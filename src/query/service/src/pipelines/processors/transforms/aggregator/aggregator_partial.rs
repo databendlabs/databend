@@ -31,12 +31,13 @@ use common_expression::HashMethodKeysU64;
 use common_expression::HashMethodKeysU8;
 use common_expression::HashMethodSerializer;
 use common_expression::Value;
-use common_functions::aggregates::StateAddr;
-use common_functions::aggregates::StateAddrs;
+use common_functions_v2::aggregates::StateAddr;
+use common_functions_v2::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
+use crate::data_type_of_group_key_column;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -139,7 +140,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
             for argument_index in function_arguments {
                 // Unwrap safety: chunk has been `convert_to_full`.
-                let argument_column = chunk.column(*argument_index).0.as_column().unwrap();
+                let argument_column = chunk
+                    .get_by_offset(*argument_index)
+                    .value
+                    .as_column()
+                    .unwrap();
                 function_arguments_column.push(argument_column.clone());
             }
 
@@ -209,20 +214,19 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             group_key_builder.append_value(group_entity.key());
         }
 
-        let schema = &self.params.output_schema;
-        let mut columns: Vec<(Value<AnyType>, DataType)> =
-            Vec::with_capacity(schema.fields().len());
-        for (builder, f) in state_builders.into_iter().zip(schema.fields().iter()) {
-            columns.push((Value::Column(builder.build()), f.data_type().into()));
+        let mut columns: Vec<(Value<AnyType>, DataType)> = Vec::with_capacity(state_builders.len());
+        for builder in state_builders.into_iter() {
+            columns.push((
+                Value::Column(Column::String(builder.build())),
+                DataType::String,
+            ));
         }
 
         let group_key_col = group_key_builder.finish();
         let num_rows = group_key_col.len();
-        columns.push((
-            Value::Column(group_key_col),
-            schema.fields().last().unwrap(),
-        ));
-        Ok(vec![Chunk::new(columns, num_rows)])
+        let data_type = data_type_of_group_key_column!(group_key_col);
+        columns.push((Value::Column(group_key_col), data_type));
+        Ok(vec![Chunk::new_from_sequence(columns, num_rows)])
     }
 }
 
@@ -234,7 +238,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     fn consume(&mut self, chunk: Chunk) -> Result<()> {
         let chunk = chunk.convert_to_full();
         // 1.1 and 1.2.
-        let group_columns = Self::group_columns(&self.params.group_columns, &chunk);
+        let group_columns = Self::group_columns(&chunk, &self.params.group_columns);
         let group_columns = group_columns
             .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
@@ -263,7 +267,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     fn consume(&mut self, chunk: Chunk) -> Result<()> {
         let chunk = chunk.convert_to_full();
         // 1.1 and 1.2.
-        let group_columns = Self::group_columns(&self.params.group_columns, &chunk);
+        let group_columns = Self::group_columns(&chunk, &self.params.group_columns);
         let group_columns = group_columns
             .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
@@ -290,13 +294,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
             keys_column_builder.append_value(group_entity.key());
         }
 
-        let columns = keys_column_builder.finish();
+        let column = keys_column_builder.finish();
 
         self.drop_states();
-        let data_type = self.params.output_schema.field(0).data_type().into();
-        Ok(vec![Chunk::new(
-            vec![(Value::Column(columns), data_type)],
-            columns.len(),
+        let data_type = data_type_of_group_key_column!(column);
+        Ok(vec![Chunk::new_from_sequence(
+            vec![(Value::Column(column), data_type)],
+            column.len(),
         )])
     }
 }

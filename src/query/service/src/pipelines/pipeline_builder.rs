@@ -382,7 +382,6 @@ impl PipelineBuilder {
             .iter()
             .map(|agg_func| {
                 agg_args.push(agg_func.args.clone());
-
                 let params = agg_func
                     .sig
                     .params

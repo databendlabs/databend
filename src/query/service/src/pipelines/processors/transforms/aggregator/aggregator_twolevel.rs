@@ -16,21 +16,24 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::NumberColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Chunk;
 use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::HashMethod;
 use common_expression::Value;
-use common_functions::aggregates::StateAddr;
+use common_functions_v2::aggregates::StateAddr;
 use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use tracing::info;
 
+use crate::data_type_of_group_key_column;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
@@ -145,21 +148,26 @@ where
                 group_key_builder.append_value(group_entity.key());
             }
 
-            let schema = &agg.params.output_schema;
-            let mut columns: Vec<Value<AnyType, DataType>> =
-                Vec::with_capacity(schema.fields().len());
+            let mut columns = Vec::with_capacity(state_builders.len() + 1);
             let mut num_rows = 0;
-            for mut builder in state_builders {
+            for (id, builder) in state_builders.into_iter().enumerate() {
                 let col = builder.build();
                 num_rows = col.len();
-                columns.push((Value::Column(Column::String(col)), DataType::String));
+                columns.push(ChunkEntry {
+                    id,
+                    value: Value::Column(Column::String(col)),
+                    data_type: DataType::String,
+                });
             }
 
             let col = group_key_builder.finish();
-            columns.push((
-                Value::Column(col),
-                schema.fields().last().unwrap().data_type().into(),
-            ));
+            let group_key_type = data_type_of_group_key_column!(col);
+
+            columns.push(ChunkEntry {
+                id: columns.len(),
+                value: Value::Column(col),
+                data_type: group_key_type,
+            });
 
             chunks.push(Chunk::new_with_meta(
                 columns,
