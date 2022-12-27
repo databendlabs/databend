@@ -196,7 +196,9 @@ pub struct UriLocation {
 impl Display for UriLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}://{}{}'", self.protocol, self.name, self.path)?;
-        write!(f, "LOCATION_PREFIX = {}", self.part_prefix)?;
+        if !self.part_prefix.is_empty() {
+            write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
+        }
         if !self.connection.is_empty() {
             write!(f, " CONNECTION = ( ")?;
             write_space_seperated_map(f, &self.connection)?;
