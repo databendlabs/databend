@@ -6518,9 +6518,9 @@ dependencies = [
 
 [[package]]
 name = "poem-derive"
-version = "1.3.50"
+version = "1.3.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9de3ad7c191f60457a5b1061ca8220f19d391de14a6774c7d5a67ab8a124f443"
+checksum = "d96859b2b0bd350f722d3b31dfb593dd33af6e8f68b8b0837026c01902e3bac2"
 dependencies = [
  "proc-macro-crate 1.2.1",
  "proc-macro2",

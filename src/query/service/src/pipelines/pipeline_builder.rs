@@ -388,6 +388,11 @@ impl PipelineBuilder {
         agg_funcs: &[AggregateFunctionDesc],
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
+        let group_data_types = group_by
+            .iter()
+            .map(|i| input_schema.field(*i).data_type().clone())
+            .collect::<Vec<_>>();
+
         let aggs: Vec<AggregateFunctionRef> = agg_funcs
             .iter()
             .map(|agg_func| {

@@ -47,8 +47,8 @@ pub struct AggregatorParams {
 impl AggregatorParams {
     pub fn try_create(
         // output_schema: DataSchemaRef,
-        input_schema: DataSchemaRef,
-        group_columns: &[usize],
+        group_data_types: Vec<DataType>,
+        group_columns: Vec<usize>,
         agg_funcs: &[AggregateFunctionRef],
         agg_args: &[Vec<usize>],
     ) -> Result<Arc<AggregatorParams>> {
@@ -58,15 +58,11 @@ impl AggregatorParams {
             states_offsets = Vec::with_capacity(agg_funcs.len());
             states_layout = Some(get_layout_offsets(agg_funcs, &mut states_offsets)?);
         }
-        let group_data_types = group_columns
-            .iter()
-            .map(|&index| input_schema.field(index).data_type().clone())
-            .collect();
 
         Ok(Arc::new(AggregatorParams {
             // output_schema,
             // input_schema,
-            group_columns: group_columns.to_vec(),
+            group_columns,
             group_data_types,
             aggregate_functions: agg_funcs.to_vec(),
             aggregate_functions_arguments: agg_args.to_vec(),
