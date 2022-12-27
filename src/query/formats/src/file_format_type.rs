@@ -117,7 +117,7 @@ impl FileFormatOptionsExt {
         options.get_output_format(schema)
     }
 
-    fn get_output_format(&self, schema: DataSchemaRef) -> Result<Box<dyn OutputFormat>> {
+    pub fn get_output_format(&self, schema: DataSchemaRef) -> Result<Box<dyn OutputFormat>> {
         let fmt = &self.stage.format;
         let options = fmt.final_file_format_options(self)?;
         // println!("format {:?} {:?} {:?}", fmt, options, format_settings);
