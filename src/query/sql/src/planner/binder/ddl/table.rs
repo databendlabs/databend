@@ -336,13 +336,13 @@ impl<'a> Binder {
             )?;
         }
 
-        let (storage_params, file_prefix) = match uri_location {
+        let (storage_params, part_prefix) = match uri_location {
             Some(uri) => {
                 let uri = UriLocation {
                     protocol: uri.protocol.clone(),
                     name: uri.name.clone(),
                     path: uri.path.clone(),
-                    loc_prefix: uri.loc_prefix.clone(),
+                    part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
                 let (sp, _) = parse_uri_location(&uri)?;
@@ -352,7 +352,7 @@ impl<'a> Binder {
 
                 // Path ends with "/" means it's a directory.
                 let fp = if uri.path.ends_with('/') {
-                    uri.loc_prefix.clone()
+                    uri.part_prefix.clone()
                 } else {
                     "".to_string()
                 };
@@ -455,7 +455,7 @@ impl<'a> Binder {
             schema,
             engine,
             storage_params,
-            file_prefix,
+            part_prefix,
             options,
             field_default_exprs,
             field_comments,

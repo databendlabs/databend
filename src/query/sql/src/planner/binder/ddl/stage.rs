@@ -91,7 +91,7 @@ impl<'a> Binder {
                     protocol: uri.protocol.clone(),
                     name: uri.name.clone(),
                     path: uri.path.clone(),
-                    loc_prefix: uri.loc_prefix.clone(),
+                    part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
 

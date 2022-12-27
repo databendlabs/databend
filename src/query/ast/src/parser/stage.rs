@@ -82,7 +82,7 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
             ~ (LOCATION_PREFIX ~ "=" ~ #literal_string)?
         },
         |(location, connection_opt, credentials_opt, encryption_opt, location_prefix)| {
-            let loc_prefix = if let Some((_, _, p)) = location_prefix {
+            let part_prefix = if let Some((_, _, p)) = location_prefix {
                 p
             } else {
                 "".to_string()
@@ -93,7 +93,7 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
                     protocol: "fs".to_string(),
                     name: "".to_string(),
                     path: path.to_string(),
-                    loc_prefix,
+                    part_prefix,
                     connection: BTreeMap::default(),
                 });
             }
@@ -123,7 +123,7 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
                 } else {
                     parsed.path().to_string()
                 },
-                loc_prefix,
+                part_prefix,
                 connection: conn,
             })
         },

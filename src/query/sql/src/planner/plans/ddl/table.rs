@@ -42,7 +42,7 @@ pub struct CreateTablePlanV2 {
     pub schema: DataSchemaRef,
     pub engine: Engine,
     pub storage_params: Option<StorageParams>,
-    pub file_prefix: String,
+    pub part_prefix: String,
     pub options: TableOptions,
     pub field_default_exprs: Vec<Option<Scalar>>,
     pub field_comments: Vec<String>,

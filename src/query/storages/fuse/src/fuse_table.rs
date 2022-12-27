@@ -138,7 +138,7 @@ impl FuseTable {
             .cloned()
             .unwrap_or_default();
 
-        let part_prefix = table_info.meta.file_prefix.clone();
+        let part_prefix = table_info.meta.part_prefix.clone();
 
         Ok(Box::new(FuseTable {
             table_info,

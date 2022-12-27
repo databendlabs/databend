@@ -180,7 +180,7 @@ impl FromToProto for mt::TableMeta {
                 Some(sp) => Some(StorageParams::from_pb(sp)?),
                 None => None,
             },
-            file_prefix: match p.file_prefix {
+            part_prefix: match p.part_prefix {
                 Some(fp) => fp,
                 None => "".to_string(),
             },
@@ -217,10 +217,10 @@ impl FromToProto for mt::TableMeta {
                 Some(sp) => Some(sp.to_pb()?),
                 None => None,
             },
-            file_prefix: if self.file_prefix == "" {
+            part_prefix: if self.part_prefix == "" {
                 None
             } else {
-                Some(self.file_prefix.clone())
+                Some(self.part_prefix.clone())
             },
             options: self.options.clone(),
             default_cluster_key: self.default_cluster_key.clone(),

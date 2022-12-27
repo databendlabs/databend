@@ -108,7 +108,7 @@ message TableMeta {
   // Table storage location connection info.
   optional UserStageInfo.StageStorage storage_params = 26;
 
-  optional string file_prefix = 27;
+  optional string part_prefix = 27;
 }
 
 // Save table name id list history.
