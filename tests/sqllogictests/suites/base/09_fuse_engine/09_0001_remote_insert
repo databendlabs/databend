@@ -80,3 +80,37 @@ DROP TABLE t2
 
 statement ok
 DROP TABLE t3
+
+## Table Compression:None
+statement ok
+CREATE TABLE IF NOT EXISTS t_compression_none(a Boolean, b Timestamp, c Date) Engine = fuse  COMPRESSION = 'NONE';
+
+statement ok
+INSERT INTO t_compression_none (a,b,c) values(true, '2021-09-07 21:38:35.000000', '2021-09-07'), (false, 1631050715000000, 18877);
+
+query BTT
+SELECT * FROM t_compression_none order by a desc;
+----
+1 2021-09-07 21:38:35.000000 2021-09-07
+0 2021-09-07 21:38:35.000000 2021-09-07
+
+statement ok
+DROP TABLE t_compression_none
+
+## Table Compression:ZSTD
+
+statement ok
+CREATE TABLE IF NOT EXISTS t_compression_zstd(a Boolean, b Timestamp, c Date) Engine = fuse COMPRESSION = 'ZSTD';
+
+statement ok
+INSERT INTO t_compression_zstd (a,b,c) values(true, '2021-09-07 21:38:35.000000', '2021-09-07'), (false, 1631050715000000, 18877);
+
+query BTT
+SELECT * FROM t_compression_zstd order by a desc;
+----
+1 2021-09-07 21:38:35.000000 2021-09-07
+0 2021-09-07 21:38:35.000000 2021-09-07
+
+statement ok
+DROP TABLE t_compression_zstd
+
