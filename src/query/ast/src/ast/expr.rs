@@ -334,6 +334,22 @@ impl BinaryOperator {
             ))),
         }
     }
+
+    pub fn to_func_name(&self) -> String {
+        match self {
+            BinaryOperator::StringConcat => "concat".to_string(),
+            BinaryOperator::NotLike => "NOT LIKE".to_string(),
+            BinaryOperator::NotRegexp => "NOT REGEXP".to_string(),
+            BinaryOperator::NotRLike => "NOT RLIKE".to_string(),
+            BinaryOperator::BitwiseOr => "bit_or".to_string(),
+            BinaryOperator::BitwiseAnd => "bit_and".to_string(),
+            BinaryOperator::BitwiseXor => "bit_xor".to_string(),
+            _ => {
+                let name = format!("{:?}", self);
+                name.to_lowercase()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -422,11 +438,65 @@ impl Display for UnaryOperator {
 impl Display for BinaryOperator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            BinaryOperator::Plus => {
+                write!(f, "+")
+            }
+            BinaryOperator::Minus => {
+                write!(f, "-")
+            }
+            BinaryOperator::Multiply => {
+                write!(f, "*")
+            }
+            BinaryOperator::Div => {
+                write!(f, "DIV")
+            }
+            BinaryOperator::Divide => {
+                write!(f, "/")
+            }
+            BinaryOperator::Modulo => {
+                write!(f, "%")
+            }
             BinaryOperator::StringConcat => {
-                write!(f, "concat")
+                write!(f, "||")
+            }
+            BinaryOperator::Gt => {
+                write!(f, ">")
+            }
+            BinaryOperator::Lt => {
+                write!(f, "<")
+            }
+            BinaryOperator::Gte => {
+                write!(f, ">=")
+            }
+            BinaryOperator::Lte => {
+                write!(f, "<=")
+            }
+            BinaryOperator::Eq => {
+                write!(f, "=")
+            }
+            BinaryOperator::NotEq => {
+                write!(f, "<>")
+            }
+            BinaryOperator::And => {
+                write!(f, "AND")
+            }
+            BinaryOperator::Or => {
+                write!(f, "OR")
+            }
+            BinaryOperator::Xor => {
+                write!(f, "XOR")
+            }
+            BinaryOperator::Like => {
+                write!(f, "LIKE")
             }
             BinaryOperator::NotLike => {
                 write!(f, "NOT LIKE")
+            }
+            BinaryOperator::Regexp => {
+                write!(f, "REGEXP")
+            }
+            BinaryOperator::RLike => {
+                write!(f, "RLIKE")
             }
             BinaryOperator::NotRegexp => {
                 write!(f, "NOT REGEXP")
@@ -435,17 +505,13 @@ impl Display for BinaryOperator {
                 write!(f, "NOT RLIKE")
             }
             BinaryOperator::BitwiseOr => {
-                write!(f, "bit_or")
+                write!(f, "|")
             }
             BinaryOperator::BitwiseAnd => {
-                write!(f, "bit_and")
+                write!(f, "&")
             }
             BinaryOperator::BitwiseXor => {
-                write!(f, "bit_xor")
-            }
-            _ => {
-                let name = format!("{:?}", self);
-                write!(f, "{}", name.to_lowercase())
+                write!(f, "^")
             }
         }
     }

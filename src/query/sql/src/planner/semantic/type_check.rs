@@ -1197,7 +1197,7 @@ impl<'a> TypeChecker<'a> {
                 )))
             }
             other => {
-                let name = other.to_string();
+                let name = other.to_func_name();
                 self.resolve_function(span, name.as_str(), &[left, right], required_type)
                     .await
             }
