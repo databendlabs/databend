@@ -172,7 +172,7 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
                 .to_str()
                 .unwrap();
             if let Some(ref specific_file) = args.file {
-                if file_name != specific_file {
+                if !file_name.contains(specific_file) {
                     continue;
                 }
             }
