@@ -178,8 +178,16 @@ pub async fn streaming_load(
                     )),
                 }
             }
+            InsertInputSource::StreamingWithFormat(_, _, _) => Err(poem::Error::from_string(
+                "'INSERT INTO $table FORMAT <type> is now only supported in clickhouse handler,\
+                     please use 'FILE_FORMAT = (type = <type> ...)' instead.",
+                StatusCode::BAD_REQUEST,
+            )),
             _non_supported_source => Err(poem::Error::from_string(
-                "Only supports streaming upload. e.g. INSERT INTO $table FILE_FORMAT = (type = 'CSV'), got insert ... select.",
+                format!(
+                    "streaming upload only support 'INSERT INTO $table FILE_FORMAT = (type = <type> ...)' got {}.",
+                    plan
+                ),
                 StatusCode::BAD_REQUEST,
             )),
         },
