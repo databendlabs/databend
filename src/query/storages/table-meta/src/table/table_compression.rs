@@ -39,8 +39,9 @@ impl TryFrom<&str> for TableCompression {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value.to_lowercase().as_str() {
-            "" | "none" => Ok(TableCompression::None),
-            "lz4" => Ok(TableCompression::LZ4),
+            "none" => Ok(TableCompression::None),
+            // Default is LZ4.
+            "" | "lz4" => Ok(TableCompression::LZ4),
             "snappy" => Ok(TableCompression::Snappy),
             "zstd" => Ok(TableCompression::Zstd),
             other => Err(ErrorCode::UnknownFormat(format!(
