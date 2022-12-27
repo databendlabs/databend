@@ -27,8 +27,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
 use common_meta_app::schema::TableIdent;
@@ -189,7 +190,10 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
 
         let mut columns = Vec::with_capacity(mutable_columns.len());
         for (mutable_column, data_type) in mutable_columns.into_iter().zip(data_types.iter()) {
-            columns.push((Value::Column(mutable_column.build()), data_type.clone()));
+            columns.push(BlockEntry {
+                data_type: data_type.clone(),
+                value: Value::Column(mutable_column.build()),
+            });
         }
 
         // Add source pipe.
@@ -198,7 +202,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
                 SystemLogSource::<Event>::create(
                     ctx.clone(),
                     output,
-                    Chunk::new_from_sequence(columns.clone(), row_len),
+                    DataBlock::new(columns.clone(), row_len),
                 )
             },
             1,
@@ -219,7 +223,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
 }
 
 struct SystemLogSource<Event: SystemLogElement> {
-    data: Option<Chunk>,
+    data: Option<DataBlock>,
     _phantom: PhantomData<Event>,
 }
 
@@ -227,7 +231,7 @@ impl<Event: SystemLogElement + 'static> SystemLogSource<Event> {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        data: Chunk,
+        data: DataBlock,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, Self {
             data: Some(data),
@@ -239,7 +243,7 @@ impl<Event: SystemLogElement + 'static> SystemLogSource<Event> {
 impl<Event: SystemLogElement + 'static> SyncSource for SystemLogSource<Event> {
     const NAME: &'static str = Event::TABLE_NAME;
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         Ok(self.data.take())
     }
 }

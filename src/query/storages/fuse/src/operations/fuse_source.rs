@@ -33,7 +33,7 @@ impl FuseTableSource {
         output: Arc<OutputPort>,
         output_reader: Arc<BlockReader>,
         prewhere_reader: Arc<BlockReader>,
-        prewhere_filter: Arc<Option<Expr<usize>>>,
+        prewhere_filter: Arc<Option<Expr>>,
         remain_reader: Arc<Option<BlockReader>>,
         storage_format: FuseStorageFormat,
     ) -> Result<ProcessorPtr> {

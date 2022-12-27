@@ -18,14 +18,14 @@ use common_arrow::arrow::compute::merge_sort::MergeSlice;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
-use common_expression::ChunkRowIndex;
+use common_expression::BlockEntry;
+use common_expression::BlockRowIndex;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::Value;
 use goldenfile::Mint;
 
-use crate::common::new_chunk;
+use crate::common::new_block;
 
 #[test]
 pub fn test_pass() {
@@ -43,7 +43,7 @@ pub fn test_pass() {
         run_filter(
             &mut file,
             filter,
-            &new_chunk(&[
+            &new_block(&[
                 (
                     DataType::Number(NumberDataType::Int32),
                     Column::from_data(vec![0i32, 1, 2, 3, -4]),
@@ -66,7 +66,7 @@ pub fn test_pass() {
     }
 
     run_concat(&mut file, &[
-        new_chunk(&[
+        new_block(&[
             (
                 DataType::Number(NumberDataType::Int32),
                 Column::from_data(vec![0i32, 1, 2, 3, -4]),
@@ -86,7 +86,7 @@ pub fn test_pass() {
                 ]),
             ),
         ]),
-        new_chunk(&[
+        new_block(&[
             (
                 DataType::Number(NumberDataType::Int32),
                 Column::from_data(vec![5i32, 6]),
@@ -107,7 +107,7 @@ pub fn test_pass() {
     run_take(
         &mut file,
         &[0, 3, 1],
-        &new_chunk(&[
+        &new_block(&[
             (
                 DataType::Number(NumberDataType::Int32),
                 Column::from_data(vec![0i32, 1, 2, 3, -4]),
@@ -129,7 +129,7 @@ pub fn test_pass() {
     );
 
     {
-        let mut chunks = Vec::with_capacity(3);
+        let mut blocks = Vec::with_capacity(3);
         let indices = vec![
             (0, 0, 1),
             (1, 0, 1),
@@ -148,27 +148,25 @@ pub fn test_pass() {
         ];
         for i in 0..3 {
             let mut columns = Vec::with_capacity(3);
-            columns.push(ChunkEntry {
-                id: i,
+            columns.push(BlockEntry {
                 data_type: DataType::Number(NumberDataType::UInt8),
                 value: Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
             });
-            columns.push(ChunkEntry {
-                id: i,
+            columns.push(BlockEntry {
                 data_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
                 value: Value::Column(Column::from_data_with_validity(
                     vec![(i + 10) as u8; 4],
                     vec![true, true, false, false],
                 )),
             });
-            chunks.push(Chunk::new(columns, 4))
+            blocks.push(DataBlock::new(columns, 4))
         }
 
-        run_take_chunk(&mut file, &indices, &chunks);
+        run_take_block(&mut file, &indices, &blocks);
     }
 
     {
-        let mut chunks = Vec::with_capacity(3);
+        let mut blocks = Vec::with_capacity(3);
         let indices = vec![
             (0, 0, 2),
             (1, 0, 3),
@@ -181,29 +179,27 @@ pub fn test_pass() {
         ];
         for i in 0..3 {
             let mut columns = Vec::with_capacity(3);
-            columns.push(ChunkEntry {
-                id: 0,
+            columns.push(BlockEntry {
                 data_type: DataType::Number(NumberDataType::UInt8),
                 value: Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
             });
-            columns.push(ChunkEntry {
-                id: 1,
+            columns.push(BlockEntry {
                 data_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
                 value: Value::Column(Column::from_data_with_validity(
                     vec![(i + 10) as u8; 4],
                     vec![true, true, false, false],
                 )),
             });
-            chunks.push(Chunk::new(columns, 4))
+            blocks.push(DataBlock::new(columns, 4))
         }
 
-        run_take_chunk_by_slices_with_limit(&mut file, &indices, &chunks, None);
-        run_take_chunk_by_slices_with_limit(&mut file, &indices, &chunks, Some(4));
+        run_take_block_by_slices_with_limit(&mut file, &indices, &blocks, None);
+        run_take_block_by_slices_with_limit(&mut file, &indices, &blocks, Some(4));
     }
 
     run_take_by_slice_limit(
         &mut file,
-        &new_chunk(&[
+        &new_block(&[
             (
                 DataType::Number(NumberDataType::Int32),
                 Column::from_data(vec![0i32, 1, 2, 3, -4]),
@@ -228,7 +224,7 @@ pub fn test_pass() {
 
     run_take_by_slice_limit(
         &mut file,
-        &new_chunk(&[
+        &new_block(&[
             (
                 DataType::Number(NumberDataType::Int32),
                 Column::from_data(vec![0i32, 1, 2, 3, -4]),
@@ -253,7 +249,7 @@ pub fn test_pass() {
 
     run_scatter(
         &mut file,
-        &new_chunk(&[
+        &new_block(&[
             (
                 DataType::Number(NumberDataType::Int32),
                 Column::from_data(vec![0i32, 1, 2, 3, -4]),
@@ -277,15 +273,15 @@ pub fn test_pass() {
     );
 }
 
-fn run_filter(file: &mut impl Write, predicate: Column, chunk: &Chunk) {
+fn run_filter(file: &mut impl Write, predicate: Column, block: &DataBlock) {
     let predicate = Value::Column(predicate);
-    let result = chunk.clone().filter(&predicate);
+    let result = block.clone().filter(&predicate);
 
     match result {
-        Ok(result_chunk) => {
+        Ok(result_block) => {
             writeln!(file, "Filter:         {predicate}").unwrap();
-            writeln!(file, "Source:\n{chunk}").unwrap();
-            writeln!(file, "Result:\n{result_chunk}").unwrap();
+            writeln!(file, "Source:\n{block}").unwrap();
+            writeln!(file, "Result:\n{result_block}").unwrap();
             write!(file, "\n\n").unwrap();
         }
         Err(err) => {
@@ -294,16 +290,16 @@ fn run_filter(file: &mut impl Write, predicate: Column, chunk: &Chunk) {
     }
 }
 
-fn run_concat(file: &mut impl Write, chunks: &[Chunk]) {
-    let result = Chunk::concat(chunks);
+fn run_concat(file: &mut impl Write, blocks: &[DataBlock]) {
+    let result = DataBlock::concat(blocks);
 
     match result {
-        Ok(result_chunk) => {
-            for (i, c) in chunks.iter().enumerate() {
+        Ok(result_block) => {
+            for (i, c) in blocks.iter().enumerate() {
                 writeln!(file, "Concat-Column {}:", i).unwrap();
                 writeln!(file, "{:?}", c).unwrap();
             }
-            writeln!(file, "Result:\n{result_chunk}").unwrap();
+            writeln!(file, "Result:\n{result_block}").unwrap();
             write!(file, "\n\n").unwrap();
         }
         Err(err) => {
@@ -312,14 +308,14 @@ fn run_concat(file: &mut impl Write, chunks: &[Chunk]) {
     }
 }
 
-fn run_take(file: &mut impl Write, indices: &[u32], chunk: &Chunk) {
-    let result = Chunk::take(chunk, indices);
+fn run_take(file: &mut impl Write, indices: &[u32], block: &DataBlock) {
+    let result = DataBlock::take(block.clone(), indices);
 
     match result {
-        Ok(result_chunk) => {
+        Ok(result_block) => {
             writeln!(file, "Take:         {indices:?}").unwrap();
-            writeln!(file, "Source:\n{chunk}").unwrap();
-            writeln!(file, "Result:\n{result_chunk}").unwrap();
+            writeln!(file, "Source:\n{block}").unwrap();
+            writeln!(file, "Result:\n{result_block}").unwrap();
             write!(file, "\n\n").unwrap();
         }
         Err(err) => {
@@ -328,30 +324,30 @@ fn run_take(file: &mut impl Write, indices: &[u32], chunk: &Chunk) {
     }
 }
 
-fn run_take_chunk(file: &mut impl Write, indices: &[ChunkRowIndex], chunks: &[Chunk]) {
-    let result = Chunk::take_chunks(chunks, indices);
+fn run_take_block(file: &mut impl Write, indices: &[BlockRowIndex], blocks: &[DataBlock]) {
+    let result = DataBlock::take_blocks(blocks, indices);
     writeln!(file, "Take Chunk indices:         {indices:?}").unwrap();
-    for (i, chunk) in chunks.iter().enumerate() {
-        writeln!(file, "Chunk{i}:\n{chunk}").unwrap();
+    for (i, block) in blocks.iter().enumerate() {
+        writeln!(file, "Chunk{i}:\n{block}").unwrap();
     }
     writeln!(file, "Result:\n{result}").unwrap();
     write!(file, "\n\n").unwrap();
 }
 
-fn run_take_chunk_by_slices_with_limit(
+fn run_take_block_by_slices_with_limit(
     file: &mut impl Write,
     slices: &[MergeSlice],
-    chunks: &[Chunk],
+    blocks: &[DataBlock],
     limit: Option<usize>,
 ) {
-    let result = Chunk::take_by_slices_limit_from_chunks(chunks, slices, limit);
+    let result = DataBlock::take_by_slices_limit_from_blocks(blocks, slices, limit);
     writeln!(
         file,
         "Take Chunk by slices (limit: {limit:?}):       {slices:?}"
     )
     .unwrap();
-    for (i, chunk) in chunks.iter().enumerate() {
-        writeln!(file, "Chunk{i}:\n{chunk}").unwrap();
+    for (i, block) in blocks.iter().enumerate() {
+        writeln!(file, "Chunk{i}:\n{block}").unwrap();
     }
     writeln!(file, "Result:\n{result}").unwrap();
     write!(file, "\n\n").unwrap();
@@ -359,26 +355,26 @@ fn run_take_chunk_by_slices_with_limit(
 
 fn run_take_by_slice_limit(
     file: &mut impl Write,
-    chunk: &Chunk,
+    block: &DataBlock,
     slice: (usize, usize),
     limit: Option<usize>,
 ) {
-    let result = Chunk::take_by_slice_limit(chunk, slice, limit);
+    let result = DataBlock::take_by_slice_limit(block, slice, limit);
     writeln!(file, "Take Chunk by slice (limit: {limit:?}): {slice:?}").unwrap();
-    writeln!(file, "Chunk:\n{chunk}").unwrap();
+    writeln!(file, "Chunk:\n{block}").unwrap();
     writeln!(file, "Result:\n{result}").unwrap();
     write!(file, "\n\n").unwrap();
 }
 
-fn run_scatter(file: &mut impl Write, chunk: &Chunk, indices: &[u32], scatter_size: usize) {
-    let result = Chunk::scatter(chunk, indices, scatter_size);
+fn run_scatter(file: &mut impl Write, block: &DataBlock, indices: &[u32], scatter_size: usize) {
+    let result = DataBlock::scatter(block, indices, scatter_size);
 
     match result {
-        Ok(result_chunk) => {
+        Ok(result_block) => {
             writeln!(file, "Scatter:         {indices:?}").unwrap();
-            writeln!(file, "Source:\n{chunk}").unwrap();
+            writeln!(file, "Source:\n{block}").unwrap();
 
-            for (i, c) in result_chunk.iter().enumerate() {
+            for (i, c) in result_block.iter().enumerate() {
                 writeln!(file, "Result-{i}:\n{c}").unwrap();
             }
             write!(file, "\n\n").unwrap();

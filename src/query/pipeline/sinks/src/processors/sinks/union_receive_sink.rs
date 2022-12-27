@@ -19,7 +19,7 @@ use async_trait::async_trait;
 use async_trait::unboxed_simple;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 
@@ -27,11 +27,11 @@ use crate::processors::sinks::AsyncSink;
 use crate::processors::sinks::AsyncSinker;
 
 pub struct UnionReceiveSink {
-    sender: Option<Sender<Chunk>>,
+    sender: Option<Sender<DataBlock>>,
 }
 
 impl UnionReceiveSink {
-    pub fn create(sender: Option<Sender<Chunk>>, input: Arc<InputPort>) -> ProcessorPtr {
+    pub fn create(sender: Option<Sender<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
         AsyncSinker::create(input, UnionReceiveSink { sender })
     }
 }
@@ -46,9 +46,9 @@ impl AsyncSink for UnionReceiveSink {
     }
 
     #[unboxed_simple]
-    async fn consume(&mut self, chunk: Chunk) -> Result<()> {
+    async fn consume(&mut self, data_block: DataBlock) -> Result<()> {
         if let Some(sender) = self.sender.as_ref() {
-            if sender.send(chunk).await.is_err() {
+            if sender.send(data_block).await.is_err() {
                 return Err(ErrorCode::Internal("UnionReceiveSink sender failed"));
             };
         }

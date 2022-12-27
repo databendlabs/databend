@@ -17,16 +17,16 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 #[typetag::serde(tag = "type")]
-pub trait ChunkMetaInfo: Debug + Send + Sync {
+pub trait BlockMetaInfo: Debug + Send + Sync {
     fn as_any(&self) -> &dyn Any;
 
     #[allow(clippy::borrowed_box)]
-    fn equals(&self, info: &Box<dyn ChunkMetaInfo>) -> bool;
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
 }
 
-impl Eq for Box<dyn ChunkMetaInfo> {}
+impl Eq for Box<dyn BlockMetaInfo> {}
 
-impl PartialEq for Box<dyn ChunkMetaInfo> {
+impl PartialEq for Box<dyn BlockMetaInfo> {
     fn eq(&self, other: &Self) -> bool {
         let this_type_id = self.as_any().type_id();
         let other_type_id = other.as_any().type_id();
@@ -38,5 +38,5 @@ impl PartialEq for Box<dyn ChunkMetaInfo> {
     }
 }
 
-pub type ChunkMetaInfoPtr = Arc<Box<dyn ChunkMetaInfo>>;
-pub type ChunkMetaInfos = Vec<ChunkMetaInfoPtr>;
+pub type BlockMetaInfoPtr = Arc<Box<dyn BlockMetaInfo>>;
+pub type BlockMetaInfos = Vec<BlockMetaInfoPtr>;

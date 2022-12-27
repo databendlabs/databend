@@ -21,7 +21,7 @@ use std::time::SystemTime;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_types::RoleInfo;
@@ -98,8 +98,8 @@ pub trait TableContext: Send + Sync {
     fn get_query_kind(&self) -> String;
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;
-    fn push_precommit_chunk(&self, block: Chunk);
-    fn consume_precommit_chunks(&self) -> Vec<Chunk>;
+    fn push_precommit_block(&self, block: DataBlock);
+    fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
     fn try_get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;

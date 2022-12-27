@@ -15,9 +15,11 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::array::ArrayColumn;
+use common_expression::types::date::date_to_string;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::NumberColumn;
 use common_expression::types::string::StringColumn;
+use common_expression::types::timestamp::timestamp_to_string;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use lexical_core::ToLexical;
@@ -25,8 +27,6 @@ use micromarshal::Marshal;
 use micromarshal::Unmarshal;
 use ordered_float::OrderedFloat;
 
-use crate::field_encoder::helpers::date_to_string;
-use crate::field_encoder::helpers::timestamp_to_string_micro;
 use crate::field_encoder::helpers::PrimitiveWithFormat;
 use crate::CommonSettings;
 
@@ -138,7 +138,7 @@ pub trait FieldEncoderRowBased {
 
     fn write_date(&self, column: &Buffer<i32>, row_index: usize, out_buf: &mut Vec<u8>, raw: bool) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = date_to_string(&(*v as i64));
+        let s = date_to_string(*v as i64, self.common_settings().timezone).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 
@@ -150,7 +150,7 @@ pub trait FieldEncoderRowBased {
         raw: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = timestamp_to_string_micro(v, self.common_settings().timezone);
+        let s = timestamp_to_string(*v, self.common_settings().timezone).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 

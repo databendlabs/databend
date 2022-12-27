@@ -20,7 +20,7 @@ use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
@@ -33,8 +33,8 @@ use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::EmptySink;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
-use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::evaluator::BlockOperator;
+use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
@@ -59,7 +59,7 @@ use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
-use crate::pipelines::processors::transforms::TransformMergeChunk;
+use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformRightJoin;
 use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::AggregatorParams;
@@ -203,12 +203,12 @@ impl PipelineBuilder {
         }
 
         pipeline.add_transform(|input, output| {
-            Ok(CompoundChunkOperator::create(
+            Ok(CompoundBlockOperator::create(
                 input,
                 output,
                 *func_ctx,
-                vec![ChunkOperator::Project {
-                    indices: projections.clone(),
+                vec![BlockOperator::Project {
+                    projection: Default::default(),
                 }],
             ))
         })?;
@@ -283,11 +283,11 @@ impl PipelineBuilder {
             .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
 
         self.main_pipeline.add_transform(|input, output| {
-            Ok(CompoundChunkOperator::create(
+            Ok(CompoundBlockOperator::create(
                 input,
                 output,
                 func_ctx,
-                vec![ChunkOperator::Filter {
+                vec![BlockOperator::Filter {
                     expr: predicate.clone(),
                 }],
             ))
@@ -300,12 +300,12 @@ impl PipelineBuilder {
         self.build_pipeline(&project.input)?;
         let func_ctx = self.ctx.try_get_function_context()?;
         self.main_pipeline.add_transform(|input, output| {
-            Ok(CompoundChunkOperator::create(
+            Ok(CompoundBlockOperator::create(
                 input,
                 output,
                 func_ctx,
-                vec![ChunkOperator::Project {
-                    indices: project.columns.clone(),
+                vec![BlockOperator::Project {
+                    projection: project.projections.clone(),
                 }],
             ))
         })
@@ -317,9 +317,8 @@ impl PipelineBuilder {
         let operators = eval_scalar
             .scalars
             .iter()
-            .map(|(scalar, index)| {
-                Ok(ChunkOperator::Map {
-                    index: *index,
+            .map(|(scalar, _)| {
+                Ok(BlockOperator::Map {
                     expr: scalar.as_expr()?,
                 })
             })
@@ -327,7 +326,7 @@ impl PipelineBuilder {
         let func_ctx = self.ctx.try_get_function_context()?;
 
         self.main_pipeline.add_transform(|input, output| {
-            Ok(CompoundChunkOperator::create(
+            Ok(CompoundBlockOperator::create(
                 input,
                 output,
                 func_ctx,
@@ -407,7 +406,13 @@ impl PipelineBuilder {
             })
             .collect::<Result<_>>()?;
 
-        let params = AggregatorParams::try_create(group_data_types, group_by, &aggs, &agg_args)?;
+        let params = AggregatorParams::try_create(
+            input_schema,
+            group_data_types,
+            group_by,
+            &aggs,
+            &agg_args,
+        )?;
 
         Ok(params)
     }
@@ -419,13 +424,13 @@ impl PipelineBuilder {
             .order_by
             .iter()
             .map(|desc| SortColumnDescription {
-                index: desc.order_by,
+                offset: desc.order_by,
                 asc: desc.asc,
                 nulls_first: desc.nulls_first,
             })
             .collect::<Vec<_>>();
 
-        let chunk_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
         if self.main_pipeline.output_len() == 1 {
             let _ = self
@@ -442,7 +447,7 @@ impl PipelineBuilder {
             TransformSortMerge::try_create(
                 input,
                 output,
-                SortMergeCompactor::new(chunk_size, sort.limit, sort_desc.clone()),
+                SortMergeCompactor::new(block_size, sort.limit, sort_desc.clone()),
             )
         })?;
 
@@ -450,7 +455,7 @@ impl PipelineBuilder {
         try_add_multi_sort_merge(
             &mut self.main_pipeline,
             schema,
-            chunk_size,
+            block_size,
             sort.limit,
             sort_desc,
         )
@@ -546,7 +551,7 @@ impl PipelineBuilder {
         self.build_pipeline(&exchange_sink.input)
     }
 
-    fn expand_union_all(&mut self, plan: &PhysicalPlan) -> Result<Receiver<Chunk>> {
+    fn expand_union_all(&mut self, plan: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
         let union_ctx = QueryContext::create_from(self.ctx.clone());
         let pipeline_builder = PipelineBuilder::create(union_ctx);
         let mut build_res = pipeline_builder.finalize(plan)?;
@@ -580,7 +585,7 @@ impl PipelineBuilder {
         let union_all_receiver = self.expand_union_all(&union_all.right)?;
         self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
-                TransformMergeChunk::try_create(
+                TransformMergeBlock::try_create(
                     transform_input_port,
                     transform_output_port,
                     union_all.output_schema()?,
@@ -618,7 +623,7 @@ impl PipelineBuilder {
                         transform_output_port,
                         select_schema.clone(),
                         insert_schema.clone(),
-                        func_ctx,
+                        func_ctx.clone(),
                     )
                 })?;
         }

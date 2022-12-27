@@ -65,7 +65,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let value = parse_value(s).map_err(|err| {
                 format!("unable to parse '{}': {}", &String::from_utf8_lossy(s), err)
             })?;
-            value.to_vec(&mut output.data);
+            value.write_to_vec(&mut output.data);
             output.commit_row();
 
             Ok(())
@@ -83,7 +83,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 match parse_value(s) {
                     Ok(value) => {
                         output.validity.push(true);
-                        value.to_vec(&mut output.builder.data);
+                        value.write_to_vec(&mut output.builder.data);
                         output.builder.commit_row();
                     }
                     Err(_) => output.push_null(),

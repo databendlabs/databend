@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use crate::Chunk;
+use crate::DataBlock;
 
 /// Shared store to support memory tables.
 ///
 /// Indexed by table id etc.
-pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<Chunk>>>>;
+pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;

@@ -16,30 +16,30 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
-pub struct OneChunkSource {
+pub struct OneBlockSource {
     output: Arc<OutputPort>,
-    chunk: Option<Chunk>,
+    data_block: Option<DataBlock>,
 }
 
-impl OneChunkSource {
-    pub fn create(output: Arc<OutputPort>, chunk: Chunk) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(OneChunkSource {
+impl OneBlockSource {
+    pub fn create(output: Arc<OutputPort>, data_block: DataBlock) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(OneBlockSource {
             output,
-            chunk: Some(chunk),
+            data_block: Some(data_block),
         })))
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for OneChunkSource {
+impl Processor for OneBlockSource {
     fn name(&self) -> String {
-        "ChunkSource".to_string()
+        "OncBlockSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -55,8 +55,8 @@ impl Processor for OneChunkSource {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(chunk) = self.chunk.take() {
-            self.output.push_data(Ok(chunk));
+        if let Some(data_block) = self.data_block.take() {
+            self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
 

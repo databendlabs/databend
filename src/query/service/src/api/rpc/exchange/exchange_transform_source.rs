@@ -20,7 +20,7 @@ use common_arrow::arrow::io::ipc::write::default_ipc_fields;
 use common_arrow::arrow::io::ipc::IpcSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
@@ -38,7 +38,7 @@ pub struct ExchangeSourceTransform {
     finished: bool,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: Option<Chunk>,
+    output_data: Option<DataBlock>,
     remote_flight_data: Option<DataPacket>,
     flight_exchanges: Vec<FlightExchange>,
     exchange_params: MergeExchangeParams,
@@ -92,8 +92,8 @@ impl Processor for ExchangeSourceTransform {
             return Ok(Event::Sync);
         }
 
-        if let Some(chunk) = self.output_data.take() {
-            self.output.push_data(Ok(chunk));
+        if let Some(data_block) = self.output_data.take() {
+            self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
 
@@ -176,11 +176,11 @@ impl ExchangeSourceTransform {
         let meta = match bincode::deserialize(fragment_data.get_meta()) {
             Ok(meta) => Ok(meta),
             Err(_) => Err(ErrorCode::BadBytes(
-                "chunk meta deserialize error when exchange",
+                "block meta deserialize error when exchange",
             )),
         }?;
 
-        self.output_data = Some(Chunk::from_arrow_chunk(&batch, schema)?.add_meta(meta)?);
+        self.output_data = Some(DataBlock::from_arrow_chunk(&batch, schema)?.add_meta(meta)?);
 
         Ok(())
     }

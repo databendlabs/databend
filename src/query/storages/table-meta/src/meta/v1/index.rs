@@ -12,12 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_expression::Chunk;
+use common_expression::DataBlock;
 
 /// Filter data of a Block, which itself is also a DataBlock.
 ///
 /// Depending on the query conditions, columns of index data will be loaded on demand.
-pub struct ChunkFilter {
+pub struct BlockFilter {
     // Before index mod is extracted from databend-query, we just keep the DataBlock here
-    data: Chunk,
+    data: DataBlock,
 }

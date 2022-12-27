@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
@@ -55,7 +55,7 @@ impl State {
 pub struct PipelinePushingExecutor {
     state: Arc<State>,
     executor: Arc<PipelineExecutor>,
-    sender: SyncSender<Option<Chunk>>,
+    sender: SyncSender<Option<DataBlock>>,
 }
 
 #[allow(dead_code)]
@@ -63,7 +63,7 @@ impl PipelinePushingExecutor {
     fn wrap_pipeline(
         ctx: Arc<QueryContext>,
         pipeline: &mut Pipeline,
-    ) -> Result<SyncSender<Option<Chunk>>> {
+    ) -> Result<SyncSender<Option<DataBlock>>> {
         if pipeline.is_pulling_pipeline()? || !pipeline.is_pushing_pipeline()? {
             return Err(ErrorCode::Internal(
                 "Logical error, PipelinePushingExecutor can only work on pushing pipeline.",
@@ -133,7 +133,7 @@ impl PipelinePushingExecutor {
         self.executor.finish(cause);
     }
 
-    pub fn push_data(&mut self, data: Chunk) -> Result<()> {
+    pub fn push_data(&mut self, data: DataBlock) -> Result<()> {
         if self.state.has_throw_error.load(Ordering::Relaxed) {
             let mut throw_error = self.state.throw_error.lock();
 
@@ -172,13 +172,13 @@ impl Drop for PipelinePushingExecutor {
 }
 
 struct PushingSource {
-    receiver: Receiver<Option<Chunk>>,
+    receiver: Receiver<Option<DataBlock>>,
 }
 
 impl PushingSource {
     pub fn create(
         ctx: Arc<QueryContext>,
-        receiver: Receiver<Option<Chunk>>,
+        receiver: Receiver<Option<DataBlock>>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, PushingSource { receiver })
@@ -188,7 +188,7 @@ impl PushingSource {
 impl SyncSource for PushingSource {
     const NAME: &'static str = "PushingExecutorSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.receiver.recv() {
             Ok(data) => Ok(data),
             Err(cause) => Err(ErrorCode::Internal(format!(

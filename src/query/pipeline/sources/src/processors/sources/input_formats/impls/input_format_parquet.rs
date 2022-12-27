@@ -36,7 +36,7 @@ use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
@@ -52,7 +52,7 @@ use similar_asserts::traits::MakeDiff;
 
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
-use crate::processors::sources::input_formats::input_pipeline::ChunkBuilderTrait;
+use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
 use crate::processors::sources::input_formats::input_pipeline::ReadBatchTrait;
 use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
@@ -148,7 +148,7 @@ impl InputFormatPipe for ParquetFormatPipe {
     type ReadBatch = ReadBatch;
     type RowBatch = RowGroupInMemory;
     type AligningState = AligningState;
-    type ChunkBuilder = ParquetChunkBuilder;
+    type BlockBuilder = ParquetBlockBuilder;
 
     async fn read_split(
         ctx: Arc<InputContext>,
@@ -319,36 +319,36 @@ impl ReadBatchTrait for ReadBatch {
     }
 }
 
-pub struct ParquetChunkBuilder {
+pub struct ParquetBlockBuilder {
     ctx: Arc<InputContext>,
 }
 
-impl ChunkBuilderTrait for ParquetChunkBuilder {
+impl BlockBuilderTrait for ParquetBlockBuilder {
     type Pipe = ParquetFormatPipe;
 
     fn create(ctx: Arc<InputContext>) -> Self {
-        ParquetChunkBuilder { ctx }
+        ParquetBlockBuilder { ctx }
     }
 
-    fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<Chunk>> {
+    fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<DataBlock>> {
         if let Some(rg) = batch.as_mut() {
             let chunk = rg.get_arrow_chunk()?;
-            let chunk = Chunk::from_arrow_chunk(&chunk, &self.ctx.data_schema())?;
+            let block = DataBlock::from_arrow_chunk(&chunk, &self.ctx.data_schema())?;
 
-            let chunk_total_rows = chunk.num_rows();
-            let num_rows_per_chunk = self.ctx.chunk_compact_thresholds.max_rows_per_chunk;
-            let chunks: Vec<Chunk> = (0..chunk_total_rows)
-                .step_by(num_rows_per_chunk)
+            let block_total_rows = block.num_rows();
+            let num_rows_per_block = self.ctx.block_compact_thresholds.max_rows_per_block;
+            let blocks: Vec<DataBlock> = (0..block_total_rows)
+                .step_by(num_rows_per_block)
                 .map(|idx| {
-                    if idx + num_rows_per_chunk < chunk_total_rows {
-                        chunk.slice(idx..idx + num_rows_per_chunk)
+                    if idx + num_rows_per_block < block_total_rows {
+                        block.slice(idx..idx + num_rows_per_block)
                     } else {
-                        chunk.slice(idx..chunk_total_rows)
+                        block.slice(idx..block_total_rows)
                     }
                 })
                 .collect();
 
-            Ok(chunks)
+            Ok(blocks)
         } else {
             Ok(vec![])
         }

@@ -14,8 +14,6 @@
 
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
-use common_expression::Column;
-use common_expression::ColumnFrom;
 use common_expression::ScalarRef;
 use common_storages_index::filters::Filter;
 use common_storages_index::filters::FilterBuilder;
@@ -196,7 +194,7 @@ fn test_xor_bitmap_data_block() -> Result<()> {
     for key in keys {
         assert!(
             filter.contains(&ScalarRef::Number(NumberScalar::Int64(key))),
-            "key {} not present",
+            "key {} is not present",
             key
         );
     }

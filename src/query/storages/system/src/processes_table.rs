@@ -22,8 +22,9 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -47,7 +48,7 @@ impl SyncSystemTable for ProcessesTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let processes_info = ctx.get_processes_info();
 
         let mut processes_id = Vec::with_capacity(processes_info.len());
@@ -66,7 +67,6 @@ impl SyncSystemTable for ProcessesTable {
         let mut processes_time = Vec::with_capacity(processes_info.len());
         let mut processes_status = Vec::with_capacity(processes_info.len());
 
-        let rows_len = processes_info.len();
         for process_info in &processes_info {
             let data_metrics = &process_info.data_metrics;
             let scan_progress = process_info.scan_progress_value.clone().unwrap_or_default();
@@ -107,68 +107,71 @@ impl SyncSystemTable for ProcessesTable {
             }
         }
 
-        Ok(Chunk::new_from_sequence(
+        let rows_len = processes_info.len();
+        Ok(DataBlock::new(
             vec![
-                (
-                    Value::Column(Column::from_data(processes_id)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(processes_type)),
-                    DataType::Nullable(Box::new(DataType::String)),
-                ),
-                (
-                    Value::Column(Column::from_data(processes_host)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(processes_user)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(processes_state)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(processes_database)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(processes_extra_info)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(processes_memory_usage)),
-                    DataType::Number(NumberDataType::Int64),
-                ),
-                (
-                    Value::Column(Column::from_data(processes_data_read_bytes)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(processes_data_write_bytes)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(processes_scan_progress_read_rows)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(processes_scan_progress_read_bytes)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(processes_mysql_connection_id)),
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
-                ),
-                (
-                    Value::Column(Column::from_data(processes_time)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(processes_status)),
-                    DataType::String,
-                ),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(processes_id)),
+                },
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(DataType::String)),
+                    value: Value::Column(Column::from_data(processes_type)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(processes_host)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(processes_user)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(processes_state)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(processes_database)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(processes_extra_info)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::Int64),
+                    value: Value::Column(Column::from_data(processes_memory_usage)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(processes_data_read_bytes)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(processes_data_write_bytes)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(processes_scan_progress_read_rows)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(processes_scan_progress_read_bytes)),
+                },
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(DataType::Number(
+                        NumberDataType::UInt32,
+                    ))),
+                    value: Value::Column(Column::from_data(processes_mysql_connection_id)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(processes_time)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(processes_status)),
+                },
             ],
             rows_len,
         ))

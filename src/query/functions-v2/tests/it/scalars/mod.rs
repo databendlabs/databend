@@ -19,10 +19,10 @@ use comfy_table::Table;
 use common_ast::DisplayError;
 use common_expression::type_check;
 use common_expression::types::DataType;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ConstantFolder;
+use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
@@ -63,22 +63,20 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             .enumerate()
             .collect::<HashMap<_, _>>();
 
-        let fn_ctx = FunctionContext { tz: chrono_tz::UTC };
+        let func_ctx = FunctionContext { tz: chrono_tz::UTC };
 
         let constant_folder =
-            ConstantFolder::new(input_domains.clone(), fn_ctx, &BUILTIN_FUNCTIONS);
+            ConstantFolder::new(input_domains.clone(), func_ctx, &BUILTIN_FUNCTIONS);
         let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
         let remote_expr = RemoteExpr::from_expr(&optimized_expr);
         let optimized_expr = remote_expr.into_expr(&BUILTIN_FUNCTIONS).unwrap();
 
         let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
-        let chunk = Chunk::new(
+        let block = DataBlock::new(
             columns
                 .iter()
-                .enumerate()
-                .map(|(id, (_, ty, col))| ChunkEntry {
-                    id,
+                .map(|(_, ty, col)| BlockEntry {
                     data_type: ty.clone(),
                     value: Value::Column(col.clone()),
                 })
@@ -90,7 +88,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             test_arrow_conversion(col);
         });
 
-        let evaluator = Evaluator::new(&chunk, fn_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {

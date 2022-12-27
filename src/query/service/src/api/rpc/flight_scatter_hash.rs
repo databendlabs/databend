@@ -20,7 +20,7 @@ use common_expression::types::AnyType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -56,8 +56,7 @@ impl HashFlightScatter {
             params: vec![],
             args: hash_keys,
         };
-        let registry = &BUILTIN_FUNCTIONS;
-        let hash_key = check(&hash_raw, registry)
+        let hash_key = check(&hash_raw, &BUILTIN_FUNCTIONS)
             .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
 
         Ok(Box::new(Self {
@@ -89,8 +88,7 @@ impl OneHashKeyFlightScatter {
             args: vec![hash_key],
         };
 
-        let registry = &BUILTIN_FUNCTIONS;
-        let indices_scalar = check(&hash_raw, registry)
+        let indices_scalar = check(&hash_raw, &BUILTIN_FUNCTIONS)
             .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
 
         Ok(Box::new(OneHashKeyFlightScatter {
@@ -102,17 +100,17 @@ impl OneHashKeyFlightScatter {
 }
 
 impl FlightScatter for OneHashKeyFlightScatter {
-    fn execute(&self, chunk: &Chunk, num: usize) -> Result<Vec<Chunk>> {
-        let evaluator = Evaluator::new(chunk, self.func_ctx, &BUILTIN_FUNCTIONS);
+    fn execute(&self, data_block: &DataBlock, num: usize) -> Result<Vec<DataBlock>> {
+        let evaluator = Evaluator::new(data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
 
         let indices = evaluator.run(&self.indices_scalar).unwrap();
         let indices = get_hash_values(&indices, num)?;
-        let chunks = Chunk::scatter(chunk, &indices, self.scatter_size)?;
+        let data_blocks = DataBlock::scatter(data_block, &indices, self.scatter_size)?;
 
-        let chunk_meta = chunk.meta()?;
-        let mut res = Vec::with_capacity(chunks.len());
-        for chunk in chunks {
-            res.push(chunk.add_meta(chunk_meta.clone())?);
+        let block_meta = data_block.meta()?;
+        let mut res = Vec::with_capacity(data_blocks.len());
+        for data_block in data_blocks {
+            res.push(data_block.add_meta(block_meta.clone())?);
         }
 
         Ok(res)
@@ -120,18 +118,18 @@ impl FlightScatter for OneHashKeyFlightScatter {
 }
 
 impl FlightScatter for HashFlightScatter {
-    fn execute(&self, chunk: &Chunk, num: usize) -> Result<Vec<Chunk>> {
-        let evaluator = Evaluator::new(chunk, self.func_ctx, &BUILTIN_FUNCTIONS);
+    fn execute(&self, data_block: &DataBlock, num: usize) -> Result<Vec<DataBlock>> {
+        let evaluator = Evaluator::new(data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
 
         let indices = evaluator.run(&self.hash_key).unwrap();
         let indices = get_hash_values(&indices, num)?;
 
-        let chunk_meta = chunk.meta()?;
-        let chunks = Chunk::scatter(chunk, &indices, self.scatter_size)?;
+        let block_meta = data_block.meta()?;
+        let data_blocks = DataBlock::scatter(data_block, &indices, self.scatter_size)?;
 
-        let mut res = Vec::with_capacity(chunks.len());
-        for chunk in chunks {
-            res.push(chunk.add_meta(chunk_meta.clone())?);
+        let mut res = Vec::with_capacity(data_blocks.len());
+        for data_block in data_blocks {
+            res.push(data_block.add_meta(block_meta.clone())?);
         }
 
         Ok(res)

@@ -24,7 +24,8 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -77,10 +78,11 @@ impl Table for NullTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
+        let schema = self.table_info.schema();
         pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
-            processors: vec![NullSource::create(ctx, output)?],
+            processors: vec![NullSource::create(ctx, output, Arc::new(schema.into()))?],
         });
 
         Ok(())
@@ -100,23 +102,31 @@ impl Table for NullTable {
 
 struct NullSource {
     finish: bool,
+    schema: DataSchemaRef,
 }
 
 impl NullSource {
-    pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, NullSource { finish: false })
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        output: Arc<OutputPort>,
+        schema: DataSchemaRef,
+    ) -> Result<ProcessorPtr> {
+        SyncSourcer::create(ctx, output, NullSource {
+            finish: false,
+            schema,
+        })
     }
 }
 
 impl SyncSource for NullSource {
     const NAME: &'static str = "NullSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finish {
             return Ok(None);
         }
 
         self.finish = true;
-        Ok(Some(Chunk::empty()))
+        Ok(Some(DataBlock::empty_with_schema(self.schema.clone())))
     }
 }

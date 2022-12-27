@@ -17,7 +17,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::*;
 
-use crate::common::new_chunk;
+use crate::common::new_block;
 
 #[test]
 fn test_group_by_hash() -> Result<()> {
@@ -28,7 +28,7 @@ fn test_group_by_hash() -> Result<()> {
         TableField::new("x", TableDataType::String),
     ]);
 
-    let chunk = new_chunk(&vec![
+    let block = new_block(&vec![
         (
             DataType::Number(NumberDataType::Int8),
             Column::from_data(vec![1i8, 1, 2, 1, 2, 3]),
@@ -47,10 +47,10 @@ fn test_group_by_hash() -> Result<()> {
         ),
     ]);
 
-    let method = Chunk::choose_hash_method(&chunk, &[0, 3])?;
+    let method = DataBlock::choose_hash_method(&block, &[0, 3])?;
     assert_eq!(method.name(), HashMethodSerializer::default().name(),);
 
-    let method = Chunk::choose_hash_method(&chunk, &[0, 1, 2])?;
+    let method = DataBlock::choose_hash_method(&block, &[0, 1, 2])?;
 
     assert_eq!(method.name(), HashMethodKeysU32::default().name());
 
@@ -61,13 +61,13 @@ fn test_group_by_hash() -> Result<()> {
     {
         for col in columns {
             let index = schema.index_of(col).unwrap();
-            let entry = chunk.get_by_offset(index);
+            let entry = block.get_by_offset(index);
             let col = entry.value.as_column().unwrap();
-            group_columns.push((col, entry.data_type.clone()));
+            group_columns.push((col.clone(), entry.data_type.clone()));
         }
     }
 
-    let state = hash.build_keys_state(group_columns.as_slice(), chunk.num_rows())?;
+    let state = hash.build_keys_state(group_columns.as_slice(), block.num_rows())?;
     let keys_iter = hash.build_keys_iter(&state)?;
     let keys: Vec<u32> = keys_iter.copied().collect();
     assert_eq!(keys, vec![

@@ -23,13 +23,13 @@ use common_storages_table_meta::meta::StatisticsOfColumns;
 
 pub trait RangePruner {
     // returns ture, if target should NOT be pruned (false positive allowed)
-    fn should_keep(&self, input: &StatisticsOfColumns, row_count: u64) -> bool;
+    fn should_keep(&self, input: &StatisticsOfColumns) -> bool;
 }
 
 struct KeepTrue;
 
 impl RangePruner for KeepTrue {
-    fn should_keep(&self, _input: &StatisticsOfColumns, _row_count: u64) -> bool {
+    fn should_keep(&self, _input: &StatisticsOfColumns) -> bool {
         true
     }
 }
@@ -37,13 +37,13 @@ impl RangePruner for KeepTrue {
 struct KeepFalse;
 
 impl RangePruner for KeepFalse {
-    fn should_keep(&self, _input: &StatisticsOfColumns, _row_count: u64) -> bool {
+    fn should_keep(&self, _input: &StatisticsOfColumns) -> bool {
         false
     }
 }
 
 impl RangePruner for RangeFilter {
-    fn should_keep(&self, stats: &StatisticsOfColumns, _row_count: u64) -> bool {
+    fn should_keep(&self, stats: &StatisticsOfColumns) -> bool {
         match self.eval(stats) {
             Ok(r) => r,
             Err(e) => {

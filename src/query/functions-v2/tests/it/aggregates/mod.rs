@@ -22,10 +22,10 @@ use common_expression::type_check;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_expression::RawExpr;
@@ -62,12 +62,10 @@ pub fn run_agg_ast(
     );
 
     let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
-    let chunk = Chunk::new(
+    let block = DataBlock::new(
         columns
             .iter()
-            .enumerate()
-            .map(|(id, (_, ty, col))| ChunkEntry {
-                id,
+            .map(|(_, ty, col)| BlockEntry {
                 data_type: ty.clone(),
                 value: Value::Column(col.clone()),
             })
@@ -90,7 +88,7 @@ pub fn run_agg_ast(
             } => {
                 let args: Vec<(Value<AnyType>, DataType)> = args
                     .iter()
-                    .map(|raw_expr| run_scalar_expr(raw_expr, &chunk))
+                    .map(|raw_expr| run_scalar_expr(raw_expr, &block))
                     .collect::<common_expression::Result<_>>()
                     .unwrap();
 
@@ -104,7 +102,7 @@ pub fn run_agg_ast(
                     .iter()
                     .map(|(arg, ty)| match arg {
                         Value::Scalar(s) => {
-                            let builder = ColumnBuilder::repeat(&s.as_ref(), chunk.num_rows(), ty);
+                            let builder = ColumnBuilder::repeat(&s.as_ref(), block.num_rows(), ty);
                             builder.build()
                         }
                         Value::Column(c) => c.clone(),
@@ -116,7 +114,7 @@ pub fn run_agg_ast(
                     params,
                     &arg_columns,
                     &arg_types,
-                    chunk.num_rows(),
+                    block.num_rows(),
                 )?
             }
             _ => unimplemented!(),
@@ -159,11 +157,11 @@ pub fn run_agg_ast(
 
 pub fn run_scalar_expr(
     raw_expr: &RawExpr,
-    chunk: &Chunk,
+    block: &DataBlock,
 ) -> common_expression::Result<(Value<AnyType>, DataType)> {
     let expr = type_check::check(raw_expr, &BUILTIN_FUNCTIONS)?;
-    let fn_ctx = FunctionContext { tz: chrono_tz::UTC };
-    let evaluator = Evaluator::new(chunk, fn_ctx, &BUILTIN_FUNCTIONS);
+    let func_ctx = FunctionContext { tz: chrono_tz::UTC };
+    let evaluator = Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS);
     let result = evaluator.run(&expr)?;
     Ok((result, expr.data_type().clone()))
 }

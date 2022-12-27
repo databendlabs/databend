@@ -22,12 +22,12 @@ use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::types::ValueType;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_CHUNK_SIZE;
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -38,14 +38,14 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &Chunk,
-    ) -> Result<Vec<Chunk>>
+        input: &DataBlock,
+    ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        let mut chunk_size = JOIN_MAX_CHUNK_SIZE;
+        let mut block_size = JOIN_MAX_BLOCK_SIZE;
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
         let probe_column = input.get_by_offset(0).value.as_column().unwrap();
@@ -59,8 +59,8 @@ impl JoinHashTable {
         let mut self_row_ptrs = self.row_ptrs.write();
 
         for (i, key) in keys_iter.enumerate() {
-            if (i & chunk_size) == 0 {
-                chunk_size <<= 1;
+            if (i & block_size) == 0 {
+                block_size <<= 1;
 
                 if self.interrupt.load(Ordering::Relaxed) {
                     return Err(ErrorCode::AbortedQuery(
@@ -85,7 +85,7 @@ impl JoinHashTable {
             }
         }
 
-        Ok(vec![Chunk::empty()])
+        Ok(vec![DataBlock::empty()])
     }
 
     pub(crate) fn probe_left_mark_join_with_conjunct<
@@ -97,8 +97,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &Chunk,
-    ) -> Result<Vec<Chunk>>
+        input: &DataBlock,
+    ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
@@ -118,8 +118,8 @@ impl JoinHashTable {
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
 
         let mut row_ptrs = self.row_ptrs.write();
-        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
-        let mut build_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
+        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = match self.hash_join_desc.from_correlated_subquery {
@@ -155,12 +155,12 @@ impl JoinHashTable {
                             build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                             probe_indexes.extend(repeat(i as u32).take(addition));
 
-                            let probe_chunk = Chunk::take(input, &probe_indexes)?;
-                            let build_chunk = self.row_space.gather(&build_indexes)?;
-                            let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
+                            let probe_block = DataBlock::take(input, &probe_indexes)?;
+                            let build_block = self.row_space.gather(&build_indexes)?;
+                            let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
                             let filter =
-                                self.get_nullable_filter_column(&merged_chunk, other_predicate)?;
+                                self.get_nullable_filter_column(&merged_block, other_predicate)?;
                             let filter_viewer =
                                 NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
                             let validity = &filter_viewer.validity;
@@ -189,11 +189,11 @@ impl JoinHashTable {
             }
         }
 
-        let probe_chunk = Chunk::take(input, &probe_indexes)?;
-        let build_chunk = self.row_space.gather(&build_indexes)?;
-        let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
+        let probe_block = DataBlock::take(input, &probe_indexes)?;
+        let build_block = self.row_space.gather(&build_indexes)?;
+        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-        let filter = self.get_nullable_filter_column(&merged_chunk, other_predicate)?;
+        let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;
         let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
         let validity = &filter_viewer.validity;
         let data = &filter_viewer.column;
@@ -210,12 +210,12 @@ impl JoinHashTable {
         }
 
         if self.hash_join_desc.from_correlated_subquery {
-            // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_chunks`.
+            // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_blocks`.
             // In the following, if value is Null and Marker is False, we'll set the marker to Null
             let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
             *has_null = false;
         }
 
-        Ok(vec![Chunk::empty()])
+        Ok(vec![DataBlock::empty()])
     }
 }

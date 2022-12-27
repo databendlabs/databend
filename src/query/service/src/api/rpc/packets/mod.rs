@@ -24,7 +24,7 @@ mod packet_publisher;
 pub use packet::Packet;
 pub use packet_data::DataPacket;
 pub use packet_data::FragmentData;
-pub use packet_data_precommit::PrecommitChunk;
+pub use packet_data_precommit::PrecommitBlock;
 pub use packet_data_progressinfo::ProgressInfo;
 pub use packet_execute::ExecutePartialQueryPacket;
 pub use packet_executor::QueryFragmentsPlanPacket;

@@ -18,24 +18,24 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 
 use super::Compactor;
 use super::TransformCompact;
 
-pub struct ChunkCompactorNoSplit {
-    thresholds: ChunkCompactThresholds,
+pub struct BlockCompactorNoSplit {
+    thresholds: BlockCompactThresholds,
     aborting: Arc<AtomicBool>,
-    // call chunk.memory_size() only once.
+    // call block.memory_size() only once.
     // we may no longer need it if we start using jsonb, otherwise it should be put in CompactorState
     accumulated_rows: usize,
     accumulated_bytes: usize,
 }
 
-impl ChunkCompactorNoSplit {
-    pub fn new(thresholds: ChunkCompactThresholds) -> Self {
-        ChunkCompactorNoSplit {
+impl BlockCompactorNoSplit {
+    pub fn new(thresholds: BlockCompactThresholds) -> Self {
+        BlockCompactorNoSplit {
             thresholds,
             accumulated_rows: 0,
             accumulated_bytes: 0,
@@ -44,9 +44,9 @@ impl ChunkCompactorNoSplit {
     }
 }
 
-impl Compactor for ChunkCompactorNoSplit {
+impl Compactor for BlockCompactorNoSplit {
     fn name() -> &'static str {
-        "ChunkCompactTransform"
+        "BlockCompactTransform"
     }
 
     fn use_partial_compact() -> bool {
@@ -57,22 +57,22 @@ impl Compactor for ChunkCompactorNoSplit {
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_partial(&mut self, chunks: &mut Vec<Chunk>) -> Result<Vec<Chunk>> {
-        if chunks.is_empty() {
+    fn compact_partial(&mut self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        if blocks.is_empty() {
             return Ok(vec![]);
         }
 
-        let size = chunks.len();
+        let size = blocks.len();
         let mut res = Vec::with_capacity(size);
-        let chunk = chunks[size - 1].clone();
+        let block = blocks[size - 1].clone();
 
-        let num_rows = chunk.num_rows();
-        let num_bytes = chunk.memory_size();
+        let num_rows = block.num_rows();
+        let num_bytes = block.memory_size();
 
         if self.thresholds.check_large_enough(num_rows, num_bytes) {
-            // pass through the new data chunk just arrived
-            res.push(chunk);
-            chunks.remove(size - 1);
+            // pass through the new data block just arrived
+            res.push(block);
+            blocks.remove(size - 1);
         } else {
             let accumulated_rows_new = self.accumulated_rows + num_rows;
             let accumulated_bytes_new = self.accumulated_bytes + num_bytes;
@@ -81,9 +81,9 @@ impl Compactor for ChunkCompactorNoSplit {
                 .thresholds
                 .check_large_enough(accumulated_rows_new, accumulated_bytes_new)
             {
-                // avoid call concat_chunks for each new chunk
-                let merged = Chunk::concat(chunks)?;
-                chunks.clear();
+                // avoid call concat_blocks for each new block
+                let merged = DataBlock::concat(blocks)?;
+                blocks.clear();
                 self.accumulated_rows = 0;
                 self.accumulated_bytes = 0;
                 res.push(merged);
@@ -96,7 +96,7 @@ impl Compactor for ChunkCompactorNoSplit {
         Ok(res)
     }
 
-    fn compact_final(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>> {
+    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let mut res = vec![];
         if self.accumulated_rows != 0 {
             if self.aborting.load(Ordering::Relaxed) {
@@ -105,12 +105,12 @@ impl Compactor for ChunkCompactorNoSplit {
                 ));
             }
 
-            let chunk = Chunk::concat(chunks)?;
-            res.push(chunk);
+            let block = DataBlock::concat(blocks)?;
+            res.push(block);
         }
 
         Ok(res)
     }
 }
 
-pub type TransformChunkCompact = TransformCompact<ChunkCompactorNoSplit>;
+pub type TransformBlockCompact = TransformCompact<BlockCompactorNoSplit>;

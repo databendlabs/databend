@@ -21,8 +21,9 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -48,7 +49,7 @@ impl AsyncSystemTable for StagesTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let stages = UserApiProvider::instance().get_stages(&tenant).await?;
         let mut name: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
@@ -92,37 +93,45 @@ impl AsyncSystemTable for StagesTable {
         }
 
         let rows_len = name.len();
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (Value::Column(Column::from_data(name)), DataType::String),
-                (
-                    Value::Column(Column::from_data(stage_type)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(stage_params)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(copy_options)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(file_format_options)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data_with_validity(
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(name)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(stage_type)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(stage_params)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(copy_options)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(file_format_options)),
+                },
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(DataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                    value: Value::Column(Column::from_data_with_validity(
                         number_of_files,
                         number_of_files_valids,
                     )),
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                ),
-                (
-                    Value::Column(Column::from_data_with_validity(creator, creator_valids)),
-                    DataType::Nullable(Box::new(DataType::String)),
-                ),
-                (Value::Column(Column::from_data(comment)), DataType::String),
+                },
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(DataType::String)),
+                    value: Value::Column(Column::from_data_with_validity(creator, creator_valids)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(comment)),
+                },
             ],
             rows_len,
         ))

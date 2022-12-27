@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::SendableChunkStream;
+use common_expression::DataBlock;
+use common_expression::SendableDataBlockStream;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use futures::StreamExt;
@@ -27,25 +27,25 @@ use crate::processors::sources::AsyncSource;
 use crate::processors::sources::AsyncSourcer;
 
 /// AsyncSource backed by a stream
-pub struct AsyncStreamSource<const SKIP_EMPTY_CHUNK: bool> {
-    stream: Option<SendableChunkStream>,
+pub struct AsyncStreamSource<const SKIP_EMPTY_DATA_BLOCK: bool> {
+    stream: Option<SendableDataBlockStream>,
 }
 
-/// AsyncSource backed by a stream, and will skip empty data chunks
+/// AsyncSource backed by a stream, and will skip empty data blocks
 pub type StreamSource = AsyncStreamSource<true>;
 
-/// AsyncSource backed by a stream, which will NOT skip empty data chunks.
-/// Needed in situations where an empty chunk with schema should be returned
+/// AsyncSource backed by a stream, which will NOT skip empty data blocks.
+/// Needed in situations where an empty block with schema should be returned
 pub type StreamSourceNoSkipEmpty = AsyncStreamSource<false>;
 
 impl<const T: bool> AsyncStreamSource<T> {
-    pub fn new(stream: Option<SendableChunkStream>) -> Self {
+    pub fn new(stream: Option<SendableDataBlockStream>) -> Self {
         AsyncStreamSource { stream }
     }
 
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        stream: Option<SendableChunkStream>,
+        stream: Option<SendableDataBlockStream>,
         out: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx, out, AsyncStreamSource::<T> { stream })
@@ -55,10 +55,10 @@ impl<const T: bool> AsyncStreamSource<T> {
 #[async_trait::async_trait]
 impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
     const NAME: &'static str = "stream source";
-    const SKIP_EMPTY_CHUNK: bool = T;
+    const SKIP_EMPTY_DATA_BLOCK: bool = T;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<Chunk>> {
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self
             .stream
             .as_mut()
@@ -66,7 +66,7 @@ impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
             .next()
             .await
         {
-            Some(Ok(chunk)) => Ok(Some(chunk)),
+            Some(Ok(block)) => Ok(Some(block)),
             Some(Err(e)) => Err(e),
             None => Ok(None),
         }

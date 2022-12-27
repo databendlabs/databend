@@ -21,8 +21,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -47,7 +48,7 @@ impl SyncSystemTable for MetricsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<Chunk> {
+    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
         let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
             ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
         })?;
@@ -65,12 +66,24 @@ impl SyncSystemTable for MetricsTable {
             values.push(self.display_sample_value(&sample.value)?.into_bytes());
         }
 
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (Value::Column(Column::from_data(metrics)), DataType::String),
-                (Value::Column(Column::from_data(kinds)), DataType::String),
-                (Value::Column(Column::from_data(labels)), DataType::String),
-                (Value::Column(Column::from_data(values)), DataType::String),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(metrics)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(kinds)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(labels)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(values)),
+                },
             ],
             rows_len,
         ))

@@ -31,8 +31,9 @@ use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -251,7 +252,7 @@ impl NumbersSource {
 impl SyncSource for NumbersSource {
     const NAME: &'static str = "NumbersSourceTransform";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         let source_remain_size = self.end - self.begin;
 
         match source_remain_size {
@@ -261,11 +262,11 @@ impl SyncSource for NumbersSource {
                 let column_data = (self.begin..self.begin + step).collect::<Vec<_>>();
 
                 self.begin += step;
-                Ok(Some(Chunk::new_from_sequence(
-                    vec![(
-                        Value::Column(Column::from_data(column_data)),
-                        DataType::Number(NumberDataType::UInt64),
-                    )],
+                Ok(Some(DataBlock::new(
+                    vec![BlockEntry {
+                        data_type: DataType::Number(NumberDataType::UInt64),
+                        value: Value::Column(Column::from_data(column_data)),
+                    }],
                     step as usize,
                 )))
             }

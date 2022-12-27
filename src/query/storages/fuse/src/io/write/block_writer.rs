@@ -22,7 +22,7 @@ use common_arrow::parquet::compression::CompressionOptions;
 use common_exception::Result;
 use common_expression::serialize_to_parquet;
 use common_expression::serialize_to_parquet_with_compression;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_storages_table_meta::meta::BlockMeta;
@@ -36,7 +36,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::fuse_table::FuseStorageFormat;
-use crate::index::ChunkFilter;
+use crate::index::BlockFilter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
 
@@ -65,21 +65,21 @@ impl<'a> BlockWriter<'a> {
     pub async fn write(
         &self,
         storage_format: FuseStorageFormat,
-        chunk: Chunk,
+        block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
     ) -> Result<BlockMeta> {
-        let (location, chunk_id) = self.location_generator.gen_block_location();
+        let (location, block_id) = self.location_generator.gen_block_location();
 
         let data_accessor = &self.data_accessor;
-        let row_count = chunk.num_rows() as u64;
-        let block_size = chunk.memory_size() as u64;
+        let row_count = block.num_rows() as u64;
+        let block_size = block.memory_size() as u64;
         let (bloom_filter_index_size, bloom_filter_index_location) = self
-            .build_chunk_index(data_accessor, &chunk, chunk_id)
+            .build_block_index(data_accessor, &block, block_id)
             .await?;
 
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
-        let (file_size, col_metas) = write_block(storage_format, self.schema, chunk, &mut buf)?;
+        let (file_size, col_metas) = write_block(storage_format, self.schema, block, &mut buf)?;
 
         write_data(&buf, data_accessor, &location.0).await?;
         let block_meta = BlockMeta::new(
@@ -96,23 +96,23 @@ impl<'a> BlockWriter<'a> {
         Ok(block_meta)
     }
 
-    pub async fn build_chunk_index(
+    pub async fn build_block_index(
         &self,
         data_accessor: &Operator,
-        chunk: &Chunk,
-        chunk_id: Uuid,
+        block: &DataBlock,
+        block_id: Uuid,
     ) -> Result<(u64, Location)> {
         let bloom_index =
-            ChunkFilter::try_create(FunctionContext::default(), self.schema.clone(), &[chunk])?;
+            BlockFilter::try_create(FunctionContext::default(), self.schema.clone(), &[block])?;
 
-        let index_chunk = bloom_index.filter_chunk;
+        let index_block = bloom_index.filter_block;
         let location = self
             .location_generator
-            .block_bloom_index_location(&chunk_id);
+            .block_bloom_index_location(&block_id);
         let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
         let index_block_schema = &bloom_index.filter_schema;
         let (size, _) = serialize_to_parquet_with_compression(
-            vec![index_chunk],
+            vec![index_block],
             index_block_schema,
             &mut data,
             CompressionOptions::Uncompressed,
@@ -125,12 +125,12 @@ impl<'a> BlockWriter<'a> {
 pub fn write_block(
     storage_format: FuseStorageFormat,
     schema: &TableSchemaRef,
-    chunk: Chunk,
+    block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
     match storage_format {
         FuseStorageFormat::Parquet => {
-            let result = serialize_to_parquet(vec![chunk], schema, buf)?;
+            let result = serialize_to_parquet(vec![block], &schema, buf)?;
             let meta = util::column_metas(&result.1)?;
             Ok((result.0, meta))
         }
@@ -145,7 +145,7 @@ pub fn write_block(
                 },
             );
 
-            let batch = ArrowChunk::try_from(chunk)?;
+            let batch = ArrowChunk::try_from(block)?;
 
             writer.start()?;
             writer.write(&batch)?;

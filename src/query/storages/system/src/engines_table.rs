@@ -20,8 +20,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -45,7 +46,7 @@ impl AsyncSystemTable for EnginesTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         // TODO passin catalog name
         let table_engine_descriptors = ctx.get_catalog(CATALOG_DEFAULT)?.get_table_engines();
         let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());
@@ -56,16 +57,16 @@ impl AsyncSystemTable for EnginesTable {
         }
 
         let rows_len = table_engine_descriptors.len();
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (
-                    Value::Column(Column::from_data(engine_name)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(engine_comment)),
-                    DataType::String,
-                ),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(engine_name)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(engine_comment)),
+                },
             ],
             rows_len,
         ))

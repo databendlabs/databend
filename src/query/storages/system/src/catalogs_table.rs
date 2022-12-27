@@ -20,8 +20,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -45,7 +46,7 @@ impl AsyncSystemTable for CatalogsTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    async fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let cm = CatalogManager::instance();
 
         let catalog_names: Vec<Vec<u8>> = cm
@@ -55,11 +56,11 @@ impl AsyncSystemTable for CatalogsTable {
             .collect();
         let rows = catalog_names.len();
 
-        Ok(Chunk::new_from_sequence(
-            vec![(
-                Value::Column(Column::from_data(catalog_names)),
-                DataType::String,
-            )],
+        Ok(DataBlock::new(
+            vec![BlockEntry {
+                data_type: DataType::String,
+                value: Value::Column(Column::from_data(catalog_names)),
+            }],
             rows,
         ))
     }

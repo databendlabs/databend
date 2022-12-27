@@ -19,13 +19,13 @@ use std::sync::atomic::Ordering;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_CHUNK_SIZE;
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -36,17 +36,17 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &Chunk,
-    ) -> Result<Vec<Chunk>>
+        input: &DataBlock,
+    ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        // The inner join will return multiple data chunks of similar size
-        let mut probed_chunks = vec![];
-        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
-        let mut build_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
+        // The inner join will return multiple data blocks of similar size
+        let mut probed_blocks = vec![];
+        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         for (i, key) in keys_iter.enumerate() {
             // If the join is derived from correlated subquery, then null equality is safe.
@@ -84,9 +84,9 @@ impl JoinHashTable {
                             build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                             probe_indexes.extend(repeat(i as u32).take(addition));
 
-                            probed_chunks.push(self.merge_eq_chunk(
+                            probed_blocks.push(self.merge_eq_block(
                                 &self.row_space.gather(&build_indexes)?,
-                                &Chunk::take(input, &probe_indexes)?,
+                                &DataBlock::take(input, &probe_indexes)?,
                             )?);
 
                             index = new_index;
@@ -100,35 +100,35 @@ impl JoinHashTable {
             }
         }
 
-        probed_chunks.push(self.merge_eq_chunk(
+        probed_blocks.push(self.merge_eq_block(
             &self.row_space.gather(&build_indexes)?,
-            &Chunk::take(input, &probe_indexes)?,
+            &DataBlock::take(input, &probe_indexes)?,
         )?);
 
         match &self.hash_join_desc.other_predicate {
-            None => Ok(probed_chunks),
+            None => Ok(probed_blocks),
             Some(other_predicate) => {
                 let func_ctx = self.ctx.try_get_function_context()?;
-                let mut filtered_chunks = Vec::with_capacity(probed_chunks.len());
+                let mut filtered_blocks = Vec::with_capacity(probed_blocks.len());
 
-                for probed_chunk in probed_chunks {
+                for probed_block in probed_blocks {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
                     }
 
-                    let evaluator = Evaluator::new(&probed_chunk, func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator = Evaluator::new(&probed_block, func_ctx, &BUILTIN_FUNCTIONS);
                     let predicate = evaluator.run(other_predicate).map_err(|(_, e)| {
                         ErrorCode::Internal(format!("Invalid expression: {}", e))
                     })?;
-                    let res = Chunk::filter(probed_chunk, &predicate)?;
+                    let res = probed_block.filter(&predicate)?;
                     if !res.is_empty() {
-                        filtered_chunks.push(res);
+                        filtered_blocks.push(res);
                     }
                 }
 
-                Ok(filtered_chunks)
+                Ok(filtered_blocks)
             }
         }
     }

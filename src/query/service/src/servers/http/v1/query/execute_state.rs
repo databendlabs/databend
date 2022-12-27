@@ -22,7 +22,7 @@ use common_base::base::tokio::sync::RwLock;
 use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_sql::Planner;
 use futures::StreamExt;
 use futures_util::FutureExt;
@@ -208,7 +208,7 @@ impl ExecuteState {
         sql: &str,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender<Chunk>,
+        block_sender: SizedChannelSender<DataBlock>,
     ) -> Result<()> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, _) = planner.plan_sql(sql).await?;
@@ -251,7 +251,7 @@ impl ExecuteState {
 async fn execute(
     interpreter: Arc<dyn Interpreter>,
     ctx: Arc<QueryContext>,
-    block_sender: SizedChannelSender<Chunk>,
+    block_sender: SizedChannelSender<DataBlock>,
     executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
     let mut data_stream = interpreter.execute(ctx.clone()).await?;

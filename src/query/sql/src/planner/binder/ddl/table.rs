@@ -68,6 +68,7 @@ use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::Visibility;
+use crate::executor::PhysicalScalarBuilder;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
@@ -97,7 +98,6 @@ use crate::plans::UndropTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::Planner;
-use crate::ScalarExpr;
 use crate::SelectBuilder;
 
 impl<'a> Binder {
@@ -992,7 +992,9 @@ impl<'a> Binder {
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            if !cluster_key.is_deterministic() {
+            let cluster_key = PhysicalScalarBuilder::build(&cluster_key)?;
+            let expr = cluster_key.as_expr()?;
+            if is_expr_non_deterministic(&expr) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",
                     cluster_by
@@ -1026,5 +1028,17 @@ impl<'a> Binder {
             }
         }
         source_fields
+    }
+}
+
+fn is_expr_non_deterministic(expr: &common_expression::Expr) -> bool {
+    match expr {
+        common_expression::Expr::Constant { .. } => false,
+        common_expression::Expr::ColumnRef { .. } => false,
+        common_expression::Expr::Cast { expr, .. } => is_expr_non_deterministic(expr),
+        common_expression::Expr::FunctionCall { function, args, .. } => {
+            function.signature.property.non_deterministic
+                || args.iter().any(is_expr_non_deterministic)
+        }
     }
 }

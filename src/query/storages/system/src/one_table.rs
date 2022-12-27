@@ -24,8 +24,9 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -49,12 +50,12 @@ impl SyncSystemTable for OneTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<Chunk> {
-        Ok(Chunk::new_from_sequence(
-            vec![(
-                Value::Column(Column::from_data(vec![1u8])),
-                DataType::Number(NumberDataType::UInt8),
-            )],
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+        Ok(DataBlock::new(
+            vec![BlockEntry {
+                data_type: DataType::Number(NumberDataType::UInt8),
+                value: Value::Column(Column::from_data(vec![1u8])),
+            }],
             1,
         ))
     }

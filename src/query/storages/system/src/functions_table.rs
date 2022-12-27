@@ -19,8 +19,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -50,7 +51,7 @@ impl AsyncSystemTable for FunctionsTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let function_factory = FunctionFactory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let func_names = function_factory.registered_names();
@@ -139,31 +140,40 @@ impl AsyncSystemTable for FunctionsTable {
             .collect::<Vec<&str>>();
 
         let rows_len = func_names.len();
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (Value::Column(Column::from_data(names)), DataType::String),
-                (
-                    Value::Column(Column::from_data(is_builtin)),
-                    DataType::Boolean,
-                ),
-                (
-                    Value::Column(Column::from_data(is_aggregate)),
-                    DataType::Boolean,
-                ),
-                (
-                    Value::Column(Column::from_data(definitions)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(categorys)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(descriptions)),
-                    DataType::String,
-                ),
-                (Value::Column(Column::from_data(syntaxs)), DataType::String),
-                (Value::Column(Column::from_data(examples)), DataType::String),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(names)),
+                },
+                BlockEntry {
+                    data_type: DataType::Boolean,
+                    value: Value::Column(Column::from_data(is_builtin)),
+                },
+                BlockEntry {
+                    data_type: DataType::Boolean,
+                    value: Value::Column(Column::from_data(is_aggregate)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(definitions)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(categorys)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(descriptions)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(syntaxs)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(examples)),
+                },
             ],
             rows_len,
         ))

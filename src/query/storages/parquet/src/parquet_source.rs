@@ -22,12 +22,11 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Evaluator;
 use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
@@ -41,7 +40,7 @@ use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::State::Generated;
 
 struct PrewhereData {
-    chunk: Chunk,
+    data_block: DataBlock,
     filter: Value<BooleanType>,
 }
 
@@ -51,7 +50,7 @@ enum State {
     ReadDataRemain(PartInfoPtr, PrewhereData),
     PrewhereFilter(PartInfoPtr, Vec<IndexedChunk>),
     Deserialize(PartInfoPtr, Vec<IndexedChunk>, Option<PrewhereData>),
-    Generated(Option<PartInfoPtr>, Chunk),
+    Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
 
@@ -107,17 +106,18 @@ impl ParquetSource {
     ) -> Result<()> {
         let rg_part = ParquetRowGroupPart::from_part(&part)?;
         // deserialize prewhere data block first
-        let chunk = self
+        let data_block = self
             .prewhere_reader
             .deserialize(rg_part, raw_chunks, None)?;
         if let Some(filter) = self.prewhere_filter.as_ref() {
             // do filter
-            let evaluator = Evaluator::new(&chunk, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+            let func_ctx = self.ctx.try_get_function_context()?;
+            let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
             let res = evaluator.run(filter).map_err(|(_, e)| {
                 ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
             })?;
-            let filter = Chunk::<String>::cast_to_nonull_boolean(&res).ok_or_else(|| {
+            let filter = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
                 ErrorCode::BadArguments(
                     "Result of filter expression cannot be converted to boolean.",
                 )
@@ -133,40 +133,40 @@ impl ParquetSource {
                 // all rows in this block are filtered out
                 // turn to begin the next state cycle.
                 let progress_values = ProgressValues {
-                    rows: chunk.num_rows(),
-                    bytes: chunk.memory_size(),
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
 
                 // Generate a empty block.
-                self.state = Generated(self.ctx.try_get_part(), Chunk::empty());
+                self.state = Generated(
+                    self.ctx.try_get_part(),
+                    DataBlock::empty_with_schema(self.output_schema.clone()),
+                );
                 return Ok(());
             }
 
             let (rows, bytes) = if self.remain_reader.is_none() {
-                (chunk.num_rows(), chunk.memory_size())
+                (data_block.num_rows(), data_block.memory_size())
             } else {
                 (0, 0)
             };
 
-            let filtered_chunk = match &filter {
-                Value::Scalar(_) => chunk,
-                Value::Column(bitmap) => Chunk::filter_chunk_with_bitmap(chunk, bitmap)?,
+            let filtered_block = match &filter {
+                Value::Scalar(_) => data_block,
+                Value::Column(bitmap) => DataBlock::filter_with_bitmap(data_block, bitmap)?,
             };
 
             if self.remain_reader.is_none() {
                 // shortcut, we don't need to read remain data
                 let progress_values = ProgressValues { rows, bytes };
                 self.scan_progress.incr(&progress_values);
-                let chunk = Chunk::resort(
-                    filtered_chunk,
-                    self.src_schema.as_ref(),
-                    self.output_schema.as_ref(),
-                )?;
-                self.state = Generated(self.ctx.try_get_part(), chunk);
+                let block =
+                    filtered_block.resort(self.src_schema.as_ref(), self.output_schema.as_ref())?;
+                self.state = Generated(self.ctx.try_get_part(), block);
             } else {
                 self.state = State::ReadDataRemain(part, PrewhereData {
-                    chunk: filtered_chunk,
+                    data_block: filtered_block,
                     filter,
                 });
             }
@@ -185,15 +185,15 @@ impl ParquetSource {
         prewhere_data: Option<PrewhereData>,
     ) -> Result<()> {
         let rg_part = ParquetRowGroupPart::from_part(&part)?;
-        let output_chunk = if let Some(PrewhereData {
-            chunk: mut prewhere_chunk,
+        let output_block = if let Some(PrewhereData {
+            data_block: mut prewhere_block,
             filter,
         }) = prewhere_data
         {
-            let chunk = if raw_chunks.is_empty() {
-                prewhere_chunk
+            let block = if raw_chunks.is_empty() {
+                prewhere_block
             } else if let Some(remain_reader) = self.remain_reader.as_ref() {
-                let remain_chunk = match filter {
+                let remain_block = match filter {
                     Value::Scalar(_) => {
                         // The case of all filtered is already covered in `do_prewhere_filter`.
                         // don't need filter
@@ -210,22 +210,22 @@ impl ParquetSource {
                 };
 
                 assert_eq!(
-                    prewhere_chunk.num_rows(),
-                    remain_chunk.num_rows(),
-                    "prewhere and remain chunks should have same row number. (prewhere: {}, remain: {})",
-                    prewhere_chunk.num_rows(),
-                    remain_chunk.num_rows()
+                    prewhere_block.num_rows(),
+                    remain_block.num_rows(),
+                    "prewhere and remain blocks should have same row number. (prewhere: {}, remain: {})",
+                    prewhere_block.num_rows(),
+                    remain_block.num_rows()
                 );
 
                 // Combine two blocks.
-                for col in remain_chunk.columns() {
-                    prewhere_chunk.add_column(col.clone());
+                for col in remain_block.columns() {
+                    prewhere_block.add_column(col.clone());
                 }
-                prewhere_chunk
+                prewhere_block
             } else {
                 return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
             };
-            chunk
+            block
         } else {
             // There is only prewhere reader.
             assert!(self.remain_reader.is_none());
@@ -234,17 +234,14 @@ impl ParquetSource {
         };
 
         let progress_values = ProgressValues {
-            rows: output_chunk.num_rows(),
-            bytes: output_chunk.memory_size(),
+            rows: output_block.num_rows(),
+            bytes: output_block.memory_size(),
         };
         self.scan_progress.incr(&progress_values);
 
-        let output_chunk = Chunk::resort(
-            output_chunk,
-            self.src_schema.as_ref(),
-            self.output_schema.as_ref(),
-        )?;
-        self.state = State::Generated(self.ctx.try_get_part(), output_chunk);
+        let output_block =
+            output_block.resort(self.src_schema.as_ref(), self.output_schema.as_ref())?;
+        self.state = State::Generated(self.ctx.try_get_part(), output_block);
         Ok(())
     }
 }
@@ -281,11 +278,11 @@ impl Processor for ParquetSource {
         }
 
         if matches!(self.state, State::Generated(_, _)) {
-            if let Generated(part, chunk) = std::mem::replace(&mut self.state, State::Finish) {
+            if let Generated(part, data_block) = std::mem::replace(&mut self.state, State::Finish) {
                 if let Some(part) = part {
                     self.state = State::ReadDataPrewhere(Some(part));
                 }
-                self.output.push_data(Ok(chunk));
+                self.output.push_data(Ok(data_block));
                 return Ok(Event::NeedConsume);
             }
         }

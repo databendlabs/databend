@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 use common_expression::serialize_to_parquet;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 
 use crate::output_format::OutputFormat;
@@ -23,35 +23,35 @@ use crate::FileFormatOptionsExt;
 #[derive(Default)]
 pub struct ParquetOutputFormat {
     schema: TableSchemaRef,
-    chunks: Vec<Chunk>,
+    data_blocks: Vec<DataBlock>,
 }
 
 impl ParquetOutputFormat {
     pub fn create(schema: TableSchemaRef, _options: &FileFormatOptionsExt) -> Self {
         Self {
             schema,
-            chunks: vec![],
+            data_blocks: vec![],
         }
     }
 }
 
 impl OutputFormat for ParquetOutputFormat {
-    fn serialize_chunk(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
-        self.chunks.push(chunk.clone());
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
+        self.data_blocks.push(block.clone());
         Ok(vec![])
     }
 
     fn buffer_size(&mut self) -> usize {
-        self.chunks.iter().map(|b| b.memory_size()).sum()
+        self.data_blocks.iter().map(|b| b.memory_size()).sum()
     }
 
     fn finalize(&mut self) -> Result<Vec<u8>> {
-        let chunks = std::mem::take(&mut self.chunks);
-        if chunks.is_empty() {
+        let blocks = std::mem::take(&mut self.data_blocks);
+        if blocks.is_empty() {
             return Ok(vec![]);
         }
         let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-        let _ = serialize_to_parquet(chunks, &self.schema, &mut buf)?;
+        let _ = serialize_to_parquet(blocks, &self.schema, &mut buf)?;
         Ok(buf)
     }
 }

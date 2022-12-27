@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 
-use crate::procedures::OneChunkProcedure;
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -35,7 +35,7 @@ impl FuseSegmentProcedure {
 }
 
 #[async_trait::async_trait]
-impl OneChunkProcedure for FuseSegmentProcedure {
+impl OneBlockProcedure for FuseSegmentProcedure {
     fn name(&self) -> &str {
         "FUSE_SEGMENT"
     }
@@ -44,7 +44,7 @@ impl OneChunkProcedure for FuseSegmentProcedure {
         ProcedureFeatures::default().num_arguments(3)
     }
 
-    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<Chunk> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let database_name = args[0].clone();
         let table_name = args[1].clone();
         let snapshot_id = args[2].clone();

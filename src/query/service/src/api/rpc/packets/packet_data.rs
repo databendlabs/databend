@@ -24,7 +24,7 @@ use common_exception::Result;
 use tracing::error;
 
 use crate::api::rpc::packets::ProgressInfo;
-use crate::api::PrecommitChunk;
+use crate::api::PrecommitBlock;
 
 pub struct FragmentData {
     meta: Vec<u8>,
@@ -53,7 +53,7 @@ pub enum DataPacket {
     FetchProgressAndPrecommit,
     ProgressAndPrecommit {
         progress: Vec<ProgressInfo>,
-        precommit: Vec<PrecommitChunk>,
+        precommit: Vec<PrecommitBlock>,
     },
     // NOTE: Unknown reason. This may be tonic's bug.
     // when we use two-way streaming grpc for data exchange,
@@ -164,7 +164,7 @@ impl TryFrom<FlightData> for DataPacket {
                 // Pre-commit.
                 let mut precommit = Vec::with_capacity(precommit_size as usize);
                 for _index in 0..precommit_size {
-                    precommit.push(PrecommitChunk::read(&mut bytes)?);
+                    precommit.push(PrecommitBlock::read(&mut bytes)?);
                 }
 
                 Ok(DataPacket::ProgressAndPrecommit {

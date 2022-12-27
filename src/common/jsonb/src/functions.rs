@@ -138,7 +138,7 @@ pub fn array_length(value: &[u8]) -> Option<usize> {
 pub fn get_by_name_ignore_case(value: &[u8], name: &str) -> Option<Vec<u8>> {
     if !is_jsonb(value) {
         let json_value = decode_value(value).unwrap();
-        return json_value.get_by_name_ignore_case(name).map(to_vec);
+        return json_value.get_by_name_ignore_case(name).map(Value::to_vec);
     }
 
     let header = read_u32(value, 0).unwrap();
@@ -209,7 +209,7 @@ pub fn get_by_name_ignore_case(value: &[u8], name: &str) -> Option<Vec<u8>> {
 pub fn get_by_path<'a>(value: &'a [u8], paths: Vec<JsonPath<'a>>) -> Option<Vec<u8>> {
     if !is_jsonb(value) {
         let json_value = decode_value(value).unwrap();
-        return json_value.get_by_path(&paths).map(to_vec);
+        return json_value.get_by_path(&paths).map(Value::to_vec);
     }
 
     let mut offset = 0;
@@ -315,7 +315,7 @@ pub fn get_by_path<'a>(value: &'a [u8], paths: Vec<JsonPath<'a>>) -> Option<Vec<
 pub fn object_keys(value: &[u8]) -> Option<Vec<u8>> {
     if !is_jsonb(value) {
         let json_value = decode_value(value).unwrap();
-        return json_value.object_keys().map(|val| to_vec(&val));
+        return json_value.object_keys().map(|val| val.to_vec());
     }
 
     let header = read_u32(value, 0).unwrap();
@@ -358,11 +358,11 @@ pub fn object_keys(value: &[u8]) -> Option<Vec<u8>> {
 pub fn compare(left: &[u8], right: &[u8]) -> Result<Ordering, Error> {
     if !is_jsonb(left) {
         let lval = decode_value(left).unwrap();
-        let lbuf = to_vec(&lval);
+        let lbuf = lval.to_vec();
         return compare(&lbuf, right);
     } else if !is_jsonb(right) {
         let rval = decode_value(right).unwrap();
-        let rbuf = to_vec(&rval);
+        let rbuf = rval.to_vec();
         return compare(left, &rbuf);
     }
 
@@ -996,12 +996,6 @@ fn is_jsonb(value: &[u8]) -> bool {
         }
     }
     false
-}
-
-fn to_vec(value: &Value<'_>) -> Vec<u8> {
-    let mut buf = Vec::new();
-    value.to_vec(&mut buf);
-    buf
 }
 
 fn read_char(buf: &[u8], idx: &mut usize) -> Result<u8, Error> {

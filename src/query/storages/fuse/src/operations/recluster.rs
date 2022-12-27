@@ -25,7 +25,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
-use common_pipeline_transforms::processors::transforms::ChunkCompactor;
+use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
@@ -87,7 +87,7 @@ impl FuseTable {
             }
         });
 
-        let chunk_compact_thresholds = self.get_chunk_compact_thresholds();
+        let block_compact_thresholds = self.get_block_compact_thresholds();
         let avg_depth_threshold = self.get_option(
             FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
             DEFAULT_AVG_DEPTH_THRESHOLD,
@@ -105,7 +105,7 @@ impl FuseTable {
             self.meta_location_generator.clone(),
             snapshot,
             threshold,
-            chunk_compact_thresholds,
+            block_compact_thresholds,
             blocks_map,
             self.operator.clone(),
         )?;
@@ -150,7 +150,7 @@ impl FuseTable {
             ctx.clone(),
             pipeline,
             mutator.level() + 1,
-            chunk_compact_thresholds,
+            block_compact_thresholds,
         )?;
 
         let _schema = table_info.schema();
@@ -158,8 +158,8 @@ impl FuseTable {
         let sort_descs: Vec<SortColumnDescription> = cluster_stats_gen
             .cluster_key_index
             .iter()
-            .map(|index| SortColumnDescription {
-                index: *index,
+            .map(|offset| SortColumnDescription {
+                offset: *offset,
                 asc: true,
                 nulls_first: false,
             })
@@ -173,12 +173,12 @@ impl FuseTable {
                 sort_descs.clone(),
             )
         })?;
-        let chunk_size = ctx.get_settings().get_max_block_size()? as usize;
+        let block_size = ctx.get_settings().get_max_block_size()? as usize;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformSortMerge::try_create(
                 transform_input_port,
                 transform_output_port,
-                SortMergeCompactor::new(chunk_size, None, sort_descs.clone()),
+                SortMergeCompactor::new(block_size, None, sort_descs.clone()),
             )
         })?;
 
@@ -188,7 +188,7 @@ impl FuseTable {
         try_add_multi_sort_merge(
             pipeline,
             DataSchemaRefExt::create(output_fields),
-            chunk_size,
+            block_size,
             None,
             sort_descs,
         )?;
@@ -197,7 +197,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                ChunkCompactor::new(chunk_compact_thresholds, true),
+                BlockCompactor::new(block_compact_thresholds, true),
             )
         })?;
 
@@ -209,7 +209,7 @@ impl FuseTable {
                 self.operator.clone(),
                 self.meta_location_generator().clone(),
                 cluster_stats_gen.clone(),
-                chunk_compact_thresholds,
+                block_compact_thresholds,
                 self.table_info.schema(),
                 self.storage_format,
                 None,

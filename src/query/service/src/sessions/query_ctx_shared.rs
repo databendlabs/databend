@@ -26,7 +26,7 @@ use common_catalog::table_context::StageAttachment;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
@@ -58,9 +58,9 @@ type DatabaseAndTable = (String, String, String);
 pub struct QueryContextShared {
     /// scan_progress for scan metrics of datablocks (uncompressed)
     pub(in crate::sessions) scan_progress: Arc<Progress>,
-    /// write_progress for write/commit metrics of chunks (uncompressed)
+    /// write_progress for write/commit metrics of datablocks (uncompressed)
     pub(in crate::sessions) write_progress: Arc<Progress>,
-    /// result_progress for metrics of result chunks (uncompressed)
+    /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
     pub(in crate::sessions) session: Arc<Session>,
@@ -76,7 +76,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
-    pub(in crate::sessions) precommit_chunks: Arc<RwLock<Vec<Chunk>>>,
+    pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
     pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
 }
@@ -105,7 +105,7 @@ impl QueryContextShared {
             auth_manager: AuthMgr::create(config).await?,
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
-            precommit_chunks: Arc::new(RwLock::new(vec![])),
+            precommit_blocks: Arc::new(RwLock::new(vec![])),
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
         }))
@@ -295,17 +295,17 @@ impl QueryContextShared {
         *executor = weak_ptr;
     }
 
-    pub fn push_precommit_chunk(&self, chunk: Chunk) {
-        let mut chunks = self.precommit_chunks.write();
-        chunks.push(chunk);
+    pub fn push_precommit_block(&self, block: DataBlock) {
+        let mut blocks = self.precommit_blocks.write();
+        blocks.push(block);
     }
 
-    pub fn consume_precommit_chunks(&self) -> Vec<Chunk> {
-        let mut chunks = self.precommit_chunks.write();
+    pub fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        let mut blocks = self.precommit_blocks.write();
 
-        let mut swaped_precommit_chunks = vec![];
-        std::mem::swap(&mut *chunks, &mut swaped_precommit_chunks);
-        swaped_precommit_chunks
+        let mut swaped_precommit_blocks = vec![];
+        std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
+        swaped_precommit_blocks
     }
 
     pub fn get_stage_attachment(&self) -> Option<StageAttachment> {

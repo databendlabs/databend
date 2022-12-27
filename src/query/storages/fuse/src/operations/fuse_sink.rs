@@ -23,12 +23,11 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::serialize_to_parquet_with_compression;
-use common_expression::Chunk;
-use common_expression::ChunkCompactThresholds;
-use common_expression::FunctionContext;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::OutputPort;
-use common_storages_index::ChunkFilter;
+use common_storages_index::BlockFilter;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnMeta;
@@ -57,14 +56,15 @@ pub struct BloomIndexState {
 
 impl BloomIndexState {
     pub fn try_create(
+        ctx: Arc<dyn TableContext>,
         source_schema: TableSchemaRef,
-        chunk: &Chunk,
+        block: &DataBlock,
         location: Location,
     ) -> Result<(Self, HashMap<usize, usize>)> {
-        let func_ctx = FunctionContext::default();
         // write index
-        let bloom_index = ChunkFilter::try_create(func_ctx, source_schema, &[chunk])?;
-        let index_block = bloom_index.filter_chunk;
+        let bloom_index =
+            BlockFilter::try_create(ctx.try_get_function_context()?, source_schema, &[block])?;
+        let index_block = bloom_index.filter_block;
         let mut data = Vec::with_capacity(100 * 1024);
         let index_block_schema = &bloom_index.filter_schema;
         let (size, _) = serialize_to_parquet_with_compression(
@@ -86,7 +86,7 @@ impl BloomIndexState {
 
 enum State {
     None,
-    NeedSerialize(Chunk),
+    NeedSerialize(DataBlock),
     Serialized {
         data: Vec<u8>,
         size: u64,
@@ -132,7 +132,7 @@ impl FuseTableSink {
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
-        thresholds: ChunkCompactThresholds,
+        thresholds: BlockCompactThresholds,
         source_schema: TableSchemaRef,
         storage_format: FuseStorageFormat,
         output: Option<Arc<OutputPort>>,
@@ -201,26 +201,30 @@ impl Processor for FuseTableSink {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::NeedSerialize(chunk) => {
-                let (cluster_stats, chunk) = self.cluster_stats_gen.gen_stats_for_append(&chunk)?;
+            State::NeedSerialize(data_block) => {
+                let (cluster_stats, block) =
+                    self.cluster_stats_gen.gen_stats_for_append(&data_block)?;
 
-                let (chunk_location, chunk_id) = self.meta_locations.gen_block_location();
+                let (block_location, block_id) = self.meta_locations.gen_block_location();
 
-                let location = self.meta_locations.block_bloom_index_location(&chunk_id);
-                let (bloom_index_state, column_distinct_count) =
-                    BloomIndexState::try_create(self.source_schema.clone(), &chunk, location)?;
+                let location = self.meta_locations.block_bloom_index_location(&block_id);
+                let (bloom_index_state, column_distinct_count) = BloomIndexState::try_create(
+                    self.ctx.clone(),
+                    self.source_schema.clone(),
+                    &block,
+                    location,
+                )?;
 
                 let block_statistics = BlockStatistics::from(
-                    &chunk,
-                    chunk_location.0,
+                    &block,
+                    block_location.0,
                     cluster_stats,
                     Some(column_distinct_count),
                 )?;
-
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let (size, meta_data) =
-                    io::write_block(self.storage_format, &self.source_schema, chunk, &mut data)?;
+                    io::write_block(self.storage_format, &self.source_schema, block, &mut data)?;
 
                 self.state = State::Serialized {
                     data,
@@ -258,8 +262,8 @@ impl Processor for FuseTableSink {
 
                 // TODO: dyn operation for table trait
                 let log_entry = AppendOperationLogEntry::new(location, segment);
-                let data_block = Chunk::try_from(log_entry)?;
-                self.ctx.push_precommit_chunk(data_block);
+                let data_block = DataBlock::try_from(log_entry)?;
+                self.ctx.push_precommit_block(data_block);
             }
             _state => {
                 return Err(ErrorCode::Internal("Unknown state for fuse table sink"));

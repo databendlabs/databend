@@ -14,6 +14,7 @@ test = false
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
+common-jsonb = { path = "../../../common/jsonb" }
 common-cache = { path = "../../../common/cache" }
 common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }

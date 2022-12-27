@@ -162,13 +162,12 @@ impl ParquetTable {
                     &file_meta.row_groups,
                     &columns_to_read,
                 ) {
-                    for (idx, (stats, rg)) in row_group_stats
+                    for (idx, (stats, _rg)) in row_group_stats
                         .iter()
                         .zip(file_meta.row_groups.iter())
                         .enumerate()
                     {
-                        row_group_pruned[idx] =
-                            !row_group_pruner.should_keep(stats, rg.num_rows() as u64);
+                        row_group_pruned[idx] = !row_group_pruner.should_keep(stats);
                     }
                 }
 
@@ -202,10 +201,9 @@ impl ParquetTable {
         // If there is a `PrewhereInfo`, the final output should be `PrehwereInfo.output_columns`.
         // `PrewhereInfo.output_columns` should be a subset of `PushDownInfo.projection`.
         let output_projection = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-            None => PushDownInfo::projection_of_push_downs(
-                self.table_info.schema().as_ref(),
-                &plan.push_downs,
-            ),
+            None => {
+                PushDownInfo::projection_of_push_downs(&*self.table_info.schema(), &plan.push_downs)
+            }
             Some(v) => v.output_columns,
         };
         let output_schema = Arc::new(DataSchema::from(

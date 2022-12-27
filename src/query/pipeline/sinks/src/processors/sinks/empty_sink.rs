@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 
@@ -33,7 +33,7 @@ impl EmptySink {
 impl Sink for EmptySink {
     const NAME: &'static str = "EmptySink";
 
-    fn consume(&mut self, _: Chunk) -> Result<()> {
+    fn consume(&mut self, _: DataBlock) -> Result<()> {
         Ok(())
     }
 }

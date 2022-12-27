@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod aggregator;
+pub mod group_by;
 pub(crate) mod hash_join;
 mod transform_addon;
 mod transform_aggregator;
@@ -20,19 +21,17 @@ mod transform_cast_schema;
 mod transform_create_sets;
 mod transform_dummy;
 mod transform_hash_join;
+mod transform_left_join;
 mod transform_limit;
 mod transform_mark_join;
-
-pub mod group_by;
-mod transform_left_join;
-mod transform_merge_chunk;
+mod transform_merge_block;
 mod transform_right_join;
 mod transform_right_semi_anti_join;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
 use common_pipeline_transforms::processors::transforms::transform;
-use common_pipeline_transforms::processors::transforms::transform_chunk_compact;
+use common_pipeline_transforms::processors::transforms::transform_block_compact;
 use common_pipeline_transforms::processors::transforms::transform_compact;
 use common_pipeline_transforms::processors::transforms::transform_sort_merge;
 use common_pipeline_transforms::processors::transforms::transform_sort_partial;
@@ -44,9 +43,9 @@ pub use hash_join::JoinHashTable;
 pub use hash_join::SerializerHashTable;
 pub use transform_addon::TransformAddOn;
 pub use transform_aggregator::TransformAggregator;
+pub use transform_block_compact::BlockCompactor;
+pub use transform_block_compact::TransformBlockCompact;
 pub use transform_cast_schema::TransformCastSchema;
-pub use transform_chunk_compact::ChunkCompactor;
-pub use transform_chunk_compact::TransformChunkCompact;
 pub use transform_compact::Compactor;
 pub use transform_compact::TransformCompact;
 pub use transform_create_sets::SubqueryReceiver;
@@ -59,7 +58,7 @@ pub use transform_left_join::TransformLeftJoin;
 pub use transform_limit::TransformLimit;
 pub use transform_mark_join::MarkJoinCompactor;
 pub use transform_mark_join::TransformMarkJoin;
-pub use transform_merge_chunk::TransformMergeChunk;
+pub use transform_merge_block::TransformMergeBlock;
 pub use transform_right_join::RightJoinCompactor;
 pub use transform_right_join::TransformRightJoin;
 pub use transform_right_semi_anti_join::RightSemiAntiJoinCompactor;

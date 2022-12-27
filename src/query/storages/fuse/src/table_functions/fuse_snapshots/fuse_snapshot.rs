@@ -17,9 +17,10 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -44,7 +45,7 @@ impl<'a> FuseSnapshot<'a> {
         Self { ctx, table }
     }
 
-    pub async fn get_snapshots(self, limit: Option<usize>) -> Result<Chunk> {
+    pub async fn get_snapshots(self, limit: Option<usize>) -> Result<DataBlock> {
         let meta_location_generator = self.table.meta_location_generator.clone();
         let snapshot_location = self.table.snapshot_loc().await?;
         let snapshot = self.table.read_table_snapshot().await?;
@@ -88,17 +89,19 @@ impl<'a> FuseSnapshot<'a> {
                     .await
             }?;
 
-            return self.to_chunk(&meta_location_generator, &snapshot_lite, snapshot_version);
+            return self.to_block(&meta_location_generator, &snapshot_lite, snapshot_version);
         }
-        Ok(Chunk::empty())
+        Ok(DataBlock::empty_with_schema(Arc::new(
+            FuseSnapshot::schema().into(),
+        )))
     }
 
-    fn to_chunk(
+    fn to_block(
         &self,
         location_generator: &TableMetaLocationGenerator,
         snapshots: &[TableSnapshotLite],
         latest_snapshot_version: u64,
-    ) -> Result<Chunk> {
+    ) -> Result<DataBlock> {
         let len = snapshots.len();
         let mut snapshot_ids: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut snapshot_locations: Vec<Vec<u8>> = Vec::with_capacity(len);
@@ -135,52 +138,52 @@ impl<'a> FuseSnapshot<'a> {
             current_snapshot_version = ver;
         }
 
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (
-                    Value::Column(Column::from_data(snapshot_ids)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(snapshot_locations)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(format_versions)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(prev_snapshot_ids)),
-                    DataType::String.wrap_nullable(),
-                ),
-                (
-                    Value::Column(Column::from_data(segment_count)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(block_count)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(row_count)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(uncompressed)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(compressed)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(index_size)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(timestamps)),
-                    DataType::Timestamp.wrap_nullable(),
-                ),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(snapshot_ids)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(snapshot_locations)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(format_versions)),
+                },
+                BlockEntry {
+                    data_type: DataType::String.wrap_nullable(),
+                    value: Value::Column(Column::from_data(prev_snapshot_ids)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(segment_count)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(block_count)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(row_count)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(uncompressed)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(compressed)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(index_size)),
+                },
+                BlockEntry {
+                    data_type: DataType::Timestamp.wrap_nullable(),
+                    value: Value::Column(Column::from_data(timestamps)),
+                },
             ],
             len,
         ))

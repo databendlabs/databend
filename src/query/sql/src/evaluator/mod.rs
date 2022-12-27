@@ -14,7 +14,7 @@
 
 // TODO(leiysky): move this crate to common-pipeline-core
 
-mod chunk_operator;
+mod block_operator;
 
-pub use chunk_operator::ChunkOperator;
-pub use chunk_operator::CompoundChunkOperator;
+pub use block_operator::BlockOperator;
+pub use block_operator::CompoundBlockOperator;

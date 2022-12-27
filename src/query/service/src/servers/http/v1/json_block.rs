@@ -17,8 +17,8 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_formats::field_encoder::FieldEncoderRowBased;
@@ -34,14 +34,18 @@ pub struct JsonBlock {
 
 pub type JsonBlockRef = Arc<JsonBlock>;
 
-pub fn block_to_json_value(chunk: &Chunk, format: &FormatSettings) -> Result<Vec<Vec<JsonValue>>> {
-    if chunk.is_empty() {
+pub fn block_to_json_value(
+    block: &DataBlock,
+    format: &FormatSettings,
+) -> Result<Vec<Vec<JsonValue>>> {
+    if block.is_empty() {
         return Ok(vec![]);
     }
-    let rows_size = chunk.num_rows();
-    let columns: Vec<Column> = chunk
+    let rows_size = block.num_rows();
+    let columns: Vec<Column> = block
         .convert_to_full()
         .columns()
+        .iter()
         .map(|column| column.value.clone().into_column().unwrap())
         .collect();
 
@@ -49,8 +53,8 @@ pub fn block_to_json_value(chunk: &Chunk, format: &FormatSettings) -> Result<Vec
     let encoder = FieldEncoderValues::create_for_http_handler(format.timezone);
     let mut buf = vec![];
     for row_index in 0..rows_size {
-        let mut row: Vec<JsonValue> = Vec::with_capacity(chunk.num_columns());
-        for column in columns.iter() {
+        let mut row: Vec<JsonValue> = Vec::with_capacity(block.num_columns());
+        for column in &columns {
             buf.clear();
             encoder.write_field(column, row_index, &mut buf, true);
             row.push(serde_json::to_value(
@@ -71,9 +75,9 @@ impl JsonBlock {
         }
     }
 
-    pub fn new(schema: DataSchemaRef, chunk: &Chunk, format: &FormatSettings) -> Result<Self> {
+    pub fn new(schema: DataSchemaRef, block: &DataBlock, format: &FormatSettings) -> Result<Self> {
         Ok(JsonBlock {
-            data: block_to_json_value(chunk, format)?,
+            data: block_to_json_value(block, format)?,
             schema,
         })
     }

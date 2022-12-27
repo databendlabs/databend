@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 
-use crate::Chunk;
+use crate::DataBlock;
 
-pub type SendableChunkStream =
-    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Chunk>> + Send>>;
+pub type SendableDataBlockStream =
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;

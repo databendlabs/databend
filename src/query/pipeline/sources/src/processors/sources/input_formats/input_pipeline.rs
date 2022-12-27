@@ -22,7 +22,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::Pipeline;
 use futures::AsyncRead;
 use futures_util::stream::FuturesUnordered;
@@ -67,14 +67,14 @@ pub trait AligningStateTrait: Sync + Sized {
     }
 }
 
-pub trait ChunkBuilderTrait {
-    type Pipe: InputFormatPipe<ChunkBuilder = Self>;
+pub trait BlockBuilderTrait {
+    type Pipe: InputFormatPipe<BlockBuilder = Self>;
     fn create(ctx: Arc<InputContext>) -> Self;
 
     fn deserialize(
         &mut self,
         batch: Option<<Self::Pipe as InputFormatPipe>::RowBatch>,
-    ) -> Result<Vec<Chunk>>;
+    ) -> Result<Vec<DataBlock>>;
 }
 
 pub trait ReadBatchTrait: From<Vec<u8>> + Send + Debug {
@@ -98,7 +98,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     type ReadBatch: ReadBatchTrait;
     type RowBatch: RowBatchTrait;
     type AligningState: AligningStateTrait<Pipe = Self> + Send;
-    type ChunkBuilder: ChunkBuilderTrait<Pipe = Self> + Send;
+    type BlockBuilder: BlockBuilderTrait<Pipe = Self> + Send;
 
     fn get_split_meta(split_info: &Arc<SplitInfo>) -> Option<&Self::SplitMeta> {
         split_info

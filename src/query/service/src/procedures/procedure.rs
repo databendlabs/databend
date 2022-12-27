@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
-use common_expression::SendableChunkStream;
+use common_expression::SendableDataBlockStream;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
@@ -77,32 +77,32 @@ pub trait Procedure: Sync + Send {
     fn schema(&self) -> Arc<DataSchema>;
 }
 
-/// Procedure that returns all the data in one Chunk
+/// Procedure that returns all the data in one DataBlock
 /// For procedures that returns a small amount of data only.
 /// If procedure may return a large amount of data, please use [StreamProcedure]
 ///
 /// Technically, it is not [Procedure] but a builder of procedure.
 /// The method `into_procedure` is be used while registering to [ProcedureFactory],
 #[async_trait::async_trait]
-pub trait OneChunkProcedure {
+pub trait OneBlockProcedure {
     fn into_procedure(self) -> Box<dyn Procedure>
     where
         Self: Send + Sync,
         Self: Sized + 'static,
     {
-        Box::new(impls::OneChunkProcedureWrapper(self))
+        Box::new(impls::OneBlockProcedureWrapper(self))
     }
 
     fn name(&self) -> &str;
 
     fn features(&self) -> ProcedureFeatures;
 
-    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<Chunk>;
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock>;
 
     fn schema(&self) -> Arc<DataSchema>;
 }
 
-/// Procedure that returns data as [`SendableChunkStream`]
+/// Procedure that returns data as [SendableBlockStream]
 ///
 /// Technically, it is not [Procedure] but a builder of procedure.
 /// The method `into_procedure` is be used while registering to [ProcedureFactory],
@@ -126,21 +126,21 @@ where Self: Sized
         &self,
         ctx: Arc<QueryContext>,
         args: Vec<String>,
-    ) -> Result<SendableChunkStream>;
+    ) -> Result<SendableDataBlockStream>;
 
     fn schema(&self) -> Arc<DataSchema>;
 }
 
 mod impls {
     use super::*;
-    use crate::stream::ChunkStream;
+    use crate::stream::DataBlockStream;
 
     // To avoid implementation conflicts, introduce a new type
-    pub(in self::super) struct OneChunkProcedureWrapper<T>(pub T);
+    pub(in self::super) struct OneBlockProcedureWrapper<T>(pub T);
 
     #[async_trait::async_trait]
-    impl<T> Procedure for OneChunkProcedureWrapper<T>
-    where T: OneChunkProcedure + Sync + Send
+    impl<T> Procedure for OneBlockProcedureWrapper<T>
+    where T: OneBlockProcedure + Sync + Send
     {
         fn name(&self) -> &str {
             self.0.name()
@@ -157,11 +157,11 @@ mod impls {
             pipeline: &mut Pipeline,
         ) -> Result<()> {
             self.validate(ctx.clone(), &args)?;
-            let chunk = self.0.all_data(ctx.clone(), args).await?;
+            let block = self.0.all_data(ctx.clone(), args).await?;
             let output = OutputPort::create();
             let source = StreamSource::create(
                 ctx,
-                Some(ChunkStream::create(None, vec![chunk]).boxed()),
+                Some(DataBlockStream::create(None, vec![block]).boxed()),
                 output.clone(),
             )?;
 
@@ -201,9 +201,9 @@ mod impls {
             pipeline: &mut Pipeline,
         ) -> Result<()> {
             self.validate(ctx.clone(), &args)?;
-            let chunk_stream = self.0.data_stream(ctx.clone(), args).await?;
+            let block_stream = self.0.data_stream(ctx.clone(), args).await?;
             let output = OutputPort::create();
-            let source = StreamSource::create(ctx, Some(chunk_stream), output.clone())?;
+            let source = StreamSource::create(ctx, Some(block_stream), output.clone())?;
 
             pipeline.add_pipe(Pipe::SimplePipe {
                 inputs_port: vec![],

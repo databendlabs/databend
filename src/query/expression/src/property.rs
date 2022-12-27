@@ -37,12 +37,12 @@ use crate::Scalar;
 
 #[derive(Debug, Clone, Default)]
 pub struct FunctionProperty {
-    pub commutative: bool,
+    pub non_deterministic: bool,
 }
 
 impl FunctionProperty {
-    pub fn commutative(mut self, commutative: bool) -> Self {
-        self.commutative = commutative;
+    pub fn non_deterministic(mut self) -> Self {
+        self.non_deterministic = true;
         self
     }
 }

@@ -19,15 +19,15 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::SortColumnDescription;
 
-use crate::common::new_chunk;
+use crate::common::new_block;
 
 #[test]
-fn test_chunk_sort() -> Result<()> {
-    let chunk = new_chunk(&[
+fn test_block_sort() -> Result<()> {
+    let block = new_block(&[
         (
             DataType::Number(NumberDataType::Int64),
             Column::from_data(vec![6i64, 4, 3, 2, 1, 1, 7]),
@@ -45,7 +45,7 @@ fn test_chunk_sort() -> Result<()> {
     let test_cases: Vec<(Vec<SortColumnDescription>, Option<usize>, Vec<Column>)> = vec![
         (
             vec![SortColumnDescription {
-                index: 0,
+                offset: 0,
                 asc: true,
                 nulls_first: false,
             }],
@@ -57,7 +57,7 @@ fn test_chunk_sort() -> Result<()> {
         ),
         (
             vec![SortColumnDescription {
-                index: 0,
+                offset: 0,
                 asc: true,
                 nulls_first: false,
             }],
@@ -69,7 +69,7 @@ fn test_chunk_sort() -> Result<()> {
         ),
         (
             vec![SortColumnDescription {
-                index: 1,
+                offset: 1,
                 asc: false,
                 nulls_first: false,
             }],
@@ -82,12 +82,12 @@ fn test_chunk_sort() -> Result<()> {
         (
             vec![
                 SortColumnDescription {
-                    index: 0,
+                    offset: 0,
                     asc: true,
                     nulls_first: false,
                 },
                 SortColumnDescription {
-                    index: 1,
+                    offset: 1,
                     asc: false,
                     nulls_first: false,
                 },
@@ -101,9 +101,9 @@ fn test_chunk_sort() -> Result<()> {
     ];
 
     for (sort_descs, limit, expected) in test_cases {
-        let res = Chunk::sort(&chunk, &sort_descs, limit)?;
+        let res = DataBlock::sort(&block, &sort_descs, limit)?;
 
-        for (entry, expect) in res.columns().zip(expected.iter()) {
+        for (entry, expect) in res.columns().iter().zip(expected.iter()) {
             assert_eq!(
                 entry.value.as_column().unwrap(),
                 expect,
@@ -118,23 +118,23 @@ fn test_chunk_sort() -> Result<()> {
 }
 
 #[test]
-fn test_chunks_merge_sort() -> Result<()> {
-    let chunks = vec![
-        new_chunk(&[
+fn test_blocks_merge_sort() -> Result<()> {
+    let blocks = vec![
+        new_block(&[
             (
                 DataType::Number(NumberDataType::Int64),
                 Column::from_data(vec![4i64, 6]),
             ),
             (DataType::String, Column::from_data(vec!["b2", "b1"])),
         ]),
-        new_chunk(&[
+        new_block(&[
             (
                 DataType::Number(NumberDataType::Int64),
                 Column::from_data(vec![2i64, 3]),
             ),
             (DataType::String, Column::from_data(vec!["b4", "b3"])),
         ]),
-        new_chunk(&[
+        new_block(&[
             (
                 DataType::Number(NumberDataType::Int64),
                 Column::from_data(vec![1i64, 1]),
@@ -157,7 +157,7 @@ fn test_chunks_merge_sort() -> Result<()> {
         (
             "order by col1".to_string(),
             vec![SortColumnDescription {
-                index: 0,
+                offset: 0,
                 asc: true,
                 nulls_first: false,
             }],
@@ -170,7 +170,7 @@ fn test_chunks_merge_sort() -> Result<()> {
         (
             "order by col1 limit 4".to_string(),
             vec![SortColumnDescription {
-                index: 0,
+                offset: 0,
                 asc: true,
                 nulls_first: false,
             }],
@@ -183,7 +183,7 @@ fn test_chunks_merge_sort() -> Result<()> {
         (
             "order by col2 desc".to_string(),
             vec![SortColumnDescription {
-                index: 1,
+                offset: 1,
                 asc: false,
                 nulls_first: false,
             }],
@@ -197,12 +197,12 @@ fn test_chunks_merge_sort() -> Result<()> {
             "order by col1, col2 desc".to_string(),
             vec![
                 SortColumnDescription {
-                    index: 0,
+                    offset: 0,
                     asc: true,
                     nulls_first: false,
                 },
                 SortColumnDescription {
-                    index: 1,
+                    offset: 1,
                     asc: false,
                     nulls_first: false,
                 },
@@ -217,9 +217,9 @@ fn test_chunks_merge_sort() -> Result<()> {
 
     let aborting: Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>> = Arc::new(Box::new(|| false));
     for (name, sort_descs, limit, expected) in test_cases {
-        let res = Chunk::merge_sort(&chunks, &sort_descs, limit, aborting.clone())?;
+        let res = DataBlock::merge_sort(&blocks, &sort_descs, limit, aborting.clone())?;
 
-        for (entry, expect) in res.columns().zip(expected.iter()) {
+        for (entry, expect) in res.columns().iter().zip(expected.iter()) {
             assert_eq!(
                 entry.value.as_column().unwrap(),
                 expect,

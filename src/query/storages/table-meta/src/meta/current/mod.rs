@@ -13,8 +13,8 @@
 //  limitations under the License.
 
 pub use v0::ColumnMeta;
+pub use v2::BlockFilter;
 pub use v2::BlockMeta;
-pub use v2::ChunkFilter;
 pub use v2::SegmentInfo;
 pub use v2::TableSnapshot;
 pub use v2::TableSnapshotLite;

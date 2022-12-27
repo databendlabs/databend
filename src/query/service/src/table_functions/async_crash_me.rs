@@ -29,7 +29,7 @@ use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
@@ -160,7 +160,7 @@ impl AsyncSource for AsyncCrashMeSource {
     const NAME: &'static str = "async_crash_me";
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<Chunk>> {
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
         match &self.message {
             None => panic!("async crash me panic"),
             Some(message) => panic!("{}", message),
@@ -184,7 +184,7 @@ struct AsyncCrashMeStream {
 }
 
 impl Stream for AsyncCrashMeStream {
-    type Item = Result<Chunk>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match &self.message {

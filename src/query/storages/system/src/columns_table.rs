@@ -20,8 +20,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -45,7 +46,7 @@ impl AsyncSystemTable for ColumnsTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let rows = self.dump_table_columns(ctx).await?;
         let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
@@ -81,31 +82,40 @@ impl AsyncSystemTable for ColumnsTable {
             comments.push("".to_string().into_bytes());
         }
 
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (Value::Column(Column::from_data(names)), DataType::String),
-                (
-                    Value::Column(Column::from_data(databases)),
-                    DataType::String,
-                ),
-                (Value::Column(Column::from_data(tables)), DataType::String),
-                (
-                    Value::Column(Column::from_data(data_types)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(default_kinds)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(default_exprs)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(is_nullables)),
-                    DataType::String,
-                ),
-                (Value::Column(Column::from_data(comments)), DataType::String),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(names)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(databases)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(tables)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(data_types)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(default_kinds)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(default_exprs)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(is_nullables)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(comments)),
+                },
             ],
             rows_len,
         ))

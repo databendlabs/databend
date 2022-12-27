@@ -18,9 +18,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::HashMethod;
 use common_expression::Value;
 use common_functions_v2::aggregates::StateAddr;
@@ -58,7 +58,7 @@ where Self: Aggregator + Send
         )))
     }
 
-    fn convert_two_level_chunk(_agg: &mut Self::TwoLevelAggregator) -> Result<Vec<Chunk>> {
+    fn convert_two_level_block(_agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
         Err(ErrorCode::Unimplemented(format!(
             "Two level aggregator is unimplemented for {}",
             Self::NAME
@@ -116,8 +116,8 @@ where
         })
     }
 
-    fn convert_two_level_chunk(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<Chunk>> {
-        let mut chunks = Vec::with_capacity(256);
+    fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
+        let mut data_blocks = Vec::with_capacity(256);
         for (bucket, iterator) in agg.hash_table.two_level_iter() {
             let (capacity, _) = iterator.size_hint();
 
@@ -147,11 +147,10 @@ where
 
             let mut columns = Vec::with_capacity(state_builders.len() + 1);
             let mut num_rows = 0;
-            for (id, builder) in state_builders.into_iter().enumerate() {
+            for builder in state_builders.into_iter() {
                 let col = builder.build();
                 num_rows = col.len();
-                columns.push(ChunkEntry {
-                    id,
+                columns.push(BlockEntry {
                     value: Value::Column(Column::String(col)),
                     data_type: DataType::String,
                 });
@@ -160,13 +159,12 @@ where
             let col = group_key_builder.finish();
             let group_key_type = data_type_of_group_key_column!(col);
 
-            columns.push(ChunkEntry {
-                id: columns.len(),
+            columns.push(BlockEntry {
                 value: Value::Column(col),
                 data_type: group_key_type,
             });
 
-            chunks.push(Chunk::new_with_meta(
+            data_blocks.push(DataBlock::new_with_meta(
                 columns,
                 num_rows,
                 Some(AggregateInfo::create(bucket)),
@@ -174,7 +172,7 @@ where
         }
 
         agg.drop_states();
-        Ok(chunks)
+        Ok(data_blocks)
     }
 }
 
@@ -228,7 +226,7 @@ where
         })
     }
 
-    fn convert_two_level_chunk(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<Chunk>> {
+    fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
         let mut chunks = Vec::with_capacity(256);
         for (bucket, iterator) in agg.hash_table.two_level_iter() {
             let (capacity, _) = iterator.size_hint();
@@ -240,13 +238,12 @@ where
 
             let column = keys_column_builder.finish();
             let num_rows = column.len();
-            let column = ChunkEntry {
-                id: 0,
+            let column = BlockEntry {
                 data_type: DataType::String,
                 value: Value::Column(column),
             };
 
-            chunks.push(Chunk::new_with_meta(
+            chunks.push(DataBlock::new_with_meta(
                 vec![column],
                 num_rows,
                 Some(AggregateInfo::create(bucket)),
@@ -298,12 +295,12 @@ impl<T: TwoLevelAggregatorLike> Aggregator for TwoLevelAggregator<T> {
     const NAME: &'static str = "TwoLevelAggregator";
 
     #[inline(always)]
-    fn consume(&mut self, data: Chunk) -> Result<()> {
+    fn consume(&mut self, data: DataBlock) -> Result<()> {
         self.inner.consume(data)
     }
 
     #[inline(always)]
-    fn generate(&mut self) -> Result<Vec<Chunk>> {
-        T::convert_two_level_chunk(&mut self.inner)
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
+        T::convert_two_level_block(&mut self.inner)
     }
 }

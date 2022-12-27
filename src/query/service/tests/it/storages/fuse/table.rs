@@ -22,7 +22,7 @@ use common_meta_app::schema::TableInfo;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::stream::ReadChunkStream;
+use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -59,7 +59,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         ctx.try_set_partitions(parts.clone())?;
         let stream = table
-            .read_chunk_stream(ctx.clone(), &DataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,
@@ -119,7 +119,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         ctx.try_set_partitions(parts.clone())?;
 
         let stream = table
-            .read_chunk_stream(ctx.clone(), &DataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,

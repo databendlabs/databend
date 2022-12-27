@@ -68,6 +68,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::Project(Project {
             input: Box::new(input),
+            projections: plan.projections.clone(),
             columns: plan.columns.clone(),
         }))
     }

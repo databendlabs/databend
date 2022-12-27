@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_datablocks::DataBlock;
 use common_datavalues::Column as DvColumn;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
@@ -25,10 +24,10 @@ use ordered_float::OrderedFloat;
 
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::Chunk;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnIndex;
+use crate::DataBlock;
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
@@ -109,10 +108,11 @@ pub fn to_column(column: &Value<AnyType>, size: usize, data_type: &DataType) -> 
     }
 }
 
-pub fn to_datablock<Index: ColumnIndex>(chunk: &Chunk<Index>, schema: DataSchemaRef) -> DataBlock {
-    let columns = chunk
+pub fn to_datablock(block: &DataBlock, schema: DataSchemaRef) -> common_datablocks::DataBlock {
+    let columns = block
         .columns()
-        .map(|entry| to_column(&entry.value, chunk.num_rows(), &entry.data_type))
+        .iter()
+        .map(|entry| to_column(&entry.value, block.num_rows(), &entry.data_type))
         .collect();
-    DataBlock::create(schema, columns)
+    common_datablocks::DataBlock::create(schema, columns)
 }

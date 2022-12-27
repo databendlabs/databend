@@ -13,8 +13,8 @@
 //  limitations under the License.
 
 pub mod transform;
-pub mod transform_chunk_compact;
-pub mod transform_chunk_compact_no_split;
+pub mod transform_block_compact;
+pub mod transform_block_compact_no_split;
 pub mod transform_compact;
 pub mod transform_limit;
 pub mod transform_multi_sort_merge;
@@ -22,7 +22,7 @@ pub mod transform_sort_merge;
 pub mod transform_sort_partial;
 
 pub use transform::*;
-pub use transform_chunk_compact::*;
+pub use transform_block_compact::*;
 pub use transform_compact::*;
 pub use transform_limit::*;
 pub use transform_multi_sort_merge::*;

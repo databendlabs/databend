@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -58,8 +58,8 @@ struct TransformLimitImpl<const MODE: usize> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    input_chunk: Option<Chunk>,
-    output_chunk: Option<Chunk>,
+    input_data_block: Option<DataBlock>,
+    output_data_block: Option<DataBlock>,
 }
 
 impl<const MODE: usize> TransformLimitImpl<MODE> {
@@ -72,29 +72,29 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
         Ok(ProcessorPtr::create(Box::new(Self {
             input,
             output,
-            input_chunk: None,
-            output_chunk: None,
+            input_data_block: None,
+            output_data_block: None,
             skip_remaining: offset,
             take_remaining: limit.unwrap_or(0),
         })))
     }
 
-    pub fn take_rows(&mut self, chunk: Chunk) -> Chunk {
-        let rows = chunk.num_rows();
+    pub fn take_rows(&mut self, data_block: DataBlock) -> DataBlock {
+        let rows = data_block.num_rows();
         debug_assert_ne!(self.take_remaining, 0);
 
         if self.take_remaining >= rows {
             self.take_remaining -= rows;
-            return chunk;
+            return data_block;
         }
 
         let remaining = self.take_remaining;
         self.take_remaining = 0;
-        chunk.slice(0..remaining)
+        data_block.slice(0..remaining)
     }
 
-    pub fn skip_rows(&mut self, chunk: Chunk) -> Option<Chunk> {
-        let rows = chunk.num_rows();
+    pub fn skip_rows(&mut self, data_block: DataBlock) -> Option<DataBlock> {
+        let rows = data_block.num_rows();
 
         if self.skip_remaining >= rows {
             self.skip_remaining -= rows;
@@ -107,12 +107,12 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
                 self.skip_remaining = 0;
                 let length = std::cmp::min(self.take_remaining, rows - offset);
                 self.take_remaining -= length;
-                Some(chunk.slice(offset..(offset + length)))
+                Some(data_block.slice(offset..(offset + length)))
             }
             _ => {
                 let offset = self.skip_remaining;
                 self.skip_remaining = 0;
-                Some(chunk.slice(offset..rows))
+                Some(data_block.slice(offset..rows))
             }
         }
     }
@@ -145,8 +145,8 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(chunk) = self.output_chunk.take() {
-            self.output.push_data(Ok(chunk));
+        if let Some(data_block) = self.output_data_block.take() {
+            self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
 
@@ -173,7 +173,7 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
             }
         }
 
-        if self.input_chunk.is_some() {
+        if self.input_data_block.is_some() {
             return Ok(Event::Sync);
         }
 
@@ -187,17 +187,17 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
             return Ok(Event::NeedData);
         }
 
-        self.input_chunk = Some(self.input.pull_data().unwrap()?);
+        self.input_data_block = Some(self.input.pull_data().unwrap()?);
         Ok(Event::Sync)
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(chunk) = self.input_chunk.take() {
-            self.output_chunk = match MODE {
-                ONLY_OFFSET => self.skip_rows(chunk),
-                ONLY_LIMIT => Some(self.take_rows(chunk)),
-                OFFSET_AND_LIMIT if self.skip_remaining != 0 => self.skip_rows(chunk),
-                OFFSET_AND_LIMIT => Some(self.take_rows(chunk)),
+        if let Some(data_block) = self.input_data_block.take() {
+            self.output_data_block = match MODE {
+                ONLY_OFFSET => self.skip_rows(data_block),
+                ONLY_LIMIT => Some(self.take_rows(data_block)),
+                OFFSET_AND_LIMIT if self.skip_remaining != 0 => self.skip_rows(data_block),
+                OFFSET_AND_LIMIT => Some(self.take_rows(data_block)),
                 _ => unreachable!(),
             }
         }

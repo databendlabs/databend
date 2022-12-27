@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use common_catalog::plan::DataSourcePlan;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
@@ -70,6 +70,9 @@ impl Filter {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Project {
     pub input: Box<PhysicalPlan>,
+    pub projections: Vec<usize>,
+
+    /// Only used for display
     pub columns: ColumnSet,
 }
 
@@ -77,8 +80,8 @@ impl Project {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::new();
-        for i in self.columns.iter() {
-            fields.push(input_schema.field_with_name(&i.to_string())?.clone());
+        for i in self.projections.iter() {
+            fields.push(input_schema.field(*i).clone());
         }
         Ok(DataSchemaRefExt::create(fields))
     }
@@ -121,7 +124,7 @@ impl AggregatePartial {
             ));
         }
         if !self.group_by.is_empty() {
-            let method = Chunk::choose_hash_method_with_types(
+            let method = DataBlock::choose_hash_method_with_types(
                 &self
                     .group_by
                     .iter()

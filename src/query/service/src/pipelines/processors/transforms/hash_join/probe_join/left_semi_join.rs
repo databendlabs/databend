@@ -19,11 +19,11 @@ use std::sync::atomic::Ordering;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_CHUNK_SIZE;
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -35,8 +35,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &Chunk,
-    ) -> Result<Vec<Chunk>>
+        input: &DataBlock,
+    ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
@@ -59,8 +59,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &Chunk,
-    ) -> Result<Vec<Chunk>>
+        input: &DataBlock,
+    ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
@@ -83,8 +83,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &Chunk,
-    ) -> Result<Vec<Chunk>>
+        input: &DataBlock,
+    ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
@@ -106,7 +106,7 @@ impl JoinHashTable {
                 _ => {}
             }
         }
-        Ok(vec![Chunk::take(input, &probe_indexes)?])
+        Ok(vec![DataBlock::take(input, &probe_indexes)?])
     }
 
     fn left_semi_anti_join_with_other_conjunct<
@@ -119,17 +119,17 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &Chunk,
-    ) -> Result<Vec<Chunk>>
+        input: &DataBlock,
+    ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
         // The semi join will return multiple data chunks of similar size
-        let mut probed_chunks = vec![];
-        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
-        let mut build_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
+        let mut probed_blocks = vec![];
+        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
         // For semi join, it defaults to all
@@ -183,14 +183,14 @@ impl JoinHashTable {
                         build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                         probe_indexes.extend(repeat(i as u32).take(addition));
 
-                        let probe_chunk = Chunk::take(input, &probe_indexes)?;
-                        let build_chunk = self.row_space.gather(&build_indexes)?;
-                        let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
+                        let probe_block = DataBlock::take(input, &probe_indexes)?;
+                        let build_block = self.row_space.gather(&build_indexes)?;
+                        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-                        let mut bm = match self.get_other_filters(&merged_chunk, other_predicate)? {
+                        let mut bm = match self.get_other_filters(&merged_block, other_predicate)? {
                             (Some(b), _, _) => b.into_mut().right().unwrap(),
-                            (_, true, _) => MutableBitmap::from_len_set(merged_chunk.num_rows()),
-                            (_, _, true) => MutableBitmap::from_len_zeroed(merged_chunk.num_rows()),
+                            (_, true, _) => MutableBitmap::from_len_set(merged_block.num_rows()),
+                            (_, _, true) => MutableBitmap::from_len_zeroed(merged_block.num_rows()),
                             _ => unreachable!(),
                         };
 
@@ -200,11 +200,11 @@ impl JoinHashTable {
                             self.fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
                         }
 
-                        let probed_data_chunk =
-                            Chunk::filter_chunk_with_bitmap(probe_chunk, &bm.into())?;
+                        let probed_data_block =
+                            DataBlock::filter_with_bitmap(probe_block, &bm.into())?;
 
-                        if !probed_data_chunk.is_empty() {
-                            probed_chunks.push(probed_data_chunk);
+                        if !probed_data_block.is_empty() {
+                            probed_blocks.push(probed_data_block);
                         }
 
                         index = new_index;
@@ -223,14 +223,14 @@ impl JoinHashTable {
             ));
         }
 
-        let probe_chunk = Chunk::take(input, &probe_indexes)?;
-        let build_chunk = self.row_space.gather(&build_indexes)?;
-        let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
+        let probe_block = DataBlock::take(input, &probe_indexes)?;
+        let build_block = self.row_space.gather(&build_indexes)?;
+        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-        let mut bm = match self.get_other_filters(&merged_chunk, other_predicate)? {
+        let mut bm = match self.get_other_filters(&merged_block, other_predicate)? {
             (Some(b), _, _) => b.into_mut().right().unwrap(),
-            (_, true, _) => MutableBitmap::from_len_set(merged_chunk.num_rows()),
-            (_, _, true) => MutableBitmap::from_len_zeroed(merged_chunk.num_rows()),
+            (_, true, _) => MutableBitmap::from_len_set(merged_block.num_rows()),
+            (_, _, true) => MutableBitmap::from_len_zeroed(merged_block.num_rows()),
             _ => unreachable!(),
         };
 
@@ -240,13 +240,13 @@ impl JoinHashTable {
             self.fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
         }
 
-        let probed_data_chunk = Chunk::filter_chunk_with_bitmap(probe_chunk, &bm.into())?;
+        let probed_data_chunk = DataBlock::filter_with_bitmap(probe_block, &bm.into())?;
 
         if !probed_data_chunk.is_empty() {
-            probed_chunks.push(probed_data_chunk);
+            probed_blocks.push(probed_data_chunk);
         }
 
-        Ok(probed_chunks)
+        Ok(probed_blocks)
     }
 
     // modify the bm by the value row_state

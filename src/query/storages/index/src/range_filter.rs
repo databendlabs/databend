@@ -42,7 +42,7 @@ use common_storages_table_meta::meta::StatisticsOfColumns;
 pub struct RangeFilter {
     schema: TableSchemaRef,
     expr: Expr<String>,
-    fn_ctx: FunctionContext,
+    func_ctx: FunctionContext,
 }
 impl RangeFilter {
     pub fn try_create(
@@ -61,7 +61,7 @@ impl RangeFilter {
         Ok(Self {
             schema,
             expr: conjunction,
-            fn_ctx: ctx.try_get_function_context()?,
+            func_ctx: ctx.try_get_function_context()?,
         })
     }
 
@@ -76,7 +76,7 @@ impl RangeFilter {
             })
             .collect::<Result<_>>()?;
 
-        let folder = ConstantFolder::new(input_domains, self.fn_ctx, &BUILTIN_FUNCTIONS);
+        let folder = ConstantFolder::new(input_domains, self.func_ctx, &BUILTIN_FUNCTIONS);
         let (new_expr, _) = folder.fold(&self.expr);
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
@@ -99,7 +99,7 @@ impl RangeFilter {
             })
             .collect::<Result<_>>()?;
 
-        let folder = ConstantFolder::new(input_domains, self.fn_ctx, &BUILTIN_FUNCTIONS);
+        let folder = ConstantFolder::new(input_domains, self.func_ctx, &BUILTIN_FUNCTIONS);
         let (new_expr, _) = folder.fold(&self.expr);
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.

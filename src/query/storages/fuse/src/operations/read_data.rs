@@ -54,7 +54,7 @@ impl FuseTable {
         match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
             None => {
                 let projection = PushDownInfo::projection_of_push_downs(
-                    &self.table_info.schema(),
+                    &*self.table_info.schema(),
                     &plan.push_downs,
                 );
                 self.create_block_reader(projection)
@@ -68,7 +68,7 @@ impl FuseTable {
         match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
             None => {
                 let projection = PushDownInfo::projection_of_push_downs(
-                    &self.table_info.schema(),
+                    &*self.table_info.schema(),
                     &plan.push_downs,
                 );
                 self.create_block_reader(projection)

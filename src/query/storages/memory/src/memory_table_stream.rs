@@ -19,7 +19,7 @@ use std::usize;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use futures::stream::Stream;
 
 use crate::memory_part::MemoryPartInfo;
@@ -34,11 +34,11 @@ pub struct MemoryTableStream {
     ctx: Arc<dyn TableContext>,
     block_index: usize,
     block_ranges: Vec<usize>,
-    blocks: Vec<Chunk>,
+    blocks: Vec<DataBlock>,
 }
 
 impl MemoryTableStream {
-    pub fn try_create(ctx: Arc<dyn TableContext>, blocks: Vec<Chunk>) -> Result<Self> {
+    pub fn try_create(ctx: Arc<dyn TableContext>, blocks: Vec<DataBlock>) -> Result<Self> {
         Ok(Self {
             ctx,
             block_index: 0,
@@ -47,7 +47,7 @@ impl MemoryTableStream {
         })
     }
 
-    fn try_get_one_block(&mut self) -> Result<Option<Chunk>> {
+    fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
         if self.block_index == self.block_ranges.len() {
             let part_info = self.ctx.try_get_part();
             if part_info.is_none() {
@@ -76,7 +76,7 @@ impl MemoryTableStream {
 }
 
 impl Stream for MemoryTableStream {
-    type Item = Result<Chunk>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,

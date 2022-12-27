@@ -20,16 +20,16 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_CHUNK_SIZE;
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -46,21 +46,21 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &Chunk,
-    ) -> Result<Vec<Chunk>>
+        input: &DataBlock,
+    ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
 
-        // The left join will return multiple data chunks of similar size
-        let mut probed_chunks = vec![];
-        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
+        // The left join will return multiple data blocks of similar size
+        let mut probed_blocks = vec![];
+        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut probe_indexes_vec = Vec::new();
         // Collect each probe_indexes, used by non-equi conditions filter
-        let mut local_build_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
-        let mut validity = MutableBitmap::with_capacity(JOIN_MAX_CHUNK_SIZE);
+        let mut local_build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         let mut row_state = match WITH_OTHER_CONJUNCT {
             true => vec![0; keys_iter.size_hint().0],
@@ -138,62 +138,61 @@ impl JoinHashTable {
                         local_build_indexes.extend_from_slice(&probed_rows[index..new_index]);
 
                         let validity_bitmap: Bitmap = validity.into();
-                        let build_chunk = if !self.hash_join_desc.from_correlated_subquery
+                        let build_block = if !self.hash_join_desc.from_correlated_subquery
                             && self.hash_join_desc.join_type == JoinType::Single
                             && validity_bitmap.unset_bits() == input.num_rows()
                         {
                             // Uncorrelated scalar subquery and no row was returned by subquery
-                            // We just construct a chunk with NULLs
+                            // We just construct a block with NULLs
                             let build_data_schema = self.row_space.data_schema.clone();
                             let columns = build_data_schema
                                 .fields()
                                 .iter()
-                                .enumerate()
-                                .map(|(id, field)| ChunkEntry {
-                                    id,
-                                    value: Value::Scalar(Scalar::Null),
+                                .map(|field| BlockEntry {
                                     data_type: field.data_type().wrap_nullable(),
+                                    value: Value::Scalar(Scalar::Null),
                                 })
                                 .collect::<Vec<_>>();
-                            Chunk::new(columns, input.num_rows())
+                            DataBlock::new(columns, input.num_rows())
                         } else {
                             self.row_space.gather(&local_build_indexes)?
                         };
 
-                        // For left join, wrap nullable for build chunk
-                        let (nullable_columns, num_rows) =
-                            if self.row_space.data_chunks().is_empty()
-                                && !local_build_indexes.is_empty()
-                            {
-                                (
-                                    build_chunk
-                                        .columns()
-                                        .map(|c| ChunkEntry {
-                                            id: c.id,
-                                            value: Value::Scalar(Scalar::Null),
-                                            data_type: c.data_type.wrap_nullable(),
-                                        })
-                                        .collect::<Vec<_>>(),
-                                    local_build_indexes.len(),
-                                )
-                            } else {
-                                (
-                                    build_chunk
-                                        .columns()
-                                        .map(|c| Self::set_validity(c, &validity_bitmap))
-                                        .collect::<Vec<_>>(),
-                                    validity_bitmap.len(),
-                                )
-                            };
+                        // For left join, wrap nullable for build block
+                        let (nullable_columns, num_rows) = if self.row_space.datablocks().is_empty()
+                            && !local_build_indexes.is_empty()
+                        {
+                            (
+                                build_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| BlockEntry {
+                                        value: Value::Scalar(Scalar::Null),
+                                        data_type: c.data_type.wrap_nullable(),
+                                    })
+                                    .collect::<Vec<_>>(),
+                                local_build_indexes.len(),
+                            )
+                        } else {
+                            (
+                                build_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| Self::set_validity(c, &validity_bitmap))
+                                    .collect::<Vec<_>>(),
+                                validity_bitmap.len(),
+                            )
+                        };
 
-                        let nullable_build_chunk = Chunk::new(nullable_columns, num_rows);
+                        let nullable_build_block = DataBlock::new(nullable_columns, num_rows);
 
-                        // For full join, wrap nullable for probe chunk
-                        let mut probe_chunk = Chunk::take(input, &probe_indexes)?;
-                        let num_rows = probe_chunk.num_rows();
+                        // For full join, wrap nullable for probe block
+                        let mut probe_block = DataBlock::take(input, &probe_indexes)?;
+                        let num_rows = probe_block.num_rows();
                         if self.hash_join_desc.join_type == JoinType::Full {
-                            let nullable_probe_columns = probe_chunk
+                            let nullable_probe_columns = probe_block
                                 .columns()
+                                .iter()
                                 .map(|c| {
                                     let mut probe_validity = MutableBitmap::new();
                                     probe_validity.extend_constant(num_rows, true);
@@ -201,110 +200,106 @@ impl JoinHashTable {
                                     Self::set_validity(c, &probe_validity)
                                 })
                                 .collect::<Vec<_>>();
-                            probe_chunk = Chunk::new(nullable_probe_columns, num_rows);
+                            probe_block = DataBlock::new(nullable_probe_columns, num_rows);
                         }
 
-                        let merged_chunk =
-                            self.merge_eq_chunk(&nullable_build_chunk, &probe_chunk)?;
+                        let merged_block =
+                            self.merge_eq_block(&nullable_build_block, &probe_block)?;
 
-                        if !merged_chunk.is_empty() {
+                        if !merged_block.is_empty() {
                             probe_indexes_vec.push(probe_indexes.clone());
-                            probed_chunks.push(merged_chunk);
+                            probed_blocks.push(merged_block);
                         }
 
                         index = new_index;
                         remain -= addition;
                         probe_indexes.clear();
                         local_build_indexes.clear();
-                        validity = MutableBitmap::with_capacity(JOIN_MAX_CHUNK_SIZE);
+                        validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
                     }
                 }
             }
         }
 
-        // For full join, wrap nullable for probe chunk
-        let mut probe_chunk = Chunk::take(input, &probe_indexes)?;
+        // For full join, wrap nullable for probe block
+        let mut probe_block = DataBlock::take(input, &probe_indexes)?;
         if self.hash_join_desc.join_type == JoinType::Full {
-            let nullable_probe_columns = probe_chunk
+            let nullable_probe_columns = probe_block
                 .columns()
+                .iter()
                 .map(|c| {
                     let mut probe_validity = MutableBitmap::new();
-                    probe_validity.extend_constant(probe_chunk.num_rows(), true);
+                    probe_validity.extend_constant(probe_block.num_rows(), true);
                     let probe_validity: Bitmap = probe_validity.into();
                     Self::set_validity(c, &probe_validity)
                 })
                 .collect::<Vec<_>>();
-            probe_chunk = Chunk::new(nullable_probe_columns, probe_chunk.num_rows());
+            probe_block = DataBlock::new(nullable_probe_columns, probe_block.num_rows());
         }
 
         if !WITH_OTHER_CONJUNCT {
             let mut rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.write();
             rest_build_indexes.extend(local_build_indexes);
-            let mut rest_probe_chunks = self.hash_join_desc.join_state.rest_probe_chunks.write();
-            rest_probe_chunks.push(probe_chunk);
+            let mut rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.write();
+            rest_probe_blocks.push(probe_block);
             let validity: Bitmap = validity.into();
             let mut validity_state = self.hash_join_desc.join_state.validity.write();
             validity_state.extend_from_bitmap(&validity);
-            return Ok(probed_chunks);
+            return Ok(probed_blocks);
         }
 
         let validity: Bitmap = validity.into();
-        let build_chunk = if !self.hash_join_desc.from_correlated_subquery
+        let build_block = if !self.hash_join_desc.from_correlated_subquery
             && self.hash_join_desc.join_type == JoinType::Single
             && validity.unset_bits() == input.num_rows()
         {
             // Uncorrelated scalar subquery and no row was returned by subquery
-            // We just construct a chunk with NULLs
+            // We just construct a block with NULLs
             let build_data_schema = self.row_space.data_schema.clone();
             let columns = build_data_schema
                 .fields()
                 .iter()
-                .enumerate()
-                .map(|(id, field)| {
-                    let data_type = field.data_type().wrap_nullable();
-                    ChunkEntry {
-                        id,
-                        value: Value::Scalar(Scalar::Null),
-                        data_type,
-                    }
+                .map(|field| BlockEntry {
+                    data_type: field.data_type().wrap_nullable(),
+                    value: Value::Scalar(Scalar::Null),
                 })
                 .collect::<Vec<_>>();
-            Chunk::new(columns, input.num_rows())
+            DataBlock::new(columns, input.num_rows())
         } else {
             self.row_space.gather(&local_build_indexes)?
         };
 
         // For left join, wrap nullable for build chunk
         let nullable_columns =
-            if self.row_space.data_chunks().is_empty() && !local_build_indexes.is_empty() {
-                build_chunk
+            if self.row_space.datablocks().is_empty() && !local_build_indexes.is_empty() {
+                build_block
                     .columns()
-                    .enumerate()
-                    .map(|(id, c)| ChunkEntry {
-                        id,
+                    .iter()
+                    .map(|c| BlockEntry {
+                        data_type: c.data_type.clone(),
                         value: Value::Column(Column::Null {
                             len: local_build_indexes.len(),
                         }),
-                        data_type: c.data_type.clone(),
                     })
                     .collect::<Vec<_>>()
             } else {
-                build_chunk
+                build_block
                     .columns()
+                    .iter()
                     .map(|c| Self::set_validity(c, &validity))
                     .collect::<Vec<_>>()
             };
-        let nullable_build_chunk = Chunk::new(nullable_columns, validity.len());
+        let nullable_build_block = DataBlock::new(nullable_columns, validity.len());
 
         // Process no-equi conditions
-        let merged_chunk = self.merge_eq_chunk(&nullable_build_chunk, &probe_chunk)?;
+        let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
 
-        if !merged_chunk.is_empty() || probed_chunks.is_empty() {
+        if !merged_block.is_empty() || probed_blocks.is_empty() {
             probe_indexes_vec.push(probe_indexes.clone());
-            probed_chunks.push(merged_chunk);
+            probed_blocks.push(merged_block);
         }
 
-        self.non_equi_conditions_for_left_join(&probed_chunks, &probe_indexes_vec, &mut row_state)
+        self.non_equi_conditions_for_left_join(&probed_blocks, &probe_indexes_vec, &mut row_state)
     }
 
     // keep at least one index of the positive state and the null state

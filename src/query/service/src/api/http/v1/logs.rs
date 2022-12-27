@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::SendableChunkStream;
+use common_expression::SendableDataBlockStream;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use poem::http::StatusCode;
 use poem::Body;
@@ -27,7 +27,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::stream::ReadChunkStream;
+use crate::stream::ReadDataBlockStream;
 
 // read log files from cfg.log.log_dir
 #[poem::handler]
@@ -53,27 +53,27 @@ async fn select_table(sessions: &Arc<SessionManager>) -> Result<Body> {
     let stream = async_stream::try_stream! {
         match tracing_table_stream.next().await {
             Some(res) => {
-                let chunk = res?;
-                yield format!("{chunk:?}");
+                let block = res?;
+                yield format!("{block:?}");
             },
             None => return,
         }
 
         while let Some(res) = tracing_table_stream.next().await {
-            let chunk = res?;
-            yield format!(", {chunk:?}");
+            let block = res?;
+            yield format!(", {block:?}");
         }
     };
 
     Ok(Body::from_bytes_stream::<_, _, ErrorCode>(stream))
 }
 
-async fn execute_query(ctx: Arc<QueryContext>) -> Result<SendableChunkStream> {
+async fn execute_query(ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
     // TODO make default a constant
     let tracing_table = ctx.get_table("default", "system", "tracing").await?;
     let tracing_table_read_plan = tracing_table.read_plan(ctx.clone(), None).await?;
 
     tracing_table
-        .read_chunk_stream(ctx, &tracing_table_read_plan)
+        .read_data_block_stream(ctx, &tracing_table_read_plan)
         .await
 }

@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -35,7 +35,7 @@ impl TransformDummy {
 impl Transform for TransformDummy {
     const NAME: &'static str = "DummyTransform";
 
-    fn transform(&mut self, data: Chunk) -> Result<Chunk> {
+    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         Ok(data)
     }
 }

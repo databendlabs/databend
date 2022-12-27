@@ -25,8 +25,7 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
@@ -123,8 +122,8 @@ impl Table for RandomTable {
             .iter()
             .map(|f| f.data_type().create_random_column(1))
             .collect::<Vec<_>>();
-        let chunk = Chunk::new_from_sequence(columns, 1);
-        let one_row_bytes = chunk.memory_size();
+        let block = DataBlock::new(columns, 1);
+        let one_row_bytes = block.memory_size();
         let read_bytes = total_rows * one_row_bytes;
         let parts_num = (total_rows / block_size) + 1;
         let statistics = PartStatistics::new_exact(total_rows, read_bytes, parts_num, parts_num);
@@ -199,7 +198,7 @@ impl RandomSource {
 impl SyncSource for RandomSource {
     const NAME: &'static str = "RandomTable";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.rows == 0 {
             // No more row is needed to generate.
             return Ok(None);
@@ -209,23 +208,13 @@ impl SyncSource for RandomSource {
             .schema
             .fields()
             .iter()
-            .enumerate()
-            .map(|(id, f)| {
-                let (col, ty) = f.data_type().create_random_column(self.rows);
-                ChunkEntry {
-                    id,
-                    data_type: ty,
-                    value: col,
-                }
-            })
+            .map(|f| f.data_type().create_random_column(self.rows))
             .collect();
-
-        let rows = self.rows;
 
         // The partition garantees the number of rows is less than or equal to `max_block_size`.
         // And we generate all the `self.rows` at once.
         self.rows = 0;
 
-        Ok(Some(Chunk::new(columns, rows)))
+        Ok(Some(DataBlock::new(columns, self.rows)))
     }
 }

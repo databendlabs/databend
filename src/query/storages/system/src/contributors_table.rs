@@ -19,8 +19,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -43,18 +44,18 @@ impl SyncSystemTable for ContributorsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<Chunk> {
+    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
         let contributors: Vec<Vec<u8>> = env!("DATABEND_COMMIT_AUTHORS")
             .split_terminator(',')
             .map(|x| x.trim().as_bytes().to_vec())
             .collect();
 
         let rows_len = contributors.len();
-        Ok(Chunk::new_from_sequence(
-            vec![(
-                Value::Column(Column::from_data(contributors)),
-                DataType::String,
-            )],
+        Ok(DataBlock::new(
+            vec![BlockEntry {
+                data_type: DataType::String,
+                value: Value::Column(Column::from_data(contributors)),
+            }],
             rows_len,
         ))
     }

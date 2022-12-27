@@ -16,15 +16,15 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Value;
-use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::evaluator::BlockOperator;
+use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::parse_exprs;
 use common_storages_factory::Table;
 
@@ -37,7 +37,8 @@ use crate::sessions::QueryContext;
 
 pub struct TransformAddOn {
     default_nonexpr_fields: Vec<DataField>,
-    expression_transform: CompoundChunkOperator,
+
+    expression_transform: CompoundBlockOperator,
 
     /// The final schema of the output chunk.
     output_schema: DataSchemaRef,
@@ -68,12 +69,12 @@ where Self: Transform
 
         let mut unresort_fields = input_schema.fields().to_vec();
 
-        for (index, f) in fields.iter().enumerate() {
+        for f in fields.iter() {
             if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
                     let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
                     let expr = expr[0].clone();
-                    default_exprs.push(ChunkOperator::Map { index, expr });
+                    default_exprs.push(BlockOperator::Map { expr });
                     unresort_fields.push(f.clone());
                 } else {
                     default_nonexpr_fields.push(f.clone());
@@ -84,7 +85,7 @@ where Self: Transform
         unresort_fields.extend_from_slice(&default_nonexpr_fields);
 
         let func_ctx = ctx.try_get_function_context()?;
-        let expression_transform = CompoundChunkOperator {
+        let expression_transform = CompoundBlockOperator {
             ctx: func_ctx,
             operators: default_exprs,
         };
@@ -101,22 +102,20 @@ where Self: Transform
 impl Transform for TransformAddOn {
     const NAME: &'static str = "AddOnTransform";
 
-    fn transform(&mut self, mut chunk: Chunk) -> Result<Chunk> {
-        let _num_rows = chunk.num_rows();
-        chunk = self.expression_transform.transform(chunk.clone())?;
+    fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
+        block = self.expression_transform.transform(block.clone())?;
 
         for f in &self.default_nonexpr_fields {
             let default_value = f.data_type().default_value();
-            let column = ChunkEntry {
-                id: chunk.num_columns(),
+            let column = BlockEntry {
                 data_type: f.data_type().clone(),
                 value: Value::Scalar(default_value),
             };
-            chunk.add_column(column);
+            block.add_column(column);
         }
 
-        chunk = chunk.resort(&self.unresort_schema, &self.output_schema)?;
+        block = block.resort(&self.unresort_schema, &self.output_schema)?;
 
-        Ok(chunk)
+        Ok(block)
     }
 }

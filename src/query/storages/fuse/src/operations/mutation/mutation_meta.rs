@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ChunkMetaInfo;
-use common_expression::ChunkMetaInfoPtr;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
 
@@ -32,12 +32,12 @@ pub struct MutationMeta {
 }
 
 #[typetag::serde(name = "mutation_meta")]
-impl ChunkMetaInfo for MutationMeta {
+impl BlockMetaInfo for MutationMeta {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn equals(&self, info: &Box<dyn ChunkMetaInfo>) -> bool {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<MutationMeta>() {
             None => false,
             Some(other) => self == other,
@@ -50,7 +50,7 @@ impl MutationMeta {
         segments: Vec<Location>,
         summary: Statistics,
         abort_operation: AbortOperation,
-    ) -> ChunkMetaInfoPtr {
+    ) -> BlockMetaInfoPtr {
         Arc::new(Box::new(MutationMeta {
             segments,
             summary,
@@ -58,7 +58,7 @@ impl MutationMeta {
         }))
     }
 
-    pub fn from_meta(info: &ChunkMetaInfoPtr) -> Result<&MutationMeta> {
+    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationMeta> {
         match info.as_any().downcast_ref::<MutationMeta>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(

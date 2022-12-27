@@ -34,8 +34,8 @@ use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 // use common_sql::ExpressionParser;
 use common_expression::RemoteExpr;
 use common_meta_app::schema::DatabaseType;
@@ -430,7 +430,7 @@ impl Table for FuseTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        operations: Vec<Chunk>,
+        operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
         // only append operation supported currently
@@ -512,14 +512,14 @@ impl Table for FuseTable {
         self.do_delete(ctx, filter, col_indices, pipeline).await
     }
 
-    fn get_chunk_compact_thresholds(&self) -> ChunkCompactThresholds {
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
         let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         );
-        ChunkCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 
     async fn compact(

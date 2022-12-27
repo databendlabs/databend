@@ -18,9 +18,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Value;
 use common_sql::plans::ListPlan;
@@ -97,19 +98,28 @@ impl Interpreter for ListInterpreter {
             .map(|file| file.creator.as_ref().map(|c| c.to_string().into_bytes()))
             .collect();
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
+        PipelineBuildResult::from_blocks(vec![DataBlock::new(
             vec![
-                (Value::Column(Column::from_data(names)), DataType::String),
-                (
-                    Value::Column(Column::from_data(sizes)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (Value::Column(Column::from_data(etags)), DataType::String),
-                (
-                    Value::Column(Column::from_data(last_modifieds)),
-                    DataType::String,
-                ),
-                (Value::Column(Column::from_data(creators)), DataType::String),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(names)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(sizes)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(etags)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(last_modifieds)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(creators)),
+                },
             ],
             num_rows,
         )])

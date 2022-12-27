@@ -15,12 +15,12 @@
 use std::marker::PhantomData;
 
 use common_exception::ErrorCode;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 
 use super::v2;
 use crate::meta::v0;
 use crate::meta::v1;
-use crate::meta::v2::ChunkFilter;
+use crate::meta::v2::BlockFilter;
 use crate::meta::Versioned;
 
 // Here versions of meta are tagged with numeric values
@@ -87,15 +87,15 @@ impl TableSnapshotStatisticsVersion {
     }
 }
 
-pub struct DataBlock {}
+pub struct OldDataBlock {}
 
-impl Versioned<0> for DataBlock {}
+impl Versioned<0> for OldDataBlock {}
 
-impl Versioned<2> for Chunk {}
-impl Versioned<3> for ChunkFilter {}
+impl Versioned<2> for DataBlock {}
+impl Versioned<3> for BlockFilter {}
 
 pub enum BlockBloomFilterIndexVersion {
-    V3(PhantomData<v2::ChunkFilter>),
+    V3(PhantomData<v2::BlockFilter>),
 }
 
 mod converters {

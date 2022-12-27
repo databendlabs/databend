@@ -37,8 +37,8 @@ use common_expression::infer_table_schema;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -56,8 +56,8 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
-use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::evaluator::BlockOperator;
+use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
@@ -249,7 +249,7 @@ impl InsertInterpreterV2 {
                     Err(may_error.as_ref().unwrap().clone())
                 }
                 None => {
-                    let append_entries = ctx.consume_precommit_chunks();
+                    let append_entries = ctx.consume_precommit_blocks();
                     // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
                     GlobalIORuntime::instance().block_on(async move {
                         tracing::info!(
@@ -407,7 +407,7 @@ impl Interpreter for InsertInterpreterV2 {
                         let table = table.clone();
 
                         if may_error.is_none() {
-                            let append_entries = ctx.consume_precommit_chunks();
+                            let append_entries = ctx.consume_precommit_blocks();
                             // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
                             return GlobalIORuntime::instance().block_on(async move {
                                 table.commit_insertion(ctx, append_entries, overwrite).await
@@ -461,10 +461,10 @@ pub struct ValueSource {
 #[async_trait::async_trait]
 impl AsyncSource for ValueSource {
     const NAME: &'static str = "ValueSource";
-    const SKIP_EMPTY_CHUNK: bool = true;
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<Chunk>> {
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
             return Ok(None);
         }
@@ -484,11 +484,11 @@ impl AsyncSource for ValueSource {
         }
 
         let mut reader = Cursor::new(self.data.as_bytes());
-        let chunk = self
+        let block = self
             .read(estimated_rows, &mut reader, &mut positions)
             .await?;
         self.is_finished = true;
-        Ok(Some(chunk))
+        Ok(Some(block))
     }
 }
 
@@ -518,7 +518,7 @@ impl ValueSource {
         estimated_rows: usize,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
-    ) -> Result<Chunk> {
+    ) -> Result<DataBlock> {
         let mut desers = self
             .schema
             .fields()
@@ -553,24 +553,22 @@ impl ValueSource {
         }
 
         if rows == 0 {
-            return Ok(Chunk::empty());
+            return Ok(DataBlock::empty_with_schema(self.schema.clone()));
         }
 
         let columns = desers
             .iter_mut()
-            .enumerate()
             .zip(self.schema.fields())
-            .map(|((index, deser), field)| {
+            .map(|(deser, field)| {
                 let col = deser.finish_to_column();
-                ChunkEntry {
-                    id: index,
+                BlockEntry {
                     data_type: field.data_type().clone(),
                     value: Value::Column(col),
                 }
             })
             .collect::<Vec<_>>();
 
-        Ok(Chunk::new(columns, rows))
+        Ok(DataBlock::new(columns, rows))
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)
@@ -723,25 +721,22 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
 
 async fn fill_default_value<'a>(
     binder: &mut ScalarBinder<'a>,
-    index: usize,
-    operators: &mut Vec<ChunkOperator>,
+    operators: &mut Vec<BlockOperator>,
     field: &DataField,
 ) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
         let tokens = tokenize_sql(default_expr)?;
         let backtrace = Backtrace::new();
         let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
-        let (scalar, _ty) = binder.bind(&ast).await?;
+        let (scalar, _) = binder.bind(&ast).await?;
         let scalar = PhysicalScalarBuilder::build(&scalar)?;
-        operators.push(ChunkOperator::Map {
-            index,
+        operators.push(BlockOperator::Map {
             expr: scalar.as_expr()?,
         });
     } else {
         // If field data type is nullable, then we'll fill it with null.
         if field.data_type().is_nullable() {
-            operators.push(ChunkOperator::Map {
-                index,
+            operators.push(BlockOperator::Map {
                 expr: Expr::Constant {
                     span: None,
                     scalar: DataScalar::Null,
@@ -751,8 +746,7 @@ async fn fill_default_value<'a>(
         } else {
             let data_type = field.data_type().clone();
             let default_value = data_type.default_value();
-            operators.push(ChunkOperator::Map {
-                index,
+            operators.push(BlockOperator::Map {
                 expr: Expr::Constant {
                     span: None,
                     scalar: default_value,
@@ -792,7 +786,7 @@ async fn exprs_to_scalar<'a>(
         if let AExpr::ColumnRef { column, .. } = expr {
             if column.name.eq_ignore_ascii_case("default") {
                 let field = schema.field(i);
-                fill_default_value(&mut scalar_binder, i, &mut operators, field).await?;
+                fill_default_value(&mut scalar_binder, &mut operators, field).await?;
                 continue;
             }
         }
@@ -807,27 +801,27 @@ async fn exprs_to_scalar<'a>(
             })
         }
         let scalar = PhysicalScalarBuilder::build(&scalar)?;
-        operators.push(ChunkOperator::Map {
-            index: i,
+        operators.push(BlockOperator::Map {
             expr: scalar.as_expr()?,
         });
     }
 
-    let one_row_chunk = Chunk::new_from_sequence(
-        vec![(
-            Value::Scalar(DataScalar::Number(NumberScalar::UInt8(1))),
-            DataType::Number(NumberDataType::UInt8),
-        )],
+    let one_row_chunk = DataBlock::new(
+        vec![BlockEntry {
+            data_type: DataType::Number(NumberDataType::UInt8),
+            value: Value::Scalar(DataScalar::Number(NumberScalar::UInt8(1))),
+        }],
         1,
     );
     let func_ctx = ctx.try_get_function_context()?;
-    let mut expression_transform = CompoundChunkOperator {
+    let mut expression_transform = CompoundBlockOperator {
         operators,
         ctx: func_ctx,
     };
     let res = expression_transform.transform(one_row_chunk)?;
     let data_scalars: Vec<DataScalar> = res
         .columns()
+        .iter()
         .skip(1)
         .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
         .collect();

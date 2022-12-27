@@ -26,6 +26,7 @@ use crate::Scalar;
 use crate::TypeDeserializer;
 
 pub type StringDeserializer = StringColumnBuilder;
+
 impl TypeDeserializer for StringDeserializer {
     fn memory_size(&self) -> usize {
         self.data.len() * std::mem::size_of::<u8>()

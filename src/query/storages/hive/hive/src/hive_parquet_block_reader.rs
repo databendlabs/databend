@@ -27,7 +27,7 @@ use common_arrow::parquet::read::PageReader;
 use common_base::base::tokio::sync::Semaphore;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_storages_cache::FileMetaDataReader;
 use futures::AsyncReadExt;
@@ -66,27 +66,27 @@ impl DataBlockDeserializer {
         schema: &TableSchemaRef,
         filler: &Option<HivePartitionFiller>,
         part_info: &HivePartInfo,
-    ) -> Result<Option<Chunk>> {
+    ) -> Result<Option<DataBlock>> {
         if self.drained {
             return Ok(None);
         };
 
         let opt = self.deserializer.next().transpose()?;
-        if let Some(arrow_chunk) = opt {
+        if let Some(chunk) = opt {
             // If the `Vec<ArrayIter<'static>>` we have passed into the `RowGroupDeserializer`
             // is empty, the deserializer will returns an empty chunk as well(since now rows are consumed).
             // In this case, mark self as drained.
-            if arrow_chunk.is_empty() {
+            if chunk.is_empty() {
                 self.drained = true;
             }
 
-            let chunk = Chunk::from_arrow_chunk(&arrow_chunk, &schema.into())?;
+            let block = DataBlock::from_arrow_chunk(&chunk, &schema.into())?;
             return if let Some(filler) = &filler {
                 let num_rows = self.deserializer.num_rows();
-                let filled = filler.fill_data(chunk, part_info, num_rows)?;
+                let filled = filler.fill_data(block, part_info, num_rows)?;
                 Ok(Some(filled))
             } else {
-                Ok(Some(chunk))
+                Ok(Some(block))
             };
         }
 
@@ -261,7 +261,7 @@ impl HiveBlockReader {
         &self,
         row_group_iterator: &mut DataBlockDeserializer,
         part: HivePartInfo,
-    ) -> Result<Option<Chunk>> {
+    ) -> Result<Option<DataBlock>> {
         row_group_iterator
             .next_block(&self.projected_schema, &self.hive_partition_filler, &part)
             .map_err(|e| e.add_message(format!(" filename of hive part {}", part.filename)))

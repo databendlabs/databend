@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::Chunk;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 
 use crate::field_encoder::FieldEncoderJSON;
@@ -61,10 +61,10 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
 impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
     OutputFormat for NDJSONOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
 {
-    fn serialize_chunk(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
-        let rows_size = chunk.num_rows();
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
+        let rows_size = block.num_rows();
 
-        let mut buf = Vec::with_capacity(chunk.memory_size());
+        let mut buf = Vec::with_capacity(block.memory_size());
         let field_names: Vec<_> = self
             .schema
             .fields()
@@ -72,9 +72,10 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
             .map(|f| f.name().as_bytes())
             .collect();
 
-        let columns: Vec<Column> = chunk
+        let columns: Vec<Column> = block
             .convert_to_full()
             .columns()
+            .iter()
             .map(|column| column.value.clone().into_column().unwrap())
             .collect();
 

@@ -16,17 +16,17 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 
-pub struct ChunkStream {
+pub struct DataBlockStream {
     current: usize,
-    data: Vec<Chunk>,
+    data: Vec<DataBlock>,
     projects: Option<Vec<usize>>,
 }
 
-impl ChunkStream {
-    pub fn create(projects: Option<Vec<usize>>, data: Vec<Chunk>) -> Self {
-        ChunkStream {
+impl DataBlockStream {
+    pub fn create(projects: Option<Vec<usize>>, data: Vec<DataBlock>) -> Self {
+        DataBlockStream {
             current: 0,
             data,
             projects,
@@ -34,8 +34,8 @@ impl ChunkStream {
     }
 }
 
-impl futures::Stream for ChunkStream {
-    type Item = Result<Chunk>;
+impl futures::Stream for DataBlockStream {
+    type Item = Result<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -43,14 +43,14 @@ impl futures::Stream for ChunkStream {
     ) -> Poll<Option<Self::Item>> {
         Poll::Ready(if self.current < self.data.len() {
             self.current += 1;
-            let chunk = &self.data[self.current - 1];
+            let block = &self.data[self.current - 1];
 
             Some(Ok(match &self.projects {
-                Some(v) => Chunk::new(
-                    v.iter().map(|x| chunk.get_by_offset(*x).clone()).collect(),
-                    chunk.num_rows(),
+                Some(v) => DataBlock::new(
+                    v.iter().map(|x| block.get_by_offset(*x).clone()).collect(),
+                    block.num_rows(),
                 ),
-                None => chunk.clone(),
+                None => block.clone(),
             }))
         } else {
             None

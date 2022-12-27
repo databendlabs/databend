@@ -17,7 +17,7 @@ pub mod filters;
 pub mod index_min_max;
 pub mod range_filter;
 
-pub use bloom::ChunkFilter;
+pub use bloom::BlockFilter;
 pub use bloom::FilterEvalResult;
 use common_expression::types::DataType;
 pub use index_min_max::*;

@@ -17,9 +17,10 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Value;
 use common_sql::executor::PhysicalScalar;
@@ -106,17 +107,28 @@ impl Interpreter for DescribeTableInterpreter {
         }
 
         let num_rows = schema.fields().len();
-
-        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
+        PipelineBuildResult::from_blocks(vec![DataBlock::new(
             vec![
-                (Value::Column(Column::from_data(names)), DataType::String),
-                (Value::Column(Column::from_data(types)), DataType::String),
-                (Value::Column(Column::from_data(nulls)), DataType::String),
-                (
-                    Value::Column(Column::from_data(default_exprs)),
-                    DataType::String,
-                ),
-                (Value::Column(Column::from_data(extras)), DataType::String),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(names)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(types)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(nulls)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(default_exprs)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(extras)),
+                },
             ],
             num_rows,
         )])

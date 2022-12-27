@@ -19,7 +19,7 @@ extern crate criterion;
 mod parser;
 
 use common_expression::type_check;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
@@ -41,10 +41,10 @@ fn bench(c: &mut Criterion) {
             b.iter(|| type_check::check(&raw_expr, &BUILTIN_FUNCTIONS))
         });
 
-        let fn_ctx = FunctionContext { tz: chrono_tz::UTC };
+        let func_ctx = FunctionContext { tz: chrono_tz::UTC };
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
-        let chunk = Chunk::new(vec![], 1);
-        let evaluator = Evaluator::new(&chunk, fn_ctx, &BUILTIN_FUNCTIONS);
+        let block = DataBlock::new(vec![], 1);
+        let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
 
         group.bench_function(format!("eval/{n}"), |b| b.iter(|| evaluator.run(&expr)));
     }

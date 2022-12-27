@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -47,7 +47,7 @@ impl TransformSortPartial {
 impl Transform for TransformSortPartial {
     const NAME: &'static str = "SortPartialTransform";
 
-    fn transform(&mut self, chunk: Chunk) -> Result<Chunk> {
-        Chunk::sort(&chunk, &self.sort_columns_descriptions, self.limit)
+    fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
+        DataBlock::sort(&block, &self.sort_columns_descriptions, self.limit)
     }
 }

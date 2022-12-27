@@ -19,9 +19,9 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::AnyType;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -45,13 +45,13 @@ impl SyncSystemTable for MallocStatsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let values = Self::build_columns().map_err(convert_je_err)?;
-        Ok(Chunk::new_from_sequence(values, 1))
+        Ok(DataBlock::new(values, 1))
     }
 }
 
-type BuildResult = std::result::Result<Vec<(Value<AnyType>, DataType)>, Box<dyn std::error::Error>>;
+type BuildResult = std::result::Result<Vec<BlockEntry>, Box<dyn std::error::Error>>;
 
 impl MallocStatsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
@@ -83,8 +83,12 @@ impl MallocStatsTable {
         options.skip_per_arena = true;
 
         tikv_jemalloc_ctl::stats_print::stats_print(&mut buf, options)?;
-        let scalar = Scalar::String(buf);
-        Ok(vec![(Value::Scalar(scalar), DataType::String)])
+        let json_value: serde_json::Value = serde_json::from_slice(&buf)?;
+        let jsonb_value: common_jsonb::Value = (&json_value).into();
+        Ok(vec![BlockEntry {
+            data_type: DataType::Variant,
+            value: Value::Scalar(Scalar::Variant(jsonb_value.to_vec())),
+        }])
     }
 }
 

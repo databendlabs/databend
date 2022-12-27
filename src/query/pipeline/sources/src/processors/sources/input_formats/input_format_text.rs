@@ -18,8 +18,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
@@ -40,7 +40,7 @@ use crate::processors::sources::input_formats::impls::input_format_csv::CsvReade
 use crate::processors::sources::input_formats::impls::input_format_xml::XmlReaderState;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
-use crate::processors::sources::input_formats::input_pipeline::ChunkBuilderTrait;
+use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
 use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
 use crate::processors::sources::input_formats::input_split::split_by_size;
@@ -56,7 +56,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
 
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder>;
 
-    fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()>;
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
 
     fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>>;
 
@@ -109,7 +109,7 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
     type ReadBatch = Vec<u8>;
     type RowBatch = RowBatch;
     type AligningState = AligningState<T>;
-    type ChunkBuilder = ChunkBuilder<T>;
+    type BlockBuilder = BlockBuilder<T>;
 }
 
 #[async_trait::async_trait]
@@ -369,7 +369,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
     }
 }
 
-pub struct ChunkBuilder<T> {
+pub struct BlockBuilder<T> {
     pub field_decoder: Arc<dyn FieldDecoder>,
     pub ctx: Arc<InputContext>,
     pub mutable_columns: Vec<TypeDeserializerImpl>,
@@ -377,15 +377,13 @@ pub struct ChunkBuilder<T> {
     phantom: PhantomData<T>,
 }
 
-impl<T: InputFormatTextBase> ChunkBuilder<T> {
-    fn flush(&mut self) -> Result<Vec<Chunk>> {
+impl<T: InputFormatTextBase> BlockBuilder<T> {
+    fn flush(&mut self) -> Result<Vec<DataBlock>> {
         let columns = self
             .mutable_columns
             .iter_mut()
             .zip(self.ctx.data_schema().fields())
-            .enumerate()
-            .map(|(i, (deserializer, field))| ChunkEntry {
-                id: i,
+            .map(|(deserializer, field)| BlockEntry {
                 data_type: field.data_type().clone(),
                 value: Value::Column(deserializer.finish_to_column()),
             })
@@ -394,10 +392,10 @@ impl<T: InputFormatTextBase> ChunkBuilder<T> {
         self.mutable_columns = self
             .ctx
             .schema
-            .create_deserializers(self.ctx.chunk_compact_thresholds.min_rows_per_chunk);
+            .create_deserializers(self.ctx.block_compact_thresholds.min_rows_per_block);
         self.num_rows = 0;
 
-        Ok(vec![Chunk::new(columns, self.num_rows)])
+        Ok(vec![DataBlock::new(columns, self.num_rows)])
     }
 
     fn memory_size(&self) -> usize {
@@ -405,16 +403,16 @@ impl<T: InputFormatTextBase> ChunkBuilder<T> {
     }
 }
 
-impl<T: InputFormatTextBase> ChunkBuilderTrait for ChunkBuilder<T> {
+impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
     type Pipe = InputFormatTextPipe<T>;
 
     fn create(ctx: Arc<InputContext>) -> Self {
         let columns = ctx
             .schema
-            .create_deserializers(ctx.chunk_compact_thresholds.min_rows_per_chunk);
+            .create_deserializers(ctx.block_compact_thresholds.min_rows_per_block);
         let field_decoder = T::create_field_decoder(&ctx.format_options);
 
-        ChunkBuilder {
+        BlockBuilder {
             ctx,
             mutable_columns: columns,
             num_rows: 0,
@@ -423,7 +421,7 @@ impl<T: InputFormatTextBase> ChunkBuilderTrait for ChunkBuilder<T> {
         }
     }
 
-    fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<Chunk>> {
+    fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<DataBlock>> {
         if let Some(b) = batch {
             self.num_rows += b.row_ends.len();
             T::deserialize(self, b)?;
@@ -433,8 +431,8 @@ impl<T: InputFormatTextBase> ChunkBuilderTrait for ChunkBuilder<T> {
                 self.num_rows,
                 mem
             );
-            if self.num_rows >= self.ctx.chunk_compact_thresholds.min_rows_per_chunk
-                || mem > self.ctx.chunk_compact_thresholds.max_bytes_per_chunk
+            if self.num_rows >= self.ctx.block_compact_thresholds.min_rows_per_block
+                || mem > self.ctx.block_compact_thresholds.max_bytes_per_block
             {
                 self.flush()
             } else {

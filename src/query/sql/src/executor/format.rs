@@ -15,6 +15,7 @@
 use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -79,9 +80,7 @@ fn table_scan_to_format_tree(
             extras
                 .filters
                 .iter()
-                .map(|f|
-                    // TODO: prettier format for RemoteExpr
-                    format!("{:?}", f))
+                .map(|f| f.into_expr(&BUILTIN_FUNCTIONS).unwrap().to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });

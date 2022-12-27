@@ -29,8 +29,9 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -144,7 +145,7 @@ impl Table for TracingTable {
 struct TracingSource {
     rows_pre_block: usize,
     tracing_files: VecDeque<String>,
-    data_blocks: VecDeque<Chunk>,
+    data_blocks: VecDeque<DataBlock>,
 }
 
 impl TracingSource {
@@ -165,7 +166,7 @@ impl TracingSource {
 impl SyncSource for TracingSource {
     const NAME: &'static str = "system.tracing";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         loop {
             if let Some(data_block) = self.data_blocks.pop_front() {
                 return Ok(Some(data_block));
@@ -183,8 +184,11 @@ impl SyncSource for TracingSource {
                 for (index, line) in buffer.lines().enumerate() {
                     if index != 0 && index % max_rows == 0 {
                         let rows_len = entry_column.len();
-                        self.data_blocks.push_back(Chunk::new_from_sequence(
-                            vec![(Value::Column(entry_column.build()), DataType::String)],
+                        self.data_blocks.push_back(DataBlock::new(
+                            vec![BlockEntry {
+                                data_type: DataType::String,
+                                value: Value::Column(entry_column.build()),
+                            }],
                             rows_len,
                         ));
 
@@ -193,10 +197,13 @@ impl SyncSource for TracingSource {
                     entry_column.push(Scalar::String(line.unwrap().as_bytes().to_vec()).as_ref());
                 }
 
-                if !entry_column.len() > 0 {
+                if entry_column.len() > 0 {
                     let rows_len = entry_column.len();
-                    self.data_blocks.push_back(Chunk::new_from_sequence(
-                        vec![(Value::Column(entry_column.build()), DataType::String)],
+                    self.data_blocks.push_back(DataBlock::new(
+                        vec![BlockEntry {
+                            data_type: DataType::String,
+                            value: Value::Column(entry_column.build()),
+                        }],
                         rows_len,
                     ));
                 }

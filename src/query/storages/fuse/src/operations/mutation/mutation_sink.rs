@@ -22,7 +22,7 @@ use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ChunkMetaInfoPtr;
+use common_expression::BlockMetaInfoPtr;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
@@ -49,7 +49,7 @@ const MAX_RETRIES: u64 = 10;
 
 enum State {
     None,
-    ReadMeta(ChunkMetaInfoPtr),
+    ReadMeta(BlockMetaInfoPtr),
     TryCommit(TableSnapshot),
     RefreshTable,
     DetectConfilct(Arc<TableSnapshot>),

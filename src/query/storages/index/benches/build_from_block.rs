@@ -18,6 +18,7 @@ extern crate criterion;
 use common_expression::types::number::NumberColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::Column;
+use common_storages_index::filters::Filter;
 use common_storages_index::filters::FilterBuilder;
 use common_storages_index::filters::Xor8Builder;
 use criterion::Criterion;
@@ -41,8 +42,7 @@ use rand::SeedableRng;
 ///   string of length 16 to 32: 123ns/key
 
 fn bench_u64(c: &mut Criterion) {
-    let block = rand_i64_block(1_000_000);
-    let column = block.try_column_by_name("a").unwrap();
+    let column = rand_i64_column(1_000_000);
 
     let mut builder = Xor8Builder::create();
     (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
@@ -63,8 +63,7 @@ fn bench_u64(c: &mut Criterion) {
 }
 
 fn bench_string(c: &mut Criterion) {
-    let block = rand_str_block(1_000_000, 32);
-    let column = block.try_column_by_name("a").unwrap();
+    let column = rand_str_column(1_000_000, 32);
 
     let mut builder = Xor8Builder::create();
     (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));

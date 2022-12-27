@@ -27,10 +27,10 @@ use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_storages_table_meta::meta::BlockBloomFilterIndexVersion;
-use common_storages_table_meta::meta::ChunkFilter;
+use common_storages_table_meta::meta::BlockFilter;
 use common_storages_table_meta::meta::Location;
 use futures_util::future::try_join_all;
 use opendal::Operator;
@@ -45,7 +45,7 @@ pub trait BlockFilterReader {
         dal: Operator,
         columns: &[String],
         index_length: u64,
-    ) -> Result<ChunkFilter>;
+    ) -> Result<BlockFilter>;
 }
 
 #[async_trait::async_trait]
@@ -56,13 +56,11 @@ impl BlockFilterReader for Location {
         dal: Operator,
         columns: &[String],
         index_length: u64,
-    ) -> Result<ChunkFilter> {
+    ) -> Result<BlockFilter> {
         let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
         match index_version {
             BlockBloomFilterIndexVersion::V3(_) => {
-                let block =
-                    load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
-                Ok(ChunkFilter::new(block))
+                load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await
             }
         }
     }
@@ -90,7 +88,7 @@ mod util_v1 {
         column_needed: &[String],
         path: &str,
         length: u64,
-    ) -> Result<Chunk> {
+    ) -> Result<BlockFilter> {
         let file_meta = load_index_meta(dal.clone(), path, length).await?;
         if file_meta.row_groups.len() != 1 {
             return Err(ErrorCode::StorageOther(format!(
@@ -105,7 +103,7 @@ mod util_v1 {
             .map(|name| TableField::new(name, TableDataType::String))
             .collect::<Vec<_>>();
 
-        let schema = Arc::new(TableSchema::new(fields));
+        let filter_schema = Arc::new(TableSchema::new(fields));
 
         // 1. load column data, as bytes
         let futs = column_needed
@@ -187,7 +185,12 @@ mod util_v1 {
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
             Some(Ok(chunk)) => {
                 let span = tracing::info_span!("from_chunk");
-                span.in_scope(|| Chunk::from_arrow_chunk(&chunk, &schema.into()))
+                let filter_block = span
+                    .in_scope(|| DataBlock::from_arrow_chunk(&chunk, &(&filter_schema).into()))?;
+                Ok(BlockFilter {
+                    filter_schema,
+                    filter_block,
+                })
             }
         }
     }

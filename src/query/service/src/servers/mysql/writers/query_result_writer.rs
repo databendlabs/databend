@@ -22,7 +22,7 @@ use common_expression::Column as ExprColumn;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::ScalarRef;
-use common_expression::SendableChunkStream;
+use common_expression::SendableDataBlockStream;
 use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
 use common_io::prelude::FormatSettings;
@@ -41,7 +41,7 @@ pub trait ProgressReporter {
 }
 
 pub struct QueryResult {
-    chunks: SendableChunkStream,
+    blocks: SendableDataBlockStream,
     extra_info: Option<Box<dyn ProgressReporter + Send>>,
     has_result_set: bool,
     schema: DataSchemaRef,
@@ -49,13 +49,13 @@ pub struct QueryResult {
 
 impl QueryResult {
     pub fn create(
-        chunks: SendableChunkStream,
+        blocks: SendableDataBlockStream,
         extra_info: Option<Box<dyn ProgressReporter + Send>>,
         has_result_set: bool,
         schema: DataSchemaRef,
     ) -> QueryResult {
         QueryResult {
-            chunks,
+            blocks,
             extra_info,
             has_result_set,
             schema,
@@ -107,9 +107,9 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         // XXX: num_columns == 0 may is error?
         if !query_result.has_result_set {
             // For statements without result sets, we still need to pull the stream because errors may occur in the stream.
-            let chunks = &mut query_result.chunks;
-            while let Some(chunk) = chunks.next().await {
-                if let Err(e) = chunk {
+            let blocks = &mut query_result.blocks;
+            while let Some(block) = blocks.next().await {
+                if let Err(e) = block {
                     error!("dataset write failed: {:?}", e);
                     dataset_writer
                         .error(
@@ -184,10 +184,10 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             Err(error) => Self::err(&error, dataset_writer).await,
             Ok(columns) => {
                 let mut row_writer = dataset_writer.start(&columns).await?;
-                let chunks = &mut query_result.chunks;
+                let blocks = &mut query_result.blocks;
 
-                while let Some(chunk) = chunks.next().await {
-                    let chunk = match chunk {
+                while let Some(block) = blocks.next().await {
+                    let block = match block {
                         Err(e) => {
                             error!("result row write failed: {:?}", e);
                             row_writer
@@ -198,16 +198,17 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                                 .await?;
                             return Ok(());
                         }
-                        Ok(chunk) => chunk,
+                        Ok(block) => block,
                     };
 
-                    let num_rows = chunk.num_rows();
+                    let num_rows = block.num_rows();
                     let encoder = FieldEncoderValues::create_for_mysql_handler(format.timezone);
                     let mut buf = Vec::<u8>::new();
 
-                    let columns = chunk
+                    let columns = block
                         .convert_to_full()
                         .columns()
+                        .iter()
                         .map(|column| column.value.clone().into_column().unwrap())
                         .collect::<Vec<_>>();
 
@@ -274,6 +275,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     .map(|r| r.progress_info())
                     .unwrap_or_default();
                 row_writer.finish_with_info(&info).await?;
+
                 Ok(())
             }
         }

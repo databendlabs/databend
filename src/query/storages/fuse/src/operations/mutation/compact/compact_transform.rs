@@ -24,11 +24,11 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::serialize_to_parquet_with_compression;
-use common_expression::Chunk;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
-use common_storages_index::ChunkFilter;
+use common_storages_index::BlockFilter;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -63,7 +63,7 @@ enum State {
     Consume,
     ReadBlocks,
     CompactBlocks {
-        chunks: Vec<Chunk>,
+        blocks: Vec<DataBlock>,
         stats_of_columns: Vec<Vec<StatisticsOfColumns>>,
         trivals: VecDeque<Arc<BlockMeta>>,
     },
@@ -86,7 +86,7 @@ pub struct CompactTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
-    output_data: Option<Chunk>,
+    output_data: Option<DataBlock>,
 
     block_reader: Arc<BlockReader>,
     location_gen: TableMetaLocationGenerator,
@@ -100,7 +100,7 @@ pub struct CompactTransform {
     compact_tasks: VecDeque<CompactTask>,
     block_metas: Vec<Arc<BlockMeta>>,
     order: usize,
-    thresholds: ChunkCompactThresholds,
+    thresholds: BlockCompactThresholds,
     abort_operation: AbortOperation,
 }
 
@@ -116,7 +116,7 @@ impl CompactTransform {
         dal: Operator,
         schema: TableSchemaRef,
         storage_format: FuseStorageFormat,
-        thresholds: ChunkCompactThresholds,
+        thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
         let max_memory_usage = (settings.get_max_memory_usage()? as f64 * 0.8) as u64;
@@ -180,8 +180,8 @@ impl Processor for CompactTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(chunk) = self.output_data.take() {
-            self.output.push_data(Ok(chunk));
+        if let Some(data_block) = self.output_data.take() {
+            self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
 
@@ -210,7 +210,7 @@ impl Processor for CompactTransform {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::CompactBlocks {
-                mut chunks,
+                mut blocks,
                 stats_of_columns,
                 mut trivals,
             } => {
@@ -223,13 +223,13 @@ impl Processor for CompactTransform {
                     }
 
                     // concat blocks.
-                    let compact_chunks: Vec<_> = chunks.drain(0..block_num).collect();
-                    let new_chunk = Chunk::concat(&compact_chunks)?;
+                    let compact_blocks: Vec<_> = blocks.drain(0..block_num).collect();
+                    let new_block = DataBlock::concat(&compact_blocks)?;
 
                     // generate block statistics.
-                    let col_stats = reduce_block_statistics(&stats, Some(&new_chunk))?;
-                    let row_count = new_chunk.num_rows() as u64;
-                    let block_size = new_chunk.memory_size() as u64;
+                    let col_stats = reduce_block_statistics(&stats, Some(&new_block))?;
+                    let row_count = new_block.num_rows() as u64;
+                    let block_size = new_block.memory_size() as u64;
                     let (block_location, block_id) = self.location_gen.gen_block_location();
 
                     // build block index.
@@ -237,13 +237,13 @@ impl Processor for CompactTransform {
                         // write index
                         let func_ctx = FunctionContext::default();
                         let bloom_index =
-                            ChunkFilter::try_create(func_ctx, self.schema.clone(), &[&new_chunk])?;
-                        let index_chunk = bloom_index.filter_chunk;
+                            BlockFilter::try_create(func_ctx, self.schema.clone(), &[&new_block])?;
+                        let index_block = bloom_index.filter_block;
                         let location = self.location_gen.block_bloom_index_location(&block_id);
                         let mut data = Vec::with_capacity(100 * 1024);
                         let index_block_schema = &bloom_index.filter_schema;
                         let (size, _) = serialize_to_parquet_with_compression(
-                            vec![index_chunk],
+                            vec![index_block],
                             index_block_schema,
                             &mut data,
                             CompressionOptions::Uncompressed,
@@ -256,7 +256,7 @@ impl Processor for CompactTransform {
                     let (file_size, col_metas) = io::write_block(
                         self.storage_format,
                         &self.schema,
-                        new_chunk,
+                        new_block,
                         &mut block_data,
                     )?;
                     // new block meta.
@@ -307,7 +307,7 @@ impl Processor for CompactTransform {
                     segment,
                     std::mem::take(&mut self.abort_operation),
                 );
-                self.output_data = Some(Chunk::empty_with_meta(meta));
+                self.output_data = Some(DataBlock::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -366,9 +366,9 @@ impl Processor for CompactTransform {
                     stats_of_columns.push(meta_stats);
                 }
 
-                let chunks = futures::future::try_join_all(task_futures).await?;
+                let blocks = futures::future::try_join_all(task_futures).await?;
                 self.state = State::CompactBlocks {
-                    chunks,
+                    blocks,
                     stats_of_columns,
                     trivals,
                 }

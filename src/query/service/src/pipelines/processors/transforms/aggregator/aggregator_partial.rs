@@ -16,11 +16,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::AnyType;
 use common_expression::types::DataType;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::HashMethod;
 use common_expression::HashMethodKeysU128;
 use common_expression::HashMethodKeysU16;
@@ -126,10 +125,10 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         places
     }
 
-    // Chunk should be `convert_to_full`.
+    // Block should be `convert_to_full`.
     #[inline(always)]
     fn aggregate_arguments(
-        chunk: &Chunk,
+        block: &DataBlock,
         params: &Arc<AggregatorParams>,
     ) -> Result<Vec<Vec<Column>>> {
         let aggregate_functions_arguments = &params.aggregate_functions_arguments;
@@ -140,7 +139,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
             for argument_index in function_arguments {
                 // Unwrap safety: chunk has been `convert_to_full`.
-                let argument_column = chunk
+                let argument_column = block
                     .get_by_offset(*argument_index)
                     .value
                     .as_column()
@@ -156,17 +155,21 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
     #[inline(always)]
     #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute(params: &Arc<AggregatorParams>, chunk: &Chunk, places: &StateAddrs) -> Result<()> {
+    fn execute(
+        params: &Arc<AggregatorParams>,
+        block: &DataBlock,
+        places: &StateAddrs,
+    ) -> Result<()> {
         let aggregate_functions = &params.aggregate_functions;
         let offsets_aggregate_states = &params.offsets_aggregate_states;
-        let aggregate_arguments_columns = Self::aggregate_arguments(chunk, params)?;
+        let aggregate_arguments_columns = Self::aggregate_arguments(block, params)?;
 
         // This can benificial for the case of dereferencing
         // This will help improve the performance ~hundreds of megabits per second
         let aggr_arg_columns_slice = &aggregate_arguments_columns;
 
         for index in 0..aggregate_functions.len() {
-            let rows = chunk.num_rows();
+            let rows = block.num_rows();
             let function = &aggregate_functions[index];
             let state_offset = offsets_aggregate_states[index];
             let function_arguments = &aggr_arg_columns_slice[index];
@@ -177,15 +180,15 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    pub fn group_columns<'a>(chunk: &'a Chunk, indices: &[usize]) -> Vec<&'a ChunkEntry> {
+    pub fn group_columns<'a>(block: &'a DataBlock, indices: &[usize]) -> Vec<&'a BlockEntry> {
         indices
             .iter()
-            .map(|&index| chunk.get_by_offset(index))
+            .map(|&index| block.get_by_offset(index))
             .collect::<Vec<_>>()
     }
 
     #[inline(always)]
-    fn generate_data(&mut self) -> Result<Vec<Chunk>> {
+    fn generate_data(&mut self) -> Result<Vec<DataBlock>> {
         if self.hash_table.len() == 0 {
             return Ok(vec![]);
         }
@@ -214,19 +217,21 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             group_key_builder.append_value(group_entity.key());
         }
 
-        let mut columns: Vec<(Value<AnyType>, DataType)> = Vec::with_capacity(state_builders.len());
+        let mut columns = Vec::with_capacity(state_builders.len());
         for builder in state_builders.into_iter() {
-            columns.push((
-                Value::Column(Column::String(builder.build())),
-                DataType::String,
-            ));
+            columns.push(BlockEntry {
+                data_type: DataType::String,
+                value: Value::Column(Column::String(builder.build())),
+            });
         }
 
         let group_key_col = group_key_builder.finish();
         let num_rows = group_key_col.len();
-        let data_type = data_type_of_group_key_column!(group_key_col);
-        columns.push((Value::Column(group_key_col), data_type));
-        Ok(vec![Chunk::new_from_sequence(columns, num_rows)])
+        columns.push(BlockEntry {
+            data_type: data_type_of_group_key_column!(group_key_col),
+            value: Value::Column(group_key_col),
+        });
+        Ok(vec![DataBlock::new(columns, num_rows)])
     }
 }
 
@@ -235,26 +240,26 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 {
     const NAME: &'static str = "GroupByPartialTransform";
 
-    fn consume(&mut self, chunk: Chunk) -> Result<()> {
-        let chunk = chunk.convert_to_full();
+    fn consume(&mut self, block: DataBlock) -> Result<()> {
+        let block = block.convert_to_full();
         // 1.1 and 1.2.
-        let group_columns = Self::group_columns(&chunk, &self.params.group_columns);
+        let group_columns = Self::group_columns(&block, &self.params.group_columns);
         let group_columns = group_columns
             .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
         let group_keys_state = self
             .method
-            .build_keys_state(&group_columns, chunk.num_rows())?;
+            .build_keys_state(&group_columns, block.num_rows())?;
 
         let group_keys_iter = self.method.build_keys_iter(&group_keys_state)?;
 
         let area = self.area.as_mut().unwrap();
         let places = Self::lookup_state(area, &self.params, group_keys_iter, &mut self.hash_table);
-        Self::execute(&self.params, &chunk, &places)
+        Self::execute(&self.params, &block, &places)
     }
 
-    fn generate(&mut self) -> Result<Vec<Chunk>> {
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
         self.generate_data()
     }
 }
@@ -264,10 +269,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 {
     const NAME: &'static str = "GroupByPartialTransform";
 
-    fn consume(&mut self, chunk: Chunk) -> Result<()> {
-        let chunk = chunk.convert_to_full();
+    fn consume(&mut self, block: DataBlock) -> Result<()> {
+        let block = block.convert_to_full();
         // 1.1 and 1.2.
-        let group_columns = Self::group_columns(&chunk, &self.params.group_columns);
+        let group_columns = Self::group_columns(&block, &self.params.group_columns);
         let group_columns = group_columns
             .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
@@ -275,14 +280,14 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
         let keys_state = self
             .method
-            .build_keys_state(&group_columns, chunk.num_rows())?;
+            .build_keys_state(&group_columns, block.num_rows())?;
         let group_keys_iter = self.method.build_keys_iter(&keys_state)?;
 
         Self::lookup_key(group_keys_iter, &mut self.hash_table);
         Ok(())
     }
 
-    fn generate(&mut self) -> Result<Vec<Chunk>> {
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
         if self.hash_table.len() == 0 {
             self.drop_states();
             return Ok(vec![]);
@@ -295,13 +300,16 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         }
 
         let column = keys_column_builder.finish();
+        let num_rows = column.len();
 
         self.drop_states();
-        let data_type = data_type_of_group_key_column!(column);
-        let rows = column.len();
-        Ok(vec![Chunk::new_from_sequence(
-            vec![(Value::Column(column), data_type)],
-            rows,
+
+        Ok(vec![DataBlock::new(
+            vec![BlockEntry {
+                data_type: data_type_of_group_key_column!(column),
+                value: Value::Column(column),
+            }],
+            num_rows,
         )])
     }
 }

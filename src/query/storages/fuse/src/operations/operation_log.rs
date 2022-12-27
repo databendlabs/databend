@@ -18,8 +18,8 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_expression::Chunk;
-use common_expression::ChunkMetaInfo;
+use common_expression::BlockMetaInfo;
+use common_expression::DataBlock;
 use common_storages_table_meta::meta::SegmentInfo;
 
 // currently, only support append,
@@ -41,10 +41,10 @@ impl AppendOperationLogEntry {
     }
 }
 
-impl TryFrom<AppendOperationLogEntry> for Chunk {
+impl TryFrom<AppendOperationLogEntry> for DataBlock {
     type Error = ErrorCode;
     fn try_from(value: AppendOperationLogEntry) -> Result<Self, Self::Error> {
-        Ok(Chunk::new_with_meta(
+        Ok(DataBlock::new_with_meta(
             vec![],
             0,
             Some(Arc::new(Box::new(value))),
@@ -52,15 +52,15 @@ impl TryFrom<AppendOperationLogEntry> for Chunk {
     }
 }
 
-impl TryFrom<&Chunk> for AppendOperationLogEntry {
+impl TryFrom<&DataBlock> for AppendOperationLogEntry {
     type Error = ErrorCode;
-    fn try_from(chunk: &Chunk) -> Result<Self, Self::Error> {
+    fn try_from(block: &DataBlock) -> Result<Self, Self::Error> {
         let err = ErrorCode::Internal(format!(
             "invalid data block meta of AppendOperation log, {:?}",
-            chunk.meta()
+            block.meta()
         ));
 
-        if let Some(meta) = chunk.meta()? {
+        if let Some(meta) = block.meta()? {
             let cast = meta.as_any().downcast_ref::<AppendOperationLogEntry>();
             return match cast {
                 None => Err(err),
@@ -73,12 +73,12 @@ impl TryFrom<&Chunk> for AppendOperationLogEntry {
 }
 
 #[typetag::serde(name = "operation_log")]
-impl ChunkMetaInfo for AppendOperationLogEntry {
+impl BlockMetaInfo for AppendOperationLogEntry {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn equals(&self, info: &Box<dyn ChunkMetaInfo>) -> bool {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<AppendOperationLogEntry>() {
             None => false,
             Some(other) => self == other,

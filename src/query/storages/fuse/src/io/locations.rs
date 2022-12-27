@@ -15,8 +15,8 @@
 use std::marker::PhantomData;
 
 use common_exception::Result;
-use common_expression::Chunk;
-use common_storages_table_meta::meta::ChunkFilter;
+use common_expression::DataBlock;
+use common_storages_table_meta::meta::BlockFilter;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::SnapshotVersion;
@@ -60,9 +60,9 @@ impl TableMetaLocationGenerator {
                     &self.prefix,
                     FUSE_TBL_BLOCK_PREFIX,
                     part_uuid.as_simple(),
-                    Chunk::VERSION,
+                    DataBlock::VERSION,
                 ),
-                Chunk::VERSION,
+                DataBlock::VERSION,
             ),
             part_uuid,
         )
@@ -75,9 +75,9 @@ impl TableMetaLocationGenerator {
                 &self.prefix,
                 FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
                 block_id.as_simple(),
-                ChunkFilter::VERSION,
+                BlockFilter::VERSION,
             ),
-            ChunkFilter::VERSION,
+            BlockFilter::VERSION,
         )
     }
 

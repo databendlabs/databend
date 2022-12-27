@@ -19,7 +19,7 @@ use std::sync::Mutex;
 use common_arrow::arrow::bitmap;
 use itertools::Itertools;
 
-use crate::chunk::Chunk;
+use crate::block::DataBlock;
 use crate::expression::Expr;
 use crate::expression::Span;
 use crate::function::EvalContext;
@@ -43,31 +43,29 @@ use crate::FunctionDomain;
 use crate::FunctionRegistry;
 use crate::Result;
 
-pub struct Evaluator<'a, Index: ColumnIndex> {
-    input_columns: &'a Chunk<Index>,
-    fn_ctx: FunctionContext,
+pub struct Evaluator<'a> {
+    input_columns: &'a DataBlock,
+    func_ctx: FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
 
-impl<'a, Index: ColumnIndex> Evaluator<'a, Index> {
+impl<'a> Evaluator<'a> {
     pub fn new(
-        input_columns: &'a Chunk<Index>,
-        fn_ctx: FunctionContext,
+        input_columns: &'a DataBlock,
+        func_ctx: FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> Self {
         Evaluator {
             input_columns,
-            fn_ctx,
+            func_ctx,
             fn_registry,
         }
     }
 
-    pub fn run(&self, expr: &Expr<Index>) -> Result<Value<AnyType>> {
+    pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
-            Expr::ColumnRef { id, .. } => {
-                Ok(self.input_columns.get_by_id(id).unwrap().value.clone())
-            }
+            Expr::ColumnRef { id, .. } => Ok(self.input_columns.get_by_offset(*id).value.clone()),
             Expr::FunctionCall {
                 span,
                 function,
@@ -91,7 +89,7 @@ impl<'a, Index: ColumnIndex> Evaluator<'a, Index> {
                 let ctx = EvalContext {
                     generics,
                     num_rows: self.input_columns.num_rows(),
-                    tz: self.fn_ctx.tz,
+                    tz: self.func_ctx.tz,
                 };
                 (function.eval)(cols_ref.as_slice(), ctx).map_err(|msg| (span.clone(), msg))
             }
@@ -117,8 +115,12 @@ impl<'a, Index: ColumnIndex> Evaluator<'a, Index> {
                 *RECURSING.lock().unwrap() = true;
                 assert_eq!(
                     ConstantFolder::new(
-                        self.input_columns.domains(),
-                        self.fn_ctx,
+                        self.input_columns
+                            .domains()
+                            .into_iter()
+                            .enumerate()
+                            .collect(),
+                        self.func_ctx,
                         self.fn_registry
                     )
                     .fold(expr)
@@ -411,7 +413,7 @@ impl<'a, Index: ColumnIndex> Evaluator<'a, Index> {
             span,
             cast_fn,
             [(value, src_type.clone())],
-            self.fn_ctx,
+            self.func_ctx,
             num_rows,
             self.fn_registry,
         )?;
@@ -422,19 +424,19 @@ impl<'a, Index: ColumnIndex> Evaluator<'a, Index> {
 
 pub struct ConstantFolder<'a, Index: ColumnIndex> {
     input_domains: HashMap<Index, Domain>,
-    fn_ctx: FunctionContext,
+    func_ctx: FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
 
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     pub fn new(
         input_domains: HashMap<Index, Domain>,
-        fn_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> Self {
         ConstantFolder {
             input_domains,
-            fn_ctx,
+            func_ctx,
             fn_registry,
         }
     }
@@ -494,8 +496,8 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 if inner_expr.as_constant().is_some() {
-                    let chunk = Chunk::empty();
-                    let evaluator = Evaluator::<Index>::new(&chunk, self.fn_ctx, self.fn_registry);
+                    let block = DataBlock::empty();
+                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let cast_expr = cast_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
@@ -570,8 +572,8 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 if all_args_is_scalar {
-                    let chunk = Chunk::empty();
-                    let evaluator = Evaluator::<Index>::new(&chunk, self.fn_ctx, self.fn_registry);
+                    let block = DataBlock::empty();
+                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
@@ -763,7 +765,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             span,
             cast_fn,
             [(domain.clone(), src_type.clone())],
-            self.fn_ctx,
+            self.func_ctx,
             self.fn_registry,
         )?;
         assert_eq!(&ty, dest_type);

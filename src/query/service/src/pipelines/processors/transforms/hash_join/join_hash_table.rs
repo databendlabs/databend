@@ -21,7 +21,7 @@ use common_base::base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::combine_validities_2;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::HashMethod;
@@ -95,7 +95,7 @@ impl JoinHashTable {
             .iter()
             .map(|expr| expr.data_type())
             .collect::<Vec<_>>();
-        let method = Chunk::choose_hash_method_with_types(&hash_key_types)?;
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
         Ok(match method {
             HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
                 ctx,
@@ -215,9 +215,9 @@ impl JoinHashTable {
 
     pub(crate) fn probe_join(
         &self,
-        input: &Chunk,
+        input: &DataBlock,
         probe_state: &mut ProbeState,
-    ) -> Result<Vec<Chunk>> {
+    ) -> Result<Vec<DataBlock>> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let evaluator = Evaluator::new(input, func_ctx, &BUILTIN_FUNCTIONS);
 
@@ -269,56 +269,56 @@ impl JoinHashTable {
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
 
-                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU8HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU16HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU32HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU64HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU128HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU256HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
             HashTable::KeyU512HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
             }
         }
     }

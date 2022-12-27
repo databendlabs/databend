@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -26,9 +26,9 @@ use common_pipeline_core::processors::Processor;
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
     const NAME: &'static str;
-    const SKIP_EMPTY_CHUNK: bool = false;
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
-    fn transform(&mut self, data: Chunk) -> Result<Chunk>;
+    fn transform(&mut self, data: DataBlock) -> Result<DataBlock>;
 
     fn name(&self) -> String {
         Self::NAME.to_string()
@@ -40,8 +40,8 @@ pub struct Transformer<T: Transform + 'static> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    input_data: Option<Chunk>,
-    output_data: Option<Chunk>,
+    input_data: Option<DataBlock>,
+    output_data: Option<DataBlock>,
 }
 
 impl<T: Transform + 'static> Transformer<T> {
@@ -82,9 +82,9 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(chunk) = self.input_data.take() {
-            let chunk = self.transform.transform(chunk)?;
-            self.output_data = Some(chunk);
+        if let Some(data_block) = self.input_data.take() {
+            let data_block = self.transform.transform(data_block)?;
+            self.output_data = Some(data_block);
         }
 
         Ok(())

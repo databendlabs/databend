@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 
@@ -28,12 +28,12 @@ impl BroadcastFlightScatter {
 }
 
 impl FlightScatter for BroadcastFlightScatter {
-    fn execute(&self, chunk: &Chunk, _num: usize) -> Result<Vec<Chunk>> {
-        let mut chunks = vec![];
+    fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
+        let mut data_blocks = vec![];
         for _ in 0..self.scattered_size {
-            chunks.push(chunk.clone());
+            data_blocks.push(data_block.clone());
         }
 
-        Ok(chunks)
+        Ok(data_blocks)
     }
 }

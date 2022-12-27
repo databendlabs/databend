@@ -22,8 +22,9 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
@@ -87,7 +88,7 @@ where TablesTable<T>: HistoryAware
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
@@ -211,49 +212,72 @@ where TablesTable<T>: HistoryAware
         let cluster_bys: Vec<Vec<u8>> = cluster_bys.iter().map(|s| s.as_bytes().to_vec()).collect();
 
         let rows_len = databases.len();
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (Value::Column(Column::from_data(catalogs)), DataType::String),
-                (
-                    Value::Column(Column::from_data(databases)),
-                    DataType::String,
-                ),
-                (Value::Column(Column::from_data(names)), DataType::String),
-                (Value::Column(Column::from_data(engines)), DataType::String),
-                (
-                    Value::Column(Column::from_data(cluster_bys)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(created_ons)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(dropped_ons)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data_with_validity(num_rows, num_rows_valids)),
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                ),
-                (
-                    Value::Column(Column::from_data_with_validity(data_size, data_size_valids)),
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                ),
-                (
-                    Value::Column(Column::from_data_with_validity(
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(catalogs)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(databases)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(names)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(engines)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(cluster_bys)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(created_ons)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(dropped_ons)),
+                },
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(DataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                    value: Value::Column(Column::from_data_with_validity(
+                        num_rows,
+                        num_rows_valids,
+                    )),
+                },
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(DataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                    value: Value::Column(Column::from_data_with_validity(
+                        data_size,
+                        data_size_valids,
+                    )),
+                },
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(DataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                    value: Value::Column(Column::from_data_with_validity(
                         data_compressed_size,
                         data_compressed_size_valids,
                     )),
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                ),
-                (
-                    Value::Column(Column::from_data_with_validity(
+                },
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(DataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                    value: Value::Column(Column::from_data_with_validity(
                         index_size,
                         index_size_valids,
                     )),
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                ),
+                },
             ],
             rows_len,
         ))

@@ -41,7 +41,7 @@ use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
-use databend_query::pipelines::processors::ChunksSource;
+use databend_query::pipelines::processors::BlocksSource;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
@@ -54,7 +54,7 @@ use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use databend_query::storages::Table;
-use databend_query::stream::ReadChunkStream;
+use databend_query::stream::ReadDataBlockStream;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
@@ -291,7 +291,7 @@ impl TestFixture {
 
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
         build_res.main_pipeline.add_source(
-            |output| ChunksSource::create(self.ctx.clone(), output, blocks.clone()),
+            |output| BlocksSource::create(self.ctx.clone(), output, blocks.clone()),
             1,
         )?;
 
@@ -357,7 +357,9 @@ pub async fn test_drive_with_args_and_ctx(
         .read_plan(ctx.clone(), Some(PushDownInfo::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.as_table().read_chunk_stream(ctx, &source_plan).await
+    func.as_table()
+        .read_data_block_stream(ctx, &source_plan)
+        .await
 }
 
 pub async fn test_drive_clustering_information(
@@ -371,7 +373,9 @@ pub async fn test_drive_clustering_information(
         .read_plan(ctx.clone(), Some(PushDownInfo::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.as_table().read_chunk_stream(ctx, &source_plan).await
+    func.as_table()
+        .read_data_block_stream(ctx, &source_plan)
+        .await
 }
 
 pub fn expects_err<T>(case_name: &str, err_code: u16, res: Result<T>) {

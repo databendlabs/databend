@@ -16,9 +16,10 @@ use comfy_table::Table;
 use common_base::base::tokio;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
+use common_expression::DataBlock;
 use common_expression::Value;
 use common_streams::*;
 use futures::stream::StreamExt;
@@ -29,43 +30,43 @@ async fn test_datablock_stream() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("stream_datablock.txt").unwrap();
 
-    let chunks = vec![
-        Chunk::new(
-            vec![
-                (
-                    Value::Column(Column::from_data(vec!["a1", "a2", "a3"])),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(vec![1i32, 1, 1])),
-                    DataType::Number(NumberDataType::Int32),
-                ),
+    let data_blocks = vec![
+        DataBlock::new(
+            Vec![
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(vec!["a1", "a2", "a3"])),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::Int32),
+                    value: Value::Column(Column::from_data(vec![1i32, 1, 1])),
+                },
             ],
             3,
         ),
-        Chunk::new(
-            vec![
-                (
-                    Value::Column(Column::from_data(vec!["b1", "b2", "b3"])),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(vec![2i32, 2, 2])),
-                    DataType::Number(NumberDataType::Int32),
-                ),
+        DataBlock::new(
+            Vec![
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(vec!["b1", "b2", "b3"])),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::Int32),
+                    value: Value::Column(Column::from_data(vec![2i32, 2, 2])),
+                },
             ],
             3,
         ),
-        Chunk::new(
-            vec![
-                (
-                    Value::Column(Column::from_data(vec!["c1", "c2", "c3"])),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(vec![3i32, 3, 3])),
-                    DataType::Number(NumberDataType::Int32),
-                ),
+        DataBlock::new(
+            Vec![
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(vec!["c1", "c2", "c3"])),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::Int32),
+                    value: Value::Column(Column::from_data(vec![3i32, 3, 3])),
+                },
             ],
             3,
         ),

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
 use common_datavalues::remove_nullable;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
@@ -24,10 +23,10 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
-use crate::Chunk;
-use crate::ChunkEntry;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataBlock;
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
@@ -177,18 +176,16 @@ pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<
     Value::Column(new_column)
 }
 
-pub fn from_block(datablock: &DataBlock) -> Chunk {
+pub fn from_block(datablock: &common_datablocks::DataBlock) -> DataBlock {
     let columns = datablock
         .columns()
         .iter()
         .zip(datablock.schema().fields().iter())
-        .enumerate()
-        .map(|(i, (c, f))| ChunkEntry {
-            id: i,
+        .map(|(c, f)| BlockEntry {
             data_type: DataType::from(&from_type(f.data_type())),
             value: convert_column(c, f.data_type()),
         })
         .collect_vec();
 
-    Chunk::new(columns, datablock.num_rows())
+    DataBlock::new(columns, datablock.num_rows())
 }

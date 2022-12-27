@@ -33,14 +33,14 @@ use crate::types::StringType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
-use crate::Chunk;
-use crate::ChunkEntry;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnIndex;
+use crate::DataBlock;
 use crate::Scalar;
 use crate::Value;
 
-impl<Index: ColumnIndex> Chunk<Index> {
+impl DataBlock {
     // check if the predicate has any valid row
     pub fn filter_exists(predicate: &Value<AnyType>) -> Result<bool> {
         let predicate = Self::cast_to_nonull_boolean(predicate).ok_or_else(|| {
@@ -55,7 +55,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
         }
     }
 
-    pub fn filter(self, predicate: &Value<AnyType>) -> Result<Chunk<Index>> {
+    pub fn filter(self, predicate: &Value<AnyType>) -> Result<DataBlock> {
         if self.num_columns() == 0 || self.num_rows() == 0 {
             return Ok(self);
         }
@@ -75,7 +75,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
                     Ok(self.slice(0..0))
                 }
             }
-            Value::Column(bitmap) => Self::filter_chunk_with_bitmap(self, &bitmap),
+            Value::Column(bitmap) => Self::filter_with_bitmap(self, &bitmap),
         }
     }
 
@@ -138,21 +138,21 @@ impl<Index: ColumnIndex> Chunk<Index> {
         }
     }
 
-    pub fn filter_chunk_with_bitmap(chunk: Chunk<Index>, bitmap: &Bitmap) -> Result<Chunk<Index>> {
+    pub fn filter_with_bitmap(block: DataBlock, bitmap: &Bitmap) -> Result<DataBlock> {
         let count_zeros = bitmap.unset_bits();
         match count_zeros {
-            0 => Ok(chunk),
+            0 => Ok(block),
             _ => {
-                if count_zeros == chunk.num_rows() {
-                    return Ok(chunk.slice(0..0));
+                if count_zeros == block.num_rows() {
+                    return Ok(block.slice(0..0));
                 }
-                let after_columns = chunk
+                let after_columns = block
                     .columns()
+                    .iter()
                     .map(|entry| match &entry.value {
                         Value::Column(c) => {
                             let value = Value::Column(Column::filter(c, bitmap));
-                            ChunkEntry {
-                                id: entry.id.clone(),
+                            BlockEntry {
                                 data_type: entry.data_type.clone(),
                                 value,
                             }
@@ -160,7 +160,10 @@ impl<Index: ColumnIndex> Chunk<Index> {
                         _ => entry.clone(),
                     })
                     .collect();
-                Ok(Chunk::new(after_columns, chunk.num_rows() - count_zeros))
+                Ok(DataBlock::new(
+                    after_columns,
+                    block.num_rows() - count_zeros,
+                ))
             }
         }
     }

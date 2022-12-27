@@ -16,9 +16,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Value;
 use common_meta_api::ShareApi;
@@ -98,21 +99,36 @@ impl Interpreter for ShowSharesInterpreter {
             comments.push(entry.comment.unwrap_or_default().as_bytes().to_vec());
         }
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
+        PipelineBuildResult::from_blocks(vec![DataBlock::new(
             vec![
-                (
-                    Value::Column(Column::from_data(created_ons)),
-                    DataType::String,
-                ),
-                (Value::Column(Column::from_data(kinds)), DataType::String),
-                (Value::Column(Column::from_data(names)), DataType::String),
-                (
-                    Value::Column(Column::from_data(database_names)),
-                    DataType::String,
-                ),
-                (Value::Column(Column::from_data(from)), DataType::String),
-                (Value::Column(Column::from_data(to)), DataType::String),
-                (Value::Column(Column::from_data(comments)), DataType::String),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(created_ons)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(kinds)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(names)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(database_names)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(from)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(to)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(comments)),
+                },
             ],
             num_rows,
         )])

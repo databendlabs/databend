@@ -19,27 +19,27 @@ use std::task::Poll;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::SendableChunkStream;
+use common_expression::DataBlock;
+use common_expression::SendableDataBlockStream;
 use futures::Stream;
 use pin_project_lite::pin_project;
 
 pin_project! {
     pub struct ProgressStream {
         #[pin]
-        input: SendableChunkStream,
+        input: SendableDataBlockStream,
         progress:Arc<Progress>,
     }
 }
 
 impl ProgressStream {
-    pub fn try_create(input: SendableChunkStream, progress: Arc<Progress>) -> Result<Self> {
+    pub fn try_create(input: SendableDataBlockStream, progress: Arc<Progress>) -> Result<Self> {
         Ok(Self { input, progress })
     }
 }
 
 impl Stream for ProgressStream {
-    type Item = Result<Chunk>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,
@@ -50,13 +50,13 @@ impl Stream for ProgressStream {
         match this.input.poll_next(ctx) {
             Poll::Ready(x) => match x {
                 Some(result) => match result {
-                    Ok(chunk) => {
+                    Ok(block) => {
                         let progress_values = ProgressValues {
-                            rows: chunk.num_rows(),
-                            bytes: chunk.memory_size(),
+                            rows: block.num_rows(),
+                            bytes: block.memory_size(),
                         };
                         this.progress.incr(&progress_values);
-                        Poll::Ready(Some(Ok(chunk)))
+                        Poll::Ready(Some(Ok(block)))
                     }
                     Err(e) => Poll::Ready(Some(Err(e))),
                 },

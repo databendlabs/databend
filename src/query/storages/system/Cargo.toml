@@ -13,6 +13,7 @@ test = false
 
 [dependencies]
 common-base = { path = "../../../common/base" }
+common-jsonb = { path = "../../../common/jsonb" }
 common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }

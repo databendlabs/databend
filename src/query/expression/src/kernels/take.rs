@@ -26,13 +26,12 @@ use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
-use crate::Chunk;
-use crate::ChunkEntry;
+use crate::BlockEntry;
 use crate::Column;
-use crate::ColumnIndex;
+use crate::DataBlock;
 use crate::Value;
 
-impl<Index: ColumnIndex> Chunk<Index> {
+impl DataBlock {
     pub fn take<I>(&self, indices: &[I]) -> Result<Self>
     where I: common_arrow::arrow::types::Index {
         if indices.is_empty() {
@@ -41,21 +40,20 @@ impl<Index: ColumnIndex> Chunk<Index> {
 
         let after_columns = self
             .columns()
+            .iter()
             .map(|entry| match &entry.value {
-                Value::Scalar(s) => ChunkEntry {
-                    id: entry.id.clone(),
+                Value::Scalar(s) => BlockEntry {
                     data_type: entry.data_type.clone(),
                     value: Value::Scalar(s.clone()),
                 },
-                Value::Column(c) => ChunkEntry {
-                    id: entry.id.clone(),
+                Value::Column(c) => BlockEntry {
                     data_type: entry.data_type.clone(),
                     value: Value::Column(Column::take(c, indices)),
                 },
             })
             .collect();
 
-        Ok(Chunk::new(after_columns, indices.len()))
+        Ok(DataBlock::new(after_columns, indices.len()))
     }
 }
 

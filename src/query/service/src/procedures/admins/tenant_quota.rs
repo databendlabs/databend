@@ -20,7 +20,8 @@ use common_expression::types::number::UInt32Type;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::ValueType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
@@ -29,7 +30,7 @@ use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
 use common_users::UserApiProvider;
 
-use crate::procedures::OneChunkProcedure;
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -44,7 +45,7 @@ impl TenantQuotaProcedure {
 }
 
 #[async_trait::async_trait]
-impl OneChunkProcedure for TenantQuotaProcedure {
+impl OneBlockProcedure for TenantQuotaProcedure {
     fn name(&self) -> &str {
         "TENANT_QUOTA"
     }
@@ -61,7 +62,7 @@ impl OneChunkProcedure for TenantQuotaProcedure {
     /// max_tables_per_database: u32
     /// max_stages: u32
     /// max_files_per_stage: u32
-    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<Chunk> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let mut tenant = ctx.get_tenant();
         if !args.is_empty() {
             let user_info = ctx.get_current_user()?;
@@ -79,7 +80,7 @@ impl OneChunkProcedure for TenantQuotaProcedure {
         let mut quota = res.data;
 
         if args.len() <= 1 {
-            return self.to_chunk(&quota);
+            return self.to_block(&quota);
         };
 
         quota.max_databases = args[1].parse::<u32>()?;
@@ -95,7 +96,7 @@ impl OneChunkProcedure for TenantQuotaProcedure {
 
         quota_api.set_quota(&quota, Some(res.seq)).await?;
 
-        self.to_chunk(&quota)
+        self.to_block(&quota)
     }
 
     fn schema(&self) -> Arc<DataSchema> {
@@ -115,25 +116,25 @@ impl OneChunkProcedure for TenantQuotaProcedure {
 }
 
 impl TenantQuotaProcedure {
-    fn to_chunk(&self, quota: &TenantQuota) -> Result<Chunk> {
-        Ok(Chunk::new_from_sequence(
+    fn to_block(&self, quota: &TenantQuota) -> Result<DataBlock> {
+        Ok(DataBlock::new(
             vec![
-                (
-                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_databases)),
-                    DataType::Number(NumberDataType::UInt32),
-                ),
-                (
-                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_tables_per_database)),
-                    DataType::Number(NumberDataType::UInt32),
-                ),
-                (
-                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_stages)),
-                    DataType::Number(NumberDataType::UInt32),
-                ),
-                (
-                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_files_per_stage)),
-                    DataType::Number(NumberDataType::UInt32),
-                ),
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt32),
+                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_databases)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt32),
+                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_tables_per_database)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt32),
+                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_stages)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt32),
+                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_files_per_stage)),
+                },
             ],
             1,
         ))

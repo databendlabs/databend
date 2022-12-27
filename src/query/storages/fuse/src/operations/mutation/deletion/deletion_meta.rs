@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ChunkMetaInfo;
-use common_expression::ChunkMetaInfoPtr;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
 use common_storages_table_meta::meta::BlockMeta;
 
 use crate::pruning::BlockIndex;
@@ -37,12 +37,12 @@ pub struct DeletionSourceMeta {
 }
 
 #[typetag::serde(name = "deletion_source_meta")]
-impl ChunkMetaInfo for DeletionSourceMeta {
+impl BlockMetaInfo for DeletionSourceMeta {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn equals(&self, info: &Box<dyn ChunkMetaInfo>) -> bool {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<DeletionSourceMeta>() {
             None => false,
             Some(other) => self == other,
@@ -51,15 +51,15 @@ impl ChunkMetaInfo for DeletionSourceMeta {
 }
 
 impl DeletionSourceMeta {
-    pub fn create(index: BlockIndex, op: Deletion) -> ChunkMetaInfoPtr {
+    pub fn create(index: BlockIndex, op: Deletion) -> BlockMetaInfoPtr {
         Arc::new(Box::new(DeletionSourceMeta { index, op }))
     }
 
-    pub fn from_meta(info: &ChunkMetaInfoPtr) -> Result<&DeletionSourceMeta> {
+    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&DeletionSourceMeta> {
         match info.as_any().downcast_ref::<DeletionSourceMeta>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
-                "Cannot downcast from ChunkMetaInfo to DeletionSourceMeta.",
+                "Cannot downcast from BlockMetaInfo to DeletionSourceMeta.",
             )),
         }
     }

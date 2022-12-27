@@ -29,9 +29,9 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::AnyType;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::InMemoryData;
 use common_expression::Value;
 use common_meta_app::schema::TableInfo;
@@ -53,7 +53,7 @@ static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
 
 pub struct MemoryTable {
     table_info: TableInfo,
-    blocks: Arc<RwLock<Vec<Chunk>>>,
+    blocks: Arc<RwLock<Vec<DataBlock>>>,
 
     data_metrics: Arc<StorageMetrics>,
 }
@@ -90,7 +90,7 @@ impl MemoryTable {
         }
     }
 
-    fn get_read_data_blocks(&self) -> Arc<Mutex<VecDeque<Chunk>>> {
+    fn get_read_data_blocks(&self) -> Arc<Mutex<VecDeque<DataBlock>>> {
         let data_blocks = self.blocks.read();
         let mut read_data_blocks = VecDeque::with_capacity(data_blocks.len());
 
@@ -234,7 +234,7 @@ impl Table for MemoryTable {
     async fn commit_insertion(
         &self,
         _: Arc<dyn TableContext>,
-        operations: Vec<Chunk>,
+        operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
         let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
@@ -261,14 +261,14 @@ impl Table for MemoryTable {
 
 struct MemoryTableSource {
     extras: Option<PushDownInfo>,
-    data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
+    data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
 }
 
 impl MemoryTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
+        data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
         extras: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, MemoryTableSource {
@@ -277,58 +277,54 @@ impl MemoryTableSource {
         })
     }
 
-    fn projection(&self, chunk: Chunk) -> Result<Option<Chunk>> {
+    fn projection(&self, data_block: DataBlock) -> Result<Option<DataBlock>> {
         if let Some(extras) = &self.extras {
             if let Some(projection) = &extras.projection {
-                let num_rows = chunk.num_rows();
+                let num_rows = data_block.num_rows();
                 let pruned_data_block = match projection {
                     Projection::Columns(indices) => {
                         let columns = indices
                             .iter()
-                            .map(|idx| chunk.get_by_offset(*idx).clone())
+                            .map(|idx| data_block.get_by_offset(*idx).clone())
                             .collect();
-                        Chunk::new(columns, num_rows)
+                        DataBlock::new(columns, num_rows)
                     }
                     Projection::InnerColumns(path_indices) => {
                         let mut columns = Vec::with_capacity(path_indices.len());
                         let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                         for path in paths {
-                            let raw_columns = chunk
-                                .columns()
-                                .map(|entry| (entry.value.clone(), entry.data_type.clone()))
-                                .collect::<Vec<_>>();
-                            let column = Self::traverse_paths(&raw_columns, path)?;
-                            columns.push(column);
+                            let entry = Self::traverse_paths(data_block.columns(), path)?;
+                            columns.push(entry);
                         }
-                        Chunk::new_from_sequence(columns, num_rows)
+                        DataBlock::new(columns, num_rows)
                     }
                 };
                 return Ok(Some(pruned_data_block));
             }
         }
 
-        Ok(Some(chunk))
+        Ok(Some(data_block))
     }
 
-    fn traverse_paths(
-        columns: &[(Value<AnyType>, DataType)],
-        path: &[usize],
-    ) -> Result<(Value<AnyType>, DataType)> {
+    fn traverse_paths(columns: &[BlockEntry], path: &[usize]) -> Result<BlockEntry> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments("path should not be empty"));
         }
-        let (value, data_type) = &columns[path[0]];
+        let entry = &columns[path[0]];
         if path.len() == 1 {
-            return Ok((value.clone(), data_type.clone()));
+            return Ok(entry.clone());
         }
 
-        match data_type {
+        match &entry.data_type {
             DataType::Tuple(inner_tys) => {
-                let col = value.clone().into_column().unwrap();
+                let col = entry.value.clone().into_column().unwrap();
                 let (inner_columns, _) = col.into_tuple().unwrap();
                 let mut values = Vec::with_capacity(inner_tys.len());
                 for (col, ty) in inner_columns.iter().zip(inner_tys.iter()) {
-                    values.push((Value::Column(col.clone()), ty.clone()))
+                    values.push(BlockEntry {
+                        data_type: ty.clone(),
+                        value: Value::Column(col.clone()),
+                    })
                 }
                 Self::traverse_paths(&values[..], &path[1..])
             }
@@ -343,7 +339,7 @@ impl MemoryTableSource {
 impl SyncSource for MemoryTableSource {
     const NAME: &'static str = "MemoryTable";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         let mut blocks_guard = self.data_blocks.lock();
         match blocks_guard.pop_front() {
             None => Ok(None),

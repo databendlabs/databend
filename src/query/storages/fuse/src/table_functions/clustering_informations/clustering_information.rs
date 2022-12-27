@@ -22,7 +22,8 @@ use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -30,6 +31,7 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
+use common_jsonb::Value as JsonbValue;
 use common_storages_table_meta::meta::BlockMeta;
 use serde_json::json;
 use serde_json::Value as JsonValue;
@@ -78,7 +80,7 @@ impl<'a> ClusteringInformation<'a> {
         }
     }
 
-    pub async fn get_clustering_info(&self) -> Result<Chunk> {
+    pub async fn get_clustering_info(&self) -> Result<DataBlock> {
         let snapshot = self.table.read_table_snapshot().await?;
 
         let mut info = ClusteringStatistics::default();
@@ -98,40 +100,42 @@ impl<'a> ClusteringInformation<'a> {
 
         let cluster_by_keys = "_cluster_keys".to_string();
 
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (
-                    Value::Scalar(Scalar::String(cluster_by_keys.as_bytes().to_vec())),
-                    DataType::String,
-                ),
-                (
-                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(info.total_block_count))),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(cluster_by_keys.as_bytes().to_vec())),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Scalar(Scalar::Number(NumberScalar::UInt64(
+                        info.total_block_count,
+                    ))),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Scalar(Scalar::Number(NumberScalar::UInt64(
                         info.total_constant_block_count,
                     ))),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Scalar(Scalar::Number(NumberScalar::Float64(
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::Float64),
+                    value: Value::Scalar(Scalar::Number(NumberScalar::Float64(
                         info.average_overlaps.into(),
                     ))),
-                    DataType::Number(NumberDataType::Float64),
-                ),
-                (
-                    Value::Scalar(Scalar::Number(NumberScalar::Float64(
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::Float64),
+                    value: Value::Scalar(Scalar::Number(NumberScalar::Float64(
                         info.average_depth.into(),
                     ))),
-                    DataType::Number(NumberDataType::Float64),
-                ),
-                (
-                    Value::Scalar(Scalar::Variant(
-                        info.block_depth_histogram.to_string().as_bytes().to_vec(),
+                },
+                BlockEntry {
+                    data_type: DataType::Variant,
+                    value: Value::Scalar(Scalar::Variant(
+                        JsonbValue::from(&info.block_depth_histogram).to_vec(),
                     )),
-                    DataType::Variant,
-                ),
+                },
             ],
             1,
         ))
@@ -232,7 +236,7 @@ impl<'a> ClusteringInformation<'a> {
                 acc
             },
         );
-        let block_depth_histogram = serde_json::Value::Object(objects);
+        let block_depth_histogram = JsonValue::Object(objects);
 
         Ok(ClusteringStatistics {
             total_block_count,

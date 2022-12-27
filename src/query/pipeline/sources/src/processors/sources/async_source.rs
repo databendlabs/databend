@@ -19,7 +19,7 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -28,10 +28,10 @@ use common_pipeline_core::processors::Processor;
 #[async_trait::async_trait]
 pub trait AsyncSource: Send {
     const NAME: &'static str;
-    const SKIP_EMPTY_CHUNK: bool = true;
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<Chunk>>;
+    async fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
 
 // TODO: This can be refactored using proc macros
@@ -43,7 +43,7 @@ pub struct AsyncSourcer<T: 'static + AsyncSource> {
     inner: T,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
-    generated_data: Option<Chunk>,
+    generated_data: Option<DataBlock>,
 }
 
 impl<T: 'static + AsyncSource> AsyncSourcer<T> {
@@ -89,8 +89,8 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
 
         match self.generated_data.take() {
             None => Ok(Event::Async),
-            Some(chunk) => {
-                self.output.push_data(Ok(chunk));
+            Some(data_block) => {
+                self.output.push_data(Ok(data_block));
                 Ok(Event::NeedConsume)
             }
         }
@@ -99,17 +99,17 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
     async fn async_process(&mut self) -> Result<()> {
         match self.inner.generate().await? {
             None => self.is_finish = true,
-            Some(chunk) => {
-                if !chunk.is_empty() {
+            Some(data_block) => {
+                if !data_block.is_empty() {
                     let progress_values = ProgressValues {
-                        rows: chunk.num_rows(),
-                        bytes: chunk.memory_size(),
+                        rows: data_block.num_rows(),
+                        bytes: data_block.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
                 }
 
-                if !T::SKIP_EMPTY_CHUNK || !chunk.is_empty() {
-                    self.generated_data = Some(chunk)
+                if !T::SKIP_EMPTY_DATA_BLOCK || !data_block.is_empty() {
+                    self.generated_data = Some(data_block)
                 }
             }
         };

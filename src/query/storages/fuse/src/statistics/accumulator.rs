@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnMeta;
@@ -38,11 +38,11 @@ pub struct StatisticsAccumulator {
     pub index_size: u64,
 
     pub perfect_block_count: u64,
-    pub thresholds: ChunkCompactThresholds,
+    pub thresholds: BlockCompactThresholds,
 }
 
 impl StatisticsAccumulator {
-    pub fn new(thresholds: ChunkCompactThresholds) -> Self {
+    pub fn new(thresholds: BlockCompactThresholds) -> Self {
         Self {
             thresholds,
             ..Default::default()
@@ -108,7 +108,7 @@ impl StatisticsAccumulator {
         let row_count = block_statistics.block_rows_size;
         let block_size = block_statistics.block_bytes_size;
         let col_stats = block_statistics.block_column_statistics.clone();
-        let data_location = (block_statistics.block_file_location, Chunk::VERSION);
+        let data_location = (block_statistics.block_file_location, DataBlock::VERSION);
         let cluster_stats = block_statistics.block_cluster_statistics;
 
         if self

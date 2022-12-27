@@ -20,8 +20,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableSchema;
@@ -33,7 +33,6 @@ use common_storage::StorageMetrics;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
-// use crate::plan::Expression;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
@@ -182,7 +181,7 @@ pub trait Table: Sync + Send {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        operations: Vec<Chunk>,
+        operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
         let (_, _, _) = (ctx, operations, overwrite);
@@ -241,15 +240,15 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn get_chunk_compact_thresholds(&self) -> ChunkCompactThresholds {
-        ChunkCompactThresholds {
-            max_rows_per_chunk: 1000 * 1000,
-            min_rows_per_chunk: 800 * 1000,
-            max_bytes_per_chunk: 100 * 1024 * 1024,
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+        BlockCompactThresholds {
+            max_rows_per_block: 1000 * 1000,
+            min_rows_per_block: 800 * 1000,
+            max_bytes_per_block: 100 * 1024 * 1024,
         }
     }
 
-    fn set_chunk_compact_thresholds(&self, _thresholds: ChunkCompactThresholds) {
+    fn set_block_compact_thresholds(&self, _thresholds: BlockCompactThresholds) {
         unimplemented!()
     }
 

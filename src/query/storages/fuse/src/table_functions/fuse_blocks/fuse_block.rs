@@ -20,8 +20,9 @@ use common_expression::types::number::NumberScalar;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -56,12 +57,12 @@ impl<'a> FuseBlock<'a> {
         }
     }
 
-    pub async fn get_blocks(&self) -> Result<Chunk> {
+    pub async fn get_blocks(&self) -> Result<DataBlock> {
         let tbl = self.table;
         let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
             if self.snapshot_id.is_none() {
-                return self.to_chunk(snapshot).await;
+                return self.to_block(snapshot).await;
             }
 
             // prepare the stream of snapshot
@@ -79,15 +80,17 @@ impl<'a> FuseBlock<'a> {
             // find the element by snapshot_id in stream
             while let Some(snapshot) = snapshot_stream.try_next().await? {
                 if snapshot.snapshot_id.simple().to_string() == self.snapshot_id.clone().unwrap() {
-                    return self.to_chunk(snapshot).await;
+                    return self.to_block(snapshot).await;
                 }
             }
         }
 
-        Ok(Chunk::empty())
+        Ok(DataBlock::empty_with_schema(Arc::new(
+            Self::schema().into(),
+        )))
     }
 
-    async fn to_chunk(&self, snapshot: Arc<TableSnapshot>) -> Result<Chunk> {
+    async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
         let len = snapshot.summary.block_count as usize;
         let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
@@ -123,40 +126,40 @@ impl<'a> FuseBlock<'a> {
             });
         }
 
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (
-                    Value::Scalar(Scalar::String(snapshot_id.to_vec())),
-                    DataType::String,
-                ),
-                (
-                    Value::Scalar(Scalar::Timestamp(timestamp)),
-                    DataType::Nullable(Box::new(DataType::Timestamp)),
-                ),
-                (
-                    Value::Column(Column::String(block_location.build())),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::Number(block_size.build())),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::Number(file_size.build())),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::Number(row_count.build())),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::String(bloom_filter_location.build())),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::Number(bloom_filter_size.build())),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(snapshot_id.to_vec())),
+                },
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(DataType::Timestamp)),
+                    value: Value::Scalar(Scalar::Timestamp(timestamp)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::String(block_location.build())),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::Number(block_size.build())),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::Number(file_size.build())),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::Number(row_count.build())),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::String(bloom_filter_location.build())),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::Number(bloom_filter_size.build())),
+                },
             ],
             len,
         ))

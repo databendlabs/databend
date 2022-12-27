@@ -16,7 +16,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::RawExpr;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
@@ -27,7 +27,7 @@ use parking_lot::RwLock;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::plans::JoinType;
 
-pub const JOIN_MAX_CHUNK_SIZE: usize = 65535;
+pub const JOIN_MAX_BLOCK_SIZE: usize = 65535;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
 pub enum MarkerKind {
@@ -43,20 +43,20 @@ pub struct MarkJoinDesc {
 
 pub struct JoinState {
     /// Record rows in build side that are matched with rows in probe side.
-    /// It's order-sensitive, aligned with the order of rows in merged chunk.
+    /// It's order-sensitive, aligned with the order of rows in merged block.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
     pub(crate) rest_build_indexes: RwLock<Vec<RowPtr>>,
-    pub(crate) rest_probe_chunks: RwLock<Vec<Chunk>>,
+    pub(crate) rest_probe_blocks: RwLock<Vec<DataBlock>>,
     pub(crate) validity: RwLock<MutableBitmap>,
 }
 
 impl JoinState {
     pub fn create() -> Result<Self> {
         Ok(JoinState {
-            build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_CHUNK_SIZE)),
-            rest_build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_CHUNK_SIZE)),
-            rest_probe_chunks: RwLock::new(Vec::with_capacity(JOIN_MAX_CHUNK_SIZE)),
-            validity: RwLock::new(MutableBitmap::with_capacity(JOIN_MAX_CHUNK_SIZE)),
+            build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            rest_build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            rest_probe_blocks: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            validity: RwLock::new(MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE)),
         })
     }
 }

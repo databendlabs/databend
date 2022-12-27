@@ -14,8 +14,9 @@
 
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
@@ -38,16 +39,16 @@ impl ClickHouseFederated {
     // Format:
     // |function_name()|
     // |value|
-    fn select_function_block(name: &str, value: &str) -> Option<(TableSchemaRef, Chunk)> {
+    fn select_function_block(name: &str, value: &str) -> Option<(TableSchemaRef, DataBlock)> {
         let schema = TableSchemaRefExt::create(vec![TableField::new(name, TableDataType::String)]);
-        let chunk = Chunk::new_from_sequence(
-            vec![(
-                Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                DataType::String,
-            )],
+        let block = DataBlock::new(
+            vec![BlockEntry {
+                data_type: DataType::String,
+                value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+            }],
             1,
         );
-        Some((schema, chunk))
+        Some((schema, block))
     }
 
     pub fn get_format(query: &str) -> Option<String> {
@@ -57,8 +58,8 @@ impl ClickHouseFederated {
         }
     }
 
-    pub fn check(query: &str) -> Option<(TableSchemaRef, Chunk)> {
-        let rules: Vec<(&str, Option<(TableSchemaRef, Chunk)>)> = vec![(
+    pub fn check(query: &str) -> Option<(TableSchemaRef, DataBlock)> {
+        let rules: Vec<(&str, Option<(TableSchemaRef, DataBlock)>)> = vec![(
             "(?i)^(SELECT VERSION()(.*))",
             Self::select_function_block("version()", CLICKHOUSE_VERSION),
         )];

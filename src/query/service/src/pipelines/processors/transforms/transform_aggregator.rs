@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::HashMethodKind;
 
 use crate::pipelines::processors::port::InputPort;
@@ -243,8 +243,8 @@ impl TransformAggregator {
 pub trait Aggregator: Sized + Send {
     const NAME: &'static str;
 
-    fn consume(&mut self, data: Chunk) -> Result<()>;
-    fn generate(&mut self) -> Result<Vec<Chunk>>;
+    fn consume(&mut self, data: DataBlock) -> Result<()>;
+    fn generate(&mut self) -> Result<Vec<DataBlock>>;
 }
 
 enum AggregatorTransform<TAggregator: Aggregator + TwoLevelAggregatorLike> {
@@ -269,7 +269,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
             input_port: transform_params.transform_input_port,
             output_port: transform_params.transform_output_port,
             two_level_threshold,
-            input_chunk: None,
+            input_data_block: None,
         });
 
         if TAggregator::SUPPORT_TWO_LEVEL
@@ -290,7 +290,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                     inner: s.inner,
                     is_generated: false,
                     output_port: s.output_port,
-                    output_chunk: vec![],
+                    output_data_block: vec![],
                 }))
             }
             AggregatorTransform::TwoLevelConsumeData(s) => {
@@ -298,7 +298,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                     inner: s.inner,
                     is_generated: false,
                     output_port: s.output_port,
-                    output_chunk: vec![],
+                    output_data_block: vec![],
                 }))
             }
             _ => Err(ErrorCode::Internal("")),
@@ -312,7 +312,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                     inner: s.inner.convert_two_level()?,
                     input_port: s.input_port,
                     output_port: s.output_port,
-                    input_chunk: None,
+                    input_data_block: None,
                 },
             )),
             _ => Err(ErrorCode::Internal("")),
@@ -369,7 +369,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                 }
             }
 
-            if state.input_chunk.is_some() {
+            if state.input_data_block.is_some() {
                 return Ok(Event::Sync);
             }
 
@@ -384,7 +384,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
 
             return match state.input_port.has_data() {
                 true => {
-                    state.input_chunk = Some(state.input_port.pull_data().unwrap()?);
+                    state.input_data_block = Some(state.input_port.pull_data().unwrap()?);
                     Ok(Event::Sync)
                 }
                 false => {
@@ -395,7 +395,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
         }
 
         if let AggregatorTransform::TwoLevelConsumeData(state) = self {
-            if state.input_chunk.is_some() {
+            if state.input_data_block.is_some() {
                 return Ok(Event::Sync);
             }
 
@@ -410,7 +410,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
 
             return match state.input_port.has_data() {
                 true => {
-                    state.input_chunk = Some(state.input_port.pull_data().unwrap()?);
+                    state.input_data_block = Some(state.input_port.pull_data().unwrap()?);
                     Ok(Event::Sync)
                 }
                 false => {
@@ -436,8 +436,8 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                 return Ok(Event::NeedConsume);
             }
 
-            if let Some(chunk) = state.output_chunk.pop() {
-                state.output_port.push_data(Ok(chunk));
+            if let Some(block) = state.output_data_block.pop() {
+                state.output_port.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }
 
@@ -465,8 +465,8 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                 return Ok(Event::NeedConsume);
             }
 
-            if let Some(chunk) = state.output_chunk.pop() {
-                state.output_port.push_data(Ok(chunk));
+            if let Some(block) = state.output_data_block.pop() {
+                state.output_port.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }
 
@@ -493,12 +493,12 @@ struct ConsumeState<TAggregator: Aggregator> {
 
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
-    input_chunk: Option<Chunk>,
+    input_data_block: Option<DataBlock>,
 }
 
 impl<TAggregator: Aggregator> ConsumeState<TAggregator> {
     pub fn consume(&mut self) -> Result<()> {
-        if let Some(input_data) = self.input_chunk.take() {
+        if let Some(input_data) = self.input_data_block.take() {
             self.inner.consume(input_data)?;
         }
 
@@ -511,12 +511,12 @@ struct TwoLevelConsumeState<TAggregator: Aggregator + TwoLevelAggregatorLike> {
 
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
-    input_chunk: Option<Chunk>,
+    input_data_block: Option<DataBlock>,
 }
 
 impl<TAggregator: Aggregator + TwoLevelAggregatorLike> TwoLevelConsumeState<TAggregator> {
     pub fn consume(&mut self) -> Result<()> {
-        if let Some(input_data) = self.input_chunk.take() {
+        if let Some(input_data) = self.input_data_block.take() {
             self.inner.consume(input_data)?;
         }
 
@@ -528,14 +528,14 @@ struct GenerateState<TAggregator: Aggregator> {
     inner: TAggregator,
     is_generated: bool,
     output_port: Arc<OutputPort>,
-    output_chunk: Vec<Chunk>,
+    output_data_block: Vec<DataBlock>,
 }
 
 impl<TAggregator: Aggregator> GenerateState<TAggregator> {
     pub fn generate(&mut self) -> Result<()> {
         if !self.is_generated {
             self.is_generated = true;
-            self.output_chunk = self.inner.generate()?;
+            self.output_data_block = self.inner.generate()?;
         }
 
         Ok(())

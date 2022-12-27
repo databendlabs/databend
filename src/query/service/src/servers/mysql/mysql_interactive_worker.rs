@@ -24,9 +24,9 @@ use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::SendableChunkStream;
+use common_expression::SendableDataBlockStream;
 use common_sql::plans::Plan;
 use common_sql::Planner;
 use common_users::CertifiedInfo;
@@ -56,7 +56,7 @@ use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::stream::ChunkStream;
+use crate::stream::DataBlockStream;
 
 fn has_result_set_by_plan(plan: &Plan) -> bool {
     matches!(
@@ -307,7 +307,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
     // Check the query is a federated or driver setup command.
     // Here we fake some values for the command which Databend not supported.
-    fn federated_server_command_check(&self, query: &str) -> Option<(DataSchemaRef, Chunk)> {
+    fn federated_server_command_check(&self, query: &str) -> Option<(DataSchemaRef, DataBlock)> {
         // INSERT don't need MySQL federated check
         if query.len() > 6 && query[..6].eq_ignore_ascii_case("INSERT") {
             return None;
@@ -319,14 +319,14 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<QueryResult> {
         match self.federated_server_command_check(query) {
-            Some((schema, chunk)) => {
+            Some((schema, data_block)) => {
                 info!("Federated query: {}", query);
-                if chunk.num_rows() > 0 {
-                    info!("Federated response: {:?}", chunk);
+                if data_block.num_rows() > 0 {
+                    info!("Federated response: {:?}", data_block);
                 }
-                let has_result = chunk.num_rows() > 0;
+                let has_result = data_block.num_rows() > 0;
                 Ok(QueryResult::create(
-                    ChunkStream::create(None, vec![chunk]).boxed(),
+                    DataBlockStream::create(None, vec![data_block]).boxed(),
                     None,
                     has_result,
                     schema,
@@ -369,7 +369,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
     ) -> Result<(
-        SendableChunkStream,
+        SendableDataBlockStream,
         Option<Box<dyn ProgressReporter + Send>>,
     )> {
         let instant = Instant::now();

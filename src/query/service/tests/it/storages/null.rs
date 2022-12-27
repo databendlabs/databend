@@ -20,7 +20,7 @@ use common_meta_app::schema::TableMeta;
 // use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 // use common_sql::plans::TableOptions;
 use common_storages_null::NullTable;
-use databend_query::stream::ReadChunkStream;
+use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -46,7 +46,9 @@ async fn test_null_table() -> Result<()> {
         let source_plan = table.read_plan(ctx.clone(), None).await?;
         assert_eq!(table.engine(), "Null");
 
-        let stream = table.read_chunk_stream(ctx.clone(), &source_plan).await?;
+        let stream = table
+            .read_data_block_stream(ctx.clone(), &source_plan)
+            .await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);

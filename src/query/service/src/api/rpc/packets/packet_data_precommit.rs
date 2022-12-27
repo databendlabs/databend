@@ -23,19 +23,19 @@ use byteorder::WriteBytesExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_expression::Chunk;
-use common_expression::ChunkMetaInfoPtr;
+use common_expression::BlockMetaInfoPtr;
+use common_expression::DataBlock;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 // PrecommitBlock only use block.meta for data transfer.
 #[derive(Clone, Debug)]
-pub struct PrecommitChunk(pub Chunk);
+pub struct PrecommitBlock(pub DataBlock);
 
-impl PrecommitChunk {
+impl PrecommitBlock {
     pub fn precommit(&self, ctx: &Arc<QueryContext>) {
-        ctx.push_precommit_chunk(self.0.clone());
+        ctx.push_precommit_block(self.0.clone());
     }
 
     pub fn write<T: Write>(self, bytes: &mut T) -> Result<()> {
@@ -50,16 +50,20 @@ impl PrecommitChunk {
         Ok(())
     }
 
-    pub fn read<T: Read>(bytes: &mut T) -> Result<PrecommitChunk> {
+    pub fn read<T: Read>(bytes: &mut T) -> Result<PrecommitBlock> {
         let meta_len = bytes.read_u64::<BigEndian>()? as usize;
         let mut meta = vec![0; meta_len];
 
         bytes.read_exact(&mut meta)?;
-        let block_meta: Option<ChunkMetaInfoPtr> = bincode::deserialize(&meta).map_err_to_code(
+        let block_meta: Option<BlockMetaInfoPtr> = bincode::deserialize(&meta).map_err_to_code(
             ErrorCode::BadBytes,
             || "precommit block deserialize error when exchange",
         )?;
 
-        Ok(PrecommitChunk(Chunk::new_with_meta(vec![], 0, block_meta)))
+        Ok(PrecommitBlock(DataBlock::new_with_meta(
+            vec![],
+            0,
+            block_meta,
+        )))
     }
 }

@@ -211,10 +211,17 @@ impl<'a> Value<'a> {
         }
     }
 
-    /// Attempts to serialize the JSONB Value into a byte stream.
-    pub fn to_vec(&self, buf: &mut Vec<u8>) {
+    /// Serialize the JSONB Value into a byte stream.
+    pub fn write_to_vec(&self, buf: &mut Vec<u8>) {
         let mut encoder = Encoder::new(buf);
         encoder.encode(self);
+    }
+
+    /// Serialize the JSONB Value into a byte stream.
+    pub fn to_vec(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        self.write_to_vec(&mut buf);
+        buf
     }
 
     pub fn get_by_path(&self, paths: &[JsonPath<'a>]) -> Option<&Value<'a>> {

@@ -17,7 +17,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_expression::HashMethodKind;
 use common_functions_v2::aggregates::get_layout_offsets;
 use common_functions_v2::aggregates::AggregateFunctionRef;
@@ -29,8 +30,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::transforms::group_by::Area;
 
 pub struct AggregatorParams {
-    // pub output_schema: DataSchemaRef,
-    // pub input_schema: DataSchemaRef,
+    pub input_schema: DataSchemaRef,
     pub group_columns: Vec<IndexType>,
     pub group_data_types: Vec<DataType>,
 
@@ -45,7 +45,7 @@ pub struct AggregatorParams {
 
 impl AggregatorParams {
     pub fn try_create(
-        // output_schema: DataSchemaRef,
+        input_schema: DataSchemaRef,
         group_data_types: Vec<DataType>,
         group_columns: &[usize],
         agg_funcs: &[AggregateFunctionRef],
@@ -59,8 +59,7 @@ impl AggregatorParams {
         }
 
         Ok(Arc::new(AggregatorParams {
-            // output_schema,
-            // input_schema,
+            input_schema,
             group_columns: group_columns.to_vec(),
             group_data_types,
             aggregate_functions: agg_funcs.to_vec(),
@@ -103,8 +102,9 @@ impl AggregatorTransformParams {
         aggregator_params: &Arc<AggregatorParams>,
     ) -> Result<AggregatorTransformParams> {
         let group_cols = &aggregator_params.group_columns;
-        let sample_chunk = Chunk::empty();
-        let method = Chunk::choose_hash_method(&sample_chunk, group_cols)?;
+        let schema_before_group_by = aggregator_params.input_schema.clone();
+        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
+        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
         Ok(AggregatorTransformParams {
             method,

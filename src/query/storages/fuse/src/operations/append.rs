@@ -19,18 +19,18 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
 use common_expression::DataField;
 use common_expression::Expr;
 use common_expression::SortColumnDescription;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::transform_chunk_compact_no_split::ChunkCompactorNoSplit;
-use common_pipeline_transforms::processors::transforms::ChunkCompactor;
+use common_pipeline_transforms::processors::transforms::transform_block_compact_no_split::BlockCompactorNoSplit;
+use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
-use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::evaluator::BlockOperator;
+use common_sql::evaluator::CompoundBlockOperator;
 
 use crate::operations::FuseTableSink;
 use crate::statistics::ClusterStatsGenerator;
@@ -49,14 +49,14 @@ impl FuseTable {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
-        let block_compact_thresholds = self.get_chunk_compact_thresholds();
+        let block_compact_thresholds = self.get_block_compact_thresholds();
         match append_mode {
             AppendMode::Normal => {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
                     TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
-                        ChunkCompactor::new(block_compact_thresholds, true),
+                        BlockCompactor::new(block_compact_thresholds, true),
                     )
                 })?;
             }
@@ -67,7 +67,7 @@ impl FuseTable {
                     TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
-                        ChunkCompactorNoSplit::new(block_compact_thresholds),
+                        BlockCompactorNoSplit::new(block_compact_thresholds),
                     )
                 })?;
                 pipeline.resize(size)?;
@@ -89,12 +89,12 @@ impl FuseTable {
                         .into_expr(&BUILTIN_FUNCTIONS)
                         .unwrap()
                         .project_column_ref(|name| schema.index_of(name).unwrap());
-                    let index = match expr {
+                    let offset = match expr {
                         Expr::ColumnRef { id, .. } => id,
                         _ => unreachable!("invalid expr"),
                     };
                     SortColumnDescription {
-                        index,
+                        offset,
                         asc: true,
                         nulls_first: false,
                     }
@@ -150,7 +150,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         level: i32,
-        chunk_compactor: ChunkCompactThresholds,
+        block_compactor: BlockCompactThresholds,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_keys = self.cluster_keys(ctx.clone());
         if cluster_keys.is_empty() {
@@ -166,30 +166,30 @@ impl FuseTable {
         let mut operators = Vec::with_capacity(cluster_keys.len());
 
         for remote_expr in &cluster_keys {
-            let expr: Expr = remote_expr
+            let expr = remote_expr
                 .into_expr(&BUILTIN_FUNCTIONS)
                 .unwrap()
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
-            let index = match &expr {
+            let offset = match &expr {
                 Expr::ColumnRef { id, .. } => *id,
                 _ => {
                     let cname = format!("{}", expr);
 
                     merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
-                    let index = merged.len() - 1;
-                    extra_key_index.push(index);
+                    operators.push(BlockOperator::Map { expr });
 
-                    operators.push(ChunkOperator::Map { index, expr });
-                    index
+                    let offset = merged.len() - 1;
+                    extra_key_index.push(offset);
+                    offset
                 }
             };
-            cluster_key_index.push(index);
+            cluster_key_index.push(offset);
         }
 
         if !operators.is_empty() {
             let func_ctx = ctx.try_get_function_context()?;
             pipeline.add_transform(move |input, output| {
-                Ok(CompoundChunkOperator::create(
+                Ok(CompoundBlockOperator::create(
                     input,
                     output,
                     func_ctx,
@@ -203,7 +203,7 @@ impl FuseTable {
             cluster_key_index,
             extra_key_index,
             level,
-            chunk_compactor,
+            block_compactor,
             vec![],
             merged,
         ))

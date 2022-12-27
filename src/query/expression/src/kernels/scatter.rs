@@ -30,25 +30,24 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
-use crate::Chunk;
-use crate::ChunkEntry;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::ColumnIndex;
+use crate::DataBlock;
 use crate::Scalar;
 use crate::Value;
 
-impl<Index: ColumnIndex> Chunk<Index> {
+impl DataBlock {
     pub fn scatter<I>(&self, indices: &[I], scatter_size: usize) -> Result<Vec<Self>>
     where I: common_arrow::arrow::types::Index {
-        let scattered_columns: Vec<Vec<ChunkEntry<Index>>> = self
+        let scattered_columns: Vec<Vec<BlockEntry>> = self
             .columns()
+            .iter()
             .map(|entry| match &entry.value {
                 Value::Scalar(s) => {
                     Column::scatter_repeat_scalars::<I>(s, &entry.data_type, indices, scatter_size)
                         .into_iter()
-                        .map(|value| ChunkEntry {
-                            id: entry.id.clone(),
+                        .map(|value| BlockEntry {
                             data_type: entry.data_type.clone(),
                             value: Value::Column(value),
                         })
@@ -57,8 +56,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
                 Value::Column(c) => c
                     .scatter(&entry.data_type, indices, scatter_size)
                     .into_iter()
-                    .map(|value| ChunkEntry {
-                        id: entry.id.clone(),
+                    .map(|value| BlockEntry {
                         data_type: entry.data_type.clone(),
                         value: Value::Column(value),
                     })
@@ -68,12 +66,12 @@ impl<Index: ColumnIndex> Chunk<Index> {
 
         let scattered_chunks = (0..scatter_size)
             .map(|scatter_idx| {
-                let chunk_columns: Vec<ChunkEntry<Index>> = scattered_columns
+                let chunk_columns: Vec<BlockEntry> = scattered_columns
                     .iter()
                     .map(|entry| entry[scatter_idx].clone())
                     .collect();
                 let num_rows = chunk_columns[0].value.as_column().unwrap().len();
-                Chunk::new(chunk_columns, num_rows)
+                DataBlock::new(chunk_columns, num_rows)
             })
             .collect();
 

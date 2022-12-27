@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -29,57 +28,48 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
-use crate::IndexType;
-
-/// `ChunkOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
+/// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone)]
-pub enum ChunkOperator {
+pub enum BlockOperator {
     /// Evaluate expression and append result column to the end.
-    Map {
-        /// Index of the result in `Chunk`
-        index: IndexType,
-        expr: Expr,
-    },
+    Map { expr: Expr },
 
     /// Filter the input `DataBlock` with the predicate `eval`.
     Filter { expr: Expr },
 
-    /// Reorganize the input `Chunk` with `indices`.
-    Project { indices: HashSet<IndexType> },
+    /// Reorganize the input `DataBlock` with `projection`.
+    Project { projection: Vec<usize> },
     // Remap { indices: Vec<(IndexType, IndexType)> },
 }
 
-impl ChunkOperator {
-    pub fn execute(&self, func_ctx: &FunctionContext, mut input: Chunk) -> Result<Chunk> {
+impl BlockOperator {
+    pub fn execute(&self, func_ctx: &FunctionContext, mut input: DataBlock) -> Result<DataBlock> {
         match self {
-            ChunkOperator::Map { index, expr } => {
-                let registry = &BUILTIN_FUNCTIONS;
-                let evaluator = Evaluator::new(&input, *func_ctx, registry);
+            BlockOperator::Map { expr } => {
+                let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
                 let result = evaluator
                     .run(expr)
                     .map_err(|(_, e)| ErrorCode::Internal(e))?;
-                let entry = ChunkEntry {
-                    id: *index,
+                let col = BlockEntry {
                     data_type: expr.data_type().clone(),
                     value: result,
                 };
-                input.add_column(entry);
+                input.add_column(col);
                 Ok(input)
             }
 
-            ChunkOperator::Filter { expr } => {
-                let registry = &BUILTIN_FUNCTIONS;
-                let evaluator = Evaluator::new(&input, *func_ctx, registry);
+            BlockOperator::Filter { expr } => {
+                let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = evaluator
                     .run(expr)
                     .map_err(|(_, e)| ErrorCode::Internal(e))?;
-                Chunk::filter(input, &filter)
+                input.filter(&filter)
             }
 
-            ChunkOperator::Project { indices } => {
-                let mut result = Chunk::new(vec![], input.num_rows());
-                for id in indices {
-                    result.add_column(input.get_by_offset(*id).clone());
+            BlockOperator::Project { projection } => {
+                let mut result = DataBlock::new(vec![], input.num_rows());
+                for offset in projection {
+                    result.add_column(input.get_by_offset(*offset).clone());
                 }
                 Ok(result)
             }
@@ -87,24 +77,24 @@ impl ChunkOperator {
     }
 }
 
-/// `CompoundChunkOperator` is a pipeline of `ChunkOperator`s
-pub struct CompoundChunkOperator {
-    pub operators: Vec<ChunkOperator>,
+/// `CompoundBlockOperator` is a pipeline of `BlockOperator`s
+pub struct CompoundBlockOperator {
+    pub operators: Vec<BlockOperator>,
     pub ctx: FunctionContext,
 }
 
-impl CompoundChunkOperator {
+impl CompoundBlockOperator {
     pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         ctx: FunctionContext,
-        operators: Vec<ChunkOperator>,
+        operators: Vec<BlockOperator>,
     ) -> ProcessorPtr {
         Transformer::<Self>::create(input_port, output_port, Self { operators, ctx })
     }
 
     #[allow(dead_code)]
-    pub fn append(self, operator: ChunkOperator) -> Self {
+    pub fn append(self, operator: BlockOperator) -> Self {
         let mut result = self;
         result.operators.push(operator);
         result
@@ -121,15 +111,15 @@ impl CompoundChunkOperator {
     }
 }
 
-impl Transform for CompoundChunkOperator {
-    const NAME: &'static str = "CompoundChunkOperator";
+impl Transform for CompoundBlockOperator {
+    const NAME: &'static str = "CompoundBlockOperator";
 
-    const SKIP_EMPTY_CHUNK: bool = true;
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
-    fn transform(&mut self, data: Chunk) -> Result<Chunk> {
+    fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         self.operators
             .iter()
-            .try_fold(data, |input, op| op.execute(&self.ctx, input))
+            .try_fold(data_block, |input, op| op.execute(&self.ctx, input))
     }
 
     fn name(&self) -> String {
@@ -140,9 +130,9 @@ impl Transform for CompoundChunkOperator {
                 .iter()
                 .map(|op| {
                     match op {
-                        ChunkOperator::Map { .. } => "Map",
-                        ChunkOperator::Filter { .. } => "Filter",
-                        ChunkOperator::Project { .. } => "Project",
+                        BlockOperator::Map { .. } => "Map",
+                        BlockOperator::Filter { .. } => "Filter",
+                        BlockOperator::Project { .. } => "Project",
                     }
                     .to_string()
                 })

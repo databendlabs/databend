@@ -33,8 +33,8 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
@@ -59,7 +59,7 @@ pub struct StageTable {
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
-    block_compact_threshold: Mutex<Option<ChunkCompactThresholds>>,
+    block_compact_threshold: Mutex<Option<BlockCompactThresholds>>,
 }
 
 impl StageTable {
@@ -118,10 +118,10 @@ impl StageTable {
         Ok(all_files)
     }
 
-    fn get_block_compact_thresholds_with_default(&self) -> ChunkCompactThresholds {
+    fn get_block_compact_thresholds_with_default(&self) -> BlockCompactThresholds {
         let guard = self.block_compact_threshold.lock();
         match guard.deref() {
-            None => ChunkCompactThresholds::default(),
+            None => BlockCompactThresholds::default(),
             Some(t) => *t,
         }
     }
@@ -270,7 +270,7 @@ impl Table for StageTable {
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _operations: Vec<Chunk>,
+        _operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
         Ok(())
@@ -283,12 +283,12 @@ impl Table for StageTable {
         ))
     }
 
-    fn get_chunk_compact_thresholds(&self) -> ChunkCompactThresholds {
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
         let guard = self.block_compact_threshold.lock();
         (*guard).expect("must success")
     }
 
-    fn set_chunk_compact_thresholds(&self, thresholds: ChunkCompactThresholds) {
+    fn set_block_compact_thresholds(&self, thresholds: BlockCompactThresholds) {
         let mut guard = self.block_compact_threshold.lock();
         (*guard) = Some(thresholds)
     }

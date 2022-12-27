@@ -22,7 +22,7 @@ use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_formats::output_format::OutputFormat;
 use common_formats::FileFormatOptionsExt;
 use common_pipeline_core::processors::port::InputPort;
@@ -36,8 +36,8 @@ use tracing::warn;
 #[derive(Debug)]
 enum State {
     None,
-    NeedSerialize(Chunk),
-    NeedWrite(Vec<u8>, Option<Chunk>),
+    NeedSerialize(DataBlock),
+    NeedWrite(Vec<u8>, Option<DataBlock>),
     Finished,
 }
 
@@ -49,7 +49,7 @@ pub struct StageTableSink {
 
     table_info: StageTableInfo,
     working_buffer: Vec<u8>,
-    working_chunks: Vec<Chunk>,
+    working_datablocks: Vec<DataBlock>,
     output_format: Box<dyn OutputFormat>,
     write_header: bool,
 
@@ -98,7 +98,7 @@ impl StageTableSink {
             working_buffer: Vec::with_capacity(
                 (max_file_size.min(256 * 1024) as f64 * 1.2) as usize,
             ),
-            working_chunks: vec![],
+            working_datablocks: vec![],
             write_header: false,
 
             uuid,
@@ -162,14 +162,14 @@ impl Processor for StageTableSink {
             let data = std::mem::take(&mut self.working_buffer);
             if data.len() >= self.max_file_size || (!data.is_empty() && self.output.is_none()) {
                 self.state = State::NeedWrite(data, None);
-                self.working_chunks.clear();
+                self.working_datablocks.clear();
                 return Ok(Event::Async);
             }
 
-            match (&self.output, self.working_chunks.is_empty()) {
+            match (&self.output, self.working_datablocks.is_empty()) {
                 (Some(output), false) => {
                     if output.can_push() {
-                        let block = self.working_chunks.pop().unwrap();
+                        let block = self.working_datablocks.pop().unwrap();
                         output.push_data(Ok(block));
                     }
                     return Ok(Event::NeedConsume);
@@ -195,7 +195,7 @@ impl Processor for StageTableSink {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::NeedSerialize(chunk) => {
+            State::NeedSerialize(datablock) => {
                 if !self.write_header {
                     let prefix = self.output_format.serialize_prefix()?;
                     self.working_buffer.extend_from_slice(&prefix);
@@ -203,11 +203,11 @@ impl Processor for StageTableSink {
                 }
 
                 if !self.single {
-                    for i in (0..chunk.num_rows()).step_by(1024) {
-                        let end = (i + 1024).min(chunk.num_rows());
-                        let small_chunk = chunk.slice(i..end);
+                    for i in (0..datablock.num_rows()).step_by(1024) {
+                        let end = (i + 1024).min(datablock.num_rows());
+                        let small_block = datablock.slice(i..end);
 
-                        let bs = self.output_format.serialize_chunk(&small_chunk)?;
+                        let bs = self.output_format.serialize_block(&small_block)?;
                         self.working_buffer.extend_from_slice(bs.as_slice());
 
                         if self.working_buffer.len() + self.output_format.buffer_size()
@@ -217,9 +217,9 @@ impl Processor for StageTableSink {
                             self.working_buffer.extend_from_slice(&bs);
 
                             let data = std::mem::take(&mut self.working_buffer);
-                            self.working_chunks.clear();
-                            if end != chunk.num_rows() {
-                                let remain = chunk.slice(end..chunk.num_rows());
+                            self.working_datablocks.clear();
+                            if end != datablock.num_rows() {
+                                let remain = datablock.slice(end..datablock.num_rows());
                                 self.state = State::NeedWrite(data, Some(remain));
                             } else {
                                 self.state = State::NeedWrite(data, None);
@@ -228,13 +228,13 @@ impl Processor for StageTableSink {
                         }
                     }
                 } else {
-                    let bs = self.output_format.serialize_chunk(&chunk)?;
+                    let bs = self.output_format.serialize_block(&datablock)?;
                     self.working_buffer.extend_from_slice(bs.as_slice());
                 }
 
-                // hold this chunk
+                // hold this datablock
                 if self.output.is_some() {
-                    self.working_chunks.push(chunk);
+                    self.working_datablocks.push(datablock);
                 }
             }
             _state => {
@@ -246,7 +246,7 @@ impl Processor for StageTableSink {
 
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::NeedWrite(bytes, remainng_chunk) => {
+            State::NeedWrite(bytes, remainng_block) => {
                 let path = self.unload_path();
 
                 // TODO(xuanwo): we used to update the data metrics here.
@@ -267,8 +267,8 @@ impl Processor for StageTableSink {
                     })
                     .await?;
 
-                match remainng_chunk {
-                    Some(chunk) => self.state = State::NeedSerialize(chunk),
+                match remainng_block {
+                    Some(block) => self.state = State::NeedSerialize(block),
                     None => self.state = State::None,
                 }
                 self.batch_id += 1;

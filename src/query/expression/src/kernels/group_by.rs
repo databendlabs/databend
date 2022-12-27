@@ -21,17 +21,17 @@ use super::group_by_hash::HashMethodKeysU8;
 use super::group_by_hash::HashMethodKind;
 use super::group_by_hash::HashMethodSerializer;
 use crate::types::DataType;
-use crate::Chunk;
+use crate::DataBlock;
 use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
 use crate::HashMethodKeysU512;
 
-impl Chunk {
-    pub fn choose_hash_method(chunk: &Chunk, indices: &[usize]) -> Result<HashMethodKind> {
+impl DataBlock {
+    pub fn choose_hash_method(chunk: &DataBlock, indices: &[usize]) -> Result<HashMethodKind> {
         let hash_key_types = indices
             .iter()
-            .map(|&c| {
-                let col = chunk.get_by_id(&c).unwrap();
+            .map(|&offset| {
+                let col = chunk.get_by_offset(offset);
                 Ok(col.data_type.clone())
             })
             .collect::<Result<Vec<_>>>();

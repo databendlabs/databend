@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
-use common_pipeline_sources::processors::sources::OneChunkSource;
+use common_pipeline_sources::processors::sources::OneBlockSource;
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,
@@ -33,12 +33,12 @@ impl PipelineBuildResult {
         }
     }
 
-    pub fn from_chunks(chunks: Vec<Chunk>) -> Result<PipelineBuildResult> {
+    pub fn from_blocks(blocks: Vec<DataBlock>) -> Result<PipelineBuildResult> {
         let mut source_builder = SourcePipeBuilder::create();
 
-        for chunk in chunks {
+        for data_block in blocks {
             let output = OutputPort::create();
-            source_builder.add_source(output.clone(), OneChunkSource::create(output, chunk)?);
+            source_builder.add_source(output.clone(), OneBlockSource::create(output, data_block)?);
         }
 
         let mut main_pipeline = Pipeline::create();

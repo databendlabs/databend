@@ -48,7 +48,7 @@ use common_storages_system::UsersTable;
 use common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::stream::ReadChunkStream;
+use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
 use goldenfile::Mint;
 use wiremock::matchers::method;
@@ -67,7 +67,7 @@ async fn run_table_tests(
     writeln!(file, "{table_info}").unwrap();
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
-    let stream = table.read_chunk_stream(ctx, &source_plan).await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let formatted = pretty_format_blocks(&blocks).unwrap();
     let mut actual_lines: Vec<&str> = formatted.trim().lines().collect();
@@ -111,7 +111,7 @@ async fn test_clusters_table() -> Result<()> {
 
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
-    let stream = table.read_chunk_stream(ctx, &source_plan).await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
@@ -171,7 +171,7 @@ async fn test_configs_table(file: &mut impl Write) -> Result<()> {
         let table = ConfigsTable::create(1);
         let source_plan = table.read_plan(ctx.clone(), None).await?;
 
-        let stream = table.read_chunk_stream(ctx, &source_plan).await?;
+        let stream = table.read_data_block_stream(ctx, &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 4);
@@ -226,7 +226,7 @@ async fn test_contributors_table() -> Result<()> {
     let table = ContributorsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
-    let stream = table.read_chunk_stream(ctx, &source_plan).await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
@@ -239,7 +239,7 @@ async fn test_credits_table() -> Result<()> {
     let table = CreditsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
-    let stream = table.read_chunk_stream(ctx, &source_plan).await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 3);
@@ -288,7 +288,7 @@ async fn test_functions_table() -> Result<()> {
     let table = FunctionsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
-    let stream = table.read_chunk_stream(ctx, &source_plan).await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 8);
@@ -305,7 +305,7 @@ async fn test_metrics_table() -> Result<()> {
     metrics::counter!("test.test_metrics_table_count", 1);
     metrics::histogram!("test.test_metrics_table_histogram", 1.0);
 
-    let stream = table.read_chunk_stream(ctx, &source_plan).await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
@@ -368,7 +368,7 @@ async fn test_tables_table() -> Result<()> {
     let table = TablesTableWithoutHistory::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
-    let stream = table.read_chunk_stream(ctx, &source_plan).await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 11);
@@ -436,7 +436,7 @@ async fn test_tracing_table() -> Result<()> {
     let table: Arc<dyn Table> = Arc::new(TracingTable::create(1));
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
-    let stream = table.read_chunk_stream(ctx, &source_plan).await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);

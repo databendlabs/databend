@@ -18,23 +18,23 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 
 use super::Compactor;
 use super::TransformCompact;
 
-pub struct ChunkCompactor {
-    thresholds: ChunkCompactThresholds,
+pub struct BlockCompactor {
+    thresholds: BlockCompactThresholds,
     // A flag denoting whether it is a recluster operation.
     // Will be removed later.
     is_recluster: bool,
     aborting: Arc<AtomicBool>,
 }
 
-impl ChunkCompactor {
-    pub fn new(thresholds: ChunkCompactThresholds, is_recluster: bool) -> Self {
-        ChunkCompactor {
+impl BlockCompactor {
+    pub fn new(thresholds: BlockCompactThresholds, is_recluster: bool) -> Self {
+        BlockCompactor {
             thresholds,
             is_recluster,
             aborting: Arc::new(AtomicBool::new(false)),
@@ -42,9 +42,9 @@ impl ChunkCompactor {
     }
 }
 
-impl Compactor for ChunkCompactor {
+impl Compactor for BlockCompactor {
     fn name() -> &'static str {
-        "ChunkCompactTransform"
+        "BlockCompactTransform"
     }
 
     fn use_partial_compact() -> bool {
@@ -55,106 +55,106 @@ impl Compactor for ChunkCompactor {
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_partial(&mut self, chunks: &mut Vec<Chunk>) -> Result<Vec<Chunk>> {
-        if chunks.is_empty() {
+    fn compact_partial(&mut self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        if blocks.is_empty() {
             return Ok(vec![]);
         }
 
-        let size = chunks.len();
+        let size = blocks.len();
         let mut res = Vec::with_capacity(size);
-        let chunk = chunks[size - 1].clone();
+        let block = blocks[size - 1].clone();
 
-        // perfect chunk
+        // perfect block
         if self
             .thresholds
-            .check_perfect_chunk(chunk.num_rows(), chunk.memory_size())
+            .check_perfect_block(block.num_rows(), block.memory_size())
         {
-            res.push(chunk);
-            chunks.remove(size - 1);
+            res.push(block);
+            blocks.remove(size - 1);
         } else {
-            let accumulated_rows: usize = chunks.iter_mut().map(|b| b.num_rows()).sum();
-            let accumulated_bytes: usize = chunks.iter_mut().map(|b| b.memory_size()).sum();
+            let accumulated_rows: usize = blocks.iter_mut().map(|b| b.num_rows()).sum();
+            let accumulated_bytes: usize = blocks.iter_mut().map(|b| b.memory_size()).sum();
 
-            let merged = Chunk::concat(chunks)?;
-            chunks.clear();
+            let merged = DataBlock::concat(blocks)?;
+            blocks.clear();
 
-            if accumulated_rows >= self.thresholds.max_rows_per_chunk {
+            if accumulated_rows >= self.thresholds.max_rows_per_block {
                 // Used for recluster opreation, will be removed later.
                 if self.is_recluster {
                     let mut offset = 0;
                     let mut remain_rows = accumulated_rows;
-                    while remain_rows >= self.thresholds.max_rows_per_chunk {
+                    while remain_rows >= self.thresholds.max_rows_per_block {
                         let cut =
-                            merged.slice(offset..(offset + self.thresholds.max_rows_per_chunk));
+                            merged.slice(offset..(offset + self.thresholds.max_rows_per_block));
                         res.push(cut);
-                        offset += self.thresholds.max_rows_per_chunk;
-                        remain_rows -= self.thresholds.max_rows_per_chunk;
+                        offset += self.thresholds.max_rows_per_block;
+                        remain_rows -= self.thresholds.max_rows_per_block;
                     }
 
                     if remain_rows > 0 {
-                        chunks.push(merged.slice(offset..(offset + remain_rows)));
+                        blocks.push(merged.slice(offset..(offset + remain_rows)));
                     }
                 } else {
                     // we can't use slice here, it did not deallocate memory
                     res.push(merged);
                 }
-            } else if accumulated_bytes >= self.thresholds.max_bytes_per_chunk {
-                // too large for merged chunk, flush to results
+            } else if accumulated_bytes >= self.thresholds.max_bytes_per_block {
+                // too large for merged block, flush to results
                 res.push(merged);
             } else {
-                // keep the merged chunk into chunks for future merge
-                chunks.push(merged);
+                // keep the merged block into blocks for future merge
+                blocks.push(merged);
             }
         }
 
         Ok(res)
     }
 
-    fn compact_final(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>> {
-        let mut res = Vec::with_capacity(chunks.len());
-        let mut temp_chunks = vec![];
+    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+        let mut res = Vec::with_capacity(blocks.len());
+        let mut temp_blocks = vec![];
         let mut accumulated_rows = 0;
 
-        for chunk in chunks.iter() {
+        for block in blocks.iter() {
             if self.aborting.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));
             }
 
-            // Perfect chunk, no need to compact
+            // Perfect block, no need to compact
             if self
                 .thresholds
-                .check_perfect_chunk(chunk.num_rows(), chunk.memory_size())
+                .check_perfect_block(block.num_rows(), block.memory_size())
             {
-                res.push(chunk.clone());
+                res.push(block.clone());
             } else {
-                let chunk = if chunk.num_rows() > self.thresholds.max_rows_per_chunk {
-                    let b = chunk.slice(0..self.thresholds.max_rows_per_chunk);
+                let block = if block.num_rows() > self.thresholds.max_rows_per_block {
+                    let b = block.slice(0..self.thresholds.max_rows_per_block);
                     res.push(b);
-                    chunk.slice(self.thresholds.max_rows_per_chunk..chunk.num_rows())
+                    block.slice(self.thresholds.max_rows_per_block..block.num_rows())
                 } else {
-                    chunk.clone()
+                    block.clone()
                 };
 
-                accumulated_rows += chunk.num_rows();
-                temp_chunks.push(chunk);
+                accumulated_rows += block.num_rows();
+                temp_blocks.push(block);
 
-                while accumulated_rows >= self.thresholds.max_rows_per_chunk {
+                while accumulated_rows >= self.thresholds.max_rows_per_block {
                     if self.aborting.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
                     }
 
-                    let chunk = Chunk::concat(&temp_chunks)?;
-                    res.push(chunk.slice(0..self.thresholds.max_rows_per_chunk));
-                    accumulated_rows -= self.thresholds.max_rows_per_chunk;
+                    let block = DataBlock::concat(&temp_blocks)?;
+                    res.push(block.slice(0..self.thresholds.max_rows_per_block));
+                    accumulated_rows -= self.thresholds.max_rows_per_block;
 
-                    temp_chunks.clear();
+                    temp_blocks.clear();
                     if accumulated_rows != 0 {
-                        temp_chunks.push(
-                            chunk.slice(self.thresholds.max_rows_per_chunk..chunk.num_rows()),
+                        temp_blocks.push(
+                            block.slice(self.thresholds.max_rows_per_block..block.num_rows()),
                         );
                     }
                 }
@@ -168,12 +168,12 @@ impl Compactor for ChunkCompactor {
                 ));
             }
 
-            let chunk = Chunk::concat(&temp_chunks)?;
-            res.push(chunk);
+            let block = DataBlock::concat(&temp_blocks)?;
+            res.push(block);
         }
 
         Ok(res)
     }
 }
 
-pub type TransformChunkCompact = TransformCompact<ChunkCompactor>;
+pub type TransformBlockCompact = TransformCompact<BlockCompactor>;

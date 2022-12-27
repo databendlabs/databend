@@ -33,7 +33,7 @@ use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
@@ -140,7 +140,7 @@ impl BlockReader {
     // TODO refine these
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<Chunk> {
+    pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<DataBlock> {
         let (num_rows, columns_array_iter) = self.read_columns_with_block_meta(meta).await?;
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
         self.try_next_block(&mut deserializer)
@@ -219,7 +219,7 @@ impl BlockReader {
         Ok((num_rows, columns_array_iter))
     }
 
-    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<Chunk> {
+    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
         let mut results = Vec::with_capacity(chunks.len());
         let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
@@ -234,10 +234,14 @@ impl BlockReader {
             }
         }
         let chunk = ArrowChunk::new(results);
-        Chunk::from_arrow_chunk(&chunk, &self.schema().into())
+        DataBlock::from_arrow_chunk(&chunk, &self.schema().into())
     }
 
-    pub fn deserialize(&self, part: PartInfoPtr, chunks: Vec<(usize, Vec<u8>)>) -> Result<Chunk> {
+    pub fn deserialize(
+        &self,
+        part: PartInfoPtr,
+        chunks: Vec<(usize, Vec<u8>)>,
+    ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&part)?;
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
@@ -352,14 +356,14 @@ impl BlockReader {
         Ok((index, chunk))
     }
 
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Chunk> {
+    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
         match deserializer.next() {
             None => Err(ErrorCode::Internal(
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
             Some(Ok(chunk)) => {
-                Chunk::from_arrow_chunk(&chunk, &self.projected_schema.clone().into())
+                DataBlock::from_arrow_chunk(&chunk, &self.projected_schema.clone().into())
             }
         }
     }

@@ -18,8 +18,8 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
-use common_expression::Chunk;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_functions_v2::aggregates::eval_aggr;
 use common_storages_index::MinMaxIndex;
@@ -43,19 +43,19 @@ pub fn calc_column_distinct_of_values(
     Ok(col[0])
 }
 
-pub fn get_traverse_columns_dfs(chunk: &Chunk) -> traverse::TraverseResult {
-    traverse::traverse_columns_dfs(chunk.columns_ref())
+pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> traverse::TraverseResult {
+    traverse::traverse_columns_dfs(data_block.columns())
 }
 
 pub fn gen_columns_statistics(
-    chunk: &Chunk,
+    data_block: &DataBlock,
     column_distinct_count: Option<HashMap<usize, usize>>,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
-    let chunk = chunk.convert_to_full();
-    let rows = chunk.num_rows();
+    let data_block = data_block.convert_to_full();
+    let rows = data_block.num_rows();
 
-    let leaves = get_traverse_columns_dfs(&chunk)?;
+    let leaves = get_traverse_columns_dfs(&data_block)?;
 
     for (idx, (col_idx, col, data_type)) in leaves.iter().enumerate() {
         if !MinMaxIndex::is_supported_type(data_type) {
@@ -136,7 +136,7 @@ pub fn gen_columns_statistics(
 pub mod traverse {
     use common_expression::types::AnyType;
     use common_expression::types::DataType;
-    use common_expression::ChunkEntry;
+    use common_expression::BlockEntry;
     use common_expression::Column;
     use common_expression::Value;
 
@@ -145,7 +145,7 @@ pub mod traverse {
     pub type TraverseResult = Result<Vec<(Option<usize>, Value<AnyType>, DataType)>>;
 
     // traverses columns and collects the leaves in depth first manner
-    pub fn traverse_columns_dfs(columns: &[ChunkEntry<usize>]) -> TraverseResult {
+    pub fn traverse_columns_dfs(columns: &[BlockEntry]) -> TraverseResult {
         let mut leaves = vec![];
         for (idx, entry) in columns.iter().enumerate() {
             let data_type = &entry.data_type;

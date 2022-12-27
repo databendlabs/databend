@@ -36,7 +36,7 @@ use common_catalog::table_context::StageAttachment;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_io::prelude::FormatSettings;
@@ -306,11 +306,11 @@ impl TableContext for QueryContext {
     fn get_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
     }
-    fn push_precommit_chunk(&self, chunk: Chunk) {
-        self.shared.push_precommit_chunk(chunk)
+    fn push_precommit_block(&self, block: DataBlock) {
+        self.shared.push_precommit_block(block)
     }
-    fn consume_precommit_chunks(&self) -> Vec<Chunk> {
-        self.shared.consume_precommit_chunks()
+    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        self.shared.consume_precommit_blocks()
     }
     fn try_get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;

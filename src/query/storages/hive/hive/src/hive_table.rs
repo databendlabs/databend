@@ -31,7 +31,8 @@ use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
@@ -209,7 +210,7 @@ impl HiveTable {
     fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
         // couldn't get groupby order by info
         if let Some(PushDownInfo {
-            filters: f,
+            filters,
             limit: Some(lm),
             ..
         }) = &plan.push_downs
@@ -220,7 +221,7 @@ impl HiveTable {
 
             // filter out the partition column related expressions
             let partition_keys = self.get_partition_key_sets();
-            let columns = Self::get_columns_from_expressions(f);
+            let columns = Self::get_columns_from_expressions(filters);
             if columns.difference(&partition_keys).count() == 0 {
                 return true;
             }
@@ -509,7 +510,7 @@ impl Table for HiveTable {
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _operations: Vec<Chunk>,
+        _operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
@@ -538,25 +539,33 @@ impl Table for HiveTable {
 // Dummy Impl
 struct HiveSource {
     finish: bool,
+    schema: DataSchemaRef,
 }
 
 impl HiveSource {
     #[allow(dead_code)]
-    pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, HiveSource { finish: false })
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        output: Arc<OutputPort>,
+        schema: DataSchemaRef,
+    ) -> Result<ProcessorPtr> {
+        SyncSourcer::create(ctx, output, HiveSource {
+            finish: false,
+            schema,
+        })
     }
 }
 
 impl SyncSource for HiveSource {
     const NAME: &'static str = "HiveSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finish {
             return Ok(None);
         }
 
         self.finish = true;
-        Ok(Some(Chunk::empty()))
+        Ok(Some(DataBlock::empty_with_schema(self.schema.clone())))
     }
 }
 

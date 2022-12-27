@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::Chunk;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 
 use crate::field_encoder::write_csv_string;
@@ -66,16 +66,17 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> CSVOutputFormatBase<WITH_NA
 impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
     for CSVOutputFormatBase<WITH_NAMES, WITH_TYPES>
 {
-    fn serialize_chunk(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
-        let rows_size = chunk.num_rows();
-        let mut buf = Vec::with_capacity(chunk.memory_size());
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
+        let rows_size = block.num_rows();
+        let mut buf = Vec::with_capacity(block.memory_size());
 
         let fd = self.field_delimiter;
         let rd = &self.record_delimiter;
 
-        let columns: Vec<Column> = chunk
+        let columns: Vec<Column> = block
             .convert_to_full()
             .columns()
+            .iter()
             .map(|val| val.value.clone().into_column().unwrap())
             .collect();
 

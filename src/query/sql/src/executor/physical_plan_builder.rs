@@ -26,7 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRefExt;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
@@ -283,13 +283,14 @@ impl PhysicalPlanBuilder {
                                 };
 
                                 let group_by_key_index = GROUP_BY_KEY_COLUMN_INDEX;
-                                let group_by_key_data_type = Chunk::choose_hash_method_with_types(
-                                    &agg.group_items
-                                        .iter()
-                                        .map(|v| v.scalar.data_type())
-                                        .collect::<Vec<_>>(),
-                                )?
-                                .data_type();
+                                let group_by_key_data_type =
+                                    DataBlock::choose_hash_method_with_types(
+                                        &agg.group_items
+                                            .iter()
+                                            .map(|v| v.scalar.data_type())
+                                            .collect::<Vec<_>>(),
+                                    )?
+                                    .data_type();
 
                                 PhysicalPlan::Exchange(PhysicalExchange {
                                     kind,

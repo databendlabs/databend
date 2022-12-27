@@ -20,8 +20,9 @@ use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -45,7 +46,7 @@ impl SyncSystemTable for ClustersTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let cluster_nodes = ctx.get_cluster().nodes.clone();
 
         let mut names = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
@@ -65,15 +66,24 @@ impl SyncSystemTable for ClustersTable {
             versions.push(Scalar::String(cluster_node.binary_version.as_bytes().to_vec()).as_ref());
         }
 
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (Value::Column(names.build()), DataType::String),
-                (Value::Column(addresses.build()), DataType::String),
-                (
-                    Value::Column(addresses_port.build()),
-                    DataType::Number(NumberDataType::UInt16),
-                ),
-                (Value::Column(versions.build()), DataType::String),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(names.build()),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(addresses.build()),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt16),
+                    value: Value::Column(addresses_port.build()),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(versions.build()),
+                },
             ],
             cluster_nodes.len(),
         ))

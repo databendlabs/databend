@@ -39,7 +39,6 @@ use crate::types::date::DATE_MIN;
 use crate::types::nullable::NullableColumn;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
-use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::utils::from_date_data;
@@ -47,6 +46,7 @@ use crate::utils::from_timestamp_data;
 use crate::utils::ColumnFrom;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
+use crate::BlockEntry;
 use crate::Column;
 use crate::TypeDeserializerImpl;
 use crate::Value;
@@ -587,109 +587,113 @@ impl TableDataType {
         }
     }
 
-    pub fn create_random_column(&self, len: usize) -> (Value<AnyType>, DataType) {
+    pub fn create_random_column(&self, len: usize) -> BlockEntry {
         match self {
-            TableDataType::Null => (Value::Column(Column::Null { len }), DataType::Null),
-            TableDataType::EmptyArray => (
-                Value::Column(Column::EmptyArray { len }),
-                DataType::EmptyArray,
-            ),
-            TableDataType::Boolean => {
-                let mut rng = SmallRng::from_entropy();
-                let data = (0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>();
-                (Value::Column(Column::from_data(data)), DataType::Boolean)
-            }
-            TableDataType::String => {
-                // randomly generate 5 characters.
-                let data = (0..len)
-                    .map(|_| {
-                        let rng = SmallRng::from_entropy();
-                        rng.sample_iter(&Alphanumeric)
-                            .take(5)
-                            .map(u8::from)
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<Vec<u8>>>();
-                (Value::Column(Column::from_data(data)), DataType::String)
-            }
-            TableDataType::Number(num_ty) => {
-                let mut rng = SmallRng::from_entropy();
-                with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                    NumberDataType::NUM_TYPE => {
-                        let data = (0..len).map(|_| rng.gen()).collect::<Vec<NUM_TYPE>>();
-                        (
-                            Value::Column(Column::from_data(data)),
-                            DataType::Number(*num_ty),
-                        )
-                    }
-                })
-            }
-            TableDataType::Timestamp => {
-                let mut rng = SmallRng::from_entropy();
-                let data = (0..len)
-                    .map(|_| rng.gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
-                    .collect::<Vec<i64>>();
-                (
-                    Value::Column(from_timestamp_data(data)),
-                    DataType::Timestamp,
-                )
-            }
-            TableDataType::Date => {
-                let mut rng = SmallRng::from_entropy();
-                let data = (0..len)
-                    .map(|_| rng.gen_range(DATE_MIN..=DATE_MAX))
-                    .collect::<Vec<i32>>();
-                (Value::Column(from_date_data(data)), DataType::Date)
-            }
+            TableDataType::Null => BlockEntry {
+                data_type: DataType::Null,
+                value: Value::Column(Column::Null { len }),
+            },
+            TableDataType::EmptyArray => BlockEntry {
+                data_type: DataType::EmptyArray,
+                value: Value::Column(Column::EmptyArray { len }),
+            },
+            TableDataType::Boolean => BlockEntry {
+                data_type: DataType::Boolean,
+                value: Value::Column(Column::from_data(
+                    (0..len)
+                        .map(|_| SmallRng::from_entropy().gen_bool(0.5))
+                        .collect::<Vec<bool>>(),
+                )),
+            },
+            TableDataType::String => BlockEntry {
+                data_type: DataType::String,
+                value: Value::Column(Column::from_data(
+                    (0..len)
+                        .map(|_| {
+                            let rng = SmallRng::from_entropy();
+                            rng.sample_iter(&Alphanumeric)
+                                // randomly generate 5 characters.
+                                .take(5)
+                                .map(u8::from)
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<Vec<u8>>>(),
+                )),
+            },
+            TableDataType::Number(num_ty) => BlockEntry {
+                data_type: DataType::Number(*num_ty),
+                value: Value::Column(with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                    NumberDataType::NUM_TYPE => Column::from_data(
+                        (0..len)
+                            .map(|_| SmallRng::from_entropy().gen())
+                            .collect::<Vec<NUM_TYPE>>(),
+                    ),
+                })),
+            },
+            TableDataType::Timestamp => BlockEntry {
+                data_type: DataType::Timestamp,
+                value: Value::Column(from_timestamp_data(
+                    (0..len)
+                        .map(|_| SmallRng::from_entropy().gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
+                        .collect::<Vec<i64>>(),
+                )),
+            },
+            TableDataType::Date => BlockEntry {
+                data_type: DataType::Date,
+                value: Value::Column(from_date_data(
+                    (0..len)
+                        .map(|_| SmallRng::from_entropy().gen_range(DATE_MIN..=DATE_MAX))
+                        .collect::<Vec<i32>>(),
+                )),
+            },
             TableDataType::Nullable(inner_ty) => {
-                let (value, ty) = inner_ty.create_random_column(len);
-                let mut rng = SmallRng::from_entropy();
-                let data = (0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>();
-                let validity = Bitmap::from(data);
-                (
-                    Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        column: value.into_column().unwrap(),
-                        validity,
+                let entry = inner_ty.create_random_column(len);
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(entry.data_type)),
+                    value: Value::Column(Column::Nullable(Box::new(NullableColumn {
+                        column: entry.value.into_column().unwrap(),
+                        validity: Bitmap::from(
+                            (0..len)
+                                .map(|_| SmallRng::from_entropy().gen_bool(0.5))
+                                .collect::<Vec<bool>>(),
+                        ),
                     }))),
-                    DataType::Nullable(Box::new(ty)),
-                )
+                }
             }
             TableDataType::Array(inner_ty) => {
                 let mut inner_len = 0;
-                let mut rng = SmallRng::from_entropy();
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
                 offsets.push(inner_len);
                 for _ in 0..len {
-                    inner_len += rng.gen_range(0..=3);
+                    inner_len += SmallRng::from_entropy().gen_range(0..=3);
                     offsets.push(inner_len);
                 }
-                let (value, ty) = inner_ty.create_random_column(inner_len as usize);
-                (
-                    Value::Column(Column::Array(Box::new(ArrayColumn {
-                        values: value.into_column().unwrap(),
+                let entry = inner_ty.create_random_column(inner_len as usize);
+                BlockEntry {
+                    data_type: DataType::Array(Box::new(entry.data_type)),
+                    value: Value::Column(Column::Array(Box::new(ArrayColumn {
+                        values: entry.value.into_column().unwrap(),
                         offsets: offsets.into(),
                     }))),
-                    DataType::Array(Box::new(ty)),
-                )
+                }
             }
             TableDataType::Tuple { fields_type, .. } => {
-                let mut types = Vec::with_capacity(len);
                 let mut fields = Vec::with_capacity(len);
+                let mut types = Vec::with_capacity(len);
                 for field_type in fields_type.iter() {
-                    let (value, ty) = field_type.create_random_column(len);
-                    fields.push(value.into_column().unwrap());
-                    types.push(ty);
+                    let entry = field_type.create_random_column(len);
+                    fields.push(entry.value.into_column().unwrap());
+                    types.push(entry.data_type);
                 }
-                (
-                    Value::Column(Column::Tuple { fields, len }),
-                    DataType::Tuple(types),
-                )
+                BlockEntry {
+                    data_type: DataType::Tuple(types),
+                    value: Value::Column(Column::Tuple { fields, len }),
+                }
             }
             TableDataType::Variant => {
-                let mut rng = SmallRng::from_entropy();
                 let mut data = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let opt = rng.gen_range(0..=6);
+                    let opt = SmallRng::from_entropy().gen_range(0..=6);
                     let val = match opt {
                         0 => JsonbValue::Null,
                         1 => JsonbValue::Bool(true),
@@ -699,24 +703,24 @@ impl TableDataType {
                             JsonbValue::String(Cow::from(s))
                         }
                         4 => {
-                            let num = rng.gen_range(i64::MIN..=i64::MAX);
+                            let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
                             JsonbValue::Number(JsonbNumber::Int64(num))
                         }
                         5 => {
-                            let arr_len = rng.gen_range(0..=5);
+                            let arr_len = SmallRng::from_entropy().gen_range(0..=5);
                             let mut values = Vec::with_capacity(arr_len);
                             for _ in 0..arr_len {
-                                let num = rng.gen_range(i64::MIN..=i64::MAX);
+                                let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
                                 values.push(JsonbValue::Number(JsonbNumber::Int64(num)))
                             }
                             JsonbValue::Array(values)
                         }
                         6 => {
-                            let obj_len = rng.gen_range(0..=5);
+                            let obj_len = SmallRng::from_entropy().gen_range(0..=5);
                             let mut obj = JsonbObject::new();
                             for _ in 0..obj_len {
                                 let k = Alphanumeric.sample_string(&mut rand::thread_rng(), 5);
-                                let num = rng.gen_range(i64::MIN..=i64::MAX);
+                                let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
                                 let v = JsonbValue::Number(JsonbNumber::Int64(num));
                                 obj.insert(k, v);
                             }
@@ -724,11 +728,12 @@ impl TableDataType {
                         }
                         _ => JsonbValue::Null,
                     };
-                    let mut buf = Vec::new();
-                    val.to_vec(&mut buf);
-                    data.push(buf);
+                    data.push(val.to_vec());
                 }
-                (Value::Column(Column::from_data(data)), DataType::Variant)
+                BlockEntry {
+                    data_type: DataType::Variant,
+                    value: Value::Column(Column::from_data(data)),
+                }
             }
             _ => todo!(),
         }

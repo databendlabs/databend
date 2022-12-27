@@ -19,7 +19,7 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -31,7 +31,7 @@ use common_pipeline_core::processors::Processor;
 pub trait SyncSource: Send {
     const NAME: &'static str;
 
-    fn generate(&mut self) -> Result<Option<Chunk>>;
+    fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
 
 // TODO: This can be refactored using proc macros
@@ -40,7 +40,7 @@ pub struct SyncSourcer<T: 'static + SyncSource> {
 
     inner: T,
     output: Arc<OutputPort>,
-    generated_data: Option<Chunk>,
+    generated_data: Option<DataBlock>,
     scan_progress: Arc<Progress>,
 }
 
@@ -87,8 +87,8 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
 
         match self.generated_data.take() {
             None => Ok(Event::Sync),
-            Some(chunk) => {
-                self.output.push_data(Ok(chunk));
+            Some(data_block) => {
+                self.output.push_data(Ok(data_block));
                 Ok(Event::NeedConsume)
             }
         }
@@ -97,13 +97,13 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
     fn process(&mut self) -> Result<()> {
         match self.inner.generate()? {
             None => self.is_finish = true,
-            Some(chunk) => {
+            Some(data_block) => {
                 let progress_values = ProgressValues {
-                    rows: chunk.num_rows(),
-                    bytes: chunk.memory_size(),
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
-                self.generated_data = Some(chunk)
+                self.generated_data = Some(data_block)
             }
         };
 

@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use itertools::Itertools;
+
 use super::DistributedInsertSelect;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
@@ -93,19 +95,19 @@ impl Display for Filter {
 
 impl Display for Project {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // if let Ok(input_schema) = self.input.output_schema() {
-        //     let project_columns_name = self
-        //         .projections
-        //         .iter()
-        //         .sorted()
-        //         .map(|idx| input_schema.field(*idx).name())
-        //         .cloned()
-        //         .collect::<Vec<String>>();
-        //
-        //     return write!(f, "Project: [{}]", project_columns_name.join(", "));
-        // }
+        if let Ok(input_schema) = self.input.output_schema() {
+            let project_columns_name = self
+                .projections
+                .iter()
+                .sorted()
+                .map(|idx| input_schema.field(*idx).name())
+                .cloned()
+                .collect::<Vec<String>>();
 
-        write!(f, "Project: [{:?}]", self.columns)
+            return write!(f, "Project: [{}]", project_columns_name.join(", "));
+        }
+
+        write!(f, "Project: [{:?}]", self.projections)
     }
 }
 

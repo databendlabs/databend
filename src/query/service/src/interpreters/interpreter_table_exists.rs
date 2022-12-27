@@ -18,7 +18,8 @@ use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_sql::plans::ExistsTablePlan;
@@ -55,11 +56,11 @@ impl Interpreter for ExistsTableInterpreter {
             false => 0u8,
         };
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
-            vec![(
-                Value::Scalar(Scalar::Number(NumberScalar::UInt8(result))),
-                DataType::Number(NumberDataType::UInt8),
-            )],
+        PipelineBuildResult::from_blocks(vec![DataBlock::new(
+            vec![BlockEntry {
+                data_type: DataType::Number(NumberDataType::UInt8),
+                value: Value::Scalar(Scalar::Number(NumberScalar::UInt8(result))),
+            }],
             1,
         )])
     }

@@ -23,7 +23,7 @@ use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
-use crate::chunk::Chunk;
+use crate::block::DataBlock;
 use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
@@ -56,14 +56,14 @@ use crate::TableDataType;
 
 const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
 
-impl<Index: ColumnIndex> Debug for Chunk<Index> {
+impl Debug for DataBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
 
         table.set_header(vec!["Column ID", "Type", "Column Data"]);
 
-        for (i, entry) in self.columns().enumerate() {
+        for (i, entry) in self.columns().iter().enumerate() {
             table.add_row(vec![
                 i.to_string(),
                 entry.data_type.to_string(),
@@ -75,7 +75,7 @@ impl<Index: ColumnIndex> Debug for Chunk<Index> {
     }
 }
 
-impl<Index: ColumnIndex> Display for Chunk<Index> {
+impl Display for DataBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
@@ -85,6 +85,7 @@ impl<Index: ColumnIndex> Display for Chunk<Index> {
         for index in 0..self.num_rows() {
             let row: Vec<_> = self
                 .columns()
+                .iter()
                 .map(|entry| entry.value.as_ref().index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
@@ -493,11 +494,11 @@ impl Display for NumberDataType {
     }
 }
 
-impl Display for Expr {
+impl<Index: ColumnIndex> Display for Expr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::Constant { scalar, .. } => write!(f, "{:?}", scalar.as_ref()),
-            Expr::ColumnRef { id, .. } => write!(f, "ColumnRef({id})"),
+            Expr::ColumnRef { id, .. } => write!(f, "{id}"),
             Expr::Cast {
                 is_try,
                 expr,
@@ -587,8 +588,8 @@ impl Display for FunctionSignature {
 impl Display for FunctionProperty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut properties = Vec::new();
-        if self.commutative {
-            properties.push("commutative");
+        if self.non_deterministic {
+            properties.push("non_deterministic");
         }
         if !properties.is_empty() {
             write!(f, "{{{}}}", properties.join(", "))?;

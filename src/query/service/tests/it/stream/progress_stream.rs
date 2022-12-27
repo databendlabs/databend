@@ -20,9 +20,9 @@ use common_base::base::*;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::ColumnFrom;
+use common_expression::DataBlock;
 use common_expression::Value;
 use common_streams::*;
 use futures::TryStreamExt;
@@ -33,31 +33,31 @@ async fn test_progress_stream() -> Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("stream_datablock.txt").unwrap();
 
-    let chunk = Chunk::new(
-        vec![(
-            Value::Column(Column::from_data(vec![1i64, 2, 3])),
-            DataType::Number(NumberDataType::Int64),
-        )],
+    let block = DataBlock::new(
+        vec![BlockEntry {
+            data_type: DataType::Number(NumberDataType::Int64),
+            value: Value::Column(Column::from_data(vec![1i64, 2, 3])),
+        }],
         3,
     );
 
-    let chunks = vec![chunk.clone(), chunk.clone(), chunk];
-    let input = DataBlockStream::create(None, chunks);
+    let blocks = vec![block.clone(), block.clone(), block];
+    let input = DataBlockStream::create(None, blocks);
 
     let progress = Arc::new(Progress::create());
     let stream = ProgressStream::try_create(Box::pin(input), progress)?;
     let result = stream.try_collect::<Vec<_>>().await?;
-    let chunk = &result[0];
-    assert_eq!(chunk.num_columns(), 1);
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
 
     let mut table = Table::new();
     table.load_preset("||--+-++|    ++++++");
     table.set_header(["a"]);
-    for _ in 0..chunk.num_rows() {
-        let mut row = Vec::with_capacity(chunk.num_columns());
-        for i in 0..chunk.num_columns() {
-            let (value, _) = chunk.column(i);
-            row.push(format!("{}", value));
+    for _ in 0..block.num_rows() {
+        let mut row = Vec::with_capacity(block.num_columns());
+        for i in 0..block.num_columns() {
+            let col = block.get_by_offset(i);
+            row.push(format!("{}", col.value));
         }
         table.add_row(row);
     }

@@ -17,7 +17,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_io::prelude::FileSplit;
 
 use crate::processors::UpdateTrigger;
@@ -32,7 +32,7 @@ const UNSET_FLAGS_MASK: usize = !FLAGS_MASK;
 
 #[repr(align(8))]
 pub enum SharedData {
-    Data(Result<Chunk>),
+    Data(Result<DataBlock>),
     FilePartition(Result<FileSplit>),
 }
 
@@ -167,15 +167,15 @@ impl InputPort {
     }
 
     #[inline(always)]
-    pub fn pull_data(&self) -> Option<Result<Chunk>> {
+    pub fn pull_data(&self) -> Option<Result<DataBlock>> {
         unsafe {
             UpdateTrigger::update_input(&self.update_trigger);
             let unset_flags = HAS_DATA | NEED_DATA;
             match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
                 address if address.is_null() => None,
                 address => {
-                    if let SharedData::Data(chunk) = *Box::from_raw(address) {
-                        Some(chunk)
+                    if let SharedData::Data(block) = *Box::from_raw(address) {
+                        Some(block)
                     } else {
                         unreachable!()
                     }
@@ -231,7 +231,7 @@ impl OutputPort {
     }
 
     #[inline(always)]
-    pub fn push_data(&self, data: Result<Chunk>) {
+    pub fn push_data(&self, data: Result<DataBlock>) {
         unsafe {
             UpdateTrigger::update_output(&self.update_trigger);
 

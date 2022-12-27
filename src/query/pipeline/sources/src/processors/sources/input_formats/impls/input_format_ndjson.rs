@@ -28,7 +28,7 @@ use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
-use crate::processors::sources::input_formats::input_format_text::ChunkBuilder;
+use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 
@@ -83,7 +83,7 @@ impl InputFormatTextBase for InputFormatNDJson {
         Arc::new(FieldJsonAstDecoder::create(options))
     }
 
-    fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         let field_decoder = builder
             .field_decoder
             .as_any()

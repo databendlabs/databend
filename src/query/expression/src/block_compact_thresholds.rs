@@ -13,55 +13,55 @@
 // limitations under the License.
 
 #[derive(Clone, Copy, Debug)]
-pub struct ChunkCompactThresholds {
-    pub max_rows_per_chunk: usize,
-    pub min_rows_per_chunk: usize,
-    pub max_bytes_per_chunk: usize,
+pub struct BlockCompactThresholds {
+    pub max_rows_per_block: usize,
+    pub min_rows_per_block: usize,
+    pub max_bytes_per_block: usize,
 }
 
-impl Default for ChunkCompactThresholds {
-    fn default() -> ChunkCompactThresholds {
-        ChunkCompactThresholds {
+impl Default for BlockCompactThresholds {
+    fn default() -> BlockCompactThresholds {
+        BlockCompactThresholds {
             // DEFAULT_ROW_PER_BLOCK
-            max_rows_per_chunk: 1000 * 1000,
+            max_rows_per_block: 1000 * 1000,
             // 0.8 * DEFAULT_ROW_PER_BLOCK
-            min_rows_per_chunk: 800 * 1000,
+            min_rows_per_block: 800 * 1000,
             // DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD
-            max_bytes_per_chunk: 100 * 1024 * 1024,
+            max_bytes_per_block: 100 * 1024 * 1024,
         }
     }
 }
 
-impl ChunkCompactThresholds {
+impl BlockCompactThresholds {
     pub fn new(
-        max_rows_per_chunk: usize,
-        min_rows_per_chunk: usize,
-        max_bytes_per_chunk: usize,
+        max_rows_per_block: usize,
+        min_rows_per_block: usize,
+        max_bytes_per_block: usize,
     ) -> Self {
-        ChunkCompactThresholds {
-            max_rows_per_chunk,
-            min_rows_per_chunk,
-            max_bytes_per_chunk,
+        BlockCompactThresholds {
+            max_rows_per_block,
+            min_rows_per_block,
+            max_bytes_per_block,
         }
     }
 
     #[inline]
-    pub fn check_perfect_chunk(&self, row_count: usize, block_size: usize) -> bool {
-        row_count <= self.max_rows_per_chunk && self.check_large_enough(row_count, block_size)
+    pub fn check_perfect_block(&self, row_count: usize, block_size: usize) -> bool {
+        row_count <= self.max_rows_per_block && self.check_large_enough(row_count, block_size)
     }
 
     #[inline]
     pub fn check_large_enough(&self, row_count: usize, block_size: usize) -> bool {
-        row_count >= self.min_rows_per_chunk || block_size >= self.max_bytes_per_chunk
+        row_count >= self.min_rows_per_block || block_size >= self.max_bytes_per_block
     }
 
     #[inline]
     pub fn check_for_compact(&self, row_count: usize, block_size: usize) -> bool {
-        row_count < 2 * self.min_rows_per_chunk && block_size < 2 * self.max_bytes_per_chunk
+        row_count < 2 * self.min_rows_per_block && block_size < 2 * self.max_bytes_per_block
     }
 
     #[inline]
     pub fn check_for_recluster(&self, total_rows: usize, total_bytes: usize) -> bool {
-        total_rows <= self.min_rows_per_chunk && total_bytes <= self.max_bytes_per_chunk
+        total_rows <= self.min_rows_per_block && total_bytes <= self.max_bytes_per_block
     }
 }

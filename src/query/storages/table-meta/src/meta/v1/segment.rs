@@ -21,7 +21,7 @@ use serde::Serialize;
 use crate::meta::common::FormatVersion;
 use crate::meta::v0::common::ClusterStatistics;
 use crate::meta::v0::common::ColumnStatistics;
-use crate::meta::versions::DataBlock;
+use crate::meta::versions::OldDataBlock;
 use crate::meta::ColumnId;
 use crate::meta::ColumnMeta;
 use crate::meta::Compression;
@@ -138,7 +138,7 @@ impl From<v0::BlockMeta> for BlockMeta {
             col_stats: s.col_stats,
             col_metas: s.col_metas,
             cluster_stats: None,
-            location: (s.location.path, DataBlock::VERSION),
+            location: (s.location.path, OldDataBlock::VERSION),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,

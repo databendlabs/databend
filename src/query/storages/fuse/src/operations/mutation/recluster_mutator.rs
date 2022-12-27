@@ -19,7 +19,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
 use common_expression::Scalar;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -53,7 +53,7 @@ impl ReclusterMutator {
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         threshold: f64,
-        thresholds: ChunkCompactThresholds,
+        thresholds: BlockCompactThresholds,
         blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
         data_accessor: Operator,
     ) -> Result<Self> {
@@ -210,7 +210,7 @@ impl TableMutator for ReclusterMutator {
         let (mut segments, mut summary, mut abort_operation) =
             self.base_mutator.generate_segments().await?;
 
-        let append_entries = ctx.consume_precommit_chunks();
+        let append_entries = ctx.consume_precommit_blocks();
         let append_log_entries = append_entries
             .iter()
             .map(AppendOperationLogEntry::try_from)

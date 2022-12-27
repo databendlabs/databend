@@ -122,7 +122,7 @@ impl FuseTable {
             return Ok(false);
         }
 
-        let thresholds = self.get_chunk_compact_thresholds();
+        let thresholds = self.get_block_compact_thresholds();
 
         let mut mutator = BlockCompactMutator::new(ctx.clone(), options, self.operator.clone());
         let need_compact = mutator.target_select().await?;

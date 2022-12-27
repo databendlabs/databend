@@ -24,18 +24,18 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
-use common_sql::evaluator::ChunkOperator;
+use common_sql::evaluator::BlockOperator;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::TableSnapshot;
 
@@ -105,7 +105,7 @@ impl FuseTable {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            if self.try_eval_const(&self.table_info.schema(), &filter_expr)? {
+            if self.try_eval_const(ctx.clone(), &*self.table_info.schema(), &filter_expr)? {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,
@@ -131,23 +131,33 @@ impl FuseTable {
         Ok(())
     }
 
-    fn try_eval_const(&self, schema: &TableSchema, filter: &RemoteExpr<String>) -> Result<bool> {
-        let func_ctx = FunctionContext::default();
-
+    fn try_eval_const(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        schema: &TableSchema,
+        filter: &RemoteExpr<String>,
+    ) -> Result<bool> {
         let dummy_field = DataField::new("dummy", DataType::Null);
         let _dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
         let dummy_value = Value::Column(Column::Null { len: 1 });
-        let dummy_chunk = Chunk::new_from_sequence(vec![(dummy_value, DataType::Null)], 1);
+        let dummy_block = DataBlock::new(
+            vec![BlockEntry {
+                data_type: DataType::Null,
+                value: dummy_value,
+            }],
+            1,
+        );
 
         let filter_expr = filter
             .into_expr(&BUILTIN_FUNCTIONS)
             .unwrap()
             .project_column_ref(|name| schema.index_of(name).unwrap());
-        let evaluator = Evaluator::new(&dummy_chunk, func_ctx, &BUILTIN_FUNCTIONS);
+        let func_ctx = ctx.try_get_function_context()?;
+        let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
         let res = evaluator
             .run(&filter_expr)
             .map_err(|(_, e)| ErrorCode::Internal(format!("eval try eval const failed: {}.", e)))?;
-        let predicates = Chunk::<String>::cast_to_nonull_boolean(&res).ok_or_else(|| {
+        let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
             ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
         })?;
 
@@ -265,7 +275,7 @@ impl FuseTable {
                     self.get_operator(),
                     self.meta_location_generator().clone(),
                     base_segments,
-                    self.get_chunk_compact_thresholds(),
+                    self.get_block_compact_thresholds(),
                 )?;
                 pipeline.pipes.push(Pipe::ResizePipe {
                     inputs_port,
@@ -301,11 +311,11 @@ impl FuseTable {
                 _ => {
                     let cname = format!("{}", expr);
                     merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
-                    let index = merged.len() - 1;
-                    extra_key_index.push(index);
+                    operators.push(BlockOperator::Map { expr });
 
-                    operators.push(ChunkOperator::Map { index, expr });
-                    index
+                    let offset = merged.len() - 1;
+                    extra_key_index.push(offset);
+                    offset
                 }
             };
             cluster_key_index.push(index);
@@ -316,7 +326,7 @@ impl FuseTable {
             cluster_key_index,
             extra_key_index,
             0,
-            self.get_chunk_compact_thresholds(),
+            self.get_block_compact_thresholds(),
             operators,
             merged,
         ))

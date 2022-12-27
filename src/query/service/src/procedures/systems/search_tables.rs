@@ -16,14 +16,14 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_storages_system::TablesTableWithoutHistory;
 use futures::TryStreamExt;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
-use crate::procedures::OneChunkProcedure;
+use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -39,7 +39,7 @@ impl SearchTablesProcedure {
 }
 
 #[async_trait::async_trait]
-impl OneChunkProcedure for SearchTablesProcedure {
+impl OneBlockProcedure for SearchTablesProcedure {
     fn name(&self) -> &str {
         "SEARCH_TABLES"
     }
@@ -50,7 +50,7 @@ impl OneChunkProcedure for SearchTablesProcedure {
             .management_mode_required(true)
     }
 
-    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<Chunk> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let query = format!(
             "SELECT * FROM system.tables WHERE name like '%{}%' ORDER BY database, name",
             args[0]
@@ -80,7 +80,7 @@ impl OneChunkProcedure for SearchTablesProcedure {
         if !result.is_empty() {
             Ok(result[0].clone())
         } else {
-            Ok(Chunk::empty())
+            Ok(DataBlock::empty())
         }
     }
 

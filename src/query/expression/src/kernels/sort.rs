@@ -30,32 +30,32 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::utils::arrow::column_to_arrow_array;
-use crate::Chunk;
 use crate::Column;
+use crate::DataBlock;
 use crate::ARROW_EXT_TYPE_VARIANT;
 
 pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
 
 #[derive(Clone)]
 pub struct SortColumnDescription {
-    pub index: usize,
+    pub offset: usize,
     pub asc: bool,
     pub nulls_first: bool,
 }
 
-impl Chunk {
+impl DataBlock {
     pub fn sort(
-        chunk: &Chunk,
+        block: &DataBlock,
         descriptions: &[SortColumnDescription],
         limit: Option<usize>,
-    ) -> Result<Chunk> {
-        let num_rows = chunk.num_rows();
+    ) -> Result<DataBlock> {
+        let num_rows = block.num_rows();
         if num_rows <= 1 {
-            return Ok(chunk.clone());
+            return Ok(block.clone());
         }
         let order_columns = descriptions
             .iter()
-            .map(|d| column_to_arrow_array(chunk.get_by_offset(d.index), num_rows))
+            .map(|d| column_to_arrow_array(block.get_by_offset(d.offset), num_rows))
             .collect::<Vec<_>>();
 
         let order_arrays = descriptions
@@ -72,20 +72,20 @@ impl Chunk {
 
         let indices: PrimitiveArray<u32> =
             arrow_sort::lexsort_to_indices_impl(&order_arrays, limit, &build_compare)?;
-        Chunk::take(chunk, indices.values())
+        DataBlock::take(block, indices.values())
     }
 
-    // merge two chunks to one sorted chunk
+    // merge two blocks to one sorted block
     // require: lhs and rhs have been `convert_to_full`.
     fn two_way_merge_sort(
-        chunks: &[Chunk],
+        blocks: &[DataBlock],
         descriptions: &[SortColumnDescription],
         limit: Option<usize>,
-    ) -> Result<Chunk> {
-        assert!(chunks.len() == 2);
+    ) -> Result<DataBlock> {
+        assert!(blocks.len() == 2);
 
-        let lhs = &chunks[0];
-        let rhs = &chunks[1];
+        let lhs = &blocks[0];
+        let rhs = &blocks[1];
         let lhs_len = lhs.num_rows();
         let rhs_len = rhs.num_rows();
         if lhs_len == 0 {
@@ -99,8 +99,8 @@ impl Chunk {
         let sort_arrays = descriptions
             .iter()
             .map(|d| {
-                let left = column_to_arrow_array(lhs.get_by_offset(d.index), lhs_len);
-                let right = column_to_arrow_array(rhs.get_by_offset(d.index), rhs_len);
+                let left = column_to_arrow_array(lhs.get_by_offset(d.offset), lhs_len);
+                let right = column_to_arrow_array(rhs.get_by_offset(d.offset), rhs_len);
                 sort_options.push(arrow_sort::SortOptions {
                     descending: !d.asc,
                     nulls_first: d.nulls_first,
@@ -127,19 +127,19 @@ impl Chunk {
         let slices =
             arrow_merge_sort::merge_sort_slices(once(&lhs_slice), once(&rhs_slice), &comparator)
                 .to_vec(limit);
-        let chunk = Chunk::take_by_slices_limit_from_chunks(chunks, &slices, limit);
-        Ok(chunk)
+        let block = DataBlock::take_by_slices_limit_from_blocks(blocks, &slices, limit);
+        Ok(block)
     }
 
     pub fn merge_sort(
-        chunks: &[Chunk],
+        blocks: &[DataBlock],
         descriptions: &[SortColumnDescription],
         limit: Option<usize>,
         aborting: Aborting,
-    ) -> Result<Chunk> {
-        match chunks.len() {
+    ) -> Result<DataBlock> {
+        match blocks.len() {
             0 => Result::Err(ErrorCode::EmptyData("Can't merge empty blocks")),
-            1 => Ok(chunks[0].clone()),
+            1 => Ok(blocks[0].clone()),
             2 => {
                 if aborting() {
                     return Err(ErrorCode::AbortedQuery(
@@ -147,7 +147,7 @@ impl Chunk {
                     ));
                 }
 
-                Chunk::two_way_merge_sort(chunks, descriptions, limit)
+                DataBlock::two_way_merge_sort(blocks, descriptions, limit)
             }
             _ => {
                 if aborting() {
@@ -155,8 +155,8 @@ impl Chunk {
                         "Aborted query, because the server is shutting down or the query was killed.",
                     ));
                 }
-                let left = Chunk::merge_sort(
-                    &chunks[0..chunks.len() / 2],
+                let left = DataBlock::merge_sort(
+                    &blocks[0..blocks.len() / 2],
                     descriptions,
                     limit,
                     aborting.clone(),
@@ -166,8 +166,8 @@ impl Chunk {
                         "Aborted query, because the server is shutting down or the query was killed.",
                     ));
                 }
-                let right = Chunk::merge_sort(
-                    &chunks[chunks.len() / 2..chunks.len()],
+                let right = DataBlock::merge_sort(
+                    &blocks[blocks.len() / 2..blocks.len()],
                     descriptions,
                     limit,
                     aborting.clone(),
@@ -177,7 +177,7 @@ impl Chunk {
                         "Aborted query, because the server is shutting down or the query was killed.",
                     ));
                 }
-                Chunk::two_way_merge_sort(&[left, right], descriptions, limit)
+                DataBlock::two_way_merge_sort(&[left, right], descriptions, limit)
             }
         }
     }

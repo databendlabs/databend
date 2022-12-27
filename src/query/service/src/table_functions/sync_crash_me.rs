@@ -28,7 +28,7 @@ use common_catalog::plan::PushDownInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
@@ -158,7 +158,7 @@ impl SyncCrashMeSource {
 impl SyncSource for SyncCrashMeSource {
     const NAME: &'static str = "sync_crash_me";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         match &self.message {
             None => panic!("sync crash me panic"),
             Some(message) => panic!("{}", message),
@@ -182,7 +182,7 @@ struct SyncCrashMeStream {
 }
 
 impl Stream for SyncCrashMeStream {
-    type Item = Result<Chunk>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match &self.message {

@@ -20,13 +20,13 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::ValueType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -60,13 +60,13 @@ impl SyncSystemTable for MallocStatsTotalsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let values = Self::build_columns().map_err(convert_je_err)?;
-        Ok(Chunk::new_from_sequence(values, 6))
+        Ok(DataBlock::new(values, 6))
     }
 }
 
-type BuildResult = std::result::Result<Vec<(Value<AnyType>, DataType)>, Box<dyn std::error::Error>>;
+type BuildResult = std::result::Result<Vec<BlockEntry>, Box<dyn std::error::Error>>;
 
 impl MallocStatsTotalsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
@@ -115,11 +115,14 @@ impl MallocStatsTotalsTable {
         let values = NumberType::<u64>::upcast_column(values.into());
 
         Ok(vec![
-            (Value::Column(names), DataType::String),
-            (
-                Value::Column(values),
-                DataType::Number(NumberDataType::UInt64),
-            ),
+            BlockEntry {
+                data_type: DataType::String,
+                value: Value::Column(names),
+            },
+            BlockEntry {
+                data_type: DataType::Number(NumberDataType::UInt64),
+                value: Value::Column(values),
+            },
         ])
     }
 }

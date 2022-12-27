@@ -16,8 +16,8 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnId;
@@ -30,7 +30,7 @@ use crate::statistics::column_statistic::get_traverse_columns_dfs;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
-    chunk: Option<&Chunk>,
+    data_block: Option<&DataBlock>,
 ) -> Result<StatisticsOfColumns> {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
@@ -45,8 +45,8 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
         )
     });
 
-    let leaves = if let Some(chunk) = chunk {
-        Some(get_traverse_columns_dfs(chunk)?)
+    let leaves = if let Some(data_block) = data_block {
+        Some(get_traverse_columns_dfs(data_block)?)
     } else {
         None
     };
@@ -91,11 +91,11 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .cloned()
                 .unwrap_or(Scalar::Null);
 
-            let distinct_of_values = match chunk {
-                Some(chunk) => {
+            let distinct_of_values = match data_block {
+                Some(data_block) => {
                     if let Some(col) = leaves.as_ref().unwrap().get(*id as usize) {
-                        let column = col.1.convert_to_full_column(&col.2, chunk.num_rows());
-                        calc_column_distinct_of_values(&column, &col.2, chunk.num_rows())?
+                        let column = col.1.convert_to_full_column(&col.2, data_block.num_rows());
+                        calc_column_distinct_of_values(&column, &col.2, data_block.num_rows())?
                     } else {
                         0
                     }
@@ -147,7 +147,7 @@ pub fn reduce_statistics<T: Borrow<Statistics>>(stats: &[T]) -> Result<Statistic
 
 pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     block_metas: &[T],
-    thresholds: ChunkCompactThresholds,
+    thresholds: BlockCompactThresholds,
 ) -> Result<Statistics> {
     let mut row_count: u64 = 0;
     let mut block_count: u64 = 0;

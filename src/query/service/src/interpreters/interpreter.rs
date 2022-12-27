@@ -20,7 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::SendableChunkStream;
+use common_expression::SendableDataBlockStream;
 
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -31,7 +31,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
-use crate::stream::ChunkStream;
+use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
 
@@ -47,8 +47,8 @@ pub trait Interpreter: Sync + Send {
         DataSchemaRefExt::create(vec![])
     }
 
-    /// The core of the databend processor which will execute the logical plan and get the Chunk
-    async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableChunkStream> {
+    /// The core of the databend processor which will execute the logical plan and get the DataBlock
+    async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         InterpreterMetrics::record_query_start(&ctx);
         log_query_start(&ctx);
 
@@ -65,7 +65,7 @@ pub trait Interpreter: Sync + Send {
             InterpreterMetrics::record_query_finished(&ctx, None);
             log_query_finished(&ctx, None);
 
-            return Ok(Box::pin(ChunkStream::create(None, vec![])));
+            return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
         let query_ctx = ctx.clone();
@@ -92,7 +92,7 @@ pub trait Interpreter: Sync + Send {
 
             ctx.set_executor(Arc::downgrade(&complete_executor.get_inner()));
             complete_executor.execute()?;
-            return Ok(Box::pin(ChunkStream::create(None, vec![])));
+            return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;

@@ -23,7 +23,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -51,7 +51,7 @@ enum State {
 
     /// `(_, _, Some(_))` indicates that a data block is ready, and needs to be consumed
     /// `(_, _, None)` indicates that there are no more blocks left for the current row group of `HiveBlocks`
-    Generated(HiveBlocks, DataBlockDeserializer, Option<Chunk>),
+    Generated(HiveBlocks, DataBlockDeserializer, Option<DataBlock>),
     Finish,
 }
 
@@ -134,16 +134,16 @@ impl Processor for HiveTableSource {
         }
 
         if matches!(self.state, State::Generated(_, _, _)) {
-            if let State::Generated(mut hive_blocks, rowgroup_deserializer, chunk) =
+            if let State::Generated(mut hive_blocks, rowgroup_deserializer, data_block) =
                 std::mem::replace(&mut self.state, State::Finish)
             {
-                if let Some(chunk) = chunk {
+                if let Some(data_block) = data_block {
                     let progress_values = ProgressValues {
-                        rows: chunk.num_rows(),
-                        bytes: chunk.memory_size(),
+                        rows: data_block.num_rows(),
+                        bytes: data_block.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
-                    self.output.push_data(Ok(chunk));
+                    self.output.push_data(Ok(data_block));
                     self.state = State::Deserialize(hive_blocks, rowgroup_deserializer);
                     return Ok(Event::NeedConsume);
                 }

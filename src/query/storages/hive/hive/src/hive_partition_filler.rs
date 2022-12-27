@@ -15,8 +15,8 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::AnyType;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::TableField;
 use common_expression::Value;
 
@@ -64,26 +64,25 @@ impl HivePartitionFiller {
 
     pub fn fill_data(
         &self,
-        mut chunk: Chunk,
+        mut data_block: DataBlock,
         part: &HivePartInfo,
         origin_num_rows: usize,
-    ) -> Result<Chunk> {
+    ) -> Result<DataBlock> {
         let data_values = self.extract_partition_values(part)?;
 
         // create column, create datafiled
-        let mut num_rows = chunk.num_rows();
+        let mut num_rows = data_block.num_rows();
         if num_rows == 0 {
             num_rows = origin_num_rows;
         }
         for (i, field) in self.partition_fields.iter().enumerate() {
             let value = &data_values[i];
             let column = self.generate_value(num_rows, value.clone(), field)?;
-            chunk.add_column(ChunkEntry {
-                id: i,
+            data_block.add_column(BlockEntry {
                 data_type: field.data_type().into(),
                 value: column,
             });
         }
-        Ok(chunk)
+        Ok(data_block)
     }
 }

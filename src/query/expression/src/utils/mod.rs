@@ -37,10 +37,10 @@ use common_exception::Result as ExceptionResult;
 pub use self::column_from::*;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::Chunk;
-use crate::ChunkEntry;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ConstantFolder;
+use crate::DataBlock;
 use crate::Domain;
 use crate::Evaluator;
 use crate::FunctionContext;
@@ -56,7 +56,7 @@ pub fn eval_function(
     span: Span,
     fn_name: &str,
     args: impl IntoIterator<Item = (Value<AnyType>, DataType)>,
-    fn_ctx: FunctionContext,
+    func_ctx: FunctionContext,
     num_rows: usize,
     fn_registry: &FunctionRegistry,
 ) -> Result<(Value<AnyType>, DataType)> {
@@ -70,8 +70,7 @@ pub fn eval_function(
                     id,
                     data_type: ty.clone(),
                 },
-                ChunkEntry {
-                    id,
+                BlockEntry {
                     data_type: ty,
                     value: val,
                 },
@@ -85,8 +84,8 @@ pub fn eval_function(
         args,
     };
     let expr = crate::type_check::check(&raw_expr, fn_registry)?;
-    let chunk = Chunk::new(cols, num_rows);
-    let evaluator = Evaluator::new(&chunk, fn_ctx, fn_registry);
+    let block = DataBlock::new(cols, num_rows);
+    let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
     Ok((evaluator.run(&expr)?, expr.data_type().clone()))
 }
 
@@ -145,7 +144,7 @@ pub const fn concat_array<T, const A: usize, const B: usize>(a: &[T; A], b: &[T;
 }
 
 pub fn serialize_to_parquet_with_compression(
-    chunks: Vec<Chunk>,
+    blocks: Vec<DataBlock>,
     schema: impl AsRef<TableSchema>,
     buf: &mut Vec<u8>,
     compression: CompressionOptions,
@@ -158,7 +157,7 @@ pub fn serialize_to_parquet_with_compression(
         version: Version::V2,
         data_pagesize_limit: None,
     };
-    let batches = chunks
+    let batches = blocks
         .into_iter()
         .map(ArrowChunk::try_from)
         .collect::<ExceptionResult<Vec<_>>>()?;
@@ -194,11 +193,11 @@ pub fn serialize_to_parquet_with_compression(
 }
 
 pub fn serialize_to_parquet(
-    chunks: Vec<Chunk>,
+    blocks: Vec<DataBlock>,
     schema: impl AsRef<TableSchema>,
     buf: &mut Vec<u8>,
 ) -> ExceptionResult<(u64, ThriftFileMetaData)> {
-    serialize_to_parquet_with_compression(chunks, schema, buf, CompressionOptions::Lz4Raw)
+    serialize_to_parquet_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
 }
 
 fn col_encoding(_data_type: &ArrowDataType) -> Encoding {

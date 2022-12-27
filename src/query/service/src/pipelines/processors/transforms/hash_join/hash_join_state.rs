@@ -13,18 +13,18 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 
 use super::ProbeState;
 
 #[async_trait::async_trait]
 /// Concurrent hash table for hash join.
 pub trait HashJoinState: Send + Sync {
-    /// Build hash table with input Chunk
-    fn build(&self, input: Chunk) -> Result<()>;
+    /// Build hash table with input DataBlock
+    fn build(&self, input: DataBlock) -> Result<()>;
 
-    /// Probe the hash table and retrieve matched rows as Chunks
-    fn probe(&self, input: &Chunk, probe_state: &mut ProbeState) -> Result<Vec<Chunk>>;
+    /// Probe the hash table and retrieve matched rows as DataBlocks
+    fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>>;
 
     fn interrupt(&self);
 
@@ -45,14 +45,14 @@ pub trait HashJoinState: Send + Sync {
     async fn wait_finish(&self) -> Result<()>;
 
     /// Get mark join results
-    fn mark_join_chunks(&self) -> Result<Vec<Chunk>>;
+    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>>;
 
     /// Get right join results
-    fn right_join_chunks(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>>;
+    fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 
     /// Get right semi/anti join results
-    fn right_semi_join_chunks(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>>;
+    fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 
     /// Get left join results
-    fn left_join_chunks(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>>;
+    fn left_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 }

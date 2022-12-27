@@ -24,7 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_expression::infer_table_schema;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
@@ -136,7 +136,7 @@ async fn execute(
     // try to catch runtime error before http response, so user can client can get http 500
     let first_block = match data_stream.next().await {
         Some(block) => match block {
-            Ok(block) => Some(compress_fn(output_format.serialize_chunk(&block))),
+            Ok(block) => Some(compress_fn(output_format.serialize_block(&block))),
             Err(err) => return Err(err),
         },
         None => None,
@@ -152,7 +152,7 @@ async fn execute(
             while let Some(block) = data_stream.next().await {
                 match block{
                     Ok(block) => {
-                        yield compress_fn(output_format.serialize_chunk(&block));
+                        yield compress_fn(output_format.serialize_block(&block));
                     },
                     Err(err) => {
                         let message = format!("{}", err);
@@ -198,11 +198,11 @@ pub async fn clickhouse_handler_get(
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
     let sql = params.query();
-    if let Some((schema, chunk)) = ClickHouseFederated::check(&sql) {
+    if let Some((schema, block)) = ClickHouseFederated::check(&sql) {
         return serialize_one_block(
-            schema,
             context.clone(),
-            chunk,
+            schema,
+            block,
             &sql,
             &params,
             default_format,
@@ -263,8 +263,8 @@ pub async fn clickhouse_handler_post(
     };
     info!("receive clickhouse http post, (query + body) = {}", &msg);
 
-    if let Some((schema, chunk)) = ClickHouseFederated::check(&sql) {
-        return serialize_one_block(schema, ctx.clone(), chunk, &sql, &params, default_format)
+    if let Some((schema, block)) = ClickHouseFederated::check(&sql) {
+        return serialize_one_block(ctx.clone(), schema, block, &sql, &params, default_format)
             .map_err(InternalServerError);
     }
     let mut planner = Planner::new(ctx.clone());
@@ -291,7 +291,7 @@ pub async fn clickhouse_handler_post(
                     table_schema,
                     ctx.get_scan_progress(),
                     false,
-                    to_table.get_chunk_compact_thresholds(),
+                    to_table.get_block_compact_thresholds(),
                 )
                 .await
                 .map_err(InternalServerError)?,
@@ -334,7 +334,7 @@ pub async fn clickhouse_handler_post(
                     table_schema,
                     ctx.get_scan_progress(),
                     false,
-                    to_table.get_chunk_compact_thresholds(),
+                    to_table.get_block_compact_thresholds(),
                 )
                 .await
                 .map_err(InternalServerError)?,
@@ -417,9 +417,9 @@ fn compress_block(input: Vec<u8>) -> Result<Vec<u8>> {
 }
 
 fn serialize_one_block(
-    schema: TableSchemaRef,
     ctx: Arc<QueryContext>,
-    block: Chunk,
+    schema: TableSchemaRef,
+    block: DataBlock,
     sql: &str,
     params: &StatementHandlerParams,
     default_format: ClickhouseFormatType,
@@ -435,7 +435,7 @@ fn serialize_one_block(
         &ctx.get_settings(),
     )?;
     let mut res = output_format.serialize_prefix()?;
-    let mut data = output_format.serialize_chunk(&block)?;
+    let mut data = output_format.serialize_block(&block)?;
     if params.compress() {
         data = compress_block(data)?;
     }

@@ -21,7 +21,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_io::prelude::FormatSettings;
@@ -56,11 +56,11 @@ pub struct PageManager {
     total_rows: usize,
     total_pages: usize,
     end: bool,
-    chunk_end: bool,
+    block_end: bool,
     schema: DataSchemaRef,
     last_page: Option<Page>,
     row_buffer: VecDeque<Vec<JsonValue>>,
-    chunk_receiver: SizedChannelReceiver<Chunk>,
+    block_receiver: SizedChannelReceiver<DataBlock>,
     format_settings: FormatSettings,
     query_ctx_ref: Option<Arc<QueryContext>>,
 }
@@ -69,7 +69,7 @@ impl PageManager {
     pub fn new(
         query_id: String,
         max_rows_per_page: usize,
-        chunk_receiver: SizedChannelReceiver<Chunk>,
+        block_receiver: SizedChannelReceiver<DataBlock>,
         format_settings: FormatSettings,
         query_ctx_ref: Arc<QueryContext>,
     ) -> PageManager {
@@ -79,10 +79,10 @@ impl PageManager {
             last_page: None,
             total_pages: 0,
             end: false,
-            chunk_end: false,
+            block_end: false,
             row_buffer: Default::default(),
             schema: Arc::new(DataSchema::empty()),
-            chunk_receiver,
+            block_receiver,
             max_rows_per_page,
             format_settings,
             query_ctx_ref: Some(query_ctx_ref),
@@ -100,11 +100,11 @@ impl PageManager {
     pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait) -> Result<Page> {
         let next_no = self.total_pages;
         if page_no == next_no && !self.end {
-            let (chunk, end) = self.collect_new_page(tp).await?;
-            let num_row = chunk.num_rows();
+            let (block, end) = self.collect_new_page(tp).await?;
+            let num_row = block.num_rows();
             self.total_rows += num_row;
             let page = Page {
-                data: chunk,
+                data: block,
                 total_rows: self.total_rows,
             };
             if num_row > 0 {
@@ -127,10 +127,10 @@ impl PageManager {
         }
     }
 
-    fn append_chunk(
+    fn append_block(
         &mut self,
         rows: &mut Vec<Vec<JsonValue>>,
-        chunk: Chunk,
+        block: DataBlock,
         remain: usize,
     ) -> Result<()> {
         let format_settings = &self.format_settings;
@@ -138,7 +138,7 @@ impl PageManager {
             todo!("expression");
             // self.schema = chunk.schema().clone();
         }
-        let mut iter = block_to_json_value(&chunk, format_settings)?
+        let mut iter = block_to_json_value(&block, format_settings)?
             .into_iter()
             .peekable();
         let chunk: Vec<_> = iter.by_ref().take(remain).collect();
@@ -163,24 +163,24 @@ impl PageManager {
                 break;
             }
             match tp {
-                Wait::Async => match self.chunk_receiver.try_recv() {
-                    Some(chunk) => self.append_chunk(&mut res, chunk, remain)?,
+                Wait::Async => match self.block_receiver.try_recv() {
+                    Some(block) => self.append_block(&mut res, block, remain)?,
                     None => break,
                 },
                 Wait::Deadline(t) => {
                     let now = Instant::now();
                     let d = *t - now;
-                    match tokio::time::timeout(d, self.chunk_receiver.recv()).await {
-                        Ok(Some(chunk)) => {
+                    match tokio::time::timeout(d, self.block_receiver.recv()).await {
+                        Ok(Some(block)) => {
                             info!(
-                                "http query {} got new chunk with {} rows",
+                                "http query {} got new block with {} rows",
                                 &self.query_id,
-                                chunk.num_rows()
+                                block.num_rows()
                             );
-                            self.append_chunk(&mut res, chunk, remain)?;
+                            self.append_block(&mut res, block, remain)?;
                         }
                         Ok(None) => {
-                            info!("http query {} reach end of chunks", &self.query_id);
+                            info!("http query {} reach end of blocks", &self.query_id);
                             break;
                         }
                         Err(_) => {
@@ -198,20 +198,20 @@ impl PageManager {
         };
 
         // try to report 'no more data' earlier to client to avoid unnecessary http call
-        if !self.chunk_end {
-            self.chunk_end = self.chunk_receiver.is_empty();
+        if !self.block_end {
+            self.block_end = self.block_receiver.is_empty();
         }
-        if self.chunk_end {
+        if self.block_end {
             let ctx = self.query_ctx_ref.take();
             GlobalIORuntime::instance().spawn(async move {
                 drop(ctx);
             });
         }
-        let end = self.chunk_end && self.row_buffer.is_empty();
+        let end = self.block_end && self.row_buffer.is_empty();
         Ok((block, end))
     }
 
     pub async fn detach(&self) {
-        self.chunk_receiver.close();
+        self.block_receiver.close();
     }
 }

@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
@@ -127,21 +128,21 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .as_str()
         });
 
-        let chunk = Chunk::new_from_sequence(
+        let block = DataBlock::new(
             vec![
-                (
-                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
-                    DataType::String,
-                ),
-                (
-                    Value::Scalar(Scalar::String(table_create_sql.into_bytes())),
-                    DataType::String,
-                ),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(table_create_sql.into_bytes())),
+                },
             ],
             1,
         );
-        debug!("Show create table executor result: {:?}", chunk);
+        debug!("Show create table executor result: {:?}", block);
 
-        PipelineBuildResult::from_chunks(vec![chunk])
+        PipelineBuildResult::from_blocks(vec![block])
     }
 }

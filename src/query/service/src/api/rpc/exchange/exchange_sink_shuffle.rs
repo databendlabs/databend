@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_arrow::arrow::io::flight::serialize_batch;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
@@ -34,7 +34,7 @@ use crate::sessions::QueryContext;
 
 struct OutputData {
     pub has_serialized_data: bool,
-    pub serialized_chunks: Vec<Option<DataPacket>>,
+    pub serialized_blocks: Vec<Option<DataPacket>>,
 }
 
 pub struct ExchangePublisherSink {
@@ -42,7 +42,7 @@ pub struct ExchangePublisherSink {
     shuffle_exchange_params: ShuffleExchangeParams,
 
     input: Arc<InputPort>,
-    input_data: Option<Chunk>,
+    input_data: Option<DataBlock>,
     output_data: Option<OutputData>,
     flight_exchanges: Vec<FlightExchange>,
 }
@@ -106,29 +106,29 @@ impl Processor for ExchangePublisherSink {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(chunk) = self.input_data.take() {
+        if let Some(data_block) = self.input_data.take() {
             let scatter = &self.shuffle_exchange_params.shuffle_scatter;
 
-            let scatted_chunks = scatter.execute(&chunk, 0)?;
+            let scatted_blocks = scatter.execute(&data_block, 0)?;
             let mut output_data = OutputData {
                 has_serialized_data: false,
-                serialized_chunks: vec![],
+                serialized_blocks: vec![],
             };
 
-            for chunk in scatted_chunks.into_iter() {
-                if chunk.is_empty() {
-                    output_data.serialized_chunks.push(None);
+            for data_block in scatted_blocks.into_iter() {
+                if data_block.is_empty() {
+                    output_data.serialized_blocks.push(None);
                     continue;
                 }
 
-                let meta = match bincode::serialize(&chunk.meta()?) {
+                let meta = match bincode::serialize(&data_block.meta()?) {
                     Ok(bytes) => Ok(bytes),
                     Err(_) => Err(ErrorCode::BadBytes(
-                        "chunk meta serialize error when exchange",
+                        "block meta serialize error when exchange",
                     )),
                 }?;
 
-                let chunks = chunk.try_into()?;
+                let chunks = data_block.try_into()?;
                 let options = &self.serialize_params.options;
                 let ipc_fields = &self.serialize_params.ipc_fields;
                 let (dicts, values) = serialize_batch(&chunks, ipc_fields, options)?;
@@ -142,7 +142,7 @@ impl Processor for ExchangePublisherSink {
                 output_data.has_serialized_data = true;
                 let data = FragmentData::create(meta, values);
                 output_data
-                    .serialized_chunks
+                    .serialized_blocks
                     .push(Some(DataPacket::FragmentData(data)));
             }
 
@@ -156,8 +156,8 @@ impl Processor for ExchangePublisherSink {
 
     async fn async_process(&mut self) -> Result<()> {
         if let Some(mut output_data) = self.output_data.take() {
-            for index in 0..output_data.serialized_chunks.len() {
-                if let Some(output_packet) = output_data.serialized_chunks[index].take() {
+            for index in 0..output_data.serialized_blocks.len() {
+                if let Some(output_packet) = output_data.serialized_blocks[index].take() {
                     let flight_exchange = &self.flight_exchanges[index];
 
                     if flight_exchange.send(output_packet).await.is_err() {

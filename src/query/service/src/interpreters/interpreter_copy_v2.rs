@@ -324,7 +324,7 @@ impl CopyInterpreterV2 {
         let to_table = ctx
             .get_table(catalog_name, database_name, table_name)
             .await?;
-        stage_table.set_chunk_compact_thresholds(to_table.get_chunk_compact_thresholds());
+        stage_table.set_block_compact_thresholds(to_table.get_block_compact_thresholds());
         stage_table.read_data(table_ctx, &read_source_plan, &mut build_res.main_pipeline)?;
 
         // Build Limit pipeline.
@@ -387,7 +387,7 @@ impl CopyInterpreterV2 {
 
                 return GlobalIORuntime::instance().block_on(async move {
                     // 1. Commit datas.
-                    let operations = ctx.consume_precommit_chunks();
+                    let operations = ctx.consume_precommit_blocks();
                     info!(
                         "copy: try to commit operations:{}, elapsed:{}",
                         operations.len(),

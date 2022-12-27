@@ -19,8 +19,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -44,7 +45,7 @@ impl SyncSystemTable for SettingsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let settings = ctx.get_settings().get_setting_values();
 
         let mut names: Vec<String> = vec![];
@@ -81,14 +82,32 @@ impl SyncSystemTable for SettingsTable {
         let types: Vec<Vec<u8>> = types.iter().map(|x| x.as_bytes().to_vec()).collect();
 
         let rows_len = names.len();
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (Value::Column(Column::from_data(names)), DataType::String),
-                (Value::Column(Column::from_data(values)), DataType::String),
-                (Value::Column(Column::from_data(defaults)), DataType::String),
-                (Value::Column(Column::from_data(levels)), DataType::String),
-                (Value::Column(Column::from_data(descs)), DataType::String),
-                (Value::Column(Column::from_data(types)), DataType::String),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(names)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(values)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(defaults)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(levels)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(descs)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(types)),
+                },
             ],
             rows_len,
         ))

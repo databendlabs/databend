@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::broadcast::Receiver;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
@@ -51,8 +51,8 @@ pub struct TransformCreateSets {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    input_data: Option<Chunk>,
-    output_data: Option<Chunk>,
+    input_data: Option<DataBlock>,
+    output_data: Option<DataBlock>,
 
     sub_queries_result: Vec<Scalar>,
     sub_queries_receiver: Vec<SubqueryReceiver>,
@@ -133,15 +133,14 @@ impl Processor for TransformCreateSets {
             let mut new_columns = Vec::with_capacity(self.sub_queries_result.len());
             for (index, result) in self.sub_queries_result.iter().enumerate() {
                 let data_type = self.schema.field(start_index + index).data_type();
-                let col = ChunkEntry {
-                    id: start_index + index,
-                    value: Value::Scalar(result.clone()),
+                let col = BlockEntry {
                     data_type: data_type.clone(),
+                    value: Value::Scalar(result.clone()),
                 };
                 new_columns.push(col);
             }
 
-            self.output_data = Some(Chunk::new(new_columns, num_rows));
+            self.output_data = Some(DataBlock::new(new_columns, num_rows));
         }
 
         Ok(())

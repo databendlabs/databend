@@ -20,8 +20,9 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -46,7 +47,7 @@ impl AsyncSystemTable for RolesTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let roles = UserApiProvider::instance().get_roles(&tenant).await?;
 
@@ -57,13 +58,16 @@ impl AsyncSystemTable for RolesTable {
             .collect();
 
         let rows_len = names.len();
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (Value::Column(Column::from_data(names)), DataType::String),
-                (
-                    Value::Column(Column::from_data(inherited_roles)),
-                    DataType::String,
-                ),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(names)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(inherited_roles)),
+                },
             ],
             rows_len,
         ))

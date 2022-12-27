@@ -17,7 +17,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use futures::Stream;
 
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -34,7 +34,7 @@ impl PullingExecutorStream {
 }
 
 impl Stream for PullingExecutorStream {
-    type Item = Result<Chunk>;
+    type Item = Result<DataBlock>;
 
     fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let self_ = Pin::get_mut(self);

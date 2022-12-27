@@ -18,8 +18,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ChunkMetaInfo;
-use common_expression::ChunkMetaInfoPtr;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
 use common_storages_table_meta::meta::SegmentInfo;
 
 use super::compact_part::CompactTask;
@@ -32,12 +32,12 @@ pub struct CompactSourceMeta {
 }
 
 #[typetag::serde(name = "compact_source_meta")]
-impl ChunkMetaInfo for CompactSourceMeta {
+impl BlockMetaInfo for CompactSourceMeta {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn equals(&self, info: &Box<dyn ChunkMetaInfo>) -> bool {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<CompactSourceMeta>() {
             None => false,
             Some(other) => self == other,
@@ -46,15 +46,15 @@ impl ChunkMetaInfo for CompactSourceMeta {
 }
 
 impl CompactSourceMeta {
-    pub fn create(order: usize, tasks: VecDeque<CompactTask>) -> ChunkMetaInfoPtr {
+    pub fn create(order: usize, tasks: VecDeque<CompactTask>) -> BlockMetaInfoPtr {
         Arc::new(Box::new(CompactSourceMeta { order, tasks }))
     }
 
-    pub fn from_meta(info: &ChunkMetaInfoPtr) -> Result<&CompactSourceMeta> {
+    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&CompactSourceMeta> {
         match info.as_any().downcast_ref::<CompactSourceMeta>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
-                "Cannot downcast from ChunkMetaInfo to CompactSourceMeta.",
+                "Cannot downcast from BlockMetaInfo to CompactSourceMeta.",
             )),
         }
     }
@@ -69,12 +69,12 @@ pub struct CompactSinkMeta {
 }
 
 #[typetag::serde(name = "compact_sink_meta")]
-impl ChunkMetaInfo for CompactSinkMeta {
+impl BlockMetaInfo for CompactSinkMeta {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn equals(&self, info: &Box<dyn ChunkMetaInfo>) -> bool {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<CompactSinkMeta>() {
             None => false,
             Some(other) => self == other,
@@ -88,7 +88,7 @@ impl CompactSinkMeta {
         segment_location: String,
         segment_info: Arc<SegmentInfo>,
         abort_operation: AbortOperation,
-    ) -> ChunkMetaInfoPtr {
+    ) -> BlockMetaInfoPtr {
         Arc::new(Box::new(CompactSinkMeta {
             order,
             segment_location,
@@ -97,11 +97,11 @@ impl CompactSinkMeta {
         }))
     }
 
-    pub fn from_meta(info: &ChunkMetaInfoPtr) -> Result<&CompactSinkMeta> {
+    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&CompactSinkMeta> {
         match info.as_any().downcast_ref::<CompactSinkMeta>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
-                "Cannot downcast from ChunkMetaInfo to CompactSinkMeta.",
+                "Cannot downcast from BlockMetaInfo to CompactSinkMeta.",
             )),
         }
     }

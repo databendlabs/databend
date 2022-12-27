@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 
 use crate::pipelines::processors::transforms::Compactor;
 use crate::pipelines::processors::HashJoinState;
@@ -40,9 +40,9 @@ impl Compactor for MarkJoinCompactor {
         self.hash_join_state.interrupt();
     }
 
-    // `compact_final` is called when all the chunks are pushed
-    fn compact_final(&self, _chunks: &[Chunk]) -> Result<Vec<Chunk>> {
-        self.hash_join_state.mark_join_chunks()
+    // `compact_final` is called when all the blocks are pushed
+    fn compact_final(&self, _blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+        self.hash_join_state.mark_join_blocks()
     }
 }
 

@@ -28,7 +28,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     {
         let fmt = StageFileFormatType::NdJson;
         let mut formatter = get_output_format(fmt, schema)?;
-        let buffer = formatter.serialize_chunk(&block)?;
+        let buffer = formatter.serialize_block(&block)?;
 
         let tsv_block = String::from_utf8(buffer)?;
         let expect = r#"{"c1":1,"c2":"a","c3":true,"c4":1.1,"c5":"1970-01-02"}
@@ -58,7 +58,7 @@ fn test_null() -> Result<()> {
     {
         let fmt = StageFileFormatType::NdJson;
         let mut formatter = get_output_format(fmt, schema)?;
-        let buffer = formatter.serialize_chunk(&block)?;
+        let buffer = formatter.serialize_block(&block)?;
 
         let tsv_block = String::from_utf8(buffer)?;
         let expect = r#"{"c1":1,"c2":null}
@@ -88,7 +88,7 @@ fn test_denormal() -> Result<()> {
     {
         let fmt = StageFileFormatType::NdJson;
         let mut formatter = get_output_format(fmt, schema)?;
-        let buffer = formatter.serialize_chunk(&block)?;
+        let buffer = formatter.serialize_block(&block)?;
 
         let tsv_block = String::from_utf8(buffer)?;
         let expect = r#"{"c1":1.0,"c2":null}
@@ -123,7 +123,7 @@ fn test_string_escape() -> Result<()> {
     {
         let fmt = StageFileFormatType::NdJson;
         let mut formatter = get_output_format(fmt, schema)?;
-        let buffer = formatter.serialize_chunk(&block)?;
+        let buffer = formatter.serialize_block(&block)?;
 
         let expect = b"{\"c1\":\"\\u0000\"}\n";
         assert_eq!(&buffer, expect);

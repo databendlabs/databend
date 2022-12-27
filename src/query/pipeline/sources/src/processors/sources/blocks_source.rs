@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use parking_lot::Mutex;
@@ -25,28 +25,28 @@ use parking_lot::Mutex;
 use crate::processors::sources::SyncSource;
 use crate::processors::sources::SyncSourcer;
 
-pub struct ChunksSource {
-    chunks: Arc<Mutex<VecDeque<Chunk>>>,
+pub struct BlocksSource {
+    data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
 }
 
-impl ChunksSource {
+impl BlocksSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        chunks: Arc<Mutex<VecDeque<Chunk>>>,
+        data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, ChunksSource { chunks })
+        SyncSourcer::create(ctx, output, BlocksSource { data_blocks })
     }
 }
 
-impl SyncSource for ChunksSource {
-    const NAME: &'static str = "ChunksSource";
+impl SyncSource for BlocksSource {
+    const NAME: &'static str = "BlocksSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
-        let mut chunks_guard = self.chunks.lock();
-        match chunks_guard.pop_front() {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
+        let mut blocks_guard = self.data_blocks.lock();
+        match blocks_guard.pop_front() {
             None => Ok(None),
-            Some(chunk) => Ok(Some(chunk)),
+            Some(data_block) => Ok(Some(data_block)),
         }
     }
 }

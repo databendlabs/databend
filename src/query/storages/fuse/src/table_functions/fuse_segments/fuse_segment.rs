@@ -17,9 +17,10 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
+use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -49,7 +50,7 @@ impl<'a> FuseSegment<'a> {
         }
     }
 
-    pub async fn get_segments(&self) -> Result<Chunk> {
+    pub async fn get_segments(&self) -> Result<DataBlock> {
         let tbl = self.table;
         let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
@@ -68,15 +69,17 @@ impl<'a> FuseSegment<'a> {
             // find the element by snapshot_id in stream
             while let Some(snapshot) = snapshot_stream.try_next().await? {
                 if snapshot.snapshot_id.simple().to_string() == self.snapshot_id {
-                    return self.to_chunk(&snapshot.segments).await;
+                    return self.to_block(&snapshot.segments).await;
                 }
             }
         }
 
-        Ok(Chunk::empty())
+        Ok(DataBlock::empty_with_schema(Arc::new(
+            Self::schema().into(),
+        )))
     }
 
-    async fn to_chunk(&self, segment_locations: &[Location]) -> Result<Chunk> {
+    async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
         let len = segment_locations.len();
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
@@ -96,32 +99,32 @@ impl<'a> FuseSegment<'a> {
             uncompressed.push(segment.summary.uncompressed_byte_size);
             file_location.push(segment_locations[idx].0.clone().into_bytes());
         }
-        Ok(Chunk::new_from_sequence(
+        Ok(DataBlock::new(
             vec![
-                (
-                    Value::Column(Column::from_data(file_location)),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(format_versions)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(block_count)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(row_count)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(uncompressed)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                (
-                    Value::Column(Column::from_data(compressed)),
-                    DataType::Number(NumberDataType::UInt64),
-                ),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(file_location)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(format_versions)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(block_count)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(row_count)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(uncompressed)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::from_data(compressed)),
+                },
             ],
             len,
         ))

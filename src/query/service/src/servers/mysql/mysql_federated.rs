@@ -18,8 +18,9 @@ use std::sync::Arc;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TableDataType;
@@ -50,65 +51,65 @@ impl MySQLFederated {
     // |@@variable|
     // |value|
     #[allow(dead_code)]
-    fn select_variable_block(name: &str, value: &str) -> Option<(TableSchemaRef, Chunk)> {
+    fn select_variable_block(name: &str, value: &str) -> Option<(TableSchemaRef, DataBlock)> {
         let schema = TableSchemaRefExt::create(vec![TableField::new(
             &format!("@@{}", name),
             TableDataType::String,
         )]);
-        let chunk = Chunk::new_from_sequence(
-            vec![(
-                Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                DataType::String,
-            )],
+        let block = DataBlock::new(
+            vec![BlockEntry {
+                data_type: DataType::String,
+                value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+            }],
             1,
         );
-        Some((schema, chunk))
+        Some((schema, block))
     }
 
     // Build block for select function.
     // Format:
     // |function_name|
     // |value|
-    fn select_function_block(name: &str, value: &str) -> Option<(TableSchemaRef, Chunk)> {
+    fn select_function_block(name: &str, value: &str) -> Option<(TableSchemaRef, DataBlock)> {
         let schema = TableSchemaRefExt::create(vec![TableField::new(name, TableDataType::String)]);
-        let chunk = Chunk::new_from_sequence(
-            vec![(
-                Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                DataType::String,
-            )],
+        let block = DataBlock::new(
+            vec![BlockEntry {
+                data_type: DataType::String,
+                value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+            }],
             1,
         );
-        Some((schema, chunk))
+        Some((schema, block))
     }
 
     // Build block for show variable statement.
     // Format is:
     // |variable_name| Value|
     // | xx          | yy   |
-    fn show_variables_block(name: &str, value: &str) -> Option<(TableSchemaRef, Chunk)> {
+    fn show_variables_block(name: &str, value: &str) -> Option<(TableSchemaRef, DataBlock)> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("Variable_name", TableDataType::String),
             TableField::new("Value", TableDataType::String),
         ]);
-        let chunk = Chunk::new_from_sequence(
+        let block = DataBlock::new(
             vec![
-                (
-                    Value::Column(Column::from_data(vec![name.as_bytes().to_vec()])),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                    DataType::String,
-                ),
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(vec![name.as_bytes().to_vec()])),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                },
             ],
             1,
         );
-        Some((schema, chunk))
+        Some((schema, block))
     }
 
     // SELECT @@aa, @@bb as cc, @dd...
     // Block is built by the variables.
-    fn select_variable_data_block(query: &str) -> Option<(TableSchemaRef, Chunk)> {
+    fn select_variable_data_block(query: &str) -> Option<(TableSchemaRef, DataBlock)> {
         let mut default_map = HashMap::new();
         // DBeaver.
         default_map.insert("tx_isolation", "REPEATABLE-READ");
@@ -132,7 +133,7 @@ impl MySQLFederated {
         let mut vars: Vec<&str> = query.split("@@").collect();
         if vars.len() > 1 {
             vars.remove(0);
-            for (_id, var) in vars.iter().enumerate() {
+            for var in vars {
                 let var = var.trim_end_matches(|c| c == ' ' || c == ',');
                 let vars_as: Vec<&str> = var.split(" as ").collect();
                 if vars_as.len() == 2 {
@@ -144,10 +145,10 @@ impl MySQLFederated {
                     // var is 'cc'.
                     let var = vars_as[0];
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push((
-                        Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                        DataType::String,
-                    ));
+                    values.push(BlockEntry {
+                        value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                        data_type: DataType::String,
+                    });
                 } else {
                     // @@aa
                     // var is 'aa'
@@ -157,21 +158,21 @@ impl MySQLFederated {
                     ));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push((
-                        Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                        DataType::String,
-                    ));
+                    values.push(BlockEntry {
+                        value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                        data_type: DataType::String,
+                    });
                 }
             }
         }
 
         let schema = TableSchemaRefExt::create(fields);
-        let chunk = Chunk::new_from_sequence(values, 1);
-        Some((schema, chunk))
+        let block = DataBlock::new(values, 1);
+        Some((schema, block))
     }
 
     // Check SELECT @@variable, @@variable
-    fn federated_select_variable_check(&self, query: &str) -> Option<(TableSchemaRef, Chunk)> {
+    fn federated_select_variable_check(&self, query: &str) -> Option<(TableSchemaRef, DataBlock)> {
         let rules: Vec<(&str, LazyBlockFunc)> = vec![
             ("(?i)^(SELECT @@(.*))", Self::select_variable_data_block),
             (
@@ -183,8 +184,8 @@ impl MySQLFederated {
     }
 
     // Check SHOW VARIABLES LIKE.
-    fn federated_show_variables_check(&self, query: &str) -> Option<(TableSchemaRef, Chunk)> {
-        let rules: Vec<(&str, Option<(TableSchemaRef, Chunk)>)> = vec![
+    fn federated_show_variables_check(&self, query: &str) -> Option<(TableSchemaRef, DataBlock)> {
+        let rules: Vec<(&str, Option<(TableSchemaRef, DataBlock)>)> = vec![
             // sqlalchemy < 1.4.30
             (
                 "(?i)^(SHOW VARIABLES LIKE 'sql_mode'(.*))",
@@ -210,8 +211,8 @@ impl MySQLFederated {
     }
 
     // Check for SET or others query, this is the final check of the federated query.
-    fn federated_mixed_check(&self, query: &str) -> Option<(TableSchemaRef, Chunk)> {
-        let rules: Vec<(&str, Option<(TableSchemaRef, Chunk)>)> = vec![
+    fn federated_mixed_check(&self, query: &str) -> Option<(TableSchemaRef, DataBlock)> {
+        let rules: Vec<(&str, Option<(TableSchemaRef, DataBlock)>)> = vec![
             (
                 r"(?i)^(SELECT VERSION\(\s*\))",
                 Self::select_function_block(
@@ -292,7 +293,7 @@ impl MySQLFederated {
 
     // Check the query is a federated or driver setup command.
     // Here we fake some values for the command which Databend not supported.
-    pub fn check(&self, query: &str) -> Option<(DataSchemaRef, Chunk)> {
+    pub fn check(&self, query: &str) -> Option<(DataSchemaRef, DataBlock)> {
         // First to check the select @@variables.
         let select_variable = self
             .federated_select_variable_check(query)

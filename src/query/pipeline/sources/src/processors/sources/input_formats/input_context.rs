@@ -23,7 +23,7 @@ use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ChunkCompactThresholds;
+use common_expression::BlockCompactThresholds;
 use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
@@ -123,7 +123,7 @@ pub struct InputContext {
     pub settings: Arc<Settings>,
 
     pub read_batch_size: usize,
-    pub chunk_compact_thresholds: ChunkCompactThresholds,
+    pub block_compact_thresholds: BlockCompactThresholds,
 
     pub scan_progress: Arc<Progress>,
     pub on_error_mode: OnErrorMode,
@@ -136,7 +136,7 @@ impl Debug for InputContext {
             .field("rows_to_skip", &self.rows_to_skip)
             .field("field_delimiter", &self.field_delimiter)
             .field("record_delimiter", &self.record_delimiter)
-            .field("chunk_compact_thresholds", &self.chunk_compact_thresholds)
+            .field("block_compact_thresholds", &self.block_compact_thresholds)
             .field("read_batch_size", &self.read_batch_size)
             .field("num_splits", &self.splits.len())
             .finish()
@@ -167,7 +167,7 @@ impl InputContext {
         stage_info: UserStageInfo,
         splits: Vec<Arc<SplitInfo>>,
         scan_progress: Arc<Progress>,
-        chunk_compact_thresholds: ChunkCompactThresholds,
+        block_compact_thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
         let on_error_mode = stage_info.copy_options.on_error.clone();
         let plan = Box::new(CopyIntoPlan { stage_info });
@@ -195,7 +195,7 @@ impl InputContext {
             scan_progress,
             source: InputSource::Operator(operator),
             plan: InputPlan::CopyInto(plan),
-            chunk_compact_thresholds,
+            block_compact_thresholds,
             format_options: file_format_options,
             on_error_mode,
         })
@@ -208,7 +208,7 @@ impl InputContext {
         schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
-        chunk_compact_thresholds: ChunkCompactThresholds,
+        block_compact_thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
         let rows_to_skip = std::cmp::max(settings.get_format_skip_header()? as usize, rows_to_skip);
@@ -254,7 +254,7 @@ impl InputContext {
             source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
-            chunk_compact_thresholds,
+            block_compact_thresholds,
             format_options: file_format_options_clone,
             on_error_mode: OnErrorMode::None,
         })
@@ -267,7 +267,7 @@ impl InputContext {
         schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
-        chunk_compact_thresholds: ChunkCompactThresholds,
+        block_compact_thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let format_typ = file_format_options.format.clone();
@@ -297,7 +297,7 @@ impl InputContext {
             source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
-            chunk_compact_thresholds,
+            block_compact_thresholds,
             format_options: file_format_options,
             on_error_mode: OnErrorMode::None,
         })

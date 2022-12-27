@@ -16,9 +16,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Value;
 use common_meta_types::PrincipalIdentity;
@@ -89,12 +90,11 @@ impl Interpreter for ShowGrantsInterpreter {
             .collect::<Vec<_>>();
 
         let num_rows = grant_list.len();
-
-        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
-            vec![(
-                Value::Column(Column::from_data(grant_list)),
-                DataType::String,
-            )],
+        PipelineBuildResult::from_blocks(vec![DataBlock::new(
+            vec![BlockEntry {
+                data_type: DataType::String,
+                value: Value::Column(Column::from_data(grant_list)),
+            }],
             num_rows,
         )])
     }

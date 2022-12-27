@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 
@@ -26,13 +26,13 @@ use crate::processors::sources::SyncSourcer;
 
 #[allow(dead_code)]
 pub struct SyncReceiverSource {
-    receiver: Receiver<Result<Chunk>>,
+    receiver: Receiver<Result<DataBlock>>,
 }
 
 impl SyncReceiverSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        rx: Receiver<Result<Chunk>>,
+        rx: Receiver<Result<DataBlock>>,
         out: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, out, SyncReceiverSource { receiver: rx })
@@ -43,11 +43,11 @@ impl SyncReceiverSource {
 impl SyncSource for SyncReceiverSource {
     const NAME: &'static str = "SyncReceiverSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.receiver.blocking_recv() {
             None => Ok(None),
             Some(Err(cause)) => Err(cause),
-            Some(Ok(chunk)) => Ok(Some(chunk)),
+            Some(Ok(data_block)) => Ok(Some(data_block)),
         }
     }
 }

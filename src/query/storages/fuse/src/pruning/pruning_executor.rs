@@ -189,10 +189,10 @@ impl BlockPruner {
         // Note that it is required to explicitly release this permit before pruning blocks, to avoid deadlock.
         drop(permit);
 
-        let result = if pruning_ctx.range_pruner.should_keep(
-            &segment_info.summary.col_stats,
-            segment_info.summary.row_count,
-        ) {
+        let result = if pruning_ctx
+            .range_pruner
+            .should_keep(&segment_info.summary.col_stats)
+        {
             if let Some(filter_pruner) = &pruning_ctx.filter_pruner {
                 Self::prune_blocks(&pruning_ctx, filter_pruner, segment_idx, &segment_info).await?
             } else {
@@ -227,10 +227,7 @@ impl BlockPruner {
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
             blocks.next().map(|(block_idx, block_meta)| {
                 let row_count = block_meta.row_count;
-                if pruning_ctx
-                    .range_pruner
-                    .should_keep(&block_meta.col_stats, row_count)
-                {
+                if pruning_ctx.range_pruner.should_keep(&block_meta.col_stats) {
                     // not pruned by block zone map index,
                     let ctx = pruning_ctx.clone();
                     let filter_pruner = filter_pruner.clone();
@@ -288,9 +285,7 @@ impl BlockPruner {
                 break;
             }
             let row_count = block_meta.row_count;
-            if pruning_ctx
-                .range_pruner
-                .should_keep(&block_meta.col_stats, row_count)
+            if pruning_ctx.range_pruner.should_keep(&block_meta.col_stats)
                 && pruning_ctx.limiter.within_limit(row_count)
             {
                 result.push(((segment_idx, block_idx), block_meta.clone()))

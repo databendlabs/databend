@@ -16,7 +16,7 @@ use std::iter::TrustedLen;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_hashtable::HashtableLike;
 
 use super::JoinHashTable;
@@ -25,13 +25,13 @@ use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::planner::plans::JoinType;
 
 impl JoinHashTable {
-    pub(crate) fn result_chunks<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
+    pub(crate) fn result_blocks<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
         &self,
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &Chunk,
-    ) -> Result<Vec<Chunk>>
+        input: &DataBlock,
+    ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,

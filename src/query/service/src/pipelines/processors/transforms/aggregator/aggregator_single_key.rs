@@ -21,10 +21,10 @@ use bumpalo::Bump;
 use common_base::runtime::ThreadPool;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::AnyType;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::BlockEntry;
 use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions_v2::aggregates::AggregateFunctionRef;
@@ -125,14 +125,14 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
 impl Aggregator for SingleStateAggregator<true> {
     const NAME: &'static str = "AggregatorFinalTransform";
 
-    fn consume(&mut self, chunk: Chunk) -> Result<()> {
-        if chunk.is_empty() {
+    fn consume(&mut self, block: DataBlock) -> Result<()> {
+        if block.is_empty() {
             return Ok(());
         }
-        let chunk = chunk.convert_to_full();
+        let block = block.convert_to_full();
         let places = self.new_places();
         for (index, func) in self.funcs.iter().enumerate() {
-            let binary_array = chunk.get_by_offset(index).value.as_column().unwrap();
+            let binary_array = block.get_by_offset(index).value.as_column().unwrap();
             let binary_array = binary_array
                 .as_string()
                 .ok_or_else(|| ErrorCode::IllegalDataType("binary array should be string type"))?;
@@ -144,7 +144,7 @@ impl Aggregator for SingleStateAggregator<true> {
         Ok(())
     }
 
-    fn generate(&mut self) -> Result<Vec<Chunk>> {
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
         let mut aggr_values = {
             let mut builders = vec![];
             for func in &self.funcs {
@@ -175,28 +175,30 @@ impl Aggregator for SingleStateAggregator<true> {
         }
 
         let mut num_rows = 0;
-        let mut columns: Vec<(Value<AnyType>, DataType)> = Vec::with_capacity(self.funcs.len());
-        for (builder, ty) in aggr_values {
+        let mut columns = Vec::with_capacity(self.funcs.len());
+        for (builder, data_type) in aggr_values {
             num_rows = builder.len();
-            let col = builder.build();
-            columns.push((Value::Column(col), ty));
+            columns.push(BlockEntry {
+                data_type,
+                value: Value::Column(builder.build()),
+            });
         }
 
-        Ok(vec![Chunk::new_from_sequence(columns, num_rows)])
+        Ok(vec![DataBlock::new(columns, num_rows)])
     }
 }
 
 impl Aggregator for SingleStateAggregator<false> {
     const NAME: &'static str = "AggregatorPartialTransform";
 
-    fn consume(&mut self, chunk: Chunk) -> Result<()> {
-        let chunk = chunk.convert_to_full();
-        let rows = chunk.num_rows();
+    fn consume(&mut self, block: DataBlock) -> Result<()> {
+        let block = block.convert_to_full();
+        let rows = block.num_rows();
         for (idx, func) in self.funcs.iter().enumerate() {
             let mut arg_columns = vec![];
             for index in self.arg_indices[idx].iter() {
                 arg_columns.push(
-                    chunk
+                    block
                         .get_by_offset(*index)
                         .value
                         .as_column()
@@ -211,7 +213,7 @@ impl Aggregator for SingleStateAggregator<false> {
         Ok(())
     }
 
-    fn generate(&mut self) -> Result<Vec<Chunk>> {
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
         let mut columns = Vec::with_capacity(self.funcs.len());
 
         for (idx, func) in self.funcs.iter().enumerate() {
@@ -219,12 +221,14 @@ impl Aggregator for SingleStateAggregator<false> {
 
             let mut data = Vec::with_capacity(4);
             func.serialize(place, &mut data)?;
-            columns.push((Value::Scalar(Scalar::String(data)), DataType::String));
+            columns.push(BlockEntry {
+                data_type: DataType::String,
+                value: Value::Scalar(Scalar::String(data)),
+            });
         }
 
-        // TODO: create with temp schema
         self.drop_states();
-        Ok(vec![Chunk::new_from_sequence(columns, 1)])
+        Ok(vec![DataBlock::new(columns, 1)])
     }
 }
 

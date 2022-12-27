@@ -30,7 +30,7 @@ use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
-use crate::processors::sources::input_formats::input_format_text::ChunkBuilder;
+use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 
@@ -139,7 +139,7 @@ impl InputFormatTextBase for InputFormatTSV {
         Arc::new(FieldDecoderTSV::create(options))
     }
 
-    fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         tracing::debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.path,

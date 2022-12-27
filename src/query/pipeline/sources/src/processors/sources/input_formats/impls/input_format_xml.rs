@@ -32,7 +32,7 @@ use xml::EventReader;
 use xml::ParserConfig;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
-use crate::processors::sources::input_formats::input_format_text::ChunkBuilder;
+use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 use crate::processors::sources::input_formats::InputContext;
@@ -97,7 +97,7 @@ impl InputFormatTextBase for InputFormatXML {
         Arc::new(FieldDecoderXML::create(options))
     }
 
-    fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         tracing::debug!(
             "xml deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.path,

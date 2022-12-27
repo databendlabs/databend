@@ -23,11 +23,10 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -41,7 +40,7 @@ type DataChunks = Vec<(usize, PaReader<Box<dyn PaReadBuf + Send + Sync>>)>;
 enum State {
     ReadData(Option<PartInfoPtr>),
     Deserialize(DataChunks),
-    Generated(Chunk, DataChunks),
+    Generated(DataBlock, DataChunks),
     Finish,
 }
 
@@ -53,7 +52,7 @@ pub struct FuseNativeSource {
     output_reader: Arc<BlockReader>,
 
     prewhere_reader: Arc<BlockReader>,
-    prewhere_filter: Arc<Option<Expr<usize>>>,
+    prewhere_filter: Arc<Option<Expr>>,
     remain_reader: Arc<Option<BlockReader>>,
 
     support_blocking: bool,
@@ -65,7 +64,7 @@ impl FuseNativeSource {
         output: Arc<OutputPort>,
         output_reader: Arc<BlockReader>,
         prewhere_reader: Arc<BlockReader>,
-        prewhere_filter: Arc<Option<Expr<usize>>>,
+        prewhere_filter: Arc<Option<Expr>>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -83,16 +82,16 @@ impl FuseNativeSource {
         })))
     }
 
-    fn generate_one_chunk(
+    fn generate_one_block(
         &mut self,
         src_schema: &DataSchema,
-        chunk: Chunk,
+        block: DataBlock,
         chunks: DataChunks,
     ) -> Result<()> {
         // resort and prune columns
         let dest_schema = self.output_reader.data_schema();
-        let chunk = chunk.resort(src_schema, &dest_schema)?;
-        self.state = State::Generated(chunk, chunks);
+        let block = block.resort(src_schema, &dest_schema)?;
+        self.state = State::Generated(block, chunks);
         Ok(())
     }
 }
@@ -129,11 +128,11 @@ impl Processor for FuseNativeSource {
         }
 
         if matches!(self.state, State::Generated(_, _)) {
-            if let State::Generated(chunk, chunks) =
+            if let State::Generated(data_block, chunks) =
                 std::mem::replace(&mut self.state, State::Finish)
             {
                 self.state = State::Deserialize(chunks);
-                self.output.push_data(Ok(chunk));
+                self.output.push_data(Ok(data_block));
                 return Ok(Event::NeedConsume);
             }
         }
@@ -166,8 +165,9 @@ impl Processor for FuseNativeSource {
                     prewhere_chunks.push((*index, chunk.next_array()?));
                 }
 
-                let mut chunk = self.prewhere_reader.build_block(prewhere_chunks)?;
+                let mut data_block = self.prewhere_reader.build_block(prewhere_chunks)?;
                 let mut fields = self.prewhere_reader.data_fields();
+
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let mut remain_fields = remain_reader.data_fields();
                     fields.append(&mut remain_fields);
@@ -178,31 +178,31 @@ impl Processor for FuseNativeSource {
                         assert!(chunk.has_next());
                         remain_chunks.push((*index, chunk.next_array()?));
                     }
-                    let remain_chunk = remain_reader.build_block(remain_chunks)?;
-                    for col in remain_chunk.columns() {
-                        chunk.add_column(col.clone());
+                    let remain_block = remain_reader.build_block(remain_chunks)?;
+                    for col in remain_block.columns() {
+                        data_block.add_column(col.clone());
                     }
                 }
 
                 if let Some(filter) = self.prewhere_filter.as_ref() {
                     // do filter
-                    let evaluator =
-                        Evaluator::new(&chunk, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+                    let func_ctx = self.ctx.try_get_function_context()?;
+                    let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
                     let predicate = evaluator.run(filter).map_err(|(_, e)| {
                         ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
                     })?;
-                    chunk = chunk.filter(&predicate)?;
+                    data_block = data_block.filter(&predicate)?;
                 }
 
                 // the last step of prewhere
                 let progress_values = ProgressValues {
-                    rows: chunk.num_rows(),
-                    bytes: chunk.memory_size(),
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
 
                 let src_schema = DataSchema::new(fields);
-                self.generate_one_chunk(&src_schema, chunk, chunks)?;
+                self.generate_one_block(&src_schema, data_block, chunks)?;
                 Ok(())
             }
 

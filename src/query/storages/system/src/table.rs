@@ -24,7 +24,7 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::DataBlock;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -61,7 +61,7 @@ pub trait SyncSystemTable: Send + Sync {
     const NAME: &'static str;
 
     fn get_table_info(&self) -> &TableInfo;
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk>;
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock>;
 
     fn get_partitions(
         &self,
@@ -176,7 +176,7 @@ where Self: SyncSource
 impl<TTable: 'static + SyncSystemTable> SyncSource for SystemTableSyncSource<TTable> {
     const NAME: &'static str = TTable::NAME;
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
             return Ok(None);
         }
@@ -191,7 +191,7 @@ pub trait AsyncSystemTable: Send + Sync {
     const NAME: &'static str;
 
     fn get_table_info(&self) -> &TableInfo;
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk>;
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock>;
 
     async fn get_partitions(
         &self,
@@ -288,7 +288,7 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
     const NAME: &'static str = TTable::NAME;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<Chunk>> {
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
             return Ok(None);
         }

@@ -20,7 +20,7 @@ use common_expression::type_check::check_function;
 use common_expression::Expr;
 use common_expression::TableSchemaRef;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
-use common_storages_index::ChunkFilter;
+use common_storages_index::BlockFilter;
 use common_storages_table_meta::meta::Location;
 use opendal::Operator;
 
@@ -121,12 +121,12 @@ pub fn new_filter_pruner(
             })
             .unwrap();
 
-        let point_query_cols = ChunkFilter::find_eq_columns(&expr)?;
+        let point_query_cols = BlockFilter::find_eq_columns(&expr)?;
         if !point_query_cols.is_empty() {
             // convert to filter column names
             let filter_block_cols = point_query_cols
                 .iter()
-                .map(|n| ChunkFilter::build_filter_column_name(n))
+                .map(|n| BlockFilter::build_filter_column_name(n))
                 .collect();
 
             return Ok(Some(Arc::new(FilterPruner::new(
@@ -164,11 +164,11 @@ mod util {
             .await;
 
         match maybe_filter {
-            Ok(filter) => Ok(ChunkFilter::from_filter_chunk(
+            Ok(filter) => Ok(BlockFilter::from_filter_block(
                 ctx.try_get_function_context()?,
                 schema.clone(),
-                schema.clone(),
-                filter.into_data(),
+                filter.filter_schema,
+                filter.filter_block,
             )?
             .eval(filter_expr.clone())?
                 != FilterEvalResult::MustFalse),

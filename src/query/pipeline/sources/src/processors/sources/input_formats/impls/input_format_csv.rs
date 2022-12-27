@@ -35,7 +35,7 @@ use csv_core::ReadRecordResult;
 
 use crate::processors::sources::input_formats::impls::input_format_tsv::format_column_error;
 use crate::processors::sources::input_formats::input_format_text::AligningState;
-use crate::processors::sources::input_formats::input_format_text::ChunkBuilder;
+use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 use crate::processors::sources::input_formats::InputContext;
@@ -119,7 +119,7 @@ impl InputFormatTextBase for InputFormatCSV {
         Arc::new(FieldDecoderCSV::create(options))
     }
 
-    fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         let columns = &mut builder.mutable_columns;
         let n_column = columns.len();
         let mut start = 0usize;
