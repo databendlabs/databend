@@ -172,7 +172,6 @@ impl PhysicalPlanReplacer for Fragmenter {
             destination_fragment_id: usize::MAX,
         });
         let fragment_type = if self.visiting_source_pipeline {
-            debug_assert!(self.fragments.is_empty());
             self.visiting_source_pipeline = false;
             FragmentType::Source
         } else {
