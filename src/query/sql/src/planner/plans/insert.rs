@@ -65,7 +65,7 @@ impl PartialEq for Insert {
 
 impl Insert {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+        Arc::new(self.schema.clone().into())
     }
 
     pub fn has_select_plan(&self) -> bool {
