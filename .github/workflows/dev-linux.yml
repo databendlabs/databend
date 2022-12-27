@@ -157,6 +157,9 @@ jobs:
           - "base"
           - "query"
           - "cluster"
+          - "ydb"
+          - "duckdb"
+          - "crdb"
         handlers:
           - "mysql"
           - "http"
