@@ -44,19 +44,19 @@ statement ok
 create view default.v0 as select * from test_view.t0 union select * from test_view.t1
 
 query T
-select * from default.v0
+select * from default.v0 order by v0.id
 ----
 1
 2
 
 query T
-select v0.id from default.v0
+select v0.id from default.v0 order by v0.id
 ----
 1
 2
 
 query T
-select v1.id from default.v0 as v1
+select v1.id from default.v0 as v1 order by v1.id
 ----
 1
 2

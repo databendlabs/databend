@@ -42,12 +42,3 @@ fn get_output_format_clickhouse(
     let settings = &Settings::default_test_settings()?;
     FileFormatOptionsExt::get_output_format_from_settings_clickhouse(format, schema, settings)
 }
-
-fn get_output_format_clickhouse_with_setting(
-    format_name: &str,
-    schema: DataSchemaRef,
-    settings: &Settings,
-) -> Result<Box<dyn OutputFormat>> {
-    let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-    FileFormatOptionsExt::get_output_format_from_settings_clickhouse(format, schema, settings)
-}

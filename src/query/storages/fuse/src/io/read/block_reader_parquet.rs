@@ -368,6 +368,7 @@ impl BlockReader {
             Compression::Snappy => Ok(ParquetCompression::Snappy),
             Compression::Zstd => Ok(ParquetCompression::Zstd),
             Compression::Gzip => Ok(ParquetCompression::Gzip),
+            Compression::None => Ok(ParquetCompression::Uncompressed),
         }
     }
 
