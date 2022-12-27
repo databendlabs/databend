@@ -145,7 +145,7 @@ impl FuseTable {
             operator,
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
-            table_compression: TableCompression::from_str(table_compression.as_str())?,
+            table_compression: table_compression.as_str().try_into()?,
         }))
     }
 

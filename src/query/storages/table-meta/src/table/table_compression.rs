@@ -12,8 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::str::FromStr;
-
 use common_arrow::native;
 use common_arrow::parquet;
 use common_exception::ErrorCode;
@@ -29,16 +27,18 @@ pub enum TableCompression {
 }
 
 impl Default for TableCompression {
+    // Default is LZ4.
     fn default() -> Self {
         TableCompression::LZ4
     }
 }
 
-impl FromStr for TableCompression {
-    type Err = ErrorCode;
+/// Convert from str.
+impl TryFrom<&str> for TableCompression {
+    type Error = ErrorCode;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
             "" | "none" => Ok(TableCompression::None),
             "lz4" => Ok(TableCompression::LZ4),
             other => Err(ErrorCode::UnknownFormat(format!(
