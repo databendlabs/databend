@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -27,8 +28,11 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
+use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
+use crate::MergeIOReadResult;
 
 pub struct DeserializeDataTransform {
     scan_progress: Arc<Progress>,
@@ -38,7 +42,7 @@ pub struct DeserializeDataTransform {
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
     parts: Vec<PartInfoPtr>,
-    chunks: Vec<Vec<(usize, Vec<u8>)>>,
+    chunks: Vec<MergeIOReadResult>,
 }
 
 impl DeserializeDataTransform {
@@ -121,9 +125,20 @@ impl Processor for DeserializeDataTransform {
     fn process(&mut self) -> Result<()> {
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
-        if let Some((part, chunks)) = part.zip(chunks) {
-            // self.block_reader
-            let data_block = self.block_reader.deserialize(part, chunks)?;
+        if let Some((part, read_res)) = part.zip(chunks) {
+            let start = Instant::now();
+
+            let columns_chunks = read_res.columns_chunks()?;
+            let part = FusePartInfo::from_part(&part)?;
+
+            let data_block = self.block_reader.deserialize_columns(
+                part.nums_rows,
+                &part.compression,
+                &part.columns_meta,
+                columns_chunks,
+            )?;
+
+            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
 
             let progress_values = ProgressValues {
                 rows: data_block.num_rows(),

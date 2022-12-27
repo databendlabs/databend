@@ -41,12 +41,12 @@ use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Compression;
 use futures::StreamExt;
 use futures::TryStreamExt;
-use opendal::Object;
 use opendal::Operator;
 use tracing::debug_span;
 use tracing::Instrument;
 
 use crate::fuse_part::FusePartInfo;
+use crate::io::read::block_reader::MergeIOReadResult;
 use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
@@ -261,6 +261,20 @@ impl BlockReader {
         ctx: Arc<dyn TableContext>,
         raw_part: PartInfoPtr,
     ) -> Result<Vec<(usize, Vec<u8>)>> {
+        let read_res = self.read_columns_data_by_merge_io(ctx, raw_part).await?;
+
+        Ok(read_res
+            .columns_chunks()?
+            .into_iter()
+            .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+            .collect::<Vec<_>>())
+    }
+
+    pub async fn read_columns_data_by_merge_io(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        raw_part: PartInfoPtr,
+    ) -> Result<MergeIOReadResult> {
         // Perf
         metrics_inc_remote_io_read_parts(1);
 
@@ -291,50 +305,42 @@ impl BlockReader {
                 .get_storage_io_max_page_bytes_for_read()?,
         };
 
-        let read_res = Self::merge_io_read(&read_settings, object, ranges).await?;
-
-        Ok(read_res
-            .columns_chunks()?
-            .into_iter()
-            .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
-            .collect::<Vec<_>>())
+        Self::merge_io_read(&read_settings, object, ranges).await
     }
 
     pub fn support_blocking_api(&self) -> bool {
         self.operator.metadata().can_blocking()
     }
 
-    pub fn sync_read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
+    pub fn sync_read_columns_data(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        part: PartInfoPtr,
+    ) -> Result<MergeIOReadResult> {
         let part = FusePartInfo::from_part(&part)?;
-
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
-        let mut results = Vec::with_capacity(indices.len());
 
-        for (index, _) in indices {
-            let column_meta = &part.columns_meta[&index];
-
-            let op = self.operator.clone();
-
-            let location = part.location.clone();
-            let offset = column_meta.offset;
-            let length = column_meta.len;
-
-            let result = Self::sync_read_column(op.object(&location), index, offset, length);
-            results.push(result?);
+        let mut ranges = vec![];
+        for index in indices.keys() {
+            let column_meta = &part.columns_meta[index];
+            ranges.push((
+                *index,
+                column_meta.offset..(column_meta.offset + column_meta.len),
+            ));
         }
 
-        Ok(results)
-    }
+        let object = self.operator.object(&part.location);
+        let read_settings = ReadSettings {
+            storage_io_min_bytes_for_seek: ctx
+                .get_settings()
+                .get_storage_io_min_bytes_for_seek()?,
+            storage_io_max_page_bytes_for_read: ctx
+                .get_settings()
+                .get_storage_io_max_page_bytes_for_read()?,
+        };
 
-    pub fn sync_read_column(
-        o: Object,
-        index: usize,
-        offset: u64,
-        length: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.blocking_range_read(offset..offset + length)?;
-        Ok((index, chunk))
+        Self::sync_merge_io_read(&read_settings, object, ranges)
     }
 
     fn to_parquet_compression(meta_compression: &Compression) -> Result<ParquetCompression> {

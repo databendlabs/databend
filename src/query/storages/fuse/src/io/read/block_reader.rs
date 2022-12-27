@@ -68,9 +68,9 @@ impl OwnerMemory {
 pub struct MergeIOReadResult
 where Self: 'static
 {
-    pub path: String,
-    pub owner_memory: OwnerMemory,
-    pub columns_chunks: HashMap<usize, (usize, Range<usize>)>,
+    path: String,
+    owner_memory: OwnerMemory,
+    columns_chunks: HashMap<usize, (usize, Range<usize>)>,
 }
 
 impl MergeIOReadResult
@@ -177,6 +177,60 @@ impl BlockReader {
         Ok(read_res)
     }
 
+    pub fn sync_merge_io_read(
+        read_settings: &ReadSettings,
+        object: Object,
+        raw_ranges: Vec<(usize, Range<u64>)>,
+    ) -> Result<MergeIOReadResult> {
+        let path = object.path().to_string();
+
+        // Build merged read ranges.
+        let ranges = raw_ranges
+            .iter()
+            .map(|(_, r)| r.clone())
+            .collect::<Vec<_>>();
+        let range_merger = RangeMerger::from_iter(
+            ranges,
+            read_settings.storage_io_min_bytes_for_seek,
+            read_settings.storage_io_max_page_bytes_for_read,
+        );
+        let merged_ranges = range_merger.ranges();
+
+        // Read merged range data.
+        let mut io_res = Vec::with_capacity(merged_ranges.len());
+        for (idx, range) in merged_ranges.iter().enumerate() {
+            io_res.push(Self::sync_read_range(
+                object.clone(),
+                idx,
+                range.start,
+                range.end,
+            )?);
+        }
+
+        let owner_memory = OwnerMemory::create(io_res);
+        let mut read_res = MergeIOReadResult::create(owner_memory, raw_ranges.len(), path.clone());
+
+        for (raw_idx, raw_range) in &raw_ranges {
+            let column_range = raw_range.start..raw_range.end;
+
+            // Find the range index and Range from merged ranges.
+            let (merged_range_idx, merged_range) = match range_merger.get(column_range.clone()) {
+                None => Err(ErrorCode::Internal(format!(
+                    "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
+                    column_range, path, merged_ranges
+                ))),
+                Some((index, range)) => Ok((index, range)),
+            }?;
+
+            // Fetch the raw data for the raw range.
+            let start = (column_range.start - merged_range.start) as usize;
+            let end = (column_range.end - merged_range.start) as usize;
+            read_res.add_column_chunk(merged_range_idx, *raw_idx, start..end);
+        }
+
+        Ok(read_res)
+    }
+
     #[inline]
     pub async fn read_range(
         o: Object,
@@ -185,6 +239,17 @@ impl BlockReader {
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
         let chunk = o.range_read(start..end).await?;
+        Ok((index, chunk))
+    }
+
+    #[inline]
+    pub fn sync_read_range(
+        o: Object,
+        index: usize,
+        start: u64,
+        end: u64,
+    ) -> Result<(usize, Vec<u8>)> {
+        let chunk = o.blocking_range_read(start..end)?;
         Ok((index, chunk))
     }
 }

@@ -13,6 +13,8 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
 use common_catalog::plan::PartInfoPtr;
 use common_datablocks::BlockMetaInfo;
@@ -21,18 +23,24 @@ use common_exception::Result;
 use serde::Deserializer;
 use serde::Serializer;
 
-pub type ParquetChunks = Vec<Vec<(usize, Vec<u8>)>>;
+use crate::MergeIOReadResult;
 
-#[derive(Debug, PartialEq)]
 pub struct DataSourceMeta {
-    // memory: Vec<u8>,
     pub part: Vec<PartInfoPtr>,
-    pub data: ParquetChunks,
+    pub data: Vec<MergeIOReadResult>,
 }
 
 impl DataSourceMeta {
-    pub fn create(part: Vec<PartInfoPtr>, data: Vec<Vec<(usize, Vec<u8>)>>) -> BlockMetaInfoPtr {
+    pub fn create(part: Vec<PartInfoPtr>, data: Vec<MergeIOReadResult>) -> BlockMetaInfoPtr {
         Box::new(DataSourceMeta { part, data })
+    }
+}
+
+impl Debug for DataSourceMeta {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DataSourceMeta")
+            .field("parts", &self.part)
+            .finish()
     }
 }
 
@@ -64,10 +72,7 @@ impl BlockMetaInfo for DataSourceMeta {
         unimplemented!("Unimplemented clone DataSourceMeta")
     }
 
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<DataSourceMeta>() {
-            None => false,
-            Some(other) => self == other,
-        }
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals DataSourceMeta")
     }
 }
