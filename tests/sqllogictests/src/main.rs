@@ -24,6 +24,8 @@ use walkdir::DirEntry;
 use walkdir::WalkDir;
 
 use crate::arg::SqlLogicTestArgs;
+use crate::client::Client;
+use crate::client::ClientType;
 use crate::client::HttpClient;
 use crate::client::MysqlClient;
 use crate::error::DSqlLogicTestError;
@@ -35,29 +37,13 @@ mod client;
 mod error;
 mod util;
 
-enum ClientType {
-    Mysql,
-    Http,
-    Clickhouse,
-}
-
 pub struct Databend {
-    mysql_client: Option<MysqlClient>,
-    http_client: Option<HttpClient>,
-    ck_client: Option<ClickhouseHttpClient>,
+    client: Client,
 }
 
 impl Databend {
-    pub fn create(
-        mysql_client: Option<MysqlClient>,
-        http_client: Option<HttpClient>,
-        ck_client: Option<ClickhouseHttpClient>,
-    ) -> Self {
-        Databend {
-            mysql_client,
-            http_client,
-            ck_client,
-        }
+    pub fn create(client: Client) -> Self {
+        Databend { client }
     }
 }
 
@@ -66,26 +52,11 @@ impl sqllogictest::AsyncDB for Databend {
     type Error = DSqlLogicTestError;
 
     async fn run(&mut self, sql: &str) -> Result<DBOutput> {
-        if let Some(mysql_client) = &mut self.mysql_client {
-            println!("Running sql with mysql client: [{}]", sql);
-            return mysql_client.query(sql).await;
-        }
-        if let Some(http_client) = &mut self.http_client {
-            println!("Running sql with http client: [{}]", sql);
-            return http_client.query(sql).await;
-        }
-        println!("Running sql with clickhouse client: [{}]", sql);
-        self.ck_client.as_mut().unwrap().query(sql).await
+        self.client.query(sql).await
     }
 
     fn engine_name(&self) -> &str {
-        if self.mysql_client.is_some() {
-            return "mysql";
-        }
-        if self.ck_client.is_some() {
-            return "clickhouse";
-        }
-        "http"
+        self.client.engine_name()
     }
 }
 
@@ -156,15 +127,15 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
     match client_type {
         ClientType::Mysql => {
             let mysql_client = MysqlClient::create().await?;
-            Ok(Databend::create(Some(mysql_client), None, None))
+            Ok(Databend::create(Client::Mysql(mysql_client)))
         }
         ClientType::Http => {
             let http_client = HttpClient::create()?;
-            Ok(Databend::create(None, Some(http_client), None))
+            Ok(Databend::create(Client::Http(http_client)))
         }
         ClientType::Clickhouse => {
             let ck_client = ClickhouseHttpClient::create()?;
-            Ok(Databend::create(None, None, Some(ck_client)))
+            Ok(Databend::create(Client::Clickhouse(ck_client)))
         }
     }
 }
