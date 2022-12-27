@@ -138,9 +138,12 @@ impl FuseTable {
             .cloned()
             .unwrap_or_default();
 
+        let part_prefix = table_info.meta.file_prefix.clone();
+
         Ok(Box::new(FuseTable {
             table_info,
-            meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
+            meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix)
+                .with_part_prefix(part_prefix),
             cluster_key_meta,
             operator,
             data_metrics,
