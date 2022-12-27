@@ -89,7 +89,9 @@ impl BlockReader {
         let merged_range_data_results = futures::future::try_join_all(read_handlers).await?;
 
         // Perf.
-        metrics_inc_remote_io_read_milliseconds(start.elapsed().as_millis() as u64);
+        {
+            metrics_inc_remote_io_read_milliseconds(start.elapsed().as_millis() as u64);
+        }
 
         // Build raw range data from merged range data.
         let mut final_result = Vec::with_capacity(raw_ranges.len());

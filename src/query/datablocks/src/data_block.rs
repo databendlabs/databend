@@ -234,6 +234,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn take_meta(&mut self) -> Option<BlockMetaInfoPtr> {
+        self.meta.take()
+    }
+
+    #[inline]
     pub fn remove_column(self, name: &str) -> Result<Self> {
         let idx = self.schema.index_of(name)?;
         self.remove_column_index(idx)

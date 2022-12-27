@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
@@ -50,6 +51,7 @@ use tracing::Instrument;
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
+use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::metrics::metrics_inc_remote_io_read_bytes;
 use crate::metrics::metrics_inc_remote_io_read_parts;
 use crate::metrics::metrics_inc_remote_io_seeks;
@@ -232,6 +234,8 @@ impl BlockReader {
         part: PartInfoPtr,
         chunks: Vec<(usize, Vec<u8>)>,
     ) -> Result<DataBlock> {
+        let start = Instant::now();
+
         let part = FusePartInfo::from_part(&part)?;
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
@@ -270,8 +274,14 @@ impl BlockReader {
         }
 
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
+        let res = self.try_next_block(&mut deserializer);
 
-        self.try_next_block(&mut deserializer)
+        // Perf.
+        {
+            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+        }
+
+        res
     }
 
     pub async fn read_columns_data(
@@ -280,7 +290,9 @@ impl BlockReader {
         raw_part: PartInfoPtr,
     ) -> Result<Vec<(usize, Vec<u8>)>> {
         // Perf
-        metrics_inc_remote_io_read_parts(1);
+        {
+            metrics_inc_remote_io_read_parts(1);
+        }
 
         let part = FusePartInfo::from_part(&raw_part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;

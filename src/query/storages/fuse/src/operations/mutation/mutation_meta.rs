@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_datablocks::BlockMetaInfo;
 use common_datablocks::BlockMetaInfoPtr;
@@ -24,7 +23,7 @@ use common_storages_table_meta::meta::Statistics;
 
 use crate::operations::mutation::AbortOperation;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct MutationMeta {
     pub segments: Vec<Location>,
     pub summary: Statistics,
@@ -35,6 +34,14 @@ pub struct MutationMeta {
 impl BlockMetaInfo for MutationMeta {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
@@ -51,11 +58,11 @@ impl MutationMeta {
         summary: Statistics,
         abort_operation: AbortOperation,
     ) -> BlockMetaInfoPtr {
-        Arc::new(Box::new(MutationMeta {
+        Box::new(MutationMeta {
             segments,
             summary,
             abort_operation,
-        }))
+        })
     }
 
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationMeta> {
