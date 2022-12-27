@@ -31,7 +31,7 @@ pub fn get_join_predicates(join: &LogicalJoin) -> Result<Vec<Scalar>> {
             let registry = &BUILTIN_FUNCTIONS;
             let raw_expr = RawExpr::FunctionCall {
                 span: None,
-                name: "=".to_string(),
+                name: "eq".to_string(),
                 params: vec![],
                 args: vec![left_cond.as_raw_expr(), right_cond.as_raw_expr()],
             };
