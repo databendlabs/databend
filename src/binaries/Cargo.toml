@@ -29,6 +29,7 @@ io-uring = [
 # Workspace dependencies
 common-base = { path = "../common/base" }
 common-config = { path = "../query/config" }
+common-datablocks = { path = "../query/datablocks" }
 common-exception = { path = "../common/exception" }
 common-formats = { path = "../query/formats" }
 common-grpc = { path = "../common/grpc" }
@@ -50,6 +51,7 @@ sharing-endpoint = { path = "../query/sharing-endpoint" }
 # Crates.io dependencies
 anyhow = { workspace = true }
 clap = { workspace = true }
+comfy-table = "6.1.3"
 limits-rs = "0.1.0"
 openraft = { workspace = true }
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }

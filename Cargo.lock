@@ -3075,8 +3075,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap 3.2.22",
+ "comfy-table",
  "common-base",
  "common-config",
+ "common-datablocks",
  "common-exception",
  "common-formats",
  "common-grpc",

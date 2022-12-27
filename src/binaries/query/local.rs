@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Instant;
+
+use comfy_table::Cell;
+use comfy_table::Table;
 use common_config::Config;
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_formats::FileFormatOptionsExt;
-use common_meta_types::FileFormatOptions;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
@@ -30,6 +33,8 @@ pub async fn query_local(conf: &Config) -> Result<()> {
     let local_conf = conf.local.clone();
     GlobalServices::init(conf).await?;
 
+    let now = Instant::now();
+
     let sql = get_sql(local_conf.sql, local_conf.table);
 
     let session = SessionManager::instance()
@@ -39,33 +44,10 @@ pub async fn query_local(conf: &Config) -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _, _) = planner.plan_sql(&sql).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
-    let mut stream = interpreter.execute(ctx.clone()).await?;
-    let first_block = match stream.next().await {
-        Some(block) => match block {
-            Ok(block) => block,
-            Err(err) => return Err(err),
-        },
-        None => return Err(ErrorCode::Internal("no data block return")),
-    };
-    let mut output_fmt = FileFormatOptionsExt::get_output_format_from_options(
-        first_block.schema().clone(),
-        FileFormatOptions::default(),
-        session.get_settings().as_ref(),
-    )?;
+    let stream = interpreter.execute(ctx.clone()).await?;
+    let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
 
-    let ret = output_fmt.serialize_block(&first_block)?;
-    print!("{}", String::from_utf8_lossy(&ret));
-
-    while let Some(block) = stream.next().await {
-        match block {
-            Ok(block) => {
-                // println!("data: {:?}", block.columns());
-                let ret = output_fmt.serialize_block(&block)?;
-                print!("{}", String::from_utf8_lossy(&ret));
-            }
-            Err(err) => return Err(err),
-        }
-    }
+    print_blocks(blocks.as_slice(), now)?;
     Ok(())
 }
 
@@ -88,4 +70,66 @@ fn get_sql(sql: String, table_str: String) -> String {
         }
     }
     ret
+}
+
+fn print_blocks(results: &[Result<DataBlock, ErrorCode>], now: Instant) -> Result<()> {
+    if let Err(err) = print_table(results, now) {
+        println!("Error: {}", err);
+    }
+    Ok(())
+}
+
+fn print_table(results: &[Result<DataBlock, ErrorCode>], now: Instant) -> Result<()> {
+    if !results.is_empty() {
+        if let Err(err) = &results[0] {
+            return Err(err.clone());
+        }
+    }
+    let mut table = Table::new();
+    table.load_preset("||--+-++|    ++++++");
+    if results.is_empty() {
+        println!("{}", table);
+        print_timing_info(0, now);
+        return Ok(());
+    }
+
+    let schema = results[0]
+        .as_ref()
+        .map_err(ErrorCode::from_std_error)?
+        .schema();
+    let mut header = Vec::new();
+    for field in schema.fields() {
+        header.push(Cell::new(field.name()));
+    }
+    table.set_header(header);
+
+    let mut row_count = 0;
+    for batch in results {
+        let batch = batch.as_ref().map_err(ErrorCode::from_std_error)?;
+        row_count += batch.num_rows();
+        for row in 0..batch.num_rows() {
+            let mut cells = Vec::new();
+            for col in 0..batch.num_columns() {
+                let column = batch.column(col);
+                let col_str = column.get(row).custom_display(false);
+                cells.push(Cell::new(col_str));
+                // cells.push(Cell::new(&array_value_to_string(column, row)?));
+            }
+            table.add_row(cells);
+        }
+    }
+
+    println!("{}", table);
+    print_timing_info(row_count, now);
+
+    Ok(())
+}
+
+fn print_timing_info(row_count: usize, now: Instant) {
+    println!(
+        "{} {} in set. Query took {:.3} seconds.",
+        row_count,
+        if row_count == 1 { "row" } else { "rows" },
+        now.elapsed().as_secs_f64()
+    );
 }
