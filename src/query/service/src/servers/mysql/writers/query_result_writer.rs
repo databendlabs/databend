@@ -185,6 +185,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             Ok(columns) => {
                 let mut row_writer = dataset_writer.start(&columns).await?;
                 let chunks = &mut query_result.chunks;
+
                 while let Some(chunk) = chunks.next().await {
                     let chunk = match chunk {
                         Err(e) => {

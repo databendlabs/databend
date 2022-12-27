@@ -77,12 +77,9 @@ impl ChunkOperator {
             }
 
             ChunkOperator::Project { indices } => {
-                let mut result = input;
-                for i in 0..result.num_columns() {
-                    let id = result.get_by_offset(i).id;
-                    if !indices.contains(&id) {
-                        result = result.remove_column_index(id)?;
-                    }
+                let mut result = Chunk::new(vec![], input.num_rows());
+                for id in indices {
+                    result.add_column(input.get_by_offset(*id).clone());
                 }
                 Ok(result)
             }

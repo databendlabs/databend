@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_channel::Receiver;
@@ -22,7 +23,6 @@ use common_expression::type_check::check;
 use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_expression::SortColumnDescription;
@@ -188,8 +188,9 @@ impl PipelineBuilder {
             return pipeline.add_sink(|input| Ok(EmptySink::create(input)));
         }
 
-        let mut projections = Vec::with_capacity(result_columns.len());
+        let mut projections = HashSet::with_capacity(result_columns.len());
         let mut result_fields = Vec::with_capacity(result_columns.len());
+
         for column_binding in result_columns {
             let index = column_binding.index;
             let name = column_binding.column_name.clone();
@@ -197,17 +198,17 @@ impl PipelineBuilder {
                 .field_with_name(index.to_string().as_str())?
                 .data_type()
                 .clone();
-            projections.push(input_schema.index_of(index.to_string().as_str())?);
+            projections.insert(input_schema.index_of(index.to_string().as_str())?);
             result_fields.push(DataField::new(name.as_str(), data_type.clone()));
         }
-        let _output_schema = DataSchemaRefExt::create(result_fields);
+
         pipeline.add_transform(|input, output| {
             Ok(CompoundChunkOperator::create(
                 input,
                 output,
                 *func_ctx,
                 vec![ChunkOperator::Project {
-                    indices: Default::default(),
+                    indices: projections.clone(),
                 }],
             ))
         })?;
