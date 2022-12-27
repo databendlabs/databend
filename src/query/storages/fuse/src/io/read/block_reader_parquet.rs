@@ -86,11 +86,7 @@ impl BlockReader {
     }
 
     pub fn data_fields(&self) -> Vec<DataField> {
-        self.schema()
-            .fields()
-            .iter()
-            .map(|f| DataField::from(f))
-            .collect()
+        self.schema().fields().iter().map(DataField::from).collect()
     }
 
     pub fn data_schema(&self) -> DataSchema {

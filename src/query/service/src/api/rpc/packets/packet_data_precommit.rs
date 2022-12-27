@@ -25,7 +25,6 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_expression::Chunk;
 use common_expression::ChunkMetaInfoPtr;
-use common_expression::DataSchemaRef;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

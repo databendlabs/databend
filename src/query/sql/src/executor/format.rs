@@ -31,7 +31,6 @@ use super::Sort;
 use super::TableScan;
 use super::UnionAll;
 use crate::executor::FragmentKind;
-use crate::planner::IndexType;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 use crate::ColumnEntry;

@@ -18,7 +18,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Expr;
 use common_expression::TableSchemaRef;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_storages_index::RangeFilter;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 

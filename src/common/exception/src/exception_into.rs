@@ -17,7 +17,6 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::ops::Range;
 use std::sync::Arc;
 
 use crate::exception::ErrorCodeBacktrace;

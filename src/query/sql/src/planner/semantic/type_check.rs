@@ -367,10 +367,10 @@ impl<'a> TypeChecker<'a> {
                 if !*not {
                     // Rewrite `expr BETWEEN low AND high`
                     // into `expr >= low AND expr <= high`
-                    let box (ge_func, left_type) = self
+                    let box (ge_func, _left_type) = self
                         .resolve_function(span, ">=", &[expr.as_ref(), low.as_ref()], None)
                         .await?;
-                    let box (le_func, right_type) = self
+                    let box (le_func, _right_type) = self
                         .resolve_function(span, "<=", &[expr.as_ref(), high.as_ref()], None)
                         .await?;
 
@@ -401,10 +401,10 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
-                    let box (lt_func, left_type) = self
+                    let box (lt_func, _left_type) = self
                         .resolve_function(span, "<", &[expr.as_ref(), low.as_ref()], None)
                         .await?;
-                    let box (gt_func, right_type) = self
+                    let box (gt_func, _right_type) = self
                         .resolve_function(span, ">", &[expr.as_ref(), high.as_ref()], None)
                         .await?;
 
@@ -807,7 +807,7 @@ impl<'a> TypeChecker<'a> {
                             column,
                             ..
                         } => {
-                            let (scalar, data_type) = *self.resolve(expr, None).await?;
+                            let (scalar, _data_type) = *self.resolve(expr, None).await?;
                             if let Scalar::BoundColumnRef(BoundColumnRef {
                                 column: ColumnBinding { index, .. },
                             }) = scalar
@@ -850,10 +850,7 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::TryCast {
-                span,
-                expr,
-                target_type,
-                ..
+                expr, target_type, ..
             } => {
                 let box (scalar, data_type) = self.resolve(expr, required_type).await?;
                 let raw_expr = RawExpr::Cast {
@@ -1047,10 +1044,10 @@ impl<'a> TypeChecker<'a> {
     #[async_recursion::async_recursion]
     pub async fn resolve_scalar_function_call(
         &mut self,
-        span: &[Token<'_>],
+        _span: &[Token<'_>],
         func_name: &str,
         args: Vec<Scalar>,
-        arguments_types: Vec<DataType>,
+        _arguments_types: Vec<DataType>,
         _required_type: Option<DataType>,
     ) -> Result<Box<(Scalar, DataType)>> {
         // Type check
@@ -1696,11 +1693,12 @@ impl<'a> TypeChecker<'a> {
     #[async_recursion::async_recursion]
     async fn resolve_trim_function(
         &mut self,
-        span: &[Token<'_>],
+        _span: &[Token<'_>],
         expr: &Expr<'_>,
         trim_where: &Option<(TrimWhere, Box<Expr<'_>>)>,
     ) -> Result<Box<(Scalar, DataType)>> {
-        let (func_name, trim_scalar, trim_type) = if let Some((trim_type, trim_expr)) = trim_where {
+        let (func_name, trim_scalar, _trim_type) = if let Some((trim_type, trim_expr)) = trim_where
+        {
             let func_name = match trim_type {
                 TrimWhere::Leading => "trim_leading",
                 TrimWhere::Trailing => "trim_trailing",
@@ -1718,7 +1716,7 @@ impl<'a> TypeChecker<'a> {
             ("trim_both", trim_scalar, DataType::String)
         };
 
-        let box (trim_source, source_type) = self.resolve(expr, None).await?;
+        let box (trim_source, _source_type) = self.resolve(expr, None).await?;
         let args = vec![trim_source, trim_scalar];
 
         // Type check
@@ -1774,12 +1772,12 @@ impl<'a> TypeChecker<'a> {
     #[async_recursion::async_recursion]
     async fn resolve_array(
         &mut self,
-        span: &[Token<'_>],
+        _span: &[Token<'_>],
         exprs: &[Expr<'_>],
     ) -> Result<Box<(Scalar, DataType)>> {
         let mut elems = Vec::with_capacity(exprs.len());
         for expr in exprs {
-            let box (arg, data_type) = self.resolve(expr, None).await?;
+            let box (arg, _data_type) = self.resolve(expr, None).await?;
             elems.push(arg);
         }
 
@@ -1808,12 +1806,12 @@ impl<'a> TypeChecker<'a> {
     #[async_recursion::async_recursion]
     async fn resolve_tuple(
         &mut self,
-        span: &[Token<'_>],
+        _span: &[Token<'_>],
         exprs: &[Expr<'_>],
     ) -> Result<Box<(Scalar, DataType)>> {
         let mut args = Vec::with_capacity(exprs.len());
         for expr in exprs {
-            let box (arg, data_type) = self.resolve(expr, None).await?;
+            let box (arg, _data_type) = self.resolve(expr, None).await?;
             args.push(arg);
         }
 
@@ -1912,7 +1910,7 @@ impl<'a> TypeChecker<'a> {
             {
                 (fields_type, fields_name)
             } else {
-                return Err(ErrorCode::Internal(format!("",)));
+                return Err(ErrorCode::Internal(String::new()));
             };
 
             let accessor = accessors.pop().unwrap();
@@ -2284,7 +2282,7 @@ impl<'a> TypeChecker<'a> {
             TypeName::Date => TableDataType::Date,
             TypeName::Array {
                 item_type: Some(item_type),
-            } => TableDataType::Array(Box::new(Self::resolve_type_name(&item_type)?)),
+            } => TableDataType::Array(Box::new(Self::resolve_type_name(item_type)?)),
             TypeName::Tuple {
                 fields_type,
                 fields_name,
@@ -2302,7 +2300,7 @@ impl<'a> TypeChecker<'a> {
                     .collect::<Result<Vec<_>>>()?,
             },
             TypeName::Nullable(inner_type) => {
-                TableDataType::Nullable(Box::new(Self::resolve_type_name(&inner_type)?))
+                TableDataType::Nullable(Box::new(Self::resolve_type_name(inner_type)?))
             }
             TypeName::Variant => TableDataType::Variant,
             _ => {

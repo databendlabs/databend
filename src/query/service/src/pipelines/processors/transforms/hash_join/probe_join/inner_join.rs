@@ -119,7 +119,7 @@ impl JoinHashTable {
                     }
 
                     let evaluator =
-                        Evaluator::new(&probed_chunk, func_ctx.clone(), &BUILTIN_FUNCTIONS);
+                        Evaluator::new(&probed_chunk, func_ctx, &BUILTIN_FUNCTIONS);
                     let predicate = evaluator.run(other_predicate).map_err(|(_, e)| {
                         ErrorCode::Internal(format!("Invalid expression: {}", e))
                     })?;

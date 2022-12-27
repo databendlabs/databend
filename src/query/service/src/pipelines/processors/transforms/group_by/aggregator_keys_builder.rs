@@ -16,8 +16,6 @@ use std::marker::PhantomData;
 
 use common_expression::large_number::LargeNumber;
 use common_expression::types::number::Number;
-use common_expression::types::number::NumberColumnBuilder;
-use common_expression::types::number::NumberScalar;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
@@ -45,7 +43,7 @@ impl<'a, T: Number> KeysColumnBuilder for FixedKeysColumnBuilder<'a, T> {
     }
 
     #[inline]
-    fn finish(mut self) -> Column {
+    fn finish(self) -> Column {
         NumberType::<T>::upcast_column(NumberType::<T>::build_column(self.inner_builder))
     }
 }
@@ -72,7 +70,7 @@ impl<'a> KeysColumnBuilder for SerializedKeysColumnBuilder<'a> {
         self.inner_builder.commit_row();
     }
 
-    fn finish(mut self) -> Column {
+    fn finish(self) -> Column {
         Column::String(self.inner_builder.build())
     }
 }
@@ -95,7 +93,7 @@ impl<'a, T: LargeNumber> KeysColumnBuilder for LargeFixedKeysColumnBuilder<'a, T
     }
 
     #[inline]
-    fn finish(mut self) -> Column {
+    fn finish(self) -> Column {
         Column::String(self.inner_builder.build())
     }
 }

@@ -19,13 +19,8 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::AnyType;
 use common_expression::Chunk;
-use common_expression::Column;
-use common_expression::Evaluator;
 use common_expression::HashMethod;
-use common_expression::Value;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;

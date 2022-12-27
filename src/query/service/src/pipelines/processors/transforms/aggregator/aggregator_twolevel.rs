@@ -16,11 +16,8 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::number::NumberColumn;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::AnyType;
 use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
 use common_expression::Chunk;
 use common_expression::ChunkEntry;
 use common_expression::Column;

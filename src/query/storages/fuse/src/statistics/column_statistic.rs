@@ -15,14 +15,12 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::Scalar;
-use common_expression::Value;
 use common_functions_v2::aggregates::eval_aggr;
 use common_storages_index::MinMaxIndex;
 use common_storages_index::SupportedType;
@@ -45,9 +43,7 @@ pub fn calc_column_distinct_of_values(
     Ok(col[0])
 }
 
-pub fn get_traverse_columns_dfs(
-    chunk: &Chunk,
-) -> Result<Vec<(Option<usize>, Value<AnyType>, DataType)>> {
+pub fn get_traverse_columns_dfs(chunk: &Chunk) -> traverse::TraverseResult {
     traverse::traverse_columns_dfs(chunk.columns_ref())
 }
 
@@ -98,7 +94,7 @@ pub fn gen_columns_statistics(
             }
         }
 
-        let unset_bits = if let Column::Nullable(nullable_col) = col {
+        let _unset_bits = if let Column::Nullable(nullable_col) = col {
             nullable_col.validity.unset_bits()
         } else {
             0
@@ -146,10 +142,10 @@ pub mod traverse {
 
     use super::*;
 
+    pub type TraverseResult = Result<Vec<(Option<usize>, Value<AnyType>, DataType)>>;
+
     // traverses columns and collects the leaves in depth first manner
-    pub fn traverse_columns_dfs(
-        columns: &[ChunkEntry<usize>],
-    ) -> Result<Vec<(Option<usize>, Value<AnyType>, DataType)>> {
+    pub fn traverse_columns_dfs(columns: &[ChunkEntry<usize>]) -> TraverseResult {
         let mut leaves = vec![];
         for (idx, entry) in columns.iter().enumerate() {
             let data_type = &entry.data_type;

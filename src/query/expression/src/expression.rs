@@ -301,7 +301,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 span: span.clone(),
                 id: id.clone(),
                 generics: generics.clone(),
-                args: args.into_iter().map(RemoteExpr::from_expr).collect(),
+                args: args.iter().map(RemoteExpr::from_expr).collect(),
                 return_type: return_type.clone(),
             },
         }
@@ -345,14 +345,14 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 args,
                 return_type,
             } => {
-                let function = fn_registry.get(&id)?;
+                let function = fn_registry.get(id)?;
                 Expr::FunctionCall {
                     span: span.clone(),
                     id: id.clone(),
                     function,
                     generics: generics.clone(),
                     args: args
-                        .into_iter()
+                        .iter()
                         .map(|arg| arg.into_expr(fn_registry))
                         .collect::<Option<_>>()?,
                     return_type: return_type.clone(),

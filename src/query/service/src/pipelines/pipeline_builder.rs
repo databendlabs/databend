@@ -21,14 +21,11 @@ use common_exception::Result;
 use common_expression::type_check::check;
 use common_expression::Chunk;
 use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_expression::SortColumnDescription;
-use common_expression::TableDataType;
 use common_functions_v2::aggregates::AggregateFunctionFactory;
 use common_functions_v2::aggregates::AggregateFunctionRef;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
@@ -41,7 +38,6 @@ use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
-use common_sql::executor::ColumnID;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
@@ -50,7 +46,6 @@ use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
-use common_sql::executor::PhysicalScalar;
 use common_sql::executor::Project;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
@@ -205,12 +200,12 @@ impl PipelineBuilder {
             projections.push(input_schema.index_of(index.to_string().as_str())?);
             result_fields.push(DataField::new(name.as_str(), data_type.clone()));
         }
-        let output_schema = DataSchemaRefExt::create(result_fields);
+        let _output_schema = DataSchemaRefExt::create(result_fields);
         pipeline.add_transform(|input, output| {
             Ok(CompoundChunkOperator::create(
                 input,
                 output,
-                func_ctx.clone(),
+                *func_ctx,
                 vec![ChunkOperator::Project {
                     indices: Default::default(),
                 }],
@@ -284,13 +279,13 @@ impl PipelineBuilder {
 
         let func_ctx = self.ctx.try_get_function_context()?;
         let predicate = check(&predicate, &BUILTIN_FUNCTIONS)
-            .map_err(|(_, e)| ErrorCode::Internal("Invalid expression"))?;
+            .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundChunkOperator::create(
                 input,
                 output,
-                func_ctx.clone(),
+                func_ctx,
                 vec![ChunkOperator::Filter {
                     expr: predicate.clone(),
                 }],
@@ -307,7 +302,7 @@ impl PipelineBuilder {
             Ok(CompoundChunkOperator::create(
                 input,
                 output,
-                func_ctx.clone(),
+                func_ctx,
                 vec![ChunkOperator::Project {
                     indices: project.columns.clone(),
                 }],
@@ -334,7 +329,7 @@ impl PipelineBuilder {
             Ok(CompoundChunkOperator::create(
                 input,
                 output,
-                func_ctx.clone(),
+                func_ctx,
                 operators.clone(),
             ))
         })?;
@@ -453,7 +448,7 @@ impl PipelineBuilder {
         // Concat merge in single thread
         try_add_multi_sort_merge(
             &mut self.main_pipeline,
-            schema.clone(),
+            schema,
             chunk_size,
             sort.limit,
             sort_desc,

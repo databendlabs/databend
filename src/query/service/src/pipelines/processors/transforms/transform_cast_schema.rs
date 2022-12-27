@@ -16,13 +16,9 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::Chunk;
-use common_expression::ChunkEntry;
 use common_expression::DataSchemaRef;
-use common_expression::Evaluator;
 use common_expression::Expr;
-use common_expression::Function;
 use common_expression::FunctionContext;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -73,7 +69,7 @@ where Self: Transform
 impl Transform for TransformCastSchema {
     const NAME: &'static str = "CastSchemaTransform";
 
-    fn transform(&mut self, data: Chunk) -> Result<Chunk> {
+    fn transform(&mut self, _data: Chunk) -> Result<Chunk> {
         todo!("expression")
         // let rows = data.num_rows();
 

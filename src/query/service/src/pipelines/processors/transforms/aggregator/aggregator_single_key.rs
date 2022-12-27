@@ -21,14 +21,10 @@ use bumpalo::Bump;
 use common_base::runtime::ThreadPool;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
-use common_expression::types::StringType;
 use common_expression::Chunk;
-use common_expression::Column;
 use common_expression::ColumnBuilder;
-use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions_v2::aggregates::AggregateFunctionRef;
@@ -137,9 +133,9 @@ impl Aggregator for SingleStateAggregator<true> {
         let places = self.new_places();
         for (index, func) in self.funcs.iter().enumerate() {
             let binary_array = chunk.get_by_offset(index).value.as_column().unwrap();
-            let binary_array = binary_array.as_string().ok_or(ErrorCode::IllegalDataType(
-                "binary array should be string type",
-            ))?;
+            let binary_array = binary_array
+                .as_string()
+                .ok_or_else(|| ErrorCode::IllegalDataType("binary array should be string type"))?;
 
             let mut data = unsafe { binary_array.index_unchecked(0) };
             func.deserialize(places[index], &mut data)?;

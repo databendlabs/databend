@@ -19,7 +19,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check;
 use common_expression::types::DataType;
-use common_expression::DataSchema;
 use common_expression::Expr;
 use common_expression::Literal;
 use common_expression::RawExpr;
@@ -118,7 +117,7 @@ impl PhysicalScalar {
         let raw_expr = self.as_raw_expr();
         let registry = &BUILTIN_FUNCTIONS;
         let expr = check(&raw_expr, registry)
-            .map_err(|(_, e)| ErrorCode::Internal("Invalid expression"))?;
+            .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
         Ok(expr)
     }
 }

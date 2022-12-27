@@ -82,7 +82,7 @@ impl FuseTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-        schema: TableSchemaRef,
+        _schema: TableSchemaRef,
     ) -> Result<Arc<Option<Expr<usize>>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {

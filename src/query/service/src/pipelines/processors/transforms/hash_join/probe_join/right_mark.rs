@@ -23,9 +23,6 @@ use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::types::ValueType;
 use common_expression::Chunk;
-use common_expression::Column;
-use common_expression::Evaluator;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -90,7 +87,7 @@ impl JoinHashTable {
             .collect::<Vec<_>>();
         let mut markers = Self::init_markers(&cols, input.num_rows());
 
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let _func_ctx = self.ctx.try_get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
 
         let mut probe_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);

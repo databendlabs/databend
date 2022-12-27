@@ -33,7 +33,6 @@ use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::InMemoryData;
-use common_expression::TableSchemaRef;
 use common_expression::Value;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
@@ -214,7 +213,6 @@ impl Table for MemoryTable {
                 MemoryTableSource::create(
                     ctx.clone(),
                     output,
-                    plan.schema(),
                     read_data_blocks.clone(),
                     plan.push_downs.clone(),
                 )
@@ -263,7 +261,6 @@ impl Table for MemoryTable {
 
 struct MemoryTableSource {
     extras: Option<PushDownInfo>,
-    schema: TableSchemaRef,
     data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
 }
 
@@ -271,13 +268,11 @@ impl MemoryTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        schema: TableSchemaRef,
         data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
         extras: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, MemoryTableSource {
             extras,
-            schema,
             data_blocks,
         })
     }
@@ -288,7 +283,6 @@ impl MemoryTableSource {
                 let num_rows = chunk.num_rows();
                 let pruned_data_block = match projection {
                     Projection::Columns(indices) => {
-                        let pruned_schema = self.schema.project(indices);
                         let columns = indices
                             .iter()
                             .map(|idx| chunk.get_by_offset(*idx).clone())
@@ -296,7 +290,6 @@ impl MemoryTableSource {
                         Chunk::new(columns, num_rows)
                     }
                     Projection::InnerColumns(path_indices) => {
-                        let pruned_schema = self.schema.inner_project(path_indices);
                         let mut columns = Vec::with_capacity(path_indices.len());
                         let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                         for path in paths {

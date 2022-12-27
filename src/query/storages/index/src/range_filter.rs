@@ -29,17 +29,14 @@ use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::with_number_mapped_type;
 use common_expression::ConstantFolder;
-use common_expression::DataSchemaRef;
 use common_expression::Domain;
 use common_expression::Expr;
 use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
-use itertools::Itertools;
 
 #[derive(Clone)]
 pub struct RangeFilter {
@@ -147,6 +144,6 @@ fn statistics_to_domain(stat: &ColumnStatistics, data_type: &DataType) -> Domain
             })
         }
         // Unsupported data type
-        _ => Domain::full(data_type.into()),
+        _ => Domain::full(data_type),
     })
 }

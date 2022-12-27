@@ -261,7 +261,7 @@ impl JoinHashTable {
                 .iter()
                 .enumerate()
                 .map(|(id, field)| {
-                    let data_type = field.data_type().wrap_nullable().into();
+                    let data_type = field.data_type().wrap_nullable();
                     ChunkEntry {
                         id,
                         value: Value::Scalar(Scalar::Null),

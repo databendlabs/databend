@@ -12,21 +12,17 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::Expr;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
-use crate::executor::PhysicalScalar;
 use crate::executor::PhysicalScalarBuilder;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::Scalar;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::Metadata;
-use crate::MetadataRef;
 use crate::Visibility;
 
 pub fn parse_exprs(
@@ -81,20 +77,14 @@ pub fn parse_exprs(
     }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::new(
-        &bind_context,
-        ctx,
-        &name_resolution_ctx,
-        metadata.clone(),
-        &[],
-    );
+    let mut type_checker =
+        TypeChecker::new(&bind_context, ctx, &name_resolution_ctx, metadata, &[]);
     let mut expressions = Vec::with_capacity(exprs.len());
 
     for expr in exprs.iter() {
         let (scalar, _) =
             *block_in_place(|| Handle::current().block_on(type_checker.resolve(expr, None)))?;
-        let mut builder = PhysicalScalarBuilder::new();
-        let scalar = builder.build(&scalar)?;
+        let scalar = PhysicalScalarBuilder::build(&scalar)?;
         expressions.push(scalar.as_expr()?);
     }
     Ok(expressions)

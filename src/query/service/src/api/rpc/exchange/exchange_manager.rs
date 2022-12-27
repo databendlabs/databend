@@ -26,7 +26,6 @@ use common_base::runtime::TrySpawn;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_grpc::ConnectionFactory;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;

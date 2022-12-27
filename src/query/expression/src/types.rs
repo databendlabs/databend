@@ -59,7 +59,6 @@ use crate::deserializations::NullableDeserializer;
 use crate::deserializations::NumberDeserializer;
 use crate::deserializations::TimestampDeserializer;
 use crate::deserializations::TupleDeserializer;
-use crate::deserializations::TypeDeserializer;
 use crate::deserializations::VariantDeserializer;
 use crate::property::Domain;
 use crate::utils::concat_array;

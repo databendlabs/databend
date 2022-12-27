@@ -41,7 +41,6 @@ use crate::Chunk;
 use crate::ChunkEntry;
 use crate::Column;
 use crate::ConstantFolder;
-use crate::DataSchema;
 use crate::Domain;
 use crate::Evaluator;
 use crate::FunctionContext;

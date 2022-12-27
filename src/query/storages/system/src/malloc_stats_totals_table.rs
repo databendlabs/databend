@@ -66,6 +66,8 @@ impl SyncSystemTable for MallocStatsTotalsTable {
     }
 }
 
+type BuildResult = std::result::Result<Vec<(Value<AnyType>, DataType)>, Box<dyn std::error::Error>>;
+
 impl MallocStatsTotalsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
@@ -88,8 +90,7 @@ impl MallocStatsTotalsTable {
         SyncOneBlockSystemTable::create(MallocStatsTotalsTable { table_info })
     }
 
-    fn build_columns()
-    -> std::result::Result<Vec<(Value<AnyType>, DataType)>, Box<dyn std::error::Error>> {
+    fn build_columns() -> BuildResult {
         let mut names = StringColumnBuilder::with_capacity(6, 6 * 4);
         let mut values: Vec<u64> = vec![];
 

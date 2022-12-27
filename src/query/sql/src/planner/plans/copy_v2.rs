@@ -17,7 +17,6 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 
 use common_catalog::plan::DataSourcePlan;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_meta_types::MetaId;
 use common_meta_types::UserStageInfo;

@@ -51,6 +51,8 @@ impl SyncSystemTable for MallocStatsTable {
     }
 }
 
+type BuildResult = std::result::Result<Vec<(Value<AnyType>, DataType)>, Box<dyn std::error::Error>>;
+
 impl MallocStatsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema =
@@ -71,8 +73,7 @@ impl MallocStatsTable {
         SyncOneBlockSystemTable::create(MallocStatsTable { table_info })
     }
 
-    fn build_columns()
-    -> std::result::Result<Vec<(Value<AnyType>, DataType)>, Box<dyn std::error::Error>> {
+    fn build_columns() -> BuildResult {
         let mut buf = vec![];
         let mut options = tikv_jemalloc_ctl::stats_print::Options::default();
         // always return as json

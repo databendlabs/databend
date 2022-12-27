@@ -22,7 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::combine_validities_2;
 use common_expression::Chunk;
-use common_expression::Column;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::HashMethod;

@@ -19,7 +19,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::combine_validities_3;
 use common_expression::types::nullable::NullableColumn;
-use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
@@ -123,7 +122,7 @@ impl JoinHashTable {
                         }
                     }
                     Column::Null { .. } => {}
-                    c => {
+                    _c => {
                         let mut m = MutableBitmap::with_capacity(num_rows);
                         m.extend_constant(num_rows, true);
                         valids = Some(m.into());
@@ -222,7 +221,7 @@ impl JoinHashTable {
             .ok_or_else(|| ErrorCode::Internal("Cannot get the boolean column"))?;
 
         match predict_boolean_nonull {
-            Value::Scalar(v) => return Ok((None, v, !v)),
+            Value::Scalar(v) => Ok((None, v, !v)),
             Value::Column(s) => {
                 let count_zeros = s.unset_bits();
                 let all_false = s.len() == count_zeros;
@@ -299,7 +298,7 @@ impl JoinHashTable {
             self.probe_schema
                 .fields()
                 .iter()
-                .map(|df| (Value::Scalar(Scalar::Null), df.data_type().clone().into()))
+                .map(|df| (Value::Scalar(Scalar::Null), df.data_type().clone()))
                 .collect(),
             unmatched_build_indexes.len(),
         );

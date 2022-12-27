@@ -20,7 +20,6 @@ use common_expression::large_number::LargeNumber;
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringIterator;
-use common_expression::types::NumberType;
 
 pub trait KeysColumnIter<T: ?Sized> {
     type Iterator<'a>: Iterator<Item = &'a T>

@@ -135,7 +135,7 @@ impl FuseTable {
         let func_ctx = FunctionContext::default();
 
         let dummy_field = DataField::new("dummy", DataType::Null);
-        let dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
+        let _dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
         let dummy_value = Value::Column(Column::Null { len: 1 });
         let dummy_chunk = Chunk::new_from_sequence(vec![(dummy_value, DataType::Null)], 1);
 
@@ -283,11 +283,8 @@ impl FuseTable {
         }
 
         let input_schema = self.table_info.schema();
-        let mut merged: Vec<DataField> = input_schema
-            .fields()
-            .iter()
-            .map(|f| DataField::from(f))
-            .collect();
+        let mut merged: Vec<DataField> =
+            input_schema.fields().iter().map(DataField::from).collect();
 
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());

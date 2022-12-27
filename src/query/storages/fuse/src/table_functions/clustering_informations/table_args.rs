@@ -14,11 +14,9 @@
 
 use std::sync::Arc;
 
-use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Expr;
 use common_expression::RemoteExpr;
 
 // use common_sql::ExpressionParser;
@@ -42,9 +40,9 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
 }
 
 pub fn get_cluster_keys(
-    ctx: Arc<dyn TableContext>,
-    table: &FuseTable,
-    definition: &str,
+    _ctx: Arc<dyn TableContext>,
+    _table: &FuseTable,
+    _definition: &str,
 ) -> Result<Vec<RemoteExpr<String>>> {
     todo!("expression");
     // let cluster_keys = if !definition.is_empty() {

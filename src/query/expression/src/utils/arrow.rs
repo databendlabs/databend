@@ -25,8 +25,6 @@ use common_arrow::arrow::io::ipc::read::FileReader;
 use common_arrow::arrow::io::ipc::write::FileWriter;
 use common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
 
-use crate::types::AnyType;
-use crate::types::DataType;
 use crate::ChunkEntry;
 use crate::ColumnBuilder;
 use crate::Value;

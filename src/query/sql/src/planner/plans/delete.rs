@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::Projection;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_meta_app::schema::TableIdent;

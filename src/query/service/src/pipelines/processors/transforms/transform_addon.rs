@@ -59,11 +59,11 @@ where Self: Transform
         let mut default_exprs = Vec::new();
         let mut default_nonexpr_fields = Vec::new();
 
-        let mut fields = table
+        let fields = table
             .schema()
             .fields()
             .iter()
-            .map(|f| DataField::from(f))
+            .map(DataField::from)
             .collect::<Vec<_>>();
 
         let mut unresort_fields = input_schema.fields().to_vec();
@@ -102,7 +102,7 @@ impl Transform for TransformAddOn {
     const NAME: &'static str = "AddOnTransform";
 
     fn transform(&mut self, mut chunk: Chunk) -> Result<Chunk> {
-        let num_rows = chunk.num_rows();
+        let _num_rows = chunk.num_rows();
         chunk = self.expression_transform.transform(chunk.clone())?;
 
         for f in &self.default_nonexpr_fields {

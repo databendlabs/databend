@@ -166,7 +166,7 @@ impl<'a> AggregateRewriter<'a> {
                     // can not be referenced, the name is only for debug
                     column_name: name,
                     index,
-                    data_type: Box::new(DataType::from(arg.data_type())),
+                    data_type: Box::new(arg.data_type()),
                     visibility: Visibility::Visible,
                 };
                 replaced_args.push(

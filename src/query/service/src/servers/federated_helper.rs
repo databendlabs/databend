@@ -15,8 +15,6 @@
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
 use common_expression::Chunk;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use regex::bytes::RegexSet;

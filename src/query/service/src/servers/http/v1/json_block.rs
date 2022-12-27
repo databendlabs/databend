@@ -74,7 +74,7 @@ impl JsonBlock {
     pub fn new(schema: DataSchemaRef, chunk: &Chunk, format: &FormatSettings) -> Result<Self> {
         Ok(JsonBlock {
             data: block_to_json_value(chunk, format)?,
-            schema: schema.clone(),
+            schema,
         })
     }
 

@@ -27,7 +27,6 @@ use common_exception::ToErrorCode;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_expression::SendableChunkStream;
-use common_io::prelude::*;
 use common_sql::plans::Plan;
 use common_sql::Planner;
 use common_users::CertifiedInfo;

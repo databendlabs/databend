@@ -288,8 +288,7 @@ impl Table for FuseTable {
                     let k = k.project_column_ref(|index| {
                         table_meta.schema().field(*index).name().to_string()
                     });
-                    let remote_expr = RemoteExpr::from_expr(&k);
-                    remote_expr
+                    RemoteExpr::from_expr(&k)
                 })
                 .collect();
             return cluster_keys;

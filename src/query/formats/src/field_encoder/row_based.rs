@@ -138,7 +138,7 @@ pub trait FieldEncoderRowBased {
 
     fn write_date(&self, column: &Buffer<i32>, row_index: usize, out_buf: &mut Vec<u8>, raw: bool) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = date_to_string(&(*v as i64)).to_string();
+        let s = date_to_string(&(*v as i64));
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 

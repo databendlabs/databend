@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_expression::ArrayDeserializer;
 use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
-use common_expression::TypeDeserializer;
 use common_io::consts::FALSE_BYTES_NUM;
 use common_io::consts::INF_BYTES_LOWER;
 use common_io::consts::NAN_BYTES_LOWER;

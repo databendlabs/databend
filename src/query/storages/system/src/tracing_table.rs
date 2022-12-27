@@ -34,7 +34,6 @@ use common_expression::ColumnBuilder;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
-use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_meta_app::schema::TableIdent;
@@ -125,7 +124,6 @@ impl Table for TracingTable {
         let output = OutputPort::create();
         let log_files = Self::log_files()?;
         debug!("listed log files: {:?}", log_files);
-        let schema = self.table_info.schema();
         let max_block_size = settings.get_max_block_size()? as usize;
 
         pipeline.add_pipe(Pipe::SimplePipe {
@@ -136,7 +134,6 @@ impl Table for TracingTable {
                 output,
                 max_block_size,
                 log_files,
-                schema,
             )?],
         });
 
@@ -146,7 +143,6 @@ impl Table for TracingTable {
 
 struct TracingSource {
     rows_pre_block: usize,
-    schema: TableSchemaRef,
     tracing_files: VecDeque<String>,
     data_blocks: VecDeque<Chunk>,
 }
@@ -157,10 +153,8 @@ impl TracingSource {
         output: Arc<OutputPort>,
         rows: usize,
         log_files: VecDeque<String>,
-        schema: TableSchemaRef,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, TracingSource {
-            schema,
             rows_pre_block: rows,
             tracing_files: log_files,
             data_blocks: Default::default(),

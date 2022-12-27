@@ -30,7 +30,6 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_storages_table_meta::meta::BlockMeta;
 use serde_json::json;
 use serde_json::Value as JsonValue;

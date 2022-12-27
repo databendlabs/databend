@@ -20,7 +20,6 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Column as ExprColumn;
 use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::ScalarRef;
 use common_expression::SendableChunkStream;
@@ -180,7 +179,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             schema.fields().iter().map(make_column_from_field).collect()
         }
 
-        let tz = format.timezone;
+        let _tz = format.timezone;
         match convert_schema(&query_result.schema) {
             Err(error) => Self::err(&error, dataset_writer).await,
             Ok(columns) => {
@@ -212,7 +211,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                         .collect::<Vec<_>>();
 
                     for row_index in 0..num_rows {
-                        for (col_index, column) in columns.iter().enumerate() {
+                        for (_col_index, column) in columns.iter().enumerate() {
                             let value = unsafe { column.index_unchecked(row_index) };
                             match value {
                                 ScalarRef::Null => {

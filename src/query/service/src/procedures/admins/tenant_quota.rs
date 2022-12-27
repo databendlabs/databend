@@ -24,7 +24,6 @@ use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
-use common_expression::Scalar;
 use common_expression::Value;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;

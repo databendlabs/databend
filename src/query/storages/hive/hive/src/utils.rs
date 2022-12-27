@@ -17,8 +17,6 @@ use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::Column;
 use common_expression::Scalar;
 use ordered_float::OrderedFloat;
 

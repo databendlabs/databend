@@ -54,7 +54,7 @@ impl ChunkOperator {
         match self {
             ChunkOperator::Map { index, expr } => {
                 let registry = &BUILTIN_FUNCTIONS;
-                let evaluator = Evaluator::new(&input, func_ctx.clone(), &registry);
+                let evaluator = Evaluator::new(&input, *func_ctx, registry);
                 let result = evaluator
                     .run(expr)
                     .map_err(|(_, e)| ErrorCode::Internal(e))?;
@@ -69,7 +69,7 @@ impl ChunkOperator {
 
             ChunkOperator::Filter { expr } => {
                 let registry = &BUILTIN_FUNCTIONS;
-                let evaluator = Evaluator::new(&input, func_ctx.clone(), &registry);
+                let evaluator = Evaluator::new(&input, *func_ctx, registry);
                 let filter = evaluator
                     .run(expr)
                     .map_err(|(_, e)| ErrorCode::Internal(e))?;

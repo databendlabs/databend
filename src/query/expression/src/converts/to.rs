@@ -29,8 +29,6 @@ use crate::Chunk;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnIndex;
-use crate::DataField;
-use crate::DataSchema;
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;

@@ -321,7 +321,7 @@ impl SubqueryRewriter {
                     })
                 } else if subquery.typ == SubqueryType::NotExists {
                     Scalar::FunctionCall(FunctionCall {
-                        arguments: vec![column_ref.clone()],
+                        arguments: vec![column_ref],
                         func_name: "not".to_string(),
                         return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
                     })

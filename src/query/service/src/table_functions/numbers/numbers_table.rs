@@ -32,15 +32,10 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
-use common_expression::ChunkEntry;
 use common_expression::Column;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
-use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_meta_app::schema::TableIdent;
@@ -212,7 +207,6 @@ impl Table for NumbersTable {
                     source_output_port,
                     source_ctx,
                     &plan.parts.partitions[part_index],
-                    self.schema(),
                 )?,
             );
         }
@@ -235,7 +229,6 @@ struct NumbersSource {
     begin: u64,
     end: u64,
     step: u64,
-    schema: TableSchemaRef,
 }
 
 impl NumbersSource {
@@ -243,13 +236,11 @@ impl NumbersSource {
         output: Arc<OutputPort>,
         ctx: Arc<dyn TableContext>,
         numbers_part: &PartInfoPtr,
-        schema: TableSchemaRef,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
         let numbers_part = NumbersPartInfo::from_part(numbers_part)?;
 
         SyncSourcer::create(ctx, output, NumbersSource {
-            schema,
             begin: numbers_part.part_start,
             end: numbers_part.part_end,
             step: settings.get_max_block_size()?,

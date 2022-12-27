@@ -28,7 +28,6 @@ use common_base::base::tokio::sync::Semaphore;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_storages_cache::FileMetaDataReader;
 use futures::AsyncReadExt;

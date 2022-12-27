@@ -12,24 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::AnyType;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::with_number_mapped_type;
-use common_expression::with_number_type;
 use common_expression::Chunk;
 use common_expression::ChunkEntry;
-use common_expression::DataField;
-use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::Value;
 
 use crate::hive_partition::HivePartInfo;
-use crate::hive_table::HIVE_DEFAULT_PARTITION;
 use crate::utils::str_field_to_scalar;
 
 #[derive(Debug, Clone)]
@@ -44,7 +35,7 @@ impl HivePartitionFiller {
 
     fn generate_value(
         &self,
-        num_rows: usize,
+        _num_rows: usize,
         value: String,
         field: &TableField,
     ) -> Result<Value<AnyType>> {

@@ -24,7 +24,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
-use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;

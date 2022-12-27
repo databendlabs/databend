@@ -171,8 +171,8 @@ impl SubqueryRewriter {
                     }
                     let join_type = common_super_type(left.data_type(), right.data_type())
                         .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
-                    let left = wrap_cast(&left, &join_type);
-                    let right = wrap_cast(&right, &join_type);
+                    let left = wrap_cast(left, &join_type);
+                    let right = wrap_cast(right, &join_type);
                     left_conditions.push(left);
                     right_conditions.push(right);
                 }

@@ -17,19 +17,13 @@ use std::sync::Arc;
 use std::vec;
 
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::DataSchema;
 use common_expression::Expr;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_storages_index::range_filter::RangeFilter;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
-use crate::hive_table::HIVE_DEFAULT_PARTITION;
 use crate::utils::str_field_to_scalar;
 
 pub struct HivePartitionPruner {
@@ -59,7 +53,7 @@ impl HivePartitionPruner {
             for (index, singe_value) in partition.split('/').enumerate() {
                 let kv = singe_value.split('=').collect::<Vec<&str>>();
                 let field = self.partition_schema.fields()[index].clone();
-                let scalar = str_field_to_scalar(&kv[1], &field.data_type().into())?;
+                let scalar = str_field_to_scalar(kv[1], &field.data_type().into())?;
                 let column_stats = ColumnStatistics {
                     min: scalar.clone(),
                     max: scalar,

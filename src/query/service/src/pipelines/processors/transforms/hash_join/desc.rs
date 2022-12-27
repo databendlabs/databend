@@ -19,11 +19,9 @@ use common_expression::type_check;
 use common_expression::Chunk;
 use common_expression::Expr;
 use common_expression::RawExpr;
-use common_functions::scalars::FunctionFactory;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::HashJoin;
 use common_sql::executor::PhysicalScalar;
-use common_sql::IndexType;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -39,7 +37,7 @@ pub enum MarkerKind {
 }
 
 pub struct MarkJoinDesc {
-    pub(crate) marker_index: Option<IndexType>,
+    // pub(crate) marker_index: Option<IndexType>,
     pub(crate) has_null: RwLock<bool>,
 }
 
@@ -88,7 +86,7 @@ impl HashJoinDesc {
             other_predicate,
             marker_join_desc: MarkJoinDesc {
                 has_null: RwLock::new(false),
-                marker_index: join.marker_index,
+                // marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
             join_state: JoinState::create()?,

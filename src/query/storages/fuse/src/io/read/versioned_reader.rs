@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 use std::marker::PhantomData;
-use std::prelude::v1;
 
 use common_exception::Result;
 use common_storages_table_meta::meta::SegmentInfo;

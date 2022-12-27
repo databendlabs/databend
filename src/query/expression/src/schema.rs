@@ -14,7 +14,6 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::intrinsics::unreachable;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -305,7 +304,7 @@ impl TableSchema {
     #[inline]
     pub fn has_field(&self, name: &str) -> bool {
         for i in 0..self.fields.len() {
-            if &self.fields[i].name == name {
+            if self.fields[i].name == name {
                 return true;
             }
         }
@@ -337,7 +336,7 @@ impl TableSchema {
     /// Find the index of the column with the given name.
     pub fn index_of(&self, name: &str) -> Result<usize> {
         for i in 0..self.fields.len() {
-            if &self.fields[i].name == name {
+            if self.fields[i].name == name {
                 return Ok(i);
             }
         }
@@ -355,7 +354,7 @@ impl TableSchema {
         self.fields
             .iter()
             .enumerate()
-            .find(|&(_, c)| &c.name == name)
+            .find(|&(_, c)| c.name == name)
     }
 
     /// Check to see if `self` is a superset of `other` schema. Here are the comparision rules:
@@ -913,7 +912,7 @@ impl From<&DataType> for ArrowDataType {
             }
             DataType::Tuple(types) => {
                 let fields = types
-                    .into_iter()
+                    .iter()
                     .map(|ty| ArrowField::new("DUMMY_FIELD_NAME", ty.into(), ty.is_nullable()))
                     .collect();
                 ArrowDataType::Struct(fields)

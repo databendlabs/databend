@@ -159,7 +159,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     fn execute(params: &Arc<AggregatorParams>, chunk: &Chunk, places: &StateAddrs) -> Result<()> {
         let aggregate_functions = &params.aggregate_functions;
         let offsets_aggregate_states = &params.offsets_aggregate_states;
-        let aggregate_arguments_columns = Self::aggregate_arguments(&chunk, params)?;
+        let aggregate_arguments_columns = Self::aggregate_arguments(chunk, params)?;
 
         // This can benificial for the case of dereferencing
         // This will help improve the performance ~hundreds of megabits per second

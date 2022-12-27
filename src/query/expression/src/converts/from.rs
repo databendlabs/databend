@@ -28,8 +28,6 @@ use crate::Chunk;
 use crate::ChunkEntry;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::DataField;
-use crate::DataSchema;
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;

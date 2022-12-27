@@ -21,8 +21,6 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 

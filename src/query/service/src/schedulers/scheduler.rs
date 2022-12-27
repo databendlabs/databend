@@ -30,11 +30,11 @@ use crate::sql::ColumnBinding;
 /// else build_local_pipeline.
 pub async fn build_query_pipeline(
     ctx: &Arc<QueryContext>,
-    result_columns: &[ColumnBinding],
+    _result_columns: &[ColumnBinding],
     plan: &PhysicalPlan,
-    ignore_result: bool,
+    _ignore_result: bool,
 ) -> Result<PipelineBuildResult> {
-    let mut build_res = if !plan.is_distributed_plan() {
+    let build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan).await
     } else {
         build_distributed_pipeline(ctx, plan).await

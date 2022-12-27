@@ -24,7 +24,6 @@ use common_expression::ColumnFrom;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::TableDataType;
 use common_expression::Value;
 use common_sql::MetadataRef;
 

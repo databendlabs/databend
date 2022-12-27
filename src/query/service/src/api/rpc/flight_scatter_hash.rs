@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check;
@@ -61,7 +58,7 @@ impl HashFlightScatter {
         };
         let registry = &BUILTIN_FUNCTIONS;
         let hash_key = check(&hash_raw, registry)
-            .map_err(|(_, e)| ErrorCode::Internal("Invalid expression"))?;
+            .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
 
         Ok(Box::new(Self {
             func_ctx,
@@ -94,7 +91,7 @@ impl OneHashKeyFlightScatter {
 
         let registry = &BUILTIN_FUNCTIONS;
         let indices_scalar = check(&hash_raw, registry)
-            .map_err(|(_, e)| ErrorCode::Internal("Invalid expression"))?;
+            .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
 
         Ok(Box::new(OneHashKeyFlightScatter {
             scatter_size,
@@ -106,7 +103,7 @@ impl OneHashKeyFlightScatter {
 
 impl FlightScatter for OneHashKeyFlightScatter {
     fn execute(&self, chunk: &Chunk, num: usize) -> Result<Vec<Chunk>> {
-        let evaluator = Evaluator::new(&chunk, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(chunk, self.func_ctx, &BUILTIN_FUNCTIONS);
 
         let indices = evaluator.run(&self.indices_scalar).unwrap();
         let indices = get_hash_values(&indices, num)?;
@@ -124,7 +121,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
 
 impl FlightScatter for HashFlightScatter {
     fn execute(&self, chunk: &Chunk, num: usize) -> Result<Vec<Chunk>> {
-        let evaluator = Evaluator::new(&chunk, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(chunk, self.func_ctx, &BUILTIN_FUNCTIONS);
 
         let indices = evaluator.run(&self.hash_key).unwrap();
         let indices = get_hash_values(&indices, num)?;
@@ -150,7 +147,7 @@ fn get_hash_values(column: &Value<AnyType>, rows: usize) -> Result<Vec<u64>> {
         },
         Value::Column(c) => {
             if let Some(column) = NumberType::<u64>::try_downcast_column(c) {
-                Ok(column.iter().map(|c| *c).collect())
+                Ok(column.iter().copied().collect())
             } else if let Some(column) = NullableType::<NumberType<u64>>::try_downcast_column(c) {
                 let null_map = column.validity;
                 Ok(column

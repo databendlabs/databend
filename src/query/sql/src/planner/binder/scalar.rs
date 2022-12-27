@@ -15,26 +15,14 @@
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
-use common_ast::parser::parse_comma_separated_exprs;
-use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
-use common_ast::Dialect;
-use common_base::base::tokio::runtime::Handle;
-use common_base::base::tokio::task::block_in_place;
 use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_settings::Settings;
-use parking_lot::RwLock;
 
-use crate::executor::PhysicalScalar;
-use crate::executor::PhysicalScalarBuilder;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::Scalar;
-use crate::Metadata;
 use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.

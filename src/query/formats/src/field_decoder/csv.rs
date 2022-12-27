@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_expression::ArrayDeserializer;
 use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
-use common_expression::TupleDeserializer;
 use common_expression::VariantDeserializer;
 use common_io::consts::FALSE_BYTES_LOWER;
 use common_io::consts::INF_BYTES_LOWER;

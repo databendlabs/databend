@@ -158,11 +158,8 @@ impl FuseTable {
         }
 
         let input_schema = self.table_info.schema();
-        let mut merged: Vec<DataField> = input_schema
-            .fields()
-            .iter()
-            .map(|f| DataField::from(f))
-            .collect();
+        let mut merged: Vec<DataField> =
+            input_schema.fields().iter().map(DataField::from).collect();
 
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
@@ -195,7 +192,7 @@ impl FuseTable {
                 Ok(CompoundChunkOperator::create(
                     input,
                     output,
-                    func_ctx.clone(),
+                    func_ctx,
                     operators.clone(),
                 ))
             })?;

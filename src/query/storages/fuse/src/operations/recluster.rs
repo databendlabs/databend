@@ -23,9 +23,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::Expr;
 use common_expression::SortColumnDescription;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_pipeline_transforms::processors::transforms::ChunkCompactor;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
@@ -155,7 +153,7 @@ impl FuseTable {
             chunk_compact_thresholds,
         )?;
 
-        let schema = table_info.schema();
+        let _schema = table_info.schema();
         // sort
         let sort_descs: Vec<SortColumnDescription> = cluster_stats_gen
             .cluster_key_index

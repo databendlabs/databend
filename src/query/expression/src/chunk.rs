@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -22,7 +21,6 @@ use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::arrow;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -30,11 +28,7 @@ use crate::ChunkMetaInfoPtr;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnIndex;
-use crate::DataSchemaRef;
 use crate::Domain;
-use crate::Scalar;
-use crate::TableSchema;
-use crate::TableSchemaRef;
 use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.

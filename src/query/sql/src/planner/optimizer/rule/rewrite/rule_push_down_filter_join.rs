@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::common_super_type;
 
@@ -418,8 +417,8 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Res
                         join.join_type = JoinType::Inner;
                     }
                     if left.data_type().ne(&right.data_type()) {
-                        let left = wrap_cast(&left, &join_key_type);
-                        let right = wrap_cast(&right, &join_key_type);
+                        let left = wrap_cast(left, &join_key_type);
+                        let right = wrap_cast(right, &join_key_type);
                         join.left_conditions.push(left);
                         join.right_conditions.push(right);
                     } else {

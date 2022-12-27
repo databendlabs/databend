@@ -17,11 +17,9 @@ use std::hash::Hash;
 use common_ast::ast::BinaryOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check;
 use common_expression::types::DataType;
 use common_expression::Literal;
 use common_functions::scalars::FunctionFactory;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::binder::ColumnBinding;
 use crate::optimizer::ColumnSet;

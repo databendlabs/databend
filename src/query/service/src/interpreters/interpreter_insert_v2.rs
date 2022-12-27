@@ -34,23 +34,16 @@ use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
-use common_expression::type_check;
 use common_expression::types::number::NumberScalar;
-use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Chunk;
 use common_expression::ChunkEntry;
-use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
-use common_expression::Literal;
 use common_expression::Scalar as DataScalar;
-use common_expression::Span;
-use common_expression::TableDataType;
 use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
 use common_expression::Value;
@@ -58,7 +51,6 @@ use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
-use common_io::prelude::FormatSettings;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
@@ -70,10 +62,8 @@ use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::executor::PhysicalScalar;
 use common_sql::executor::PhysicalScalarBuilder;
 use common_sql::plans::CastExpr;
-use common_sql::plans::ConstantExpr;
 use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
@@ -187,7 +177,7 @@ impl InsertInterpreterV2 {
 
         let table_schema = infer_table_schema(&source_schema)?;
         let mut stage_table_info = StageTableInfo {
-            schema: table_schema.into(),
+            schema: table_schema,
             user_stage_info: stage_info,
             path: path.to_string(),
             files: vec![],
@@ -741,8 +731,8 @@ async fn fill_default_value<'a>(
         let tokens = tokenize_sql(default_expr)?;
         let backtrace = Backtrace::new();
         let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
-        let (scalar, ty) = binder.bind(&ast).await?;
-        let scalar = PhysicalScalarBuilder::new().build(&scalar)?;
+        let (scalar, _ty) = binder.bind(&ast).await?;
+        let scalar = PhysicalScalarBuilder::build(&scalar)?;
         operators.push(ChunkOperator::Map {
             index,
             expr: scalar.as_expr()?,
@@ -789,7 +779,6 @@ async fn exprs_to_scalar<'a>(
         ));
     }
     let mut operators = Vec::with_capacity(schema_fields_len);
-    let mut physical_builder = PhysicalScalarBuilder::new();
     let mut scalar_binder = ScalarBinder::new(
         bind_context,
         ctx.clone(),
@@ -817,7 +806,7 @@ async fn exprs_to_scalar<'a>(
                 target_type: Box::new(field_data_type.clone()),
             })
         }
-        let scalar = physical_builder.build(&scalar)?;
+        let scalar = PhysicalScalarBuilder::build(&scalar)?;
         operators.push(ChunkOperator::Map {
             index: i,
             expr: scalar.as_expr()?,

@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_expression::types::number::*;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
-use common_expression::types::StringType;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::HashMethod;
@@ -133,9 +132,9 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
     }
     type KeysColumnIter = FixedKeysColumnIter<u8>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        FixedKeysColumnIter::create(&UInt8Type::try_downcast_column(column).ok_or(
-            ErrorCode::IllegalDataType(format!("Illegal data type for FixedKeysColumnIter<u8>",)),
-        )?)
+        FixedKeysColumnIter::create(&UInt8Type::try_downcast_column(column).ok_or_else(|| {
+            ErrorCode::IllegalDataType("Illegal data type for FixedKeysColumnIter<u8>".to_string())
+        })?)
     }
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, u8>;
     fn group_columns_builder(
@@ -165,9 +164,9 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16
     }
     type KeysColumnIter = FixedKeysColumnIter<u16>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        FixedKeysColumnIter::create(&UInt16Type::try_downcast_column(column).ok_or(
-            ErrorCode::IllegalDataType(format!("Illegal data type for FixedKeysColumnIter<u16>",)),
-        )?)
+        FixedKeysColumnIter::create(&UInt16Type::try_downcast_column(column).ok_or_else(|| {
+            ErrorCode::IllegalDataType("Illegal data type for FixedKeysColumnIter<u16>".to_string())
+        })?)
     }
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, u16>;
     fn group_columns_builder(
@@ -197,9 +196,9 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32
     }
     type KeysColumnIter = FixedKeysColumnIter<u32>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        FixedKeysColumnIter::create(&UInt32Type::try_downcast_column(column).ok_or(
-            ErrorCode::IllegalDataType(format!("Illegal data type for FixedKeysColumnIter<u32>",)),
-        )?)
+        FixedKeysColumnIter::create(&UInt32Type::try_downcast_column(column).ok_or_else(|| {
+            ErrorCode::IllegalDataType("Illegal data type for FixedKeysColumnIter<u32>".to_string())
+        })?)
     }
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, u32>;
     fn group_columns_builder(
@@ -229,9 +228,9 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64
     }
     type KeysColumnIter = FixedKeysColumnIter<u64>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        FixedKeysColumnIter::create(&UInt64Type::try_downcast_column(column).ok_or(
-            ErrorCode::IllegalDataType(format!("Illegal data type for FixedKeysColumnIter<u64>",)),
-        )?)
+        FixedKeysColumnIter::create(&UInt64Type::try_downcast_column(column).ok_or_else(|| {
+            ErrorCode::IllegalDataType("Illegal data type for FixedKeysColumnIter<u64>".to_string())
+        })?)
     }
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, u64>;
     fn group_columns_builder(
@@ -262,9 +261,11 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
 
     type KeysColumnIter = LargeFixedKeysColumnIter<u128>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(column.as_string().ok_or(ErrorCode::IllegalDataType(
-            format!("Illegal data type for LargeFixedKeysColumnIter<u128>",),
-        ))?)
+        LargeFixedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+            ErrorCode::IllegalDataType(
+                "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
+            )
+        })?)
     }
 
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, u128>;
@@ -296,9 +297,11 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
 
     type KeysColumnIter = LargeFixedKeysColumnIter<U256>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(column.as_string().ok_or(ErrorCode::IllegalDataType(
-            format!("Illegal data type for LargeFixedKeysColumnIter<u256>",),
-        ))?)
+        LargeFixedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+            ErrorCode::IllegalDataType(
+                "Illegal data type for LargeFixedKeysColumnIter<u256>".to_string(),
+            )
+        })?)
     }
 
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, U256>;
@@ -330,9 +333,11 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
 
     type KeysColumnIter = LargeFixedKeysColumnIter<U512>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(column.as_string().ok_or(ErrorCode::IllegalDataType(
-            format!("Illegal data type for LargeFixedKeysColumnIter<u512>",),
-        ))?)
+        LargeFixedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+            ErrorCode::IllegalDataType(
+                "Illegal data type for LargeFixedKeysColumnIter<u512>".to_string(),
+            )
+        })?)
     }
 
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, U512>;
@@ -361,9 +366,9 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 
     type KeysColumnIter = SerializedKeysColumnIter;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        SerializedKeysColumnIter::create(column.as_string().ok_or(ErrorCode::IllegalDataType(
-            format!("Illegal data type for SerializedKeysColumnIter",),
-        ))?)
+        SerializedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+            ErrorCode::IllegalDataType("Illegal data type for SerializedKeysColumnIter".to_string())
+        })?)
     }
 
     type GroupColumnsBuilder<'a> = SerializedKeysGroupColumnsBuilder<'a>;

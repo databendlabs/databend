@@ -32,9 +32,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
@@ -541,20 +538,12 @@ impl Table for HiveTable {
 // Dummy Impl
 struct HiveSource {
     finish: bool,
-    schema: DataSchemaRef,
 }
 
 impl HiveSource {
     #[allow(dead_code)]
-    pub fn create(
-        ctx: Arc<dyn TableContext>,
-        output: Arc<OutputPort>,
-        schema: DataSchemaRef,
-    ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, HiveSource {
-            finish: false,
-            schema,
-        })
+    pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
+        SyncSourcer::create(ctx, output, HiveSource { finish: false })
     }
 }
 

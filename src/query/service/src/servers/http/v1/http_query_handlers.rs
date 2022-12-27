@@ -14,8 +14,6 @@
 
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
-use common_formats::ClickhouseFormatType;
-use poem::error::BadRequest;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;

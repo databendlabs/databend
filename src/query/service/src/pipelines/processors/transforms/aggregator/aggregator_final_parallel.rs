@@ -21,7 +21,6 @@ use common_base::runtime::ThreadPool;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::AnyType;
 use common_expression::Chunk;
 use common_expression::ColumnBuilder;
 use common_expression::HashMethod;
@@ -200,12 +199,13 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 let mut states_binary_columns = Vec::with_capacity(states_columns.len());
 
                 for agg in states_columns.iter().take(aggregate_function_len) {
-                    let aggr_column = agg.value.as_column().unwrap().as_string().ok_or(
-                        ErrorCode::IllegalDataType(format!(
-                            "Aggregation column should be StringType, but got {:?}",
-                            agg.value
-                        )),
-                    )?;
+                    let aggr_column =
+                        agg.value.as_column().unwrap().as_string().ok_or_else(|| {
+                            ErrorCode::IllegalDataType(format!(
+                                "Aggregation column should be StringType, but got {:?}",
+                                agg.value
+                            ))
+                        })?;
                     states_binary_columns.push(aggr_column);
                 }
 
@@ -256,8 +256,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 let mut values = vec![];
                 for aggregate_function in aggregate_functions {
                     let data_type = aggregate_function.return_type()?;
-                    let mut builder =
-                        ColumnBuilder::with_capacity(&data_type, self.hash_table.len());
+                    let builder = ColumnBuilder::with_capacity(&data_type, self.hash_table.len());
                     values.push((builder, data_type))
                 }
                 values

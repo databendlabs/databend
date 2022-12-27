@@ -23,9 +23,6 @@ use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::types::ValueType;
 use common_expression::Chunk;
-use common_expression::Column;
-use common_expression::Evaluator;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -117,7 +114,7 @@ impl JoinHashTable {
             *has_null = true;
         }
 
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let _func_ctx = self.ctx.try_get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
 
         let mut row_ptrs = self.row_ptrs.write();

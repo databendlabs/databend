@@ -19,18 +19,14 @@ use common_config::DATABEND_COMMIT_VERSION;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
-use common_expression::ChunkEntry;
 use common_expression::Column;
-use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
-use petgraph::visit::Data;
 
 use crate::servers::federated_helper::FederatedHelper;
 use crate::servers::federated_helper::LazyBlockFunc;
@@ -136,7 +132,7 @@ impl MySQLFederated {
         let mut vars: Vec<&str> = query.split("@@").collect();
         if vars.len() > 1 {
             vars.remove(0);
-            for (id, var) in vars.iter().enumerate() {
+            for (_id, var) in vars.iter().enumerate() {
                 let var = var.trim_end_matches(|c| c == ' ' || c == ',');
                 let vars_as: Vec<&str> = var.split(" as ").collect();
                 if vars_as.len() == 2 {

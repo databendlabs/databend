@@ -16,8 +16,6 @@ use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
 
 use crate::binder::Binder;
 use crate::optimizer::SExpr;
@@ -33,7 +31,7 @@ impl<'a> Binder {
         limit: Option<&Expr<'a>>,
         offset: &Option<Expr<'a>>,
     ) -> Result<SExpr> {
-        let type_checker = TypeChecker::new(
+        let _type_checker = TypeChecker::new(
             bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,

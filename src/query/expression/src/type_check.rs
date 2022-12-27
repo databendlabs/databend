@@ -147,11 +147,11 @@ pub fn check_literal(literal: &Literal) -> (Scalar, DataType) {
             DataType::Number(NumberDataType::Int64),
         ),
         Literal::Float32(v) => (
-            Scalar::Number(NumberScalar::Float32((*v).into())),
+            Scalar::Number(NumberScalar::Float32(*v)),
             DataType::Number(NumberDataType::Float32),
         ),
         Literal::Float64(v) => (
-            Scalar::Number(NumberScalar::Float64((*v).into())),
+            Scalar::Number(NumberScalar::Float64(*v)),
             DataType::Number(NumberDataType::Float64),
         ),
         Literal::Boolean(v) => (Scalar::Boolean(*v), DataType::Boolean),

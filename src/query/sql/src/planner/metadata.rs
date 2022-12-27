@@ -22,7 +22,6 @@ use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_catalog::table::Table;
 use common_expression::types::DataType;
-use common_expression::DataField;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use parking_lot::RwLock;
@@ -189,13 +188,13 @@ impl Metadata {
             {
                 let mut i = fields_type.len();
                 for (inner_name, inner_type) in
-                    fields_name.into_iter().rev().zip(fields_type.iter().rev())
+                    fields_name.iter().rev().zip(fields_type.iter().rev())
                 {
                     i -= 1;
                     let mut inner_indices = indices.clone();
                     inner_indices.push(i);
 
-                    let inner_field = TableField::new(&inner_name, inner_type.clone());
+                    let inner_field = TableField::new(inner_name, inner_type.clone());
                     fields.push_front((inner_indices, inner_field));
                 }
             }
@@ -210,16 +209,13 @@ impl Metadata {
         for idx in indices.iter() {
             let entry = self.column(*idx);
             if let ColumnEntry::BaseTableColumn {
-                column_index,
-                data_type,
+                data_type: TableDataType::Number(number_type),
                 ..
             } = entry
             {
-                if let TableDataType::Number(number_type) = data_type {
-                    if (number_type.bit_width() as usize) < smallest_size {
-                        smallest_size = number_type.bit_width() as usize;
-                        smallest_index = idx;
-                    }
+                if (number_type.bit_width() as usize) < smallest_size {
+                    smallest_size = number_type.bit_width() as usize;
+                    smallest_index = idx;
                 }
             }
         }

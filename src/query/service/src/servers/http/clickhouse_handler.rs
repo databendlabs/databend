@@ -431,7 +431,7 @@ fn serialize_one_block(
     let format_typ = format.typ.clone();
     let mut output_format = FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
         format,
-        schema.clone(),
+        schema,
         &ctx.get_settings(),
     )?;
     let mut res = output_format.serialize_prefix()?;

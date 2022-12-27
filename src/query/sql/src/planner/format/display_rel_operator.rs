@@ -15,12 +15,7 @@
 use std::fmt::Display;
 
 use common_ast::ast::FormatTreeNode;
-use common_exception::ErrorCode;
-use common_expression::type_check;
 use common_expression::types::DataType;
-use common_expression::RawExpr;
-use common_functions::scalars::FunctionFactory;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use crate::optimizer::SExpr;
@@ -43,7 +38,6 @@ use crate::plans::Scalar;
 use crate::plans::Sort;
 use crate::ColumnEntry;
 use crate::MetadataRef;
-use crate::ScalarExpr;
 
 #[derive(Clone)]
 pub enum FormatContext {
@@ -140,7 +134,7 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &Scalar) -> String {
             format!(
                 "CAST({} AS {})",
                 format_scalar(_metadata, &cast.argument),
-                cast.target_type.to_string()
+                cast.target_type
             )
         }
         Scalar::SubqueryExpr(_) => "SUBQUERY".to_string(),

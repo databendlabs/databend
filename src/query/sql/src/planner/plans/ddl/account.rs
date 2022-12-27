@@ -20,7 +20,6 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::TableDataType;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::PrincipalIdentity;
