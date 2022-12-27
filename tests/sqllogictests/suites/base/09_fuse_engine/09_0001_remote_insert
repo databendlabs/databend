@@ -99,6 +99,7 @@ DROP TABLE t_compression_none
 
 ## Table Compression:ZSTD
 
+statement ok
 CREATE TABLE IF NOT EXISTS t_compression_zstd(a Boolean, b Timestamp, c Date) Engine = fuse COMPRESSION = 'ZSTD';
 
 statement ok
