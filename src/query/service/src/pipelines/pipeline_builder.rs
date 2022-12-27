@@ -339,7 +339,7 @@ impl PipelineBuilder {
     fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
         self.build_pipeline(&aggregate.input)?;
         let params = Self::build_aggregator_params(
-            // aggregate.input.output_schema()?,
+            aggregate.input.output_schema()?,
             // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
@@ -359,7 +359,7 @@ impl PipelineBuilder {
         self.build_pipeline(&aggregate.input)?;
 
         let params = Self::build_aggregator_params(
-            // aggregate.before_group_by_schema.clone(),
+            aggregate.before_group_by_schema.clone(),
             // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
@@ -377,6 +377,7 @@ impl PipelineBuilder {
     }
 
     pub fn build_aggregator_params(
+        input_schema: DataSchemaRef,
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
     ) -> Result<Arc<AggregatorParams>> {
@@ -399,7 +400,7 @@ impl PipelineBuilder {
             })
             .collect::<Result<_>>()?;
 
-        let params = AggregatorParams::try_create(group_by, &aggs, &agg_args)?;
+        let params = AggregatorParams::try_create(input_schema, &group_columns, &aggs, &agg_args)?;
 
         Ok(params)
     }

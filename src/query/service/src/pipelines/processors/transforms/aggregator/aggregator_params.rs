@@ -47,7 +47,7 @@ pub struct AggregatorParams {
 impl AggregatorParams {
     pub fn try_create(
         // output_schema: DataSchemaRef,
-        // input_schema: DataSchemaRef,
+        input_schema: DataSchemaRef,
         group_columns: &[usize],
         agg_funcs: &[AggregateFunctionRef],
         agg_args: &[Vec<usize>],

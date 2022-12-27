@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::ChunkEntry;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Value;
@@ -36,8 +37,13 @@ use crate::sessions::QueryContext;
 
 pub struct TransformAddOn {
     default_nonexpr_fields: Vec<DataField>,
-
     expression_transform: CompoundChunkOperator,
+
+    /// The final schema of the output chunk.
+    output_schema: DataSchemaRef,
+    /// The schema of the output chunk before resorting.
+    /// input fields | default expr fields | default nonexpr fields
+    unresort_schema: DataSchemaRef,
 }
 
 impl TransformAddOn
@@ -53,16 +59,28 @@ where Self: Transform
         let mut default_exprs = Vec::new();
         let mut default_nonexpr_fields = Vec::new();
 
-        for (index, f) in unresort_fields.iter().enumerate() {
+        let mut fields = table
+            .schema()
+            .fields()
+            .iter()
+            .map(|f| DataField::from(f))
+            .collect::<Vec<_>>();
+
+        let mut unresort_fields = input_schema.fields().to_vec();
+
+        for (index, f) in fields.iter().enumerate() {
             if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
                     let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?[0];
                     default_exprs.push(ChunkOperator::Map { index, expr });
+                    unresort_fields.push(f.clone());
                 } else {
                     default_nonexpr_fields.push(f.clone());
                 }
             }
         }
+
+        unresort_fields.extend_from_slice(&default_nonexpr_fields);
 
         let func_ctx = ctx.try_get_function_context()?;
         let expression_transform = CompoundChunkOperator {
@@ -73,6 +91,8 @@ where Self: Transform
         Ok(Transformer::create(input, output, Self {
             default_nonexpr_fields,
             expression_transform,
+            output_schema: Arc::new(DataSchema::from(table.schema())),
+            unresort_schema: DataSchemaRefExt::create(unresort_fields),
         }))
     }
 }
@@ -93,6 +113,8 @@ impl Transform for TransformAddOn {
             };
             chunk.add_column(column);
         }
+
+        chunk = chunk.resort(&self.unresort_schema, &self.output_schema)?;
 
         Ok(chunk)
     }

@@ -145,7 +145,7 @@ impl HashJoinState for JoinHashTable {
             }
 
             let chunk = &mut chunks[chunk_index];
-            let mut columns = Vec::with_capacity(chunk.cols.len());
+            let columns = &chunk.cols;
             let markers = match self.hash_join_desc.join_type {
                 JoinType::LeftMark => Self::init_markers(&chunk.cols, chunk.num_rows())
                     .iter()
@@ -168,9 +168,6 @@ impl HashJoinState for JoinHashTable {
                     vec![None; chunk.num_rows()]
                 }
             };
-            for col in chunk.cols.iter() {
-                columns.push(col);
-            }
             match (*self.hash_table.write()).borrow_mut() {
                 HashTable::SerializerHashTable(table) => {
                     let mut build_cols_ref = Vec::with_capacity(chunk.cols.len());
@@ -299,7 +296,7 @@ impl HashJoinState for JoinHashTable {
         let num_rows = input_chunk.num_rows();
 
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
-            if input_block.is_empty() {
+            if input_chunk.is_empty() {
                 return Ok(vec![]);
             }
             return Ok(vec![input_chunk]);
@@ -338,7 +335,7 @@ impl HashJoinState for JoinHashTable {
             .iter()
             .map(|c| Self::set_validity(c, &validity))
             .collect::<Vec<_>>();
-        let probe_chunk = Chunk::new(robe_columns, num_rows);
+        let probe_chunk = Chunk::new(probe_columns, num_rows);
         let build_chunk = Chunk::new(
             input_chunk.columns_ref()[probe_column_len..].to_vec(),
             num_rows,

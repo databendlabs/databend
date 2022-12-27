@@ -130,17 +130,19 @@ impl Aggregator for SingleStateAggregator<true> {
     const NAME: &'static str = "AggregatorFinalTransform";
 
     fn consume(&mut self, chunk: Chunk) -> Result<()> {
+        if chunk.is_empty() {
+            return Ok(());
+        }
         let chunk = chunk.convert_to_full();
+        let places = self.new_places();
         for (index, func) in self.funcs.iter().enumerate() {
-            let place = self.places[index];
-
             let binary_array = chunk.get_by_offset(index).value.as_column().unwrap();
             let binary_array = binary_array.as_string().ok_or(ErrorCode::IllegalDataType(
                 "binary array should be string type",
             ))?;
 
             let mut data = unsafe { binary_array.index_unchecked(0) };
-            func.deserialize(temp_addr, &mut data)?;
+            func.deserialize(places[index], &mut data)?;
             self.to_merge_places[index].push(places[index]);
         }
         Ok(())

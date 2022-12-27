@@ -213,18 +213,19 @@ impl JoinHashTable {
         filter: &Expr,
     ) -> Result<(Option<Bitmap>, bool, bool)> {
         let func_ctx = self.ctx.try_get_function_context()?;
+        // `predicate_column` contains a column, which is a boolean column.
         let evaluator = Evaluator::new(merged_chunk, func_ctx, &BUILTIN_FUNCTIONS);
         let filter_vector: Value<AnyType> = evaluator
             .run(filter)
             .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
-        let predict_boolean_nonull = Chunk::cast_to_nonull_boolean(&filter_vector)
+        let predict_boolean_nonull = Chunk::<usize>::cast_to_nonull_boolean(&filter_vector)
             .ok_or_else(|| ErrorCode::Internal("Cannot get the boolean column"))?;
 
         match predict_boolean_nonull {
             Value::Scalar(v) => return Ok((None, v, !v)),
             Value::Column(s) => {
                 let count_zeros = s.unset_bits();
-                Ok((Some(s), count_zeros == 0, rows == count_zeros))
+                Ok((Some(s), count_zeros == 0, s.len() == count_zeros))
             }
         }
     }
@@ -242,9 +243,16 @@ impl JoinHashTable {
         let filter_vector =
             filter_vector.convert_to_full_column(filter.data_type(), merged_chunk.num_rows());
 
-        match type_vector {
-            Column::Nullable(_) => Ok(type_vector),
-            other => Ok(Column::Nullable(Box::new(other))),
+        match filter_vector {
+            Column::Nullable(_) => Ok(filter_vector),
+            other => {
+                let validity = MutableBitmap::with_capacity(other.len());
+                validity.extend_constant(other.len(), true);
+                Ok(Column::Nullable(Box::new(NullableColumn {
+                    column: other,
+                    validity: validity.into(),
+                })))
+            }
         }
     }
 
