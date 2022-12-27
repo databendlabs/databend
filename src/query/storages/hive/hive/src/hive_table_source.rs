@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::vec;
 
 use common_base::base::tokio::time::sleep;
 use common_base::base::tokio::time::Duration;
@@ -22,12 +23,16 @@ use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
+use common_datavalues::Column;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionContext;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_sql::evaluator::EvalNode;
 use opendal::Operator;
 
 use crate::hive_parquet_block_reader::DataBlockDeserializer;
@@ -36,6 +41,11 @@ use crate::HiveBlockFilter;
 use crate::HiveBlocks;
 use crate::HivePartInfo;
 
+struct PreWhereData {
+    data_blocks: Vec<DataBlock>,
+    valids: Vec<Arc<dyn Column>>,
+}
+
 enum State {
     /// Read parquet file meta data
     /// IO bound
@@ -43,15 +53,19 @@ enum State {
 
     /// Read blocks from data groups (without deserialization)
     /// IO bound
-    ReadData(HiveBlocks),
+    ReadPrewhereData(HiveBlocks),
+
+    ReadRemainData(HiveBlocks, PreWhereData),
+
+    PrewhereFilter(HiveBlocks, DataBlockDeserializer),
 
     /// Deserialize block from the given data groups
     /// CPU bound
-    Deserialize(HiveBlocks, DataBlockDeserializer),
+    Deserialize(HiveBlocks, DataBlockDeserializer, PreWhereData),
 
     /// `(_, _, Some(_))` indicates that a data block is ready, and needs to be consumed
     /// `(_, _, None)` indicates that there are no more blocks left for the current row group of `HiveBlocks`
-    Generated(HiveBlocks, DataBlockDeserializer, Option<DataBlock>),
+    Generated(HiveBlocks, Vec<DataBlock>),
     Finish,
 }
 
@@ -60,31 +74,41 @@ pub struct HiveTableSource {
     ctx: Arc<dyn TableContext>,
     dal: Operator,
     scan_progress: Arc<Progress>,
-    block_reader: Arc<HiveBlockReader>,
+    prewhere_block_reader: Arc<HiveBlockReader>,
+    remain_reader: Arc<Option<HiveBlockReader>>,
+    prewhere_filter: Arc<Option<EvalNode>>,
     output: Arc<OutputPort>,
     delay: usize,
     hive_block_filter: Arc<HiveBlockFilter>,
+    output_schema: DataSchemaRef,
 }
 
 impl HiveTableSource {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         output: Arc<OutputPort>,
-        block_reader: Arc<HiveBlockReader>,
+        prewhere_block_reader: Arc<HiveBlockReader>,
+        remain_reader: Arc<Option<HiveBlockReader>>,
+        prewhere_filter: Arc<Option<EvalNode>>,
         delay: usize,
         hive_block_filter: Arc<HiveBlockFilter>,
+        output_schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(HiveTableSource {
             ctx,
             dal,
             output,
-            block_reader,
+            prewhere_block_reader,
+            remain_reader,
+            prewhere_filter,
             hive_block_filter,
             scan_progress,
             state: State::ReadMeta(None),
             delay,
+            output_schema,
         })))
     }
 
@@ -96,6 +120,122 @@ impl HiveTableSource {
             }
         }
 
+        Ok(())
+    }
+
+    fn exec_prewhere_filter(
+        &self,
+        filter: &EvalNode,
+        data_blocks: &Vec<DataBlock>,
+    ) -> Result<(bool, Vec<Arc<dyn Column>>)> {
+        let mut valids = vec![];
+        let mut exists = false;
+        for datablock in data_blocks {
+            let res = filter.eval(&FunctionContext::default(), datablock)?.vector;
+            let filter = DataBlock::cast_to_nonull_boolean(&res).unwrap();
+            assert_eq!(datablock.num_rows(), filter.len());
+            valids.push(filter.clone());
+            // shortcut, if predicates is const boolean (or can be cast to boolean)
+            match DataBlock::filter_exists(&filter)? {
+                true => {
+                    exists = true;
+                }
+                false => {}
+            }
+        }
+
+        assert_eq!(data_blocks.len(), valids.len());
+
+        Ok((exists, valids))
+    }
+
+    fn do_prewhere_filter(
+        &mut self,
+        hive_blocks: HiveBlocks,
+        rowgroup_deserializer: DataBlockDeserializer,
+    ) -> Result<()> {
+        // 1. deserialize chunks to datablocks
+        let prewhere_datablocks = self
+            .prewhere_block_reader
+            .get_all_datablocks(rowgroup_deserializer, &hive_blocks.part)?;
+
+        let progress_values = ProgressValues {
+            rows: prewhere_datablocks.iter().map(|x| x.num_rows()).sum(),
+            bytes: prewhere_datablocks.iter().map(|x| x.memory_size()).sum(),
+        };
+        self.scan_progress.incr(&progress_values);
+
+        if let Some(filter) = self.prewhere_filter.as_ref() {
+            // 2. do filter
+            let (exists, valids) = self.exec_prewhere_filter(filter, &prewhere_datablocks)?;
+            // 3. if all data filter out, try next rowgroup, trans to prewehere data
+            if !exists {
+                // all rows in this block are filtered out
+                // turn to begin the next state cycle.
+                // Generate a empty block.
+                self.state = State::Generated(hive_blocks, vec![]);
+                return Ok(());
+            }
+            // 4. if remain block is non, trans to generated state
+            if self.remain_reader.is_none() {
+                let prewhere_datablocks = prewhere_datablocks
+                    .into_iter()
+                    .zip(valids.iter())
+                    .map(|(datablock, valid)| DataBlock::filter_block(datablock, valid).unwrap())
+                    .filter(|x| !x.is_empty())
+                    .collect();
+
+                self.state = State::Generated(hive_blocks, prewhere_datablocks);
+            } else {
+                // 5. if not all data filter out, and remain block reader is not non, trans to read remain
+                self.state = State::ReadRemainData(hive_blocks, PreWhereData {
+                    data_blocks: prewhere_datablocks,
+                    valids,
+                });
+            }
+        } else {
+            // if no prewhere filter, data should be all fetched in prewhere state
+            self.state = State::Generated(hive_blocks, prewhere_datablocks);
+        }
+
+        Ok(())
+    }
+
+    fn do_deserialize(
+        &mut self,
+        hive_blocks: HiveBlocks,
+        rowgroup_deserializer: DataBlockDeserializer,
+        prewhere_data: PreWhereData,
+    ) -> Result<()> {
+        let datablocks = if let Some(remain_reader) = self.remain_reader.as_ref() {
+            // 1. deserialize all remain data block
+            let remain_datablocks =
+                remain_reader.get_all_datablocks(rowgroup_deserializer, &hive_blocks.part)?;
+            // 2. concat prewhere and remain datablock(may be none)
+            assert_eq!(remain_datablocks.len(), prewhere_data.data_blocks.len());
+            let allblocks = remain_datablocks
+                .iter()
+                .zip(prewhere_data.data_blocks.iter())
+                .zip(prewhere_data.valids.iter())
+                .map(|((r, p), v)| {
+                    // do merge block
+                    assert_eq!(r.num_rows(), p.num_rows());
+                    let mut a = r.clone();
+                    for (column, field) in p.columns().iter().zip(p.schema().fields()) {
+                        a = a.add_column(column.clone(), field.clone()).unwrap();
+                    }
+                    let a = DataBlock::filter_block(a, v).unwrap();
+                    a.resort(self.output_schema.clone()).unwrap()
+                })
+                .filter(|x| !x.is_empty())
+                .collect::<Vec<_>>();
+            allblocks
+        } else {
+            prewhere_data.data_blocks
+        };
+
+        // 3  trans to generate state
+        self.state = State::Generated(hive_blocks, datablocks);
         Ok(())
     }
 }
@@ -133,26 +273,28 @@ impl Processor for HiveTableSource {
             return Ok(Event::Finished);
         }
 
-        if matches!(self.state, State::Generated(_, _, _)) {
-            if let State::Generated(mut hive_blocks, rowgroup_deserializer, data_block) =
+        if matches!(self.state, State::Generated(_, _)) {
+            if let State::Generated(mut hive_blocks, mut data_blocks) =
                 std::mem::replace(&mut self.state, State::Finish)
             {
-                if let Some(data_block) = data_block {
-                    let progress_values = ProgressValues {
-                        rows: data_block.num_rows(),
-                        bytes: data_block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
+                // 1. consume all generated blocks,
+                if let Some(data_block) = data_blocks.pop() {
+                    // let progress_values = ProgressValues {
+                    // rows: data_block.num_rows(),
+                    // bytes: data_block.memory_size(),
+                    // };
+                    // self.scan_progress.incr(&progress_values);
                     self.output.push_data(Ok(data_block));
-                    self.state = State::Deserialize(hive_blocks, rowgroup_deserializer);
+                    // 2. if not all consumed, retain generated state
+                    self.state = State::Generated(hive_blocks, data_blocks);
                     return Ok(Event::NeedConsume);
                 }
 
-                // read current rowgroup finished, try read next rowgroup
+                // 3. if all consumed, try next rowgroup
                 hive_blocks.advance();
                 match hive_blocks.has_blocks() {
                     true => {
-                        self.state = State::ReadData(hive_blocks);
+                        self.state = State::ReadPrewhereData(hive_blocks);
                     }
                     false => {
                         self.try_get_partitions()?;
@@ -167,21 +309,21 @@ impl Processor for HiveTableSource {
                 Ok(Event::Finished)
             }
             State::ReadMeta(_) => Ok(Event::Async),
-            State::ReadData(_) => Ok(Event::Async),
-            State::Deserialize(_, _) => Ok(Event::Sync),
-            State::Generated(_, _, _) => Err(ErrorCode::Internal("It's a bug.")),
+            State::ReadPrewhereData(_) => Ok(Event::Async),
+            State::ReadRemainData(_, _) => Ok(Event::Async),
+            State::PrewhereFilter(_, _) => Ok(Event::Sync),
+            State::Deserialize(_, _, _) => Ok(Event::Sync),
+            State::Generated(_, _) => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::Deserialize(hive_blocks, mut rowgroup_deserializer) => {
-                let data_block = self
-                    .block_reader
-                    .create_data_block(&mut rowgroup_deserializer, hive_blocks.part.clone())?;
-
-                self.state = State::Generated(hive_blocks, rowgroup_deserializer, data_block);
-                Ok(())
+            State::PrewhereFilter(hive_blocks, rowgroup_deserializer) => {
+                self.do_prewhere_filter(hive_blocks, rowgroup_deserializer)
+            }
+            State::Deserialize(hive_blocks, rowgroup_deserializer, prewhere_data) => {
+                self.do_deserialize(hive_blocks, rowgroup_deserializer, prewhere_data)
             }
             _ => Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -197,7 +339,7 @@ impl Processor for HiveTableSource {
                 }
                 let part = HivePartInfo::from_part(&part)?;
                 let file_meta = self
-                    .block_reader
+                    .prewhere_block_reader
                     .read_meta_data(self.dal.clone(), &part.filename, part.filesize)
                     .await?;
                 let mut hive_blocks =
@@ -205,7 +347,7 @@ impl Processor for HiveTableSource {
 
                 match hive_blocks.prune() {
                     true => {
-                        self.state = State::ReadData(hive_blocks);
+                        self.state = State::ReadPrewhereData(hive_blocks);
                     }
                     false => {
                         self.try_get_partitions()?;
@@ -213,18 +355,34 @@ impl Processor for HiveTableSource {
                 }
                 Ok(())
             }
-            State::ReadData(hive_blocks) => {
+            State::ReadPrewhereData(hive_blocks) => {
                 let row_group = hive_blocks.get_current_row_group_meta_data();
                 let part = hive_blocks.get_part_info();
                 let chunks = self
-                    .block_reader
+                    .prewhere_block_reader
                     .read_columns_data(row_group, &part)
                     .await?;
                 let rowgroup_deserializer = self
-                    .block_reader
+                    .prewhere_block_reader
                     .create_rowgroup_deserializer(chunks, row_group)?;
-                self.state = State::Deserialize(hive_blocks, rowgroup_deserializer);
+                self.state = State::PrewhereFilter(hive_blocks, rowgroup_deserializer);
                 Ok(())
+            }
+
+            State::ReadRemainData(hive_blocks, prewhere_data) => {
+                let row_group = hive_blocks.get_current_row_group_meta_data();
+                let part = hive_blocks.get_part_info();
+
+                if let Some(remain_reader) = self.remain_reader.as_ref() {
+                    let chunks = remain_reader.read_columns_data(row_group, &part).await?;
+                    let rowgroup_deserializer =
+                        remain_reader.create_rowgroup_deserializer(chunks, row_group)?;
+                    self.state =
+                        State::Deserialize(hive_blocks, rowgroup_deserializer, prewhere_data);
+                    Ok(())
+                } else {
+                    Err(ErrorCode::Internal("It's a bug. No remain reader"))
+                }
             }
             _ => Err(ErrorCode::Internal("It's a bug.")),
         }

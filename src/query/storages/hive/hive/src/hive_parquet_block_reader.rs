@@ -25,7 +25,9 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
 use common_base::base::tokio::sync::Semaphore;
+use common_catalog::plan::Projection;
 use common_datablocks::DataBlock;
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -34,8 +36,8 @@ use opendal::Object;
 use opendal::Operator;
 
 use crate::hive_partition::HivePartInfo;
-use crate::hive_partition_filler::HivePartitionFiller;
 use crate::MetaDataReader;
+use crate::HivePartitionFiller;
 
 #[derive(Clone)]
 pub struct HiveBlockReader {
@@ -43,6 +45,8 @@ pub struct HiveBlockReader {
     projection: Vec<usize>,
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
+    // have partition columns
+    output_schema: DataSchemaRef,
     hive_partition_filler: Option<HivePartitionFiller>,
     chunk_size: usize,
 }
@@ -81,7 +85,8 @@ impl DataBlockDeserializer {
             }
 
             let block: DataBlock = DataBlock::from_chunk(schema, &chunk)?;
-            return if let Some(filler) = &filler {
+
+            return if let Some(filler) = filler {
                 let num_rows = self.deserializer.num_rows();
                 let filled = filler.fill_data(block, part_info, num_rows)?;
                 Ok(Some(filled))
@@ -99,16 +104,36 @@ impl HiveBlockReader {
     pub fn create(
         operator: Operator,
         schema: DataSchemaRef,
-        projection: Vec<usize>,
-        hive_partition_filler: Option<HivePartitionFiller>,
+        projection: Projection,
+        partition_keys: &Option<Vec<String>>,
         chunk_size: usize,
     ) -> Result<Arc<HiveBlockReader>> {
+        let projection = match projection {
+            Projection::Columns(projection) => projection,
+            Projection::InnerColumns(b) => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "not support inter columns in hive block reader,{:?}",
+                    b
+                )));
+            }
+        };
+        let output_schema = DataSchemaRef::new(schema.project(&projection));
+
+        let (projection, partition_fields) =
+            filter_hive_partition_from_partition_keys(schema.clone(), projection, partition_keys);
+        let hive_partition_filler = if !partition_fields.is_empty() {
+            Some(HivePartitionFiller::create(partition_fields))
+        } else {
+            None
+        };
+
         let projected_schema = DataSchemaRef::new(schema.project(&projection));
         let arrow_schema = schema.to_arrow();
         Ok(Arc::new(HiveBlockReader {
             operator,
             projection,
             projected_schema,
+            output_schema,
             arrow_schema: Arc::new(arrow_schema),
             hive_partition_filler,
             chunk_size,
@@ -260,10 +285,51 @@ impl HiveBlockReader {
     pub fn create_data_block(
         &self,
         row_group_iterator: &mut DataBlockDeserializer,
-        part: HivePartInfo,
+        part: &HivePartInfo,
     ) -> Result<Option<DataBlock>> {
         row_group_iterator
-            .next_block(&self.projected_schema, &self.hive_partition_filler, &part)
+            .next_block(&self.projected_schema, &self.hive_partition_filler, part)
             .map_err(|e| e.add_message(format!(" filename of hive part {}", part.filename)))
+    }
+
+    pub fn get_all_datablocks(
+        &self,
+        mut rowgroup_deserializer: DataBlockDeserializer,
+        part: &HivePartInfo,
+    ) -> Result<Vec<DataBlock>> {
+        let mut all_blocks = vec![];
+
+        while let Some(datablock) = self.create_data_block(&mut rowgroup_deserializer, part)? {
+            all_blocks.push(datablock);
+        }
+
+        Ok(all_blocks)
+    }
+
+    pub fn get_output_schema(&self) -> DataSchemaRef {
+        self.output_schema.clone()
+    }
+}
+
+pub fn filter_hive_partition_from_partition_keys(
+    schema: DataSchemaRef,
+    projections: Vec<usize>,
+    partition_keys: &Option<Vec<String>>,
+) -> (Vec<usize>, Vec<DataField>) {
+    match partition_keys {
+        Some(partition_keys) => {
+            let mut not_partitions = vec![];
+            let mut partition_fields = vec![];
+            for i in projections.into_iter() {
+                let field = schema.field(i);
+                if !partition_keys.contains(field.name()) {
+                    not_partitions.push(i);
+                } else {
+                    partition_fields.push(field.clone());
+                }
+            }
+            (not_partitions, partition_fields)
+        }
+        None => (projections, vec![]),
     }
 }

@@ -26,6 +26,8 @@ common-pipeline-sources = { path = "../../../pipeline/sources" }
 common-storage = { path = "../../../../common/storage" }
 common-storages-index = { path = "../../index" }
 common-storages-table-meta = { path = "../../table-meta" }
+common-sql = { path = "../../../sql" }
+common-functions = { path = "../../../functions" }
 
 async-recursion = "1.0.0"
 async-trait = "0.1.57"
