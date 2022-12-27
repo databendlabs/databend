@@ -432,13 +432,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::UInt64(1 * 1024 * 1024),
+                default_value: UserSettingValue::UInt64(2 * 1024 * 1024),
                 user_setting: UserSetting::create(
                     "parquet_uncompressed_buffer_size",
-                    UserSettingValue::UInt64(1 * 1024 * 1024),
+                    UserSettingValue::UInt64(2 * 1024 * 1024),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Parquet decompresses buffer size. default: 1MB",
+                desc: "Parquet decompresses buffer size. default: 2MB",
                 possible_values: None,
             },
         ];

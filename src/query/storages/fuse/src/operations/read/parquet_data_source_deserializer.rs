@@ -13,15 +13,9 @@
 //  limitations under the License.
 
 use std::any::Any;
-use std::cell::RefCell;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Instant;
 
-use common_arrow::parquet::page::CompressedPage;
-use common_arrow::parquet::page::Page;
-use common_arrow::parquet::read::decompress;
-use common_arrow::parquet::FallibleStreamingIterator;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
@@ -90,6 +84,7 @@ impl Processor for DeserializeDataTransform {
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
+            self.uncompressed_buffer.clear();
             return Ok(Event::Finished);
         }
 
@@ -127,6 +122,7 @@ impl Processor for DeserializeDataTransform {
 
         if self.input.is_finished() {
             self.output.finish();
+            self.uncompressed_buffer.clear();
             return Ok(Event::Finished);
         }
 

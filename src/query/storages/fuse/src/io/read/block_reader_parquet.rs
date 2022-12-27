@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
@@ -26,7 +24,6 @@ use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
