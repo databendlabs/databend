@@ -41,6 +41,8 @@ impl TryFrom<&str> for TableCompression {
         match value.to_lowercase().as_str() {
             "" | "none" => Ok(TableCompression::None),
             "lz4" => Ok(TableCompression::LZ4),
+            "snappy" => Ok(TableCompression::Snappy),
+            "zstd" => Ok(TableCompression::Zstd),
             other => Err(ErrorCode::UnknownFormat(format!(
                 "unsupported table compression: {}",
                 other
@@ -66,9 +68,9 @@ impl From<TableCompression> for native::Compression {
     fn from(value: TableCompression) -> Self {
         match value {
             TableCompression::None => native::Compression::None,
-            TableCompression::LZ4 => native::Compression::LZ4,
-            // Others to ZSTD
-            _ => native::Compression::ZSTD,
+            TableCompression::Zstd => native::Compression::ZSTD,
+            // Others to LZ4.
+            _ => native::Compression::LZ4,
         }
     }
 }
