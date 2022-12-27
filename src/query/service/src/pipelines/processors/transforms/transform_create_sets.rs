@@ -133,7 +133,7 @@ impl Processor for TransformCreateSets {
         if let Some(mut data) = self.input_data.take() {
             let num_rows = data.num_rows();
             let start_index = self.schema.fields().len() - self.sub_queries_result.len();
-
+            let mut new_columns = Vec::with_capacity(self.sub_queries_result.len());
             for (index, result) in self.sub_queries_result.iter().enumerate() {
                 let data_type = self.schema.field(start_index + index).data_type();
                 let col = ChunkEntry {
@@ -144,7 +144,7 @@ impl Processor for TransformCreateSets {
                 new_columns.push(col);
             }
 
-            self.output_data = Some(data);
+            self.output_data = Some(Chunk::new(new_columns, num_rows));
         }
 
         Ok(())

@@ -18,6 +18,7 @@ use async_channel::Receiver;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Expr;
 use common_expression::type_check::check;
 use common_expression::Chunk;
 use common_expression::DataField;
@@ -30,6 +31,7 @@ use common_expression::SortColumnDescription;
 use common_expression::TableDataType;
 use common_functions_v2::aggregates::AggregateFunctionFactory;
 use common_functions_v2::aggregates::AggregateFunctionRef;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::EmptySink;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
@@ -249,15 +251,16 @@ impl PipelineBuilder {
         //     },
         // ];
 
-        let func_ctx = self.ctx.try_get_function_context()?;
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(CompoundChunkOperator::create(
-                input,
-                output,
-                func_ctx.clone(),
-                ops.clone(),
-            ))
-        })
+        // let func_ctx = self.ctx.try_get_function_context()?;
+        // self.main_pipeline.add_transform(|input, output| {
+        //     Ok(CompoundChunkOperator::create(
+        //         input,
+        //         output,
+        //         func_ctx.clone(),
+        //         ops.clone(),
+        //     ))
+        // })
+        Ok(())
     }
 
     fn build_filter(&mut self, filter: &Filter) -> Result<()> {
@@ -268,15 +271,15 @@ impl PipelineBuilder {
                 "Invalid empty predicate list".to_string(),
             ));
         }
-        let mut predicate = filter.predicates[0].clone();
+        let mut predicate = filter.predicates[0].clone().as_raw_expr();
         for pred in filter.predicates.iter().skip(1) {
-            predicate = PhysicalScalar::Function {
-                name: "and".to_string(),
-                args: vec![predicate.clone(), pred.clone()],
-                return_type: func.return_type(),
-            };
+            let pred = pred.as_raw_expr();
+            predicate = RawExpr::FunctionCall { span: Non, name: "and".to_string(), params: vec![], args: vec![predicate, pred] };
         }
-        let predicate = predicate.as_expr()?;
+        
+        let predicate = check(&predicate, &BUILTIN_FUNCTIONS)
+            .map_err(|(_, e)| ErrorCode::Internal("Invalid expression"))?;
+            
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundChunkOperator::create(
                 input,
@@ -620,7 +623,7 @@ impl PipelineBuilder {
         // Fill missing columns.
         {
             let source_schema = insert_schema;
-            if source_schema.fields().len() < target_schema.fields().len() {
+            if source_schema.fields().len() < table.schema().fields().len() {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
                         TransformAddOn::try_create(

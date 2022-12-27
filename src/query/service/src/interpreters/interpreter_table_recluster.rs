@@ -19,6 +19,7 @@ use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::type_check::check;
 use common_expression::RemoteExpr;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
