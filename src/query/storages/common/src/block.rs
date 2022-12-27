@@ -22,24 +22,25 @@ use common_arrow::parquet::encoding::Encoding;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_arrow::parquet::write::Version;
 use common_arrow::write_parquet_file;
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_table_meta::table::TableCompression;
 
-use crate::DataBlock;
-
-pub fn serialize_to_parquet_with_compression(
-    blocks: Vec<DataBlock>,
+/// Serialize data blocks to parquet format.
+pub fn blocks_to_parquet(
     schema: impl AsRef<DataSchema>,
+    blocks: Vec<DataBlock>,
     buf: &mut Vec<u8>,
-    compression: CompressionOptions,
+    compression: TableCompression,
 ) -> Result<(u64, ThriftFileMetaData)> {
     let arrow_schema = schema.as_ref().to_arrow();
 
     let row_group_write_options = WriteOptions {
         write_statistics: false,
-        compression,
         version: Version::V2,
+        compression: CompressionOptions::from(compression),
         data_pagesize_limit: None,
     };
     let batches = blocks
@@ -78,14 +79,6 @@ pub fn serialize_to_parquet_with_compression(
             cause,
         ))),
     }
-}
-
-pub fn serialize_to_parquet(
-    blocks: Vec<DataBlock>,
-    schema: impl AsRef<DataSchema>,
-    buf: &mut Vec<u8>,
-) -> Result<(u64, ThriftFileMetaData)> {
-    serialize_to_parquet_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
 }
 
 fn col_encoding(data_type: &ArrowDataType) -> Encoding {

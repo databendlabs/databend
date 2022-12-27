@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod table_compression;
 mod table_keys;
 mod table_prefix;
 
+pub use table_compression::TableCompression;
 pub use table_keys::*;
 pub use table_prefix::*;

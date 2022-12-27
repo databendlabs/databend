@@ -16,21 +16,21 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_arrow::parquet::compression::CompressionOptions;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_to_parquet_with_compression;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_common::blocks_to_parquet;
 use common_storages_index::BlockFilter;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::StatisticsOfColumns;
+use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
 
 use super::compact_meta::CompactSourceMeta;
@@ -236,20 +236,22 @@ impl Processor for CompactTransform {
                         let location = self.location_gen.block_bloom_index_location(&block_id);
                         let mut data = Vec::with_capacity(100 * 1024);
                         let index_block_schema = &bloom_index.filter_schema;
-                        let (size, _) = serialize_to_parquet_with_compression(
-                            vec![index_block],
+                        let (size, _) = blocks_to_parquet(
                             index_block_schema,
+                            vec![index_block],
                             &mut data,
-                            CompressionOptions::Uncompressed,
+                            TableCompression::None,
                         )?;
                         (data, size, location)
                     };
 
-                    // serialize data block.
-                    let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                     let write_settings = WriteSettings {
                         storage_format: self.storage_format,
+                        ..Default::default()
                     };
+
+                    // serialize data block.
+                    let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                     let (file_size, col_metas) =
                         io::write_block(&write_settings, new_block, &mut block_data)?;
 

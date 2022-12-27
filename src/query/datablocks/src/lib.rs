@@ -21,7 +21,6 @@ mod data_block_debug;
 mod kernels;
 mod memory;
 mod meta_info;
-mod serialize;
 mod stream;
 
 pub use block_compact_thresholds::BlockCompactThresholds;
@@ -31,5 +30,4 @@ pub use kernels::*;
 pub use memory::InMemoryData;
 pub use meta_info::BlockMetaInfo;
 pub use meta_info::BlockMetaInfoPtr;
-pub use serialize::*;
 pub use stream::SendableDataBlockStream;

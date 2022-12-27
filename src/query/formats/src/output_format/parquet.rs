@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::serialize_to_parquet;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_storages_common::blocks_to_parquet;
+use common_storages_table_meta::table::TableCompression;
 
 use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
@@ -51,7 +52,7 @@ impl OutputFormat for ParquetOutputFormat {
             return Ok(vec![]);
         }
         let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-        let _ = serialize_to_parquet(blocks, &self.schema, &mut buf)?;
+        let _ = blocks_to_parquet(&self.schema, blocks, &mut buf, TableCompression::LZ4Raw)?;
         Ok(buf)
     }
 }
