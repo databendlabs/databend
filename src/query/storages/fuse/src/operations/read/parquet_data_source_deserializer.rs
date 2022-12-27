@@ -30,6 +30,7 @@ use common_pipeline_core::processors::Processor;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::io::UncompressedBuffer;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 use crate::MergeIOReadResult;
@@ -43,7 +44,10 @@ pub struct DeserializeDataTransform {
     output_data: Option<DataBlock>,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<MergeIOReadResult>,
+    uncompressed_buffer: Arc<UncompressedBuffer>,
 }
+
+unsafe impl Send for DeserializeDataTransform {}
 
 impl DeserializeDataTransform {
     pub fn create(
@@ -52,6 +56,7 @@ impl DeserializeDataTransform {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
+        let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             scan_progress,
@@ -61,6 +66,7 @@ impl DeserializeDataTransform {
             output_data: None,
             parts: vec![],
             chunks: vec![],
+            uncompressed_buffer: UncompressedBuffer::new(buffer_size),
         })))
     }
 }
@@ -78,6 +84,7 @@ impl Processor for DeserializeDataTransform {
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
+            self.uncompressed_buffer.clear();
             return Ok(Event::Finished);
         }
 
@@ -115,6 +122,7 @@ impl Processor for DeserializeDataTransform {
 
         if self.input.is_finished() {
             self.output.finish();
+            self.uncompressed_buffer.clear();
             return Ok(Event::Finished);
         }
 
@@ -136,6 +144,7 @@ impl Processor for DeserializeDataTransform {
                 &part.compression,
                 &part.columns_meta,
                 columns_chunks,
+                Some(self.uncompressed_buffer.clone()),
             )?;
 
             metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);

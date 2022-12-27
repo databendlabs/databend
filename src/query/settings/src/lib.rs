@@ -431,6 +431,16 @@ impl Settings {
                 desc: "Inject a custom sandbox_tenant into this session, it's only for testing purpose and take effect when the internal_enable_sandbox_tenant is on",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(2 * 1024 * 1024),
+                user_setting: UserSetting::create(
+                    "parquet_uncompressed_buffer_size",
+                    UserSettingValue::UInt64(2 * 1024 * 1024),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Parquet decompresses buffer size. default: 2MB",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -483,6 +493,19 @@ impl Settings {
     // Set storage_fetch_part_num.
     pub fn set_storage_fetch_part_num(&self, val: u64) -> Result<()> {
         let key = "storage_fetch_part_num";
+        self.try_set_u64(key, val, false)
+    }
+
+    // Get parquet_uncompressed_buffer_size.
+    pub fn get_parquet_uncompressed_buffer_size(&self) -> Result<u64> {
+        let key = "parquet_uncompressed_buffer_size";
+        let value = self.try_get_u64(key)?;
+        if value == 0 { Ok(16) } else { Ok(value) }
+    }
+
+    // Set parquet_uncompressed_buffer_size.
+    pub fn set_parquet_uncompressed_buffer_size(&self, val: u64) -> Result<()> {
+        let key = "parquet_uncompressed_buffer_size";
         self.try_set_u64(key, val, false)
     }
 

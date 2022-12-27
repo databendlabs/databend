@@ -2108,6 +2108,7 @@ dependencies = [
  "opendal",
  "serde",
  "serde_json",
+ "streaming-decompression",
  "tracing",
  "typetag",
  "uuid",
