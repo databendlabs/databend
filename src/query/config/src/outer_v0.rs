@@ -53,6 +53,7 @@ use serfig::parsers::Toml;
 use super::inner::CatalogConfig as InnerCatalogConfig;
 use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
 use super::inner::Config as InnerConfig;
+use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::DATABEND_COMMIT_VERSION;
@@ -105,6 +106,10 @@ pub struct Config {
     /// - currently only supports HIVE (via hive meta store)
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
+
+    // Local query config.
+    #[clap(flatten)]
+    pub local: LocalConfig,
 
     /// external catalog config.
     ///
@@ -183,6 +188,7 @@ impl From<InnerConfig> for Config {
             meta: inner.meta.into(),
             storage: inner.storage.into(),
             catalog: HiveCatalogConfig::default(),
+            local: inner.local.into(),
 
             catalogs: inner
                 .catalogs
@@ -218,6 +224,7 @@ impl TryInto<InnerConfig> for Config {
             log: self.log.try_into()?,
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
+            local: self.local.try_into()?,
             catalogs,
         })
     }
@@ -1792,5 +1799,43 @@ impl From<AuthInfo> for UserAuthConfig {
             auth_type,
             auth_string,
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct LocalConfig {
+    // sql to run
+    #[clap(long, default_value = "SELECT 1")]
+    pub sql: String,
+
+    // name1=filepath1,name2=filepath2
+    #[clap(long, default_value = "")]
+    pub table: String,
+}
+
+impl Default for LocalConfig {
+    fn default() -> Self {
+        InnerLocalConfig::default().into()
+    }
+}
+
+impl From<InnerLocalConfig> for LocalConfig {
+    fn from(inner: InnerLocalConfig) -> Self {
+        Self {
+            sql: inner.sql,
+            table: inner.table,
+        }
+    }
+}
+
+impl TryInto<InnerLocalConfig> for LocalConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerLocalConfig> {
+        Ok(InnerLocalConfig {
+            sql: self.sql,
+            table: self.table,
+        })
     }
 }
