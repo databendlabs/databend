@@ -44,7 +44,7 @@ pub type PartialSingleStateAggregator = SingleStateAggregator<false>;
 pub struct SingleStateAggregator<const FINAL: bool> {
     funcs: Vec<AggregateFunctionRef>,
     arg_indices: Vec<Vec<usize>>,
-    schema: DataSchemaRef,
+    // schema: DataSchemaRef,
     arena: Bump,
 
     places: Vec<StateAddr>,
@@ -84,7 +84,7 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
             to_merge_places: vec![vec![]; params.aggregate_functions.len()],
             funcs: params.aggregate_functions.clone(),
             arg_indices: params.aggregate_functions_arguments.clone(),
-            schema: params.output_schema.clone(),
+            // schema: params.output_schema.clone(),
             layout,
             offsets_aggregate_states: params.offsets_aggregate_states.clone(),
             states_dropped: false,
@@ -134,7 +134,7 @@ impl Aggregator for SingleStateAggregator<true> {
         for (index, func) in self.funcs.iter().enumerate() {
             let place = self.places[index];
 
-            let binary_array = chunk.column(index).0.as_column().unwrap();
+            let binary_array = chunk.get_by_offset(index).value.as_column().unwrap();
             let binary_array = binary_array.as_string().ok_or(ErrorCode::IllegalDataType(
                 "binary array should be string type",
             ))?;
@@ -184,7 +184,7 @@ impl Aggregator for SingleStateAggregator<true> {
             columns.push((Value::Column(col), ty));
         }
 
-        Ok(vec![Chunk::new(columns, num_rows)])
+        Ok(vec![Chunk::new_from_sequence(columns, num_rows)])
     }
 }
 
@@ -197,7 +197,14 @@ impl Aggregator for SingleStateAggregator<false> {
         for (idx, func) in self.funcs.iter().enumerate() {
             let mut arg_columns = vec![];
             for index in self.arg_indices[idx].iter() {
-                arg_columns.push(chunk.column(*index).clone());
+                arg_columns.push(
+                    chunk
+                        .get_by_offset(*index)
+                        .value
+                        .as_column()
+                        .unwrap()
+                        .clone(),
+                );
             }
             let place = self.places[idx];
             func.accumulate(place, &arg_columns, None, rows)?;
@@ -219,7 +226,7 @@ impl Aggregator for SingleStateAggregator<false> {
 
         // TODO: create with temp schema
         self.drop_states();
-        Ok(vec![Chunk::new(columns, 1)])
+        Ok(vec![Chunk::new_from_sequence(columns, 1)])
     }
 }
 

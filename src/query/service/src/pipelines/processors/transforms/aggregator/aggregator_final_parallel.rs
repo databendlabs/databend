@@ -26,13 +26,14 @@ use common_expression::Chunk;
 use common_expression::ColumnBuilder;
 use common_expression::HashMethod;
 use common_expression::Value;
-use common_functions::aggregates::StateAddr;
-use common_functions::aggregates::StateAddrs;
+use common_functions_v2::aggregates::StateAddr;
+use common_functions_v2::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use tracing::info;
 
+use crate::data_type_of_group_key_column;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
@@ -176,7 +177,11 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             let chunk = chunk.convert_to_full();
             // 1.1 and 1.2.
             let aggregate_function_len = self.params.aggregate_functions.len();
-            let keys_column = chunk.column(aggregate_function_len).0.as_column().unwrap();
+            let keys_column = chunk
+                .get_by_offset(aggregate_function_len)
+                .value
+                .as_column()
+                .unwrap();
             let keys_iter = self.method.keys_iter_from_column(keys_column)?;
 
             if !HAS_AGG {
@@ -190,15 +195,15 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 let places = self.lookup_state(&keys_iter);
 
                 let states_columns = (0..aggregate_function_len)
-                    .map(|i| chunk.column(i))
+                    .map(|i| chunk.get_by_offset(i))
                     .collect::<Vec<_>>();
                 let mut states_binary_columns = Vec::with_capacity(states_columns.len());
 
                 for agg in states_columns.iter().take(aggregate_function_len) {
-                    let aggr_column = agg.0.as_column().unwrap().as_string().ok_or(
+                    let aggr_column = agg.value.as_column().unwrap().as_string().ok_or(
                         ErrorCode::IllegalDataType(format!(
                             "Aggregation column should be StringType, but got {:?}",
-                            agg.1
+                            agg.value
                         )),
                     )?;
                     states_binary_columns.push(aggr_column);
@@ -235,25 +240,25 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             let mut num_rows = 0;
             let columns = columns
                 .into_iter()
-                .zip(self.params.output_schema.fields())
-                .map(|(col, f)| {
+                .map(|col| {
                     num_rows = col.len();
-                    (Value::Column(col), f.data_type().into())
+                    let data_type = data_type_of_group_key_column!(col);
+                    (Value::Column(col), data_type)
                 })
                 .collect();
 
-            Ok(vec![Chunk::new(columns, num_rows)])
+            Ok(vec![Chunk::new_from_sequence(columns, num_rows)])
         } else {
             let aggregate_functions = &self.params.aggregate_functions;
             let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-            let mut aggregates_column_builder: Vec<ColumnBuilder> = {
+            let mut aggregates_column_builder = {
                 let mut values = vec![];
                 for aggregate_function in aggregate_functions {
                     let data_type = aggregate_function.return_type()?;
                     let mut builder =
                         ColumnBuilder::with_capacity(&data_type, self.hash_table.len());
-                    values.push(builder)
+                    values.push((builder, data_type))
                 }
                 values
             };
@@ -268,7 +273,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                     })
                     .collect();
 
-                let builder: &mut ColumnBuilder = aggregates_column_builder[idx].borrow_mut();
+                let (builder, _) = aggregates_column_builder[idx].borrow_mut();
                 aggregate_function.batch_merge_result(places, builder)?;
             }
 
@@ -277,26 +282,23 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
 
             // Build final state chunk.
-            let fields = self.params.output_schema.fields();
             let mut num_rows = 0;
             let columns = aggregates_column_builder
                 .into_iter()
-                .zip(fields)
-                .map(|(builder, f)| {
+                .map(|(builder, ty)| {
                     let col = builder.build();
                     num_rows = col.len();
-                    (Value::Column(col), f.data_type().into())
+                    (Value::Column(col), ty)
                 })
                 .collect::<Vec<_>>();
 
             let group_columns = group_columns_builder.finish()?;
             let group_columns = group_columns
                 .into_iter()
-                .zip(fields.iter().skip(columns.len()))
-                .map(|(col, f)| (Value::Column(col), f.data_type().into()))
+                .map(|col| (Value::Column(col), data_type_of_group_key_column!(col)))
                 .collect::<Vec<_>>();
             columns.extend_from_slice(&group_columns);
-            Ok(vec![Chunk::new(columns, num_rows)])
+            Ok(vec![Chunk::new_from_sequence(columns, num_rows)])
         }
     }
 
