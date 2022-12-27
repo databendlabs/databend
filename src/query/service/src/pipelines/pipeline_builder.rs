@@ -18,13 +18,13 @@ use async_channel::Receiver;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Expr;
 use common_expression::type_check::check;
 use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_expression::SortColumnDescription;
@@ -274,12 +274,17 @@ impl PipelineBuilder {
         let mut predicate = filter.predicates[0].clone().as_raw_expr();
         for pred in filter.predicates.iter().skip(1) {
             let pred = pred.as_raw_expr();
-            predicate = RawExpr::FunctionCall { span: Non, name: "and".to_string(), params: vec![], args: vec![predicate, pred] };
+            predicate = RawExpr::FunctionCall {
+                span: Non,
+                name: "and".to_string(),
+                params: vec![],
+                args: vec![predicate, pred],
+            };
         }
-        
+
         let predicate = check(&predicate, &BUILTIN_FUNCTIONS)
             .map_err(|(_, e)| ErrorCode::Internal("Invalid expression"))?;
-            
+
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundChunkOperator::create(
                 input,

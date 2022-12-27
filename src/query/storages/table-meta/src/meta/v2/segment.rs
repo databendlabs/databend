@@ -153,7 +153,7 @@ impl From<(v1::SegmentInfo, &DataSchema)> for SegmentInfo {
 
 impl From<(v0::BlockMeta, &DataSchema)> for BlockMeta {
     fn from(s: (v0::BlockMeta, &DataSchema)) -> Self {
-        let schema = s.1;
+        let _schema = s.1;
         let s = s.0;
 
         let col_stats = s
@@ -189,7 +189,7 @@ impl From<(v0::BlockMeta, &DataSchema)> for BlockMeta {
 
 impl From<(&v1::BlockMeta, &DataSchema)> for BlockMeta {
     fn from(s: (&v1::BlockMeta, &DataSchema)) -> Self {
-        let schema = s.1;
+        let _schema = s.1;
         let s = s.0;
 
         let col_stats = s
