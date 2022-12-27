@@ -499,8 +499,7 @@ impl Settings {
     // Get parquet_uncompressed_buffer_size.
     pub fn get_parquet_uncompressed_buffer_size(&self) -> Result<u64> {
         let key = "parquet_uncompressed_buffer_size";
-        let value = self.try_get_u64(key)?;
-        if value == 0 { Ok(16) } else { Ok(value) }
+        self.try_get_u64(key)
     }
 
     // Set parquet_uncompressed_buffer_size.
