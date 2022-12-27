@@ -48,7 +48,7 @@ impl AggregatorParams {
     pub fn try_create(
         // output_schema: DataSchemaRef,
         group_data_types: Vec<DataType>,
-        group_columns: Vec<usize>,
+        group_columns: &[usize],
         agg_funcs: &[AggregateFunctionRef],
         agg_args: &[Vec<usize>],
     ) -> Result<Arc<AggregatorParams>> {
@@ -62,7 +62,7 @@ impl AggregatorParams {
         Ok(Arc::new(AggregatorParams {
             // output_schema,
             // input_schema,
-            group_columns,
+            group_columns: group_columns.to_vec(),
             group_data_types,
             aggregate_functions: agg_funcs.to_vec(),
             aggregate_functions_arguments: agg_args.to_vec(),
