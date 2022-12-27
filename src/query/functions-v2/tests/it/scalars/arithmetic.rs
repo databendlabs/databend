@@ -65,6 +65,7 @@ fn test_arithmetic() {
     test_div(file, columns);
     test_intdiv(file, columns);
     test_modulo(file, columns);
+    test_to_string(file, columns);
 }
 
 fn test_add(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
@@ -121,4 +122,13 @@ fn test_modulo(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "c % (d - 3)", columns);
     run_ast(file, "c % 0", columns);
     run_ast(file, "c % d2", columns);
+}
+
+fn test_to_string(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+    run_ast(file, "to_string(a)", columns);
+    run_ast(file, "to_string(a2)", columns);
+    run_ast(file, "to_string(b)", columns);
+    run_ast(file, "to_string(c)", columns);
+    run_ast(file, "to_string(d)", columns);
+    run_ast(file, "to_string(d2)", columns);
 }

@@ -309,7 +309,7 @@ fn run_concat(file: &mut impl Write, blocks: &[DataBlock]) {
 }
 
 fn run_take(file: &mut impl Write, indices: &[u32], block: &DataBlock) {
-    let result = DataBlock::take(block.clone(), indices);
+    let result = DataBlock::take(block, indices);
 
     match result {
         Ok(result_block) => {
@@ -326,9 +326,9 @@ fn run_take(file: &mut impl Write, indices: &[u32], block: &DataBlock) {
 
 fn run_take_block(file: &mut impl Write, indices: &[BlockRowIndex], blocks: &[DataBlock]) {
     let result = DataBlock::take_blocks(blocks, indices);
-    writeln!(file, "Take Chunk indices:         {indices:?}").unwrap();
+    writeln!(file, "Take Block indices:         {indices:?}").unwrap();
     for (i, block) in blocks.iter().enumerate() {
-        writeln!(file, "Chunk{i}:\n{block}").unwrap();
+        writeln!(file, "Block{i}:\n{block}").unwrap();
     }
     writeln!(file, "Result:\n{result}").unwrap();
     write!(file, "\n\n").unwrap();
@@ -343,11 +343,11 @@ fn run_take_block_by_slices_with_limit(
     let result = DataBlock::take_by_slices_limit_from_blocks(blocks, slices, limit);
     writeln!(
         file,
-        "Take Chunk by slices (limit: {limit:?}):       {slices:?}"
+        "Take Block by slices (limit: {limit:?}):       {slices:?}"
     )
     .unwrap();
     for (i, block) in blocks.iter().enumerate() {
-        writeln!(file, "Chunk{i}:\n{block}").unwrap();
+        writeln!(file, "Block{i}:\n{block}").unwrap();
     }
     writeln!(file, "Result:\n{result}").unwrap();
     write!(file, "\n\n").unwrap();
@@ -360,8 +360,8 @@ fn run_take_by_slice_limit(
     limit: Option<usize>,
 ) {
     let result = DataBlock::take_by_slice_limit(block, slice, limit);
-    writeln!(file, "Take Chunk by slice (limit: {limit:?}): {slice:?}").unwrap();
-    writeln!(file, "Chunk:\n{block}").unwrap();
+    writeln!(file, "Take Block by slice (limit: {limit:?}): {slice:?}").unwrap();
+    writeln!(file, "Block:\n{block}").unwrap();
     writeln!(file, "Result:\n{result}").unwrap();
     write!(file, "\n\n").unwrap();
 }

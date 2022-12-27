@@ -2055,6 +2055,26 @@ to_start_of_year(Timestamp) :: Date
 to_start_of_year(Timestamp NULL) :: Date NULL
 to_start_of_year(Date) :: Date
 to_start_of_year(Date NULL) :: Date NULL
+to_string(UInt8) :: String
+to_string(UInt8 NULL) :: String NULL
+to_string(UInt16) :: String
+to_string(UInt16 NULL) :: String NULL
+to_string(UInt32) :: String
+to_string(UInt32 NULL) :: String NULL
+to_string(UInt64) :: String
+to_string(UInt64 NULL) :: String NULL
+to_string(Int8) :: String
+to_string(Int8 NULL) :: String NULL
+to_string(Int16) :: String
+to_string(Int16 NULL) :: String NULL
+to_string(Int32) :: String
+to_string(Int32 NULL) :: String NULL
+to_string(Int64) :: String
+to_string(Int64 NULL) :: String NULL
+to_string(Float32) :: String
+to_string(Float32 NULL) :: String NULL
+to_string(Float64) :: String
+to_string(Float64 NULL) :: String NULL
 to_string(Timestamp) :: String
 to_string(Timestamp NULL) :: String NULL
 to_string(Date) :: String

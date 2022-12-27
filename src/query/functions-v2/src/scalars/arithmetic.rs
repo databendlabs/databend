@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
@@ -37,9 +40,8 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("div", &["intdiv"]);
     registry.register_aliases("modulo", &["mod"]);
 
-    // Unary OP for minus and plus
-    for left in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match left {
+    for num_ty in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match num_ty {
             NumberDataType::NUM_TYPE => {
                 type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
@@ -56,8 +58,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
 
-        // Can be eliminated by optimizer
-        with_number_mapped_type!(|NUM_TYPE| match left {
+        // TODO: Can be eliminated by optimizer
+        with_number_mapped_type!(|NUM_TYPE| match num_ty {
             NumberDataType::NUM_TYPE => {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, _, _>(
                     "plus",
@@ -65,6 +67,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                     |lhs| FunctionDomain::Domain(lhs.clone()),
                     |a, _| a,
                 );
+            }
+        });
+
+        with_number_mapped_type!(|NUM_TYPE| match num_ty {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
+                        "to_string",
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::Full,
+                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, StringType>(
+                            |a, output, _| {
+                                output.write_row(|data| write!(data, "{a}").unwrap());
+                                Ok(())
+                            },
+                        ),
+                    );
             }
         });
     }
