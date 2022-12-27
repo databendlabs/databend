@@ -133,9 +133,9 @@ impl CreateTableInterpreterV2 {
             .schema()
             .fields()
             .iter()
-            .filter_map(|f| table_schema.field_with_name(f.name()).ok())
-            .cloned()
+            .filter_map(|f| table_schema.field_with_name(f.name()).unwrap().into())
             .collect();
+
         let schema = DataSchemaRefExt::create(select_fields);
         let insert_plan = Insert {
             catalog: self.plan.catalog.clone(),

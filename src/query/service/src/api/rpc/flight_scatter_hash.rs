@@ -126,7 +126,7 @@ impl FlightScatter for HashFlightScatter {
     fn execute(&self, chunk: &Chunk, num: usize) -> Result<Vec<Chunk>> {
         let evaluator = Evaluator::new(&chunk, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
 
-        let indices = evaluator.run(&self.indices_scalar).unwrap();
+        let indices = evaluator.run(&self.hash_key).unwrap();
         let indices = get_hash_values(&indices, num)?;
 
         let chunk_meta = chunk.meta()?;

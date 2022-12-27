@@ -17,6 +17,8 @@ use std::time::SystemTime;
 
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
+use common_expression::type_check::check;
+use common_expression::RemoteExpr;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -52,9 +54,20 @@ impl Interpreter for ReclusterTableInterpreter {
         let tenant = ctx.get_tenant();
         let start = SystemTime::now();
 
+        let table = self
+            .ctx
+            .get_catalog(&plan.catalog)?
+            .get_table(tenant.as_str(), &plan.database, &plan.table)
+            .await?;
+
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
-            let filter = scalar.as_raw_expr().as_remote_expr()?;
+            let expr = scalar.as_raw_expr();
+            let expr = check(&expr, &BUILTIN_FUNCTIONS).unwrap();
+            let expr =
+                expr.project_column_ref(|index| table.schema().field(*index).name().to_string());
+            let filter = RemoteExpr::from_expr(&expr);
+
             Some(PushDownInfo {
                 filters: vec![filter],
                 ..PushDownInfo::default()
@@ -64,12 +77,6 @@ impl Interpreter for ReclusterTableInterpreter {
         };
 
         loop {
-            let table = self
-                .ctx
-                .get_catalog(&plan.catalog)?
-                .get_table(tenant.as_str(), &plan.database, &plan.table)
-                .await?;
-
             let mut pipeline = Pipeline::create();
             let mutator = table
                 .recluster(ctx.clone(), &mut pipeline, extras.clone())

@@ -31,7 +31,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 // PrecommitBlock only use block.meta for data transfer.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PrecommitChunk(pub Chunk);
 
 impl PrecommitChunk {
@@ -61,6 +61,6 @@ impl PrecommitChunk {
             || "precommit block deserialize error when exchange",
         )?;
 
-        Ok(PrecommitChunk(Chunk::empty_with_meta(block_meta)))
+        Ok(PrecommitChunk(Chunk::new_with_meta(vec![], 0, block_meta)))
     }
 }

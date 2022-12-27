@@ -201,7 +201,7 @@ impl PageManager {
         if !self.chunk_end {
             self.chunk_end = self.chunk_receiver.is_empty();
         }
-        if self.block_end {
+        if self.chunk_end {
             let ctx = self.query_ctx_ref.take();
             GlobalIORuntime::instance().spawn(async move {
                 drop(ctx);

@@ -72,7 +72,7 @@ impl Interpreter for DescribeTableInterpreter {
                 ));
             }
         } else {
-            table.schema()
+            Arc::new((&table.schema()).into())
         };
 
         let mut names: Vec<Vec<u8>> = vec![];

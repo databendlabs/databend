@@ -41,6 +41,7 @@ use common_expression::RemoteExpr;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
+use common_sql::parse_exprs;
 use common_storage::init_operator;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
@@ -278,13 +279,22 @@ impl Table for FuseTable {
     }
 
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        todo!("expression");
-        // let table_meta = Arc::new(self.clone());
-        // if let Some((_, order)) = &self.cluster_key_meta {
-        //     let cluster_keys = ExpressionParser::parse_exprs(ctx, table_meta, order).unwrap();
-        //     return cluster_keys;
-        // }
-        // vec![]
+        let table_meta = Arc::new(self.clone());
+        if let Some((_, order)) = &self.cluster_key_meta {
+            let cluster_keys = parse_exprs(ctx, table_meta.clone(), order).unwrap();
+            let cluster_keys = cluster_keys
+                .iter()
+                .map(|k| {
+                    let k = k.project_column_ref(|index| {
+                        table_meta.schema().field(*index).name().to_string()
+                    });
+                    let remote_expr = RemoteExpr::from_expr(&k);
+                    remote_expr
+                })
+                .collect();
+            return cluster_keys;
+        }
+        vec![]
     }
 
     fn support_prewhere(&self) -> bool {

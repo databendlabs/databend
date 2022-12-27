@@ -209,14 +209,15 @@ impl InsertInterpreterV2 {
 
         stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
 
-        let need_fill_missing_columns = target_schema != source_schema;
+        let need_fill_missing_columns =
+            target_schema.fields().len() != source_schema.fields().len();
         if need_fill_missing_columns {
             pipeline.add_transform(|transform_input_port, transform_output_port| {
                 TransformAddOn::try_create(
                     transform_input_port,
                     transform_output_port,
                     source_schema.clone(),
-                    target_schema.clone(),
+                    table.clone(),
                     ctx.clone(),
                 )
             })?;

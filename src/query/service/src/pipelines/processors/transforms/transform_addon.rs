@@ -38,9 +38,6 @@ pub struct TransformAddOn {
     default_nonexpr_fields: Vec<DataField>,
 
     expression_transform: CompoundChunkOperator,
-
-    unresort_schema: DataSchemaRef,
-    output_schema: DataSchemaRef,
 }
 
 impl TransformAddOn
@@ -56,7 +53,6 @@ where Self: Transform
         let mut default_exprs = Vec::new();
         let mut default_nonexpr_fields = Vec::new();
 
-        let mut unresort_fields = table.schema().fields().clone();
         for (index, f) in unresort_fields.iter().enumerate() {
             if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
@@ -64,7 +60,6 @@ where Self: Transform
                     default_exprs.push(ChunkOperator::Map { index, expr });
                 } else {
                     default_nonexpr_fields.push(f.clone());
-                    unresort_fields.push(f.clone());
                 }
             }
         }
@@ -78,8 +73,6 @@ where Self: Transform
         Ok(Transformer::create(input, output, Self {
             default_nonexpr_fields,
             expression_transform,
-            unresort_schema: DataSchemaRefExt::create(unresort_fields),
-            output_schema,
         }))
     }
 }

@@ -620,7 +620,6 @@ impl PipelineBuilder {
         // Fill missing columns.
         {
             let source_schema = insert_schema;
-            let target_schema = Arc::new(DataSchema::from(table.schema()));
             if source_schema.fields().len() < target_schema.fields().len() {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
@@ -628,7 +627,7 @@ impl PipelineBuilder {
                             transform_input_port,
                             transform_output_port,
                             source_schema.clone(),
-                            target_schema.clone(),
+                            table.clone(),
                             self.ctx.clone(),
                         )
                     },
