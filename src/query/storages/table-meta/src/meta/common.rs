@@ -88,6 +88,8 @@ pub enum Compression {
     Snappy,
     Zstd,
     Gzip,
+    // New: dded by bohu.
+    None,
 }
 
 impl Compression {

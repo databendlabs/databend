@@ -23,6 +23,7 @@ use common_storages_fuse::FuseStorageFormat;
 use common_storages_index::BlockFilter;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
+use common_storages_table_meta::meta::Compression;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 use common_storages_table_meta::table::TableCompression;
@@ -83,6 +84,7 @@ impl<'a> BlockWriter<'a> {
             location,
             Some(bloom_filter_index_location),
             bloom_filter_index_size,
+            Compression::Lz4Raw,
         );
         Ok(block_meta)
     }

@@ -91,6 +91,7 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     storage_format: FuseStorageFormat,
+    table_compression: TableCompression,
 
     // Limit the memory size of the block read.
     max_memory: u64,
@@ -113,6 +114,7 @@ impl CompactTransform {
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
         storage_format: FuseStorageFormat,
+        table_compression: TableCompression,
         thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
@@ -130,6 +132,7 @@ impl CompactTransform {
             location_gen,
             dal,
             storage_format,
+            table_compression,
             max_memory,
             max_io_requests,
             compact_tasks: VecDeque::new(),
@@ -247,6 +250,7 @@ impl Processor for CompactTransform {
 
                     let write_settings = WriteSettings {
                         storage_format: self.storage_format,
+                        table_compression: self.table_compression,
                         ..Default::default()
                     };
 
@@ -266,6 +270,7 @@ impl Processor for CompactTransform {
                         block_location.clone(),
                         Some(index_location.clone()),
                         index_size,
+                        self.table_compression.into(),
                     );
                     self.abort_operation.add_block(&new_meta);
                     self.block_metas.push(Arc::new(new_meta));

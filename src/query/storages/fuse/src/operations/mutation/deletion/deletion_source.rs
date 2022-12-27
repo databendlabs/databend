@@ -276,6 +276,7 @@ impl Processor for DeletionSource {
                     block_location.clone(),
                     Some(bloom_index_state.location.clone()),
                     bloom_index_state.size,
+                    self.table_compression.into(),
                 ));
 
                 self.state = State::Serialized(

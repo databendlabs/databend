@@ -14,21 +14,23 @@
 
 use std::str::FromStr;
 
-use common_arrow::native::Compression;
-use common_arrow::parquet::compression::CompressionOptions;
+use common_arrow::native;
+use common_arrow::parquet;
 use common_exception::ErrorCode;
+
+use crate::meta;
 
 #[derive(Clone, Copy)]
 pub enum TableCompression {
     None,
-    LZ4Raw,
+    LZ4,
     Snappy,
     Zstd,
 }
 
 impl Default for TableCompression {
     fn default() -> Self {
-        TableCompression::LZ4Raw
+        TableCompression::LZ4
     }
 }
 
@@ -38,7 +40,7 @@ impl FromStr for TableCompression {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "" | "none" => Ok(TableCompression::None),
-            "lz4" => Ok(TableCompression::LZ4Raw),
+            "lz4" => Ok(TableCompression::LZ4),
             other => Err(ErrorCode::UnknownFormat(format!(
                 "unsupported table compression: {}",
                 other
@@ -48,25 +50,38 @@ impl FromStr for TableCompression {
 }
 
 /// Convert to parquet CompressionOptions.
-impl From<TableCompression> for CompressionOptions {
+impl From<TableCompression> for parquet::compression::CompressionOptions {
     fn from(value: TableCompression) -> Self {
         match value {
-            TableCompression::None => CompressionOptions::Uncompressed,
-            TableCompression::LZ4Raw => CompressionOptions::Lz4Raw,
-            TableCompression::Snappy => CompressionOptions::Snappy,
-            TableCompression::Zstd => CompressionOptions::Zstd(None),
+            TableCompression::None => parquet::compression::CompressionOptions::Uncompressed,
+            TableCompression::LZ4 => parquet::compression::CompressionOptions::Lz4Raw,
+            TableCompression::Snappy => parquet::compression::CompressionOptions::Snappy,
+            TableCompression::Zstd => parquet::compression::CompressionOptions::Zstd(None),
         }
     }
 }
 
 /// Convert to native Compression.
-impl From<TableCompression> for Compression {
+impl From<TableCompression> for native::Compression {
     fn from(value: TableCompression) -> Self {
         match value {
-            TableCompression::None => Compression::None,
-            TableCompression::LZ4Raw => Compression::LZ4,
+            TableCompression::None => native::Compression::None,
+            TableCompression::LZ4 => native::Compression::LZ4,
             // Others to ZSTD
-            _ => Compression::ZSTD,
+            _ => native::Compression::ZSTD,
+        }
+    }
+}
+
+/// Convert to meta Compression.
+impl From<TableCompression> for meta::Compression {
+    fn from(value: TableCompression) -> Self {
+        match value {
+            TableCompression::None => meta::Compression::None,
+            // Map to meta Lz4Raw.
+            TableCompression::LZ4 => meta::Compression::Lz4Raw,
+            TableCompression::Snappy => meta::Compression::Snappy,
+            TableCompression::Zstd => meta::Compression::Zstd,
         }
     }
 }

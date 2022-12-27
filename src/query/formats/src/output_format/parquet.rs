@@ -52,7 +52,7 @@ impl OutputFormat for ParquetOutputFormat {
             return Ok(vec![]);
         }
         let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-        let _ = blocks_to_parquet(&self.schema, blocks, &mut buf, TableCompression::LZ4Raw)?;
+        let _ = blocks_to_parquet(&self.schema, blocks, &mut buf, TableCompression::LZ4)?;
         Ok(buf)
     }
 }

@@ -115,6 +115,7 @@ pub struct FuseTableSink {
     cluster_stats_gen: ClusterStatsGenerator,
 
     storage_format: FuseStorageFormat,
+    table_compression: TableCompression,
     // A dummy output port for distributed insert select to connect Exchange Sink.
     output: Option<Arc<OutputPort>>,
 }
@@ -130,6 +131,7 @@ impl FuseTableSink {
         cluster_stats_gen: ClusterStatsGenerator,
         thresholds: BlockCompactThresholds,
         storage_format: FuseStorageFormat,
+        table_compression: TableCompression,
         output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
@@ -142,6 +144,7 @@ impl FuseTableSink {
             num_block_threshold: num_block_threshold as u64,
             cluster_stats_gen,
             storage_format,
+            table_compression,
             output,
         })))
     }
@@ -214,6 +217,7 @@ impl Processor for FuseTableSink {
 
                 let write_settings = WriteSettings {
                     storage_format: self.storage_format,
+                    table_compression: self.table_compression,
                     ..Default::default()
                 };
 
@@ -300,6 +304,7 @@ impl Processor for FuseTableSink {
                     block_statistics,
                     Some(bloom_index_state.location),
                     bloom_filter_index_size,
+                    self.table_compression.into(),
                 )?;
 
                 if self.accumulator.summary_block_count >= self.num_block_threshold {

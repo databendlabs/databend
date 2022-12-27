@@ -17,7 +17,6 @@ use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::io::parquet::write::transverse;
 use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
-use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::encoding::Encoding;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_arrow::parquet::write::Version;
@@ -32,7 +31,7 @@ use common_storages_table_meta::table::TableCompression;
 pub fn blocks_to_parquet(
     schema: impl AsRef<DataSchema>,
     blocks: Vec<DataBlock>,
-    buf: &mut Vec<u8>,
+    write_buffer: &mut Vec<u8>,
     compression: TableCompression,
 ) -> Result<(u64, ThriftFileMetaData)> {
     let arrow_schema = schema.as_ref().to_arrow();
@@ -40,7 +39,7 @@ pub fn blocks_to_parquet(
     let row_group_write_options = WriteOptions {
         write_statistics: false,
         version: Version::V2,
-        compression: CompressionOptions::from(compression),
+        compression: compression.into(),
         data_pagesize_limit: None,
     };
     let batches = blocks
@@ -72,7 +71,7 @@ pub fn blocks_to_parquet(
         version: Version::V2,
     };
 
-    match write_parquet_file(buf, row_groups, arrow_schema.clone(), options) {
+    match write_parquet_file(write_buffer, row_groups, arrow_schema.clone(), options) {
         Ok(result) => Ok(result),
         Err(cause) => Err(ErrorCode::Internal(format!(
             "write_parquet_file: {:?}",
