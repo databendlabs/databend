@@ -1251,9 +1251,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "10000")]
     pub max_query_log_size: usize,
 
-    /// Table Cached enabled
-    #[clap(long)]
-    pub table_cache_enabled: bool,
+    /// Table Meta Cached enabled
+    #[clap(long, default_value = "true")]
+    pub table_meta_cache_enabled: bool,
 
     /// Max number of cached table block meta
     #[clap(long, default_value = "102400")]
@@ -1366,7 +1366,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_engine_memory_enabled: self.table_engine_memory_enabled,
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
-            table_cache_enabled: self.table_cache_enabled,
+            table_meta_cache_enabled: self.table_meta_cache_enabled,
             table_cache_block_meta_count: self.table_cache_block_meta_count,
             table_memory_cache_mb_size: self.table_memory_cache_mb_size,
             table_disk_cache_root: self.table_disk_cache_root,
@@ -1431,7 +1431,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             database_engine_github_enabled: true,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
-            table_cache_enabled: inner.table_cache_enabled,
+            table_meta_cache_enabled: inner.table_meta_cache_enabled,
             table_cache_block_meta_count: inner.table_cache_block_meta_count,
             table_memory_cache_mb_size: inner.table_memory_cache_mb_size,
             table_disk_cache_root: inner.table_disk_cache_root,
