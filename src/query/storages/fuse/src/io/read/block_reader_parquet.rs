@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
@@ -48,6 +49,7 @@ use tracing::Instrument;
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
+use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::metrics::metrics_inc_remote_io_read_bytes;
 use crate::metrics::metrics_inc_remote_io_read_parts;
 use crate::metrics::metrics_inc_remote_io_seeks;
@@ -236,14 +238,26 @@ impl BlockReader {
         DataBlock::from_chunk(&self.projected_schema, &chunk)
     }
 
-    pub fn deserialize(&self, part: PartInfoPtr, chunks: Vec<(usize, Vec<u8>)>) -> Result<DataBlock> {
+    pub fn deserialize(
+        &self,
+        part: PartInfoPtr,
+        chunks: Vec<(usize, Vec<u8>)>,
+    ) -> Result<DataBlock> {
+        let start = Instant::now();
         let reads = chunks
             .iter()
             .map(|(index, chunk)| (*index, chunk.as_slice()))
             .collect::<Vec<_>>();
 
         let part = FusePartInfo::from_part(&part)?;
-        self.deserialize_columns(part.nums_rows, &part.compression, &part.columns_meta, reads)
+        let deserialized_res = self.deserialize_columns(
+            part.nums_rows,
+            &part.compression,
+            &part.columns_meta,
+            reads,
+        );
+        metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+        deserialized_res
     }
 
     pub async fn read_columns_data(
@@ -267,10 +281,8 @@ impl BlockReader {
             ));
 
             // Perf
-            {
-                metrics_inc_remote_io_seeks(1);
-                metrics_inc_remote_io_read_bytes(column_meta.len);
-            }
+            metrics_inc_remote_io_seeks(1);
+            metrics_inc_remote_io_read_bytes(column_meta.len);
         }
 
         let object = self.operator.object(&part.location);

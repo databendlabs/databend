@@ -515,7 +515,6 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	cargo version
 
 	# Install tools that needed in build
-	cargo install cccache@0.5.1
 	cargo install sccache@0.4.0-pre.2 --git https://github.com/mozilla/sccache
 fi
 
