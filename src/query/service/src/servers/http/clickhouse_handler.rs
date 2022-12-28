@@ -279,7 +279,6 @@ pub async fn clickhouse_handler_post(
                     ctx.get_settings(),
                     schema,
                     ctx.get_scan_progress(),
-                    false,
                     to_table.get_block_compact_thresholds(),
                 )
                 .await

@@ -211,16 +211,12 @@ impl InputContext {
     ) -> Result<Self> {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
 
-        let file_format_options = if is_multi_part {
-            let format_type =
-                StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
-            format_type.get_file_format_options_from_setting(&settings, None)
-        } else {
-            // clickhouse
-            let typ = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-            typ.typ
-                .get_file_format_options_from_setting(&settings, Some(typ.suffixes))
-        }?;
+        let typ = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
+        let mut file_format_options = typ
+            .typ
+            .get_file_format_options_from_setting(&settings, Some(typ.suffixes))?;
+        file_format_options.stage.skip_header = rows_to_skip as u64;
+
         let format_type = file_format_options.stage.format.clone();
 
         let file_format_options = format_type.final_file_format_options(&file_format_options)?;
