@@ -57,6 +57,7 @@ common-settings = { path = "../settings" }
 common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
 common-storages-cache = { path = "../storages/cache" }
+common-storages-common = { path = "../storages/common" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive/hive", optional = true }

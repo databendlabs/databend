@@ -28,6 +28,7 @@ use tracing::warn;
 
 use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;
+use crate::servers::http::v1::query::http_query::ExpireResult;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::HttpQueryRequest;
 use crate::sessions::Session;
@@ -87,15 +88,26 @@ impl HttpQueryManager {
         let query_id_clone = query_id.to_string();
         let query_clone = query.clone();
         GlobalIORuntime::instance().spawn(async move {
-            while let Some(t) = query_clone.check_expire().await {
-                sleep(t).await;
-            }
-            let msg = format!("http query {} timeout after {} s", &query_id_clone, timeout);
-            if self_clone.remove_query(&query_id_clone).await.is_none() {
-                warn!("{msg}, but fail to remove");
-            } else {
-                warn!("{msg}");
-                query.detach().await;
+            loop {
+                match query_clone.check_expire().await {
+                    ExpireResult::Expired => {
+                        let msg =
+                            format!("http query {} timeout after {} s", &query_id_clone, timeout);
+                        if self_clone.remove_query(&query_id_clone).await.is_none() {
+                            warn!("{msg}, but fail to remove");
+                        } else {
+                            warn!("{msg}");
+                            query.detach().await;
+                        };
+                        break;
+                    }
+                    ExpireResult::Sleep(t) => {
+                        sleep(t).await;
+                    }
+                    ExpireResult::Removed => {
+                        break;
+                    }
+                }
             }
         });
     }
@@ -104,10 +116,8 @@ impl HttpQueryManager {
     pub(crate) async fn remove_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
         let mut queries = self.queries.write().await;
         let q = queries.remove(query_id);
-        if let Some(q) = queries.remove(query_id) {
-            if q.is_async() {
-                q.update_expire_time(false).await;
-            }
+        if let Some(q) = &q {
+            q.mark_removed().await;
         }
         q
     }

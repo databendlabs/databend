@@ -37,6 +37,7 @@ use common_catalog::table_mutator::TableMutator;
 pub use constants::*;
 pub use fuse_table::FuseStorageFormat;
 pub use fuse_table::FuseTable;
+pub use io::MergeIOReadResult;
 
 pub use crate::metrics::metrics_reset;
 

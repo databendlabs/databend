@@ -16,14 +16,17 @@ mod block_reader;
 mod block_reader_native;
 mod block_reader_parquet;
 mod bloom_index_reader;
+mod decompressor;
 mod meta_readers;
 mod read_settings;
 mod snapshot_history_reader;
 mod versioned_reader;
 
 pub use block_reader::BlockReader;
+pub use block_reader::MergeIOReadResult;
 pub use bloom_index_reader::load_bloom_filter_by_columns;
 pub use bloom_index_reader::BlockFilterReader;
+pub use decompressor::UncompressedBuffer;
 pub use meta_readers::MetaReaders;
 pub use meta_readers::SegmentInfoReader;
 pub use meta_readers::TableSnapshotReader;

@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -27,8 +28,12 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
+use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::io::UncompressedBuffer;
+use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
+use crate::MergeIOReadResult;
 
 pub struct DeserializeDataTransform {
     scan_progress: Arc<Progress>,
@@ -38,8 +43,11 @@ pub struct DeserializeDataTransform {
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
     parts: Vec<PartInfoPtr>,
-    chunks: Vec<Vec<(usize, Vec<u8>)>>,
+    chunks: Vec<MergeIOReadResult>,
+    uncompressed_buffer: Arc<UncompressedBuffer>,
 }
+
+unsafe impl Send for DeserializeDataTransform {}
 
 impl DeserializeDataTransform {
     pub fn create(
@@ -48,6 +56,7 @@ impl DeserializeDataTransform {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
+        let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             scan_progress,
@@ -57,6 +66,7 @@ impl DeserializeDataTransform {
             output_data: None,
             parts: vec![],
             chunks: vec![],
+            uncompressed_buffer: UncompressedBuffer::new(buffer_size),
         })))
     }
 }
@@ -74,6 +84,7 @@ impl Processor for DeserializeDataTransform {
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
+            self.uncompressed_buffer.clear();
             return Ok(Event::Finished);
         }
 
@@ -101,7 +112,7 @@ impl Processor for DeserializeDataTransform {
                 if let Some(source_meta) = source_meta.as_mut_any().downcast_mut::<DataSourceMeta>()
                 {
                     self.parts = source_meta.part.clone();
-                    self.chunks = source_meta.data.take().unwrap();
+                    self.chunks = std::mem::take(&mut source_meta.data);
                     return Ok(Event::Sync);
                 }
             }
@@ -111,6 +122,7 @@ impl Processor for DeserializeDataTransform {
 
         if self.input.is_finished() {
             self.output.finish();
+            self.uncompressed_buffer.clear();
             return Ok(Event::Finished);
         }
 
@@ -121,8 +133,21 @@ impl Processor for DeserializeDataTransform {
     fn process(&mut self) -> Result<()> {
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
-        if let Some((part, chunks)) = part.zip(chunks) {
-            let data_block = self.block_reader.deserialize(part, chunks)?;
+        if let Some((part, read_res)) = part.zip(chunks) {
+            let start = Instant::now();
+
+            let columns_chunks = read_res.columns_chunks()?;
+            let part = FusePartInfo::from_part(&part)?;
+
+            let data_block = self.block_reader.deserialize_columns(
+                part.nums_rows,
+                &part.compression,
+                &part.columns_meta,
+                columns_chunks,
+                Some(self.uncompressed_buffer.clone()),
+            )?;
+
+            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
 
             let progress_values = ProgressValues {
                 rows: data_block.num_rows(),

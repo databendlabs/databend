@@ -1121,9 +1121,9 @@ dependencies = [
 
 [[package]]
 name = "comfy-table"
-version = "6.1.1"
+version = "6.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b3d16bb3da60be2f7c7acfc438f2ae6f3496897ce68c291d0509bb67b4e248e"
+checksum = "e621e7e86c46fd8a14c32c6ae3cb95656621b4743a27d0cffedb831d46e7ad21"
 dependencies = [
  "crossterm",
  "strum",
@@ -1384,6 +1384,8 @@ dependencies = [
  "common-io",
  "common-meta-types",
  "common-settings",
+ "common-storages-common",
+ "common-storages-table-meta",
  "lexical-core",
  "micromarshal",
  "num",
@@ -2042,6 +2044,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-common"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-storages-table-meta",
+]
+
+[[package]]
 name = "common-storages-factory"
 version = "0.1.0"
 dependencies = [
@@ -2084,6 +2097,7 @@ dependencies = [
  "common-sql",
  "common-storage",
  "common-storages-cache",
+ "common-storages-common",
  "common-storages-index",
  "common-storages-pruner",
  "common-storages-table-meta",
@@ -2094,6 +2108,7 @@ dependencies = [
  "opendal",
  "serde",
  "serde_json",
+ "streaming-decompression",
  "tracing",
  "typetag",
  "uuid",
@@ -2957,9 +2972,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap 3.2.22",
+ "comfy-table",
  "common-base",
  "common-config",
+ "common-datablocks",
  "common-exception",
+ "common-formats",
  "common-grpc",
  "common-meta-api",
  "common-meta-app",
@@ -3087,6 +3105,7 @@ dependencies = [
  "common-sql",
  "common-storage",
  "common-storages-cache",
+ "common-storages-common",
  "common-storages-factory",
  "common-storages-fuse",
  "common-storages-hive",

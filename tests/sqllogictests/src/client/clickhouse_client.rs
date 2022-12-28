@@ -62,7 +62,7 @@ impl ClickhouseHttpClient {
         }
 
         let mut query = HashMap::new();
-        query.insert("query", sql);
+        query.insert("query", sql.trim_end_matches(|p| p == ';'));
         query.insert("database", self.database.as_str());
         if !self.settings.is_empty() {
             query.extend(

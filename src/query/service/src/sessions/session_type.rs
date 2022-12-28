@@ -25,6 +25,7 @@ pub enum SessionType {
     HTTPAPI(String),
     Dummy,
     Fuzz,
+    Local,
 }
 
 impl SessionType {
@@ -48,6 +49,7 @@ impl fmt::Display for SessionType {
             SessionType::FlightRPC => "FlightRPC".to_string(),
             SessionType::HTTPAPI(usage) => format!("HTTPAPI({})", usage),
             SessionType::Fuzz => "Fuzz".to_string(),
+            SessionType::Local => "Local".to_string(),
         };
         write!(f, "{}", name)
     }
