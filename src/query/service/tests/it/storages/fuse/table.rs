@@ -89,7 +89,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             "| 2  | (4, 6) |", //
             "+----+--------+", //
         ];
-        common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
+        common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
     }
 
     // test commit with overwrite
@@ -145,7 +145,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             "| 3  | (6, 9) |", //
             "+----+--------+", //
         ];
-        common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
+        common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
     }
 
     Ok(())

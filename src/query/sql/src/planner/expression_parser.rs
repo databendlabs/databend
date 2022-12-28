@@ -13,6 +13,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Expr;
+use common_expression::RemoteExpr;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
@@ -90,4 +91,23 @@ pub fn parse_exprs(
         expressions.push(scalar.as_expr()?);
     }
     Ok(expressions)
+}
+
+pub fn parse_to_remote_string_exprs(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    sql: &str,
+) -> Result<Vec<RemoteExpr<String>>> {
+    let schema = table_meta.schema();
+    let exprs = parse_exprs(ctx, table_meta, sql)?;
+    let exprs = exprs
+        .iter()
+        .map(|expr| {
+            let expr = expr.project_column_ref(|index| schema.field(*index).name().to_string());
+
+            RemoteExpr::from_expr(&expr)
+        })
+        .collect();
+
+    Ok(exprs)
 }

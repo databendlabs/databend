@@ -14,18 +14,12 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
-use common_datavalues::Series;
-use common_datavalues::SeriesFrom;
-use common_datavalues::StructColumn;
-use common_datavalues::StructType;
-use common_datavalues::ToDataType;
 use common_exception::Result;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::traverse;
 
@@ -54,18 +48,18 @@ fn gen_sample_block() -> (DataBlock, Vec<ColumnRef>) {
         f64::to_data_type(),
     ]);
 
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataTypeImpl::Struct(col_a_type.clone())),
-        DataField::new("f", i64::to_data_type()),
-        DataField::new("g", f64::to_data_type()),
-    ]);
+    // let schema = DataSchemaRefExt::create(vec![
+    //     DataField::new("a", DataTypeImpl::Struct(col_a_type.clone())),
+    //     DataField::new("f", i64::to_data_type()),
+    //     DataField::new("g", f64::to_data_type()),
+    // ]);
 
     // prepare leaves
-    let col_c = Series::from_data(vec![1i64, 2, 3]);
-    let col_d = Series::from_data(vec![1.0f64, 2., 3.]);
-    let col_e = Series::from_data(vec![4.0f64, 5., 6.]);
-    let col_f = Series::from_data(vec![7i64, 8, 9]);
-    let col_g = Series::from_data(vec![10.0f64, 11., 12.]);
+    let col_c = Column::from_data(vec![1i64, 2, 3]);
+    let col_d = Column::from_data(vec![1.0f64, 2., 3.]);
+    let col_e = Column::from_data(vec![4.0f64, 5., 6.]);
+    let col_f = Column::from_data(vec![7i64, 8, 9]);
+    let col_g = Column::from_data(vec![10.0f64, 11., 12.]);
 
     // inner/root nodes
     let col_b: ColumnRef = Arc::new(StructColumn::from_data(

@@ -40,7 +40,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
-        schema: TestFixture::default_schema(),
+        schema: TestFixture::default_table_schema(),
         engine: Engine::Fuse,
         storage_params: None,
         options: [

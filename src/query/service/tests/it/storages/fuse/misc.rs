@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_datavalues::DataValue;
+use common_expression::Scalar;
 use common_storages_table_meta::meta::ColumnStatistics;
 use serde_json::Value;
 
@@ -23,8 +23,8 @@ use serde_json::Value;
 fn test_issue_6556_column_statistics_ser_de_compatability_null_count_alias()
 -> common_exception::Result<()> {
     let col_stats = ColumnStatistics {
-        min: DataValue::Null,
-        max: DataValue::Null,
+        min: Scalar::Null,
+        max: Scalar::Null,
         null_count: 0,
         in_memory_size: 0,
         distinct_of_values: None,

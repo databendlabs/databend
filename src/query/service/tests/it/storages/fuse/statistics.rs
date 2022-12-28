@@ -15,9 +15,12 @@
 use std::collections::HashMap;
 
 use common_base::base::tokio;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
 use common_functions::aggregates::eval_aggr;
 use common_sql::evaluator::BlockOperator;
@@ -25,6 +28,7 @@ use common_sql::evaluator::Evaluator;
 use common_sql::executor::add;
 use common_sql::executor::col;
 use common_sql::executor::lit;
+use common_sql::parse_exprs;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::statistics::Trim;
 use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
@@ -49,8 +53,8 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", i32::to_data_type()),
-        DataField::new("b", Vu8::to_data_type()),
+        DataField::new("a", DataType::Number(NumberDataType::Int32)),
+        DataField::new("b", DataType::String),
     ]);
     let block = DataBlock::create(schema, vec![
         Series::from_data(vec![1, 2, 3]),
@@ -72,8 +76,8 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
 #[test]
 fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", i32::to_data_type()),
-        DataField::new("b", Vu8::to_data_type()),
+        DataField::new("a", DataType::Number(NumberDataType::Int32)),
+        DataField::new("b", DataType::String),
     ]);
     let block = DataBlock::create(schema, vec![
         Series::from_data(vec![1, 2, 3]),
@@ -98,7 +102,10 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::R
 #[test]
 fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
     let inner_names = vec!["a".to_string(), "b".to_string()];
-    let inner_data_types = vec![i32::to_data_type(), i32::to_data_type()];
+    let inner_data_types = vec![
+        DataType::Number(NumberDataType::Int32),
+        DataType::Number(NumberDataType::Int32),
+    ];
     let tuple_data_type = StructType::new_impl(Some(inner_names), inner_data_types);
     let schema = DataSchemaRefExt::create(vec![DataField::new("t", tuple_data_type.clone())]);
     let inner_columns = vec![
@@ -212,38 +219,12 @@ async fn test_accumulator() -> common_exception::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", i32::to_data_type()),
-        DataField::new("b", Vu8::to_data_type()),
-    ]);
-    let blocks = DataBlock::create(schema, vec![
-        Series::from_data(vec![1i32, 2, 3]),
-        Series::from_data(vec!["123456", "234567", "345678"]),
-    ]);
-
-    let block_compactor = BlockCompactThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor, vec![]);
-    let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
-    assert!(stats.is_some());
-    let stats = stats.unwrap();
-    assert_eq!(vec![DataValue::Int64(1)], stats.min);
-    assert_eq!(vec![DataValue::Int64(3)], stats.max);
-
-    let stats_gen = ClusterStatsGenerator::new(1, vec![1], vec![], 0, block_compactor, vec![]);
-    let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
-    assert!(stats.is_some());
-    let stats = stats.unwrap();
-    assert_eq!(vec![DataValue::String(b"12345".to_vec())], stats.min);
-    assert_eq!(vec![DataValue::String(b"34567".to_vec())], stats.max);
-
-    Ok(())
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new(
+        "a",
+        DataType::Number(NumberDataType::Int32),
+    )]);
     let blocks = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1i32, 2, 3])]);
     let origin = Some(ClusterStatistics {
         cluster_key_id: 0,
@@ -253,7 +234,8 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     });
 
     let block_compactor = BlockCompactThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor, vec![]);
+    let stats_gen =
+        ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor, vec![], vec![]);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -261,14 +243,13 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
     // add expression executor.
-    let expr = add(col("a", i32::to_data_type()), lit(1));
-    let field = DataField::new("(a + 1)", i64::to_data_type());
+    let expr = parse_exprs(ctx, table_meta, "a + 1")?;
     let operators = vec![BlockOperator::Map {
-        eval: Evaluator::eval_expression(&expr, &schema)?,
-        name: field.name().to_string(),
+        expr: expr[0].clone(),
     }];
 
-    let stats_gen = ClusterStatsGenerator::new(0, vec![1], vec![], 0, block_compactor, operators);
+    let stats_gen =
+        ClusterStatsGenerator::new(0, vec![1], vec![], 0, block_compactor, operators, vec![]);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -276,7 +257,8 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert_eq!(vec![DataValue::Int64(4)], stats.max);
 
     // different cluster_key_id.
-    let stats_gen = ClusterStatsGenerator::new(1, vec![0], vec![], 0, block_compactor, vec![]);
+    let stats_gen =
+        ClusterStatsGenerator::new(1, vec![0], vec![], 0, block_compactor, vec![], vec![]);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin)?;
     assert!(stats.is_none());
 

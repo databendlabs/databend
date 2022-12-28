@@ -21,15 +21,25 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
 use common_config::GlobalConfig;
-use common_datablocks::assert_blocks_sorted_eq_with_name;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
+use common_expression::infer_table_schema;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::BlockEntry;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::SendableDataBlockStream;
+use common_expression::TableSchemaRef;
+use common_expression::Value;
 use common_meta_app::schema::DatabaseMeta;
-// use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-// use common_sql::plans::CreateDatabasePlan;
-// use common_sql::plans::CreateTablePlanV2;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_sql::plans::CreateDatabasePlan;
+use common_sql::plans::CreateTablePlanV2;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_storages_fuse::FuseTable;
@@ -136,13 +146,19 @@ impl TestFixture {
     }
 
     pub fn default_schema() -> DataSchemaRef {
-        let tuple_inner_names = vec!["a".to_string(), "b".to_string()];
-        let tuple_inner_data_types = vec![i32::to_data_type(), i32::to_data_type()];
-        let tuple_data_type = StructType::new_impl(Some(tuple_inner_names), tuple_inner_data_types);
+        let tuple_inner_data_types = vec![
+            DataType::Number(NumberDataType::Int32),
+            DataType::Number(NumberDataType::Int32),
+        ];
+        let tuple_data_type = DataType::Tuple(tuple_inner_data_types);
         DataSchemaRefExt::create(vec![
-            DataField::new("id", i32::to_data_type()),
+            DataField::new("id", DataType::Number(NumberDataType::Int32)),
             DataField::new("t", tuple_data_type),
         ])
+    }
+
+    pub fn default_table_schema() -> TableSchemaRef {
+        infer_table_schema(&Self::default_schema())
     }
 
     pub fn default_crate_table_plan(&self) -> CreateTablePlanV2 {
@@ -152,7 +168,7 @@ impl TestFixture {
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
-            schema: TestFixture::default_schema(),
+            schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
             options: [
@@ -175,7 +191,7 @@ impl TestFixture {
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
-            schema: TestFixture::default_schema(),
+            schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
             options: [
@@ -218,34 +234,42 @@ impl TestFixture {
         (0..num_of_block)
             .into_iter()
             .map(|idx| {
-                let tuple_inner_names = vec!["a".to_string(), "b".to_string()];
-                let tuple_inner_data_types = vec![i32::to_data_type(), i32::to_data_type()];
-                let tuple_data_type =
-                    StructType::new_impl(Some(tuple_inner_names), tuple_inner_data_types);
-                let schema = DataSchemaRefExt::create(vec![
-                    DataField::new("id", i32::to_data_type()),
-                    DataField::new("t", tuple_data_type.clone()),
-                ]);
-                let column0 = Series::from_data(
+                let column0 = Column::from_data(
                     std::iter::repeat_with(|| idx as i32 + start)
                         .take(rows_per_block)
                         .collect::<Vec<i32>>(),
                 );
-                let column1 = Series::from_data(
+                let column1 = Column::from_data(
                     std::iter::repeat_with(|| (idx as i32 + start) * 2)
                         .take(rows_per_block)
                         .collect::<Vec<i32>>(),
                 );
-                let column2 = Series::from_data(
+                let column2 = Column::from_data(
                     std::iter::repeat_with(|| (idx as i32 + start) * 3)
                         .take(rows_per_block)
                         .collect::<Vec<i32>>(),
                 );
                 let tuple_inner_columns = vec![column1, column2];
-                let tuple_column =
-                    StructColumn::from_data(tuple_inner_columns, tuple_data_type).arc();
+                let tuple_column = Column::Tuple {
+                    fields: tuple_inner_columns,
+                    len: rows_per_block,
+                };
 
-                Ok(DataBlock::create(schema, vec![column0, tuple_column]))
+                let columns = vec![
+                    BlockEntry {
+                        data_type: DataType::Number(NumberDataType::Int32),
+                        value: Value::Column(column0),
+                    },
+                    BlockEntry {
+                        data_type: DataType::Tuple(vec![
+                            DataType::Number(NumberDataType::Int32),
+                            DataType::Number(NumberDataType::Int32),
+                        ]),
+                        value: Value::Column(tuple_column),
+                    },
+                ];
+
+                Ok(DataBlock::new(columns, rows_per_block))
             })
             .collect()
     }

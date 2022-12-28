@@ -18,8 +18,8 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::channel;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_pipeline_sources::processors::sources::SyncReceiverSource;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::processors::port::InputPort;
@@ -157,47 +157,6 @@ async fn test_resize_pipeline_init_queue() -> Result<()> {
         Ok(())
     }
 }
-
-// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-// async fn test_simple_pipeline_schedule_queue() -> Result<()> {
-//     unsafe {
-//         let (mut rx, sink_pipe) = create_sink_pipe(1)?;
-//         let (mut tx, source_pipe) = create_source_pipe(1)?;
-//
-//         let mut pipeline = Pipeline::create();
-//         pipeline.add_pipe(source_pipe);
-//         pipeline.add_pipe(create_transform_pipe(1)?);
-//         pipeline.add_pipe(sink_pipe);
-//
-//         let executor = PipelineExecutor::create(pipeline, 1)?;
-//         let thread1_executor = executor.clone();
-//         let thread1 = std::thread::spawn(move || {
-//             thread1_executor.execute_with_single_worker(0);
-//         });
-//
-//         let thread2 = std::thread::spawn(move || {
-//             let tx = tx.remove(0);
-//             for index in 0..5 {
-//                 let schema = DataSchema::new(vec![DataField::new("field",i8:to_data_type())]);
-//                 tx.blocking_send(Ok(DataBlock::create(Arc::new(schema), vec![DataColumn::Constant(DataValue::Int64(index), 2)])));
-//             }
-//         });
-//
-//         let thread3 = std::thread::spawn(move || {
-//             while let Some(data) = rx[0].blocking_recv() {
-//                 println!("{:?}", data);
-//             }
-//         });
-//
-//         thread2.join();
-//         // thread3.join();
-//         executor.finish();
-//         thread1.join();
-//     }
-//
-//
-//     unimplemented!("")
-// }
 
 fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     let (_rx, sink_pipe) = create_sink_pipe(1)?;

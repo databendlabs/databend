@@ -16,6 +16,7 @@ use common_base::base::tokio;
 use common_catalog::plan::PushDownInfo;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 // use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
@@ -67,62 +68,8 @@ async fn test_number_table() -> Result<()> {
         "| 7      |",
         "+--------+",
     ];
-    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    common_expression::block_debug::assert_blocks_sorted_eq(expected, result.as_slice());
 
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_limit_push_down() -> Result<()> {
-    struct Test {
-        name: &'static str,
-        query: &'static str,
-        result: Vec<&'static str>,
-    }
-
-    let tests: Vec<Test> = vec![
-        Test {
-            name: "only-limit",
-            query: "select * from numbers_mt(10) limit 2",
-            result: vec![
-                "+--------+",
-                "| number |",
-                "+--------+",
-                "| 0      |",
-                "| 1      |",
-                "+--------+",
-            ],
-        },
-        Test {
-            name: "limit-with-filter",
-            query: "select * from numbers_mt(10) where number > 8 limit 2",
-            result: vec![
-                "+--------+",
-                "| number |",
-                "+--------+",
-                "| 9      |",
-                "+--------+",
-            ],
-        },
-    ];
-
-    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
-    for test in tests {
-        let session = SessionManager::instance()
-            .create_session(SessionType::Dummy)
-            .await?;
-        let ctx = session.create_query_context().await?;
-        let mut planner = Planner::new(ctx.clone());
-        let (plan, _, _) = planner.plan_sql(test.query).await?;
-
-        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
-
-        let stream = executor.execute(ctx.clone()).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expect = test.result;
-        let actual = result.as_slice();
-        common_datablocks::assert_blocks_sorted_eq_with_name(test.name, expect, actual);
-    }
     Ok(())
 }
 

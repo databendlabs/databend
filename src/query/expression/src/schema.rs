@@ -452,6 +452,14 @@ impl DataField {
         }
     }
 
+    pub fn new_nullable(name: &str, data_type: DataType) -> Self {
+        DataField {
+            name: name.to_string(),
+            default_expr: None,
+            data_type: DataType::Nullable(Box::new(data_type)),
+        }
+    }
+
     #[must_use]
     pub fn with_default_expr(mut self, default_expr: Option<String>) -> Self {
         self.default_expr = default_expr;

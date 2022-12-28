@@ -16,8 +16,15 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use common_base::base::tokio;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseMeta;
@@ -167,9 +174,9 @@ async fn test_catalogs_table() -> Result<()> {
     // Create.
     {
         // Table schema with metadata(due to serde issue).
-        let schema = Arc::new(DataSchema::new(vec![DataField::new(
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
             "number",
-            u64::to_data_type(),
+            TableDataType::Number(NumberDataType::UInt64),
         )]));
 
         let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};

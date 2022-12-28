@@ -17,9 +17,20 @@ use std::sync::Arc;
 use common_ast::ast::Engine;
 use common_base::base::tokio;
 use common_catalog::plan::PushDownInfo;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
+use common_sql::parse_exprs;
+use common_sql::parse_to_remote_string_exprs;
+use common_sql::plans::CreateTablePlanV2;
 // use common_sql::executor::add;
 // use common_sql::executor::col;
 // use common_sql::executor::lit;
@@ -45,7 +56,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 async fn apply_block_pruning(
     table_snapshot: Arc<TableSnapshot>,
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     push_down: &Option<PushDownInfo>,
     ctx: Arc<QueryContext>,
     op: Operator,
@@ -63,9 +74,9 @@ async fn test_block_pruner() -> Result<()> {
     let ctx = fixture.ctx();
 
     let test_tbl_name = "test_index_helper";
-    let test_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", u64::to_data_type()),
-        DataField::new("b", u64::to_data_type()),
+    let test_schema = TableSchemaRefExt::create(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+        TableField::new("b", TableDataType::Number(NumberDataType::UInt64)),
     ]);
 
     let num_blocks = 10;
@@ -108,7 +119,7 @@ async fn test_block_pruner() -> Result<()> {
         .await?;
 
     let gen_col =
-        |value, rows| Series::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
+        |value, rows| Column::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
 
     // prepare test blocks
     // - there will be `num_blocks` blocks, for each block, it comprises of `row_per_block` rows,
@@ -116,7 +127,7 @@ async fn test_block_pruner() -> Result<()> {
     let blocks = (0..num_blocks)
         .into_iter()
         .map(|idx| {
-            DataBlock::create(test_schema.clone(), vec![
+            DataBlock::new(test_schema.clone(), vec![
                 // value of column a always equals  1
                 gen_col(1, row_per_block),
                 // for column b
@@ -153,30 +164,34 @@ async fn test_block_pruner() -> Result<()> {
 
     // nothing is pruned
     let e1 = PushDownInfo {
-        filters: vec![col("a", u64::to_data_type()).gt(&lit(30u64))?],
+        filters: parse_to_remote_string_exprs(ctx.clone(), table.clone(), "a > 3")?,
         ..Default::default()
     };
 
     // some blocks pruned
     let mut e2 = PushDownInfo::default();
-    let max_val_of_b = 6u64;
-    e2.filters = vec![
-        col("a", u64::to_data_type())
-            .gt(&lit(0u64))?
-            .and(&col("b", u64::to_data_type()).gt(&lit(max_val_of_b))?)?,
-    ];
+
+    e2.filters = parse_to_remote_string_exprs(ctx.clone(), table.clone(), "a > 0 and b > 6")?;
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
     // Sort asc Limit
     let e3 = PushDownInfo {
-        order_by: vec![(col("b", u64::to_data_type()), true, false)],
+        order_by: vec![(
+            col("b", DataType::Number(NumberDataType::UInt64)),
+            true,
+            false,
+        )],
         limit: Some(3),
         ..Default::default()
     };
 
     // Sort desc Limit
     let e4 = PushDownInfo {
-        order_by: vec![(col("b", u64::to_data_type()), false, false)],
+        order_by: vec![(
+            col("b", DataType::Number(NumberDataType::UInt64)),
+            false,
+            false,
+        )],
         limit: Some(4),
         ..Default::default()
     };
@@ -214,8 +229,8 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     let test_tbl_name = "test_index_helper";
     let test_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", u64::to_data_type()),
-        DataField::new("b", u64::to_data_type()),
+        DataField::new("a", DataType::Number(NumberDataType::UInt64)),
+        DataField::new("b", DataType::Number(NumberDataType::UInt64)),
     ]);
 
     let row_per_block = 3u32;
@@ -298,7 +313,11 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     // a + b > 20; some blocks pruned
     let mut extra = PushDownInfo::default();
-    let pred = add(col("a", u64::to_data_type()), col("b", u64::to_data_type())).gt(&lit(20u64))?;
+    let pred = add(
+        col("a", DataType::Number(NumberDataType::UInt64)),
+        col("b", DataType::Number(NumberDataType::UInt64)),
+    )
+    .gt(&lit(20u64))?;
     extra.filters = vec![pred];
 
     let blocks = apply_block_pruning(
@@ -314,7 +333,11 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     // b - a < 20; nothing will be pruned.
     let mut extra = PushDownInfo::default();
-    let pred = sub(col("b", u64::to_data_type()), col("a", u64::to_data_type())).lt(&lit(20u64))?;
+    let pred = sub(
+        col("b", DataType::Number(NumberDataType::UInt64)),
+        col("a", DataType::Number(NumberDataType::UInt64)),
+    )
+    .lt(&lit(20u64))?;
     extra.filters = vec![pred];
 
     let blocks = apply_block_pruning(

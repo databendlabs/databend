@@ -13,12 +13,17 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataField;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-// use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-// use common_sql::plans::TableOptions;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_sql::plans::TableOptions;
 use common_storages_null::NullTable;
 use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
@@ -33,7 +38,10 @@ async fn test_null_table() -> Result<()> {
         ident: Default::default(),
 
         meta: TableMeta {
-            schema: DataSchemaRefExt::create(vec![DataField::new("a", u64::to_data_type())]),
+            schema: TableSchemaRefExt::create(vec![TableField::new(
+                "a",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]),
             engine: "Null".to_string(),
             options: TableOptions::default(),
             ..Default::default()

@@ -36,6 +36,7 @@ pub type Result<T> = std::result::Result<T, (crate::Span, String)>;
 mod block;
 
 mod block_compact_thresholds;
+pub mod block_debug;
 pub mod converts;
 mod deserializations;
 mod evaluator;

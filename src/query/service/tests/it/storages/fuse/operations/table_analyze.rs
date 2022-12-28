@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::table::Table;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::SendableDataBlockStream;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::Plan;

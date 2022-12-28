@@ -246,6 +246,7 @@ mod utils {
 
     use chrono::DateTime;
     use chrono::Utc;
+    use common_storages_factory::Table;
 
     use super::*;
 
@@ -287,7 +288,8 @@ mod utils {
         num_blocks: usize,
     ) -> Result<(Location, SegmentInfo)> {
         let dal = fuse_table.get_operator_ref();
-        let block_writer = BlockWriter::new(dal, fuse_table.meta_location_generator());
+        let schema = fuse_table.schema();
+        let block_writer = BlockWriter::new(&schema, dal, fuse_table.meta_location_generator());
         let mut block_metas = vec![];
 
         // does not matter in this suite

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
 use std::sync::Arc;
 
 use comfy_table::Table;
@@ -20,11 +21,13 @@ use common_base::base::*;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::DataBlock;
 use common_expression::Value;
-use common_streams::*;
+use databend_query::stream::DataBlockStream;
+use databend_query::stream::ProgressStream;
 use futures::TryStreamExt;
 use goldenfile::Mint;
 
