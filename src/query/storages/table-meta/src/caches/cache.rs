@@ -49,7 +49,7 @@ impl CacheManager {
     ///
     /// For convenience, ids of cluster and tenant are also kept
     pub fn init(config: &QueryConfig) -> Result<()> {
-        if !config.table_cache_enabled {
+        if !config.table_meta_cache_enabled {
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
