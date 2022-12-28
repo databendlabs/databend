@@ -101,11 +101,6 @@ impl LogicalOperator for Filter {
             // Compute selectivity for each conjunction
             selectivity *= sb.compute_selectivity(pred);
         }
-        tracing::info!(
-            "Filter selectivity: {:?}, {:?}",
-            self.predicates,
-            selectivity
-        );
         let cardinality = input_prop.cardinality * selectivity;
 
         // Derive used columns
