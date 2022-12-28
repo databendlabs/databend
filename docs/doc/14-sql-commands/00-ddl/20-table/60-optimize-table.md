@@ -62,6 +62,8 @@ Optimizing a table could be time-consuming, especially for large ones. Databend 
 ## Syntax
 
 ```sql
+-- Purge historical data
+OPTIMIZE TABLE [database.]table_name PURGE
 -- Purge historical data generated before a snapshot or a timestamp was created
 OPTIMIZE TABLE [database.]table_name PURGE BEFORE (SNAPSHOT => '<SNAPSHOT_ID>')
 OPTIMIZE TABLE [database.]table_name PURGE BEFORE (TIMESTAMP => '<TIMESTAMP>'::TIMESTAMP)
@@ -70,7 +72,14 @@ OPTIMIZE TABLE [database.]table_name PURGE BEFORE (TIMESTAMP => '<TIMESTAMP>'::T
 OPTIMIZE TABLE [database.]table_name COMPACT [LIMIT <segment_count>]
 -- Compact historical data by merging segments ONLY
 OPTIMIZE TABLE [database.]table_name COMPACT SEGMENT [LIMIT <segment_count>]
+
+-- Compact and purge historical data
+OPTIMIZE TABLE [database.]table_name ALL
 ```
+
+- `OPTIMIZE TABLE <table_name> PURGE`
+
+    Purges historical data from the table. Only the latest snapshot (including the segments and blocks referenced by this snapshot) will be kept.
 
 - `OPTIMIZE TABLE <table_name> PURGE BEFORE (SNAPSHOT => '<SNAPSHOT_ID>')`
 
@@ -94,6 +103,10 @@ OPTIMIZE TABLE [database.]table_name COMPACT SEGMENT [LIMIT <segment_count>]
 
     - See [Compacting Segments Only](#compacting-segments-only) for when you need this command.
     - The option LIMIT sets the maximum number of segments to be compacted. In this case, Databend will select and compact the latest segments.
+
+-   `OPTIMIZE TABLE <table_name> ALL`
+
+    Equals to `OPTIMIZE TABLE <table_name> COMPACT` + `OPTIMIZE TABLE <table_name> PURGE`.
 
 ## Examples
 
