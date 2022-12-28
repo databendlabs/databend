@@ -147,7 +147,10 @@ impl Processor for DeserializeDataTransform {
                 Some(self.uncompressed_buffer.clone()),
             )?;
 
-            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+            // Perf.
+            {
+                metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+            }
 
             let progress_values = ProgressValues {
                 rows: data_block.num_rows(),
