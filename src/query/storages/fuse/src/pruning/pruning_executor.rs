@@ -273,7 +273,7 @@ impl BlockPruner {
 
         // Perf
         {
-            metrics_inc_pruning_before_block_nums(blocks.len() as u64);
+            metrics_inc_pruning_before_block_nums(segment_info.blocks.len() as u64);
             metrics_inc_pruning_after_block_nums(result.len() as u64);
             metrics_inc_pruning_milliseconds(start.elapsed().as_millis() as u64);
         }
