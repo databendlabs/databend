@@ -395,17 +395,16 @@ impl Processor for CompactTransform {
                 let dal = &self.dal;
                 while let Some(state) = serialize_states.pop() {
                     handles.push(async move {
-                        // write block data.
-                        write_data(&state.block_data, dal, &state.block_location).await?;
-                        // write index data.
-                        let r = write_data(&state.index_data, dal, &state.index_location).await;
-
                         // Perf.
                         {
                             metrics_inc_compact_block_write_nums(1);
                             metrics_inc_compact_block_write_bytes(state.block_data.len() as u64);
                         }
-                        r
+
+                        // write block data.
+                        write_data(&state.block_data, dal, &state.block_location).await?;
+                        // write index data.
+                        write_data(&state.index_data, dal, &state.index_location).await
                     });
                 }
 

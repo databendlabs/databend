@@ -2977,7 +2977,6 @@ dependencies = [
  "common-config",
  "common-datablocks",
  "common-exception",
- "common-formats",
  "common-grpc",
  "common-meta-api",
  "common-meta-app",

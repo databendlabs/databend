@@ -15,6 +15,7 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
@@ -39,6 +40,7 @@ use tracing::Instrument;
 
 use super::pruner;
 use crate::io::MetaReaders;
+use crate::metrics::*;
 use crate::pruning::pruner::Pruner;
 use crate::pruning::topn_pruner;
 
@@ -250,6 +252,8 @@ impl BlockPruner {
             })
         });
 
+        let start = Instant::now();
+
         let join_handlers = pruning_runtime
             .try_spawn_batch_with_owned_semaphore(semaphore.clone(), tasks)
             .await?;
@@ -266,6 +270,14 @@ impl BlockPruner {
                 result.push(((segment_idx, block_idx), block))
             }
         }
+
+        // Perf
+        {
+            metrics_inc_pruning_before_block_nums(blocks.len() as u64);
+            metrics_inc_pruning_after_block_nums(result.len() as u64);
+            metrics_inc_pruning_milliseconds(start.elapsed().as_millis() as u64);
+        }
+
         Ok(result)
     }
 
@@ -274,6 +286,8 @@ impl BlockPruner {
         segment_idx: usize,
         segment_info: &SegmentInfo,
     ) -> Vec<(BlockIndex, Arc<BlockMeta>)> {
+        let start = Instant::now();
+
         let mut result = Vec::with_capacity(segment_info.blocks.len());
         for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
             // check limit speculatively
@@ -288,6 +302,13 @@ impl BlockPruner {
             {
                 result.push(((segment_idx, block_idx), block_meta.clone()))
             }
+        }
+
+        // Perf
+        {
+            metrics_inc_pruning_before_block_nums(segment_info.blocks.len() as u64);
+            metrics_inc_pruning_after_block_nums(result.len() as u64);
+            metrics_inc_pruning_milliseconds(start.elapsed().as_millis() as u64);
         }
         result
     }
