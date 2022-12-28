@@ -108,16 +108,16 @@ impl HeuristicOptimizer {
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
         /// manually implement a stack to avoid stack overflow
         /// an AST frame is a node in the AST tree
-        struct TreeFrame<'a> {
-            pub expr: &'a SExpr,
+        struct TreeFrame {
+            pub expr: Box<SExpr>,
             pub optimized_children: Vec<SExpr>,
-            pub parent: Option<Rc<RefCell<TreeFrame<'a>>>>,
+            pub parent: Option<Rc<RefCell<TreeFrame>>>,
             pub visited: bool,
         }
 
         let mut to_optimize = VecDeque::new();
         let root_frame = TreeFrame {
-            expr: s_expr,
+            expr: Box::new(s_expr.clone()),
             optimized_children: Vec::new(),
             parent: None,
             visited: false,
@@ -134,7 +134,7 @@ impl HeuristicOptimizer {
                     // optimize starts from the first children!
                     for expr in frame.borrow().expr.children().iter().rev() {
                         let child_frame = TreeFrame {
-                            expr,
+                            expr: Box::new(expr.clone()),
                             optimized_children: Vec::new(),
                             parent: Some(frame.clone()),
                             visited: false,
@@ -147,7 +147,7 @@ impl HeuristicOptimizer {
                 true => {
                     // all of its children are optimized now, apply transform rules on it
                     let (result, need_optimize) = {
-                        let expr = frame.borrow().expr;
+                        let expr = &frame.borrow().expr;
                         let optimized_children = frame.borrow().optimized_children.clone();
                         let optimized_expr = expr.replace_children(optimized_children);
                         self.apply_transform_rules(&optimized_expr, &self.rules)?
@@ -158,7 +158,7 @@ impl HeuristicOptimizer {
                         to_optimize.push_back(frame.clone());
                         let mut frame = frame.borrow_mut();
                         // move `result` onto heap
-                        frame.expr = Box::leak(Box::new(result));
+                        frame.expr = Box::new(result);
                         frame.optimized_children = vec![];
                         frame.visited = false;
                     } else {
@@ -211,13 +211,16 @@ impl HeuristicOptimizer {
     // set the last bool to true
     fn apply_transform_rules(&self, s_expr: &SExpr, rule_list: &RuleList) -> Result<(SExpr, bool)> {
         let mut s_expr = s_expr.clone();
+        println!("==apply transform rules==");
         for rule in rule_list.iter() {
             let mut state = TransformResult::new();
             if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
+                println!("rule matched: {:?}", rule.id());
                 s_expr.apply_rule(&rule.id());
                 rule.apply(&s_expr, &mut state)?;
                 if !state.results().is_empty() {
                     let result = &state.results()[0];
+                    println!("rule applied outcome: {:#?}", result.applied_rules);
                     // set to true
                     // the optimizer will optimize it again
                     return Ok((result.clone(), true));
