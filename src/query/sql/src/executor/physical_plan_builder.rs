@@ -24,7 +24,6 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
@@ -32,7 +31,6 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateFinal;

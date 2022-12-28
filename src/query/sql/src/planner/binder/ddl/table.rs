@@ -53,7 +53,6 @@ use common_expression::infer_table_schema;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;

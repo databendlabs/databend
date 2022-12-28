@@ -68,13 +68,14 @@ impl<'a> FuseStatistic<'a> {
             }
             col_ndvs.push(ndvs.into_bytes());
         };
+        let num_rows = col_ndvs.len();
 
         Ok(DataBlock::new(
             vec![BlockEntry {
                 data_type: DataType::String,
                 value: Value::Column(Column::from_data(col_ndvs)),
             }],
-            1,
+            num_rows,
         ))
     }
 

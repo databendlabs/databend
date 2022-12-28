@@ -211,16 +211,6 @@ impl PipelineBuilder {
                 }],
             ))
         })?;
-        // pipeline.add_transform(|input, output| {
-        //     Ok(CompoundChunkOperator::create(
-        //         input,
-        //         output,
-        //         func_ctx.clone(),
-        //         vec![ChunkOperator::Rename {
-        //             output_schema: output_schema.clone(),
-        //         }],
-        //     ))
-        // })?;
 
         Ok(())
     }
@@ -230,32 +220,24 @@ impl PipelineBuilder {
         self.ctx.try_set_partitions(scan.source.parts.clone())?;
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
 
-        // let schema = scan.source.schema();
-        // let projections = scan
-        //     .name_mapping
-        //     .keys()
-        //     .map(|name| schema.index_of(name.as_str()))
-        //     .collect::<Result<Vec<usize>>>()?;
-        //
-        // let ops = vec![
-        //     ChunkOperator::Project {
-        //         offsets: projections,
-        //     },
-        //     ChunkOperator::Rename {
-        //         output_schema: scan.output_schema()?,
-        //     },
-        // ];
+        let schema = scan.source.schema();
+        let projection = scan
+            .name_mapping
+            .keys()
+            .map(|name| schema.index_of(name.as_str()))
+            .collect::<Result<Vec<usize>>>()?;
 
-        // let func_ctx = self.ctx.try_get_function_context()?;
-        // self.main_pipeline.add_transform(|input, output| {
-        //     Ok(CompoundChunkOperator::create(
-        //         input,
-        //         output,
-        //         func_ctx.clone(),
-        //         ops.clone(),
-        //     ))
-        // })
-        Ok(())
+        let ops = vec![BlockOperator::Project { projection }];
+
+        let func_ctx = self.ctx.try_get_function_context()?;
+        self.main_pipeline.add_transform(|input, output| {
+            Ok(CompoundBlockOperator::create(
+                input,
+                output,
+                func_ctx.clone(),
+                ops.clone(),
+            ))
+        })
     }
 
     fn build_filter(&mut self, filter: &Filter) -> Result<()> {
