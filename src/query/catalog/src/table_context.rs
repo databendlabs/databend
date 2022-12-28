@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -19,7 +20,6 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
@@ -37,6 +37,7 @@ use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::table::Table;
 
+#[derive(Debug)]
 pub struct ProcessInfo {
     pub id: String,
     pub typ: String,
@@ -54,6 +55,13 @@ pub struct ProcessInfo {
     pub created_time: SystemTime,
 }
 
+#[derive(Debug, Clone)]
+pub struct StageAttachment {
+    pub location: String,
+    pub file_format_options: BTreeMap<String, String>,
+    pub copy_options: BTreeMap<String, String>,
+}
+
 #[async_trait::async_trait]
 pub trait TableContext: Send + Sync {
     /// Build a table instance the plan wants to operate on.
@@ -68,6 +76,7 @@ pub trait TableContext: Send + Sync {
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
     fn try_get_part(&self) -> Option<PartInfoPtr>;
+    fn try_get_parts(&self, num: usize) -> Vec<PartInfoPtr>;
     // Update the context partition pool from the pipeline builder.
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn attach_query_str(&self, kind: String, query: &str);
@@ -77,7 +86,6 @@ pub trait TableContext: Send + Sync {
     fn get_current_catalog(&self) -> String;
     fn get_aborting(&self) -> Arc<AtomicBool>;
     fn get_current_database(&self) -> String;
-    fn get_config(&self) -> Config;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
     fn get_fuse_version(&self) -> String;
@@ -100,4 +108,5 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
+    fn get_stage_attachment(&self) -> Option<StageAttachment>;
 }

@@ -1,0 +1,15 @@
+statement ok
+drop table if exists t1
+
+statement ok
+drop table if exists t0
+
+statement ok
+CREATE TABLE t0(c0 INT)
+
+statement ok
+CREATE TABLE t1(c0 INT)
+
+statement ok
+SELECT * FROM t0 RIGHT JOIN t1 ON t0.c0!=t1.c0
+

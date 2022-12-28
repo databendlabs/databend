@@ -36,7 +36,7 @@ pub mod linux {
     use std::ptr::NonNull;
 
     use super::MmapAllocator;
-    use crate::base::ThreadTracker;
+    use crate::runtime::ThreadTracker;
 
     // MADV_POPULATE_WRITE is supported since Linux 5.14.
     const MADV_POPULATE_WRITE: i32 = 23;
@@ -51,6 +51,7 @@ pub mod linux {
         #[inline(always)]
         fn mmap_alloc(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert!(layout.align() <= page_size());
+            ThreadTracker::alloc(layout.size() as i64)?;
             const PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
             const FLAGS: i32 = libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_POPULATE;
             let addr = unsafe { libc::mmap(null_mut(), layout.size(), PROT, FLAGS, -1, 0) };
@@ -58,7 +59,6 @@ pub mod linux {
                 return Err(AllocError);
             }
             let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
-            ThreadTracker::alloc(layout.size() as i64);
             Ok(NonNull::<[u8]>::from_raw_parts(addr, layout.size()))
         }
 
@@ -81,7 +81,7 @@ pub mod linux {
             debug_assert!(old_layout.align() == new_layout.align());
 
             ThreadTracker::dealloc(old_layout.size() as i64);
-            ThreadTracker::alloc(new_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64)?;
 
             const REMAP_FLAGS: i32 = libc::MREMAP_MAYMOVE;
             let addr = libc::mremap(
@@ -111,7 +111,7 @@ pub mod linux {
             debug_assert!(old_layout.align() == new_layout.align());
 
             ThreadTracker::dealloc(old_layout.size() as i64);
-            ThreadTracker::alloc(new_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64)?;
 
             const REMAP_FLAGS: i32 = libc::MREMAP_MAYMOVE;
             let addr = libc::mremap(

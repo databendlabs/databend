@@ -148,6 +148,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::OptimizeTable(_) => {}
+            Plan::AnalyzeTable(_) => {}
             Plan::ExistsTable(_) => {}
 
             // Others.

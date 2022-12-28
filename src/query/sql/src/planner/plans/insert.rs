@@ -14,8 +14,10 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::StageAttachment;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::MetaId;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 
@@ -24,10 +26,15 @@ use super::Plan;
 #[derive(Clone)]
 pub enum InsertInputSource {
     SelectPlan(Box<Plan>),
-    // From outside streaming source
+    // From outside streaming source with 'FORMAT <format_name>;
+    // used in clickhouse handler only;
     StreamingWithFormat(String, usize, Option<Arc<InputContext>>),
+    // From outside streaming source with 'FILE_FORMAT = (type=<type_name> ...)
+    StreamingWithFileFormat(FileFormatOptions, usize, Option<Arc<InputContext>>),
     // From cloned String and format
     Values(String),
+    // From stage
+    Stage(Arc<StageAttachment>),
 }
 
 #[derive(Clone)]
@@ -62,14 +69,6 @@ impl Insert {
 
     pub fn has_select_plan(&self) -> bool {
         matches!(&self.source, InsertInputSource::SelectPlan(_))
-    }
-
-    pub fn format(&self) -> Option<&str> {
-        match &self.source {
-            InsertInputSource::SelectPlan(_) => None,
-            InsertInputSource::StreamingWithFormat(v, ..) => Some(v.as_str()),
-            InsertInputSource::Values(v) => Some(v.as_str()),
-        }
     }
 }
 

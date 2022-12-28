@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
+use common_catalog::table::NavigationPoint;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -117,13 +118,25 @@ impl OptimizeTablePlan {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OptimizeTableAction {
     All,
-    Purge,
-    Statistic,
+    Purge(Option<NavigationPoint>),
     CompactBlocks(Option<usize>),
     CompactSegments(Option<usize>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AnalyzeTablePlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl AnalyzeTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }
 
 /// Rename.

@@ -1,0 +1,120 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0020
+
+statement ok
+CREATE DATABASE db_09_0020
+
+statement ok
+USE db_09_0020
+
+statement ok
+create table t(a uint64)
+
+statement ok
+insert into t values (5)
+
+statement ok
+insert into t values (6)
+
+statement ok
+insert into t values (7)
+
+query I
+select * from t order by a
+----
+5
+6
+7
+
+query ok
+select * from fuse_statistic('db_09_0020', 't')
+
+
+statement ok
+analyze table `t`
+
+query T
+select * from fuse_statistic('db_09_0020', 't')
+----
+(0,3);
+
+statement ok
+insert into t values (5)
+
+statement ok
+insert into t values (6)
+
+statement ok
+insert into t values (7)
+
+
+query I
+select * from t order by a
+----
+5
+5
+6
+6
+7
+7
+
+query II
+select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
+----
+6 6
+
+query T
+select * from fuse_statistic('db_09_0020', 't')
+----
+(0,3);
+
+statement ok
+analyze table `t`
+
+query T
+select * from fuse_statistic('db_09_0020', 't')
+----
+(0,6);
+
+statement ok
+optimize table t compact
+
+query II
+select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
+----
+1 1
+
+query T
+select * from fuse_statistic('db_09_0020', 't')
+----
+(0,6);
+
+statement ok
+analyze table `t`
+
+query T
+select * from fuse_statistic('db_09_0020', 't')
+----
+(0,3);
+
+statement ok
+delete from t where a=5
+
+query T
+select * from fuse_statistic('db_09_0020', 't')
+----
+(0,3);
+
+statement ok
+analyze table `t`
+
+query T
+select * from fuse_statistic('db_09_0020', 't')
+----
+(0,2);
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP DATABASE db_09_0020

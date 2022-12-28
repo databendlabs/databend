@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod local;
+
 use std::env;
 
-use common_base::base::Runtime;
-use common_base::base::GLOBAL_MEM_STAT;
+use common_base::runtime::Runtime;
+use common_base::runtime::GLOBAL_MEM_STAT;
+use common_base::set_alloc_error_hook;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
@@ -54,12 +57,23 @@ fn main() {
 async fn main_entrypoint() -> Result<()> {
     let conf: Config = Config::load()?;
 
-    if run_cmd(&conf) {
+    if run_cmd(&conf).await? {
         return Ok(());
     }
 
     init_default_metrics_recorder();
     set_panic_hook();
+    set_alloc_error_hook();
+
+    #[cfg(target_arch = "x86_64")]
+    {
+        if !std::is_x86_feature_detected!("sse4.2") {
+            println!(
+                "Current pre-built binary is typically compiled for x86_64 and leverage SSE 4.2 instruction set, you can build your own binary from source"
+            );
+            return Ok(());
+        }
+    }
 
     if conf.meta.is_embedded_meta()? {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
@@ -124,7 +138,7 @@ async fn main_entrypoint() -> Result<()> {
         let hostname = conf.query.clickhouse_http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.clickhouse_http_handler_port);
 
-        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse, conf.clone())?;
+        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse)?;
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -140,7 +154,7 @@ async fn main_entrypoint() -> Result<()> {
         let hostname = conf.query.http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
 
-        let mut srv = HttpHandler::create(HttpHandlerKind::Query, conf.clone())?;
+        let mut srv = HttpHandler::create(HttpHandlerKind::Query)?;
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -180,9 +194,9 @@ async fn main_entrypoint() -> Result<()> {
 
     // Cluster register.
     {
-        let cluster_discovery = ClusterDiscovery::instance();
-        let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
-        register_to_metastore.await?;
+        ClusterDiscovery::instance()
+            .register_to_metastore(&conf)
+            .await?;
         info!(
             "Databend query has been registered:{:?} to metasrv:{:?}.",
             conf.query.cluster_id, conf.meta.endpoints
@@ -205,6 +219,26 @@ async fn main_entrypoint() -> Result<()> {
             format!("connected to endpoints {:#?}", conf.meta.endpoints)
         }
     );
+    println!(
+        "Memory: {}",
+        if conf.query.max_memory_limit_enabled {
+            format!(
+                "Memory: server memory limit to {} (bytes)",
+                conf.query.max_server_memory_usage
+            )
+        } else {
+            "unlimited".to_string()
+        }
+    );
+    println!("Cluster: {}", {
+        let cluster = ClusterDiscovery::instance().discover(&conf).await?;
+        let nodes = cluster.nodes.len();
+        if nodes > 1 {
+            format!("[{}] nodes", nodes)
+        } else {
+            "standalone".to_string()
+        }
+    });
     println!("Storage: {}", conf.storage.params);
     println!("Cache: {}", conf.storage.cache.params);
     println!(
@@ -266,15 +300,19 @@ async fn main_entrypoint() -> Result<()> {
     Ok(())
 }
 
-fn run_cmd(conf: &Config) -> bool {
+async fn run_cmd(conf: &Config) -> Result<bool> {
     if conf.cmd.is_empty() {
-        return false;
+        return Ok(false);
     }
 
     match conf.cmd.as_str() {
         "ver" => {
             println!("version: {}", *QUERY_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
+        }
+        "local" => {
+            println!("exec local query: {}", conf.local.sql);
+            local::query_local(conf).await?
         }
         _ => {
             eprintln!("Invalid cmd: {}", conf.cmd);
@@ -284,7 +322,7 @@ fn run_cmd(conf: &Config) -> bool {
         }
     }
 
-    true
+    Ok(true)
 }
 
 #[cfg(not(target_os = "macos"))]

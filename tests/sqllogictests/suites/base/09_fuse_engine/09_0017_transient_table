@@ -1,0 +1,41 @@
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+CREATE TRANSIENT TABLE IF NOT EXISTS t09_0016(a int)
+
+statement ok
+INSERT INTO t09_0016 VALUES(1)
+
+statement ok
+INSERT INTO t09_0016 VALUES(2)
+
+statement ok
+INSERT INTO t09_0016 VALUES(3)
+
+query I
+select * from t09_0016 order by a
+----
+1
+2
+3
+
+query B
+select count(*)=1 from fuse_snapshot('db1', 't09_0016')
+----
+1
+
+
+
+statement ok
+DROP TABLE t09_0016
+
+statement ok
+DROP DATABASE db1
+

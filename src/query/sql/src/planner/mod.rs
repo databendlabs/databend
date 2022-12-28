@@ -19,7 +19,7 @@ mod metadata;
 mod planner;
 mod semantic;
 
-pub(crate) mod binder;
+pub mod binder;
 pub mod optimizer;
 pub mod plans;
 
@@ -27,6 +27,7 @@ pub use binder::BindContext;
 pub use binder::Binder;
 pub use binder::ColumnBinding;
 pub use binder::ScalarBinder;
+pub use binder::SelectBuilder;
 pub use binder::Visibility;
 pub use expression_parser::ExpressionParser;
 pub use metadata::*;

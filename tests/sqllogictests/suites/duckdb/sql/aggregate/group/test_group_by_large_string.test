@@ -1,0 +1,15 @@
+statement ok
+drop table if exists test
+
+statement ok
+CREATE TABLE test (a VARCHAR, b INTEGER)
+
+statement ok
+INSERT INTO test VALUES ('helloworld', 22), ('thisisalongstring', 22), ('helloworld', 21)
+
+query TI
+SELECT a, SUM(b) FROM test GROUP BY a ORDER BY a
+----
+helloworld 43
+thisisalongstring 22
+

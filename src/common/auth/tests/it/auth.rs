@@ -17,7 +17,7 @@ use common_auth::RefreshableToken;
 use common_auth::TokenFile;
 use common_base::base::tokio;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn direct_token() {
     let token = "test-token".to_string();
     let refreshable_token = RefreshableToken::Direct(token.clone());
@@ -34,7 +34,7 @@ async fn direct_token() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn token_file() {
     let file = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(file.path(), "token1").unwrap();

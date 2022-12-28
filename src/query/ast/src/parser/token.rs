@@ -101,7 +101,7 @@ pub enum TokenKind {
 
     EOI,
 
-    #[regex(r"[ \t\n\f]+", logos::skip)]
+    #[regex(r"[ \t\r\n\f]+", logos::skip)]
     Whitespace,
 
     #[regex(r"--[^\t\n\f]*", logos::skip)]
@@ -269,6 +269,8 @@ pub enum TokenKind {
     AWS_SECRET_KEY,
     #[token("ANTI", ignore(ascii_case))]
     ANTI,
+    #[token("BEFORE", ignore(ascii_case))]
+    BEFORE,
     #[token("BETWEEN", ignore(ascii_case))]
     BETWEEN,
     #[token("BIGINT", ignore(ascii_case))]

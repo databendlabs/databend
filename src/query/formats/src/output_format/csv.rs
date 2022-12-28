@@ -43,7 +43,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> CSVOutputFormatBase<WITH_NA
             field_encoder,
             field_delimiter: options.stage.field_delimiter.as_bytes()[0],
             record_delimiter: options.stage.record_delimiter.as_bytes().to_vec(),
-            quote: options.quote.as_bytes()[0],
+            quote: options.stage.quote.as_bytes()[0],
         }
     }
 

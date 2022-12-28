@@ -1,0 +1,26 @@
+query I
+SELECT LENGTH('word')
+----
+4
+
+## cyrillic in russian
+query I
+SELECT LENGTH('кириллица')
+----
+18
+
+query I
+SELECT LENGTH('кириллица and latin')
+----
+28
+
+query I
+SELECT LENGTH('你好')
+----
+6
+
+query T
+SELECT LENGTH(NULL)
+----
+NULL
+

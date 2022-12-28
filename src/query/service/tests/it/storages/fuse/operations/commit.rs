@@ -27,8 +27,8 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::table::Table;
 use common_catalog::table_context::ProcessInfo;
+use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
-use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -80,7 +80,7 @@ use walkdir::WalkDir;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
@@ -138,7 +138,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_last_snapshot_hint() -> Result<()> {
     let fixture = TestFixture::new().await;
     fixture.create_default_table().await?;
@@ -175,7 +175,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_abort_on_error() -> Result<()> {
     struct Case {
         update_meta_error: Option<ErrorCode>,
@@ -233,7 +233,6 @@ async fn test_abort_on_error() -> Result<()> {
             )) {
                 let entry = entry.unwrap();
                 if entry.file_type().is_file() {
-                    eprintln!("{:?}", entry);
                     ss_count += 1;
                 }
             }
@@ -347,6 +346,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn try_get_parts(&self, _: usize) -> Vec<PartInfoPtr> {
+        todo!()
+    }
+
     fn try_set_partitions(&self, _partitions: Partitions) -> Result<()> {
         todo!()
     }
@@ -377,10 +380,6 @@ impl TableContext for CtxDelegation {
 
     fn get_current_database(&self) -> String {
         self.ctx.get_current_database()
-    }
-
-    fn get_config(&self) -> Config {
-        todo!()
     }
 
     fn get_current_user(&self) -> Result<UserInfo> {
@@ -457,6 +456,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
         todo!()
     }
 }
@@ -549,14 +552,13 @@ impl Catalog for FakedCatalog {
 
     async fn update_table_meta(
         &self,
-        tenant: &str,
-        db_name: &str,
+        table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         if let Some(e) = &self.error_injection {
             Err(e.clone())
         } else {
-            self.cat.update_table_meta(tenant, db_name, req).await
+            self.cat.update_table_meta(table_info, req).await
         }
     }
 
@@ -584,8 +586,7 @@ impl Catalog for FakedCatalog {
 
     async fn truncate_table(
         &self,
-        _tenant: &str,
-        _db_name: &str,
+        _table_info: &TableInfo,
         _req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
         todo!()

@@ -23,7 +23,6 @@ use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storage::DataOperator;
-use common_storages_fuse::io::BlockWriter;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
@@ -36,7 +35,9 @@ use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
+use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
+use common_storages_table_meta::meta;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -48,11 +49,12 @@ use futures_util::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
 
+use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -94,7 +96,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -151,7 +153,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -250,7 +252,7 @@ async fn build_mutator(
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_segment_compactor() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -632,7 +634,7 @@ impl CompactSegmentTestFixture {
         limit: Option<usize>,
     ) -> Result<SegmentCompactionState> {
         let block_per_seg = self.threshold;
-        let data_accessor = &self.data_accessor;
+        let data_accessor = &self.data_accessor.operator();
         let location_gen = &self.location_gen;
         let block_writer = BlockWriter::new(data_accessor, location_gen);
 
@@ -663,14 +665,21 @@ impl CompactSegmentTestFixture {
             let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
                 let block = block?;
-                let col_stats = gen_columns_statistics(&block)?;
+                let col_stats = gen_columns_statistics(&block, None)?;
 
-                let mut block_statistics = BlockStatistics::from(&block, "".to_owned(), None)?;
-                let block_meta = block_writer.write(block, col_stats, None).await?;
+                let mut block_statistics =
+                    BlockStatistics::from(&block, "".to_owned(), None, None)?;
+                let block_meta = block_writer
+                    .write(FuseStorageFormat::Parquet, block, col_stats, None)
+                    .await?;
                 block_statistics.block_file_location = block_meta.location.0.clone();
 
                 collected_blocks.push(block_meta.clone());
-                stats_acc.add_with_block_meta(block_meta, block_statistics)?;
+                stats_acc.add_with_block_meta(
+                    block_meta,
+                    block_statistics,
+                    meta::Compression::Lz4Raw,
+                )?;
             }
             let col_stats = stats_acc.summary()?;
             let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {

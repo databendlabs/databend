@@ -19,6 +19,7 @@ use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_meta_types::FileFormatOptions;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -89,10 +90,19 @@ impl<'a> Binder {
                     Ok(InsertInputSource::StreamingWithFormat(format, start, None))
                 }
             }
-            InsertSource::Values { rest_str } => {
-                let data = rest_str.trim_end_matches(';').trim_start().to_owned();
-                Ok(InsertInputSource::Values(data))
+            InsertSource::StreamingV2 { settings, start } => {
+                let opts = FileFormatOptions::from_map(&settings)?;
+                Ok(InsertInputSource::StreamingWithFileFormat(
+                    opts, start, None,
+                ))
             }
+            InsertSource::Values { rest_str } => match self.ctx.get_stage_attachment() {
+                Some(attachment) => Ok(InsertInputSource::Stage(Arc::new(attachment))),
+                None => {
+                    let data = rest_str.trim_end_matches(';').trim_start().to_owned();
+                    Ok(InsertInputSource::Values(data))
+                }
+            },
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;

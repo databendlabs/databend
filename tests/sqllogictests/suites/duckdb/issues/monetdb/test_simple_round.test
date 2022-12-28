@@ -1,0 +1,39 @@
+statement ok
+drop table if exists test
+
+statement ok
+create table test (col1 double)
+
+statement ok
+insert into test values (2.887)
+
+query F
+select round(col1, -1) from test
+----
+0.0
+
+query F
+select round(col1, 0) from test
+----
+3.0
+
+query F
+select round(col1, 1) from test
+----
+2.9
+
+query F
+select round(col1, 2) from test
+----
+2.89
+
+query F
+select round(col1, 3) from test
+----
+2.887
+
+query F
+select round(col1, 4) from test
+----
+2.887
+

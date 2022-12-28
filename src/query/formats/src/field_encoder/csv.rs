@@ -42,7 +42,7 @@ impl FieldEncoderCSV {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
             },
-            quote_char: options.quote.as_bytes()[0],
+            quote_char: options.stage.quote.as_bytes()[0],
         }
     }
 }

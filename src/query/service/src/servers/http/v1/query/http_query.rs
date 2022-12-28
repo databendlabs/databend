@@ -20,7 +20,8 @@ use std::time::Instant;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
-use common_base::base::TrySpawn;
+use common_base::runtime::TrySpawn;
+use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
@@ -59,6 +60,7 @@ pub struct HttpQueryRequest {
     pub pagination: PaginationConf,
     #[serde(default = "default_as_true")]
     pub string_fields: bool,
+    pub stage_attachment: Option<StageAttachmentConf>,
 }
 
 const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
@@ -141,6 +143,15 @@ impl HttpSessionConf {
     }
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct StageAttachmentConf {
+    /// location of the stage
+    /// for example: @stage_name/path/to/file, @~/path/to/file
+    pub(crate) location: String,
+    pub(crate) file_format_options: Option<BTreeMap<String, String>>,
+    pub(crate) copy_options: Option<BTreeMap<String, String>>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ResponseState {
     pub running_time_ms: f64,
@@ -157,6 +168,18 @@ pub struct HttpQueryResponseInternal {
     pub state: ResponseState,
 }
 
+pub enum ExpireState {
+    Working,
+    ExpireAt(Instant),
+    Removed,
+}
+
+pub enum ExpireResult {
+    Expired,
+    Sleep(Duration),
+    Removed,
+}
+
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
@@ -164,7 +187,7 @@ pub struct HttpQuery {
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
     config: HttpQueryConfig,
-    expire_at: Arc<TokioMutex<Option<Instant>>>,
+    expire_state: Arc<TokioMutex<ExpireState>>,
 }
 
 impl HttpQuery {
@@ -229,6 +252,21 @@ impl HttpQuery {
         let sql = &request.sql;
         tracing::info!("run query_id={id} in session_id={session_id}, sql='{sql}'");
 
+        match &request.stage_attachment {
+            Some(attachment) => ctx.attach_stage(StageAttachment {
+                location: attachment.location.clone(),
+                file_format_options: match attachment.file_format_options {
+                    Some(ref params) => params.clone(),
+                    None => BTreeMap::new(),
+                },
+                copy_options: match attachment.copy_options {
+                    Some(ref params) => params.clone(),
+                    None => BTreeMap::new(),
+                },
+            }),
+            None => {}
+        };
+
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
         let start_time = Instant::now();
         let state = Arc::new(RwLock::new(Executor {
@@ -281,13 +319,9 @@ impl HttpQuery {
             state,
             page_manager: data,
             config,
-            expire_at: Arc::new(TokioMutex::new(None)),
+            expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
         };
         Ok(Arc::new(query))
-    }
-
-    pub fn is_async(&self) -> bool {
-        self.request.pagination.wait_time_secs == 0
     }
 
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
@@ -356,28 +390,38 @@ impl HttpQuery {
     }
 
     pub async fn update_expire_time(&self, before_wait: bool) {
-        let duration = Duration::from_millis(self.config.result_timeout_millis)
+        let duration = Duration::from_secs(self.config.result_timeout_secs)
             + if before_wait {
                 Duration::from_secs(self.request.pagination.wait_time_secs as u64)
             } else {
                 Duration::new(0, 0)
             };
         let deadline = Instant::now() + duration;
-        let mut t = self.expire_at.lock().await;
-        *t = Some(deadline);
+        let mut t = self.expire_state.lock().await;
+        *t = ExpireState::ExpireAt(deadline);
     }
 
-    pub async fn check_expire(&self) -> Option<Duration> {
-        let expire_at = self.expire_at.lock().await;
-        if let Some(expire_at) = *expire_at {
-            let now = Instant::now();
-            if now >= expire_at {
-                None
-            } else {
-                Some(expire_at - now)
+    pub async fn mark_removed(&self) {
+        let mut t = self.expire_state.lock().await;
+        *t = ExpireState::Removed;
+    }
+
+    // return Duration to sleep
+    pub async fn check_expire(&self) -> ExpireResult {
+        let expire_state = self.expire_state.lock().await;
+        match *expire_state {
+            ExpireState::ExpireAt(expire_at) => {
+                let now = Instant::now();
+                if now >= expire_at {
+                    ExpireResult::Expired
+                } else {
+                    ExpireResult::Sleep(expire_at - now)
+                }
             }
-        } else {
-            Some(Duration::from_millis(self.config.result_timeout_millis))
+            ExpireState::Removed => ExpireResult::Removed,
+            ExpireState::Working => {
+                ExpireResult::Sleep(Duration::from_secs(self.config.result_timeout_secs))
+            }
         }
     }
 }

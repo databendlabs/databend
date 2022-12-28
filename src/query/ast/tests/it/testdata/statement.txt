@@ -5,6 +5,8 @@ SHOW DATABASES
 ---------- AST ------------
 ShowDatabases(
     ShowDatabasesStmt {
+        catalog: None,
+        full: false,
         limit: None,
     },
 )
@@ -17,6 +19,8 @@ SHOW DATABASES
 ---------- AST ------------
 ShowDatabases(
     ShowDatabasesStmt {
+        catalog: None,
+        full: false,
         limit: None,
     },
 )
@@ -33,6 +37,7 @@ SHOW TABLES
 ---------- AST ------------
 ShowTables(
     ShowTablesStmt {
+        catalog: None,
         database: None,
         full: false,
         limit: None,
@@ -48,6 +53,7 @@ SHOW TABLES
 ---------- AST ------------
 ShowTables(
     ShowTablesStmt {
+        catalog: None,
         database: None,
         full: false,
         limit: None,
@@ -60,6 +66,72 @@ ShowTables(
 Some(
     "TabSeparatedWithNamesAndTypes",
 )
+---------- Input ----------
+show full tables
+---------- Output ---------
+SHOW FULL TABLES
+---------- AST ------------
+ShowTables(
+    ShowTablesStmt {
+        catalog: None,
+        database: None,
+        full: true,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- Input ----------
+show full tables from db
+---------- Output ---------
+SHOW FULL TABLES FROM db
+---------- AST ------------
+ShowTables(
+    ShowTablesStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Ident(22..24),
+            },
+        ),
+        full: true,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- Input ----------
+show full tables from ctl.db
+---------- Output ---------
+SHOW FULL TABLES FROM ctl.db
+---------- AST ------------
+ShowTables(
+    ShowTablesStmt {
+        catalog: Some(
+            Identifier {
+                name: "ctl",
+                quote: None,
+                span: Ident(22..25),
+            },
+        ),
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Ident(26..28),
+            },
+        ),
+        full: true,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
 ---------- Input ----------
 show processlist;
 ---------- Output ---------
@@ -959,7 +1031,7 @@ CreateTable(
 ---------- Input ----------
 create view v as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-CREATE VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
+CREATE VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -1082,7 +1154,7 @@ CreateView(
 ---------- Input ----------
 alter view v as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-ALTER VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
+ALTER VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 AlterView(
     AlterViewStmt {
@@ -1646,7 +1718,7 @@ DropDatabase(
 ---------- Input ----------
 select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;
 ---------- Output ---------
-SELECT DISTINCT a, COUNT(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1
+SELECT DISTINCT a, COUNT(*) FROM t WHERE ((a = 1) AND ((b - 1) < a)) GROUP BY a HAVING (a = 1)
 ---------- AST ------------
 Query(
     Query {
@@ -2259,7 +2331,7 @@ Query(
 ---------- Input ----------
 select * from a join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a INNER JOIN b ON a.a = b.a
+SELECT * FROM a INNER JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -2409,7 +2481,7 @@ Query(
 ---------- Input ----------
 select * from a left outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT OUTER JOIN b ON a.a = b.a
+SELECT * FROM a LEFT OUTER JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -2565,7 +2637,7 @@ Query(
 ---------- Input ----------
 select * from a right outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT OUTER JOIN b ON a.a = b.a
+SELECT * FROM a RIGHT OUTER JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -2721,7 +2793,7 @@ Query(
 ---------- Input ----------
 select * from a left semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
+SELECT * FROM a LEFT SEMI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -2877,7 +2949,7 @@ Query(
 ---------- Input ----------
 select * from a semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
+SELECT * FROM a LEFT SEMI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3030,7 +3102,7 @@ Query(
 ---------- Input ----------
 select * from a left anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
+SELECT * FROM a LEFT ANTI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3186,7 +3258,7 @@ Query(
 ---------- Input ----------
 select * from a anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
+SELECT * FROM a LEFT ANTI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3339,7 +3411,7 @@ Query(
 ---------- Input ----------
 select * from a right semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT SEMI JOIN b ON a.a = b.a
+SELECT * FROM a RIGHT SEMI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3495,7 +3567,7 @@ Query(
 ---------- Input ----------
 select * from a right anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT ANTI JOIN b ON a.a = b.a
+SELECT * FROM a RIGHT ANTI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3651,7 +3723,7 @@ Query(
 ---------- Input ----------
 select * from a full outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a FULL OUTER JOIN b ON a.a = b.a
+SELECT * FROM a FULL OUTER JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3807,7 +3879,7 @@ Query(
 ---------- Input ----------
 select * from a inner join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a INNER JOIN b ON a.a = b.a
+SELECT * FROM a INNER JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -4393,7 +4465,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = any (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = ANY (SELECT b.a FROM b)
+SELECT * FROM a WHERE (a.a = ANY (SELECT b.a FROM b))
 ---------- AST ------------
 Query(
     Query {
@@ -4596,7 +4668,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = all (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = ALL (SELECT b.a FROM b)
+SELECT * FROM a WHERE (a.a = ALL (SELECT b.a FROM b))
 ---------- AST ------------
 Query(
     Query {
@@ -4799,7 +4871,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = some (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = SOME (SELECT b.a FROM b)
+SELECT * FROM a WHERE (a.a = SOME (SELECT b.a FROM b))
 ---------- AST ------------
 Query(
     Query {
@@ -5002,7 +5074,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a > (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a > (SELECT b.a FROM b)
+SELECT * FROM a WHERE (a.a > (SELECT b.a FROM b))
 ---------- AST ------------
 Query(
     Query {
@@ -5200,7 +5272,7 @@ Query(
 ---------- Input ----------
 select 1 from numbers(1) where ((1 = 1) or 1)
 ---------- Output ---------
-SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1
+SELECT 1 FROM numbers(1) WHERE ((1 = 1) OR 1)
 ---------- AST ------------
 Query(
     Query {
@@ -5829,7 +5901,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0
+ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0)
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -6596,7 +6668,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6630,6 +6702,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -6646,7 +6719,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6682,6 +6755,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -6701,7 +6775,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6739,6 +6813,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -6758,7 +6833,7 @@ COPY INTO mytable
                 );
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6796,6 +6871,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -6804,7 +6880,7 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FORCE = false
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6835,6 +6911,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -6843,7 +6920,7 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE = false
+COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6874,6 +6951,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -6890,7 +6968,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6924,6 +7002,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -6940,7 +7019,7 @@ COPY INTO 's3://mybucket/data.csv'
                 size_limit=10;
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6976,6 +7055,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -6992,7 +7072,7 @@ COPY INTO @my_stage
                 size_limit=10;
 ---------- Output ---------
 COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7026,6 +7106,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -7049,7 +7130,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key' aws_secret_key='secret_key' master_key='master_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7089,6 +7170,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -7105,7 +7187,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7139,6 +7221,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -7155,7 +7238,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7189,6 +7272,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -7205,7 +7289,7 @@ COPY INTO mytable
                 force=true;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SINGLE = false PURGE = false FORCE = true
+' skip_header = '1' type = 'CSV' ) SINGLE = false PURGE = false FORCE = true ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7239,6 +7323,7 @@ Copy(
         single: false,
         purge: false,
         force: true,
+        on_error: "",
     },
 )
 
@@ -7255,7 +7340,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7291,6 +7376,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        on_error: "",
     },
 )
 
@@ -7762,7 +7848,7 @@ ShowGrantsOfShare(
 ---------- Input ----------
 UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;
 ---------- Output ---------
-UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
+UPDATE db1.tb1 SET a = (a + 1), b = 2 WHERE (c > 3)
 ---------- AST ------------
 Update(
     UpdateStmt {

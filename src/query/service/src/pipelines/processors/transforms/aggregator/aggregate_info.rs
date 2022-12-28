@@ -14,19 +14,18 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use common_datablocks::BlockMetaInfo;
 use common_datablocks::BlockMetaInfoPtr;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct OverflowInfo {
     pub temporary_path: String,
     // bucket_id -> (offset, length)
     pub bucket_info: HashMap<usize, (usize, usize)>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AggregateInfo {
     pub bucket: isize,
     pub overflow: Option<OverflowInfo>,
@@ -34,10 +33,10 @@ pub struct AggregateInfo {
 
 impl AggregateInfo {
     pub fn create(bucket: isize) -> BlockMetaInfoPtr {
-        Arc::new(Box::new(AggregateInfo {
+        Box::new(AggregateInfo {
             bucket,
             overflow: None,
-        }))
+        })
     }
 }
 
@@ -45,6 +44,14 @@ impl AggregateInfo {
 impl BlockMetaInfo for AggregateInfo {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {

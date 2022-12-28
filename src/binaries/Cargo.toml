@@ -29,7 +29,9 @@ io-uring = [
 # Workspace dependencies
 common-base = { path = "../common/base" }
 common-config = { path = "../query/config" }
+common-datablocks = { path = "../query/datablocks" }
 common-exception = { path = "../common/exception" }
+common-formats = { path = "../query/formats" }
 common-grpc = { path = "../common/grpc" }
 common-meta-api = { path = "../meta/api" }
 common-meta-app = { path = "../meta/app" }
@@ -44,13 +46,16 @@ common-metrics = { path = "../common/metrics" }
 common-tracing = { path = "../common/tracing" }
 databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
+sharing-endpoint = { path = "../query/sharing-endpoint" }
 
 # Crates.io dependencies
 anyhow = { workspace = true }
 clap = { workspace = true }
+comfy-table = "6.1.3"
 limits-rs = "0.1.0"
 openraft = { workspace = true }
-sentry = "0.27.0"
+poem = { version = "1", features = ["rustls", "multipart", "compression"] }
+sentry = { version = "0.27.0", default-features = false, features = ["backtrace", "contexts", "panic", "rustls"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio-stream = "0.1.10"
@@ -79,5 +84,11 @@ test = false
 [[bin]]
 name = "databend-query"
 path = "query/main.rs"
+doctest = false
+test = false
+
+[[bin]]
+name = "open-sharing"
+path = "opensharing/main.rs"
 doctest = false
 test = false

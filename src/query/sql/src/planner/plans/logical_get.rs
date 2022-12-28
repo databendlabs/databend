@@ -19,12 +19,14 @@ use common_catalog::table::TableStatistics;
 use common_exception::Result;
 use itertools::Itertools;
 
+use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::ColumnStatSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::Statistics as OpStatistics;
+use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
@@ -121,12 +123,28 @@ impl LogicalOperator for LogicalGet {
 
         used_columns.extend(self.columns.iter());
 
+        let num_rows = self
+            .statistics
+            .statistics
+            .as_ref()
+            .map(|s| s.num_rows.unwrap_or(0))
+            .unwrap_or(0);
+
         let mut column_stats: ColumnStatSet = Default::default();
         for (k, v) in &self.statistics.col_stats {
             if let Some(col_stat) = v {
+                let min = col_stat.min.clone();
+                let max = col_stat.max.clone();
+                let histogram = histogram_from_ndv(
+                    col_stat.number_of_distinct_values,
+                    num_rows,
+                    Some((min, max)),
+                    DEFAULT_HISTOGRAM_BUCKETS,
+                )
+                .ok();
                 let column_stat = ColumnStat {
-                    distinct_count: col_stat.number_of_distinct_values,
                     null_count: col_stat.null_count,
+                    histogram,
                 };
                 column_stats.insert(*k as IndexType, column_stat);
             }

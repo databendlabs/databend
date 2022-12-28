@@ -17,12 +17,14 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
 use common_formats::FileFormatOptionsExt;
+use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
@@ -90,6 +92,7 @@ impl InputFormatTextBase for InputFormatNDJson {
 
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
+        let mut num_rows = 0usize;
         let start_row = batch.start_row;
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
@@ -108,10 +111,22 @@ impl InputFormatTextBase for InputFormatNDJson {
                         batch.offset + start,
                         row_info,
                     );
-                    return Err(ErrorCode::BadBytes(msg));
+                    if builder.ctx.on_error_mode == OnErrorMode::Continue {
+                        columns.iter_mut().for_each(|c| {
+                            // check if parts of columns inserted data, if so, pop it.
+                            if c.len() > num_rows {
+                                c.pop_data_value().expect("must success");
+                            }
+                        });
+                        start = *end;
+                        continue;
+                    } else {
+                        return Err(ErrorCode::BadBytes(msg));
+                    }
                 }
             }
             start = *end;
+            num_rows += 1;
         }
         Ok(())
     }

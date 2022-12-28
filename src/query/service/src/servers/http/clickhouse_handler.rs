@@ -19,7 +19,7 @@ use async_stream::stream;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::task::JoinHandle;
-use common_base::base::TrySpawn;
+use common_base::runtime::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -273,7 +273,7 @@ pub async fn clickhouse_handler_post(
                 .map_err(InternalServerError)?;
 
             let input_context = Arc::new(
-                InputContext::try_create_from_insert(
+                InputContext::try_create_from_insert_clickhouse(
                     format.as_str(),
                     rx,
                     ctx.get_settings(),
@@ -290,6 +290,47 @@ pub async fn clickhouse_handler_post(
                 "clickhouse insert with format {:?}, value {}",
                 input_context, *start
             );
+            let compression_alg = input_context.get_compression_alg("").map_err(BadRequest)?;
+            let start = *start;
+            handle = Some(ctx.spawn(async move {
+                gen_batches(
+                    sql,
+                    start,
+                    input_context.read_batch_size,
+                    tx,
+                    compression_alg,
+                )
+                .await
+            }));
+        } else if let InsertInputSource::StreamingWithFileFormat(
+            option_settings,
+            start,
+            input_context_ref,
+        ) = &mut insert.source
+        {
+            let (tx, rx) = tokio::sync::mpsc::channel(2);
+            let to_table = ctx
+                .get_table(&insert.catalog, &insert.database, &insert.table)
+                .await
+                .map_err(InternalServerError)?;
+
+            let input_context = Arc::new(
+                InputContext::try_create_from_insert_file_format(
+                    rx,
+                    ctx.get_settings(),
+                    option_settings.clone(),
+                    schema,
+                    ctx.get_scan_progress(),
+                    false,
+                    to_table.get_block_compact_thresholds(),
+                )
+                .await
+                .map_err(InternalServerError)?,
+            );
+
+            *input_context_ref = Some(input_context.clone());
+            info!("clickhouse insert with file_format {:?}", input_context);
+
             let compression_alg = input_context.get_compression_alg("").map_err(BadRequest)?;
             let start = *start;
             handle = Some(ctx.spawn(async move {

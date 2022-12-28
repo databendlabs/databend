@@ -1,0 +1,22 @@
+statement ok
+drop table if exists t0
+
+statement ok
+CREATE TABLE t0(c0 INT)
+
+statement ok
+INSERT INTO t0(c0) VALUES (0)
+
+statement ok
+SELECT * FROM t0 WHERE NOT(NULL OR TRUE)
+
+query I
+SELECT NULL OR TRUE
+----
+1
+
+query I
+SELECT NOT(NULL OR TRUE)
+----
+0
+

@@ -26,13 +26,13 @@ use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_base::base::TrySpawn;
+use common_base::runtime::TrySpawn;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
-use common_config::Config;
+use common_catalog::table_context::StageAttachment;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
@@ -46,6 +46,7 @@ use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use common_storages_fuse::TableContext;
 use common_storages_stage::StageTable;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -55,13 +56,11 @@ use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::TableContext;
 use crate::storages::Table;
 
 #[derive(Clone)]
@@ -140,14 +139,6 @@ impl QueryContext {
         DataExchangeManager::instance()
     }
 
-    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
-        self.shared.attach_http_query_handle(handle);
-    }
-
-    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
-        self.shared.get_http_query()
-    }
-
     pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
         self.shared.get_auth_manager()
     }
@@ -191,6 +182,10 @@ impl QueryContext {
 
     pub fn set_executor(&self, weak_ptr: Weak<PipelineExecutor>) {
         self.shared.set_executor(weak_ptr)
+    }
+
+    pub fn attach_stage(&self, attachment: StageAttachment) {
+        self.shared.attach_stage(attachment);
     }
 
     pub fn get_created_time(&self) -> SystemTime {
@@ -237,6 +232,24 @@ impl TableContext for QueryContext {
         self.partition_queue.write().pop_front()
     }
 
+    fn try_get_parts(&self, num: usize) -> Vec<PartInfoPtr> {
+        let mut res = Vec::with_capacity(num);
+        let mut partition_queue = self.partition_queue.write();
+
+        for _index in 0..num {
+            match partition_queue.pop_front() {
+                None => {
+                    break;
+                }
+                Some(part) => {
+                    res.push(part);
+                }
+            };
+        }
+
+        res
+    }
+
     // Update the context partition pool from the pipeline builder.
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
         let mut partition_queue = self.partition_queue.write();
@@ -274,9 +287,6 @@ impl TableContext for QueryContext {
 
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
-    }
-    fn get_config(&self) -> Config {
-        self.shared.get_config()
     }
     fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
@@ -357,6 +367,11 @@ impl TableContext for QueryContext {
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
+    }
+
+    // Get Stage Attachment.
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        self.shared.get_stage_attachment()
     }
 }
 

@@ -31,6 +31,7 @@ use crate::TypeID;
 pub type ColumnRef = Arc<dyn Column>;
 pub trait Column: Send + Sync {
     fn as_any(&self) -> &dyn Any;
+
     /// Type of data that column contains. It's an underlying physical type:
     /// Int32 for Date, Int64 for Timestamp, so on.
     fn data_type_id(&self) -> TypeID {
@@ -147,10 +148,6 @@ pub trait Column: Send + Sync {
     fn get_string(&self, index: usize) -> Result<Vec<u8>> {
         let value = self.get(index);
         DFTryFrom::try_from(value)
-    }
-
-    fn to_values(&self) -> Vec<DataValue> {
-        (0..self.len()).map(|i| self.get(i)).collect()
     }
 
     /// Visit each row value of Column

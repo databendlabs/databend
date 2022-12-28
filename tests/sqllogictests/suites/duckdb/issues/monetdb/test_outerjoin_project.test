@@ -1,0 +1,20 @@
+statement ok
+drop table if exists a
+
+statement ok
+drop table if exists b
+
+statement ok
+create table a (a integer)
+
+statement ok
+create table b (a integer)
+
+statement ok
+insert into a values (1)
+
+query IT
+select * from a left join (select a, 20 from b) as x using (a)
+----
+1 NULL
+

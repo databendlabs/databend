@@ -224,8 +224,7 @@ impl Catalog for ImmutableCatalog {
 
     async fn truncate_table(
         &self,
-        _tenant: &str,
-        _db_name: &str,
+        _table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
         Err(ErrorCode::Unimplemented(format!(
@@ -248,8 +247,7 @@ impl Catalog for ImmutableCatalog {
 
     async fn update_table_meta(
         &self,
-        _tenant: &str,
-        _db_name: &str,
+        _table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::Unimplemented(format!(

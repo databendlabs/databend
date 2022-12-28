@@ -1,0 +1,55 @@
+statement ok
+DROP DATABASE IF EXISTS issue_8130
+
+statement ok
+CREATE DATABASE issue_8130
+
+statement ok
+USE issue_8130
+
+statement ok
+create table t(a int)
+
+statement ok
+insert into t values(1)
+
+statement ok
+insert into t values(2)
+
+statement ok
+optimize table t compact limit 5
+
+query I
+select count(1) from t
+----
+2
+
+statement ok
+create table t1(c int) block_per_segment=2 row_per_block=2
+
+statement ok
+insert into t1 values(1),(2),(3),(4)
+
+statement ok
+optimize table t1 compact
+
+statement ok
+insert into t1 values(5),(6),(7)
+
+statement ok
+optimize table t1 compact
+
+query I
+select count(1) from t1
+----
+7
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP DATABASE issue_8130
+

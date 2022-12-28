@@ -16,8 +16,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_base::base::tokio::runtime::Handle;
-use common_base::base::ThreadTracker;
-use common_base::base::TrackedFuture;
+use common_base::runtime::TrackedFuture;
 use opendal::raw::Accessor;
 use opendal::raw::BytesReader;
 use opendal::raw::ObjectPager;
@@ -80,7 +79,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.create(&path, args).await };
-        let future = TrackedFuture::create(ThreadTracker::fork(), future);
+        let future = TrackedFuture::create(future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 
@@ -88,7 +87,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.read(&path, args).await };
-        let future = TrackedFuture::create(ThreadTracker::fork(), future);
+        let future = TrackedFuture::create(future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 
@@ -96,7 +95,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.write(&path, args, r).await };
-        let future = TrackedFuture::create(ThreadTracker::fork(), future);
+        let future = TrackedFuture::create(future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 
@@ -104,7 +103,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.stat(&path, args).await };
-        let future = TrackedFuture::create(ThreadTracker::fork(), future);
+        let future = TrackedFuture::create(future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 
@@ -112,7 +111,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.delete(&path, args).await };
-        let future = TrackedFuture::create(ThreadTracker::fork(), future);
+        let future = TrackedFuture::create(future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 
@@ -120,7 +119,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.list(&path, args).await };
-        let future = TrackedFuture::create(ThreadTracker::fork(), future);
+        let future = TrackedFuture::create(future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 }

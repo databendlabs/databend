@@ -1,0 +1,24 @@
+statement ok
+DROP DATABASE IF EXISTS db_13_0001
+
+statement ok
+CREATE DATABASE db_13_0001
+
+statement ok
+USE db_13_0001
+
+statement ok
+CREATE TABLE t(c1 int) ENGINE = Null
+
+statement ok
+DROP TABLE t ALL
+
+statement ok
+CREATE TABLE t(c1 int) ENGINE = Fuse
+
+statement ok
+DROP TABLE t ALL
+
+statement ok
+DROP database db_13_0001
+

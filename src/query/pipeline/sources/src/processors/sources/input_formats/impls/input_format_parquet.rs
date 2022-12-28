@@ -31,7 +31,6 @@ use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::to_deserializer;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
@@ -48,6 +47,8 @@ use common_settings::Settings;
 use futures::AsyncRead;
 use futures::AsyncSeek;
 use opendal::Operator;
+use serde::Deserializer;
+use serde::Serializer;
 use similar_asserts::traits::MakeDiff;
 
 use crate::processors::sources::input_formats::input_context::InputContext;
@@ -62,12 +63,6 @@ use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::InputFormat;
 
 pub struct InputFormatParquet;
-
-impl DynData for FileMetaData {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
 
 fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
     meta.data_page_offset()
@@ -86,7 +81,7 @@ impl InputFormat for InputFormatParquet {
         for path in files {
             let obj = op.object(path);
             let size = obj.metadata().await?.content_length() as usize;
-            let mut reader = obj.seekable_reader(..(size as u64));
+            let mut reader = obj.seekable_reader(..);
             let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);
             let infer_schema = infer_schema(&file_meta)?;
@@ -129,13 +124,12 @@ impl InputFormat for InputFormatParquet {
         Ok(infos)
     }
 
-    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<DataSchema> {
+    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<DataSchemaRef> {
         let obj = op.object(path);
-        let size = obj.content_length().await?;
-        let mut reader = obj.seekable_reader(..size);
+        let mut reader = obj.seekable_reader(..);
         let file_meta = read_metadata_async(&mut reader).await?;
         let arrow_schema = infer_schema(&file_meta)?;
-        Ok(DataSchema::from(arrow_schema))
+        Ok(Arc::new(DataSchema::from(arrow_schema)))
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
@@ -164,7 +158,7 @@ impl InputFormatPipe for ParquetFormatPipe {
         let meta = Self::get_split_meta(split_info).expect("must success");
         let op = ctx.source.get_operator()?;
         let obj = op.object(&split_info.file.path);
-        let mut reader = obj.seekable_reader(..(split_info.file.size as u64));
+        let mut reader = obj.seekable_reader(..);
         let input_fields = Arc::new(get_used_fields(&meta.file.fields, &ctx.schema)?);
         RowGroupInMemory::read_async(&mut reader, meta.meta.clone(), input_fields).await
     }
@@ -175,11 +169,31 @@ pub struct FileMeta {
     pub fields: Arc<Vec<Field>>,
 }
 
+#[derive(Clone)]
 pub struct SplitMeta {
     pub file: Arc<FileMeta>,
     pub meta: RowGroupMetaData,
 }
 
+impl Debug for SplitMeta {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "parquet split meta")
+    }
+}
+
+impl serde::Serialize for SplitMeta {
+    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        unimplemented!()
+    }
+}
+impl<'a> serde::Deserialize<'a> for SplitMeta {
+    fn deserialize<D: Deserializer<'a>>(_deserializer: D) -> Result<Self, D::Error> {
+        unimplemented!()
+    }
+}
+
+#[typetag::serde(name = "parquet_split")]
 impl DynData for SplitMeta {
     fn as_any(&self) -> &dyn Any {
         self
@@ -266,6 +280,7 @@ impl RowGroupInMemory {
             )?;
             column_chunks.push(array_iters);
         }
+
         match RowGroupDeserializer::new(column_chunks, self.meta.num_rows(), None).next() {
             None => Err(ErrorCode::Internal(
                 "deserialize from raw group: fail to get a chunk",
@@ -319,7 +334,21 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
         if let Some(rg) = batch.as_mut() {
             let chunk = rg.get_arrow_chunk()?;
             let block = DataBlock::from_chunk(&self.ctx.schema, &chunk)?;
-            Ok(vec![block])
+
+            let block_total_rows = block.num_rows();
+            let num_rows_per_block = self.ctx.block_compact_thresholds.max_rows_per_block;
+            let blocks: Vec<DataBlock> = (0..block_total_rows)
+                .step_by(num_rows_per_block)
+                .map(|idx| {
+                    if idx + num_rows_per_block < block_total_rows {
+                        block.slice(idx, num_rows_per_block)
+                    } else {
+                        block.slice(idx, block_total_rows - idx)
+                    }
+                })
+                .collect();
+
+            Ok(blocks)
         } else {
             Ok(vec![])
         }

@@ -1,0 +1,31 @@
+statement ok
+use default
+
+query I
+select length(parse_json('[1, 2, [1, 2]]'))
+----
+3
+
+query I
+select length(parse_json('[]'))
+----
+0
+
+statement ok
+DROP TABLE IF EXISTS array_length_test
+
+statement ok
+CREATE TABLE array_length_test(number Array(UInt8))
+
+statement ok
+INSERT INTO array_length_test VALUES([1,2]), ([3,4])
+
+query I
+SELECT LENGTH(number) FROM array_length_test
+----
+2
+2
+
+statement ok
+DROP TABLE array_length_test
+

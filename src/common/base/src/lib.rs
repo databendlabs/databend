@@ -20,8 +20,11 @@
 #![feature(thread_id_value)]
 #![feature(backtrace_frames)]
 #![allow(incomplete_features)]
+#![feature(alloc_error_hook)]
 
 pub mod base;
 pub mod containers;
 pub mod mem_allocator;
 pub mod rangemap;
+pub mod runtime;
+pub use runtime::set_alloc_error_hook;

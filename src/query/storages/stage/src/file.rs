@@ -12,29 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use chrono::TimeZone;
 use chrono::Utc;
-use common_catalog::table_context::TableContext;
+use common_catalog::plan::StageFileInfo;
+use common_catalog::plan::StageFileStatus;
 use common_exception::Result;
-use common_meta_types::UserStageInfo;
 use futures::TryStreamExt;
+use opendal::Object;
+use opendal::Operator;
 use tracing::warn;
 
-use crate::StageFilePartition;
-use crate::StageFileStatus;
-use crate::StageTable;
-
-pub async fn stat_file(
-    table_ctx: Arc<dyn TableContext>,
-    path: &str,
-    stage: &UserStageInfo,
-) -> Result<StageFilePartition> {
-    let op = StageTable::get_op(&table_ctx, stage)?;
+pub async fn stat_file(op: &Operator, path: &str) -> Result<StageFileInfo> {
     let meta = op.object(path).metadata().await?;
 
-    Ok(StageFilePartition {
+    Ok(StageFileInfo {
         path: path.to_string(),
         size: meta.content_length(),
         md5: meta.content_md5().map(str::to_string),
@@ -54,12 +45,7 @@ pub async fn stat_file(
 /// - If not exist, we will try to list `path/` too.
 ///
 /// TODO(@xuanwo): return a stream instead.
-pub async fn list_file(
-    table_ctx: Arc<dyn TableContext>,
-    path: &str,
-    stage: &UserStageInfo,
-) -> Result<Vec<StageFilePartition>> {
-    let op = StageTable::get_op(&table_ctx, stage)?;
+pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> {
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.
@@ -96,7 +82,7 @@ pub async fn list_file(
 
     let results = files
         .into_iter()
-        .map(|(name, meta)| StageFilePartition {
+        .map(|(name, meta)| StageFileInfo {
             path: name,
             size: meta.content_length(),
             md5: meta.content_md5().map(str::to_string),
@@ -107,7 +93,22 @@ pub async fn list_file(
             status: StageFileStatus::NeedCopy,
             creator: None,
         })
-        .collect::<Vec<StageFilePartition>>();
+        .collect::<Vec<StageFileInfo>>();
 
     Ok(results)
+}
+
+pub async fn get_first_file(op: &Operator, path: &str) -> Result<Option<Object>> {
+    let root_object = op.object(path);
+    let meta = match root_object.metadata().await {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == opendal::ErrorKind::ObjectNotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    if !meta.mode().is_dir() {
+        Ok(Some(root_object))
+    } else {
+        let mut lister = root_object.list().await?;
+        Ok(lister.try_next().await?)
+    }
 }

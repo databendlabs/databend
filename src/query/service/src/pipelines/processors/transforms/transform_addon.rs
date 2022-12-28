@@ -32,7 +32,6 @@ use crate::sessions::QueryContext;
 use crate::sql::evaluator::Evaluator;
 
 pub struct TransformAddOn {
-    default_expr_fields: Vec<DataField>,
     default_nonexpr_fields: Vec<DataField>,
 
     expression_transform: CompoundChunkOperator,
@@ -49,7 +48,6 @@ where Self: Transform
         output_schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
-        let mut default_expr_fields = Vec::new();
         let mut default_exprs = Vec::new();
         let mut default_nonexpr_fields = Vec::new();
 
@@ -62,7 +60,6 @@ where Self: Transform
                             default_expr,
                         )?)?,
                     });
-                    default_expr_fields.push(f.clone());
                 } else {
                     default_nonexpr_fields.push(f.clone());
                 }
@@ -76,7 +73,6 @@ where Self: Transform
         };
 
         Ok(Transformer::create(input, output, Self {
-            default_expr_fields,
             default_nonexpr_fields,
             expression_transform,
             output_schema,
@@ -89,12 +85,7 @@ impl Transform for TransformAddOn {
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
         let num_rows = block.num_rows();
-        let expr_block = self.expression_transform.transform(block.clone())?;
-
-        for f in self.default_expr_fields.iter() {
-            block =
-                block.add_column(expr_block.try_column_by_name(f.name())?.clone(), f.clone())?;
-        }
+        block = self.expression_transform.transform(block)?;
 
         for f in &self.default_nonexpr_fields {
             let default_value = f.data_type().default_value();

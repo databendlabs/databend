@@ -29,6 +29,8 @@ use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
 use common_formats::RecordDelimiter;
+use common_meta_types::FileFormatOptions;
+use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
@@ -123,6 +125,7 @@ pub struct InputContext {
     pub block_compact_thresholds: BlockCompactThresholds,
 
     pub scan_progress: Arc<Progress>,
+    pub on_error_mode: OnErrorMode,
 }
 
 impl Debug for InputContext {
@@ -156,7 +159,7 @@ impl InputContext {
         }
     }
 
-    pub async fn try_create_from_copy(
+    pub fn try_create_from_copy(
         operator: Operator,
         settings: Arc<Settings>,
         schema: DataSchemaRef,
@@ -165,6 +168,7 @@ impl InputContext {
         scan_progress: Arc<Progress>,
         block_compact_thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
+        let on_error_mode = stage_info.copy_options.on_error.clone();
         let plan = Box::new(CopyIntoPlan { stage_info });
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let file_format_options = &plan.stage_info.file_format_options;
@@ -192,10 +196,11 @@ impl InputContext {
             plan: InputPlan::CopyInto(plan),
             block_compact_thresholds,
             format_options: file_format_options,
+            on_error_mode,
         })
     }
 
-    pub async fn try_create_from_insert(
+    pub async fn try_create_from_insert_clickhouse(
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
@@ -205,7 +210,6 @@ impl InputContext {
         block_compact_thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
-        let rows_to_skip = std::cmp::max(settings.get_format_skip_header()? as usize, rows_to_skip);
 
         let file_format_options = if is_multi_part {
             let format_type =
@@ -225,12 +229,7 @@ impl InputContext {
         let file_format_options_clone = file_format_options.clone();
         let field_delimiter = file_format_options.get_field_delimiter();
         let record_delimiter = file_format_options.get_record_delimiter()?;
-        let compression = settings.get_format_compression()?;
-        let compression = if !compression.is_empty() {
-            StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
-        } else {
-            StageFileCompression::Auto
-        };
+        let compression = StageFileCompression::Auto;
         let plan = StreamPlan {
             is_multi_part,
             compression,
@@ -250,6 +249,50 @@ impl InputContext {
             splits: vec![],
             block_compact_thresholds,
             format_options: file_format_options_clone,
+            on_error_mode: OnErrorMode::None,
+        })
+    }
+
+    pub async fn try_create_from_insert_file_format(
+        stream_receiver: Receiver<Result<StreamingReadBatch>>,
+        settings: Arc<Settings>,
+        file_format_options: FileFormatOptions,
+        schema: DataSchemaRef,
+        scan_progress: Arc<Progress>,
+        is_multi_part: bool,
+        block_compact_thresholds: BlockCompactThresholds,
+    ) -> Result<Self> {
+        let read_batch_size = settings.get_input_read_buffer_size()? as usize;
+        let format_typ = file_format_options.format.clone();
+        let file_format_options =
+            StageFileFormatType::get_ext_from_stage(file_format_options, &settings)?;
+        let file_format_options = format_typ.final_file_format_options(&file_format_options)?;
+        let format = Self::get_input_format(&format_typ)?;
+        let field_delimiter = file_format_options.get_field_delimiter();
+        let record_delimiter = file_format_options.get_record_delimiter()?;
+        let rows_to_skip = file_format_options.stage.skip_header as usize;
+        let compression = file_format_options.stage.compression;
+
+        let plan = StreamPlan {
+            is_multi_part,
+            compression,
+        };
+
+        Ok(InputContext {
+            format,
+            schema,
+            settings,
+            record_delimiter,
+            read_batch_size,
+            rows_to_skip,
+            field_delimiter,
+            scan_progress,
+            source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
+            plan: InputPlan::StreamingLoad(plan),
+            splits: vec![],
+            block_compact_thresholds,
+            format_options: file_format_options,
+            on_error_mode: OnErrorMode::None,
         })
     }
 

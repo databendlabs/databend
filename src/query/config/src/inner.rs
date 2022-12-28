@@ -51,6 +51,9 @@ pub struct Config {
     // Storage backend config.
     pub storage: StorageConfig,
 
+    // Local query config.
+    pub local: LocalConfig,
+
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
@@ -123,7 +126,7 @@ pub struct QueryConfig {
     pub clickhouse_http_handler_port: u16,
     pub http_handler_host: String,
     pub http_handler_port: u16,
-    pub http_handler_result_timeout_millis: u64,
+    pub http_handler_result_timeout_secs: u64,
     pub flight_api_address: String,
     pub admin_api_address: String,
     pub metric_api_address: String,
@@ -145,7 +148,7 @@ pub struct QueryConfig {
     pub wait_timeout_mills: u64,
     pub max_query_log_size: usize,
     /// Table Cached enabled
-    pub table_cache_enabled: bool,
+    pub table_meta_cache_enabled: bool,
     /// Max number of cached table block meta
     pub table_cache_block_meta_count: u64,
     /// Table memory cache size (mb)
@@ -174,6 +177,7 @@ pub struct QueryConfig {
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
     pub tenant_quota: Option<TenantQuota>,
+    pub internal_enable_sandbox_tenant: bool,
 }
 
 impl Default for QueryConfig {
@@ -191,7 +195,7 @@ impl Default for QueryConfig {
             clickhouse_http_handler_port: 8124,
             http_handler_host: "127.0.0.1".to_string(),
             http_handler_port: 8000,
-            http_handler_result_timeout_millis: 10000,
+            http_handler_result_timeout_secs: 60,
             flight_api_address: "127.0.0.1:9090".to_string(),
             admin_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
@@ -208,7 +212,7 @@ impl Default for QueryConfig {
             table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
-            table_cache_enabled: false,
+            table_meta_cache_enabled: false,
             table_cache_block_meta_count: 102400,
             table_memory_cache_mb_size: 256,
             table_disk_cache_root: "_cache".to_string(),
@@ -227,6 +231,7 @@ impl Default for QueryConfig {
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
             tenant_quota: None,
+            internal_enable_sandbox_tenant: false,
         }
     }
 }
@@ -394,6 +399,22 @@ impl Default for CatalogHiveConfig {
         Self {
             address: "127.0.0.1:9083".to_string(),
             protocol: ThriftProtocol::Binary,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalConfig {
+    pub sql: String,
+    // name1=filepath1,name2=filepath2
+    pub table: String,
+}
+
+impl Default for LocalConfig {
+    fn default() -> Self {
+        Self {
+            sql: "SELECT 1".to_string(),
+            table: "".to_string(),
         }
     }
 }

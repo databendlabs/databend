@@ -34,7 +34,7 @@ impl Config {
             },
             stderr: StderrConfig {
                 on: true,
-                level: "DEBUG".to_string(),
+                level: "INFO".to_string(),
                 format: "text".to_string(),
             },
         }

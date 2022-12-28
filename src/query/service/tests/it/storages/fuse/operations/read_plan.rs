@@ -23,11 +23,12 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_storages_fuse::ColumnLeaves;
+use common_storage::ColumnLeaf;
+use common_storage::ColumnLeaves;
+use common_storages_table_meta::meta;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::ColumnStatistics;
-use databend_query::storages::fuse::ColumnLeaf;
 use databend_query::storages::fuse::FuseTable;
 use futures::TryStreamExt;
 
@@ -90,6 +91,7 @@ fn test_to_partitions() -> Result<()> {
         location,
         bloom_filter_location,
         bloom_filter_size,
+        meta::Compression::Lz4Raw,
     ));
 
     let blocks_metas = (0..num_of_block)
@@ -132,7 +134,6 @@ fn test_to_partitions() -> Result<()> {
         limit: None,
         order_by: vec![],
         prewhere: None,
-        stage: None,
     });
 
     let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, push_down);
@@ -142,7 +143,7 @@ fn test_to_partitions() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_exact_statistic() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -173,7 +174,6 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
             prewhere: None,
             limit: None,
             order_by: vec![],
-            stage: None,
         };
         let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);

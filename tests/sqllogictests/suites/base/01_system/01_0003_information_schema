@@ -1,0 +1,37 @@
+query T
+show tables from information_schema
+----
+columns
+keywords
+schemata
+tables
+views
+
+query T
+SHOW TABLES FROM INFORMATION_SCHEMA
+----
+columns
+keywords
+schemata
+tables
+views
+
+query B
+select count(1) > 1 from information_schema.columns
+----
+1
+
+
+query B
+select count(1) > 1 from information_Schema.Columns
+----
+1
+
+query T
+SELECT t.table_catalog FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA = 'information_schema'
+----
+information_schema
+information_schema
+information_schema
+information_schema
+information_schema

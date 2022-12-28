@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_base::base::tokio::io::AsyncRead;
 use common_base::base::tokio::io::AsyncReadExt;
+use common_base::base::unescape_string;
 use common_base::base::ProgressValues;
-use common_base::base::TrySpawn;
+use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::parse_escape_string;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_sources::processors::sources::input_formats::StreamingReadBatch;
 use futures::StreamExt;
@@ -100,12 +100,15 @@ pub async fn streaming_load(
         .unwrap_or("");
 
     let settings = context.get_settings();
+
     for (key, value) in req.headers().iter() {
         if settings.has_setting(key.as_str()) {
             let value = value.to_str().map_err(InternalServerError)?;
-            let value = parse_escape_string(remove_quote(value.as_bytes()));
+            let unquote =
+                std::str::from_utf8(remove_quote(value.as_bytes())).map_err(InternalServerError)?;
+            let value = unescape_string(unquote).map_err(InternalServerError)?;
             settings
-                .set_settings(key.to_string(), value, false)
+                .set_settings(key.to_string(), value.to_string(), false)
                 .map_err(InternalServerError)?
         }
     }
@@ -120,11 +123,15 @@ pub async fn streaming_load(
     let schema = plan.schema();
     match &mut plan {
         Plan::Insert(insert) => match &mut insert.source {
-            InsertInputSource::StreamingWithFormat(format, start, input_context_ref) => {
+            InsertInputSource::StreamingWithFileFormat(
+                option_settings,
+                start,
+                input_context_ref,
+            ) => {
                 let sql_rest = &insert_sql[*start..].trim();
                 if !sql_rest.is_empty() {
                     return Err(poem::Error::from_string(
-                        "should NOT have data after `Format` in streaming load.",
+                        "should NOT have data after `FILE_FORMAT` in streaming load.",
                         StatusCode::BAD_REQUEST,
                     ));
                 };
@@ -133,21 +140,22 @@ pub async fn streaming_load(
                     .await
                     .map_err(InternalServerError)?;
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
+
                 let input_context = Arc::new(
-                    InputContext::try_create_from_insert(
-                        format.as_str(),
+                    InputContext::try_create_from_insert_file_format(
                         rx,
                         context.get_settings(),
+                        option_settings.clone(),
                         schema,
                         context.get_scan_progress(),
-                        true,
+                        false,
                         to_table.get_block_compact_thresholds(),
                     )
                     .await
                     .map_err(InternalServerError)?,
                 );
                 *input_context_ref = Some(input_context.clone());
-                tracing::info!("streaming load {:?}", input_context);
+                tracing::info!("streaming load with file_format {:?}", input_context);
 
                 let handler = context.spawn(execute_query(context.clone(), plan));
                 let files = read_multi_part(multipart, tx, &input_context).await?;
@@ -170,8 +178,16 @@ pub async fn streaming_load(
                     )),
                 }
             }
+            InsertInputSource::StreamingWithFormat(_, _, _) => Err(poem::Error::from_string(
+                "'INSERT INTO $table FORMAT <type> is now only supported in clickhouse handler,\
+                     please use 'FILE_FORMAT = (type = <type> ...)' instead.",
+                StatusCode::BAD_REQUEST,
+            )),
             _non_supported_source => Err(poem::Error::from_string(
-                "Only supports streaming upload. e.g. INSERT INTO $table FORMAT CSV, got insert ... select.",
+                format!(
+                    "streaming upload only support 'INSERT INTO $table FILE_FORMAT = (type = <type> ...)' got {}.",
+                    plan
+                ),
                 StatusCode::BAD_REQUEST,
             )),
         },

@@ -28,12 +28,12 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
-use url::Url;
 
 use crate::ast::*;
 use crate::input::Input;
 use crate::parser::expr::*;
 use crate::parser::query::*;
+use crate::parser::stage::*;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
@@ -234,9 +234,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_databases = map(
         rule! {
-            SHOW ~ ( DATABASES | SCHEMAS ) ~ #show_limit?
+            SHOW ~ FULL? ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN) ~ ^#ident )? ~ #show_limit?
         },
-        |(_, _, limit)| Statement::ShowDatabases(ShowDatabasesStmt { limit }),
+        |(_, opt_full, _, opt_catalog, limit)| {
+            Statement::ShowDatabases(ShowDatabasesStmt {
+                catalog: opt_catalog.map(|(_, catalog)| catalog),
+                full: opt_full.is_some(),
+                limit,
+            })
+        },
     );
     let show_create_database = map(
         rule! {
@@ -326,11 +332,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_tables = map(
         rule! {
-            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ #peroid_separated_idents_1_to_2 )? ~ #show_limit?
         },
-        |(_, opt_full, _, opt_history, opt_database, limit)| {
+        |(_, opt_full, _, opt_history, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
             Statement::ShowTables(ShowTablesStmt {
-                database: opt_database.map(|(_, database)| database),
+                catalog,
+                database,
                 full: opt_full.is_some(),
                 limit,
                 with_history: opt_history.is_some(),
@@ -504,7 +516,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ #optimize_table_action?
+            OPTIMIZE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ #optimize_table_action
         },
         |(_, _, (catalog, database, table), action)| {
             Statement::OptimizeTable(OptimizeTableStmt {
@@ -512,6 +524,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 database,
                 table,
                 action,
+            })
+        },
+    );
+    let analyze_table = map(
+        rule! {
+            ANALYZE ~ TABLE ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, table))| {
+            Statement::AnalyzeTable(AnalyzeTableStmt {
+                catalog,
+                database,
+                table,
             })
         },
     );
@@ -837,6 +861,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 single: Default::default(),
                 purge: Default::default(),
                 force: Default::default(),
+                on_error: Default::default(),
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -966,7 +991,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
-            | #show_databases : "`SHOW DATABASES [<show_limit>]`"
+            | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
             | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
@@ -991,6 +1016,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+            | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
         ),
         rule!(
@@ -1078,11 +1104,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 pub fn insert_source(i: Input) -> IResult<InsertSource> {
     let streaming = map(
         rule! {
-            FORMAT ~ #ident ~ #rest_str
+                 FORMAT ~ #ident ~ #rest_str
         },
         |(_, format, (rest_str, start))| InsertSource::Streaming {
             format: format.name,
             rest_str,
+            start,
+        },
+    );
+    let streaming_v2 = map(
+        rule! {
+            FILE_FORMAT ~ "=" ~ #options ~ #rest_str
+        },
+        |(_, _, options, (_, start))| InsertSource::StreamingV2 {
+            settings: options,
             start,
         },
     );
@@ -1098,6 +1133,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 
     rule!(
         #streaming
+        | #streaming_v2
         | #values
         | #query
     )(i)
@@ -1448,8 +1484,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     alt((
         value(OptimizeTableAction::All, rule! { ALL }),
-        value(OptimizeTableAction::Purge, rule! { PURGE }),
-        value(OptimizeTableAction::Statistic, rule! { STATISTIC }),
+        map(
+            rule! { PURGE ~ (BEFORE ~ #travel_point)?},
+            |(_, opt_travel_point)| OptimizeTableAction::Purge {
+                before: opt_travel_point.map(|(_, p)| p),
+            },
+        ),
         map(
             rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
             |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {
@@ -1517,70 +1557,6 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
         | #inner_uri_location: "'<protocol>://<name> {<path>} { CONNECTION = ({ AWS_ACCESS_KEY = 'aws_access_key' }) } '"
         | #table: "{ { <catalog>. } <database>. }<table>"
         | #query: "( <query> )"
-    )(i)
-}
-
-pub fn stage_location(i: Input) -> IResult<StageLocation> {
-    map_res(at_string, |location| {
-        let parsed = location.splitn(2, '/').collect::<Vec<_>>();
-        let name = parsed[0].to_string();
-        let path = if parsed.len() == 1 {
-            "/".to_string()
-        } else {
-            format!("/{}", parsed[1])
-        };
-        Ok(StageLocation { name, path })
-    })(i)
-}
-
-/// Parse input into `UriLocation`
-pub fn uri_location(i: Input) -> IResult<UriLocation> {
-    map_res(
-        rule! {
-            #literal_string
-            ~ (CONNECTION ~ "=" ~ #options)?
-            ~ (CREDENTIALS ~ "=" ~ #options)?
-            ~ (ENCRYPTION ~ "=" ~ #options)?
-        },
-        |(location, connection_opt, credentials_opt, encryption_opt)| {
-            // fs location is not a valid url, let's check it in advance.
-            if let Some(path) = location.strip_prefix("fs://") {
-                return Ok(UriLocation {
-                    protocol: "fs".to_string(),
-                    name: "".to_string(),
-                    path: path.to_string(),
-                    connection: BTreeMap::default(),
-                });
-            }
-
-            let parsed =
-                Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
-
-            // TODO: We will use `CONNECTION` to replace `CREDENTIALS` and `ENCRYPTION`.
-            let mut conn = connection_opt.map(|v| v.2).unwrap_or_default();
-            conn.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
-            conn.extend(encryption_opt.map(|v| v.2).unwrap_or_default());
-
-            Ok(UriLocation {
-                protocol: parsed.scheme().to_string(),
-                name: parsed
-                    .host_str()
-                    .map(|hostname| {
-                        if let Some(port) = parsed.port() {
-                            format!("{}:{}", hostname, port)
-                        } else {
-                            hostname.to_string()
-                        }
-                    })
-                    .ok_or(ErrorKind::Other("invalid uri location"))?,
-                path: if parsed.path().is_empty() {
-                    "/".to_string()
-                } else {
-                    parsed.path().to_string()
-                },
-                connection: conn,
-            })
-        },
     )(i)
 }
 
@@ -1758,39 +1734,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
             CopyOption::Force(force)
         }),
+        map(rule! {ON_ERROR ~ "=" ~ #ident}, |(_, _, on_error)| {
+            CopyOption::OnError(on_error.to_string())
+        }),
     ))(i)
-}
-
-pub fn ident_to_string(i: Input) -> IResult<String> {
-    map_res(ident, |ident| Ok(ident.name))(i)
-}
-
-pub fn u64_to_string(i: Input) -> IResult<String> {
-    map(literal_u64, |v| v.to_string())(i)
-}
-
-pub fn parameter_to_string(i: Input) -> IResult<String> {
-    map(
-        rule! { ( #literal_string | #ident_to_string | #u64_to_string ) },
-        |parameter| parameter,
-    )(i)
-}
-
-// parse: (k = v ...)* into a map
-pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let ident_with_format = alt((
-        ident_to_string,
-        map(rule! { FORMAT }, |_| "FORMAT".to_string()),
-    ));
-
-    map(
-        rule! {
-            "(" ~ ( #ident_with_format ~ "=" ~ #parameter_to_string )* ~ ")"
-        },
-        |(_, opts, _)| {
-            BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))
-        },
-    )(i)
 }
 
 pub fn presign_action(i: Input) -> IResult<PresignAction> {

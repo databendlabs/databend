@@ -1,0 +1,361 @@
+query T
+select name from system.databases where regexp_like(name, '^sys') ;
+----
+system
+
+query T
+select name from system.databases where regexp_like(name, 'ef+.ul+.') ;
+----
+default
+
+query B
+select regexp_like('foo', 'FOO')
+----
+1
+
+
+
+query T
+select regexp_like('foo', null)
+----
+NULL
+
+query T
+select regexp_like(null, null)
+----
+NULL
+
+query T
+select regexp_like('foo', 'FOO', null)
+----
+NULL
+
+query B
+select regexp_like('foo', 'FOO', 'c')
+----
+0
+
+
+
+query B
+select regexp_like('foo', 'FOO', 'i')
+----
+1
+
+
+
+query B
+select regexp_like('fo\nfo', '^fo$')
+----
+0
+
+
+
+query B
+select regexp_like('fofo', '^fo')
+----
+1
+
+
+
+query B
+select regexp_like('fo\nfo', '^fo$', 'm')
+----
+1
+
+
+
+query B
+select regexp_like('fo\no', '^fo\no$')
+----
+1
+
+
+
+query B
+select regexp_like('fo\no', '^fo$')
+----
+0
+
+
+
+query B
+select regexp_like('fo\no', '^fo$', 'm')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('fofo', '^f.*$')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('fo\r\nfo', '^f.*$')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('fo\r\nfo', '^f.*$', 'm')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('fo\r\nfo', '(?m)^f.*$')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('fo\r\nfo', '^f.*$', 'n')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('Ban', '^Ba*n')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('Baaan', '^Ba*n')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('Bn', '^Ba*n')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('Ban', '^Ba+n')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('Bn', '^Ba+n')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('Bn', '^Ba?n')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('Ban', '^Ba?n')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('Baan', '^Ba?n')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('pi', 'pi|apa')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('axe', 'pi|apa')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('apa', 'pi|apa')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('apa', '^(pi|apa)$')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('pi', '^(pi|apa)$')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('pix', '^(pi|apa)$')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('pi', '^(pi)*$')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('pip', '^(pi)*$')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('pipi', '^(pi)*$')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('abcde', 'a[bcd]{2}e')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('abcde', 'a[bcd]{3}e')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('abcde', 'a[bcd]{1,10}e')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('aXbc', '[a-dXYZ]')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('aXbc', '^[a-dXYZ]$')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('aXbc', '^[a-dXYZ]+$')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('aXbc', '^[^a-dXYZ]+$')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('gheis', '^[^a-dXYZ]+$')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('gheisa', '^[^a-dXYZ]+$')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('justalnums', '[[:alnum:]]+')
+----
+1
+
+
+
+query B
+SELECT REGEXP_LIKE('!!', '[[:alnum:]]+')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('1+2', '1+2')
+----
+0
+
+
+
+query B
+SELECT REGEXP_LIKE('1+2', '1\\+2')
+----
+1
+
+
+
+query B
+select REGEXP_LIKE('🍣🍣b', 'b')
+----
+1
+
+
+
+query B
+select regexp_like('бжb', 'b')
+----
+1
+
+
+
+query B
+select regexp_like('µå周çб', '周')
+----
+1
+
+
+
+query B
+select regexp_like('周周周周', '.*')
+----
+1
+
+
+

@@ -1,0 +1,291 @@
+statement ok
+drop table if exists tt all
+
+statement ok
+set timezone='UTC'
+
+query T
+select to_timestamp(1630320462000000)
+----
+2021-08-30 10:47:42.000000
+
+
+query T
+select to_timestamp('2000-01-01 00:00:00')
+----
+2000-01-01 00:00:00.000000
+
+## Asia/Shanghai: +8:00
+statement ok
+set timezone='Asia/Shanghai'
+
+query T
+select to_timestamp(1630320462000000)
+----
+2021-08-30 18:47:42.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00')
+----
+2000-01-01 12:00:00.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00+08:00')
+----
+2000-01-01 12:00:00.000000
+
+statement ok
+set timezone = 'UTC'
+
+statement ok
+create table tt (a timestamp)
+
+statement ok
+insert into table tt values ('2021-04-30 22:48:00'), (to_timestamp('2021-04-30 22:48:00'))
+
+query T
+select * from tt
+----
+2021-04-30 22:48:00.000000
+2021-04-30 22:48:00.000000
+
+
+statement ok
+set timezone = 'Asia/Shanghai'
+
+query T
+select * from tt
+----
+2021-05-01 06:48:00.000000
+2021-05-01 06:48:00.000000
+
+
+statement ok
+drop table tt
+
+statement ok
+set timezone = 'UTC'
+
+query I
+select to_yyyymm(to_timestamp(1619820000000000))
+----
+202104
+
+query I
+select to_yyyymmdd(to_timestamp(1619820000000000))
+----
+20210430
+
+query I
+select to_yyyymmddhhmmss(to_timestamp(1619820000000000))
+----
+20210430220000
+
+query T
+select to_start_of_month(to_timestamp(1619820000000000))
+----
+2021-04-01
+
+query I
+select to_month(to_timestamp(1619820000000000))
+----
+4
+
+query I
+select to_day_of_year(to_timestamp(1619820000000000))
+----
+120
+
+query I
+select to_day_of_month(to_timestamp(1619820000000000))
+----
+30
+
+query I
+select to_day_of_week(to_timestamp(1619820000000000))
+----
+5
+
+statement ok
+set timezone = 'Asia/Shanghai'
+
+query I
+select to_yyyymm(to_timestamp(1619820000000000))
+----
+202105
+
+query I
+select to_yyyymmdd(to_timestamp(1619820000000000))
+----
+20210501
+
+query I
+select to_yyyymmddhhmmss(to_timestamp(1619820000000000))
+----
+20210501060000
+
+query T
+select to_start_of_month(to_timestamp(1619820000000000))
+----
+2021-05-01
+
+query I
+select to_month(to_timestamp(1619820000000000))
+----
+5
+
+query I
+select to_day_of_year(to_timestamp(1619820000000000))
+----
+121
+
+query I
+select to_day_of_month(to_timestamp(1619820000000000))
+----
+1
+
+query I
+select to_day_of_week(to_timestamp(1619820000000000))
+----
+6
+
+query T
+select '==UTC=='
+----
+==UTC==
+
+statement ok
+set timezone = 'UTC'
+
+query T
+select to_start_of_second(to_timestamp(1619822911999000))
+----
+2021-04-30 22:48:31.000000
+
+query T
+select to_start_of_minute(to_timestamp(1619822911999000))
+----
+2021-04-30 22:48:00.000000
+
+query T
+select to_start_of_five_minutes(to_timestamp(1619822911999000))
+----
+2021-04-30 22:45:00.000000
+
+query T
+select to_start_of_ten_minutes(to_timestamp(1619822911999000))
+----
+2021-04-30 22:40:00.000000
+
+query T
+select to_start_of_fifteen_minutes(to_timestamp(1619822911999000))
+----
+2021-04-30 22:45:00.000000
+
+query T
+select time_slot(to_timestamp(1619822911999000))
+----
+2021-04-30 22:30:00.000000
+
+query T
+select to_start_of_hour(to_timestamp(1619822911999000))
+----
+2021-04-30 22:00:00.000000
+
+query T
+select to_start_of_day(to_timestamp(1619822911999000))
+----
+2021-04-30 00:00:00.000000
+
+query T
+select to_start_of_week(to_timestamp(1619822911999000))
+----
+2021-04-25
+
+statement ok
+set timezone = 'Asia/Shanghai'
+
+query T
+select to_start_of_second(to_timestamp(1619822911999000))
+----
+2021-05-01 06:48:31.000000
+
+query T
+select to_start_of_minute(to_timestamp(1619822911999000))
+----
+2021-05-01 06:48:00.000000
+
+query T
+select to_start_of_five_minutes(to_timestamp(1619822911999000))
+----
+2021-05-01 06:45:00.000000
+
+query T
+select to_start_of_ten_minutes(to_timestamp(1619822911999000))
+----
+2021-05-01 06:40:00.000000
+
+query T
+select to_start_of_fifteen_minutes(to_timestamp(1619822911999000))
+----
+2021-05-01 06:45:00.000000
+
+query T
+select time_slot(to_timestamp(1619822911999000))
+----
+2021-05-01 06:30:00.000000
+
+query T
+select to_start_of_hour(to_timestamp(1619822911999000))
+----
+2021-05-01 06:00:00.000000
+
+query T
+select to_start_of_day(to_timestamp(1619822911999000))
+----
+2021-05-01 00:00:00.000000
+
+query T
+select to_start_of_week(to_timestamp(1619822911999000))
+----
+2021-04-25
+
+statement ok
+set timezone = 'UTC'
+
+query T
+select add_months(to_timestamp(1619822911999000), 1)
+----
+2021-05-30 22:48:31.999000
+
+query T
+select to_timestamp(1583013600000000)
+----
+2020-02-29 22:00:00.000000
+
+
+query T
+select add_years(to_timestamp(1583013600000000), 1)
+----
+2021-02-28 22:00:00.000000
+
+
+statement ok
+set timezone = 'Asia/Shanghai'
+
+query T
+select add_months(to_timestamp(1619822911999000), 1)
+----
+2021-06-01 14:48:31.999000
+
+query T
+select to_timestamp(1583013600000000)
+----
+2020-03-01 06:00:00.000000
+
+query T
+select add_years(to_timestamp(1583013600000000), 1)
+----
+2021-03-01 14:00:00.000000
+
+

@@ -1,0 +1,33 @@
+statement ok
+drop table if exists t0
+
+statement ok
+CREATE TABLE t0(c0 DOUBLE)
+
+statement ok
+INSERT INTO t0(c0) VALUES (1163404482), (0), (488566)
+
+query F
+SELECT * FROM t0 WHERE c0 > 0.1 ORDER BY 1
+----
+488566.0
+1163404482.0
+
+query F
+SELECT * FROM t0 WHERE c0 >= 0.1 ORDER BY 1
+----
+488566.0
+1163404482.0
+
+query F
+SELECT * FROM t0 WHERE 0.1 < c0 ORDER BY 1
+----
+488566.0
+1163404482.0
+
+query F
+SELECT * FROM t0 WHERE 0.1 <= c0 ORDER BY 1
+----
+488566.0
+1163404482.0
+

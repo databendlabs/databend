@@ -53,6 +53,7 @@ use serfig::parsers::Toml;
 use super::inner::CatalogConfig as InnerCatalogConfig;
 use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
 use super::inner::Config as InnerConfig;
+use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::DATABEND_COMMIT_VERSION;
@@ -106,6 +107,10 @@ pub struct Config {
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
 
+    // Local query config.
+    #[clap(flatten)]
+    pub local: LocalConfig,
+
     /// external catalog config.
     ///
     /// - Later, catalog information SHOULD be kept in KV Service
@@ -136,6 +141,7 @@ impl Config {
     /// with_args is to control whether we need to load from args or not.
     /// We should set this to false during tests because we don't want
     /// our test binary to parse cargo's args.
+    #[no_sanitize(address)]
     pub fn load(with_args: bool) -> Result<Self> {
         let mut arg_conf = Self::default();
 
@@ -182,6 +188,7 @@ impl From<InnerConfig> for Config {
             meta: inner.meta.into(),
             storage: inner.storage.into(),
             catalog: HiveCatalogConfig::default(),
+            local: inner.local.into(),
 
             catalogs: inner
                 .catalogs
@@ -217,6 +224,7 @@ impl TryInto<InnerConfig> for Config {
             log: self.log.try_into()?,
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
+            local: self.local.try_into()?,
             catalogs,
         })
     }
@@ -1184,8 +1192,8 @@ pub struct QueryConfig {
     #[clap(long, default_value = "8000")]
     pub http_handler_port: u16,
 
-    #[clap(long, default_value = "10000")]
-    pub http_handler_result_timeout_millis: u64,
+    #[clap(long, default_value = "60")]
+    pub http_handler_result_timeout_secs: u64,
 
     #[clap(long, default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
@@ -1243,9 +1251,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "10000")]
     pub max_query_log_size: usize,
 
-    /// Table Cached enabled
-    #[clap(long)]
-    pub table_cache_enabled: bool,
+    /// Table Meta Cached enabled
+    #[clap(long, default_value = "true")]
+    pub table_meta_cache_enabled: bool,
 
     /// Max number of cached table block meta
     #[clap(long, default_value = "102400")]
@@ -1313,6 +1321,9 @@ pub struct QueryConfig {
 
     #[clap(skip)]
     quota: Option<TenantQuota>,
+
+    #[clap(long)]
+    pub internal_enable_sandbox_tenant: bool,
 }
 
 impl Default for QueryConfig {
@@ -1338,7 +1349,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             clickhouse_http_handler_port: self.clickhouse_http_handler_port,
             http_handler_host: self.http_handler_host,
             http_handler_port: self.http_handler_port,
-            http_handler_result_timeout_millis: self.http_handler_result_timeout_millis,
+            http_handler_result_timeout_secs: self.http_handler_result_timeout_secs,
             flight_api_address: self.flight_api_address,
             admin_api_address: self.admin_api_address,
             metric_api_address: self.metric_api_address,
@@ -1355,7 +1366,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_engine_memory_enabled: self.table_engine_memory_enabled,
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
-            table_cache_enabled: self.table_cache_enabled,
+            table_meta_cache_enabled: self.table_meta_cache_enabled,
             table_cache_block_meta_count: self.table_cache_block_meta_count,
             table_memory_cache_mb_size: self.table_memory_cache_mb_size,
             table_disk_cache_root: self.table_disk_cache_root,
@@ -1376,6 +1387,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: self.share_endpoint_address,
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
+            internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
         })
     }
 }
@@ -1401,7 +1413,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             clickhouse_http_handler_port: inner.clickhouse_http_handler_port,
             http_handler_host: inner.http_handler_host,
             http_handler_port: inner.http_handler_port,
-            http_handler_result_timeout_millis: inner.http_handler_result_timeout_millis,
+            http_handler_result_timeout_secs: inner.http_handler_result_timeout_secs,
             flight_api_address: inner.flight_api_address,
             admin_api_address: inner.admin_api_address,
             metric_api_address: inner.metric_api_address,
@@ -1419,7 +1431,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             database_engine_github_enabled: true,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
-            table_cache_enabled: inner.table_cache_enabled,
+            table_meta_cache_enabled: inner.table_meta_cache_enabled,
             table_cache_block_meta_count: inner.table_cache_block_meta_count,
             table_memory_cache_mb_size: inner.table_memory_cache_mb_size,
             table_disk_cache_root: inner.table_disk_cache_root,
@@ -1438,6 +1450,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
+            internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
         }
     }
 }
@@ -1786,5 +1799,43 @@ impl From<AuthInfo> for UserAuthConfig {
             auth_type,
             auth_string,
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct LocalConfig {
+    // sql to run
+    #[clap(long, default_value = "SELECT 1")]
+    pub sql: String,
+
+    // name1=filepath1,name2=filepath2
+    #[clap(long, default_value = "")]
+    pub table: String,
+}
+
+impl Default for LocalConfig {
+    fn default() -> Self {
+        InnerLocalConfig::default().into()
+    }
+}
+
+impl From<InnerLocalConfig> for LocalConfig {
+    fn from(inner: InnerLocalConfig) -> Self {
+        Self {
+            sql: inner.sql,
+            table: inner.table,
+        }
+    }
+}
+
+impl TryInto<InnerLocalConfig> for LocalConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerLocalConfig> {
+        Ok(InnerLocalConfig {
+            sql: self.sql,
+            table: self.table,
+        })
     }
 }

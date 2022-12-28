@@ -1,6 +1,0 @@
-statement query TT
-SELECT database(), currentDatabase();
-
-----
-default default
-

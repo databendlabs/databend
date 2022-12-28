@@ -1,0 +1,91 @@
+statement ok
+DROP VIEW IF EXISTS tmp_view
+
+statement ok
+DROP VIEW IF EXISTS tmp_view2
+
+statement ok
+CREATE VIEW tmp_view AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a
+
+statement error 2306
+CREATE VIEW tmp_view AS SELECT 1
+
+statement ok
+CREATE VIEW tmp_view2 AS SELECT * FROM numbers(100)
+
+statement ok
+DROP VIEW IF EXISTS tmp_view
+
+statement ok
+DROP VIEW IF EXISTS tmp_view2
+
+statement ok
+drop database if exists test_view
+
+statement ok
+drop view if exists default.v0
+
+statement ok
+create database test_view
+
+statement ok
+create table test_view.t0(id int)
+
+statement ok
+create table test_view.t1(id int)
+
+statement ok
+insert into test_view.t0 values(1)
+
+statement ok
+insert into test_view.t0 values(2)
+
+statement ok
+create view default.v0 as select * from test_view.t0 union select * from test_view.t1
+
+query T
+select * from default.v0 order by v0.id
+----
+1
+2
+
+query T
+select v0.id from default.v0 order by v0.id
+----
+1
+2
+
+query T
+select v1.id from default.v0 as v1 order by v1.id
+----
+1
+2
+
+statement ok
+create view default.v2 as select * from test_view.t0 where ((((((t0.id)-(1362151668)))-((+ 1362151668))))is not distinct from((+ ((-177629504)/(2071531978)))))
+
+statement ok
+select * from default.v2
+
+statement ok
+drop view default.v0
+
+statement ok
+drop view default.v2
+
+statement ok
+drop database test_view
+
+statement ok
+drop table if exists default.c
+
+statement ok
+create table default.c like information_schema.keywords
+
+statement ok
+select * from c
+
+statement ok
+drop table c
+
+

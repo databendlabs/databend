@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod csv;
+mod fast_values;
 mod json_ast;
 mod row_based;
 mod tsv;
@@ -22,6 +23,7 @@ mod xml;
 use std::any::Any;
 
 pub use csv::FieldDecoderCSV;
+pub use fast_values::FastFieldDecoderValues;
 pub use json_ast::FieldJsonAstDecoder;
 pub use row_based::FieldDecoderRowBased;
 pub use tsv::FieldDecoderTSV;

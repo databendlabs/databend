@@ -90,11 +90,9 @@ git_partial_clone() {
 
 # Run specified tests found in logic test suite dir
 run_logictest() {
-    local pattern="$1"
     (
-        cd "tests/logictest"
         # Only run test on mysql handler
-        python3 main.py "$pattern" --handlers mysql --suites "$SCRIPT_PATH/compat-logictest"
+        cargo run -p sqllogictests -- --handlers mysql --suites "$logictest_path"
     )
 
 }

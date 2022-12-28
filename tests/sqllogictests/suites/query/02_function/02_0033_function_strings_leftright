@@ -1,0 +1,142 @@
+query T
+SELECT LEFT(NULL, 1)
+----
+NULL
+
+query T
+SELECT LEFT('aaa', NULL)
+----
+NULL
+
+query T
+SELECT LEFT(NULL, NULL)
+----
+NULL
+
+statement ok
+SELECT LEFT('', 0)
+
+statement ok
+SELECT LEFT('', 1)
+
+statement ok
+SELECT LEFT('123', 0)
+
+query T
+SELECT LEFT('123', 1)
+----
+1
+
+query T
+SELECT LEFT('123', 2)
+----
+12
+
+query T
+SELECT LEFT('123', 3)
+----
+123
+
+query T
+SELECT LEFT('123', 4)
+----
+123
+
+query T
+SELECT LEFT('123', number) FROM numbers(5) ORDER BY number
+----
+(empty)
+1
+12
+123
+123
+
+query T
+SELECT LEFT(to_varchar(number * 10000), 1) FROM numbers(5) ORDER BY number
+----
+0
+1
+2
+3
+4
+
+query T
+SELECT LEFT(to_varchar(number * 10000), number) FROM numbers(5) ORDER BY number
+----
+(empty)
+1
+20
+300
+4000
+
+query T
+SELECT RIGHT(NULL, 1)
+----
+NULL
+
+query T
+SELECT RIGHT('aaa', NULL)
+----
+NULL
+
+query T
+SELECT RIGHT(NULL, NULL)
+----
+NULL
+
+statement ok
+SELECT RIGHT('', 0)
+
+statement ok
+SELECT RIGHT('', 1)
+
+statement ok
+SELECT RIGHT('123', 0)
+
+query T
+SELECT RIGHT('123', 1)
+----
+3
+
+query T
+SELECT RIGHT('123', 2)
+----
+23
+
+query T
+SELECT RIGHT('123', 3)
+----
+123
+
+query T
+SELECT RIGHT('123', 4)
+----
+123
+
+query T
+SELECT RIGHT('123', number) FROM numbers(5) ORDER BY number
+----
+(empty)
+3
+23
+123
+123
+
+query T
+SELECT RIGHT(to_varchar(number * 10000), 1) FROM numbers(5) ORDER BY number
+----
+0
+0
+0
+0
+0
+
+query T
+SELECT RIGHT(to_varchar(number * 10000), number) FROM numbers(5) ORDER BY number
+----
+(empty)
+0
+00
+000
+0000
+

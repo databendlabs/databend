@@ -1,0 +1,51 @@
+statement ok
+use default
+
+statement ok
+drop table if exists cast_test
+
+statement ok
+create table cast_test(int_nullable int null, int_not_nullable int not null)
+
+statement ok
+insert into cast_test values(null, 1)
+
+statement error
+select cast(null as int)
+
+query I
+select try_cast(null as int)
+----
+NULL
+
+query I
+select try_cast(int_not_nullable as int) from cast_test
+----
+1
+
+statement error
+select int_nullable::int from cast_test
+
+statement ok
+drop table if exists t0
+
+statement ok
+drop table if exists t1
+
+statement ok
+CREATE TABLE t0(c0BOOLEAN BOOL NULL DEFAULT(false))
+
+statement ok
+CREATE TABLE t1(c0VARCHAR VARCHAR NULL, c1BOOLEAN BOOLEAN NULL DEFAULT(false))
+
+statement ok
+INSERT INTO t1(c1boolean, c0varchar) VALUES (true, '0')
+
+statement ok
+SELECT (false and NULL NOT IN (0.1, 0.2, 0.3,0.4)) ::BIGINT FROM t1,t0
+
+statement ok
+drop table t0
+
+statement ok
+drop table t1

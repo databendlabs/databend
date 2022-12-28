@@ -1,0 +1,8 @@
+onlyif mysql
+statement error 1104
+SELECT * FROM sync_crash_me('sync crash me')
+
+onlyif mysql
+statement error 1104
+SELECT * FROM async_crash_me('async crash me')
+

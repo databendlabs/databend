@@ -55,9 +55,8 @@ impl Interpreter for OptimizeTableInterpreter {
         let action = &plan.action;
         let do_purge = matches!(
             action,
-            OptimizeTableAction::Purge | OptimizeTableAction::All
+            OptimizeTableAction::Purge(_) | OptimizeTableAction::All
         );
-        let do_statistic = matches!(action, OptimizeTableAction::Statistic);
         let do_compact_blocks = matches!(
             action,
             OptimizeTableAction::CompactBlocks(_) | OptimizeTableAction::All
@@ -94,7 +93,8 @@ impl Interpreter for OptimizeTableInterpreter {
             {
                 let settings = ctx.get_settings();
                 pipeline.set_max_threads(settings.get_max_threads()? as usize);
-                let executor_settings = ExecutorSettings::try_create(&settings)?;
+                let query_id = ctx.get_id();
+                let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
                 let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
 
                 ctx.set_executor(Arc::downgrade(&executor.get_inner()));
@@ -102,7 +102,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 drop(executor);
             }
 
-            if do_purge || do_statistic {
+            if do_purge {
                 // currently, context caches the table, we have to "refresh"
                 // the table by using the catalog API directly
                 table = self
@@ -113,13 +113,14 @@ impl Interpreter for OptimizeTableInterpreter {
             }
         }
 
-        if do_statistic {
-            table.statistic(self.ctx.clone()).await?;
-            return Ok(PipelineBuildResult::create());
-        }
-
         if do_purge {
-            table.optimize(self.ctx.clone(), true).await?;
+            let table = if let OptimizeTableAction::Purge(Some(point)) = action {
+                table.navigate_to(point).await?
+            } else {
+                table
+            };
+            let keep_latest = true;
+            table.purge(self.ctx.clone(), keep_latest).await?;
         }
 
         Ok(PipelineBuildResult::create())

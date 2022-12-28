@@ -38,21 +38,21 @@ struct ConvertGroupingMetaInfo {
 
 impl Serialize for ConvertGroupingMetaInfo {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+        where S: Serializer {
         unreachable!("ConvertGroupingMetaInfo does not support exchanging between multiple nodes")
     }
 }
 
 impl<'de> Deserialize<'de> for ConvertGroupingMetaInfo {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+        where D: Deserializer<'de> {
         unreachable!("ConvertGroupingMetaInfo does not support exchanging between multiple nodes")
     }
 }
 
 impl ConvertGroupingMetaInfo {
     pub fn create(bucket: isize, blocks: Vec<DataBlock>) -> BlockMetaInfoPtr {
-        Arc::new(Box::new(ConvertGroupingMetaInfo { bucket, blocks }))
+        Box::new(ConvertGroupingMetaInfo { bucket, blocks })
     }
 }
 
@@ -60,6 +60,14 @@ impl ConvertGroupingMetaInfo {
 impl BlockMetaInfo for ConvertGroupingMetaInfo {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        unimplemented!("Unimplemented clone for ConvertGroupingMetaInfo")
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
@@ -144,7 +152,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
 #[async_trait::async_trait]
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-    for TransformConvertGrouping<Method>
+for TransformConvertGrouping<Method>
 {
     fn name(&self) -> String {
         String::from("TransformConvertGrouping")
@@ -434,7 +442,7 @@ struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> +
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
-    MergeBucketTransform<Method>
+MergeBucketTransform<Method>
 {
     pub fn try_create(
         input: Arc<InputPort>,
@@ -455,7 +463,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
 
 #[async_trait::async_trait]
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-    for MergeBucketTransform<Method>
+for MergeBucketTransform<Method>
 {
     fn name(&self) -> String {
         String::from("MergeBucketTransform")

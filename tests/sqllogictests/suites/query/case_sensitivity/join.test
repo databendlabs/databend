@@ -1,0 +1,41 @@
+statement ok
+use default
+
+statement ok
+set sql_dialect = 'PostgreSQL'
+
+statement ok
+drop table if exists t
+
+statement ok
+create table t(a int, "A" int)
+
+statement ok
+insert into t values(1, 1)
+
+query II
+select * from t join t t1 using(a, "A")
+----
+1	1
+
+query II
+select * from t join t t1 using(A, "A")
+----
+1	1
+
+statement ok
+drop table t
+
+statement ok
+create table t(A int)
+
+statement ok
+insert into t values(1)
+
+query I
+select A from (select A from t) t1 join (select A from t) t2 using(A)
+----
+1
+
+statement ok
+drop table t

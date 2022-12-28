@@ -816,6 +816,7 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                 }
                 let s = std::str::from_utf8(&path[prev_idx..idx - 2])?;
                 let json_path = JsonPath::String(Cow::Borrowed(s));
+
                 json_paths.push(json_path);
             } else {
                 prev_idx = idx - 1;
@@ -835,6 +836,26 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                 } else {
                     return Err(Error::InvalidToken);
                 }
+            }
+        } else if c == b'"' {
+            prev_idx = idx;
+            loop {
+                let c = read_char(path, &mut idx)?;
+                if c == b'\\' {
+                    idx += 1;
+                } else if c == b'"' {
+                    if idx < path.len() {
+                        return Err(Error::InvalidToken);
+                    }
+                    break;
+                }
+            }
+            let s = std::str::from_utf8(&path[prev_idx..idx - 1])?;
+            let json_path = JsonPath::String(Cow::Borrowed(s));
+            if json_paths.is_empty() {
+                json_paths.push(json_path);
+            } else {
+                return Err(Error::InvalidToken);
             }
         } else {
             if c == b':' || c == b'.' {

@@ -18,7 +18,7 @@ use common_datavalues::prelude::*;
 use databend_query::stream::DataBlockStream;
 use futures::stream::StreamExt;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_datablock_stream() {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("name", Vu8::to_data_type()),

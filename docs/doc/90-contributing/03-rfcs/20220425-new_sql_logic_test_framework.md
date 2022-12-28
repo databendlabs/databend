@@ -51,7 +51,7 @@ statement error table db1.tbl1 does not exist
 create table db1.tbl1 (id int);
 ```
 
-`statement query <desired_query_schema_type> <options> <labels>`: the sql statement output is expected success with desired result.
+`query <desired_query_schema_type> <options> <labels>`: the sql statement output is expected success with desired result.
 
 `desired_query_schema_type` represent the schema type of the query result. which is documented in https://github.com/gregrahn/sqllogictest/blob/master/about.wiki#test-script-format
 
@@ -67,9 +67,8 @@ create table db1.tbl1 (id int);
 for example: the following sql would be ok with output table
   
 ```text
-statement query III
+query III
 select number, number + 1, number + 999 from numbers(10);
-
 ----
      0     1   999
      1     2  1000
@@ -86,9 +85,8 @@ select number, number + 1, number + 999 from numbers(10);
 The follow sql configured match mysql label first then default label
 
 ```text
-statement query III label(mysql)
+query III label(mysql)
 select number, number + 1, number + 999 from numbers(10);
-
 ----
      0     1   999
      1     2  1000

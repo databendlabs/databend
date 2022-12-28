@@ -1,0 +1,82 @@
+query T
+SELECT FORMAT(12332.123456, 4)
+----
+12,332.1235
+
+query T
+SELECT FORMAT(-12332.123456, 4)
+----
+-12,332.1235
+
+query T
+SELECT FORMAT(12332.1, 4)
+----
+12,332.1000
+
+query T
+SELECT FORMAT(12332.2, 0)
+----
+12,332
+
+query T
+SELECT FORMAT(12332.2, -1)
+----
+12,332
+
+query T
+SELECT FORMAT(12332, 2)
+----
+12,332.00
+
+query T
+SELECT FORMAT(0, 0)
+----
+0
+
+query T
+SELECT FORMAT(NULL, 1)
+----
+NULL
+
+query T
+SELECT FORMAT(1, NULL)
+----
+NULL
+
+query T
+SELECT FORMAT(NULL, NULL)
+----
+NULL
+
+query T
+SELECT FORMAT(12332.123456, 4, 'en_US')
+----
+12,332.1235
+
+query T
+SELECT FORMAT(12332.123456, 4, 'zh_CN')
+----
+12,332.1235
+
+query T
+SELECT FORMAT(12332.123456, 4, '')
+----
+12,332.1235
+
+query T
+SELECT FORMAT(12332.123456, 4, NULL)
+----
+NULL
+
+query T
+SELECT FORMAT(100 + 100, 2)
+----
+200.00
+
+query TI
+SELECT FORMAT(number, number), number from  numbers(3) order by number
+----
+0 0
+1.0 1
+2.00 2
+

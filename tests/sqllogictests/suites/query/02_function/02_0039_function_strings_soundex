@@ -1,0 +1,104 @@
+query T
+SELECT SOUNDEX(NULL)
+----
+NULL
+
+query T
+SELECT SOUNDEX('Hello')
+----
+H400
+
+query T
+SELECT SOUNDEX('hello')
+----
+H400
+
+query T
+SELECT SOUNDEX('Quadratically')
+----
+Q36324
+
+query T
+SELECT SOUNDEX('quadratically')
+----
+Q36324
+
+query T
+SELECT SOUNDEX('你好中国')
+----
+你000
+
+query T
+SELECT SOUNDEX('你好中国北京')
+----
+你000
+
+statement ok
+SELECT SOUNDEX('')
+
+query T
+SELECT SOUNDEX('he')
+----
+H000
+
+query T
+SELECT SOUNDEX('hello all folks')
+----
+H4142
+
+query T
+SELECT SOUNDEX('#3556 in bugdb')
+----
+I51231
+
+statement ok
+SELECT SOUNDEX('####')
+
+query T
+SELECT SOUNDEX('##🐑hello')
+----
+🐑400
+
+query T
+SELECT SOUNDEX('##🐑🐑he🐑llo🐑')
+----
+🐑400
+
+query T
+SELECT SOUNDEX('🐑he🐑llo🐑')
+----
+🐑400
+
+query T
+SELECT SOUNDEX('teacher')
+----
+T260
+
+query T
+SELECT SOUNDEX('TEACHER')
+----
+T260
+
+query T
+SELECT SOUNDEX('much')
+----
+M200
+
+query T
+SELECT SOUNDEX('MUCH')
+----
+M200
+
+statement ok
+SELECT SOUNDEX('1.23')
+
+query T
+SELECT SOUNDEX('pneumonoultramicroscopicsilicovolcanoconiosis')
+----
+P5436526212421425252
+
+query T
+SELECT SOUNDEX('pneumonoultramicroscopicsilicovolcanoconiosis hello world')
+----
+P54365262124214252524643
+

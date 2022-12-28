@@ -21,7 +21,8 @@ use std::sync::Weak;
 use std::time::SystemTime;
 
 use common_base::base::Progress;
-use common_base::base::Runtime;
+use common_base::runtime::Runtime;
+use common_catalog::table_context::StageAttachment;
 use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -31,7 +32,6 @@ use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
-use common_storage::StorageParams;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -40,7 +40,6 @@ use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::storages::Table;
@@ -57,7 +56,6 @@ type DatabaseAndTable = (String, String, String);
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
-    pub(in crate::sessions) config: Config,
     /// scan_progress for scan metrics of datablocks (uncompressed)
     pub(in crate::sessions) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
@@ -71,7 +69,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) cluster_cache: Arc<Cluster>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<String>>>,
-    pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
@@ -80,19 +77,19 @@ pub struct QueryContextShared {
     pub(in crate::sessions) data_operator: DataOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
+    pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
 }
 
 impl QueryContextShared {
     pub async fn try_create(
-        config: Config,
+        config: &Config,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
             session,
             cluster_cache,
-            config: config.clone(),
             catalog_manager: CatalogManager::instance(),
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
@@ -103,13 +100,13 @@ impl QueryContextShared {
             runtime: Arc::new(RwLock::new(None)),
             running_query: Arc::new(RwLock::new(None)),
             running_query_kind: Arc::new(RwLock::new(None)),
-            http_query: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             auth_manager: AuthMgr::create(config).await?,
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             precommit_blocks: Arc::new(RwLock::new(vec![])),
+            stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
         }))
     }
@@ -160,10 +157,6 @@ impl QueryContextShared {
 
     pub fn set_current_tenant(&self, tenant: String) {
         self.session.set_current_tenant(tenant);
-    }
-
-    pub fn get_storage_params(&self) -> StorageParams {
-        self.data_operator.get_storage_params()
     }
 
     /// Get all tables that already attached in this query.
@@ -258,14 +251,6 @@ impl QueryContextShared {
         }
     }
 
-    pub fn attach_http_query_handle(&self, handle: HttpQueryHandle) {
-        let mut http_query = self.http_query.write();
-        *http_query = Some(handle);
-    }
-    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
-        self.http_query.read().clone()
-    }
-
     pub fn attach_query_str(&self, kind: String, query: &str) {
         {
             let mut running_query = self.running_query.write();
@@ -289,10 +274,6 @@ impl QueryContextShared {
             .as_ref()
             .cloned()
             .unwrap_or_else(|| "Unknown".to_string())
-    }
-
-    pub fn get_config(&self) -> Config {
-        self.config.clone()
     }
 
     pub fn get_connection_id(&self) -> String {
@@ -325,6 +306,15 @@ impl QueryContextShared {
         let mut swaped_precommit_blocks = vec![];
         std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
         swaped_precommit_blocks
+    }
+
+    pub fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        self.stage_attachment.read().clone()
+    }
+
+    pub fn attach_stage(&self, attachment: StageAttachment) {
+        let mut stage_attachment = self.stage_attachment.write();
+        *stage_attachment = Some(attachment);
     }
 
     pub fn get_created_time(&self) -> SystemTime {

@@ -1,0 +1,32 @@
+query II
+select 1, sum(number) from numbers_mt(1000000)
+----
+1 499999500000
+
+query B
+select count(*) = count(1) from numbers(1000)
+----
+1
+
+
+
+query I
+select count(1) from numbers(1000)
+----
+1000
+
+query I
+select sum(3) from numbers(1000)
+----
+3000
+
+query ITTTI
+select count(null), min(null), sum(null), avg(null), approx_count_distinct(null) from numbers(1000)
+----
+0 NULL NULL NULL 0
+
+query IIII
+select sum(a), sum(b), sum(c), sum(e) from ( select (number % 8)::UInt64 as a,(number % 9)::UInt64 as b,(number % 10)::UInt64  as c, count() as e from numbers(100) group by a ,b,c)
+----
+342 396 450 100
+

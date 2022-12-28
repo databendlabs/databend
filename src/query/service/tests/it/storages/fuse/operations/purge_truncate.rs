@@ -20,7 +20,7 @@ use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::history_should_have_item;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_truncate_purge_stmt() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
@@ -43,6 +43,7 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
         2,
         expected_index_count,
         Some(()),
+        None,
     )
     .await?;
 
@@ -68,6 +69,7 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
         0,
         0,
         Some(()),
+        None,
     )
     .await?;
     Ok(())

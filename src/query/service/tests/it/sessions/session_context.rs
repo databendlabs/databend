@@ -15,18 +15,15 @@
 use std::net::SocketAddr;
 
 use common_base::base::tokio;
-use common_config::Config;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
 use databend_query::sessions::SessionContext;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_session_context() -> Result<()> {
-    let conf = Config::default();
-    let tenant = &conf.query.tenant_id;
-    let settings = Settings::default_settings(tenant)?;
-    let session_ctx = SessionContext::try_create(conf, settings)?;
+    let settings = Settings::default_test_settings()?;
+    let session_ctx = SessionContext::try_create(settings)?;
 
     // Abort status.
     {

@@ -1,0 +1,35 @@
+query T
+select add_months('2021-06-30'::DATE, -4)
+----
+2021-02-28
+
+query T
+select add_months('2021-08-31'::DATE, 1)
+----
+2021-09-30
+
+query T
+select add_months('2021-08-31'::DATE, 2)
+----
+2021-10-31
+
+query T
+SELECT add_months('2021-08-31'::DATE, 3)
+----
+2021-11-30
+
+query T
+SELECT add_months('2021-08-31'::DATE, 4)
+----
+2021-12-31
+
+query T
+SELECT add_months('2021-08-31'::DATE, -6)
+----
+2021-02-28
+
+query T
+SELECT add_months('2021-08-31'::DATE, -18)
+----
+2020-02-29
+

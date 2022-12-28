@@ -1,0 +1,48 @@
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(a Int8, b UInt32, c UInt64, d String) Engine = FUSE
+
+statement ok
+CREATE TABLE IF NOT EXISTS t2(a Int8, b UInt32, c UInt64, d String) Engine = FUSE
+
+statement ok
+INSERT INTO t1 (a,b,c,d) VALUES(1, 1, 1, 'origin'), (2, 2, 2, 'origin')
+
+statement ok
+INSERT INTO t2 (a,b,c,d) VALUES(3, 3, 3, 'change'), (4, 4, 4, 'change')
+
+query IIIT
+select * from t1
+----
+1 1 1 origin
+2 2 2 origin
+
+statement ok
+INSERT OVERWRITE t1 select * from t2
+
+query IIIT
+select * from t1
+----
+3 3 3 change
+4 4 4 change
+
+statement ok
+INSERT OVERWRITE t1 VALUES (5, 5, 5, 'change2'), (6, 6, 6, 'change2')
+
+query IIIT
+select * from t1
+----
+5 5 5 change2
+6 6 6 change2
+
+statement ok
+DROP DATABASE db1
+

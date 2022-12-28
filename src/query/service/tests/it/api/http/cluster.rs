@@ -28,7 +28,7 @@ use pretty_assertions::assert_eq;
 
 use crate::tests::TestGlobalServices;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_cluster() -> Result<()> {
     let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     let cluster_router = Route::new().at("/v1/cluster/list", get(cluster_list_handler));

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -61,6 +62,10 @@ pub enum InsertSource<'a> {
         rest_str: &'a str,
         start: usize,
     },
+    StreamingV2 {
+        settings: BTreeMap<String, String>,
+        start: usize,
+    },
     Values {
         rest_str: &'a str,
     },
@@ -76,8 +81,13 @@ impl Display for InsertSource<'_> {
                 format,
                 rest_str,
                 start: _,
-            } => {
-                write!(f, "FORMAT {format} {rest_str}")
+            } => write!(f, "FORMAT {format} {rest_str}"),
+            InsertSource::StreamingV2 { settings, start: _ } => {
+                write!(f, " FILE_FORMAT = (")?;
+                for (k, v) in settings.iter() {
+                    write!(f, " {} = '{}'", k, v)?;
+                }
+                write!(f, " )")
             }
             InsertSource::Values { rest_str } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),

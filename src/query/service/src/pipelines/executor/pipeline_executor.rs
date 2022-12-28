@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_base::base::catch_unwind;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Notify;
-use common_base::base::GlobalIORuntime;
-use common_base::base::Runtime;
-use common_base::base::Thread;
-use common_base::base::ThreadJoinHandle;
-use common_base::base::TrySpawn;
+use common_base::runtime::catch_unwind;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::Runtime;
+use common_base::runtime::Thread;
+use common_base::runtime::ThreadJoinHandle;
+use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::future::select;
@@ -31,6 +30,7 @@ use parking_lot::Mutex;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
+use crate::pipelines::executor::executor_graph::ScheduleQueue;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::ExecutorSettings;
@@ -203,12 +203,25 @@ impl PipelineExecutor {
 
             let mut init_schedule_queue = self.graph.init_schedule_queue()?;
 
-            let mut tasks = VecDeque::new();
-            while let Some(task) = init_schedule_queue.pop_task() {
-                tasks.push_back(task);
+            let mut wakeup_worker_id = 0;
+            while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
+                ScheduleQueue::schedule_async_task(
+                    proc.clone(),
+                    self.settings.query_id.clone(),
+                    self,
+                    wakeup_worker_id,
+                    self.workers_condvar.clone(),
+                    self.global_tasks_queue.clone(),
+                );
+                wakeup_worker_id += 1;
+
+                if wakeup_worker_id == self.threads_num {
+                    wakeup_worker_id = 0;
+                }
             }
 
-            self.global_tasks_queue.init_tasks(tasks);
+            let sync_queue = std::mem::take(&mut init_schedule_queue.sync_queue);
+            self.global_tasks_queue.init_sync_tasks(sync_queue);
 
             Ok(())
         }
@@ -284,7 +297,11 @@ impl PipelineExecutor {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_single_thread(&self, thread_num: usize) -> Result<()> {
         let workers_condvar = self.workers_condvar.clone();
-        let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
+        let mut context = ExecutorWorkerContext::create(
+            thread_num,
+            workers_condvar,
+            self.settings.query_id.clone(),
+        );
 
         while !self.global_tasks_queue.is_finished() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.
@@ -293,10 +310,10 @@ impl PipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                if let Some(executed_pid) = context.execute_task(self)? {
+                if let Some(executed_pid) = context.execute_task()? {
                     // We immediately schedule the processor again.
                     let schedule_queue = self.graph.schedule_queue(executed_pid)?;
-                    schedule_queue.schedule(&self.global_tasks_queue, &mut context);
+                    schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
                 }
             }
         }

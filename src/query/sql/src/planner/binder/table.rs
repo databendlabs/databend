@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::default::Default;
+use std::path::Path;
 use std::sync::Arc;
 
+use common_ast::ast::FileLocation;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
@@ -28,16 +31,27 @@ use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::plan::StageTableInfo;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_function::TableFunction;
+use common_config::GlobalConfig;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::FileFormatOptions;
+use common_meta_types::StageFileCompression;
+use common_meta_types::StageFileFormatType;
+use common_meta_types::UserStageInfo;
+use common_pipeline_sources::processors::sources::input_formats::InputContext;
+use common_storages_stage::get_first_file;
+use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 
+use crate::binder::copy::parse_stage_location_v2;
+use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
@@ -272,6 +286,96 @@ impl<'a> Binder {
                     new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
                 Ok((s_expr, new_bind_context))
+            }
+            TableReference::Stage {
+                span: _,
+                location,
+                files,
+                alias,
+            } => {
+                let table_alias_name = if let Some(table_alias) = alias {
+                    Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+                } else {
+                    None
+                };
+
+                let (mut user_stage_info, path) = match location {
+                    FileLocation::Stage(location) => {
+                        parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?
+                    }
+                    FileLocation::Uri(location) => {
+                        let (storage_params, path) = parse_uri_location(location)?;
+                        if !storage_params.is_secure()
+                            && !GlobalConfig::instance().storage.allow_insecure
+                        {
+                            return Err(ErrorCode::StorageInsecure(
+                                "copy from insecure storage is not allowed",
+                            ));
+                        }
+                        let stage_info = UserStageInfo::new_external_stage(storage_params, &path);
+                        (stage_info, path)
+                    }
+                };
+
+                let op = StageTable::get_op(&user_stage_info)?;
+
+                let first_file = if files.is_empty() {
+                    let file = get_first_file(&op, &path).await?;
+                    match file {
+                        None => {
+                            return Err(ErrorCode::BadArguments(format!(
+                                "no file in {}",
+                                location
+                            )));
+                        }
+                        Some(f) => f.path().to_string(),
+                    }
+                } else {
+                    Path::new(&path)
+                        .join(&files[0])
+                        .to_string_lossy()
+                        .to_string()
+                };
+
+                let format_type = StageFileFormatType::Parquet;
+                let input_format = InputContext::get_input_format(&format_type)?;
+                let schema = input_format.infer_schema(&first_file, &op).await?;
+                user_stage_info.file_format_options = FileFormatOptions {
+                    format: format_type,
+                    record_delimiter: "".to_string(),
+                    field_delimiter: "".to_string(),
+                    nan_display: "".to_string(),
+                    skip_header: 0,
+                    escape: "".to_string(),
+                    compression: StageFileCompression::default(),
+                    row_tag: "".to_string(),
+                    quote: "".to_string(),
+                };
+                let stage_table_info = StageTableInfo {
+                    schema,
+                    user_stage_info,
+                    path: path.to_string(),
+                    files: vec![],
+                    pattern: Default::default(),
+                    files_to_copy: None,
+                };
+
+                let stage_table = StageTable::try_create(stage_table_info)?;
+
+                let database = "default".to_string();
+                let table_index = self.metadata.write().add_table(
+                    database.clone(),
+                    "default".to_string(),
+                    stage_table,
+                    table_alias_name,
+                );
+                let (s_expr, mut bind_context) = self
+                    .bind_base_table(bind_context, database.as_str(), table_index)
+                    .await?;
+                if let Some(alias) = alias {
+                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                }
+                Ok((s_expr, bind_context))
             }
         }
     }

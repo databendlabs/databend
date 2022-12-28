@@ -1,0 +1,55 @@
+query T
+SELECT INSERT('123456789', 0, 0, 'aaa')
+----
+123456789
+
+query T
+SELECT INSERT('123456789', 1, 1, 'aaa')
+----
+aaa23456789
+
+query T
+SELECT INSERT('123456789', 2, 2, 'aaa')
+----
+1aaa456789
+
+query T
+SELECT INSERT('123456789', 3, 3, 'aaa')
+----
+12aaa6789
+
+query T
+SELECT INSERT('123456789', 4, 4, 'aaa')
+----
+123aaa89
+
+query T
+SELECT INSERT('123456789', 5, 5, 'aaa')
+----
+1234aaa
+
+query T
+SELECT INSERT('123456789', 6, 6, 'aaa')
+----
+12345aaa
+
+query T
+SELECT INSERT('123456789', 7, 7, 'aaa')
+----
+123456aaa
+
+query T
+SELECT INSERT('123456789', 8, 8, 'aaa')
+----
+1234567aaa
+
+query T
+SELECT INSERT('123456789', 9, 9, 'aaa')
+----
+12345678aaa
+
+query T
+SELECT INSERT('123456789', 10, 10, 'aaa')
+----
+123456789
+

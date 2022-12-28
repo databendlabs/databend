@@ -1,0 +1,30 @@
+statement ok
+DROP DATABASE IF EXISTS db
+
+statement ok
+CREATE DATABASE db
+
+statement ok
+DROP DATABASE db
+
+statement ok
+DROP DATABASE IF EXISTS db
+
+statement error 1003
+DROP DATABASE db
+
+statement ok
+DROP SCHEMA IF EXISTS db
+
+statement ok
+CREATE SCHEMA db
+
+statement ok
+DROP SCHEMA db
+
+statement ok
+DROP SCHEMA IF EXISTS db
+
+statement error 1003
+DROP SCHEMA db
+

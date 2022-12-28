@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
-
 use chrono_tz::Tz;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
@@ -61,7 +58,6 @@ pub trait FileFormatTypeExt {
 #[derive(Clone, Debug)]
 pub struct FileFormatOptionsExt {
     pub stage: FileFormatOptions,
-    pub quote: String,
     pub ident_case_sensitive: bool,
     pub headers: usize,
     pub json_compact: bool,
@@ -71,7 +67,7 @@ pub struct FileFormatOptionsExt {
 
 impl FileFormatOptionsExt {
     pub fn get_quote_char(&self) -> u8 {
-        self.quote.as_bytes()[0]
+        self.stage.quote.as_bytes()[0]
     }
 
     pub fn get_field_delimiter(&self) -> u8 {
@@ -121,7 +117,7 @@ impl FileFormatOptionsExt {
         options.get_output_format(schema)
     }
 
-    fn get_output_format(&self, schema: DataSchemaRef) -> Result<Box<dyn OutputFormat>> {
+    pub fn get_output_format(&self, schema: DataSchemaRef) -> Result<Box<dyn OutputFormat>> {
         let fmt = &self.stage.format;
         let options = fmt.final_file_format_options(self)?;
         // println!("format {:?} {:?} {:?}", fmt, options, format_settings);
@@ -194,6 +190,9 @@ impl FileFormatOptionsExt {
             StageFileFormatType::Xml => {
                 unreachable!()
             }
+            StageFileFormatType::None => {
+                unreachable!()
+            }
         };
         Ok(output)
     }
@@ -207,7 +206,6 @@ impl FileFormatTypeExt for StageFileFormatType {
         let timezone = parse_timezone(settings)?;
         let options = FileFormatOptionsExt {
             stage,
-            quote: "".to_string(),
             ident_case_sensitive: false,
             headers: 0,
             json_compact: false,
@@ -226,21 +224,17 @@ impl FileFormatTypeExt for StageFileFormatType {
 
         let stage = FileFormatOptions {
             format: self.clone(),
-            skip_header: settings.get_format_skip_header()?,
-            field_delimiter: settings.get_format_field_delimiter()?,
-            record_delimiter: settings.get_format_record_delimiter()?,
-            nan_display: settings.get_format_nan_display()?,
-            escape: settings.get_format_escape()?,
-            compression: StageFileCompression::from_str(&settings.get_format_compression()?)
-                .map_err_to_code(
-                    ErrorCode::InvalidArgument,
-                    || "get_file_format_options_from_setting",
-                )?,
-            row_tag: settings.get_row_tag()?,
+            skip_header: 0,
+            field_delimiter: "".to_string(),
+            record_delimiter: "".to_string(),
+            nan_display: "".to_string(),
+            escape: "".to_string(),
+            compression: StageFileCompression::None,
+            row_tag: "".to_string(),
+            quote: "".to_string(),
         };
         let mut options = FileFormatOptionsExt {
             stage,
-            quote: settings.get_format_quote()?,
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
             json_compact: false,

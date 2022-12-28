@@ -83,8 +83,14 @@ where Self: Sized
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Compression {
+    // Lz4 will be deprecated.
     Lz4,
     Lz4Raw,
+    Snappy,
+    Zstd,
+    Gzip,
+    // New: Added by bohu.
+    None,
 }
 
 impl Compression {

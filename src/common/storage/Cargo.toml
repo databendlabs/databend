@@ -10,6 +10,7 @@ edition = { workspace = true }
 storage-hdfs = ["opendal/services-hdfs"]
 
 [dependencies]
+common-arrow = { path = "../arrow" }
 common-auth = { path = "../auth" }
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
@@ -21,11 +22,12 @@ bytes = "1"
 futures = "0.3"
 globiter = "0.1"
 once_cell = "1"
-opendal = { version = "0.22", features = [
+opendal = { version = "0.23", features = [
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",
-    "services-ftp",
+    # Disable ftp support until https://github.com/datafuselabs/opendal/pull/1102 has been released
+    # "services-ftp",
     "services-moka",
     "services-redis",
     "trust-dns",

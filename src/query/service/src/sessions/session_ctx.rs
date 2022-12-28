@@ -18,7 +18,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
-use common_config::Config;
+use common_config::GlobalConfig;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
@@ -29,7 +29,6 @@ use parking_lot::RwLock;
 use crate::sessions::QueryContextShared;
 
 pub struct SessionContext {
-    conf: Config,
     abort: AtomicBool,
     settings: Arc<Settings>,
     current_catalog: RwLock<String>,
@@ -55,9 +54,8 @@ pub struct SessionContext {
 }
 
 impl SessionContext {
-    pub fn try_create(conf: Config, settings: Arc<Settings>) -> Result<Arc<Self>> {
+    pub fn try_create(settings: Arc<Settings>) -> Result<Arc<Self>> {
         Ok(Arc::new(SessionContext {
-            conf,
             settings,
             abort: Default::default(),
             current_user: Default::default(),
@@ -131,13 +129,22 @@ impl SessionContext {
     }
 
     pub fn get_current_tenant(&self) -> String {
-        if self.conf.query.management_mode {
+        let conf = GlobalConfig::instance();
+
+        if conf.query.internal_enable_sandbox_tenant {
+            let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
+            if !sandbox_tenant.is_empty() {
+                return sandbox_tenant;
+            }
+        }
+
+        if conf.query.management_mode {
             let lock = self.current_tenant.read();
             if !lock.is_empty() {
                 return lock.clone();
             }
         }
-        self.conf.query.tenant_id.clone()
+        conf.query.tenant_id.clone()
     }
 
     pub fn set_current_tenant(&self, tenant: String) {

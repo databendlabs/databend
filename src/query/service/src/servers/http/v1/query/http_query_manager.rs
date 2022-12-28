@@ -16,18 +16,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
-use common_base::base::Singleton;
+use common_base::base::GlobalInstance;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
 use common_config::Config;
 use common_exception::Result;
-use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use tracing::warn;
 
 use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;
+use crate::servers::http::v1::query::http_query::ExpireResult;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::HttpQueryRequest;
 use crate::sessions::Session;
@@ -37,7 +38,7 @@ use crate::sessions::Session;
 // 2. maybe QueryConfig can contain it directly
 #[derive(Copy, Clone)]
 pub(crate) struct HttpQueryConfig {
-    pub(crate) result_timeout_millis: u64,
+    pub(crate) result_timeout_secs: u64,
 }
 
 pub struct HttpQueryManager {
@@ -46,27 +47,21 @@ pub struct HttpQueryManager {
     pub(crate) config: HttpQueryConfig,
 }
 
-static HTTP_QUERIES_MANAGER: OnceCell<Singleton<Arc<HttpQueryManager>>> = OnceCell::new();
-
 impl HttpQueryManager {
-    pub async fn init(cfg: &Config, v: Singleton<Arc<HttpQueryManager>>) -> Result<()> {
-        v.init(Arc::new(HttpQueryManager {
+    pub async fn init(cfg: &Config) -> Result<()> {
+        GlobalInstance::set(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),
             config: HttpQueryConfig {
-                result_timeout_millis: cfg.query.http_handler_result_timeout_millis,
+                result_timeout_secs: cfg.query.http_handler_result_timeout_secs,
             },
-        }))?;
+        }));
 
-        HTTP_QUERIES_MANAGER.set(v).ok();
         Ok(())
     }
 
     pub fn instance() -> Arc<HttpQueryManager> {
-        match HTTP_QUERIES_MANAGER.get() {
-            None => panic!("HttpQueryManager is not init"),
-            Some(http_queries_manager) => http_queries_manager.get(),
-        }
+        GlobalInstance::get()
     }
 
     pub(crate) async fn try_create_query(
@@ -87,33 +82,42 @@ impl HttpQueryManager {
     async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
         queries.insert(query_id.to_string(), query.clone());
+        let timeout = self.config.result_timeout_secs;
 
         let self_clone = self.clone();
         let query_id_clone = query_id.to_string();
         let query_clone = query.clone();
-        if query.is_async() {
-            tokio::spawn(async move {
-                while let Some(t) = query_clone.check_expire().await {
-                    sleep(t).await;
+        GlobalIORuntime::instance().spawn(async move {
+            loop {
+                match query_clone.check_expire().await {
+                    ExpireResult::Expired => {
+                        let msg =
+                            format!("http query {} timeout after {} s", &query_id_clone, timeout);
+                        if self_clone.remove_query(&query_id_clone).await.is_none() {
+                            warn!("{msg}, but fail to remove");
+                        } else {
+                            warn!("{msg}");
+                            query.detach().await;
+                        };
+                        break;
+                    }
+                    ExpireResult::Sleep(t) => {
+                        sleep(t).await;
+                    }
+                    ExpireResult::Removed => {
+                        break;
+                    }
                 }
-                if self_clone.remove_query(&query_id_clone).await.is_none() {
-                    warn!("http query {} timeout, but fail to remove", &query_id_clone);
-                } else {
-                    warn!("http query {} timeout", &query_id_clone);
-                    query.detach().await;
-                }
-            });
-        };
+            }
+        });
     }
 
     // not remove it until timeout or cancelled by user, even if query execution is aborted
     pub(crate) async fn remove_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
         let mut queries = self.queries.write().await;
         let q = queries.remove(query_id);
-        if let Some(q) = queries.remove(query_id) {
-            if q.is_async() {
-                q.update_expire_time(false).await;
-            }
+        if let Some(q) = &q {
+            q.mark_removed().await;
         }
         q
     }
