@@ -13,15 +13,17 @@
 // limitations under the License.
 
 use std::fs::ReadDir;
-use std::path::PathBuf;
+use std::path::Path;
 
 use clap::Parser;
 use client::ClickhouseHttpClient;
 use sqllogictest::default_validator;
+use sqllogictest::parse_file;
 use sqllogictest::update_test_file;
 use sqllogictest::DBOutput;
-use walkdir::DirEntry;
-use walkdir::WalkDir;
+use sqllogictest::Record;
+use sqllogictest::Runner;
+use sqllogictest::TestError;
 
 use crate::arg::SqlLogicTestArgs;
 use crate::client::Client;
@@ -30,7 +32,7 @@ use crate::client::HttpClient;
 use crate::client::MysqlClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
-use crate::util::find_specific_dir;
+use crate::util::get_files;
 
 mod arg;
 mod client;
@@ -143,6 +145,7 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
 async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
     // Todo: set validator to process regex
     let args = SqlLogicTestArgs::parse();
+    let mut error_records = Vec::new();
     // Walk each suit dir and read all files in it
     // After get a slt file, set the file name to databend
     for suit in suits {
@@ -174,51 +177,43 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     .unwrap();
             } else {
                 println!("test file: [{}] is running", file_name,);
-                runner.run_file_async(file.unwrap().path()).await?;
+                run_file_async(&mut runner, &mut error_records, file.unwrap().path()).await?;
             }
         }
     }
+    print_error_info(error_records);
 
     Ok(())
 }
 
-fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
-    let args = SqlLogicTestArgs::parse();
-    let mut files = vec![];
-    // Skipped dir and specific dir won't be used together!
-    if args.dir.is_none() {
-        for entry in WalkDir::new(suit)
-            .min_depth(0)
-            .max_depth(100)
-            .sort_by(|a, b| a.file_name().cmp(b.file_name()))
-            .into_iter()
-            .filter_entry(|e| {
-                if let Some(skipped_dir) = &args.skipped_dir {
-                    if e.file_name().to_str().unwrap() == skipped_dir {
-                        return false;
-                    }
-                }
-                true
-            })
-            .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
-        {
-            files.push(entry);
+async fn run_file_async(
+    runner: &mut Runner<Databend>,
+    error_records: &mut Vec<TestError>,
+    filename: impl AsRef<Path>,
+) -> Result<()> {
+    let records = parse_file(filename).unwrap();
+    for record in records.into_iter() {
+        if let Record::Halt { .. } = record {
+            break;
         }
-        return Ok(files);
+        // Capture error record and continue to run next records
+        if let Err(e) = runner.run_async(record).await {
+            error_records.push(e);
+            continue;
+        }
     }
-    // Find specific dir
-    let dir_entry = find_specific_dir(args.dir.as_ref().unwrap(), suit);
-    if dir_entry.is_err() {
-        return Ok(vec![]);
+    Ok(())
+}
+
+fn print_error_info(error_records: Vec<TestError>) {
+    if error_records.is_empty() {
+        return;
     }
-    for entry in WalkDir::new(dir_entry.unwrap().into_path())
-        .min_depth(0)
-        .max_depth(100)
-        .sort_by(|a, b| a.file_name().cmp(b.file_name()))
-        .into_iter()
-        .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
-    {
-        files.push(entry);
+    println!(
+        "Test finished, Total {} records failed to run",
+        error_records.len()
+    );
+    for (idx, error_record) in error_records.iter().enumerate() {
+        println!("{idx}: {}", error_record.display(true));
     }
-    Ok(files)
 }
