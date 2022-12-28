@@ -29,10 +29,7 @@ use opendal::Object;
 use opendal::Operator;
 
 use crate::io::read::ReadSettings;
-use crate::metrics::metrics_inc_remote_io_copy_milliseconds;
-use crate::metrics::metrics_inc_remote_io_read_bytes_after_merged;
-use crate::metrics::metrics_inc_remote_io_read_milliseconds;
-use crate::metrics::metrics_inc_remote_io_seeks_after_merged;
+use crate::metrics::*;
 
 // TODO: make BlockReader as a trait.
 #[derive(Clone)]
@@ -152,7 +149,6 @@ impl BlockReader {
         // Perf.
         metrics_inc_remote_io_read_milliseconds(start.elapsed().as_millis() as u64);
 
-        let start = Instant::now();
         for (raw_idx, raw_range) in &raw_ranges {
             let column_range = raw_range.start..raw_range.end;
 
@@ -170,9 +166,6 @@ impl BlockReader {
             let end = (column_range.end - merged_range.start) as usize;
             read_res.add_column_chunk(merged_range_idx, *raw_idx, start..end);
         }
-
-        // Perf. TODO: maybe remove
-        metrics_inc_remote_io_copy_milliseconds(start.elapsed().as_millis() as u64);
 
         Ok(read_res)
     }
