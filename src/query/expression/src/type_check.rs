@@ -67,7 +67,7 @@ pub fn check<Index: ColumnIndex>(
             if expr.data_type() == &wrapped_dest_type {
                 Ok(expr)
             } else {
-                // faster path to eval function for cast
+                // fast path to eval function for cast
                 if let Some(cast_fn) = check_simple_cast(*is_try, dest_type) {
                     return check_function(span.clone(), &cast_fn, &[], &[expr], fn_registry);
                 }

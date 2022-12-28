@@ -464,7 +464,8 @@ impl PhysicalPlanBuilder {
                 predicates
                     .into_iter()
                     .map(|scalar| {
-                        let raw_expr = scalar.as_raw_expr();
+                        let physical_scalar = PhysicalScalarBuilder::build(&scalar)?;
+                        let raw_expr = physical_scalar.as_raw_expr();
                         let filter = check(&raw_expr, &BUILTIN_FUNCTIONS)
                             .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
                         let filter = filter.project_column_ref(|index: &usize| {
@@ -500,7 +501,8 @@ impl PhysicalPlanBuilder {
                     "There should be at least one predicate in prewhere"
                 );
 
-                let filter = predicate.unwrap().as_raw_expr();
+                let filter = PhysicalScalarBuilder::build(&predicate.unwrap())?;
+                let filter = filter.as_raw_expr();
                 let filter = check(&filter, &BUILTIN_FUNCTIONS)
                     .map_err(|(_, _)| ErrorCode::Internal("Invalid expression"))?;
                 let filter = RemoteExpr::from_expr(&filter);

@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_expression::type_check::check;
 use common_expression::RemoteExpr;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_sql::executor::PhysicalScalarBuilder;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -63,7 +64,8 @@ impl Interpreter for ReclusterTableInterpreter {
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
-            let expr = scalar.as_raw_expr();
+            let physical_scalar = PhysicalScalarBuilder::build(expr)?;
+            let raw_expr = physical_scalar.as_raw_expr();
             let expr = check(&expr, &BUILTIN_FUNCTIONS).unwrap();
             let expr =
                 expr.project_column_ref(|index| table.schema().field(*index).name().to_string());

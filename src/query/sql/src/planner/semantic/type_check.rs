@@ -377,7 +377,7 @@ impl<'a> TypeChecker<'a> {
                     // Type check
                     let arguments = vec![&ge_func, &le_func]
                         .iter()
-                        .map(|v| v.as_raw_expr())
+                        .map(|v| v.as_raw_expr_for_tyck())
                         .collect::<Vec<_>>();
                     let raw_expr = RawExpr::FunctionCall {
                         span: None,
@@ -411,7 +411,7 @@ impl<'a> TypeChecker<'a> {
                     // Type check
                     let arguments = vec![&lt_func, &gt_func]
                         .iter()
-                        .map(|v| v.as_raw_expr())
+                        .map(|v| v.as_raw_expr_for_tyck())
                         .collect::<Vec<_>>();
                     let raw_expr = RawExpr::FunctionCall {
                         span: None,
@@ -509,7 +509,7 @@ impl<'a> TypeChecker<'a> {
                 let raw_expr = RawExpr::Cast {
                     span: None,
                     is_try: false,
-                    expr: Box::new(scalar.as_raw_expr()),
+                    expr: Box::new(scalar.as_raw_expr_for_tyck()),
                     dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
@@ -856,7 +856,7 @@ impl<'a> TypeChecker<'a> {
                 let raw_expr = RawExpr::Cast {
                     span: None,
                     is_try: false,
-                    expr: Box::new(scalar.as_raw_expr()),
+                    expr: Box::new(scalar.as_raw_expr_for_tyck()),
                     dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
@@ -1019,7 +1019,10 @@ impl<'a> TypeChecker<'a> {
         };
 
         // Type check
-        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let arguments = args
+            .iter()
+            .map(|v| v.as_raw_expr_for_tyck())
+            .collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
             span: None,
             name: func_name.to_string(),
@@ -1051,7 +1054,10 @@ impl<'a> TypeChecker<'a> {
         _required_type: Option<DataType>,
     ) -> Result<Box<(Scalar, DataType)>> {
         // Type check
-        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let arguments = args
+            .iter()
+            .map(|v| v.as_raw_expr_for_tyck())
+            .collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
             span: None,
             name: func_name.to_string(),
@@ -1116,7 +1122,7 @@ impl<'a> TypeChecker<'a> {
                 // Type check
                 let arguments = vec![&left, &right]
                     .iter()
-                    .map(|v| v.as_raw_expr())
+                    .map(|v| v.as_raw_expr_for_tyck())
                     .collect::<Vec<_>>();
                 let raw_expr = RawExpr::FunctionCall {
                     span: None,
@@ -1145,7 +1151,7 @@ impl<'a> TypeChecker<'a> {
                 // Type check
                 let arguments = vec![&left, &right]
                     .iter()
-                    .map(|v| v.as_raw_expr())
+                    .map(|v| v.as_raw_expr_for_tyck())
                     .collect::<Vec<_>>();
                 let raw_expr = RawExpr::FunctionCall {
                     span: None,
@@ -1174,7 +1180,7 @@ impl<'a> TypeChecker<'a> {
                 // Type check
                 let arguments = vec![&left, &right]
                     .iter()
-                    .map(|v| v.as_raw_expr())
+                    .map(|v| v.as_raw_expr_for_tyck())
                     .collect::<Vec<_>>();
                 let raw_expr = RawExpr::FunctionCall {
                     span: None,
@@ -1335,7 +1341,10 @@ impl<'a> TypeChecker<'a> {
         arg_types.push(interval_type);
 
         // Type check
-        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let arguments = args
+            .iter()
+            .map(|v| v.as_raw_expr_for_tyck())
+            .collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
             span: None,
             name: "date_add".to_string(),
@@ -1720,7 +1729,10 @@ impl<'a> TypeChecker<'a> {
         let args = vec![trim_source, trim_scalar];
 
         // Type check
-        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let arguments = args
+            .iter()
+            .map(|v| v.as_raw_expr_for_tyck())
+            .collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
             span: None,
             name: func_name.to_string(),
@@ -1781,7 +1793,10 @@ impl<'a> TypeChecker<'a> {
             elems.push(arg);
         }
 
-        let arguments = elems.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let arguments = elems
+            .iter()
+            .map(|v| v.as_raw_expr_for_tyck())
+            .collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
             span: None,
             name: "array".to_string(),
@@ -1816,7 +1831,10 @@ impl<'a> TypeChecker<'a> {
         }
 
         // Type check
-        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let arguments = args
+            .iter()
+            .map(|v| v.as_raw_expr_for_tyck())
+            .collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
             span: None,
             name: "tuple".to_string(),

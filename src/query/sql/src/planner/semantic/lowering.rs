@@ -21,7 +21,10 @@ const DUMMY_ID: usize = usize::MAX;
 impl Scalar {
     /// Lowering `Scalar` into `RawExpr` to utilize with `common_expression::types::type_check`.
     /// Specific variants will be replaced with a `RawExpr::ColumnRef` with a dummy id.
-    pub fn as_raw_expr(&self) -> RawExpr {
+    ///
+    /// Note that this function is only used for type checking, and the returned `RawExpr` is not
+    /// ready for evaluation. Please use `PhysicalScalar::as_raw_expr()` for evaluation.
+    pub fn as_raw_expr_for_tyck(&self) -> RawExpr {
         match self {
             Scalar::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
                 span: None,
@@ -36,19 +39,28 @@ impl Scalar {
                 span: None,
                 name: "and".to_string(),
                 params: vec![],
-                args: vec![expr.left.as_raw_expr(), expr.right.as_raw_expr()],
+                args: vec![
+                    expr.left.as_raw_expr_for_tyck(),
+                    expr.right.as_raw_expr_for_tyck(),
+                ],
             },
             Scalar::OrExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: "or".to_string(),
                 params: vec![],
-                args: vec![expr.left.as_raw_expr(), expr.right.as_raw_expr()],
+                args: vec![
+                    expr.left.as_raw_expr_for_tyck(),
+                    expr.right.as_raw_expr_for_tyck(),
+                ],
             },
             Scalar::ComparisonExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: expr.op.to_func_name(),
                 params: vec![],
-                args: vec![expr.left.as_raw_expr(), expr.right.as_raw_expr()],
+                args: vec![
+                    expr.left.as_raw_expr_for_tyck(),
+                    expr.right.as_raw_expr_for_tyck(),
+                ],
             },
             Scalar::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
@@ -59,12 +71,16 @@ impl Scalar {
                 span: None,
                 name: func.func_name.clone(),
                 params: vec![],
-                args: func.arguments.iter().map(Scalar::as_raw_expr).collect(),
+                args: func
+                    .arguments
+                    .iter()
+                    .map(Scalar::as_raw_expr_for_tyck)
+                    .collect(),
             },
             Scalar::CastExpr(cast) => RawExpr::Cast {
                 span: None,
                 is_try: false,
-                expr: Box::new(cast.argument.as_raw_expr()),
+                expr: Box::new(cast.argument.as_raw_expr_for_tyck()),
                 dest_type: *cast.target_type.clone(),
             },
             Scalar::SubqueryExpr(subquery) => RawExpr::ColumnRef {
