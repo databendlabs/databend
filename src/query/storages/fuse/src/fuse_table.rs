@@ -140,10 +140,14 @@ impl FuseTable {
 
         let part_prefix = table_info.meta.part_prefix.clone();
 
+        let mut meta_location_generator = TableMetaLocationGenerator::with_prefix(storage_prefix);
+        if !part_prefix.is_empty() {
+            meta_location_generator = meta_location_generator.with_part_prefix(part_prefix);
+        }
+
         Ok(Box::new(FuseTable {
             table_info,
-            meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix)
-                .with_part_prefix(part_prefix),
+            meta_location_generator,
             cluster_key_meta,
             operator,
             data_metrics,
