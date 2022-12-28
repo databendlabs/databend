@@ -1316,7 +1316,7 @@ dependencies = [
  "micromarshal",
  "num",
  "once_cell",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "paste",
  "pretty_assertions",
  "primitive-types",
@@ -1364,7 +1364,7 @@ dependencies = [
  "match-template",
  "micromarshal",
  "num-traits",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "rand 0.8.5",
  "rust_decimal",
  "serde",
@@ -1427,7 +1427,7 @@ dependencies = [
  "num-format",
  "num-traits",
  "once_cell",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "pretty_assertions",
  "pulldown-cmark",
  "rand 0.8.5",
@@ -1473,7 +1473,7 @@ dependencies = [
  "match-template",
  "num-traits",
  "once_cell",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "rand 0.8.5",
  "regex",
  "serde",
@@ -1509,7 +1509,7 @@ dependencies = [
  "cfg-if",
  "common-base",
  "libc",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "primitive-types",
  "rand 0.8.5",
  "semver 1.0.14",
@@ -1549,7 +1549,7 @@ dependencies = [
  "common-exception",
  "lexical-core",
  "micromarshal",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "rand 0.8.5",
  "serde",
 ]
@@ -1560,7 +1560,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "fast-float",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "serde_json",
 ]
 
@@ -1990,6 +1990,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "opensrv-mysql",
+ "ordered-float 3.4.0",
  "parking_lot 0.12.1",
  "percent-encoding",
  "petgraph",
@@ -5192,7 +5193,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "855e0476963a94b79a463e92f16c3132bc9ad3bf0cfdec03ab34b60fe4c2d259"
 dependencies = [
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
 ]
 
 [[package]]
@@ -5835,9 +5836,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "3.3.0"
+version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f74e330193f90ec45e2b257fa3ef6df087784157ac1ad2c1e71c62837b03aa7"
+checksum = "d84eb1409416d254e4a9c8fa56cc24701755025b458f0fcd8e59e1f5f40c23bf"
 dependencies = [
  "num-traits",
  "rand 0.8.5",

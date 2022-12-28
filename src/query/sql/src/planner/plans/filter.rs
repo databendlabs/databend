@@ -22,7 +22,9 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::Statistics;
+use crate::optimizer::MAX_SELECTIVITY;
 use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
@@ -92,9 +94,14 @@ impl LogicalOperator for Filter {
         }
         outer_columns = outer_columns.difference(&output_columns).cloned().collect();
 
-        // Derive cardinality. We can not estimate the cardinality of the filter until we have
-        // NDV(Number of Distinct Values), so we pass it through.
-        let cardinality = input_prop.cardinality;
+        // Derive cardinality
+        let sb = SelectivityEstimator::new(&input_prop.statistics);
+        let mut selectivity = MAX_SELECTIVITY;
+        for pred in self.predicates.iter() {
+            // Compute selectivity for each conjunction
+            selectivity *= sb.compute_selectivity(pred);
+        }
+        let cardinality = input_prop.cardinality * selectivity;
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
