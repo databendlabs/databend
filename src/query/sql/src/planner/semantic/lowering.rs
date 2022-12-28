@@ -12,13 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
+use common_expression::type_check;
 use common_expression::RawExpr;
+use common_expression::RemoteExpr;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::plans::Scalar;
 
 const DUMMY_NAME: &str = "DUMMY";
 
 impl Scalar {
+    pub fn to_remote_expr(&self) -> Result<RemoteExpr<String>> {
+        let raw_expr = self.as_raw_expr_for_tyck();
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {
+            common_exception::ErrorCode::Internal(format!(
+                "Failed to type check the filter expression: {:?}, error: {}",
+                raw_expr, e
+            ))
+        })?;
+        Ok(RemoteExpr::from_expr(&expr))
+    }
+
     /// Lowering `Scalar` into `RawExpr` to utilize with `common_expression::types::type_check`.
     /// Specific variants will be replaced with a `RawExpr::ColumnRef` with a dummy id.
     ///

@@ -483,12 +483,8 @@ impl PhysicalPlanBuilder {
                 predicates
                     .into_iter()
                     .map(|scalar| {
-                        let filter = physical_scalar_builder.build(&scalar)?;
-                        let filter = filter.as_expr()?;
-                        let filter = filter.project_column_ref(|index: &usize| {
-                            table_schema.fields()[*index].name().clone()
-                        });
-                        Ok(RemoteExpr::from_expr(&filter))
+                        let filter = scalar.to_remote_expr()?;
+                        Ok(filter)
                     })
                     .collect::<Result<Vec<_>>>()
             })

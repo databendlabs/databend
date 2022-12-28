@@ -15,10 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::type_check;
 use common_expression::DataSchemaRef;
-use common_expression::RemoteExpr;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use common_sql::plans::DeletePlan;
 
@@ -63,15 +60,9 @@ impl Interpreter for DeleteInterpreter {
         let tbl_name = self.plan.table_name.as_str();
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
-            let filter = scalar.as_raw_expr_for_tyck();
-            let filter = type_check::check(&filter, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {
-                common_exception::ErrorCode::Internal(format!(
-                    "Failed to type check the filter expression: {:?}, error: {}",
-                    filter, e
-                ))
-            })?;
+            let filter = scalar.to_remote_expr()?;
             let col_indices = scalar.used_columns().into_iter().collect();
-            (Some(RemoteExpr::from_expr(&filter)), col_indices)
+            (Some(filter), col_indices)
         } else {
             (None, vec![])
         };
