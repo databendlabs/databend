@@ -26,7 +26,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
-use common_formats::FileFormatTypeExt;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileCompression;
@@ -163,9 +162,11 @@ impl InputContext {
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let file_format_options = &plan.stage_info.file_format_options;
         let format_typ = file_format_options.format.clone();
-        let file_format_options =
-            StageFileFormatType::get_ext_from_stage(file_format_options.clone(), &settings)?;
-        let file_format_options = format_typ.final_file_format_options(&file_format_options)?;
+        let mut file_format_options = FileFormatOptionsExt::create_from_file_format_options(
+            file_format_options.clone(),
+            &settings,
+        )?;
+        file_format_options.check()?;
 
         let format = Self::get_input_format(&format_typ)?;
 
@@ -195,13 +196,12 @@ impl InputContext {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
 
         let typ = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-        let mut file_format_options = typ
-            .typ
-            .get_file_format_options_from_setting(&settings, Some(typ.suffixes))?;
+        let mut file_format_options =
+            FileFormatOptionsExt::create_from_clickhouse_format(typ, &settings)?;
         file_format_options.stage.skip_header = rows_to_skip as u64;
 
         let format_type = file_format_options.stage.format.clone();
-        let file_format_options = format_type.final_file_format_options(&file_format_options)?;
+        file_format_options.check()?;
         let format = Self::get_input_format(&format_type)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let compression = StageFileCompression::Auto;
@@ -236,9 +236,9 @@ impl InputContext {
     ) -> Result<Self> {
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let format_typ = file_format_options.format.clone();
-        let file_format_options =
-            StageFileFormatType::get_ext_from_stage(file_format_options, &settings)?;
-        let file_format_options = format_typ.final_file_format_options(&file_format_options)?;
+        let mut file_format_options =
+            FileFormatOptionsExt::create_from_file_format_options(file_format_options, &settings)?;
+        file_format_options.check()?;
         let format = Self::get_input_format(&format_typ)?;
         let compression = file_format_options.stage.compression;
 
