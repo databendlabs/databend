@@ -19,6 +19,7 @@ use common_io::prelude::FormatSettings;
 
 use crate::types::array::ArrayColumn;
 use crate::types::AnyType;
+use crate::types::DataType;
 use crate::types::ValueType;
 use crate::Column;
 use crate::Scalar;
@@ -31,6 +32,13 @@ pub struct ArrayDeserializer {
 }
 
 impl ArrayDeserializer {
+    pub fn with_capacity(capacity: usize, inner_ty: &DataType) -> Self {
+        Self {
+            inner: Box::new(inner_ty.create_deserializer(capacity)),
+            offsets: Vec::with_capacity(capacity),
+        }
+    }
+
     pub fn add_offset(&mut self, size: usize) {
         if self.offsets.is_empty() {
             self.offsets.push(0);

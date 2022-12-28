@@ -54,6 +54,7 @@ use self::string::StringColumnBuilder;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
+use crate::deserializations::ArrayDeserializer;
 use crate::deserializations::DateDeserializer;
 use crate::deserializations::NullableDeserializer;
 use crate::deserializations::NumberDeserializer;
@@ -237,6 +238,7 @@ impl DataType {
                 NullableDeserializer::with_capacity(capacity, inner_ty.as_ref()).into()
             }
             DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
+            DataType::Array(ty) => ArrayDeserializer::with_capacity(capacity, ty).into(),
             DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
 
             _ => unimplemented!(),
