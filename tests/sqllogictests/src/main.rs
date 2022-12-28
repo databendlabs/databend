@@ -145,6 +145,7 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
 async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
     // Todo: set validator to process regex
     let args = SqlLogicTestArgs::parse();
+    let no_fail_fast = args.no_fail_fast;
     let mut error_records = Vec::new();
     // Walk each suit dir and read all files in it
     // After get a slt file, set the file name to databend
@@ -177,11 +178,17 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     .unwrap();
             } else {
                 println!("test file: [{}] is running", file_name,);
-                run_file_async(&mut runner, &mut error_records, file.unwrap().path()).await?;
+                if no_fail_fast {
+                    run_file_async(&mut runner, &mut error_records, file.unwrap().path()).await?;
+                } else {
+                    runner.run_file_async(file.unwrap().path()).await?;
+                }
             }
         }
     }
-    print_error_info(error_records);
+    if no_fail_fast {
+        print_error_info(error_records);
+    }
 
     Ok(())
 }
