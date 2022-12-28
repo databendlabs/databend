@@ -14,7 +14,7 @@ const config = {
     tagline: 'Databend is a modern cloud data warehouse that empowers your object storage for real-time analytics.',
     url: 'https://databend.rs',
     baseUrl: '/',
-    onBrokenLinks: 'throw',
+    onBrokenLinks: 'warn',
     onBrokenMarkdownLinks: 'throw',
     favicon: 'img/logo/logo-no-text.svg',
     organizationName: 'datafuselabs',

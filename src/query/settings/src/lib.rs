@@ -107,12 +107,12 @@ impl Settings {
 
     pub fn default_settings(tenant: &str, conf: Arc<Config>) -> Result<Arc<Settings>> {
         let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-        let mut num_physical_cpus = num_cpus::get_physical() as u64;
+        let mut num_cpus = num_cpus::get() as u64;
         if conf.query.num_cpus != 0 {
-            num_physical_cpus = conf.query.num_cpus;
+            num_cpus = conf.query.num_cpus;
         }
-        if num_physical_cpus == 0 {
-            num_physical_cpus = 16;
+        if num_cpus == 0 {
+            num_cpus = 16;
         }
 
         let mut default_max_memory_usage = 1024 * memory_info.total * 80 / 100;
@@ -121,7 +121,7 @@ impl Settings {
         }
 
         let default_max_storage_io_requests = if conf.storage.params.is_fs() {
-            num_physical_cpus
+            num_cpus
         } else {
             64
         };
@@ -140,10 +140,10 @@ impl Settings {
             },
             // max_threads
             SettingValue {
-                default_value: UserSettingValue::UInt64(num_physical_cpus),
+                default_value: UserSettingValue::UInt64(num_cpus),
                 user_setting: UserSetting::create(
                     "max_threads",
-                    UserSettingValue::UInt64(num_physical_cpus),
+                    UserSettingValue::UInt64(num_cpus),
                 ),
                 level: ScopeLevel::Session,
                 desc: "The maximum number of threads to execute the request. By default the value is determined automatically.",
@@ -272,6 +272,13 @@ impl Settings {
                 ),
                 level: ScopeLevel::Session,
                 desc: "The threshold of keys to open two-level aggregation, default value: 10000.",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(3),
+                user_setting: UserSetting::create("max_inlist_to_or", UserSettingValue::UInt64(3)),
+                level: ScopeLevel::Session,
+                desc: "Max size in inlist expression that will convert to or combinator, default value: 3.",
                 possible_values: None,
             },
             SettingValue {
@@ -611,6 +618,11 @@ impl Settings {
     pub fn set_group_by_two_level_threshold(&self, val: u64) -> Result<()> {
         let key = "group_by_two_level_threshold";
         self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_max_inlist_to_or(&self) -> Result<u64> {
+        let key = "max_inlist_to_or";
+        self.try_get_u64(key)
     }
 
     pub fn get_enable_async_insert(&self) -> Result<u64> {
