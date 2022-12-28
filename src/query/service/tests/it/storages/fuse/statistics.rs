@@ -15,14 +15,28 @@
 use std::collections::HashMap;
 
 use common_base::base::tokio;
+use common_expression::type_check::check;
+use common_expression::types::number::Number;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::types::ValueType;
 use common_expression::BlockCompactThresholds;
+use common_expression::BlockEntry;
+use common_expression::Column;
+use common_expression::ColumnFrom;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
+use common_expression::Expr;
 use common_expression::FunctionContext;
-use common_functions::aggregates::eval_aggr;
+use common_expression::Literal;
+use common_expression::RawExpr;
+use common_expression::Scalar;
+use common_expression::Value;
+use common_functions_v2::aggregates::eval_aggr;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::Evaluator;
 use common_sql::executor::add;
@@ -52,77 +66,97 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Number(NumberDataType::Int32)),
-        DataField::new("b", DataType::String),
-    ]);
-    let block = DataBlock::create(schema, vec![
-        Series::from_data(vec![1, 2, 3]),
-        Series::from_data(vec!["aa", "aa", "bb"]),
-    ]);
+    let block = DataBlock::new(
+        vec![
+            BlockEntry {
+                value: Value::Column(Column::from_data(vec![1, 2, 3])),
+                data_type: DataType::Number(NumberDataType::Int32),
+            },
+            BlockEntry {
+                value: Value::Column(Column::from_data(vec!["aa", "aa", "bb"])),
+                data_type: DataType::String,
+            },
+        ],
+        3,
+    );
+
     let r = gen_columns_statistics(&block, None)?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.min, DataValue::Int64(1));
-    assert_eq!(col_stats.max, DataValue::Int64(3));
+    assert_eq!(col_stats.min, Scalar::Number(NumberScalar::Int32(1)));
+    assert_eq!(col_stats.max, Scalar::Number(NumberScalar::Int32(3)));
     assert_eq!(col_stats.distinct_of_values, Some(3));
     let col_stats = r.get(&1).unwrap();
-    assert_eq!(col_stats.min, DataValue::String(b"aa".to_vec()));
-    assert_eq!(col_stats.max, DataValue::String(b"bb".to_vec()));
+    assert_eq!(col_stats.min, Scalar::String(b"aa".to_vec()));
+    assert_eq!(col_stats.max, Scalar::String(b"bb".to_vec()));
     assert_eq!(col_stats.distinct_of_values, Some(2));
     Ok(())
 }
 
 #[test]
 fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Number(NumberDataType::Int32)),
-        DataField::new("b", DataType::String),
-    ]);
-    let block = DataBlock::create(schema, vec![
-        Series::from_data(vec![1, 2, 3]),
-        Series::from_data(vec!["aa", "aa", "bb"]),
-    ]);
+    let block = DataBlock::new(
+        vec![
+            BlockEntry {
+                value: Value::Column(Column::from_data(vec![1, 2, 3])),
+                data_type: DataType::Number(NumberDataType::Int32),
+            },
+            BlockEntry {
+                value: Value::Column(Column::from_data(vec!["aa", "aa", "bb"])),
+                data_type: DataType::String,
+            },
+        ],
+        3,
+    );
     let mut column_distinct_count = HashMap::new();
     column_distinct_count.insert(0, 3);
     column_distinct_count.insert(1, 2);
     let r = gen_columns_statistics(&block, Some(column_distinct_count))?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.min, DataValue::Int64(1));
-    assert_eq!(col_stats.max, DataValue::Int64(3));
+    assert_eq!(col_stats.min, Scalar::Number(NumberScalar::Int32(1)));
+    assert_eq!(col_stats.max, Scalar::Number(NumberScalar::Int32(3)));
     assert_eq!(col_stats.distinct_of_values, Some(3));
     let col_stats = r.get(&1).unwrap();
-    assert_eq!(col_stats.min, DataValue::String(b"aa".to_vec()));
-    assert_eq!(col_stats.max, DataValue::String(b"bb".to_vec()));
+    assert_eq!(col_stats.min, Scalar::String(b"aa".to_vec()));
+    assert_eq!(col_stats.max, Scalar::String(b"bb".to_vec()));
     assert_eq!(col_stats.distinct_of_values, Some(2));
     Ok(())
 }
 
 #[test]
 fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
-    let inner_names = vec!["a".to_string(), "b".to_string()];
     let inner_data_types = vec![
         DataType::Number(NumberDataType::Int32),
         DataType::Number(NumberDataType::Int32),
     ];
-    let tuple_data_type = StructType::new_impl(Some(inner_names), inner_data_types);
-    let schema = DataSchemaRefExt::create(vec![DataField::new("t", tuple_data_type.clone())]);
-    let inner_columns = vec![
-        Series::from_data(vec![1, 2, 3]),
-        Series::from_data(vec![4, 5, 6]),
-    ];
-    let column = StructColumn::from_data(inner_columns, tuple_data_type).arc();
 
-    let block = DataBlock::create(schema, vec![column]);
+    let inner_columns = vec![
+        Column::from_data(vec![1, 2, 3]),
+        Column::from_data(vec![4, 5, 6]),
+    ];
+    let column = Column::Tuple {
+        fields: inner_columns,
+        len: 3,
+    };
+
+    let block = DataBlock::new(
+        vec![BlockEntry {
+            value: Value::Column(column),
+            data_type: DataType::Tuple(inner_data_types),
+        }],
+        3,
+    );
+
     let r = gen_columns_statistics(&block, None)?;
     assert_eq!(2, r.len());
     let col0_stats = r.get(&0).unwrap();
-    assert_eq!(col0_stats.min, DataValue::Int64(1));
-    assert_eq!(col0_stats.max, DataValue::Int64(3));
+    assert_eq!(col0_stats.min, Scalar::Number(Number::Int64(1)));
+    assert_eq!(col0_stats.max, Scalar::Number(Number::Int64(3)));
+
     let col1_stats = r.get(&1).unwrap();
-    assert_eq!(col1_stats.min, DataValue::Int64(4));
-    assert_eq!(col1_stats.max, DataValue::Int64(6));
+    assert_eq!(col1_stats.min, Scalar::Number(Number::Int64(4)));
+    assert_eq!(col1_stats.max, Scalar::Number(Number::Int64(6)));
     Ok(())
 }
 
@@ -142,21 +176,34 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let r = r.unwrap();
     assert_eq!(3, r.len());
     let col0_stats = r.get(&0).unwrap();
-    assert_eq!(col0_stats.min, DataValue::Int64(val_start_with as i64));
-    assert_eq!(col0_stats.max, DataValue::Int64(num_of_blocks as i64));
+    assert_eq!(
+        col0_stats.min,
+        Scalar::Number(Number::Int64(val_start_with as i64))
+    );
+    assert_eq!(
+        col0_stats.max,
+        Scalar::Number(Number::Int64(num_of_blocks as i64))
+    );
+
     let col1_stats = r.get(&1).unwrap();
     assert_eq!(
         col1_stats.min,
-        DataValue::Int64((val_start_with * 2) as i64)
+        Scalar::Number(Number::Int64((val_start_with * 2) as i64))
     );
-    assert_eq!(col1_stats.max, DataValue::Int64((num_of_blocks * 2) as i64));
+
+    assert_eq!(
+        col1_stats.max,
+        Scalar::Number(Number::Int64((num_of_blocks * 2) as i64))
+    );
     let col2_stats = r.get(&2).unwrap();
     assert_eq!(
         col2_stats.min,
-        DataValue::Int64((val_start_with * 3) as i64)
+        Scalar::Number(Number::Int64((val_start_with * 3) as i64))
     );
-    assert_eq!(col2_stats.max, DataValue::Int64((num_of_blocks * 3) as i64));
-
+    assert_eq!(
+        col2_stats.max,
+        Scalar::Number(Number::Int64((num_of_blocks * 3) as i64))
+    );
     Ok(())
 }
 
@@ -166,8 +213,8 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
         std::iter::from_fn(move || {
             idx += 1;
             Some((idx, ColumnStatistics {
-                min: DataValue::Null,
-                max: DataValue::Null,
+                min: Scalar::Null,
+                max: Scalar::Null,
                 null_count: 1,
                 in_memory_size: 1,
                 distinct_of_values: Some(1),
@@ -225,11 +272,11 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         "a",
         DataType::Number(NumberDataType::Int32),
     )]);
-    let blocks = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1i32, 2, 3])]);
+    let blocks = DataBlock::create(schema.clone(), vec![Column::from_data(vec![1i32, 2, 3])]);
     let origin = Some(ClusterStatistics {
         cluster_key_id: 0,
-        min: vec![DataValue::Int64(1)],
-        max: vec![DataValue::Int64(5)],
+        min: vec![Scalar::Number(NumberScalar::Int32(1))],
+        max: vec![Scalar::Number(NumberScalar::Int32(5))],
         level: 0,
     });
 
@@ -239,22 +286,37 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
-    assert_eq!(vec![DataValue::Int64(1)], stats.min);
-    assert_eq!(vec![DataValue::Int64(3)], stats.max);
+    assert_eq!(vec![Scalar::Number(NumberScalar::Int32(1))], stats.min);
+    assert_eq!(vec![Scalar::Number(NumberScalar::Int32(3))], stats.max);
 
     // add expression executor.
-    let expr = parse_exprs(ctx, table_meta, "a + 1")?;
-    let operators = vec![BlockOperator::Map {
-        expr: expr[0].clone(),
-    }];
+    let expr = RawExpr::FunctionCall {
+        span: None,
+        name: "plus".to_string(),
+        params: vec![],
+        args: vec![
+            RawExpr::ColumnRef {
+                span: None,
+                id: 0usize,
+                data_type: schema.field(0).data_type().clone(),
+            },
+            RawExpr::Literal {
+                span: None,
+                lit: Literal::UInt64(1),
+            },
+        ],
+    };
+    let expr = check(&expr, &BUILTIN_FUNCTIONS).unwrap();
+
+    let operators = vec![BlockOperator::Map { expr }];
 
     let stats_gen =
         ClusterStatsGenerator::new(0, vec![1], vec![], 0, block_compactor, operators, vec![]);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
-    assert_eq!(vec![DataValue::Int64(2)], stats.min);
-    assert_eq!(vec![DataValue::Int64(4)], stats.max);
+    assert_eq!(vec![Scalar::Number(NumberScalar::Int32(2))], stats.min);
+    assert_eq!(vec![Scalar::Number(NumberScalar::Int32(4))], stats.max);
 
     // different cluster_key_id.
     let stats_gen =
@@ -284,8 +346,8 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> common_exception::Resu
         let min_expr = rand_strings.iter().min().unwrap();
         let max_expr = rand_strings.iter().max().unwrap();
 
-        let data_value_min = DataValue::String(min_expr.to_owned().into_bytes());
-        let data_value_max = DataValue::String(max_expr.to_owned().into_bytes());
+        let data_value_min = Scalar::String(min_expr.clone().into_bytes());
+        let data_value_max = Scalar::String(max_expr.clone().into_bytes());
 
         let trimmed_min = data_value_min.clone().trim_min();
         let trimmed_max = data_value_max.clone().trim_max();
@@ -296,16 +358,16 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> common_exception::Resu
             assert!(trimmed_max.is_none());
         } else {
             assert!(trimmed_max.is_some());
-            let trimmed = trimmed_max.unwrap().as_string()?;
+            let trimmed = trimmed_max.unwrap().as_string().unwrap().clone();
             assert!(char_len(&trimmed) <= STATS_STRING_PREFIX_LEN);
-            assert!(DataValue::String(trimmed) >= data_value_max)
+            assert!(Scalar::String(trimmed) >= data_value_max)
         }
 
         {
             assert!(trimmed_min.is_some());
-            let trimmed = trimmed_min.unwrap().as_string()?;
+            let trimmed = trimmed_min.unwrap().as_string().unwrap().clone();
             assert!(char_len(&trimmed) <= STATS_STRING_PREFIX_LEN);
-            assert!(DataValue::String(trimmed) <= data_value_min);
+            assert!(Scalar::String(trimmed) <= data_value_min);
         }
         Ok(())
     };
@@ -320,10 +382,6 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> common_exception::Resu
 
 #[test]
 fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exception::Result<()> {
-    let data_type = StringType::new_impl();
-    let data_filed = DataField::new("a", data_type.clone());
-    let schema = DataSchemaRefExt::create(vec![data_filed]);
-
     // verifies (randomly) the following assumptions:
     //
     // https://github.com/datafuselabs/databend/issues/7829
@@ -347,24 +405,37 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
         }
 
         // build test data block, which has only on column, of String type
-        let data_col = Series::from_data(
+        let data_col = Column::from_data(
             rand_strings
                 .iter()
                 .map(|s| s.as_str())
                 .collect::<Vec<&str>>(),
         );
-        let block = DataBlock::create(schema.clone(), vec![data_col.clone()]);
+        let block = DataBlock::create(
+            vec![BlockEntry {
+                data_type: DataType::String,
+                value: Value::Column(data_col),
+            }],
+            100,
+        );
 
-        // calculate UNTRIMMED min max values of the test column
-        // by using eval_aggr (to be consistent with the column_statistic mod)
-        let data_field = DataField::new("", data_type.clone());
-        let rows = data_col.len();
-        let column_field = ColumnWithField::new(data_col, data_field);
-        let min_col = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
-        let max_col = eval_aggr("max", vec![], &[column_field], rows)?;
+        let min_col = eval_aggr(
+            "min",
+            vec![],
+            &[data_col.clone()],
+            &[data_type.clone()],
+            rows,
+        )?;
+        let max_col = eval_aggr(
+            "max",
+            vec![],
+            &[data_col.clone()],
+            &[data_type.clone()],
+            rows,
+        )?;
 
-        let min_expr = min_col.get(0);
-        let max_expr = max_col.get(0);
+        let min_expr = AnyType::index_column(&min_col.0, 0).unwrap();
+        let max_expr = AnyType::index_column(&max_col.0, 0).unwrap();
 
         // generate the statistics of column
         let stats_of_columns = gen_columns_statistics(&block, None).unwrap();
@@ -373,7 +444,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
         // - the length of string value is larger or equal than STRING_PREFIX_LEN
         // - AND the string has a prefix of length STRING_PREFIX_LEN, for all the char C in prefix,
         //   C > REPLACEMENT_CHAR; which means we can not replace any of them.
-        let string_max_expr = String::from_utf8(max_expr.as_string()?).unwrap();
+        let string_max_expr = String::from_utf8(max_expr.as_string().unwrap().clone()).unwrap();
         let meaningless_to_collect_max = is_degenerated_case(string_max_expr.as_str());
 
         if meaningless_to_collect_max {
@@ -384,14 +455,14 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
             // check that, trimmed "col_stats.max" always large than or equal to the untrimmed "max_expr"
             let col_stats = stats_of_columns.get(&0).unwrap();
             assert!(
-                col_stats.max >= max_expr,
+                col_stats.max >= max_expr.to_owned(),
                 "left [{}]\nright [{}]",
                 col_stats.max,
                 max_expr
             );
             // check that, trimmed "col_stats.min" always less than or equal to the untrimmed "mn_expr"
             assert!(
-                col_stats.min <= min_expr,
+                col_stats.min <= min_expr.to_owned(),
                 "left [{}]\nright [{}]",
                 col_stats.min,
                 min_expr

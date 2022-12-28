@@ -13,9 +13,9 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::*;

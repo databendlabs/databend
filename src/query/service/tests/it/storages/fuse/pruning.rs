@@ -275,16 +275,16 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     let blocks = vec![
         DataBlock::create(test_schema.clone(), vec![
-            Series::from_data(vec![1u64, 2, 3]),
-            Series::from_data(vec![11u64, 12, 13]),
+            Column::from_data(vec![1u64, 2, 3]),
+            Column::from_data(vec![11u64, 12, 13]),
         ]),
         DataBlock::create(test_schema.clone(), vec![
-            Series::from_data(vec![4u64, 5, 6]),
-            Series::from_data(vec![21u64, 22, 23]),
+            Column::from_data(vec![4u64, 5, 6]),
+            Column::from_data(vec![21u64, 22, 23]),
         ]),
         DataBlock::create(test_schema, vec![
-            Series::from_data(vec![7u64, 8, 9]),
-            Series::from_data(vec![31u64, 32, 33]),
+            Column::from_data(vec![7u64, 8, 9]),
+            Column::from_data(vec![31u64, 32, 33]),
         ]),
     ];
 

@@ -13,10 +13,9 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::*;
@@ -32,8 +31,8 @@ async fn test_clustering_information_table_read() -> Result<()> {
     fixture.create_default_table().await?;
 
     // func args
-    let arg_db = DataValue::String(db.as_bytes().to_vec());
-    let arg_tbl = DataValue::String(tbl.as_bytes().to_vec());
+    let arg_db = Scalar::String(db.as_bytes().to_vec());
+    let arg_tbl = Scalar::String(tbl.as_bytes().to_vec());
 
     {
         let expected = vec![

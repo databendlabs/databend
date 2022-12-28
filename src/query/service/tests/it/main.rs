@@ -18,7 +18,6 @@ mod auth;
 mod catalogs;
 mod clusters;
 mod configs;
-mod context_function;
 mod metrics;
 mod pipelines;
 mod servers;

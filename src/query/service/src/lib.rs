@@ -31,7 +31,6 @@ pub mod api;
 pub mod auth;
 pub mod catalogs;
 pub mod clusters;
-pub mod context_function;
 pub mod databases;
 pub mod interpreters;
 pub mod metrics;

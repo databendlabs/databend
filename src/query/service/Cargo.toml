@@ -35,7 +35,6 @@ common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-formats = { path = "../formats" }
-common-functions = { path = "../functions" }
 common-functions-v2 = { path = "../functions-v2" }
 common-grpc = { path = "../../common/grpc" }
 common-hashtable = { path = "../../common/hashtable" }

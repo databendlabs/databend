@@ -13,10 +13,10 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::Scalar;
 use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::*;
@@ -50,14 +50,14 @@ async fn test_fuse_snapshot_table_args() -> Result<()> {
         test_drive_with_args(query_ctx.clone(), Some(vec![])).await,
     );
 
-    let arg_db = DataValue::String(test_db.as_bytes().to_vec());
+    let arg_db = Scalar::String(test_db.as_bytes().to_vec());
     expects_err(
         "bad argument (no table)",
         ErrorCode::BAD_ARGUMENTS,
         test_drive_with_args(query_ctx.clone(), Some(vec![arg_db])).await,
     );
 
-    let arg_db = DataValue::String(test_db.as_bytes().to_vec());
+    let arg_db = Scalar::String(test_db.as_bytes().to_vec());
     expects_err(
         "bad argument (too many args)",
         ErrorCode::BAD_ARGUMENTS,
