@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_channel::Receiver;
@@ -188,7 +187,7 @@ impl PipelineBuilder {
             return pipeline.add_sink(|input| Ok(EmptySink::create(input)));
         }
 
-        let mut projections = HashSet::with_capacity(result_columns.len());
+        let mut projections = Vec::with_capacity(result_columns.len());
         let mut result_fields = Vec::with_capacity(result_columns.len());
 
         for column_binding in result_columns {
@@ -198,7 +197,7 @@ impl PipelineBuilder {
                 .field_with_name(index.to_string().as_str())?
                 .data_type()
                 .clone();
-            projections.insert(input_schema.index_of(index.to_string().as_str())?);
+            projections.push(input_schema.index_of(index.to_string().as_str())?);
             result_fields.push(DataField::new(name.as_str(), data_type.clone()));
         }
 
@@ -306,7 +305,7 @@ impl PipelineBuilder {
                 output,
                 func_ctx,
                 vec![BlockOperator::Project {
-                    projection: HashSet::from_iter(project.projections.clone().into_iter()),
+                    projection: project.projections.clone(),
                 }],
             ))
         })
