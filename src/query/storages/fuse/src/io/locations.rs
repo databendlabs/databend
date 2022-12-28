@@ -75,7 +75,7 @@ impl TableMetaLocationGenerator {
             )
         } else {
             format!(
-                "{}/{}/{}_{}_v{}.parquet",
+                "{}/{}/{}{}_v{}.parquet",
                 &self.prefix,
                 FUSE_TBL_BLOCK_PREFIX,
                 &self.part_prefix,

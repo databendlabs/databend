@@ -8,7 +8,7 @@ echo "drop table if exists table_external_location_with_location_prefix;" | $MYS
 
 ## Create table
 echo "create table table_external_location(a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
-echo "create table table_external_location_with_location_prefix(a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}') location_prefix = 'lulu';" | $MYSQL_CLIENT_CONNECT
+echo "create table table_external_location_with_location_prefix(a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}') location_prefix = 'lulu_';" | $MYSQL_CLIENT_CONNECT
 
 table_inserts=(
   "insert into table_external_location(a) values(888)"
