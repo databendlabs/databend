@@ -365,10 +365,15 @@ impl PipelineBuilder {
         agg_funcs: &[AggregateFunctionDesc],
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
-        let group_data_types = group_by
+        let (group_by, group_data_types) = group_by
             .iter()
-            .map(|i| input_schema.field(*i).data_type().clone())
-            .collect::<Vec<_>>();
+            .map(|i| {
+                let index = input_schema.index_of(&i.to_string())?;
+                Ok((index, input_schema.field(index).data_type().clone()))
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .unzip::<_, _, Vec<_>, Vec<_>>();
 
         let aggs: Vec<AggregateFunctionRef> = agg_funcs
             .iter()
@@ -391,7 +396,7 @@ impl PipelineBuilder {
         let params = AggregatorParams::try_create(
             input_schema,
             group_data_types,
-            group_by,
+            &group_by,
             &aggs,
             &agg_args,
         )?;
