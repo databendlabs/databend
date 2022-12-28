@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use common_cache::Cache;
@@ -40,6 +41,12 @@ use crate::fuse_table::FuseStorageFormat;
 use crate::io;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
+use crate::metrics::metrics_inc_block_index_write_bytes;
+use crate::metrics::metrics_inc_block_index_write_milliseconds;
+use crate::metrics::metrics_inc_block_index_write_nums;
+use crate::metrics::metrics_inc_block_write_bytes;
+use crate::metrics::metrics_inc_block_write_milliseconds;
+use crate::metrics::metrics_inc_block_write_nums;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -281,6 +288,8 @@ impl Processor for FuseTableSink {
                 block_statistics,
                 bloom_index_state,
             } => {
+                let start = Instant::now();
+
                 // write data block
                 io::write_data(
                     &data,
@@ -289,6 +298,15 @@ impl Processor for FuseTableSink {
                 )
                 .await?;
 
+                // Perf.
+                {
+                    metrics_inc_block_write_nums(1);
+                    metrics_inc_block_write_bytes(data.len() as u64);
+                    metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
+                }
+
+                let start = Instant::now();
+
                 // write bloom filter index
                 io::write_data(
                     &bloom_index_state.data,
@@ -296,6 +314,13 @@ impl Processor for FuseTableSink {
                     &bloom_index_state.location.0,
                 )
                 .await?;
+
+                // Perf.
+                {
+                    metrics_inc_block_index_write_nums(1);
+                    metrics_inc_block_index_write_bytes(bloom_index_state.data.len() as u64);
+                    metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
+                }
 
                 let bloom_filter_index_size = bloom_index_state.size;
                 self.accumulator.add_block(
