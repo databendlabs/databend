@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -38,7 +39,7 @@ pub enum BlockOperator {
     Filter { expr: Expr },
 
     /// Reorganize the input `DataBlock` with `projection`.
-    Project { projection: Vec<usize> },
+    Project { projection: HashSet<usize> },
     // Remap { indices: Vec<(IndexType, IndexType)> },
 }
 
@@ -68,8 +69,10 @@ impl BlockOperator {
 
             BlockOperator::Project { projection } => {
                 let mut result = DataBlock::new(vec![], input.num_rows());
-                for offset in projection {
-                    result.add_column(input.get_by_offset(*offset).clone());
+                for id in 0..input.num_columns() {
+                    if projection.contains(&id) {
+                        result.add_column(input.get_by_offset(id).clone());
+                    }
                 }
                 Ok(result)
             }

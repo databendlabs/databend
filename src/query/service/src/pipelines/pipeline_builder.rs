@@ -208,7 +208,7 @@ impl PipelineBuilder {
                 output,
                 *func_ctx,
                 vec![BlockOperator::Project {
-                    projection: Default::default(),
+                    projection: projections.clone(),
                 }],
             ))
         })?;
@@ -299,13 +299,14 @@ impl PipelineBuilder {
     fn build_project(&mut self, project: &Project) -> Result<()> {
         self.build_pipeline(&project.input)?;
         let func_ctx = self.ctx.try_get_function_context()?;
+
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundBlockOperator::create(
                 input,
                 output,
                 func_ctx,
                 vec![BlockOperator::Project {
-                    projection: project.projections.clone(),
+                    projection: HashSet::from_iter(project.projections.clone().into_iter()),
                 }],
             ))
         })
