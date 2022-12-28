@@ -275,6 +275,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::UInt64(3),
+                user_setting: UserSetting::create("max_inlist_to_or", UserSettingValue::UInt64(3)),
+                level: ScopeLevel::Session,
+                desc: "Max size in inlist expression that will convert to or combinator, default value: 3.",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create(
                     "enable_async_insert",
@@ -611,6 +618,11 @@ impl Settings {
     pub fn set_group_by_two_level_threshold(&self, val: u64) -> Result<()> {
         let key = "group_by_two_level_threshold";
         self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_max_inlist_to_or(&self) -> Result<u64> {
+        let key = "max_inlist_to_or";
+        self.try_get_u64(key)
     }
 
     pub fn get_enable_async_insert(&self) -> Result<u64> {
