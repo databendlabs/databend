@@ -64,8 +64,8 @@ impl Interpreter for ReclusterTableInterpreter {
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
-            let physical_scalar = PhysicalScalarBuilder::build(expr)?;
-            let raw_expr = physical_scalar.as_raw_expr();
+            let expr = PhysicalScalarBuilder::build(scalar)?;
+            let expr = expr.as_raw_expr();
             let expr = check(&expr, &BUILTIN_FUNCTIONS).unwrap();
             let expr =
                 expr.project_column_ref(|index| table.schema().field(*index).name().to_string());
