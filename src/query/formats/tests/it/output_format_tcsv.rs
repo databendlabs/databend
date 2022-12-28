@@ -17,9 +17,8 @@ use std::collections::BTreeMap;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_formats::FileFormatTypeExt;
+use common_formats::FileFormatOptionsExt;
 use common_meta_types::FileFormatOptions;
-use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 use pretty_assertions::assert_eq;
 
@@ -66,7 +65,8 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         options.insert("field_delimiter".to_string(), "$".to_string());
         options.insert("record_delimiter".to_string(), "\r\n".to_string());
         let options = FileFormatOptions::from_map(&options)?;
-        let options =  FileFormatOptionsExt::create_from_file_format_options(options, &settings)?;
+        let mut options =
+            FileFormatOptionsExt::create_from_file_format_options(options, &settings)?;
         let mut formatter = options.get_output_format(schema)?;
         let buffer = formatter.serialize_block(&block)?;
 
@@ -123,7 +123,7 @@ fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
     options.insert("field_delimiter".to_string(), "\x01".to_string());
     options.insert("record_delimiter".to_string(), "\r\n".to_string());
     let options = FileFormatOptions::from_map(&options)?;
-    let options = FileFormatOptionsExt::create_from_file_format_options(options, &settings)?;
+    let mut options = FileFormatOptionsExt::create_from_file_format_options(options, &settings)?;
     let mut formatter = options.get_output_format(schema)?;
     let buffer = formatter.serialize_block(&block)?;
 

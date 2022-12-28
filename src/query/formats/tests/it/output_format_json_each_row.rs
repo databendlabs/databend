@@ -15,7 +15,6 @@
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::StageFileFormatType;
 use pretty_assertions::assert_eq;
 
 use crate::get_output_format_clickhouse;

@@ -17,7 +17,6 @@ use common_exception::Result;
 use common_formats::output_format::OutputFormat;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
-use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 
 mod field_encoder;
@@ -32,5 +31,5 @@ fn get_output_format_clickhouse(
 ) -> Result<Box<dyn OutputFormat>> {
     let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
     let settings = &Settings::default_test_settings()?;
-    FileFormatOptionsExt::get_output_format_from_settings_clickhouse(format, schema, settings)
+    FileFormatOptionsExt::get_output_format_from_clickhouse_format(format, schema, settings)
 }
