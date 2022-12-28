@@ -66,7 +66,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         options.insert("field_delimiter".to_string(), "$".to_string());
         options.insert("record_delimiter".to_string(), "\r\n".to_string());
         let options = FileFormatOptions::from_map(&options)?;
-        let options = StageFileFormatType::get_ext_from_stage(options, &settings)?;
+        let options =  FileFormatOptionsExt::create_from_file_format_options(options, &settings)?;
         let mut formatter = options.get_output_format(schema)?;
         let buffer = formatter.serialize_block(&block)?;
 
@@ -123,7 +123,7 @@ fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
     options.insert("field_delimiter".to_string(), "\x01".to_string());
     options.insert("record_delimiter".to_string(), "\r\n".to_string());
     let options = FileFormatOptions::from_map(&options)?;
-    let options = StageFileFormatType::get_ext_from_stage(options, &settings)?;
+    let options = FileFormatOptionsExt::create_from_file_format_options(options, &settings)?;
     let mut formatter = options.get_output_format(schema)?;
     let buffer = formatter.serialize_block(&block)?;
 

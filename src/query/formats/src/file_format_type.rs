@@ -36,11 +36,6 @@ use crate::output_format::TSVWithNamesOutputFormat;
 use crate::ClickhouseFormatType;
 
 pub trait FileFormatTypeExt {
-    fn get_ext_from_stage(
-        stage: FileFormatOptions,
-        settings: &Settings,
-    ) -> Result<FileFormatOptionsExt>;
-
     fn get_file_format_options_from_setting(
         &self,
         settings: &Settings,
@@ -66,6 +61,22 @@ pub struct FileFormatOptionsExt {
 }
 
 impl FileFormatOptionsExt {
+    pub fn create_from_file_format_options(
+        stage: FileFormatOptions,
+        settings: &Settings,
+    ) -> Result<FileFormatOptionsExt> {
+        let timezone = parse_timezone(settings)?;
+        let options = FileFormatOptionsExt {
+            stage,
+            ident_case_sensitive: false,
+            headers: 0,
+            json_compact: false,
+            json_strings: false,
+            timezone,
+        };
+        Ok(options)
+    }
+
     pub fn get_quote_char(&self) -> u8 {
         self.stage.quote.as_bytes()[0]
     }
@@ -104,7 +115,7 @@ impl FileFormatOptionsExt {
         options: FileFormatOptions,
         settings: &Settings,
     ) -> Result<Box<dyn OutputFormat>> {
-        let options = StageFileFormatType::get_ext_from_stage(options, settings)?;
+        let options = FileFormatOptionsExt::create_from_file_format_options(options, settings)?;
         options.get_output_format(schema)
     }
 
@@ -190,22 +201,6 @@ impl FileFormatOptionsExt {
 }
 
 impl FileFormatTypeExt for StageFileFormatType {
-    fn get_ext_from_stage(
-        stage: FileFormatOptions,
-        settings: &Settings,
-    ) -> Result<FileFormatOptionsExt> {
-        let timezone = parse_timezone(settings)?;
-        let options = FileFormatOptionsExt {
-            stage,
-            ident_case_sensitive: false,
-            headers: 0,
-            json_compact: false,
-            json_strings: false,
-            timezone,
-        };
-        Ok(options)
-    }
-
     fn get_file_format_options_from_setting(
         &self,
         settings: &Settings,
