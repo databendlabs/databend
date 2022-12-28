@@ -17,9 +17,9 @@ use std::time::SystemTime;
 
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
-use common_expression::DataSchema;
+use common_expression::type_check;
 use common_expression::RemoteExpr;
-use common_sql::executor::PhysicalScalarBuilder;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -63,11 +63,13 @@ impl Interpreter for ReclusterTableInterpreter {
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
-            let expr = PhysicalScalarBuilder::new(&Arc::new(DataSchema::from(&table.schema())))
-                .build(scalar)?;
-            let expr = expr.as_expr()?;
-            let expr =
-                expr.project_column_ref(|index| table.schema().field(*index).name().to_string());
+            let expr = scalar.as_raw_expr_for_tyck();
+            let expr = type_check::check(&expr, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {
+                common_exception::ErrorCode::Internal(format!(
+                    "Failed to type check the filter expression: {:?}, error: {}",
+                    expr, e
+                ))
+            })?;
             let filter = RemoteExpr::from_expr(&expr);
 
             Some(PushDownInfo {

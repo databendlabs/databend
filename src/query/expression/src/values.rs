@@ -1299,12 +1299,8 @@ impl ColumnBuilder {
             DataType::String => {
                 ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, 0))
             }
-            DataType::Timestamp => {
-                ColumnBuilder::Number(NumberColumnBuilder::Int64(Vec::with_capacity(capacity)))
-            }
-            DataType::Date => {
-                ColumnBuilder::Number(NumberColumnBuilder::Int32(Vec::with_capacity(capacity)))
-            }
+            DataType::Timestamp => ColumnBuilder::Timestamp(Vec::with_capacity(capacity)),
+            DataType::Date => ColumnBuilder::Date(Vec::with_capacity(capacity)),
             DataType::Nullable(ty) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                 builder: Self::with_capacity(ty, capacity),
                 validity: MutableBitmap::with_capacity(capacity),
