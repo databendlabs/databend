@@ -14,26 +14,12 @@
 
 use std::fmt::Debug;
 
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::optimizer::property::datum::Datum;
+
 pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
-
-pub trait Datum: Debug + Clone + PartialEq + Eq {
-    type Type: Debug + Clone + PartialEq + Eq;
-
-    fn data_type(&self) -> Self::Type;
-}
-
-impl Datum for DataValue {
-    type Type = DataTypeImpl;
-
-    fn data_type(&self) -> Self::Type {
-        self.data_type()
-    }
-}
 
 /// A histogram is a representation of the distribution of a column.
 ///
@@ -45,12 +31,12 @@ impl Datum for DataValue {
 /// of rows instead of maintaining a real histogram for each column,
 /// which brings the assumption that the data is uniformly distributed.
 #[derive(Debug, Clone)]
-pub struct Histogram<DatumType: Datum = DataValue> {
-    pub buckets: Vec<HistogramBucket<DatumType>>,
+pub struct Histogram {
+    pub buckets: Vec<HistogramBucket>,
 }
 
-impl<DatumType: Datum> Histogram<DatumType> {
-    pub fn new(buckets: Vec<HistogramBucket<DatumType>>) -> Self {
+impl Histogram {
+    pub fn new(buckets: Vec<HistogramBucket>) -> Self {
         Self { buckets }
     }
 
@@ -63,7 +49,7 @@ impl<DatumType: Datum> Histogram<DatumType> {
     pub fn num_values(&self) -> f64 {
         self.buckets
             .iter()
-            .fold(0.0, |acc, bucket| acc + bucket.num_values)
+            .fold(0.0, |acc, bucket| acc + bucket.num_values())
     }
 
     /// Get number of distinct values
@@ -71,7 +57,14 @@ impl<DatumType: Datum> Histogram<DatumType> {
     pub fn num_distinct_values(&self) -> f64 {
         self.buckets
             .iter()
-            .fold(0.0, |acc, bucket| acc + bucket.num_distinct)
+            .fold(0.0, |acc, bucket| acc + bucket.num_distinct())
+    }
+
+    /// Get iterator of buckets
+    pub fn buckets_iter(
+        &self,
+    ) -> impl Iterator<Item = &HistogramBucket> + DoubleEndedIterator<Item = &HistogramBucket> {
+        self.buckets.iter()
     }
 }
 
@@ -85,17 +78,17 @@ impl<DatumType: Datum> Histogram<DatumType> {
 pub fn histogram_from_ndv(
     ndv: u64,
     num_rows: u64,
-    bound: Option<(DataValue, DataValue)>,
+    bound: Option<(Datum, Datum)>,
     num_buckets: usize,
-) -> Result<Histogram<DataValue>> {
-    if ndv == 0 {
+) -> Result<Histogram> {
+    if ndv <= 2 {
         if num_rows != 0 {
             return Err(ErrorCode::Internal(format!(
                 "NDV must be greater than 0 when the number of rows is greater than 0, got NDV: {}, num_rows: {}",
                 ndv, num_rows
             )));
         } else {
-            return Ok(Histogram::<DataValue> { buckets: vec![] });
+            return Ok(Histogram { buckets: vec![] });
         }
     }
 
@@ -124,17 +117,17 @@ pub fn histogram_from_ndv(
     };
 
     let num_buckets = if num_buckets > ndv as usize {
-        ndv as usize
+        (ndv - 1) as usize
     } else {
         num_buckets
     };
 
-    let mut buckets: Vec<HistogramBucket<DataValue>> = Vec::with_capacity(num_buckets);
-    let sample_set = UniformSampleSet::<DataValue> { min, max };
+    let mut buckets: Vec<HistogramBucket> = Vec::with_capacity(num_buckets);
+    let sample_set = UniformSampleSet { min, max };
 
     for idx in 0..num_buckets {
         let upper_bound = sample_set.get_upper_bound(num_buckets, idx)?;
-        let bucket = HistogramBucket::<DataValue> {
+        let bucket = HistogramBucket {
             upper_bound,
             num_values: (num_rows / num_buckets as u64) as f64,
             num_distinct: (ndv / num_buckets as u64) as f64,
@@ -142,21 +135,21 @@ pub fn histogram_from_ndv(
         buckets.push(bucket);
     }
 
-    Ok(Histogram::<DataValue> { buckets })
+    Ok(Histogram { buckets })
 }
 
 #[derive(Debug, Clone)]
-pub struct HistogramBucket<DatumType: Datum = DataValue> {
+pub struct HistogramBucket {
     /// Upper bound value of the bucket.
-    upper_bound: DatumType,
+    upper_bound: Datum,
     /// Estimated number of values in the bucket.
     num_values: f64,
     /// Estimated number of distinct values in the bucket.
     num_distinct: f64,
 }
 
-impl<DatumType: Datum> HistogramBucket<DatumType> {
-    pub fn new(upper_bound: DatumType, num_values: f64, num_distinct: f64) -> Self {
+impl HistogramBucket {
+    pub fn new(upper_bound: Datum, num_values: f64, num_distinct: f64) -> Self {
         Self {
             upper_bound,
             num_values,
@@ -164,35 +157,44 @@ impl<DatumType: Datum> HistogramBucket<DatumType> {
         }
     }
 
-    #[allow(dead_code)]
-    fn upper_bound(&self) -> &DatumType {
+    pub fn upper_bound(&self) -> &Datum {
         &self.upper_bound
     }
 
-    #[allow(dead_code)]
-    fn num_values(&self) -> f64 {
+    pub fn num_values(&self) -> f64 {
         self.num_values
     }
 
-    #[allow(dead_code)]
-    fn num_distinct(&self) -> f64 {
+    pub fn num_distinct(&self) -> f64 {
         self.num_distinct
     }
 }
 
-trait SampleSet<DatumType: Datum> {
-    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<DatumType>;
+trait SampleSet {
+    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum>;
 }
 
-struct UniformSampleSet<DatumType: Datum> {
-    min: DatumType,
-    max: DatumType,
+struct UniformSampleSet {
+    min: Datum,
+    max: Datum,
 }
 
-impl SampleSet<DataValue> for UniformSampleSet<DataValue> {
-    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<DataValue> {
+impl SampleSet for UniformSampleSet {
+    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum> {
         match (&self.min, &self.max) {
-            (DataValue::UInt64(min), DataValue::UInt64(max)) => {
+            (Datum::Int(min), Datum::Int(max)) => {
+                let min = *min;
+                let max = *max;
+                let bucket_range = (max - min) / num_buckets as i64;
+                let upper_bound = match bucket_index {
+                    0 => min,
+                    _ if bucket_index == num_buckets - 1 => max,
+                    _ => min + bucket_range * bucket_index as i64,
+                };
+                Ok(Datum::Int(upper_bound))
+            }
+
+            (Datum::UInt(min), Datum::UInt(max)) => {
                 let min = *min;
                 let max = *max;
                 let bucket_range = (max - min) / num_buckets as u64;
@@ -201,11 +203,24 @@ impl SampleSet<DataValue> for UniformSampleSet<DataValue> {
                     _ if bucket_index == num_buckets - 1 => max,
                     _ => min + bucket_range * bucket_index as u64,
                 };
-                Ok(DataValue::UInt64(upper_bound))
+                Ok(Datum::UInt(upper_bound))
             }
+
+            (Datum::Float(min), Datum::Float(max)) => {
+                let min = *min;
+                let max = *max;
+                let bucket_range = (max - min) / num_buckets as f64;
+                let upper_bound = match bucket_index {
+                    0 => min,
+                    _ if bucket_index == num_buckets - 1 => max,
+                    _ => min + bucket_range * bucket_index as f64,
+                };
+                Ok(Datum::Float(upper_bound))
+            }
+
             _ => Err(ErrorCode::Unimplemented(format!(
-                "Unsupported data type: {:?}",
-                self.min.data_type()
+                "Unsupported datum type: {:?}",
+                self.min,
             ))),
         }
     }
