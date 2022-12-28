@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_meta_types::StageFileFormatType;
 use pretty_assertions::assert_eq;
 
-use crate::get_output_format;
+use crate::get_output_format_clickhouse;
 use crate::output_format_utils::get_simple_block;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
@@ -26,8 +26,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     let schema = block.schema().clone();
 
     {
-        let fmt = StageFileFormatType::NdJson;
-        let mut formatter = get_output_format(fmt, schema)?;
+        let mut formatter = get_output_format_clickhouse("ndjson", schema)?;
         let buffer = formatter.serialize_block(&block)?;
 
         let tsv_block = String::from_utf8(buffer)?;
@@ -56,8 +55,7 @@ fn test_null() -> Result<()> {
     let block = DataBlock::create(schema.clone(), columns);
 
     {
-        let fmt = StageFileFormatType::NdJson;
-        let mut formatter = get_output_format(fmt, schema)?;
+        let mut formatter = get_output_format_clickhouse("ndjson", schema)?;
         let buffer = formatter.serialize_block(&block)?;
 
         let tsv_block = String::from_utf8(buffer)?;
@@ -86,8 +84,7 @@ fn test_denormal() -> Result<()> {
     let block = DataBlock::create(schema.clone(), columns);
 
     {
-        let fmt = StageFileFormatType::NdJson;
-        let mut formatter = get_output_format(fmt, schema)?;
+        let mut formatter = get_output_format_clickhouse("ndjson", schema)?;
         let buffer = formatter.serialize_block(&block)?;
 
         let tsv_block = String::from_utf8(buffer)?;
@@ -121,8 +118,7 @@ fn test_string_escape() -> Result<()> {
     let block = DataBlock::create(schema.clone(), columns);
 
     {
-        let fmt = StageFileFormatType::NdJson;
-        let mut formatter = get_output_format(fmt, schema)?;
+        let mut formatter = get_output_format_clickhouse("ndjson", schema)?;
         let buffer = formatter.serialize_block(&block)?;
 
         let expect = b"{\"c1\":\"\\u0000\"}\n";

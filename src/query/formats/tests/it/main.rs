@@ -26,14 +26,6 @@ mod output_format_json_each_row;
 mod output_format_tcsv;
 mod output_format_utils;
 
-fn get_output_format(
-    typ: StageFileFormatType,
-    schema: DataSchemaRef,
-) -> Result<Box<dyn OutputFormat>> {
-    let settings = &Settings::default_test_settings()?;
-    FileFormatOptionsExt::get_output_format_from_settings(typ, schema, settings)
-}
-
 fn get_output_format_clickhouse(
     format_name: &str,
     schema: DataSchemaRef,

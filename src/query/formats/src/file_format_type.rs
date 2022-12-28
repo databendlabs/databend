@@ -99,15 +99,6 @@ impl FileFormatOptionsExt {
         options.get_output_format(schema)
     }
 
-    pub fn get_output_format_from_settings(
-        format: StageFileFormatType,
-        schema: DataSchemaRef,
-        settings: &Settings,
-    ) -> Result<Box<dyn OutputFormat>> {
-        let options = format.get_file_format_options_from_setting(settings, None)?;
-        options.get_output_format(schema)
-    }
-
     pub fn get_output_format_from_options(
         schema: DataSchemaRef,
         options: FileFormatOptions,
