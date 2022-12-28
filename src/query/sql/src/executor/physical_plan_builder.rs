@@ -261,6 +261,7 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::Aggregate(agg) => {
                 let input = self.build(s_expr.child(0)?).await?;
+                let input_schema = input.output_schema()?;
                 let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
                 let result = match &agg.mode {
                     AggregateMode::Partial => {
@@ -278,7 +279,8 @@ impl PhysicalPlanBuilder {
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
                                         if let Scalar::BoundColumnRef(col) = arg {
-                                            Ok(col.column.index)
+                                            let col_index = input_schema.index_of(&col.column.index.to_string())?;
+                                            Ok(col_index)
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
