@@ -14,10 +14,12 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::RemoteExpr;
+use common_sql::parse_exprs;
 
 // use common_sql::ExpressionParser;
 use crate::table_functions::string_value;
@@ -40,24 +42,31 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
 }
 
 pub fn get_cluster_keys(
-    _ctx: Arc<dyn TableContext>,
-    _table: &FuseTable,
-    _definition: &str,
+    ctx: Arc<dyn TableContext>,
+    table: &FuseTable,
+    definition: &str,
 ) -> Result<Vec<RemoteExpr<String>>> {
-    todo!("expression");
-    // let cluster_keys = if !definition.is_empty() {
-    //     let table_meta = Arc::new(table.clone());
-    //     ExpressionParser::parse_exprs(ctx, table_meta, definition)?
-    // } else {
-    //     table.cluster_keys(ctx)
-    // };
+    let cluster_keys = if !definition.is_empty() {
+        let table_meta = Arc::new(table.clone());
+        let cluster_keys = parse_exprs(ctx, table_meta.clone(), definition)?;
+        cluster_keys
+            .iter()
+            .map(|k| {
+                let k = k.project_column_ref(|index| {
+                    table_meta.schema().field(*index).name().to_string()
+                });
+                RemoteExpr::from_expr(&k)
+            })
+            .collect()
+    } else {
+        table.cluster_keys(ctx)
+    };
 
-    // if cluster_keys.is_empty() {
-    //     return Err(ErrorCode::InvalidClusterKeys(format!(
-    //         "Invalid clustering keys or table {} is not clustered",
-    //         table.name()
-    //     )));
-    // }
-
-    // Ok(cluster_keys)
+    if cluster_keys.is_empty() {
+        return Err(ErrorCode::InvalidClusterKeys(format!(
+            "Invalid clustering keys or table {} is not clustered",
+            table.name()
+        )));
+    }
+    Ok(cluster_keys)
 }

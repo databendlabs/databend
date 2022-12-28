@@ -22,7 +22,6 @@ use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
@@ -70,6 +69,7 @@ impl PageManager {
         query_id: String,
         max_rows_per_page: usize,
         block_receiver: SizedChannelReceiver<DataBlock>,
+        schema: DataSchemaRef,
         format_settings: FormatSettings,
         query_ctx_ref: Arc<QueryContext>,
     ) -> PageManager {
@@ -81,7 +81,7 @@ impl PageManager {
             end: false,
             block_end: false,
             row_buffer: Default::default(),
-            schema: Arc::new(DataSchema::empty()),
+            schema,
             block_receiver,
             max_rows_per_page,
             format_settings,
@@ -134,10 +134,6 @@ impl PageManager {
         remain: usize,
     ) -> Result<()> {
         let format_settings = &self.format_settings;
-        if self.schema.fields().is_empty() {
-            todo!("expression");
-            // self.schema = chunk.schema().clone();
-        }
         let mut iter = block_to_json_value(&block, format_settings)?
             .into_iter()
             .peekable();

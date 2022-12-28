@@ -23,6 +23,7 @@ use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_sql::Planner;
 use futures::StreamExt;
 use futures_util::FutureExt;
@@ -203,6 +204,12 @@ impl Executor {
 }
 
 impl ExecuteState {
+    pub(crate) async fn get_schema(sql: &str, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _, _) = planner.plan_sql(sql).await?;
+        Ok(plan.schema())
+    }
+
     pub(crate) async fn try_start_query(
         executor: Arc<RwLock<Executor>>,
         sql: &str,
@@ -219,7 +226,6 @@ impl ExecuteState {
             session,
             ctx: ctx.clone(),
         };
-
         info!("http query {}, change state to Running", &ctx.get_id());
         Executor::start_to_running(&executor, Running(running_state)).await;
 

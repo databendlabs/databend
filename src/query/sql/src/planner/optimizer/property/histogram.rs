@@ -24,16 +24,10 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 
 pub trait Datum: Debug + Clone + PartialEq + Eq {
     type Type: Debug + Clone + PartialEq + Eq;
-
-    fn data_type(&self) -> Self::Type;
 }
 
 impl Datum for Scalar {
     type Type = DateType;
-
-    fn data_type(&self) -> Self::Type {
-        todo!("expression")
-    }
 }
 
 /// A histogram is a representation of the distribution of a column.

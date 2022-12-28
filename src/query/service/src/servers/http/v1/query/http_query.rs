@@ -269,6 +269,8 @@ impl HttpQuery {
         let sql = request.sql.clone();
         let query_id = id.clone();
         let query_id_clone = id.clone();
+
+        let schema = ExecuteState::get_schema(&sql, ctx.clone()).await?;
         ctx.try_spawn(async move {
             let state = state_clone.clone();
             if let Err(e) =
@@ -297,6 +299,7 @@ impl HttpQuery {
             query_id_clone,
             request.pagination.max_rows_per_page,
             block_receiver,
+            schema,
             format_settings,
             ctx_clone2,
         )));
