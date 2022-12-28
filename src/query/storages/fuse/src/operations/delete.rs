@@ -105,7 +105,7 @@ impl FuseTable {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            if self.try_eval_const(ctx.clone(), &*self.table_info.schema(), &filter_expr)? {
+            if self.try_eval_const(ctx.clone(), &self.table_info.schema(), &filter_expr)? {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,

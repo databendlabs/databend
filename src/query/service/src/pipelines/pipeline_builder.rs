@@ -623,7 +623,7 @@ impl PipelineBuilder {
                         transform_output_port,
                         select_schema.clone(),
                         insert_schema.clone(),
-                        func_ctx.clone(),
+                        func_ctx,
                     )
                 })?;
         }

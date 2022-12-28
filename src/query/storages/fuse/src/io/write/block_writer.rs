@@ -130,7 +130,7 @@ pub fn write_block(
 ) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
     match storage_format {
         FuseStorageFormat::Parquet => {
-            let result = serialize_to_parquet(vec![block], &schema, buf)?;
+            let result = serialize_to_parquet(vec![block], schema, buf)?;
             let meta = util::column_metas(&result.1)?;
             Ok((result.0, meta))
         }
