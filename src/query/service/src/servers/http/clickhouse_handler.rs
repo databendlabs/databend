@@ -111,7 +111,7 @@ async fn execute(
 ) -> Result<WithContentType<Body>> {
     let format_typ = format.typ.clone();
     let mut data_stream = interpreter.execute(ctx.clone()).await?;
-    let mut output_format = FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
+    let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
         format,
         schema,
         &ctx.get_settings(),
@@ -415,7 +415,7 @@ fn serialize_one_block(
         None => default_format,
     };
     let format_typ = format.typ.clone();
-    let mut output_format = FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
+    let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
         format,
         block.schema().clone(),
         &ctx.get_settings(),
