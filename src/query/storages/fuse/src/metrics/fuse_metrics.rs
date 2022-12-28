@@ -76,7 +76,7 @@ pub fn metrics_inc_remote_io_deserialize_milliseconds(c: u64) {
     increment_gauge!(key!("remote_io_deserialize_milliseconds"), c as f64);
 }
 
-/// Write metrics.
+/// Block metrics.
 pub fn metrics_inc_block_write_nums(c: u64) {
     increment_gauge!(key!("block_write_nums"), c as f64);
 }
@@ -99,6 +99,18 @@ pub fn metrics_inc_block_index_write_bytes(c: u64) {
 
 pub fn metrics_inc_block_index_write_milliseconds(c: u64) {
     increment_gauge!(key!("block_index_write_milliseconds"), c as f64);
+}
+
+pub fn metrics_inc_block_index_read_nums(c: u64) {
+    increment_gauge!(key!("block_index_read_nums"), c as f64);
+}
+
+pub fn metrics_inc_block_index_read_bytes(c: u64) {
+    increment_gauge!(key!("block_index_read_bytes"), c as f64);
+}
+
+pub fn metrics_inc_block_index_read_milliseconds(c: u64) {
+    increment_gauge!(key!("block_index_read_milliseconds"), c as f64);
 }
 
 /// Compact metrics.
@@ -151,13 +163,16 @@ pub fn metrics_reset() {
     gauge!(key!("remote_io_read_milliseconds"), c);
     gauge!(key!("remote_io_deserialize_milliseconds"), c);
 
-    // Write metrics.
+    // Block metrics.
     gauge!(key!("block_write_nums"), c);
     gauge!(key!("block_write_bytes"), c);
     gauge!(key!("block_write_milliseconds"), c);
     gauge!(key!("block_index_write_nums"), c);
     gauge!(key!("block_index_write_bytes"), c);
     gauge!(key!("block_index_write_milliseconds"), c);
+    gauge!(key!("block_index_read_nums"), c);
+    gauge!(key!("block_index_read_bytes"), c);
+    gauge!(key!("block_index_read_milliseconds"), c);
 
     // Compact metrics.
     gauge!(key!("compact_block_read_nums"), c);
