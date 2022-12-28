@@ -28,7 +28,6 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
-use url::Url;
 
 use crate::ast::*;
 use crate::input::Input;
@@ -211,7 +210,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ CATALOG ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident
             ~ TYPE ~ "=" ~ #catalog_type
-            ~ CONNECTION ~ "=" ~ #catalog_options
+            ~ CONNECTION ~ "=" ~ #options
         },
         |(_, _, opt_if_not_exists, catalog, _, _, ty, _, _, options)| {
             Statement::CreateCatalog(CreateCatalogStmt {
@@ -768,7 +767,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #stage_name )
             ~ ( URL ~ "=" ~ #uri_location)?
-            ~ ( FILE_FORMAT ~ "=" ~ #catalog_options)?
+            ~ ( FILE_FORMAT ~ "=" ~ #options)?
             ~ ( ON_ERROR ~ "=" ~ #ident)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
             ~ ( VALIDATION_MODE ~ "=" ~ #ident)?
@@ -1562,70 +1561,6 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
     )(i)
 }
 
-pub fn stage_location(i: Input) -> IResult<StageLocation> {
-    map_res(at_string, |location| {
-        let parsed = location.splitn(2, '/').collect::<Vec<_>>();
-        let name = parsed[0].to_string();
-        let path = if parsed.len() == 1 {
-            "/".to_string()
-        } else {
-            format!("/{}", parsed[1])
-        };
-        Ok(StageLocation { name, path })
-    })(i)
-}
-
-/// Parse input into `UriLocation`
-pub fn uri_location(i: Input) -> IResult<UriLocation> {
-    map_res(
-        rule! {
-            #literal_string
-            ~ (CONNECTION ~ "=" ~ #catalog_options)?
-            ~ (CREDENTIALS ~ "=" ~ #catalog_options)?
-            ~ (ENCRYPTION ~ "=" ~ #catalog_options)?
-        },
-        |(location, connection_opt, credentials_opt, encryption_opt)| {
-            // fs location is not a valid url, let's check it in advance.
-            if let Some(path) = location.strip_prefix("fs://") {
-                return Ok(UriLocation {
-                    protocol: "fs".to_string(),
-                    name: "".to_string(),
-                    path: path.to_string(),
-                    connection: BTreeMap::default(),
-                });
-            }
-
-            let parsed =
-                Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
-
-            // TODO: We will use `CONNECTION` to replace `CREDENTIALS` and `ENCRYPTION`.
-            let mut conn = connection_opt.map(|v| v.2).unwrap_or_default();
-            conn.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
-            conn.extend(encryption_opt.map(|v| v.2).unwrap_or_default());
-
-            Ok(UriLocation {
-                protocol: parsed.scheme().to_string(),
-                name: parsed
-                    .host_str()
-                    .map(|hostname| {
-                        if let Some(port) = parsed.port() {
-                            format!("{}:{}", hostname, port)
-                        } else {
-                            hostname.to_string()
-                        }
-                    })
-                    .ok_or(ErrorKind::Other("invalid uri location"))?,
-                path: if parsed.path().is_empty() {
-                    "/".to_string()
-                } else {
-                    parsed.path().to_string()
-                },
-                connection: conn,
-            })
-        },
-    )(i)
-}
-
 pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     let limit_like = map(
         rule! {
@@ -1773,10 +1708,9 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
             rule! { PATTERN ~ "=" ~ #literal_string },
             |(_, _, pattern)| CopyOption::Pattern(pattern),
         ),
-        map(
-            rule! { FILE_FORMAT ~ "=" ~ #catalog_options },
-            |(_, _, options)| CopyOption::FileFormat(options),
-        ),
+        map(rule! { FILE_FORMAT ~ "=" ~ #options }, |(_, _, options)| {
+            CopyOption::FileFormat(options)
+        }),
         map(
             rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
             |(_, _, validation_mode)| CopyOption::ValidationMode(validation_mode),
@@ -1806,38 +1740,6 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
             CopyOption::OnError(on_error.to_string())
         }),
     ))(i)
-}
-
-pub fn ident_to_string(i: Input) -> IResult<String> {
-    map_res(ident, |ident| Ok(ident.name))(i)
-}
-
-pub fn u64_to_string(i: Input) -> IResult<String> {
-    map(literal_u64, |v| v.to_string())(i)
-}
-
-pub fn parameter_to_string(i: Input) -> IResult<String> {
-    map(
-        rule! { ( #literal_string | #ident_to_string | #u64_to_string ) },
-        |parameter| parameter,
-    )(i)
-}
-
-// parse: (k = v ...)* into a map
-pub fn catalog_options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let ident_with_format = alt((
-        ident_to_string,
-        map(rule! { FORMAT }, |_| "FORMAT".to_string()),
-    ));
-
-    map(
-        rule! {
-            "(" ~ ( #ident_with_format ~ "=" ~ #parameter_to_string )* ~ ")"
-        },
-        |(_, opts, _)| {
-            BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))
-        },
-    )(i)
 }
 
 pub fn presign_action(i: Input) -> IResult<PresignAction> {
