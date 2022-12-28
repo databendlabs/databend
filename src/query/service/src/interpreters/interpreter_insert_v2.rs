@@ -719,17 +719,18 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
     Ok(())
 }
 
-async fn fill_default_value<'a>(
-    binder: &mut ScalarBinder<'a>,
+async fn fill_default_value(
+    binder: &mut ScalarBinder<'_>,
     operators: &mut Vec<BlockOperator>,
     field: &DataField,
+    builder: &PhysicalScalarBuilder<'_>,
 ) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
         let tokens = tokenize_sql(default_expr)?;
         let backtrace = Backtrace::new();
         let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
         let (scalar, _) = binder.bind(&ast).await?;
-        let scalar = PhysicalScalarBuilder::build(&scalar)?;
+        let scalar = builder.build(&scalar)?;
         operators.push(BlockOperator::Map {
             expr: scalar.as_expr()?,
         });
@@ -781,12 +782,19 @@ async fn exprs_to_scalar<'a>(
         &[],
     );
 
+    let physical_scalar_builder = PhysicalScalarBuilder::new(schema);
     for (i, expr) in exprs.iter().enumerate() {
         // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
         if let AExpr::ColumnRef { column, .. } = expr {
             if column.name.eq_ignore_ascii_case("default") {
                 let field = schema.field(i);
-                fill_default_value(&mut scalar_binder, &mut operators, field).await?;
+                fill_default_value(
+                    &mut scalar_binder,
+                    &mut operators,
+                    field,
+                    &physical_scalar_builder,
+                )
+                .await?;
                 continue;
             }
         }
@@ -800,7 +808,7 @@ async fn exprs_to_scalar<'a>(
                 target_type: Box::new(field_data_type.clone()),
             })
         }
-        let scalar = PhysicalScalarBuilder::build(&scalar)?;
+        let scalar = physical_scalar_builder.build(&scalar)?;
         operators.push(BlockOperator::Map {
             expr: scalar.as_expr()?,
         });

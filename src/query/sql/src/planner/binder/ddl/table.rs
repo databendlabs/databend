@@ -53,6 +53,7 @@ use common_expression::infer_table_schema;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
@@ -969,13 +970,12 @@ impl<'a> Binder {
     ) -> Result<Vec<String>> {
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
-        for field in schema.fields() {
+        for (idx, field) in schema.fields().iter().enumerate() {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
                 column_name: field.name().clone(),
-                // A dummy index is fine, since we won't actually evaluate the expression
-                index: 0,
+                index: idx,
                 data_type: Box::new(DataType::from(field.data_type())),
                 visibility: Visibility::Visible,
             };
@@ -989,10 +989,22 @@ impl<'a> Binder {
             &[],
         );
 
+        let data_fields = schema
+            .fields()
+            .iter()
+            .enumerate()
+            .map(|(idx, field)| {
+                let data_type = DataType::from(field.data_type());
+                DataField::new(&idx.to_string(), data_type)
+            })
+            .collect::<Vec<_>>();
+        let data_schema = DataSchemaRefExt::create(data_fields);
+        let physical_scalar_builder = PhysicalScalarBuilder::new(&data_schema);
+
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            let cluster_key = PhysicalScalarBuilder::build(&cluster_key)?;
+            let cluster_key = physical_scalar_builder.build(&cluster_key)?;
             let expr = cluster_key.as_expr()?;
             if is_expr_non_deterministic(&expr) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(

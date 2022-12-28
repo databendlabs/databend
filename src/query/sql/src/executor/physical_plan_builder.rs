@@ -27,6 +27,8 @@ use common_exception::Result;
 use common_expression::type_check::check;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
@@ -195,6 +197,19 @@ impl PhysicalPlanBuilder {
             RelOperator::PhysicalHashJoin(join) => {
                 let build_side = self.build(s_expr.child(1)?).await?;
                 let probe_side = self.build(s_expr.child(0)?).await?;
+                let build_schema = build_side.output_schema()?;
+                let probe_schema = probe_side.output_schema()?;
+                let merged_schema = DataSchemaRefExt::create(
+                    probe_schema
+                        .fields()
+                        .iter()
+                        .chain(build_schema.fields())
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                );
+                let probe_physical_scalar_builder = PhysicalScalarBuilder::new(&probe_schema);
+                let build_physical_scalar_builder = PhysicalScalarBuilder::new(&build_schema);
+                let merged_physical_scalar_builder = PhysicalScalarBuilder::new(&merged_schema);
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
@@ -202,17 +217,17 @@ impl PhysicalPlanBuilder {
                     build_keys: join
                         .build_keys
                         .iter()
-                        .map(PhysicalScalarBuilder::build)
+                        .map(|scalar| build_physical_scalar_builder.build(scalar))
                         .collect::<Result<_>>()?,
                     probe_keys: join
                         .probe_keys
                         .iter()
-                        .map(PhysicalScalarBuilder::build)
+                        .map(|scalar| probe_physical_scalar_builder.build(scalar))
                         .collect::<Result<_>>()?,
                     non_equi_conditions: join
                         .non_equi_conditions
                         .iter()
-                        .map(PhysicalScalarBuilder::build)
+                        .map(|scalar| merged_physical_scalar_builder.build(scalar))
                         .collect::<Result<_>>()?,
                     marker_index: join.marker_index,
                     from_correlated_subquery: join.from_correlated_subquery,
@@ -221,24 +236,28 @@ impl PhysicalPlanBuilder {
 
             RelOperator::EvalScalar(eval_scalar) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let input_schema = input.output_schema()?;
+                let builder = PhysicalScalarBuilder::new(&input_schema);
                 Ok(PhysicalPlan::EvalScalar(EvalScalar {
                     input,
                     scalars: eval_scalar
                         .items
                         .iter()
-                        .map(|item| Ok((PhysicalScalarBuilder::build(&item.scalar)?, item.index)))
+                        .map(|item| Ok((builder.build(&item.scalar)?, item.index)))
                         .collect::<Result<_>>()?,
                 }))
             }
 
             RelOperator::Filter(filter) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let input_schema = input.output_schema()?;
+                let builder = PhysicalScalarBuilder::new(&input_schema);
                 Ok(PhysicalPlan::Filter(Filter {
                     input,
                     predicates: filter
                         .predicates
                         .iter()
-                        .map(PhysicalScalarBuilder::build)
+                        .map(|scalar| builder.build(scalar))
                         .collect::<Result<_>>()?,
                 }))
             }
@@ -400,13 +419,14 @@ impl PhysicalPlanBuilder {
             })),
             RelOperator::Exchange(exchange) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
-                // let input_schema = input.output_schema()?;
+                let input_schema = input.output_schema()?;
+                let builder = PhysicalScalarBuilder::new(&input_schema);
                 let mut keys = vec![];
                 let kind = match exchange {
                     Exchange::Random => FragmentKind::Init,
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
-                            keys.push(PhysicalScalarBuilder::build(scalar)?);
+                            keys.push(builder.build(scalar)?);
                         }
                         FragmentKind::Normal
                     }
@@ -452,7 +472,8 @@ impl PhysicalPlanBuilder {
         has_inner_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
-
+        let data_schema = Arc::new(DataSchema::from(table_schema));
+        let physical_scalar_builder = PhysicalScalarBuilder::new(&data_schema);
         let projection =
             Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
         let _project_schema = projection.project_schema(table_schema);
@@ -464,7 +485,7 @@ impl PhysicalPlanBuilder {
                 predicates
                     .into_iter()
                     .map(|scalar| {
-                        let filter = PhysicalScalarBuilder::build(&scalar)?;
+                        let filter = physical_scalar_builder.build(&scalar)?;
                         let filter = filter.as_expr()?;
                         let filter = filter.project_column_ref(|index: &usize| {
                             table_schema.fields()[*index].name().clone()
@@ -499,7 +520,7 @@ impl PhysicalPlanBuilder {
                     "There should be at least one predicate in prewhere"
                 );
 
-                let filter = PhysicalScalarBuilder::build(&predicate.unwrap())?;
+                let filter = physical_scalar_builder.build(&predicate.unwrap())?;
                 let filter = filter.as_expr()?;
                 let filter = RemoteExpr::from_expr(&filter);
 
@@ -580,16 +601,22 @@ impl PhysicalPlanBuilder {
     }
 }
 
-#[derive(Default)]
-pub struct PhysicalScalarBuilder {
-    // input_schema: &'a DataSchemaRef,
+pub struct PhysicalScalarBuilder<'a> {
+    input_schema: &'a DataSchemaRef,
 }
 
-impl PhysicalScalarBuilder {
-    pub fn build(scalar: &Scalar) -> Result<PhysicalScalar> {
+impl<'a> PhysicalScalarBuilder<'a> {
+    pub fn new(input_schema: &'a DataSchemaRef) -> Self {
+        Self { input_schema }
+    }
+
+    pub fn build(&self, scalar: &Scalar) -> Result<PhysicalScalar> {
         match scalar {
             Scalar::BoundColumnRef(column_ref) => {
-                let index = column_ref.column.index;
+                // Remap ColumnIndex to offset in input schema.
+                let index = self
+                    .input_schema
+                    .index_of(&column_ref.column.index.to_string())?;
                 Ok(PhysicalScalar::IndexedVariable {
                     data_type: column_ref.data_type(),
                     index,
@@ -611,17 +638,17 @@ impl PhysicalScalarBuilder {
             }),
             Scalar::AndExpr(and) => Ok(PhysicalScalar::Function {
                 name: "and".to_string(),
-                args: vec![Self::build(&and.left)?, Self::build(&and.right)?],
+                args: vec![self.build(&and.left)?, self.build(&and.right)?],
                 return_type: and.data_type(),
             }),
             Scalar::OrExpr(or) => Ok(PhysicalScalar::Function {
                 name: "or".to_string(),
-                args: vec![Self::build(&or.left)?, Self::build(&or.right)?],
+                args: vec![self.build(&or.left)?, self.build(&or.right)?],
                 return_type: or.data_type(),
             }),
             Scalar::ComparisonExpr(comp) => Ok(PhysicalScalar::Function {
                 name: comp.op.to_func_name(),
-                args: vec![Self::build(&comp.left)?, Self::build(&comp.right)?],
+                args: vec![self.build(&comp.left)?, self.build(&comp.right)?],
                 return_type: comp.data_type(),
             }),
             Scalar::FunctionCall(func) => Ok(PhysicalScalar::Function {
@@ -629,12 +656,12 @@ impl PhysicalScalarBuilder {
                 args: func
                     .arguments
                     .iter()
-                    .map(Self::build)
+                    .map(|scalar| self.build(scalar))
                     .collect::<Result<_>>()?,
                 return_type: *func.return_type.clone(),
             }),
             Scalar::CastExpr(cast) => Ok(PhysicalScalar::Cast {
-                input: Box::new(Self::build(&cast.argument)?),
+                input: Box::new(self.build(&cast.argument)?),
                 target: *cast.target_type.clone(),
             }),
 

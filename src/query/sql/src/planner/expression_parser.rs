@@ -81,10 +81,12 @@ pub fn parse_exprs(
         TypeChecker::new(&bind_context, ctx, &name_resolution_ctx, metadata, &[]);
     let mut expressions = Vec::with_capacity(exprs.len());
 
+    let data_schema = bind_context.output_schema();
+    let physical_scalar_builder = PhysicalScalarBuilder::new(&data_schema);
     for expr in exprs.iter() {
         let (scalar, _) =
             *block_in_place(|| Handle::current().block_on(type_checker.resolve(expr, None)))?;
-        let scalar = PhysicalScalarBuilder::build(&scalar)?;
+        let scalar = physical_scalar_builder.build(&scalar)?;
         expressions.push(scalar.as_expr()?);
     }
     Ok(expressions)

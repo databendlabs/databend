@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::RemoteExpr;
 use common_pipeline_core::Pipeline;
@@ -62,7 +63,9 @@ impl Interpreter for DeleteInterpreter {
         let tbl_name = self.plan.table_name.as_str();
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
-            let filter = PhysicalScalarBuilder::build(scalar)?
+            let schema = Arc::new(DataSchema::from(tbl.schema()));
+            let filter = PhysicalScalarBuilder::new(&schema)
+                .build(scalar)?
                 .as_expr()?
                 .project_column_ref(|index| tbl.schema().field(*index).name().clone());
             let col_indices = scalar.used_columns().into_iter().collect();

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
+use common_expression::DataSchema;
 use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
@@ -156,10 +157,12 @@ impl CreateTableInterpreterV2 {
     /// - Update cluster key of table meta.
     fn build_request(&self) -> Result<CreateTableReq> {
         let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
-        let _input_schema = self.plan.schema.clone();
+        let input_schema = self.plan.schema.clone();
         for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
             let field = if let Some(Some(scalar)) = &self.plan.field_default_exprs.get(idx) {
-                let physical_scaler = PhysicalScalarBuilder::build(scalar)?;
+                let physical_scaler =
+                    PhysicalScalarBuilder::new(&Arc::new(DataSchema::from(&input_schema)))
+                        .build(scalar)?;
                 field.with_default_expr(Some(serde_json::to_string(&physical_scaler)?))
             } else {
                 field

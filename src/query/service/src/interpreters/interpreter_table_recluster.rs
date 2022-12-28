@@ -17,6 +17,7 @@ use std::time::SystemTime;
 
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
+use common_expression::DataSchema;
 use common_expression::RemoteExpr;
 use common_sql::executor::PhysicalScalarBuilder;
 
@@ -62,7 +63,8 @@ impl Interpreter for ReclusterTableInterpreter {
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
-            let expr = PhysicalScalarBuilder::build(scalar)?;
+            let expr = PhysicalScalarBuilder::new(&Arc::new(DataSchema::from(&table.schema())))
+                .build(scalar)?;
             let expr = expr.as_expr()?;
             let expr =
                 expr.project_column_ref(|index| table.schema().field(*index).name().to_string());
