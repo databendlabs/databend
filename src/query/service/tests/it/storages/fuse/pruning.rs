@@ -20,6 +20,7 @@ use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::DataBlock;
@@ -118,8 +119,13 @@ async fn test_block_pruner() -> Result<()> {
         )
         .await?;
 
-    let gen_col =
-        |value, rows| Column::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
+    let gen_col = |value, rows| {
+        let col = Column::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
+        BlockEntry {
+            data_type: DataType::Number(NumberDataType::UInt64),
+            value: Value::Column(col),
+        }
+    };
 
     // prepare test blocks
     // - there will be `num_blocks` blocks, for each block, it comprises of `row_per_block` rows,
@@ -127,14 +133,17 @@ async fn test_block_pruner() -> Result<()> {
     let blocks = (0..num_blocks)
         .into_iter()
         .map(|idx| {
-            DataBlock::new(test_schema.clone(), vec![
-                // value of column a always equals  1
-                gen_col(1, row_per_block),
-                // for column b
-                // - for all block `B` in blocks, whose index is `i`
-                // - for all row in `B`, value of column b  equals `i`
-                gen_col(idx as u64, row_per_block),
-            ])
+            DataBlock::new(
+                vec![
+                    // value of column a always equals  1
+                    gen_col(1, row_per_block),
+                    // for column b
+                    // - for all block `B` in blocks, whose index is `i`
+                    // - for all row in `B`, value of column b  equals `i`
+                    gen_col(idx as u64, row_per_block),
+                ],
+                row_per_block,
+            )
         })
         .collect::<Vec<_>>();
 
@@ -218,138 +227,6 @@ async fn test_block_pruner() -> Result<()> {
         assert_eq!(expected_rows, rows);
         assert_eq!(expected_blocks, blocks.len());
     }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_block_pruner_monotonic() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
-
-    let test_tbl_name = "test_index_helper";
-    let test_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Number(NumberDataType::UInt64)),
-        DataField::new("b", DataType::Number(NumberDataType::UInt64)),
-    ]);
-
-    let row_per_block = 3u32;
-    let num_blocks_opt = row_per_block.to_string();
-
-    // create test table
-    let create_table_plan = CreateTablePlanV2 {
-        catalog: "default".to_owned(),
-        if_not_exists: false,
-        tenant: fixture.default_tenant(),
-        database: fixture.default_db_name(),
-        table: test_tbl_name.to_string(),
-        schema: test_schema.clone(),
-        engine: Engine::Fuse,
-        storage_params: None,
-        options: [
-            (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
-            // for the convenience of testing, let one seegment contains one block
-            (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
-            // database id is required for FUSE
-            (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
-        ]
-        .into(),
-        field_default_exprs: vec![],
-        field_comments: vec![],
-        as_select: None,
-        cluster_key: None,
-    };
-
-    let catalog = ctx.get_catalog("default")?;
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
-
-    // get table
-    let table = catalog
-        .get_table(
-            fixture.default_tenant().as_str(),
-            fixture.default_db_name().as_str(),
-            test_tbl_name,
-        )
-        .await?;
-
-    let blocks = vec![
-        DataBlock::create(test_schema.clone(), vec![
-            Column::from_data(vec![1u64, 2, 3]),
-            Column::from_data(vec![11u64, 12, 13]),
-        ]),
-        DataBlock::create(test_schema.clone(), vec![
-            Column::from_data(vec![4u64, 5, 6]),
-            Column::from_data(vec![21u64, 22, 23]),
-        ]),
-        DataBlock::create(test_schema, vec![
-            Column::from_data(vec![7u64, 8, 9]),
-            Column::from_data(vec![31u64, 32, 33]),
-        ]),
-    ];
-
-    fixture
-        .append_commit_blocks(table.clone(), blocks, false, true)
-        .await?;
-
-    // get the latest tbl
-    let table = catalog
-        .get_table(
-            fixture.default_tenant().as_str(),
-            fixture.default_db_name().as_str(),
-            test_tbl_name,
-        )
-        .await?;
-
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-    let snapshot_loc = table
-        .get_table_info()
-        .options()
-        .get(OPT_KEY_SNAPSHOT_LOCATION)
-        .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
-
-    // a + b > 20; some blocks pruned
-    let mut extra = PushDownInfo::default();
-    let pred = add(
-        col("a", DataType::Number(NumberDataType::UInt64)),
-        col("b", DataType::Number(NumberDataType::UInt64)),
-    )
-    .gt(&lit(20u64))?;
-    extra.filters = vec![pred];
-
-    let blocks = apply_block_pruning(
-        snapshot.clone(),
-        table.get_table_info().schema(),
-        &Some(extra),
-        ctx.clone(),
-        fuse_table.get_operator(),
-    )
-    .await?;
-
-    assert_eq!(2, blocks.len());
-
-    // b - a < 20; nothing will be pruned.
-    let mut extra = PushDownInfo::default();
-    let pred = sub(
-        col("b", DataType::Number(NumberDataType::UInt64)),
-        col("a", DataType::Number(NumberDataType::UInt64)),
-    )
-    .lt(&lit(20u64))?;
-    extra.filters = vec![pred];
-
-    let blocks = apply_block_pruning(
-        snapshot.clone(),
-        table.get_table_info().schema(),
-        &Some(extra),
-        ctx.clone(),
-        fuse_table.get_operator(),
-    )
-    .await?;
-
-    assert_eq!(3, blocks.len());
 
     Ok(())
 }

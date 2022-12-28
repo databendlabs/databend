@@ -94,7 +94,6 @@ fn test_format() {
             build_keys: vec![
                 FunctionCall {
                     func_name: "plus".to_string(),
-                    arg_types: vec![],
                     arguments: vec![
                         BoundColumnRef {
                             column: ColumnBinding {

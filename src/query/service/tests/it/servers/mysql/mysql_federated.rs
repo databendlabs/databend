@@ -34,7 +34,7 @@ fn test_mysql_federated() -> Result<()> {
         assert!(result.is_some());
 
         if let Some(block) = result {
-            assert!(!block.is_empty())
+            assert!(!block.1.is_empty())
         }
 
         let query = "select versiona";

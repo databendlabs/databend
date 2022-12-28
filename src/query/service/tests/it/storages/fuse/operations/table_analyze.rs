@@ -18,7 +18,11 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_catalog::table::Table;
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::AnyType;
+use common_expression::types::ValueType;
 use common_expression::DataBlock;
+use common_expression::ScalarRef;
 use common_expression::SendableDataBlockStream;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
@@ -105,7 +109,12 @@ async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
     let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
     let mut count: u64 = 0;
     for block in blocks {
-        count += block.column(0).get_u64(0)?;
+        let value = &block.get_by_offset(0).value;
+        let value = value.as_ref();
+        let value = unsafe { value.index_unchecked(0) };
+        if let ScalarRef::Number(NumberScalar::UInt64(v)) = value {
+            count += v;
+        }
     }
     Ok(count)
 }

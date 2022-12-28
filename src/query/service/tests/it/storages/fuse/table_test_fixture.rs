@@ -33,6 +33,7 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::Scalar;
 use common_expression::SendableDataBlockStream;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
@@ -158,7 +159,7 @@ impl TestFixture {
     }
 
     pub fn default_table_schema() -> TableSchemaRef {
-        infer_table_schema(&Self::default_schema())
+        infer_table_schema(&Self::default_schema()).unwrap()
     }
 
     pub fn default_crate_table_plan(&self) -> CreateTablePlanV2 {
@@ -307,10 +308,7 @@ impl TestFixture {
         overwrite: bool,
         commit: bool,
     ) -> Result<()> {
-        let source_schema = blocks
-            .get(0)
-            .map(|b| b.schema().clone())
-            .unwrap_or_else(|| table.schema());
+        let source_schema = Self::default_schema();
         let mut build_res = PipelineBuildResult::create();
 
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
@@ -343,13 +341,13 @@ pub async fn test_drive(
     test_tbl: Option<&str>,
 ) -> Result<()> {
     let arg_db = match test_db {
-        Some(v) => DataValue::String(v.as_bytes().to_vec()),
-        None => DataValue::Null,
+        Some(v) => Scalar::String(v.as_bytes().to_vec()),
+        None => Scalar::Null,
     };
 
     let arg_tbl = match test_tbl {
-        Some(v) => DataValue::String(v.as_bytes().to_vec()),
-        None => DataValue::Null,
+        Some(v) => Scalar::String(v.as_bytes().to_vec()),
+        None => Scalar::Null,
     };
 
     let tbl_args = Some(vec![arg_db, arg_tbl]);

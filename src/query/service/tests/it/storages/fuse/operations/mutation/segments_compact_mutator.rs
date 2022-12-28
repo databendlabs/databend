@@ -634,7 +634,8 @@ impl CompactSegmentTestFixture {
         let block_per_seg = self.threshold;
         let data_accessor = &self.data_accessor.operator();
         let location_gen = &self.location_gen;
-        let block_writer = BlockWriter::new(data_accessor, location_gen);
+        let schema = TestFixture::default_table_schema();
+        let block_writer = BlockWriter::new(&schema, data_accessor, location_gen);
 
         let segment_writer = SegmentWriter::new(data_accessor, location_gen, &None);
         let seg_acc = SegmentCompactor::new(block_per_seg, segment_writer.clone());

@@ -15,15 +15,22 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::number::Float64Type;
+use common_expression::types::number::Int64Type;
+use common_expression::types::ArgType;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
+use common_expression::Scalar;
+use common_expression::Value;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::traverse;
 
-fn gen_sample_block() -> (DataBlock, Vec<ColumnRef>) {
+fn gen_sample_block() -> (DataBlock, Vec<Column>) {
     //   sample message
     //
     //   struct {
@@ -38,21 +45,9 @@ fn gen_sample_block() -> (DataBlock, Vec<ColumnRef>) {
     //      g: f64,
     //   }
 
-    let col_b_type = StructType::create(Some(vec!["c".to_owned(), "d".to_owned()]), vec![
-        i64::to_data_type(),
-        f64::to_data_type(),
-    ]);
+    let col_b_type = DataType::Tuple(vec![Int64Type::data_type(), Int64Type::data_type()]);
 
-    let col_a_type = StructType::create(Some(vec!["b".to_owned(), "e".to_owned()]), vec![
-        DataTypeImpl::Struct(col_b_type.clone()),
-        f64::to_data_type(),
-    ]);
-
-    // let schema = DataSchemaRefExt::create(vec![
-    //     DataField::new("a", DataTypeImpl::Struct(col_a_type.clone())),
-    //     DataField::new("f", i64::to_data_type()),
-    //     DataField::new("g", f64::to_data_type()),
-    // ]);
+    let col_a_type = DataType::Tuple(vec![col_b_type.clone(), Float64Type::data_type()]);
 
     // prepare leaves
     let col_c = Column::from_data(vec![1i64, 2, 3]);
@@ -62,30 +57,32 @@ fn gen_sample_block() -> (DataBlock, Vec<ColumnRef>) {
     let col_g = Column::from_data(vec![10.0f64, 11., 12.]);
 
     // inner/root nodes
-    let col_b: ColumnRef = Arc::new(StructColumn::from_data(
-        vec![col_c.clone(), col_d.clone()],
-        DataTypeImpl::Struct(col_b_type),
-    ));
-    let col_a: ColumnRef = Arc::new(StructColumn::from_data(
-        vec![col_b.clone(), col_e.clone()],
-        DataTypeImpl::Struct(col_a_type),
-    ));
+    let col_b = Column::Tuple {
+        fields: vec![col_c.clone(), col_d.clone()],
+        len: 3,
+    };
+    let col_a = Column::Tuple {
+        fields: vec![col_b.clone(), col_e.clone()],
+        len: 3,
+    };
 
-    (
-        DataBlock::create(schema, vec![col_a.clone(), col_f.clone(), col_g.clone()]),
-        vec![col_c, col_d, col_e, col_f, col_g],
-    )
-}
-
-#[test]
-fn test_column_traverse() -> Result<()> {
-    let (sample_block, sample_cols) = gen_sample_block();
-    let cols = traverse::traverse_columns_dfs(sample_block.columns())?;
-
-    assert_eq!(5, cols.len());
-    (0..5).for_each(|i| assert_eq!(cols[i].1, sample_cols[i], "checking col {}", i));
-
-    Ok(())
+    let entries = vec![
+        BlockEntry {
+            data_type: col_a_type,
+            value: Value::Column(col_a.clone()),
+        },
+        BlockEntry {
+            data_type: Int64Type::data_type(),
+            value: Value::Column(col_f.clone()),
+        },
+        BlockEntry {
+            data_type: Float64Type::data_type(),
+            value: Value::Column(col_g.clone()),
+        },
+    ];
+    (DataBlock::new(entries, 3), vec![
+        col_c, col_d, col_e, col_f, col_g,
+    ])
 }
 
 #[test]
@@ -98,7 +95,9 @@ fn test_column_statistic() -> Result<()> {
     (0..5).for_each(|i| {
         let stats = col_stats.get(&(i as u32)).unwrap();
         let column = &sample_cols[i];
-        let values: Vec<DataValue> = (0..column.len()).map(|i| column.get(i)).collect();
+        let values: Vec<Scalar> = (0..column.len())
+            .map(|i| column.index(i).unwrap().to_owned())
+            .collect();
         assert_eq!(
             &stats.min,
             values.iter().min().unwrap(),

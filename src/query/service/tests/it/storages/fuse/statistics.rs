@@ -16,9 +16,11 @@ use std::collections::HashMap;
 
 use common_base::base::tokio;
 use common_expression::type_check::check;
+use common_expression::types::number::Int32Type;
 use common_expression::types::number::Number;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::AnyType;
+use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::ValueType;
@@ -151,12 +153,12 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
     let r = gen_columns_statistics(&block, None)?;
     assert_eq!(2, r.len());
     let col0_stats = r.get(&0).unwrap();
-    assert_eq!(col0_stats.min, Scalar::Number(Number::Int64(1)));
-    assert_eq!(col0_stats.max, Scalar::Number(Number::Int64(3)));
+    assert_eq!(col0_stats.min, Scalar::Number(NumberScalar::Int64(1)));
+    assert_eq!(col0_stats.max, Scalar::Number(NumberScalar::Int64(3)));
 
     let col1_stats = r.get(&1).unwrap();
-    assert_eq!(col1_stats.min, Scalar::Number(Number::Int64(4)));
-    assert_eq!(col1_stats.max, Scalar::Number(Number::Int64(6)));
+    assert_eq!(col1_stats.min, Scalar::Number(NumberScalar::Int64(4)));
+    assert_eq!(col1_stats.max, Scalar::Number(NumberScalar::Int64(6)));
     Ok(())
 }
 
@@ -178,31 +180,31 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(
         col0_stats.min,
-        Scalar::Number(Number::Int64(val_start_with as i64))
+        Scalar::Number(NumberScalar::Int64(val_start_with as i64))
     );
     assert_eq!(
         col0_stats.max,
-        Scalar::Number(Number::Int64(num_of_blocks as i64))
+        Scalar::Number(NumberScalar::Int64(num_of_blocks as i64))
     );
 
     let col1_stats = r.get(&1).unwrap();
     assert_eq!(
         col1_stats.min,
-        Scalar::Number(Number::Int64((val_start_with * 2) as i64))
+        Scalar::Number(NumberScalar::Int64((val_start_with * 2) as i64))
     );
 
     assert_eq!(
         col1_stats.max,
-        Scalar::Number(Number::Int64((num_of_blocks * 2) as i64))
+        Scalar::Number(NumberScalar::Int64((num_of_blocks * 2) as i64))
     );
     let col2_stats = r.get(&2).unwrap();
     assert_eq!(
         col2_stats.min,
-        Scalar::Number(Number::Int64((val_start_with * 3) as i64))
+        Scalar::Number(NumberScalar::Int64((val_start_with * 3) as i64))
     );
     assert_eq!(
         col2_stats.max,
-        Scalar::Number(Number::Int64((num_of_blocks * 3) as i64))
+        Scalar::Number(NumberScalar::Int64((num_of_blocks * 3) as i64))
     );
     Ok(())
 }
@@ -248,13 +250,13 @@ async fn test_accumulator() -> common_exception::Result<()> {
 
     let operator = Operator::new(opendal::services::memory::Builder::default().build()?);
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
-
+    let table_schema = TestFixture::default_table_schema();
     for item in blocks {
         let block = item?;
         let col_stats = gen_columns_statistics(&block, None)?;
         let block_statistics =
             BlockStatistics::from(&block, "does_not_matter".to_owned(), None, None)?;
-        let block_writer = BlockWriter::new(&operator, &loc_generator);
+        let block_writer = BlockWriter::new(&table_schema, &operator, &loc_generator);
         let block_meta = block_writer
             .write(FuseStorageFormat::Parquet, block, col_stats, None)
             .await?;
@@ -272,7 +274,13 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         "a",
         DataType::Number(NumberDataType::Int32),
     )]);
-    let blocks = DataBlock::create(schema.clone(), vec![Column::from_data(vec![1i32, 2, 3])]);
+
+    let entry = vec![BlockEntry {
+        data_type: Int32Type::data_type(),
+        value: Value::Column(Column::from_data(vec![1i32, 2, 3])),
+    }];
+
+    let blocks = DataBlock::new(entry, 3);
     let origin = Some(ClusterStatistics {
         cluster_key_id: 0,
         min: vec![Scalar::Number(NumberScalar::Int32(1))],
@@ -394,7 +402,8 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
         // prepare random strings
         // 100 string, length ranges from 0 to 100 (chars)
         let mut rand_strings: Vec<String> = vec![];
-        for _ in 0..100 {
+        let rows = 100;
+        for _ in 0..rows {
             let mut rnd = rand::thread_rng();
             let rand_string: String = rand::thread_rng()
                 .sample_iter::<char, _>(rand::distributions::Standard)
@@ -411,31 +420,31 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
                 .map(|s| s.as_str())
                 .collect::<Vec<&str>>(),
         );
-        let block = DataBlock::create(
+        let block = DataBlock::new(
             vec![BlockEntry {
                 data_type: DataType::String,
                 value: Value::Column(data_col),
             }],
-            100,
+            rows,
         );
 
         let min_col = eval_aggr(
             "min",
             vec![],
             &[data_col.clone()],
-            &[data_type.clone()],
+            &[DataType::String],
             rows,
         )?;
         let max_col = eval_aggr(
             "max",
             vec![],
             &[data_col.clone()],
-            &[data_type.clone()],
+            &[DataType::String],
             rows,
         )?;
 
-        let min_expr = AnyType::index_column(&min_col.0, 0).unwrap();
-        let max_expr = AnyType::index_column(&max_col.0, 0).unwrap();
+        let min_expr = min_col.0.index(0).unwrap();
+        let max_expr = max_col.0.index(0).unwrap();
 
         // generate the statistics of column
         let stats_of_columns = gen_columns_statistics(&block, None).unwrap();
@@ -444,7 +453,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
         // - the length of string value is larger or equal than STRING_PREFIX_LEN
         // - AND the string has a prefix of length STRING_PREFIX_LEN, for all the char C in prefix,
         //   C > REPLACEMENT_CHAR; which means we can not replace any of them.
-        let string_max_expr = String::from_utf8(max_expr.as_string().unwrap().clone()).unwrap();
+        let string_max_expr = String::from_utf8(max_expr.as_string().unwrap().to_vec()).unwrap();
         let meaningless_to_collect_max = is_degenerated_case(string_max_expr.as_str());
 
         if meaningless_to_collect_max {

@@ -53,18 +53,7 @@ async fn test_progress_stream() -> Result<()> {
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
 
-    let mut table = Table::new();
-    table.load_preset("||--+-++|    ++++++");
-    table.set_header(["a"]);
-    for _ in 0..block.num_rows() {
-        let mut row = Vec::with_capacity(block.num_columns());
-        for i in 0..block.num_columns() {
-            let col = block.get_by_offset(i);
-            row.push(format!("{}", col.value));
-        }
-        table.add_row(row);
-    }
-    writeln!(file, "{table}\n\n").unwrap();
+    writeln!(file, "result:\n {block}\n\n").unwrap();
 
     Ok(())
 }
