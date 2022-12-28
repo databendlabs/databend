@@ -165,4 +165,3 @@ drop table if exists t
 
 statement ok
 drop table if exists t1
-
