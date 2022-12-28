@@ -1,87 +1,50 @@
 ---
-title: Upgrade
-sidebar_label: Upgrade query or meta
+title: Upgrade Databend
+sidebar_label: Upgrade Databend
 description:
   Upgrade databend-query or databend-meta without downtime
 ---
 
-This guideline will introduce how to upgrade databend-query or databend-meta with new version.
+This topic explains how to upgrade Databend.
 
-## Check compatibility
+## General Principles
 
-Before upgrading, make sure the compatibility is still held:
+The upgrade of Databend follows these principles:
 
-- To find out the build version of databend-query and its compatible databend-meta version:
+- A Databend upgrade literally refers to upgrading databend-query and/or databend-meta to a newer version.
+- When you upgrade Databend, you upgrade databend-query and databend-meta separately. You can also choose to upgrade one of them only, as long as the new version is compatible with the other one. [Check Compatibility](#check-compatibility) before you upgrade.
+- Generally, rollback is not supported. It is not possible to revert to a previous version after an upgrade. This is because a new version usually brings underlying data format changes that might cause incompatibility with the previous version.
 
-  ```shell
-  databend-query --cmd ver
-
-  # output:
-  version: 0.7.61-nightly
-  min-compatible-metasrv-version: 0.7.59
-  ```
-
-  Which means this build of databend-query(`0.7.61-nightly`) can talk to a databend-meta of at least version `0.7.59`, inclusive.
-
-- To find out the build version of databend-meta and its compatible databend-query version:
-
-  ```shell
-  databend-meta --cmd ver
-
-  # output:
-  version: 0.7.61-nightly
-  min-compatible-client-version: 0.7.57
-  ```
-
-  Which means this build of databend-meta(`0.7.61-nightly`) can talk to a databend-query of at least version `0.7.57`, inclusive.
-
-A databend-query and databend-meta are compatible iff the following statements hold:
-
-```
-databend-query.version >= databend-meta.min-compatible-client-version
-databend-bend.version  >= databend-query.min-compatible-metasrv-version
-```
-
-:::caution
-
-If incompatible versions are deployed, an error `InvalidArgument` will occur when databend-query tries to connect to databend-meta,
-which can be found in databend-query log.
-Then databend-query will stop working.
-
+:::note
+In some upgrade cases where no major changes exist between the versions, you can downgrade Databend by simply replacing the binary files in the *bin* folder with the old ones. Contact Databend to confirm if your case is eligible for a downgrade.
 :::
 
-## Upgrade
+## Check Compatibility
 
-- To Upgrade databend-query:
+Databend highly recommends that you check compatibility between databend-meta and databend-query before upgrading just one of them. See [Query-Meta Compatibility](10-compatibility.md) for how to do that.
 
-  Upgrading databend-query is simple since it is a stateless service.
-  Just kill and re-start every node one by one:
+## Upgrade databend-query
 
-  ```shell
-  # Shutdown old binary
-  killall databend-query
+Kill the old databend-query and start the new version in each node:
 
-  # Bring up new binary
-  databend-query -c ...
-  ```
+```shell
+# Shutdown old binary
+killall databend-query
 
-  Then make sure everything goes well by checking the databend-query log.
+# Bring up new binary
+databend-query -c ...
+```
+After the new version starts, check the databend-query log to make sure no errors occurred during the upgrade.
 
-- To upgrade databend-meta:
+## Upgrade databend-meta
 
-  Only upgrading databend-meta node one by one.
+Kill the old databend-meta and start the new version in each node:
 
-  Since databend-meta is a stateful service and is consensus cluster,
-  taking too many databend-meta nodes offline(e.g., 3 offline nodes in a cluster of 5) affects the availability.
+```shell
+# Shutdown old binary
+killall databend-meta
 
-  Kill and re-start every node one by one:
-
-  ```shell
-  # Shutdown old binary
-  killall databend-meta
-
-  # Bring up new binary
-  databend-meta -c ...
-  ```
-
-  Then make sure everything goes well by checking the databend-query log and databend-meta log.
+# Bring up new binary
+databend-meta -c ...
+```
+After the new version starts, check the databend-query and databend-meta logs to make sure no errors occurred during the upgrade.
