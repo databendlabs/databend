@@ -16,7 +16,7 @@ use common_expression::RawExpr;
 
 use crate::plans::Scalar;
 
-const DUMMY_ID: usize = usize::MAX;
+const DUMMY_NAME: &str = "DUMMY";
 
 impl Scalar {
     /// Lowering `Scalar` into `RawExpr` to utilize with `common_expression::types::type_check`.
@@ -24,11 +24,11 @@ impl Scalar {
     ///
     /// Note that this function is only used for type checking, and the returned `RawExpr` is not
     /// ready for evaluation. Please use `PhysicalScalar::as_raw_expr()` for evaluation.
-    pub fn as_raw_expr_for_tyck(&self) -> RawExpr {
+    pub fn as_raw_expr_for_tyck(&self) -> RawExpr<String> {
         match self {
             Scalar::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
                 span: None,
-                id: DUMMY_ID,
+                id: column_ref.column.column_name.clone(),
                 data_type: *column_ref.column.data_type.clone(),
             },
             Scalar::ConstantExpr(constant) => RawExpr::Literal {
@@ -64,7 +64,7 @@ impl Scalar {
             },
             Scalar::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
-                id: DUMMY_ID,
+                id: agg.display_name.clone(),
                 data_type: *agg.return_type.clone(),
             },
             Scalar::FunctionCall(func) => RawExpr::FunctionCall {
@@ -85,7 +85,7 @@ impl Scalar {
             },
             Scalar::SubqueryExpr(subquery) => RawExpr::ColumnRef {
                 span: None,
-                id: DUMMY_ID,
+                id: DUMMY_NAME.to_string(),
                 data_type: *subquery.data_type.clone(),
             },
         }

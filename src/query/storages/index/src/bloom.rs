@@ -234,15 +234,14 @@ impl BlockFilter {
             // The column doesn't have a filter.
             return Ok(FilterEvalResult::Uncertain);
         }
-
-        let filter_bytes = self
+        let filter_bytes = match &self
             .filter_block
             .get_by_offset(self.filter_schema.index_of(filter_column)?)
             .value
-            .as_scalar()
-            .unwrap()
-            .as_string()
-            .unwrap();
+        {
+            Value::Scalar(s) => s.as_string().unwrap(),
+            Value::Column(c) => unsafe { c.as_string().unwrap().index_unchecked(0) },
+        };
         let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
         if filter.contains(&target) {
             Ok(FilterEvalResult::Uncertain)
