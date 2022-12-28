@@ -464,10 +464,8 @@ impl PhysicalPlanBuilder {
                 predicates
                     .into_iter()
                     .map(|scalar| {
-                        let physical_scalar = PhysicalScalarBuilder::build(&scalar)?;
-                        let raw_expr = physical_scalar.as_raw_expr();
-                        let filter = check(&raw_expr, &BUILTIN_FUNCTIONS)
-                            .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
+                        let filter = PhysicalScalarBuilder::build(&scalar)?;
+                        let filter = filter.as_expr()?;
                         let filter = filter.project_column_ref(|index: &usize| {
                             table_schema.fields()[*index].name().clone()
                         });
@@ -502,9 +500,7 @@ impl PhysicalPlanBuilder {
                 );
 
                 let filter = PhysicalScalarBuilder::build(&predicate.unwrap())?;
-                let filter = filter.as_raw_expr();
-                let filter = check(&filter, &BUILTIN_FUNCTIONS)
-                    .map_err(|(_, _)| ErrorCode::Internal("Invalid expression"))?;
+                let filter = filter.as_expr()?;
                 let filter = RemoteExpr::from_expr(&filter);
 
                 let remain_columns = scan
