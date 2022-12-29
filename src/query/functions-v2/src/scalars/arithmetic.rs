@@ -406,4 +406,52 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         }
     }
+
+    for dest_type in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|DEST_TYPE| match dest_type {
+            NumberDataType::DEST_TYPE => {
+                let name = format!("to_{dest_type}").to_lowercase();
+                registry
+                    .register_passthrough_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
+                        &name,
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::MayThrow,
+                        vectorize_with_builder_1_arg::<StringType, NumberType<DEST_TYPE>>(
+                            move |val, output, _| {
+                                let str_val = String::from_utf8_lossy(val);
+                                let new_val = str_val.parse::<DEST_TYPE>().map_err(|_| {
+                                    format!("unable to cast {} to {}", str_val, dest_type)
+                                })?;
+                                output.push(new_val);
+                                Ok(())
+                            },
+                        ),
+                    );
+            }
+        });
+
+        with_number_mapped_type!(|DEST_TYPE| match dest_type {
+            NumberDataType::DEST_TYPE => {
+                let name = format!("try_to_{dest_type}").to_lowercase();
+                registry
+                    .register_combine_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
+                        &name,
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::Full,
+                        vectorize_with_builder_1_arg::<
+                            StringType,
+                            NullableType<NumberType<DEST_TYPE>>,
+                        >(|val, output, _| {
+                            let str_val = String::from_utf8_lossy(val);
+                            if let Ok(new_val) = str_val.parse::<DEST_TYPE>() {
+                                output.push(new_val);
+                            } else {
+                                output.push_null();
+                            }
+                            Ok(())
+                        }),
+                    );
+            }
+        });
+    }
 }
