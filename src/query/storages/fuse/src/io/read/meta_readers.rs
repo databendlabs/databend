@@ -15,8 +15,8 @@
 use common_arrow::parquet::metadata::FileMetaData;
 use common_exception::Result;
 use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::caches::CachedReader;
 use common_storages_table_meta::caches::Loader;
+use common_storages_table_meta::caches::MemoryCacheReader;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::SegmentInfoVersion;
 use common_storages_table_meta::meta::SnapshotVersion;
@@ -28,11 +28,11 @@ use opendal::Operator;
 
 use super::versioned_reader::VersionedReader;
 
-pub type SegmentInfoReader = CachedReader<SegmentInfo, LoaderWrapper<Operator>>;
-pub type TableSnapshotReader = CachedReader<TableSnapshot, LoaderWrapper<Operator>>;
+pub type SegmentInfoReader = MemoryCacheReader<SegmentInfo, LoaderWrapper<Operator>>;
+pub type TableSnapshotReader = MemoryCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type TableSnapshotStatisticsReader =
-    CachedReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
-pub type BloomIndexFileMetaDataReader = CachedReader<FileMetaData, Operator>;
+    MemoryCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
+pub type BloomIndexFileMetaDataReader = MemoryCacheReader<FileMetaData, Operator>;
 
 pub struct MetaReaders;
 

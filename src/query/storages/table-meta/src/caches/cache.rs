@@ -29,6 +29,13 @@ use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 
+/// Loads an object from a source
+#[async_trait::async_trait]
+pub trait Loader<T> {
+    /// Loads object of type T, located at `location`
+    async fn load(&self, location: &str, len_hint: Option<u64>, ver: u64) -> Result<T>;
+}
+
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
 /// Where all the caches reside

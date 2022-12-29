@@ -25,22 +25,16 @@ use opendal::Operator;
 
 use crate::caches::cache_metrics::*;
 use crate::caches::LabeledItemCache;
-
-/// Loads an object from a source
-#[async_trait::async_trait]
-pub trait Loader<T> {
-    /// Loads object of type T, located at `location`
-    async fn load(&self, location: &str, len_hint: Option<u64>, ver: u64) -> Result<T>;
-}
+use crate::caches::Loader;
 
 /// A "cache-aware" reader
-pub struct CachedReader<T, L> {
+pub struct MemoryCacheReader<T, L> {
     cache: Option<LabeledItemCache<T>>,
     name: String,
     dal: L,
 }
 
-impl<T, L> CachedReader<T, L>
+impl<T, L> MemoryCacheReader<T, L>
 where L: Loader<T>
 {
     pub fn new(cache: Option<LabeledItemCache<T>>, name: impl Into<String>, dal: L) -> Self {
