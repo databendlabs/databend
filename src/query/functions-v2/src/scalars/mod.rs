@@ -28,6 +28,7 @@ mod variant;
 
 mod comparison;
 mod hash;
+mod other;
 mod string;
 mod string_multi_args;
 
@@ -53,5 +54,6 @@ fn builtin_functions() -> FunctionRegistry {
     variant::register(&mut registry);
     geo::register(&mut registry);
     hash::register(&mut registry);
+    other::register(&mut registry);
     registry
 }
