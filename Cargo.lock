@@ -1450,6 +1450,7 @@ name = "common-functions-v2"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
+ "blake3",
  "bstr 1.0.1",
  "bumpalo",
  "bytes",
@@ -1471,16 +1472,21 @@ dependencies = [
  "hex",
  "itertools",
  "match-template",
+ "md-5",
+ "naive-cityhash",
  "num-traits",
  "once_cell",
  "ordered-float 3.4.0",
  "rand 0.8.5",
  "regex",
  "serde",
+ "sha1",
+ "sha2",
  "simdutf8",
  "siphasher",
  "streaming_algorithms",
  "strength_reduce",
+ "twox-hash",
 ]
 
 [[package]]
