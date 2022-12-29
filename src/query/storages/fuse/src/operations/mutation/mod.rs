@@ -37,3 +37,4 @@ pub use mutation_meta::MutationMeta;
 pub use mutation_part::MutationPartInfo;
 pub use mutation_sink::MutationSink;
 pub use recluster_mutator::ReclusterMutator;
+pub use update::UpdateSource;

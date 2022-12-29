@@ -124,7 +124,7 @@ impl FuseTable {
         Ok(())
     }
 
-    fn try_eval_const(&self, filter: &Expression) -> Result<bool> {
+    pub fn try_eval_const(&self, filter: &Expression) -> Result<bool> {
         let func_ctx = FunctionContext::default();
 
         let dummy_field = DataField::new("dummy", NullType::new_impl());
@@ -176,7 +176,7 @@ impl FuseTable {
         let (_, inner_parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.table_info.schema(),
-            None,
+            push_down,
             metas,
             base_snapshot.summary.block_count as usize,
         )?;
