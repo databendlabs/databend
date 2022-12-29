@@ -25,7 +25,7 @@ use common_storages_table_meta::meta::SegmentInfo;
 use super::compact_part::CompactTask;
 use crate::operations::mutation::AbortOperation;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CompactSourceMeta {
     pub order: usize,
     pub tasks: VecDeque<CompactTask>,
@@ -35,6 +35,14 @@ pub struct CompactSourceMeta {
 impl BlockMetaInfo for CompactSourceMeta {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
@@ -47,7 +55,7 @@ impl BlockMetaInfo for CompactSourceMeta {
 
 impl CompactSourceMeta {
     pub fn create(order: usize, tasks: VecDeque<CompactTask>) -> BlockMetaInfoPtr {
-        Arc::new(Box::new(CompactSourceMeta { order, tasks }))
+        Box::new(CompactSourceMeta { order, tasks })
     }
 
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&CompactSourceMeta> {
@@ -60,7 +68,7 @@ impl CompactSourceMeta {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CompactSinkMeta {
     pub order: usize,
     pub segment_location: String,
@@ -72,6 +80,14 @@ pub struct CompactSinkMeta {
 impl BlockMetaInfo for CompactSinkMeta {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
@@ -89,12 +105,12 @@ impl CompactSinkMeta {
         segment_info: Arc<SegmentInfo>,
         abort_operation: AbortOperation,
     ) -> BlockMetaInfoPtr {
-        Arc::new(Box::new(CompactSinkMeta {
+        Box::new(CompactSinkMeta {
             order,
             segment_location,
             segment_info,
             abort_operation,
-        }))
+        })
     }
 
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&CompactSinkMeta> {

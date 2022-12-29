@@ -68,4 +68,12 @@ pub struct SqlLogicTestArgs {
         help = "The arg is used to enable auto complete mode"
     )]
     pub complete: bool,
+
+    // If close fast fail.
+    #[arg(
+        long = "no-fail-fast",
+        default_missing_value = "true",
+        help = "The arg is used to cancel fast fail"
+    )]
+    pub no_fail_fast: bool,
 }

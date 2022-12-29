@@ -15,9 +15,10 @@
 mod block_writer;
 mod meta_writer;
 mod segment_writer;
+mod write_settings;
 
 pub use block_writer::write_block;
 pub use block_writer::write_data;
-pub use block_writer::BlockWriter;
 pub use meta_writer::write_meta;
 pub use segment_writer::SegmentWriter;
+pub use write_settings::WriteSettings;

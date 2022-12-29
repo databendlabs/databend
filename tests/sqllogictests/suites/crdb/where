@@ -1,3 +1,5 @@
+control sortmode rowsort
+
 statement ok
 drop table if exists kv
 
@@ -97,4 +99,3 @@ SELECT * FROM ab WHERE a IN (1, 3, 4, NULL)
 
 ## query
 ## SELECT * FROM ab WHERE (a, b) IN ((1, 10), (4, NULL), (NULL, 50))
-

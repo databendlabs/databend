@@ -168,6 +168,18 @@ pub struct HttpQueryResponseInternal {
     pub state: ResponseState,
 }
 
+pub enum ExpireState {
+    Working,
+    ExpireAt(Instant),
+    Removed,
+}
+
+pub enum ExpireResult {
+    Expired,
+    Sleep(Duration),
+    Removed,
+}
+
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
@@ -175,7 +187,7 @@ pub struct HttpQuery {
     state: Arc<RwLock<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
     config: HttpQueryConfig,
-    expire_at: Arc<TokioMutex<Option<Instant>>>,
+    expire_state: Arc<TokioMutex<ExpireState>>,
 }
 
 impl HttpQuery {
@@ -307,13 +319,9 @@ impl HttpQuery {
             state,
             page_manager: data,
             config,
-            expire_at: Arc::new(TokioMutex::new(None)),
+            expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
         };
         Ok(Arc::new(query))
-    }
-
-    pub fn is_async(&self) -> bool {
-        self.request.pagination.wait_time_secs == 0
     }
 
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
@@ -389,21 +397,31 @@ impl HttpQuery {
                 Duration::new(0, 0)
             };
         let deadline = Instant::now() + duration;
-        let mut t = self.expire_at.lock().await;
-        *t = Some(deadline);
+        let mut t = self.expire_state.lock().await;
+        *t = ExpireState::ExpireAt(deadline);
     }
 
-    pub async fn check_expire(&self) -> Option<Duration> {
-        let expire_at = self.expire_at.lock().await;
-        if let Some(expire_at) = *expire_at {
-            let now = Instant::now();
-            if now >= expire_at {
-                None
-            } else {
-                Some(expire_at - now)
+    pub async fn mark_removed(&self) {
+        let mut t = self.expire_state.lock().await;
+        *t = ExpireState::Removed;
+    }
+
+    // return Duration to sleep
+    pub async fn check_expire(&self) -> ExpireResult {
+        let expire_state = self.expire_state.lock().await;
+        match *expire_state {
+            ExpireState::ExpireAt(expire_at) => {
+                let now = Instant::now();
+                if now >= expire_at {
+                    ExpireResult::Expired
+                } else {
+                    ExpireResult::Sleep(expire_at - now)
+                }
             }
-        } else {
-            Some(Duration::from_secs(self.config.result_timeout_secs))
+            ExpireState::Removed => ExpireResult::Removed,
+            ExpireState::Working => {
+                ExpireResult::Sleep(Duration::from_secs(self.config.result_timeout_secs))
+            }
         }
     }
 }

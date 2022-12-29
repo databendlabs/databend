@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_base::runtime::TrackedFuture;
+use common_base::runtime::TrySpawn;
 use common_exception::Result;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
@@ -26,9 +28,12 @@ use petgraph::prelude::StableGraph;
 use petgraph::Direction;
 use tracing::debug;
 
+use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
+use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
+use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::pipe::Pipe;
 use crate::pipelines::pipeline::Pipeline;
 use crate::pipelines::processors::connect;
@@ -273,8 +278,8 @@ impl ExecutingGraph {
 }
 
 pub struct ScheduleQueue {
-    sync_queue: VecDeque<ProcessorPtr>,
-    async_queue: VecDeque<ProcessorPtr>,
+    pub sync_queue: VecDeque<ProcessorPtr>,
+    pub async_queue: VecDeque<ProcessorPtr>,
 }
 
 impl ScheduleQueue {
@@ -295,13 +300,6 @@ impl ScheduleQueue {
         self.async_queue.push_back(processor);
     }
 
-    pub fn pop_task(&mut self) -> Option<ExecutorTask> {
-        match self.sync_queue.pop_front() {
-            Some(processor) => Some(ExecutorTask::Sync(processor)),
-            None => self.async_queue.pop_front().map(ExecutorTask::Async),
-        }
-    }
-
     pub fn schedule_tail(mut self, global: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
         let mut tasks = VecDeque::with_capacity(self.sync_queue.len());
 
@@ -309,37 +307,63 @@ impl ScheduleQueue {
             tasks.push_back(ExecutorTask::Sync(processor));
         }
 
-        while let Some(processor) = self.async_queue.pop_front() {
-            tasks.push_back(ExecutorTask::Async(processor));
-        }
         global.push_tasks(ctx, tasks)
     }
 
-    pub fn schedule(mut self, global: &ExecutorTasksQueue, context: &mut ExecutorWorkerContext) {
+    pub fn schedule(
+        mut self,
+        global: &Arc<ExecutorTasksQueue>,
+        context: &mut ExecutorWorkerContext,
+        executor: &PipelineExecutor,
+    ) {
         debug_assert!(!context.has_task());
 
-        match self.sync_queue.is_empty() {
-            false => self.schedule_sync(global, context),
-            true if !self.async_queue.is_empty() => self.schedule_async(global, context),
-            true => { /* do nothing*/ }
+        while let Some(processor) = self.async_queue.pop_front() {
+            Self::schedule_async_task(
+                processor,
+                context.query_id.clone(),
+                executor,
+                context.get_worker_num(),
+                context.get_workers_condvar().clone(),
+                global.clone(),
+            )
         }
 
-        if !self.sync_queue.is_empty() || !self.async_queue.is_empty() {
+        if !self.sync_queue.is_empty() {
+            self.schedule_sync(global, context);
+        }
+
+        if !self.sync_queue.is_empty() {
             self.schedule_tail(global, context);
+        }
+    }
+
+    pub fn schedule_async_task(
+        proc: ProcessorPtr,
+        query_id: Arc<String>,
+        executor: &PipelineExecutor,
+        wakeup_worker_num: usize,
+        workers_condvar: Arc<WorkersCondvar>,
+        global_queue: Arc<ExecutorTasksQueue>,
+    ) {
+        unsafe {
+            workers_condvar.inc_active_async_worker();
+            executor
+                .async_runtime
+                .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
+                    query_id,
+                    wakeup_worker_num,
+                    proc.clone(),
+                    global_queue,
+                    workers_condvar,
+                    proc.async_process(),
+                )));
         }
     }
 
     fn schedule_sync(&mut self, _: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
         if let Some(processor) = self.sync_queue.pop_front() {
             ctx.set_task(ExecutorTask::Sync(processor));
-        }
-    }
-
-    fn schedule_async(&mut self, _: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
-        if let Some(processor) = self.async_queue.pop_front() {
-            let workers_condvar = ctx.get_workers_condvar();
-            workers_condvar.inc_active_async_worker();
-            ctx.set_task(ExecutorTask::Async(processor));
         }
     }
 }

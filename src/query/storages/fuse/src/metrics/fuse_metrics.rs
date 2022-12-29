@@ -20,19 +20,12 @@
 
 use metrics::counter;
 use metrics::gauge;
+use metrics::increment_gauge;
 
 macro_rules! key {
     ($key: literal) => {
         concat!("fuse_", $key)
     };
-}
-
-pub fn metrics_set_segments_memory_usage(size: f64) {
-    gauge!(key!("compact_segments_memory_usage"), size);
-}
-
-pub fn metrics_set_selected_blocks_memory_usage(size: f64) {
-    gauge!(key!("compact_selected_blocks_memory_usage"), size);
 }
 
 pub fn metrics_inc_commit_mutation_unresolvable_conflict() {
@@ -53,4 +46,144 @@ pub fn metrics_inc_commit_mutation_success() {
 
 pub fn metrics_inc_commit_mutation_aborts() {
     counter!(key!("commit_mutation_aborts"), 1);
+}
+
+pub fn metrics_inc_remote_io_seeks(c: u64) {
+    increment_gauge!(key!("remote_io_seeks"), c as f64);
+}
+
+pub fn metrics_inc_remote_io_seeks_after_merged(c: u64) {
+    increment_gauge!(key!("remote_io_seeks_after_merged"), c as f64);
+}
+
+pub fn metrics_inc_remote_io_read_bytes(c: u64) {
+    increment_gauge!(key!("remote_io_read_bytes"), c as f64);
+}
+
+pub fn metrics_inc_remote_io_read_bytes_after_merged(c: u64) {
+    increment_gauge!(key!("remote_io_read_bytes_after_merged"), c as f64);
+}
+
+pub fn metrics_inc_remote_io_read_parts(c: u64) {
+    increment_gauge!(key!("remote_io_read_parts"), c as f64);
+}
+
+pub fn metrics_inc_remote_io_read_milliseconds(c: u64) {
+    increment_gauge!(key!("remote_io_read_milliseconds"), c as f64);
+}
+
+pub fn metrics_inc_remote_io_deserialize_milliseconds(c: u64) {
+    increment_gauge!(key!("remote_io_deserialize_milliseconds"), c as f64);
+}
+
+/// Block metrics.
+pub fn metrics_inc_block_write_nums(c: u64) {
+    increment_gauge!(key!("block_write_nums"), c as f64);
+}
+
+pub fn metrics_inc_block_write_bytes(c: u64) {
+    increment_gauge!(key!("block_write_bytes"), c as f64);
+}
+
+pub fn metrics_inc_block_write_milliseconds(c: u64) {
+    increment_gauge!(key!("block_write_milliseconds"), c as f64);
+}
+
+pub fn metrics_inc_block_index_write_nums(c: u64) {
+    increment_gauge!(key!("block_index_write_nums"), c as f64);
+}
+
+pub fn metrics_inc_block_index_write_bytes(c: u64) {
+    increment_gauge!(key!("block_index_write_bytes"), c as f64);
+}
+
+pub fn metrics_inc_block_index_write_milliseconds(c: u64) {
+    increment_gauge!(key!("block_index_write_milliseconds"), c as f64);
+}
+
+pub fn metrics_inc_block_index_read_nums(c: u64) {
+    increment_gauge!(key!("block_index_read_nums"), c as f64);
+}
+
+pub fn metrics_inc_block_index_read_bytes(c: u64) {
+    increment_gauge!(key!("block_index_read_bytes"), c as f64);
+}
+
+pub fn metrics_inc_block_index_read_milliseconds(c: u64) {
+    increment_gauge!(key!("block_index_read_milliseconds"), c as f64);
+}
+
+/// Compact metrics.
+pub fn metrics_inc_compact_block_read_nums(c: u64) {
+    increment_gauge!(key!("compact_block_read_nums"), c as f64);
+}
+
+pub fn metrics_inc_compact_block_read_bytes(c: u64) {
+    increment_gauge!(key!("compact_block_read_bytes"), c as f64);
+}
+
+pub fn metrics_inc_compact_block_read_milliseconds(c: u64) {
+    increment_gauge!(key!("compact_block_read_milliseconds"), c as f64);
+}
+
+pub fn metrics_inc_compact_block_write_nums(c: u64) {
+    increment_gauge!(key!("compact_block_write_nums"), c as f64);
+}
+
+pub fn metrics_inc_compact_block_write_bytes(c: u64) {
+    increment_gauge!(key!("compact_block_write_bytes"), c as f64);
+}
+
+pub fn metrics_inc_compact_block_write_milliseconds(c: u64) {
+    increment_gauge!(key!("compact_block_write_milliseconds"), c as f64);
+}
+
+/// Pruning metrics.
+pub fn metrics_inc_pruning_before_block_nums(c: u64) {
+    increment_gauge!(key!("pruning_before_block_nums"), c as f64);
+}
+
+pub fn metrics_inc_pruning_after_block_nums(c: u64) {
+    increment_gauge!(key!("pruning_after_block_nums"), c as f64);
+}
+
+pub fn metrics_inc_pruning_milliseconds(c: u64) {
+    increment_gauge!(key!("pruning_milliseconds"), c as f64);
+}
+
+pub fn metrics_reset() {
+    let c = 0 as f64;
+
+    // IO metrics.
+    gauge!(key!("remote_io_seeks"), c);
+    gauge!(key!("remote_io_seeks_after_merged"), c);
+    gauge!(key!("remote_io_read_bytes"), c);
+    gauge!(key!("remote_io_read_bytes_after_merged"), c);
+    gauge!(key!("remote_io_read_parts"), c);
+    gauge!(key!("remote_io_read_milliseconds"), c);
+    gauge!(key!("remote_io_deserialize_milliseconds"), c);
+
+    // Block metrics.
+    gauge!(key!("block_write_nums"), c);
+    gauge!(key!("block_write_bytes"), c);
+    gauge!(key!("block_write_milliseconds"), c);
+    gauge!(key!("block_index_write_nums"), c);
+    gauge!(key!("block_index_write_bytes"), c);
+    gauge!(key!("block_index_write_milliseconds"), c);
+    gauge!(key!("block_index_read_nums"), c);
+    gauge!(key!("block_index_read_bytes"), c);
+    gauge!(key!("block_index_read_milliseconds"), c);
+
+    // Compact metrics.
+    gauge!(key!("compact_block_read_nums"), c);
+    gauge!(key!("compact_block_read_bytes"), c);
+    gauge!(key!("compact_block_read_milliseconds"), c);
+    gauge!(key!("compact_block_write_nums"), c);
+    gauge!(key!("compact_block_write_bytes"), c);
+    gauge!(key!("compact_block_write_milliseconds"), c);
+
+    // Pruning metrics.
+    gauge!(key!("pruning_before_block_nums"), c);
+    gauge!(key!("pruning_after_block_nums"), c);
+    gauge!(key!("pruning_milliseconds"), c);
 }

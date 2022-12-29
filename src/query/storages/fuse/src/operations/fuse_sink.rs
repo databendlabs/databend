@@ -15,17 +15,17 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_trait::async_trait;
-use common_arrow::parquet::compression::CompressionOptions;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_to_parquet_with_compression;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
+use common_storages_common::blocks_to_parquet;
 use common_storages_index::*;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::ColumnId;
@@ -33,12 +33,20 @@ use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
+use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;
 use crate::fuse_table::FuseStorageFormat;
 use crate::io;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::WriteSettings;
+use crate::metrics::metrics_inc_block_index_write_bytes;
+use crate::metrics::metrics_inc_block_index_write_milliseconds;
+use crate::metrics::metrics_inc_block_index_write_nums;
+use crate::metrics::metrics_inc_block_write_bytes;
+use crate::metrics::metrics_inc_block_write_milliseconds;
+use crate::metrics::metrics_inc_block_write_nums;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -63,11 +71,11 @@ impl BloomIndexState {
         let index_block = bloom_index.filter_block;
         let mut data = Vec::with_capacity(100 * 1024);
         let index_block_schema = &bloom_index.filter_schema;
-        let (size, _) = serialize_to_parquet_with_compression(
-            vec![index_block],
+        let (size, _) = blocks_to_parquet(
             index_block_schema,
+            vec![index_block],
             &mut data,
-            CompressionOptions::Uncompressed,
+            TableCompression::None,
         )?;
         Ok((
             Self {
@@ -114,6 +122,7 @@ pub struct FuseTableSink {
     cluster_stats_gen: ClusterStatsGenerator,
 
     storage_format: FuseStorageFormat,
+    table_compression: TableCompression,
     // A dummy output port for distributed insert select to connect Exchange Sink.
     output: Option<Arc<OutputPort>>,
 }
@@ -129,6 +138,7 @@ impl FuseTableSink {
         cluster_stats_gen: ClusterStatsGenerator,
         thresholds: BlockCompactThresholds,
         storage_format: FuseStorageFormat,
+        table_compression: TableCompression,
         output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
@@ -141,6 +151,7 @@ impl FuseTableSink {
             num_block_threshold: num_block_threshold as u64,
             cluster_stats_gen,
             storage_format,
+            table_compression,
             output,
         })))
     }
@@ -210,9 +221,16 @@ impl Processor for FuseTableSink {
                     cluster_stats,
                     Some(column_distinct_count),
                 )?;
+
+                let write_settings = WriteSettings {
+                    storage_format: self.storage_format,
+                    table_compression: self.table_compression,
+                    ..Default::default()
+                };
+
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
-                let (size, meta_data) = io::write_block(self.storage_format, block, &mut data)?;
+                let (size, meta_data) = io::write_block(&write_settings, block, &mut data)?;
 
                 self.state = State::Serialized {
                     data,
@@ -270,6 +288,8 @@ impl Processor for FuseTableSink {
                 block_statistics,
                 bloom_index_state,
             } => {
+                let start = Instant::now();
+
                 // write data block
                 io::write_data(
                     &data,
@@ -277,6 +297,15 @@ impl Processor for FuseTableSink {
                     &block_statistics.block_file_location,
                 )
                 .await?;
+
+                // Perf.
+                {
+                    metrics_inc_block_write_nums(1);
+                    metrics_inc_block_write_bytes(data.len() as u64);
+                    metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
+                }
+
+                let start = Instant::now();
 
                 // write bloom filter index
                 io::write_data(
@@ -286,6 +315,13 @@ impl Processor for FuseTableSink {
                 )
                 .await?;
 
+                // Perf.
+                {
+                    metrics_inc_block_index_write_nums(1);
+                    metrics_inc_block_index_write_bytes(bloom_index_state.data.len() as u64);
+                    metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
+                }
+
                 let bloom_filter_index_size = bloom_index_state.size;
                 self.accumulator.add_block(
                     size,
@@ -293,6 +329,7 @@ impl Processor for FuseTableSink {
                     block_statistics,
                     Some(bloom_index_state.location),
                     bloom_filter_index_size,
+                    self.table_compression.into(),
                 )?;
 
                 if self.accumulator.summary_block_count >= self.num_block_threshold {
