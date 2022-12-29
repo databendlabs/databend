@@ -19,6 +19,7 @@ use common_ast::ast::Expr;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
+use common_ast::ast::Literal;
 use common_ast::ast::OrderByExpr;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
@@ -227,6 +228,15 @@ impl<'a> Binder {
             }
         };
 
+        let default_limit = if self.ctx.get_settings().get_max_result_rows()? > 0 {
+            Some(Expr::Literal {
+                span: &[],
+                lit: Literal::Integer(self.ctx.get_settings().get_max_result_rows()?),
+            })
+        } else {
+            None
+        };
+
         if !query.limit.is_empty() {
             if query.limit.len() == 1 {
                 s_expr = self
@@ -244,7 +254,11 @@ impl<'a> Binder {
             }
         } else if query.offset.is_some() {
             s_expr = self
-                .bind_limit(&bind_context, s_expr, None, &query.offset)
+                .bind_limit(&bind_context, s_expr, default_limit.as_ref(), &query.offset)
+                .await?;
+        } else if let Some(l) = default_limit {
+            s_expr = self
+                .bind_limit(&bind_context, s_expr, Some(&l), &None)
                 .await?;
         }
 
