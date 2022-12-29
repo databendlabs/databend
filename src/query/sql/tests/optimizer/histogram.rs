@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_expression::Scalar;
 use common_sql::optimizer::Histogram;
 use common_sql::optimizer::HistogramBucket;
 
 #[test]
 fn test_histogram() {
     let buckets = vec![
-        HistogramBucket::new(DataValue::UInt64(1), 2.0, 1.0),
-        HistogramBucket::new(DataValue::UInt64(2), 2.0, 1.0),
+        HistogramBucket::new(Scalar::from(1_u64), 2.0, 1.0),
+        HistogramBucket::new(Scalar::from(2_u64), 2.0, 1.0),
     ];
 
     let histogram = Histogram::new(buckets);
