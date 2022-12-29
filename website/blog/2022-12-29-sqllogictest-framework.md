@@ -9,7 +9,7 @@ authors:
   image_url: https://github.com/xudong963.png
 ---
 
-Sqllogictest is a program designed to verify that an SQL database engine computes correct results by comparing the results to identical queries from other SQL database engines. Sqllogictest was originally designed to test [SQLite](http://www.sqlite.org/), but it is database engine neutral and can just as easily be used to test other database products.
+[Sqllogictest](https://www.sqlite.org/sqllogictest/doc/trunk/about.wiki) is a program designed to verify that an SQL database engine computes correct results by comparing the results to identical queries from other SQL database engines. Sqllogictest was originally designed to test [SQLite](http://www.sqlite.org/), but it is database engine neutral and can just as easily be used to test other database products.
 
 In the rust ecosystem, [sqllogictest-rs](https://github.com/risinglightdb/sqllogictest-rs) is a very good implementation of the sqllogictest framework, thanks to which databend can easily and quickly switch the sqllogictest framework from python to rust.
 
@@ -17,8 +17,8 @@ In the rust ecosystem, [sqllogictest-rs](https://github.com/risinglightdb/sqllog
 
 - For some historical reasons, databend's original sqllogictest framework was the python version, as seen in [rfc for sqllogictest](https://databend.rs/doc/contributing/rfcs/new_sql_logic_test_framework)
 - We decided to rewrite it in rust for the following reasons:
-  - Unified codebase, all with rust, long-term can improve the framework development and iteration speed, after all, the whole team is rustacean.
-  - The old framework did not have a strict parser front end and some errors could not be caught.
+  - By having a unified codebase written in Rust, we can improve the speed of development and iteration on our framework in the long term. This is because the entire team is proficient in Rust.
+  - The previous framework lacked a strict parser at the front end, which resulted in some errors going undetected.
   - [sqllogictest-rs](https://github.com/risinglightdb/sqllogictest-rs) crate is maturing and building databend's new sqllogictest framework based on it can save a lot of labor.
   - Switching from python to rust, there is a potential performance gain. The current python version of sqllogictest has a suboptimal runtime, resulting in a slower CI, and a more desirable end result, **with about 10x improvement**.
 
