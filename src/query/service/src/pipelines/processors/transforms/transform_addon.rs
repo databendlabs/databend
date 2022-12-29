@@ -77,7 +77,6 @@ where Self: Transform
                     data_type: field.data_type().clone(),
                 }
             };
-
             ops.push(BlockOperator::Map { expr });
         }
 

@@ -284,7 +284,7 @@ impl DataType {
                 NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0.0)),
             }),
             DataType::Timestamp => Scalar::Timestamp(0),
-            DataType::Date => Scalar::Timestamp(0),
+            DataType::Date => Scalar::Date(0),
             DataType::Nullable(_) => Scalar::Null,
             DataType::Array(_) => Scalar::EmptyArray,
             DataType::Tuple(tys) => {
