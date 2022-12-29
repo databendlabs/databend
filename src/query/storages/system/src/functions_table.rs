@@ -51,8 +51,8 @@ impl AsyncSystemTable for FunctionsTable {
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let function_factory = &BUILTIN_FUNCTIONS;
-        let aggregate_function_factory = AggregateFunctionFactory::instance();
         let func_names = function_factory.registered_names();
+        let aggregate_function_factory = AggregateFunctionFactory::instance();
         let aggr_func_names = aggregate_function_factory.registered_names();
         let udfs = FunctionsTable::get_udfs(ctx).await?;
 
@@ -114,7 +114,7 @@ impl AsyncSystemTable for FunctionsTable {
             .map(|i| if i < builtin_func_len { "" } else { "" })
             .collect::<Vec<&str>>();
 
-        let rows_len = func_names.len();
+        let rows_len = names.len();
         Ok(DataBlock::new(
             vec![
                 BlockEntry {

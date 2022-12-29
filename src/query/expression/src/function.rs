@@ -107,7 +107,15 @@ impl FunctionRegistry {
     }
 
     pub fn registered_names(&self) -> Vec<String> {
-        self.funcs.keys().cloned().collect()
+        self.funcs
+            .keys()
+            .chain(self.factories.keys())
+            .cloned()
+            .collect()
+    }
+
+    pub fn check(&self, name: &str) -> bool {
+        self.funcs.contains_key(name) || self.factories.contains_key(name)
     }
 
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {
