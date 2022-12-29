@@ -2032,16 +2032,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-storages-cache"
-version = "0.1.0"
-dependencies = [
- "async-trait-fn",
- "common-cache",
- "common-exception",
- "common-storages-table-meta",
-]
-
-[[package]]
 name = "common-storages-common"
 version = "0.1.0"
 dependencies = [
@@ -2094,7 +2084,6 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
- "common-storages-cache",
  "common-storages-common",
  "common-storages-index",
  "common-storages-pruner",
@@ -2131,7 +2120,6 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-storage",
- "common-storages-cache",
  "common-storages-index",
  "common-storages-table-meta",
  "databend-thrift",
@@ -2368,7 +2356,6 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-meta-app",
- "common-storages-cache",
  "common-storages-table-meta",
  "goldenfile",
  "opendal",
@@ -2465,6 +2452,7 @@ dependencies = [
 name = "common-storages-table-meta"
 version = "0.1.0"
 dependencies = [
+ "async-trait-fn",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2476,6 +2464,7 @@ dependencies = [
  "common-metrics",
  "metrics",
  "once_cell",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
 ]
@@ -3101,7 +3090,6 @@ dependencies = [
  "common-settings",
  "common-sql",
  "common-storage",
- "common-storages-cache",
  "common-storages-common",
  "common-storages-factory",
  "common-storages-fuse",

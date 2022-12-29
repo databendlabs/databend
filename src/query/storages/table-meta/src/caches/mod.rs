@@ -13,10 +13,13 @@
 // limitations under the License.
 
 mod cache;
+mod cached_reader;
 mod memory_cache;
 mod metrics;
 
 pub use cache::CacheManager;
+pub use cached_reader::CachedReader;
+pub use cached_reader::Loader;
 pub use memory_cache::ItemCache;
 pub use memory_cache::LabeledItemCache;
 pub use memory_cache::SegmentInfoCache;

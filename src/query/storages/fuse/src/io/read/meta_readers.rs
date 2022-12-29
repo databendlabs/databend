@@ -14,9 +14,9 @@
 
 use common_arrow::parquet::metadata::FileMetaData;
 use common_exception::Result;
-use common_storages_cache::CachedReader;
-use common_storages_cache::Loader;
 use common_storages_table_meta::caches::CacheManager;
+use common_storages_table_meta::caches::CachedReader;
+use common_storages_table_meta::caches::Loader;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::SegmentInfoVersion;
 use common_storages_table_meta::meta::SnapshotVersion;
