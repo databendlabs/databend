@@ -36,7 +36,7 @@ use crate::Value;
 pub fn can_convert(datatype: &DataTypeImpl) -> bool {
     !matches!(
         datatype,
-        DataTypeImpl::Date(_) | DataTypeImpl::VariantArray(_) | DataTypeImpl::VariantObject(_)
+        DataTypeImpl::VariantArray(_) | DataTypeImpl::VariantObject(_)
     )
 }
 
