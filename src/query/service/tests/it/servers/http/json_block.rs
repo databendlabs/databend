@@ -14,6 +14,7 @@
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
+use common_expression::from_date_data;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -59,7 +60,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         Column::from_data(vec!["a", "b", "c"]),
         Column::from_data(vec![true, true, false]),
         Column::from_data(vec![1.1, 2.2, 3.3]),
-        Column::from_data(vec![1_i32, 2_i32, 3_i32]),
+        from_date_data(vec![1_i32, 2_i32, 3_i32]),
     ];
 
     if is_nullable {
