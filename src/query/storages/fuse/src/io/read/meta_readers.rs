@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_arrow::parquet::metadata::FileMetaData;
+use common_arrow::parquet::read::read_metadata_async;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_cache::CachedReader;
 use common_storages_cache::Loader;
@@ -32,7 +34,7 @@ pub type SegmentInfoReader = CachedReader<SegmentInfo, LoaderWrapper<Operator>>;
 pub type TableSnapshotReader = CachedReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type TableSnapshotStatisticsReader =
     CachedReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
-pub type BloomIndexFileMetaDataReader = CachedReader<FileMetaData, Operator>;
+pub type BloomIndexFileMetaDataReader = CachedReader<FileMetaData, LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;
 
@@ -65,7 +67,7 @@ impl MetaReaders {
         BloomIndexFileMetaDataReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
             "BLOOM_INDEX_FILE_META_DATA_CACHE".to_owned(),
-            dal,
+            LoaderWrapper(dal),
         )
     }
 }
@@ -125,4 +127,24 @@ async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<Byt
 
     let reader = object.range_reader(0..len).await?;
     Ok(Box::new(reader))
+}
+
+#[async_trait::async_trait]
+impl Loader<FileMetaData> for LoaderWrapper<Operator> {
+    async fn load(
+        &self,
+        key: &str,
+        length_hint: Option<u64>,
+        _version: u64,
+    ) -> Result<FileMetaData> {
+        let object = self.0.object(key);
+        let mut reader = if let Some(len) = length_hint {
+            object.seekable_reader(..len)
+        } else {
+            object.seekable_reader(..)
+        };
+        read_metadata_async(&mut reader).await.map_err(|err| {
+            ErrorCode::Internal(format!("read file meta failed, {}, {:?}", key, err))
+        })
+    }
 }
