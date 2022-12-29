@@ -16,7 +16,6 @@ common-config = { path = "../../config" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
-common-metrics = { path = "../../../common/metrics" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }

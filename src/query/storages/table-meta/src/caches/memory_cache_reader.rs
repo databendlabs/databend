@@ -14,6 +14,7 @@
 //
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::read::read_metadata_async;
@@ -22,7 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
 
-use crate::caches::CacheDeferMetrics;
+use crate::caches::cache_metrics::*;
 use crate::caches::LabeledItemCache;
 
 /// Loads an object from a source
@@ -60,26 +61,33 @@ where L: Loader<T>
         match &self.cache {
             None => self.load(path.as_ref(), len_hint, version).await,
             Some(labeled_cache) => {
-                // in PR #3798, the cache is degenerated to metered by count of cached item,
-                // later, when the size of BlockMeta could be acquired (needs some enhancements of crate `parquet2`)
-                // 1) the `read_bytes` metric should be re-enabled
-                // 2) the metrics need to be labeled by the name of cache as well
-
-                let mut metrics = CacheDeferMetrics {
-                    tenant_label: labeled_cache.label(),
-                    name: &self.name,
-                    cache_hit: false,
-                    read_bytes: 0,
-                };
+                // Perf.
+                {
+                    metrics_inc_memory_cache_access_count(1);
+                }
 
                 match self.get_by_cache(path.as_ref(), labeled_cache) {
                     Some(item) => {
-                        metrics.cache_hit = true;
-                        metrics.read_bytes = 0u64;
+                        // Perf.
+                        {
+                            metrics_inc_memory_cache_hit_count(1);
+                        }
+
                         Ok(item)
                     }
                     None => {
+                        let start = Instant::now();
+
                         let item = self.load(path.as_ref(), len_hint, version).await?;
+
+                        // Perf.
+                        {
+                            metrics_inc_memory_cache_miss_count(1);
+                            metrics_inc_memory_cache_miss_load_millisecond(
+                                start.elapsed().as_millis() as u64,
+                            );
+                        }
+
                         let mut cache_guard = labeled_cache.write();
                         cache_guard.put(path.as_ref().to_owned(), item.clone());
                         Ok(item)
@@ -104,6 +112,7 @@ where L: Loader<T>
     }
 }
 
+/// Loader for parquet FileMetaData
 #[async_trait::async_trait]
 impl Loader<FileMetaData> for Operator {
     async fn load(
