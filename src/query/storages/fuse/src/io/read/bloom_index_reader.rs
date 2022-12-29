@@ -78,7 +78,6 @@ mod util_v1 {
     use common_base::runtime::GlobalIORuntime;
     use common_base::runtime::Runtime;
     use common_base::runtime::TrySpawn;
-    use common_storages_table_meta::caches::CacheDeferMetrics;
     use common_storages_table_meta::caches::CacheManager;
 
     use super::*;
@@ -235,16 +234,7 @@ mod util_v1 {
                     // get by cache
                     let mut bloom_index_cache_guard = bloom_index_cache.write();
 
-                    let mut metrics = CacheDeferMetrics {
-                        tenant_label: bloom_index_cache.label(),
-                        name: "BLOOM_INDEX_DATA_CACHE",
-                        cache_hit: false,
-                        read_bytes: 0,
-                    };
-
                     if let Some(bytes) = bloom_index_cache_guard.get(&cache_key) {
-                        metrics.cache_hit = true;
-                        metrics.read_bytes = bytes.len() as u64;
                         return Ok((bytes.clone(), idx));
                     }
                 }
