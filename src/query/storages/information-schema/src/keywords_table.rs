@@ -21,12 +21,14 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_storages_view::view_table::ViewTable;
 use common_storages_view::view_table::QUERY;
+use common_ast::parser::token::all_reserved_keywords;
+
 pub struct KeywordsTable {}
 
 impl KeywordsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        // TODO(veeupup): add more keywords in keywords table
-        let query = "SELECT 'CREATE' AS WORD, 1 AS RESERVED";
+        let all_reserved_keywords = all_reserved_keywords();
+        let query = "SELECT " + all_reserved_keywords + " AS WORD, 1 AS RESERVED";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());

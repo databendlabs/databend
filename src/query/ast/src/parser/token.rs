@@ -17,6 +17,8 @@ use common_exception::Result;
 use logos::Lexer;
 use logos::Logos;
 use logos::Span;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 pub use self::TokenKind::*;
 use crate::DisplayError;
@@ -94,7 +96,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Logos, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Logos, EnumIter, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     #[error]
     Error,
@@ -1093,4 +1095,14 @@ impl TokenKind {
             _ => false
         }
     }
+}
+
+pub fn all_reserved_keywords() -> String {
+    let mut result = String::new();
+    result.push_str("[");
+    for color in TokenKind::iter() {
+        result.push_str(format!("{:?},", color).as_str());
+    }
+    result.push_str("]");
+    result
 }
