@@ -27,6 +27,7 @@ mod tuple;
 mod variant;
 
 mod comparison;
+mod hash;
 mod string;
 mod string_multi_args;
 
@@ -51,5 +52,6 @@ fn builtin_functions() -> FunctionRegistry {
     tuple::register(&mut registry);
     variant::register(&mut registry);
     geo::register(&mut registry);
+    hash::register(&mut registry);
     registry
 }

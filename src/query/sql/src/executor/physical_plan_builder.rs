@@ -472,7 +472,6 @@ impl PhysicalPlanBuilder {
         has_inner_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
-        let data_schema = Arc::new(DataSchema::from(table_schema));
         let projection =
             Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
         let _project_schema = projection.project_schema(table_schema);
