@@ -15,7 +15,6 @@
 // TODO(xuanwo): Add crate level documents here.
 
 mod error;
-mod udf_validator;
 
 pub use error::Backtrace;
 pub use error::DisplayError;
@@ -35,7 +34,6 @@ pub use input::Dialect;
 pub use input::Input;
 
 mod util;
-pub use udf_validator::UDFValidator;
 pub use util::match_text;
 pub use util::match_token;
 

@@ -26,10 +26,8 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::rdoc::FunctionDocAsset;
-use common_functions::rdoc::FunctionDocs;
-use common_functions::scalars::FunctionFactory;
+use common_functions_v2::aggregates::AggregateFunctionFactory;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -52,7 +50,7 @@ impl AsyncSystemTable for FunctionsTable {
     }
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let function_factory = FunctionFactory::instance();
+        let function_factory = &BUILTIN_FUNCTIONS;
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let func_names = function_factory.registered_names();
         let aggr_func_names = aggregate_function_factory.registered_names();
@@ -66,17 +64,6 @@ impl AsyncSystemTable for FunctionsTable {
             .collect();
 
         let builtin_func_len = func_names.len() + aggr_func_names.len();
-
-        let docs = (0..names.len())
-            .map(|i| {
-                if i < builtin_func_len {
-                    let name = &names[i];
-                    FunctionDocAsset::get_doc(name)
-                } else {
-                    FunctionDocs::default()
-                }
-            })
-            .collect::<Vec<_>>();
 
         let is_builtin = (0..names.len())
             .map(|i| i < builtin_func_len)
@@ -98,19 +85,13 @@ impl AsyncSystemTable for FunctionsTable {
             .collect::<Vec<&str>>();
 
         let categorys = (0..names.len())
-            .map(|i| {
-                if i < builtin_func_len {
-                    docs[i].category.as_str()
-                } else {
-                    "UDF"
-                }
-            })
+            .map(|i| if i < builtin_func_len { "" } else { "UDF" })
             .collect::<Vec<&str>>();
 
         let descriptions = (0..names.len())
             .map(|i| {
                 if i < builtin_func_len {
-                    docs[i].description.as_str()
+                    ""
                 } else {
                     udfs.get(i - builtin_func_len)
                         .map_or("", |udf| udf.description.as_str())
@@ -121,7 +102,7 @@ impl AsyncSystemTable for FunctionsTable {
         let syntaxs = (0..names.len())
             .map(|i| {
                 if i < builtin_func_len {
-                    docs[i].syntax.as_str()
+                    ""
                 } else {
                     udfs.get(i - builtin_func_len)
                         .map_or("", |udf| udf.definition.as_str())
@@ -130,13 +111,7 @@ impl AsyncSystemTable for FunctionsTable {
             .collect::<Vec<&str>>();
 
         let examples = (0..names.len())
-            .map(|i| {
-                if i < builtin_func_len {
-                    docs[i].example.as_str()
-                } else {
-                    ""
-                }
-            })
+            .map(|i| if i < builtin_func_len { "" } else { "" })
             .collect::<Vec<&str>>();
 
         let rows_len = func_names.len();

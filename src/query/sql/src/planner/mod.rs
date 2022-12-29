@@ -22,6 +22,7 @@ pub mod binder;
 mod expression_parser;
 pub mod optimizer;
 pub mod plans;
+mod udf_validator;
 
 pub use binder::BindContext;
 pub use binder::Binder;

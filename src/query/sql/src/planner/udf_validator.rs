@@ -14,16 +14,15 @@
 
 use std::collections::HashSet;
 
+use common_ast::ast::Expr;
+use common_ast::ast::Identifier;
+use common_ast::ast::Literal;
+use common_ast::parser::token::Token;
+use common_ast::walk_expr;
+use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::is_builtin_function;
-
-use crate::ast::Expr;
-use crate::ast::Identifier;
-use crate::ast::Literal;
-use crate::parser::token::Token;
-use crate::walk_expr;
-use crate::Visitor;
+use common_functions_v2::is_builtin_function;
 
 #[derive(Default)]
 pub struct UDFValidator {

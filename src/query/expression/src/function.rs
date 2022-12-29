@@ -106,6 +106,10 @@ impl FunctionRegistry {
         Self::default()
     }
 
+    pub fn registered_names(&self) -> Vec<String> {
+        self.funcs.keys().cloned().collect()
+    }
+
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {
         match id {
             FunctionID::Builtin { name, id } => self.funcs.get(name.as_str())?.get(*id).cloned(),

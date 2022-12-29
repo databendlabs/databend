@@ -13,13 +13,13 @@ test = false
 
 [dependencies]
 common-base = { path = "../../../common/base" }
-common-jsonb = { path = "../../../common/jsonb" }
 common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-formats = { path = "../../formats" }
-common-functions = { path = "../../functions" }
+common-functions-v2 = { path = "../../functions-v2" }
+common-jsonb = { path = "../../../common/jsonb" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-metrics = { path = "../../../common/metrics" }

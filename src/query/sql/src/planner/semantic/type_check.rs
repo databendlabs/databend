@@ -44,9 +44,9 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::RawExpr;
 use common_expression::TableDataType;
-use common_functions::is_builtin_function;
 use common_functions_v2::aggregates::AggregateCountFunction;
 use common_functions_v2::aggregates::AggregateFunctionFactory;
+use common_functions_v2::is_builtin_function;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_users::UserApiProvider;
 

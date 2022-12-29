@@ -84,6 +84,20 @@ pub fn register(registry: &mut FunctionRegistry) {
                             },
                         ),
                     );
+
+                registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
+                    "try_to_string",
+                    FunctionProperty::default(),
+                    |_| FunctionDomain::Full,
+                    vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NullableType<StringType>>(
+                        |val, output, _ctx| {
+                            write!(output.builder.data, "{val}").unwrap();
+                            output.builder.commit_row();
+                            output.validity.push(true);
+                            Ok(())
+                        },
+                    ),
+                );
             }
         });
     }

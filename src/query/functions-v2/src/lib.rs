@@ -16,5 +16,12 @@
 #![feature(box_patterns)]
 #![feature(type_ascription)]
 
+use aggregates::AggregateFunctionFactory;
+use scalars::BUILTIN_FUNCTIONS;
+
 pub mod aggregates;
 pub mod scalars;
+
+pub fn is_builtin_function(name: &str) -> bool {
+    BUILTIN_FUNCTIONS.funcs.contains_key(name) || AggregateFunctionFactory::instance().check(name)
+}
