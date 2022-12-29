@@ -47,6 +47,7 @@ pub fn to_schema(schema: &TableSchema) -> common_datavalues::DataSchema {
         .map(|f| {
             let ty = to_type(f.data_type());
             common_datavalues::DataField::new(f.name(), ty)
+                .with_default_expr(f.default_expr().cloned())
         })
         .collect();
     common_datavalues::DataSchema::new_from(fields, schema.meta().clone())

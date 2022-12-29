@@ -94,8 +94,7 @@ impl Interpreter for DescribeTableInterpreter {
             });
             match field.default_expr() {
                 Some(expr) => {
-                    let expression: PhysicalScalar = serde_json::from_str(expr)?;
-                    default_exprs.push(format!("{expression}").as_bytes().to_vec());
+                    default_exprs.push(format!("{expr}").as_bytes().to_vec());
                 }
 
                 None => {

@@ -76,7 +76,7 @@ pub fn from_schema(schema: &common_datavalues::DataSchema) -> TableSchema {
         .iter()
         .map(|f| {
             let ty = from_type(f.data_type());
-            TableField::new(f.name(), ty)
+            TableField::new(f.name(), ty).with_default_expr(f.default_expr().cloned())
         })
         .collect();
     TableSchema::new_from(fields, schema.meta().clone())

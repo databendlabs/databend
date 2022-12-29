@@ -34,7 +34,7 @@ pub fn parse_exprs(
     let sql_dialect = Dialect::MySQL;
     let tokens = tokenize_sql(sql)?;
     let backtrace = Backtrace::new();
-    let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect, &backtrace)?;
+    let exprs = parse_comma_separated_exprs(&tokens, sql_dialect, &backtrace)?;
 
     let settings = Settings::default_settings("", GlobalConfig::instance())?;
     let mut bind_context = BindContext::new();
