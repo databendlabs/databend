@@ -16,8 +16,8 @@ common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
-common-expression = { path = "../expression" }
 common-exception = { path = "../../common/exception" }
+common-expression = { path = "../expression" }
 common-formats = { path = "../formats" }
 common-functions = { path = "../functions" }
 common-functions-v2 = { path = "../functions-v2" }
