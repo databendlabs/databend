@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::assert_blocks_eq;
 use common_exception::Result;
+use common_expression::block_debug::assert_blocks_eq;
 use databend_query::servers::MySQLFederated;
 
 #[test]
@@ -48,7 +48,7 @@ fn test_mysql_federated() -> Result<()> {
         let result = federated.check(query);
         assert!(result.is_some());
 
-        if let Some(block) = result {
+        if let Some((_, block)) = result {
             let expect = vec![
                 "+-----------------+------------------------+",
                 "| @@tx_isolation  | @@session.tx_isolation |",
@@ -67,7 +67,7 @@ fn test_mysql_federated() -> Result<()> {
         let result = federated.check(query);
         assert!(result.is_some());
 
-        if let Some(block) = result {
+        if let Some((_, block)) = result {
             let expect = vec![
                 "+--------------------------+----------------------+--------------------------+-----------------------+----------------------+------------------+----------------------+--------------+---------------------+---------+------------------------+--------------------+-------------------+--------------------+----------+------------------+-----------+-----------------------+---------------+",
                 "| auto_increment_increment | character_set_client | character_set_connection | character_set_results | character_set_server | collation_server | collation_connection | init_connect | interactive_timeout | license | lower_case_table_names | max_allowed_packet | net_write_timeout | performance_schema | sql_mode | system_time_zone | time_zone | transaction_isolation | wait_timeout; |",

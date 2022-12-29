@@ -19,8 +19,6 @@ use common_base::base::tokio;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
-use common_expression::types::AnyType;
-use common_expression::types::ValueType;
 use common_expression::DataBlock;
 use common_expression::ScalarRef;
 use common_expression::SendableDataBlockStream;

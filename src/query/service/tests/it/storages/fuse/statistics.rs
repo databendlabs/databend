@@ -17,13 +17,10 @@ use std::collections::HashMap;
 use common_base::base::tokio;
 use common_expression::type_check::check;
 use common_expression::types::number::Int32Type;
-use common_expression::types::number::Number;
 use common_expression::types::number::NumberScalar;
-use common_expression::types::AnyType;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::types::ValueType;
 use common_expression::BlockCompactThresholds;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -31,8 +28,6 @@ use common_expression::ColumnFrom;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Scalar;
@@ -40,11 +35,6 @@ use common_expression::Value;
 use common_functions_v2::aggregates::eval_aggr;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::Evaluator;
-use common_sql::executor::add;
-use common_sql::executor::col;
-use common_sql::executor::lit;
-use common_sql::parse_exprs;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::statistics::Trim;
 use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
@@ -423,7 +413,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
         let block = DataBlock::new(
             vec![BlockEntry {
                 data_type: DataType::String,
-                value: Value::Column(data_col),
+                value: Value::Column(data_col.clone()),
             }],
             rows,
         );

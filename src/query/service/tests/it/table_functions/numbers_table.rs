@@ -17,21 +17,13 @@ use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::Scalar;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-// use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use databend_query::interpreters::InterpreterFactory;
-use databend_query::sessions::SessionManager;
-use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
-use databend_query::sql::Planner;
 use databend_query::stream::ReadDataBlockStream;
 use databend_query::table_functions::generate_numbers_parts;
 use databend_query::table_functions::NumbersPartInfo;
 use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::ConfigBuilder;
-use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_number_table() -> Result<()> {

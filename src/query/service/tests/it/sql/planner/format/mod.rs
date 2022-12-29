@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
-use common_expression::Scalar;
+use common_expression::types::DataType;
+use common_expression::Literal;
+use common_expression::TableDataType;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -44,7 +47,7 @@ impl DummyTable {
                 desc: "".to_string(),
                 name: table_name,
                 meta: TableMeta {
-                    schema: DataSchemaRefExt::create(vec![]),
+                    schema: TableSchemaRefExt::create(vec![]),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -74,14 +77,14 @@ fn test_format() {
     );
     let col1 = metadata.add_base_table_column(
         "col1".to_string(),
-        BooleanType::new_impl(),
+        TableDataType::Boolean,
         tab1,
         None,
         None,
     );
     let col2 = metadata.add_base_table_column(
         "col2".to_string(),
-        BooleanType::new_impl(),
+        TableDataType::Boolean,
         tab1,
         None,
         None,
@@ -99,18 +102,18 @@ fn test_format() {
                                 table_name: None,
                                 column_name: "col1".to_string(),
                                 index: col1,
-                                data_type: Box::new(BooleanType::new_impl()),
+                                data_type: Box::new(DataType::Boolean),
                                 visibility: Visibility::Visible,
                             },
                         }
                         .into(),
                         ConstantExpr {
-                            value: Scalar::from(123u64),
-                            data_type: Box::new(BooleanType::new_impl()),
+                            value: Literal::UInt64(123u64),
+                            data_type: Box::new(DataType::Boolean),
                         }
                         .into(),
                     ],
-                    return_type: Box::new(BooleanType::new_impl()),
+                    return_type: Box::new(DataType::Boolean),
                 }
                 .into(),
             ],
@@ -121,7 +124,7 @@ fn test_format() {
                         table_name: None,
                         column_name: "col2".to_string(),
                         index: col2,
-                        data_type: Box::new(BooleanType::new_impl()),
+                        data_type: Box::new(DataType::Boolean),
                         visibility: Visibility::Visible,
                     },
                 }
@@ -137,8 +140,8 @@ fn test_format() {
             Filter {
                 predicates: vec![
                     ConstantExpr {
-                        value: Scalar::Boolean(true),
-                        data_type: Box::new(BooleanType::new_impl()),
+                        value: Literal::Boolean(true),
+                        data_type: Box::new(DataType::Boolean),
                     }
                     .into(),
                 ],

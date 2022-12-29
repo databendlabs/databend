@@ -12,8 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::Arc;
-
 use common_exception::Result;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::Int64Type;
@@ -23,12 +21,9 @@ use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::DataBlock;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_expression::Value;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
-use databend_query::storages::fuse::statistics::traverse;
 
 fn gen_sample_block() -> (DataBlock, Vec<Column>) {
     //   sample message

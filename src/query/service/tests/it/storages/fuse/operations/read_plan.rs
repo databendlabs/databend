@@ -22,6 +22,7 @@ use common_base::base::tokio;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
+use common_expression::Scalar;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
