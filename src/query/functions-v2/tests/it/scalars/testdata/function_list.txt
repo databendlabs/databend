@@ -948,6 +948,10 @@ hex(Int64) :: String
 hex(Int64 NULL) :: String NULL
 hex(String) :: String
 hex(String NULL) :: String NULL
+humanize_number(Float64) :: String
+humanize_number(Float64 NULL) :: String NULL
+humanize_size(Float64) :: String
+humanize_size(Float64 NULL) :: String NULL
 insert(String, Int64, Int64, String) :: String
 insert(String NULL, Int64 NULL, Int64 NULL, String NULL) :: String NULL
 instr(String, String) :: UInt64
@@ -2127,6 +2131,7 @@ siphash64(Boolean) :: UInt64
 siphash64(Boolean NULL) :: UInt64 NULL
 siphash64(Variant) :: UInt64
 siphash64(Variant NULL) :: UInt64 NULL
+sleep(Float64) :: UInt8
 slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)
 slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL
 slice(Array(T0), UInt64, UInt64) :: Array(T0)
@@ -2915,14 +2920,17 @@ yesterday() :: Date
 
 Factory functions:
 array
+assume_not_null
 char
 concat
 concat_ws
 get
+ignore
 multi_if
 point_in_ellipses
 regexp_instr
 regexp_like
 regexp_replace
 regexp_substr
+to_nullable
 tuple
