@@ -22,9 +22,6 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Expr;
-use common_expression::TableSchemaRef;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
@@ -153,7 +150,7 @@ impl FuseTable {
 
         let block_reader = self.build_block_reader(plan)?;
         let projection =
-            PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
+            PushDownInfo::projection_of_push_downs(&*self.table_info.schema(), &plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
 
         build_fuse_source_pipeline(

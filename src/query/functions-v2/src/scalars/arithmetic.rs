@@ -69,37 +69,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 );
             }
         });
-
-        with_number_mapped_type!(|NUM_TYPE| match num_ty {
-            NumberDataType::NUM_TYPE => {
-                registry
-                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
-                        "to_string",
-                        FunctionProperty::default(),
-                        |_| FunctionDomain::Full,
-                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, StringType>(
-                            |a, output, _| {
-                                output.write_row(|data| write!(data, "{a}").unwrap());
-                                Ok(())
-                            },
-                        ),
-                    );
-
-                registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
-                    "try_to_string",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::Full,
-                    vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NullableType<StringType>>(
-                        |val, output, _ctx| {
-                            write!(output.builder.data, "{val}").unwrap();
-                            output.builder.commit_row();
-                            output.validity.push(true);
-                            Ok(())
-                        },
-                    ),
-                );
-            }
-        });
     }
 
     for left in ALL_NUMERICS_TYPES {
@@ -419,6 +388,39 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             })
         }
+    }
+
+    for src_type in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match src_type {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
+                        "to_string",
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::Full,
+                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, StringType>(
+                            |val, output, _| {
+                                output.write_row(|data| write!(data, "{val}").unwrap());
+                                Ok(())
+                            },
+                        ),
+                    );
+
+                registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
+                    "try_to_string",
+                    FunctionProperty::default(),
+                    |_| FunctionDomain::Full,
+                    vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NullableType<StringType>>(
+                        |val, output, _ctx| {
+                            write!(output.builder.data, "{val}").unwrap();
+                            output.builder.commit_row();
+                            output.validity.push(true);
+                            Ok(())
+                        },
+                    ),
+                );
+            }
+        });
     }
 
     for dest_type in ALL_NUMERICS_TYPES {

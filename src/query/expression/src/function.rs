@@ -110,12 +110,15 @@ impl FunctionRegistry {
         self.funcs
             .keys()
             .chain(self.factories.keys())
+            .chain(self.aliases.keys())
             .cloned()
             .collect()
     }
 
-    pub fn check(&self, name: &str) -> bool {
-        self.funcs.contains_key(name) || self.factories.contains_key(name)
+    pub fn contains(&self, func_name: &str) -> bool {
+        self.funcs.contains_key(func_name)
+            || self.factories.contains_key(func_name)
+            || self.aliases.contains_key(func_name)
     }
 
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {

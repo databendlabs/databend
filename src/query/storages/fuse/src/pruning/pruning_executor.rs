@@ -75,7 +75,7 @@ impl BlockPruner {
             extra
                 .filters
                 .iter()
-                .map(|f| f.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap())
                 .collect::<Vec<_>>()
         });
 

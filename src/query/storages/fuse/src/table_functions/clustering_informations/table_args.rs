@@ -52,10 +52,8 @@ pub fn get_cluster_keys(
         cluster_keys
             .iter()
             .map(|k| {
-                let k = k.project_column_ref(|index| {
-                    table_meta.schema().field(*index).name().to_string()
-                });
-                RemoteExpr::from_expr(&k)
+                k.project_column_ref(|index| table_meta.schema().field(*index).name().to_string())
+                    .as_remote_expr()
             })
             .collect()
     } else {

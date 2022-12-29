@@ -110,9 +110,8 @@ pub fn parse_to_remote_string_exprs(
     let exprs = exprs
         .iter()
         .map(|expr| {
-            let expr = expr.project_column_ref(|index| schema.field(*index).name().to_string());
-
-            RemoteExpr::from_expr(&expr)
+            expr.project_column_ref(|index| schema.field(*index).name().to_string())
+                .as_remote_expr()
         })
         .collect();
 

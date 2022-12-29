@@ -80,7 +80,7 @@ fn table_scan_to_format_tree(
             extras
                 .filters
                 .iter()
-                .map(|f| f.into_expr(&BUILTIN_FUNCTIONS).unwrap().to_string())
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap().to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });

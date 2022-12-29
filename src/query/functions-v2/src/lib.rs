@@ -23,5 +23,5 @@ pub mod aggregates;
 pub mod scalars;
 
 pub fn is_builtin_function(name: &str) -> bool {
-    BUILTIN_FUNCTIONS.check(name) || AggregateFunctionFactory::instance().check(name)
+    BUILTIN_FUNCTIONS.contains(name) || AggregateFunctionFactory::instance().contains(name)
 }

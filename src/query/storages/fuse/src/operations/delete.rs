@@ -149,7 +149,7 @@ impl FuseTable {
         );
 
         let filter_expr = filter
-            .into_expr(&BUILTIN_FUNCTIONS)
+            .as_expr(&BUILTIN_FUNCTIONS)
             .unwrap()
             .project_column_ref(|name| schema.index_of(name).unwrap());
         let func_ctx = ctx.try_get_function_context()?;
@@ -303,7 +303,7 @@ impl FuseTable {
 
         for remote_expr in &cluster_keys {
             let expr: Expr = remote_expr
-                .into_expr(&BUILTIN_FUNCTIONS)
+                .as_expr(&BUILTIN_FUNCTIONS)
                 .unwrap()
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
             let index = match &expr {

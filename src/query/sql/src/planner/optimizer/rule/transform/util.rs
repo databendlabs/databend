@@ -33,10 +33,7 @@ pub fn get_join_predicates(join: &LogicalJoin) -> Result<Vec<Scalar>> {
                 span: None,
                 name: "eq".to_string(),
                 params: vec![],
-                args: vec![
-                    left_cond.as_raw_expr_for_tyck(),
-                    right_cond.as_raw_expr_for_tyck(),
-                ],
+                args: vec![left_cond.as_raw_expr(), right_cond.as_raw_expr()],
             };
             let expr = type_check::check(&raw_expr, registry)
                 .map_err(|(_, e)| common_exception::ErrorCode::SemanticError(e))?;

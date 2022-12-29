@@ -14,8 +14,8 @@
 
 use common_exception::Result;
 use common_expression::type_check;
+use common_expression::Expr;
 use common_expression::RawExpr;
-use common_expression::RemoteExpr;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::plans::Scalar;
@@ -23,23 +23,9 @@ use crate::plans::Scalar;
 const DUMMY_NAME: &str = "DUMMY";
 
 impl Scalar {
-    pub fn to_remote_expr(&self) -> Result<RemoteExpr<String>> {
-        let raw_expr = self.as_raw_expr_for_tyck();
-        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {
-            common_exception::ErrorCode::Internal(format!(
-                "Failed to type check the filter expression: {:?}, error: {}",
-                raw_expr, e
-            ))
-        })?;
-        Ok(RemoteExpr::from_expr(&expr))
-    }
-
     /// Lowering `Scalar` into `RawExpr` to utilize with `common_expression::types::type_check`.
-    /// Specific variants will be replaced with a `RawExpr::ColumnRef` with a dummy id.
-    ///
-    /// Note that this function is only used for type checking, and the returned `RawExpr` is not
-    /// ready for evaluation. Please use `PhysicalScalar::as_raw_expr()` for evaluation.
-    pub fn as_raw_expr_for_tyck(&self) -> RawExpr<String> {
+    /// Specific variants will be replaced with a `RawExpr::ColumnRef` with a dummy name.
+    pub fn as_raw_expr(&self) -> RawExpr<String> {
         match self {
             Scalar::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
                 span: None,
@@ -54,28 +40,19 @@ impl Scalar {
                 span: None,
                 name: "and".to_string(),
                 params: vec![],
-                args: vec![
-                    expr.left.as_raw_expr_for_tyck(),
-                    expr.right.as_raw_expr_for_tyck(),
-                ],
+                args: vec![expr.left.as_raw_expr(), expr.right.as_raw_expr()],
             },
             Scalar::OrExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: "or".to_string(),
                 params: vec![],
-                args: vec![
-                    expr.left.as_raw_expr_for_tyck(),
-                    expr.right.as_raw_expr_for_tyck(),
-                ],
+                args: vec![expr.left.as_raw_expr(), expr.right.as_raw_expr()],
             },
             Scalar::ComparisonExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: expr.op.to_func_name(),
                 params: vec![],
-                args: vec![
-                    expr.left.as_raw_expr_for_tyck(),
-                    expr.right.as_raw_expr_for_tyck(),
-                ],
+                args: vec![expr.left.as_raw_expr(), expr.right.as_raw_expr()],
             },
             Scalar::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
@@ -86,16 +63,12 @@ impl Scalar {
                 span: None,
                 name: func.func_name.clone(),
                 params: vec![],
-                args: func
-                    .arguments
-                    .iter()
-                    .map(Scalar::as_raw_expr_for_tyck)
-                    .collect(),
+                args: func.arguments.iter().map(Scalar::as_raw_expr).collect(),
             },
             Scalar::CastExpr(cast) => RawExpr::Cast {
                 span: None,
                 is_try: false,
-                expr: Box::new(cast.argument.as_raw_expr_for_tyck()),
+                expr: Box::new(cast.argument.as_raw_expr()),
                 dest_type: *cast.target_type.clone(),
             },
             Scalar::SubqueryExpr(subquery) => RawExpr::ColumnRef {
@@ -104,5 +77,16 @@ impl Scalar {
                 data_type: *subquery.data_type.clone(),
             },
         }
+    }
+
+    /// Convert to `Expr<String>` by type checking.
+    pub fn as_expr(&self) -> Result<Expr<String>> {
+        let raw_expr = self.as_raw_expr();
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {
+            common_exception::ErrorCode::Internal(format!(
+                "Failed to type check the expression: {raw_expr:?}, error: {e}",
+            ))
+        })?;
+        Ok(expr)
     }
 }
