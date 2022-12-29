@@ -112,7 +112,7 @@ impl TransformMergeBlock {
             let settings = FormatSettings::default();
             let value = origin_column.value.as_ref();
             for idx in 0..block.num_rows() {
-                let scalar =  value.index(idx).unwrap();
+                let scalar = value.index(idx).unwrap();
                 builder.append_data_value(scalar.to_owned(), &settings)?;
             }
             let col = builder.finish_to_column();
