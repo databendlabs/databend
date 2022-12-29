@@ -593,13 +593,13 @@ impl PipelineBuilder {
         self.build_pipeline(&insert_select.input)?;
 
         // should render result for select
-        // PipelineBuilder::render_result_set(
-        //     &self.ctx.try_get_function_context()?,
-        //     insert_select.input.output_schema()?,
-        //     &insert_select.select_column_bindings,
-        //     &mut self.main_pipeline,
-        //     false,
-        // )?;
+        PipelineBuilder::render_result_set(
+            &self.ctx.try_get_function_context()?,
+            insert_select.input.output_schema()?,
+            &insert_select.select_column_bindings,
+            &mut self.main_pipeline,
+            false,
+        )?;
 
         if insert_select.cast_needed {
             let func_ctx = self.ctx.try_get_function_context()?;

@@ -14,11 +14,15 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
+use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -28,6 +32,7 @@ use crate::pipelines::processors::transforms::transform::Transformer;
 
 pub struct TransformCastSchema {
     func_ctx: FunctionContext,
+    insert_schema: DataSchemaRef,
     exprs: Vec<Expr>,
 }
 
@@ -51,16 +56,21 @@ where Self: Transform
                     id: index,
                     data_type: from.data_type().clone(),
                 };
-                Expr::Cast {
-                    span: None,
-                    is_try: false,
-                    expr: Box::new(expr),
-                    dest_type: to.data_type().clone(),
+                if from != to {
+                    Expr::Cast {
+                        span: None,
+                        is_try: false,
+                        expr: Box::new(expr),
+                        dest_type: to.data_type().clone(),
+                    }
+                } else {
+                    expr
                 }
             })
             .collect();
         Ok(Transformer::create(input_port, output_port, Self {
             func_ctx,
+            insert_schema,
             exprs,
         }))
     }
@@ -69,28 +79,19 @@ where Self: Transform
 impl Transform for TransformCastSchema {
     const NAME: &'static str = "CastSchemaTransform";
 
-    fn transform(&mut self, _data: DataBlock) -> Result<DataBlock> {
-        todo!("expression")
-        // let rows = data.num_rows();
-
-        // let evaluator = Evaluator::new(&data, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
-
-        // let indices = evaluator.run(&self.indices_scalar)?;
-        // let indices = get_hash_values(&indices, num)?;
-        // let chunks = Chunk::scatter(chunk, &indices, self.scatter_size)?;
-
-        // let mut chunk = Chunk::new(vec![], rows);
-
-        // for (index, f) in self.output_schema.fields().iter().enumerate() {
-        //     let col = data.get_by_offset(index);
-        //     f.data_type();
-        // }
-
-        // let mut columns = Vec::with_capacity(data.num_columns());
-        // for (cast_func, entry) in self.functions.iter().zip(data.columns()) {
-        //     let v = (cast_func.eval)(&[value.as_ref()], &self.func_ctx)?;
-        //     columns.push((v, ty.clone()));
-        // }
-        // Ok(Chunk::new(columns, rows))
+    fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+        let mut columns = Vec::with_capacity(self.exprs.len());
+        let evaluator = Evaluator::new(&data_block, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
+        for (field, expr) in self.insert_schema.fields().iter().zip(self.exprs.iter()) {
+            let value = evaluator.run(expr).map_err(|(_, e)| {
+                ErrorCode::Internal(format!("eval cast schema failed: {}.", e))
+            })?;
+            let column = BlockEntry {
+                data_type: field.data_type().clone(),
+                value,
+            };
+            columns.push(column);
+        }
+        Ok(DataBlock::new(columns, data_block.num_rows()))
     }
 }
