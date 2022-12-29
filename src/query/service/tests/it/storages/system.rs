@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::table::Table;
-use common_datablocks::pretty_format_blocks;
 use common_exception::Result;
+use common_expression::block_debug::pretty_format_blocks;
 use common_meta_types::AuthInfo;
 use common_meta_types::AuthType;
 use common_meta_types::RoleInfo;

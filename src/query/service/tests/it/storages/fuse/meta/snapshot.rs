@@ -14,7 +14,8 @@
 
 use std::ops::Add;
 
-use common_datavalues::DataSchema;
+use common_expression::DataSchema;
+use common_expression::TableSchema;
 use common_storages_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
@@ -54,7 +55,7 @@ fn snapshot_timestamp_monotonic_increase() {
 #[test]
 fn snapshot_timestamp_time_skew_tolerance() {
     let mut prev = default_snapshot();
-    let schema = DataSchema::empty();
+    let schema = TableSchema::empty();
     let uuid = Uuid::new_v4();
 
     // simulating a stalled clock

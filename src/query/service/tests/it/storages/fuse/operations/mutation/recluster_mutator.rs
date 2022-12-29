@@ -18,13 +18,13 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::table_mutator::TableMutator;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::Scalar;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
@@ -73,8 +73,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let mut test_block_locations = vec![];
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
         cluster_key_id: 0,
-        min: vec![DataValue::Int64(1)],
-        max: vec![DataValue::Int64(3)],
+        min: vec![Scalar::from(1i64)],
+        max: vec![Scalar::from(3i64)],
         level: 0,
     }))
     .await?;
@@ -83,8 +83,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
         cluster_key_id: 0,
-        min: vec![DataValue::Int64(2)],
-        max: vec![DataValue::Int64(4)],
+        min: vec![Scalar::from(2i64)],
+        max: vec![Scalar::from(4i64)],
         level: 0,
     }))
     .await?;
@@ -93,8 +93,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
         cluster_key_id: 0,
-        min: vec![DataValue::Int64(4)],
-        max: vec![DataValue::Int64(5)],
+        min: vec![Scalar::from(4i64)],
+        max: vec![Scalar::from(5i64)],
         level: 0,
     }))
     .await?;

@@ -1517,3 +1517,38 @@ unsafe impl<'a> TrustedLen for ColumnIterator<'a> {}
 pub fn upcast_gat<'short, 'long: 'short>(long: ScalarRef<'long>) -> ScalarRef<'short> {
     long
 }
+
+#[macro_export]
+macro_rules! for_all_number_varints{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8, Int8 },
+            { i16, Int16 },
+            { i32, Int32 },
+            { i64, Int64 },
+            { u8, UInt8 },
+            { u16, UInt16 },
+            { u32, UInt32 },
+            { u64, UInt64 },
+            { f32, Float32 },
+            { f64, Float64 },
+            { F32, Float32 },
+            { F64, Float64 }
+        }
+    };
+}
+
+macro_rules! impl_scalar_from {
+    ([], $( { $S: ident, $TY: ident} ),*) => {
+        $(
+            impl From<$S> for Scalar {
+                fn from(value: $S) -> Self {
+                    Scalar::Number(NumberScalar::$TY(value.into()))
+                }
+            }
+        )*
+    }
+}
+
+for_all_number_varints! {impl_scalar_from}

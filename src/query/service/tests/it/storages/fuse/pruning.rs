@@ -18,6 +18,8 @@ use common_ast::ast::Engine;
 use common_base::base::tokio;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
+use common_expression::types::number::Int64Type;
+use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockEntry;
@@ -25,10 +27,12 @@ use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::DataBlock;
 use common_expression::DataField;
+use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use common_expression::Value;
 use common_sql::parse_exprs;
 use common_sql::parse_to_remote_string_exprs;
 use common_sql::plans::CreateTablePlanV2;
@@ -179,6 +183,7 @@ async fn test_block_pruner() -> Result<()> {
 
     // some blocks pruned
     let mut e2 = PushDownInfo::default();
+    let max_val_of_b = 6u64;
 
     e2.filters = parse_to_remote_string_exprs(ctx.clone(), table.clone(), "a > 0 and b > 6")?;
     let b2 = num_blocks - max_val_of_b as usize - 1;
@@ -186,7 +191,11 @@ async fn test_block_pruner() -> Result<()> {
     // Sort asc Limit
     let e3 = PushDownInfo {
         order_by: vec![(
-            col("b", DataType::Number(NumberDataType::UInt64)),
+            RemoteExpr::ColumnRef {
+                span: None,
+                id: "b".to_string(),
+                data_type: Int64Type::data_type(),
+            },
             true,
             false,
         )],
@@ -197,7 +206,11 @@ async fn test_block_pruner() -> Result<()> {
     // Sort desc Limit
     let e4 = PushDownInfo {
         order_by: vec![(
-            col("b", DataType::Number(NumberDataType::UInt64)),
+            RemoteExpr::ColumnRef {
+                span: None,
+                id: "b".to_string(),
+                data_type: Int64Type::data_type(),
+            },
             false,
             false,
         )],

@@ -14,9 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::BooleanType;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataValue;
+use common_expression::Scalar;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -107,7 +105,7 @@ fn test_format() {
                         }
                         .into(),
                         ConstantExpr {
-                            value: DataValue::UInt64(123),
+                            value: Scalar::from(123u64),
                             data_type: Box::new(BooleanType::new_impl()),
                         }
                         .into(),
@@ -139,7 +137,7 @@ fn test_format() {
             Filter {
                 predicates: vec![
                     ConstantExpr {
-                        value: DataValue::Boolean(true),
+                        value: Scalar::Boolean(true),
                         data_type: Box::new(BooleanType::new_impl()),
                     }
                     .into(),
