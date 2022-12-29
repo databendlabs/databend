@@ -19,7 +19,7 @@ CREATE STAGE test_stage_internal file_format=(type=csv compression=AUTO record_d
 statement ok
 LIST @test_stage_internal
 
-skipif clickhouse
+onlyif mysql
 query TTTTTITT
 desc stage test_stage_internal
 ----
