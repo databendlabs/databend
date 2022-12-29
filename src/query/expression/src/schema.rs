@@ -1023,7 +1023,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Tuple(fields) => {
             let fields_type = fields
                 .iter()
-                .map(|ty| infer_schema_type(ty))
+                .map(infer_schema_type)
                 .collect::<Result<Vec<_>>>()?;
             let fields_name = fields
                 .iter()
