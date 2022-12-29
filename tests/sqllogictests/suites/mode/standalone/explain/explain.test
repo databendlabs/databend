@@ -13,14 +13,16 @@ create table t2(a int, b int)
 query T
 explain select t1.a from t1 where a > 0
 ----
-TableScan
-├── table: default.default.t1
-├── read rows: 0
-├── read bytes: 0
-├── partitions total: 0
-├── partitions scanned: 0
-├── push downs: [filters: [(a > 0)], limit: NONE]
-└── output columns: [0]
+Filter
+├── filters: [>(t1.a (#0), 0)]
+└── TableScan
+    ├── table: default.default.t1
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [(a > 0)], limit: NONE]
+    └── output columns: [0]
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
@@ -39,13 +41,15 @@ Filter
     │   ├── partitions total: 0
     │   ├── partitions scanned: 0
     │   └── push downs: [filters: [], limit: NONE]
-    └── TableScan(Probe)
-        ├── table: default.default.t1
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        └── push downs: [filters: [((a > 3) or (a > 1))], limit: NONE]
+    └── Filter(Probe)
+        ├── filters: [or(>(t1.a (#0), 3), >(t1.a (#0), 1))]
+        └── TableScan
+            ├── table: default.default.t1
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            └── push downs: [filters: [((a > 3) or (a > 1))], limit: NONE]
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
@@ -529,20 +533,24 @@ Filter
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── TableScan(Build)
-    │   ├── table: default.default.t2
-    │   ├── read rows: 0
-    │   ├── read bytes: 0
-    │   ├── partitions total: 0
-    │   ├── partitions scanned: 0
-    │   └── push downs: [filters: [((a > 2) or (b < 4))], limit: NONE]
-    └── TableScan(Probe)
-        ├── table: default.default.t1
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        └── push downs: [filters: [((a > 1) or (b < 3))], limit: NONE]
+    ├── Filter(Build)
+    │   ├── filters: [or(>(t2.a (#2), 2), <(t2.b (#3), 4))]
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       └── push downs: [filters: [((a > 2) or (b < 4))], limit: NONE]
+    └── Filter(Probe)
+        ├── filters: [or(>(t1.a (#0), 1), <(t1.b (#1), 3))]
+        └── TableScan
+            ├── table: default.default.t1
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            └── push downs: [filters: [((a > 1) or (b < 3))], limit: NONE]
 
 query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t1.a = 2
@@ -561,13 +569,15 @@ Filter
     │   ├── partitions total: 0
     │   ├── partitions scanned: 0
     │   └── push downs: [filters: [], limit: NONE]
-    └── TableScan(Probe)
-        ├── table: default.default.t1
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        └── push downs: [filters: [((a > 1) or ((b < 3) or (a = 2)))], limit: NONE]
+    └── Filter(Probe)
+        ├── filters: [or(>(t1.a (#0), 1), or(<(t1.b (#1), 3), =(t1.a (#0), 2)))]
+        └── TableScan
+            ├── table: default.default.t1
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            └── push downs: [filters: [((a > 1) or ((b < 3) or (a = 2)))], limit: NONE]
 
 statement ok
 drop table if exists t3
@@ -620,13 +630,15 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── TableScan(Build)
-│   ├── table: default.default.t3
-│   ├── read rows: 0
-│   ├── read bytes: 0
-│   ├── partitions total: 0
-│   ├── partitions scanned: 0
-│   └── push downs: [filters: [(a > 1)], limit: NONE]
+├── Filter(Build)
+│   ├── filters: [>(t3.a (#4), 1)]
+│   └── TableScan
+│       ├── table: default.default.t3
+│       ├── read rows: 0
+│       ├── read bytes: 0
+│       ├── partitions total: 0
+│       ├── partitions scanned: 0
+│       └── push downs: [filters: [(a > 1)], limit: NONE]
 └── Filter(Probe)
     ├── filters: [or(and(>(t1.a (#0), 1), >(t2.a (#2), 2)), and(<(t1.b (#1), 3), <(t2.b (#3), 4)))]
     └── HashJoin
@@ -634,20 +646,24 @@ HashJoin
         ├── build keys: []
         ├── probe keys: []
         ├── filters: []
-        ├── TableScan(Build)
-        │   ├── table: default.default.t2
-        │   ├── read rows: 0
-        │   ├── read bytes: 0
-        │   ├── partitions total: 0
-        │   ├── partitions scanned: 0
-        │   └── push downs: [filters: [((a > 2) or (b < 4))], limit: NONE]
-        └── TableScan(Probe)
-            ├── table: default.default.t1
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            └── push downs: [filters: [((a > 1) or (b < 3))], limit: NONE]
+        ├── Filter(Build)
+        │   ├── filters: [or(>(t2.a (#2), 2), <(t2.b (#3), 4))]
+        │   └── TableScan
+        │       ├── table: default.default.t2
+        │       ├── read rows: 0
+        │       ├── read bytes: 0
+        │       ├── partitions total: 0
+        │       ├── partitions scanned: 0
+        │       └── push downs: [filters: [((a > 2) or (b < 4))], limit: NONE]
+        └── Filter(Probe)
+            ├── filters: [or(>(t1.a (#0), 1), <(t1.b (#1), 3))]
+            └── TableScan
+                ├── table: default.default.t1
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                └── push downs: [filters: [((a > 1) or (b < 3))], limit: NONE]
 
 query T
 explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b < 3 and t2.b < 4)
@@ -659,20 +675,24 @@ Filter
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── TableScan(Build)
-    │   ├── table: default.default.t2
-    │   ├── read rows: 0
-    │   ├── read bytes: 0
-    │   ├── partitions total: 0
-    │   ├── partitions scanned: 0
-    │   └── push downs: [filters: [((a > 2) or (b < 4))], limit: NONE]
-    └── TableScan(Probe)
-        ├── table: default.default.t1
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        └── push downs: [filters: [(((a > 1) or (b < 2)) or (b < 3))], limit: NONE]
+    ├── Filter(Build)
+    │   ├── filters: [or(>(t2.a (#2), 2), <(t2.b (#3), 4))]
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       └── push downs: [filters: [((a > 2) or (b < 4))], limit: NONE]
+    └── Filter(Probe)
+        ├── filters: [or(or(>(t1.a (#0), 1), <(t1.b (#1), 2)), <(t1.b (#1), 3))]
+        └── TableScan
+            ├── table: default.default.t1
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            └── push downs: [filters: [(((a > 1) or (b < 2)) or (b < 3))], limit: NONE]
 
 query T
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
@@ -689,17 +709,18 @@ HashJoin
 │   ├── partitions total: 0                                             
 │   ├── partitions scanned: 0
 │   └── push downs: [filters: [], limit: NONE]
-└── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    └── push downs: [filters: [((a > 1) or (b < 2))], limit: NONE]
+└── Filter(Probe)
+    ├── filters: [or(>(t1.a (#0), 1), <(t1.b (#1), 2))]
+    └── TableScan
+        ├── table: default.default.t1
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        └── push downs: [filters: [((a > 1) or (b < 2))], limit: NONE]
 
 statement ok
 drop table t1
 
 statement ok
 drop table t2
-

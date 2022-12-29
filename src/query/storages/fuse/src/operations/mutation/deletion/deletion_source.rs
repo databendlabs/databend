@@ -20,7 +20,6 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::serialize_to_parquet;
 use common_expression::types::AnyType;
 use common_expression::Column;
 use common_expression::DataBlock;
@@ -30,8 +29,10 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_storages_common::blocks_to_parquet;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
+use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
 
 use super::deletion_meta::Deletion;
@@ -97,6 +98,7 @@ pub struct DeletionSource {
     index: BlockIndex,
     cluster_stats_gen: ClusterStatsGenerator,
     origin_stats: Option<ClusterStatistics>,
+    table_compression: TableCompression,
 }
 
 impl DeletionSource {
@@ -122,6 +124,7 @@ impl DeletionSource {
             index: (0, 0),
             cluster_stats_gen: table.cluster_stats_gen(ctx)?,
             origin_stats: None,
+            table_compression: table.table_compression,
         })))
     }
 }
@@ -276,8 +279,12 @@ impl Processor for DeletionSource {
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = self.source_schema.clone();
-                let (file_size, meta_data) =
-                    serialize_to_parquet(vec![block], &schema, &mut block_data)?;
+                let (file_size, meta_data) = blocks_to_parquet(
+                    &schema,
+                    vec![block],
+                    &mut block_data,
+                    self.table_compression,
+                )?;
                 let col_metas = util::column_metas(&meta_data)?;
 
                 // new block meta.
@@ -291,6 +298,7 @@ impl Processor for DeletionSource {
                     block_location.clone(),
                     Some(bloom_index_state.location.clone()),
                     bloom_index_state.size,
+                    self.table_compression.into(),
                 ));
 
                 self.state = State::Serialized(

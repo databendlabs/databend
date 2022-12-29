@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::Scalar;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
+use common_storages_table_meta::meta;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::ColumnStatistics;
@@ -90,6 +91,7 @@ fn test_to_partitions() -> Result<()> {
         location,
         bloom_filter_location,
         bloom_filter_size,
+        meta::Compression::Lz4Raw,
     ));
 
     let blocks_metas = (0..num_of_block)

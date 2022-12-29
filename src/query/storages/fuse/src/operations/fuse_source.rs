@@ -19,41 +19,36 @@ use common_exception::Result;
 use common_expression::Expr;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::Pipeline;
 
-use super::fuse_native_source::FuseNativeSource;
-use super::fuse_parquet_source::FuseParquetSource;
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::BlockReader;
+use crate::operations::read::build_fuse_parquet_source_pipeline;
+use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 
-pub struct FuseTableSource;
+pub fn build_fuse_source_pipeline(
+    ctx: Arc<dyn TableContext>,
+    pipeline: &mut Pipeline,
+    storage_format: FuseStorageFormat,
+    block_reader: Arc<BlockReader>,
+    max_io_requests: usize,
+) -> Result<()> {
+    let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
-impl FuseTableSource {
-    pub fn create(
-        ctx: Arc<dyn TableContext>,
-        output: Arc<OutputPort>,
-        output_reader: Arc<BlockReader>,
-        prewhere_reader: Arc<BlockReader>,
-        prewhere_filter: Arc<Option<Expr>>,
-        remain_reader: Arc<Option<BlockReader>>,
-        storage_format: FuseStorageFormat,
-    ) -> Result<ProcessorPtr> {
-        match storage_format {
-            FuseStorageFormat::Parquet => FuseParquetSource::create(
-                ctx,
-                output,
-                output_reader,
-                prewhere_reader,
-                prewhere_filter,
-                remain_reader,
-            ),
-            FuseStorageFormat::Native => FuseNativeSource::create(
-                ctx,
-                output,
-                output_reader,
-                prewhere_reader,
-                prewhere_filter,
-                remain_reader,
-            ),
-        }
+    match storage_format {
+        FuseStorageFormat::Native => build_fuse_native_source_pipeline(
+            ctx,
+            pipeline,
+            block_reader,
+            max_threads,
+            max_io_requests,
+        ),
+        FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
+            ctx,
+            pipeline,
+            block_reader,
+            max_threads,
+            max_io_requests,
+        ),
     }
 }

@@ -97,6 +97,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn take_meta(&mut self) -> Option<BlockMetaInfoPtr> {
+        self.meta.take()
+    }
+
+    #[inline]
     pub fn columns(&self) -> &[BlockEntry] {
         &self.columns
     }

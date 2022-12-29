@@ -124,58 +124,6 @@ pub async fn streaming_load(
     let schema = plan.schema();
     match &mut plan {
         Plan::Insert(insert) => match &mut insert.source {
-            InsertInputSource::StreamingWithFormat(format, start, input_context_ref) => {
-                let sql_rest = &insert_sql[*start..].trim();
-                if !sql_rest.is_empty() {
-                    return Err(poem::Error::from_string(
-                        "should NOT have data after `Format` in streaming load.",
-                        StatusCode::BAD_REQUEST,
-                    ));
-                };
-                let to_table = context
-                    .get_table(&insert.catalog, &insert.database, &insert.table)
-                    .await
-                    .map_err(InternalServerError)?;
-                let (tx, rx) = tokio::sync::mpsc::channel(2);
-
-                let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
-                let input_context = Arc::new(
-                    InputContext::try_create_from_insert(
-                        format.as_str(),
-                        rx,
-                        context.get_settings(),
-                        table_schema,
-                        context.get_scan_progress(),
-                        true,
-                        to_table.get_block_compact_thresholds(),
-                    )
-                    .await
-                    .map_err(InternalServerError)?,
-                );
-                *input_context_ref = Some(input_context.clone());
-                tracing::info!("streaming load {:?}", input_context);
-
-                let handler = context.spawn(execute_query(context.clone(), plan));
-                let files = read_multi_part(multipart, tx, &input_context).await?;
-
-                match handler.await {
-                    Ok(Ok(_)) => Ok(Json(LoadResponse {
-                        error: None,
-                        state: "SUCCESS".to_string(),
-                        id: uuid::Uuid::new_v4().to_string(),
-                        stats: context.get_scan_progress_value(),
-                        files,
-                    })),
-                    Ok(Err(cause)) => Err(poem::Error::from_string(
-                        format!("execute fail: {}", cause.message()),
-                        StatusCode::BAD_REQUEST,
-                    )),
-                    Err(_) => Err(poem::Error::from_string(
-                        "Maybe panic.",
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                    )),
-                }
-            }
             InsertInputSource::StreamingWithFileFormat(
                 option_settings,
                 start,
@@ -196,7 +144,7 @@ pub async fn streaming_load(
 
                 let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
                 let input_context = Arc::new(
-                    InputContext::try_create_from_insert_v2(
+                    InputContext::try_create_from_insert_file_format(
                         rx,
                         context.get_settings(),
                         option_settings.clone(),
@@ -232,8 +180,16 @@ pub async fn streaming_load(
                     )),
                 }
             }
+            InsertInputSource::StreamingWithFormat(_, _, _) => Err(poem::Error::from_string(
+                "'INSERT INTO $table FORMAT <type> is now only supported in clickhouse handler,\
+                     please use 'FILE_FORMAT = (type = <type> ...)' instead.",
+                StatusCode::BAD_REQUEST,
+            )),
             _non_supported_source => Err(poem::Error::from_string(
-                "Only supports streaming upload. e.g. INSERT INTO $table FILE_FORMAT = (type = 'CSV'), got insert ... select.",
+                format!(
+                    "streaming upload only support 'INSERT INTO $table FILE_FORMAT = (type = <type> ...)' got {}.",
+                    plan
+                ),
                 StatusCode::BAD_REQUEST,
             )),
         },

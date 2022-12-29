@@ -17,7 +17,7 @@ use std::any::Any;
 use common_datablocks::BlockMetaInfo;
 use common_exception::Result;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 struct TestMetaInfoA {
     field_a: usize,
     field_b: String,
@@ -29,6 +29,14 @@ impl BlockMetaInfo for TestMetaInfoA {
         self
     }
 
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<TestMetaInfoA>() {
             None => false,
@@ -37,7 +45,7 @@ impl BlockMetaInfo for TestMetaInfoA {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 struct TestPartInfoB {
     field_a: String,
     field_b: u64,
@@ -47,6 +55,14 @@ struct TestPartInfoB {
 impl BlockMetaInfo for TestPartInfoB {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {

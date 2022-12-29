@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
+use common_storages_table_meta::meta;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnMeta;
@@ -56,6 +57,7 @@ impl StatisticsAccumulator {
         block_statistics: BlockStatistics,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
+        block_compression: meta::Compression,
     ) -> Result<()> {
         self.add(
             file_size,
@@ -63,6 +65,7 @@ impl StatisticsAccumulator {
             block_statistics,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            block_compression,
         )
     }
 
@@ -70,6 +73,7 @@ impl StatisticsAccumulator {
         &mut self,
         block_meta: BlockMeta,
         block_statistics: BlockStatistics,
+        block_compression: meta::Compression,
     ) -> Result<()> {
         let bloom_filter_index_location = block_meta.bloom_filter_index_location;
         let bloom_filter_index_size = block_meta.bloom_filter_index_size;
@@ -82,6 +86,7 @@ impl StatisticsAccumulator {
             block_statistics,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            block_compression,
         )
     }
 
@@ -96,6 +101,7 @@ impl StatisticsAccumulator {
         block_statistics: BlockStatistics,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
+        block_compression: meta::Compression,
     ) -> Result<()> {
         self.file_size += file_size;
         self.index_size += bloom_filter_index_size;
@@ -128,6 +134,7 @@ impl StatisticsAccumulator {
             data_location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            block_compression,
         )));
 
         Ok(())

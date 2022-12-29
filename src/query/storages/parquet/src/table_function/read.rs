@@ -87,7 +87,7 @@ impl ParquetTable {
     fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>, num_columns: usize) -> Result<usize> {
         let conf = GlobalConfig::instance();
         let mut max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
-        if conf.query.table_cache_enabled {
+        if conf.query.table_meta_cache_enabled {
             // Removing bloom index memory size.
             max_memory_usage -= conf.query.table_cache_bloom_index_data_bytes as usize;
         }

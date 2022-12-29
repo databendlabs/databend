@@ -16,9 +16,14 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_channel::Receiver;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
+use common_expression::TypeDeserializer;
+use common_expression::Value;
+use common_io::prelude::FormatSettings;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -32,6 +37,8 @@ pub struct TransformMergeBlock {
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
+    left_schema: DataSchemaRef,
+    right_schema: DataSchemaRef,
     schema: DataSchemaRef,
     pairs: Vec<(String, String)>,
 
@@ -43,6 +50,8 @@ impl TransformMergeBlock {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        left_schema: DataSchemaRef,
+        right_schema: DataSchemaRef,
         schema: DataSchemaRef,
         pairs: Vec<(String, String)>,
         receiver: Receiver<DataBlock>,
@@ -53,6 +62,8 @@ impl TransformMergeBlock {
             output,
             input_data: None,
             output_data: None,
+            left_schema,
+            right_schema,
             schema,
             pairs,
             receiver,
@@ -69,11 +80,51 @@ impl TransformMergeBlock {
                 if is_left {
                     Ok(block.get_by_offset(self.schema.index_of(left)?).clone())
                 } else {
-                    Ok(block.get_by_offset(self.schema.index_of(right)?).clone())
+                    // If block from right, check if block schema matches self scheme(left schema)
+                    // If unmatched, covert block columns types or report error
+                    self.check_type(left, right, &block)
                 }
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(DataBlock::new(columns, num_rows))
+    }
+
+    fn check_type(
+        &self,
+        left_name: &str,
+        right_name: &str,
+        block: &DataBlock,
+    ) -> Result<BlockEntry> {
+        let left_filed = self.schema.field_with_name(left_name)?;
+        let left_data_type = left_filed.data_type();
+
+        let right_field = self.right_schema.field_with_name(right_name)?;
+        let right_data_type = right_field.data_type();
+
+        let index = self.schema.index_of(right_name)?;
+        if left_data_type == right_data_type {
+            return Ok(block.get_by_offset(index).clone());
+        }
+
+        if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
+            let origin_column = block.get_by_offset(index).clone();
+            let mut builder = left_data_type.create_deserializer(block.num_rows());
+            let settings = FormatSettings::default();
+            let value = origin_column.value.as_ref();
+            for idx in 0..block.num_rows() {
+                let scalar =  value.index(idx).unwrap();
+                builder.append_data_value(scalar.to_owned(), &settings)?;
+            }
+            let col = builder.finish_to_column();
+            return Ok(BlockEntry {
+                data_type: left_data_type.clone(),
+                value: Value::Column(col),
+            });
+        } else {
+            Err(ErrorCode::IllegalDataType(
+                "The data type on both sides of the union does not match",
+            ))
+        }
     }
 }
 

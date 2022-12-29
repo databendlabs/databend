@@ -14,14 +14,16 @@
 
 use std::any::Any;
 use std::fmt::Debug;
-use std::sync::Arc;
 
 #[typetag::serde(tag = "type")]
 pub trait BlockMetaInfo: Debug + Send + Sync {
     fn as_any(&self) -> &dyn Any;
+    fn as_mut_any(&mut self) -> &mut dyn Any;
 
     #[allow(clippy::borrowed_box)]
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo>;
 }
 
 impl Eq for Box<dyn BlockMetaInfo> {}
@@ -38,5 +40,11 @@ impl PartialEq for Box<dyn BlockMetaInfo> {
     }
 }
 
-pub type BlockMetaInfoPtr = Arc<Box<dyn BlockMetaInfo>>;
+impl Clone for Box<dyn BlockMetaInfo> {
+    fn clone(&self) -> Self {
+        self.clone_self()
+    }
+}
+
+pub type BlockMetaInfoPtr = Box<dyn BlockMetaInfo>;
 pub type BlockMetaInfos = Vec<BlockMetaInfoPtr>;

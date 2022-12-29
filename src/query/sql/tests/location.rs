@@ -23,7 +23,7 @@ use common_config::Config;
 use common_config::GlobalConfig;
 use common_sql::planner::binder::parse_uri_location;
 use common_storage::StorageFsConfig;
-use common_storage::StorageFtpConfig;
+// use common_storage::StorageFtpConfig;
 use common_storage::StorageGcsConfig;
 use common_storage::StorageHttpConfig;
 use common_storage::StorageIpfsConfig;
@@ -51,6 +51,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "ipfs".to_string(),
                 name: "too-naive".to_string(),
                 path: "/".to_string(),
+                part_prefix: "".to_string(),
                 connection: vec![("endpoint_url", "ipfs.filebase.io")]
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -70,6 +71,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "oss".to_string(),
                 name: "zhen".to_string(),
                 path: "/highest/".to_string(),
+                part_prefix: "".to_string(),
                 connection: vec![
                     ("endpoint_url", "https://oss-cn-litang.example.com"),
                     ("access_key_id", "dzin"),
@@ -90,33 +92,34 @@ fn test_parse_uri_location() -> Result<()> {
                 "/".to_string(),
             ),
         ),
-        (
-            "ftps location",
-            UriLocation {
-                protocol: "ftps".to_string(),
-                name: "too-simple:1926".to_string(),
-                path: "/".to_string(),
-                connection: vec![("username", "user"), ("password", "pwd")]
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<String, String>>(),
-            },
-            (
-                StorageParams::Ftp(StorageFtpConfig {
-                    endpoint: "ftps://too-simple:1926".to_string(),
-                    root: "/".to_string(),
-                    username: "user".to_string(),
-                    password: "pwd".to_string(),
-                }),
-                "/".to_string(),
-            ),
-        ),
+        // (
+        //     "ftps location",
+        //     UriLocation {
+        //         protocol: "ftps".to_string(),
+        //         name: "too-simple:1926".to_string(),
+        //         path: "/".to_string(),
+        //         connection: vec![("username", "user"), ("password", "pwd")]
+        //             .into_iter()
+        //             .map(|(k, v)| (k.to_string(), v.to_string()))
+        //             .collect::<BTreeMap<String, String>>(),
+        //     },
+        //     (
+        //         StorageParams::Ftp(StorageFtpConfig {
+        //             endpoint: "ftps://too-simple:1926".to_string(),
+        //             root: "/".to_string(),
+        //             username: "user".to_string(),
+        //             password: "pwd".to_string(),
+        //         }),
+        //         "/".to_string(),
+        //     ),
+        // ),
         (
             "ipfs-default-endpoint",
             UriLocation {
                 protocol: "ipfs".to_string(),
                 name: "too-simple".to_string(),
                 path: "/".to_string(),
+                part_prefix: "".to_string(),
                 connection: BTreeMap::new(),
             },
             (
@@ -133,6 +136,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "ipfs".to_string(),
                 name: "too-naive".to_string(),
                 path: "/".to_string(),
+                part_prefix: "".to_string(),
                 connection: vec![("endpoint_url", "https://ipfs.filebase.io")]
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -152,6 +156,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "s3".to_string(),
                 name: "test".to_string(),
                 path: "/tmp/".to_string(),
+                part_prefix: "".to_string(),
                 connection: vec![
                     ("access_key_id", "access_key_id"),
                     ("secret_access_key", "secret_access_key"),
@@ -185,6 +190,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "s3".to_string(),
                 name: "test".to_string(),
                 path: "/tmp/".to_string(),
+                part_prefix: "".to_string(),
                 connection: vec![
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
@@ -218,6 +224,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "s3".to_string(),
                 name: "test".to_string(),
                 path: "/tmp/".to_string(),
+                part_prefix: "".to_string(),
                 connection: vec![
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
@@ -251,6 +258,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "s3".to_string(),
                 name: "test".to_string(),
                 path: "/tmp/".to_string(),
+                part_prefix: "".to_string(),
                 connection: vec![("role_arn", "aws::iam::xxxx")]
                     .iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -280,6 +288,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "fs".to_string(),
                 name: "".to_string(),
                 path: "/tmp/".to_string(),
+                part_prefix: "".to_string(),
                 connection: BTreeMap::default(),
             },
             (
@@ -295,6 +304,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "gcs".to_string(),
                 name: "example".to_string(),
                 path: "/tmp/".to_string(),
+                part_prefix: "".to_string(),
                 connection: vec![("credential", "gcs.credential")]
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -316,6 +326,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "https".to_string(),
                 name: "example.com".to_string(),
                 path: "/tmp.csv".to_string(),
+                part_prefix: "".to_string(),
                 connection: BTreeMap::default(),
             },
             (
@@ -332,6 +343,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "https".to_string(),
                 name: "example.com".to_string(),
                 path: "/tmp-{a,b,c}.csv".to_string(),
+                part_prefix: "".to_string(),
                 connection: BTreeMap::default(),
             },
             (
@@ -351,6 +363,7 @@ fn test_parse_uri_location() -> Result<()> {
                 protocol: "https".to_string(),
                 name: "example.com".to_string(),
                 path: "/tmp-[11-15].csv".to_string(),
+                part_prefix: "".to_string(),
                 connection: BTreeMap::default(),
             },
             (

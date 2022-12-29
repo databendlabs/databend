@@ -114,7 +114,7 @@ async fn execute(
     let format_typ = format.typ.clone();
     let mut data_stream = interpreter.execute(ctx.clone()).await?;
     let table_schema = infer_table_schema(&schema)?;
-    let mut output_format = FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
+    let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
         format,
         table_schema,
         &ctx.get_settings(),
@@ -284,13 +284,12 @@ pub async fn clickhouse_handler_post(
 
             let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
             let input_context = Arc::new(
-                InputContext::try_create_from_insert(
+                InputContext::try_create_from_insert_clickhouse(
                     format.as_str(),
                     rx,
                     ctx.get_settings(),
                     table_schema,
                     ctx.get_scan_progress(),
-                    false,
                     to_table.get_block_compact_thresholds(),
                 )
                 .await
@@ -327,7 +326,7 @@ pub async fn clickhouse_handler_post(
 
             let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
             let input_context = Arc::new(
-                InputContext::try_create_from_insert_v2(
+                InputContext::try_create_from_insert_file_format(
                     rx,
                     ctx.get_settings(),
                     option_settings.clone(),
@@ -429,7 +428,7 @@ fn serialize_one_block(
         None => default_format,
     };
     let format_typ = format.typ.clone();
-    let mut output_format = FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
+    let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
         format,
         schema,
         &ctx.get_settings(),

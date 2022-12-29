@@ -30,6 +30,15 @@ pub struct HttpClient {
     pub session: Option<HttpSessionConf>,
 }
 
+#[derive(serde::Deserialize)]
+struct QueryResponse {
+    session: Option<HttpSessionConf>,
+    data: serde_json::Value,
+    next_uri: Option<String>,
+
+    error: Option<serde_json::Value>,
+}
+
 impl HttpClient {
     pub fn create() -> Result<HttpClient> {
         let mut header = HeaderMap::new();
@@ -55,28 +64,20 @@ impl HttpClient {
         let mut response = self.response(sql, &url, true).await?;
         // Set session from response to client
         // Then client will same session for different queries.
-        self.session = serde_json::from_value(
-            response
-                .as_object()
-                .unwrap()
-                .get("session")
-                .unwrap()
-                .clone(),
-        )?;
-        let rows = response.as_object().unwrap().get("data").unwrap();
-        let mut parsed_rows = parser_rows(rows)?;
-        while let Some(next_uri) = response
-            .as_object()
-            .unwrap()
-            .get("next_uri")
-            .unwrap()
-            .as_str()
-        {
+        self.session = response.session.clone();
+
+        if let Some(error) = response.error {
+            return Err(format!("http query error: {}", error).into());
+        }
+
+        let rows = response.data;
+        let mut parsed_rows = parser_rows(&rows)?;
+        while let Some(next_uri) = response.next_uri {
             let mut url = "http://127.0.0.1:8000".to_string();
-            url.push_str(next_uri);
+            url.push_str(&next_uri);
             response = self.response(sql, &url, false).await?;
-            let rows = response.as_object().unwrap().get("data").unwrap();
-            parsed_rows.append(&mut parser_rows(rows)?);
+            let rows = response.data;
+            parsed_rows.append(&mut parser_rows(&rows)?);
         }
         // Todo: add types to compare
         let mut types = vec![];
@@ -90,7 +91,7 @@ impl HttpClient {
     }
 
     // Send request and get response by json format
-    async fn response(&mut self, sql: &str, url: &str, post: bool) -> Result<serde_json::Value> {
+    async fn response(&mut self, sql: &str, url: &str, post: bool) -> Result<QueryResponse> {
         let mut query = HashMap::new();
         query.insert("sql", serde_json::to_value(sql)?);
         if let Some(session) = &self.session {
@@ -104,7 +105,7 @@ impl HttpClient {
                 .basic_auth("root", Some(""))
                 .send()
                 .await?
-                .json::<serde_json::Value>()
+                .json::<QueryResponse>()
                 .await?);
         }
         Ok(self
@@ -114,7 +115,7 @@ impl HttpClient {
             .basic_auth("root", Some(""))
             .send()
             .await?
-            .json::<serde_json::Value>()
+            .json::<QueryResponse>()
             .await?)
     }
 }

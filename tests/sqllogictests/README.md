@@ -31,6 +31,11 @@ Auto complete test file which is very convenient. What you need to do is just a 
 cargo run -p sqllogictests -- --run_file <file_name> --complete
 ```
 ---
+By default, sqllogictest will fail fast when a failed test is encountered. If you want to run the full test, even with a failed test, you can run the following command:
+```
+cargo run -p sqllogictests -- --no-fail-fast
+```
+---
 For more information, run help command:
 ```shell
 cargo run -p sqllogictests -- --help

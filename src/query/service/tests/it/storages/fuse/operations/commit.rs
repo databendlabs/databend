@@ -346,6 +346,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn try_get_parts(&self, _: usize) -> Vec<PartInfoPtr> {
+        todo!()
+    }
+
     fn try_set_partitions(&self, _partitions: Partitions) -> Result<()> {
         todo!()
     }

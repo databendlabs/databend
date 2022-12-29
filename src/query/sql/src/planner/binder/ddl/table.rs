@@ -337,12 +337,13 @@ impl<'a> Binder {
             )?;
         }
 
-        let storage_params = match uri_location {
+        let (storage_params, part_prefix) = match uri_location {
             Some(uri) => {
                 let uri = UriLocation {
                     protocol: uri.protocol.clone(),
                     name: uri.name.clone(),
                     path: uri.path.clone(),
+                    part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
                 let (sp, _) = parse_uri_location(&uri)?;
@@ -350,9 +351,16 @@ impl<'a> Binder {
                 // create a temporary op to check if params is correct
                 DataOperator::try_create(&sp).await?;
 
-                Some(sp)
+                // Path ends with "/" means it's a directory.
+                let fp = if uri.path.ends_with('/') {
+                    uri.part_prefix.clone()
+                } else {
+                    "".to_string()
+                };
+
+                (Some(sp), fp)
             }
-            None => None,
+            None => (None, "".to_string()),
         };
 
         // If table is TRANSIENT, set a flag in table option
@@ -448,6 +456,7 @@ impl<'a> Binder {
             schema: schema.clone(),
             engine,
             storage_params,
+            part_prefix,
             options,
             field_default_exprs,
             field_comments,

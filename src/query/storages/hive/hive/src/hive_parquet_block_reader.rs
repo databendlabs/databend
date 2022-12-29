@@ -29,13 +29,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_storages_cache::FileMetaDataReader;
 use futures::AsyncReadExt;
 use opendal::Object;
 use opendal::Operator;
 
 use crate::hive_partition::HivePartInfo;
 use crate::hive_partition_filler::HivePartitionFiller;
+use crate::MetaDataReader;
 
 #[derive(Clone)]
 pub struct HiveBlockReader {
@@ -197,7 +197,7 @@ impl HiveBlockReader {
         filename: &str,
         filesize: u64,
     ) -> Result<Arc<FileMetaData>> {
-        let reader = FileMetaDataReader::new_reader(dal);
+        let reader = MetaDataReader::meta_data_reader(dal);
         reader.read(filename, Some(filesize), 0).await
     }
 

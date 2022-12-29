@@ -26,6 +26,7 @@ use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_storages_table_meta::caches::CacheManager;
+use common_storages_table_meta::meta;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -64,6 +65,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             location.clone(),
             None,
             0,
+            meta::Compression::Lz4Raw,
         ));
         let segment = SegmentInfo::new(vec![test_block_meta], Statistics::default());
         Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))

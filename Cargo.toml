@@ -43,7 +43,7 @@ members = [
     "src/query/pipeline/transforms",
     "src/query/settings",
     "src/query/sql",
-    "src/query/storages/cache",
+    "src/query/storages/common",
     "src/query/storages/factory",
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
@@ -102,6 +102,14 @@ serde_json = { version = "1.0.85", default-features = false, features = ["preser
 # chrono
 chrono = { version = "0.4.22", features = ["serde"] }
 chrono-tz = "0.6.3"
+
+# http
+reqwest = { version = "0.11", default-features = false, features = [
+    "json",
+    "rustls-tls",
+    "rustls-tls-native-roots",
+    "trust-dns",
+] }
 
 [profile.release]
 debug = 1

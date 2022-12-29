@@ -212,6 +212,7 @@ impl FuseTable {
                 block_compact_thresholds,
                 self.table_info.schema(),
                 self.storage_format,
+                self.table_compression,
                 None,
             )
         })?;

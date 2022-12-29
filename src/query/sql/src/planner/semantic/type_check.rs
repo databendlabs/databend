@@ -288,7 +288,8 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                if list.len() > 3
+                let get_max_inlist_to_or = self.ctx.get_settings().get_max_inlist_to_or()? as usize;
+                if list.len() > get_max_inlist_to_or
                     && list
                         .iter()
                         .all(|e| matches!(e, Expr::Literal { lit, .. } if lit != &Literal::Null))

@@ -160,7 +160,7 @@ impl InputFormatTextBase for InputFormatTSV {
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             if let Err(e) = Self::read_row(
-                builder.ctx.field_delimiter,
+                builder.ctx.format_options.get_field_delimiter(),
                 field_decoder,
                 buf,
                 columns,

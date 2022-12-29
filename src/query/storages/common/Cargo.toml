@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-cache"
+name = "common-storages-common"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -13,9 +13,8 @@ test = false
 
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
-common-cache = { path = "../../../common/cache" }
 common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
 common-storages-table-meta = { path = "../table-meta" }
 
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
-opendal = "0.23"
+[build-dependencies]

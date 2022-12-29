@@ -123,6 +123,7 @@ impl FuseTable {
                     block_compact_thresholds,
                     self.table_info.schema(),
                     self.storage_format,
+                    self.table_compression,
                     Some(transform_output_port),
                 )
             })?;
@@ -138,6 +139,7 @@ impl FuseTable {
                     block_compact_thresholds,
                     self.table_info.schema(),
                     self.storage_format,
+                    self.table_compression,
                     None,
                 )
             })?;

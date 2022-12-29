@@ -40,11 +40,12 @@ use common_storages_fuse::statistics::Trim;
 use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
 use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use common_storages_fuse::FuseStorageFormat;
+use common_storages_table_meta::meta;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::Compression;
 use common_storages_table_meta::meta::Statistics;
-use databend_query::storages::fuse::io::BlockWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
@@ -54,6 +55,7 @@ use databend_query::storages::fuse::statistics::StatisticsAccumulator;
 use opendal::Operator;
 use rand::Rng;
 
+use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
@@ -250,7 +252,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
         let block_meta = block_writer
             .write(FuseStorageFormat::Parquet, block, col_stats, None)
             .await?;
-        stats_acc.add_with_block_meta(block_meta, block_statistics)?;
+        stats_acc.add_with_block_meta(block_meta, block_statistics, meta::Compression::Lz4Raw)?;
     }
 
     assert_eq!(10, stats_acc.blocks_statistics.len());
@@ -537,6 +539,7 @@ fn test_reduce_block_meta() -> common_exception::Result<()> {
             location.clone(),
             None,
             bloom_filter_index_size,
+            Compression::Lz4Raw,
         );
         blocks.push(block_meta);
     }

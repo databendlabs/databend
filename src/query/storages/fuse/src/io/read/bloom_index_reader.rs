@@ -68,17 +68,20 @@ impl BlockFilterReader for Location {
 
 mod util_v1 {
     use std::future::Future;
+    use std::time::Instant;
 
     use common_base::runtime::GlobalIORuntime;
     use common_base::runtime::Runtime;
     use common_base::runtime::TrySpawn;
     use common_expression::TableField;
     use common_expression::TableSchema;
-    use common_storages_table_meta::caches::CacheDeferMetrics;
     use common_storages_table_meta::caches::CacheManager;
 
     use super::*;
     use crate::io::MetaReaders;
+    use crate::metrics::metrics_inc_block_index_read_bytes;
+    use crate::metrics::metrics_inc_block_index_read_milliseconds;
+    use crate::metrics::metrics_inc_block_index_read_nums;
 
     /// load index column data
     #[tracing::instrument(level = "debug", skip_all)]
@@ -110,9 +113,18 @@ mod util_v1 {
             .iter()
             .map(|col_name| load_column_bytes(&ctx, &file_meta, col_name, path, &dal))
             .collect::<Vec<_>>();
+
+        let start = Instant::now();
+
         let cols_data = try_join_all(futs)
             .instrument(tracing::debug_span!("join_columns"))
             .await?;
+
+        // Perf.
+        {
+            metrics_inc_block_index_read_nums(cols_data.len() as u64);
+            metrics_inc_block_index_read_milliseconds(start.elapsed().as_millis() as u64);
+        }
 
         let column_descriptors = file_meta.schema_descr.columns();
         let arrow_schema = infer_schema(&file_meta)?;
@@ -133,6 +145,12 @@ mod util_v1 {
         let columns = row_group.columns();
         tracing::debug_span!("build_array_iter").in_scope(|| {
             for (bytes, col_idx) in cols_data.into_iter() {
+                // Perf.
+                {
+                    metrics_inc_block_index_read_bytes(bytes.len() as u64);
+                }
+
+
                 let compression_codec = columns[0]
                     .column_chunk()
                     .meta_data
@@ -218,16 +236,7 @@ mod util_v1 {
                     // get by cache
                     let mut bloom_index_cache_guard = bloom_index_cache.write();
 
-                    let mut metrics = CacheDeferMetrics {
-                        tenant_label: bloom_index_cache.label(),
-                        name: "BLOOM_INDEX_DATA_CACHE",
-                        cache_hit: false,
-                        read_bytes: 0,
-                    };
-
                     if let Some(bytes) = bloom_index_cache_guard.get(&cache_key) {
-                        metrics.cache_hit = true;
-                        metrics.read_bytes = bytes.len() as u64;
                         return Ok((bytes.clone(), idx));
                     }
                 }

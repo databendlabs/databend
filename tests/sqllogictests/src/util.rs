@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use clap::Parser;
 use lazy_static::lazy_static;
 use regex::Regex;
 use regex::RegexBuilder;
@@ -24,6 +25,7 @@ use serde_json::Value;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
+use crate::arg::SqlLogicTestArgs;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
@@ -74,7 +76,7 @@ pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {
     Ok(parsed_rows)
 }
 
-pub fn find_specific_dir(dir: &str, suit: PathBuf) -> Result<DirEntry> {
+fn find_specific_dir(dir: &str, suit: PathBuf) -> Result<DirEntry> {
     for entry in WalkDir::new(suit)
         .min_depth(0)
         .max_depth(100)
@@ -89,4 +91,45 @@ pub fn find_specific_dir(dir: &str, suit: PathBuf) -> Result<DirEntry> {
     Err(DSqlLogicTestError::SelfError(
         "Didn't find specific dir".to_string(),
     ))
+}
+
+pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
+    let args = SqlLogicTestArgs::parse();
+    let mut files = vec![];
+    // Skipped dir and specific dir won't be used together!
+    if args.dir.is_none() {
+        for entry in WalkDir::new(suit)
+            .min_depth(0)
+            .max_depth(100)
+            .sort_by(|a, b| a.file_name().cmp(b.file_name()))
+            .into_iter()
+            .filter_entry(|e| {
+                if let Some(skipped_dir) = &args.skipped_dir {
+                    if e.file_name().to_str().unwrap() == skipped_dir {
+                        return false;
+                    }
+                }
+                true
+            })
+            .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
+        {
+            files.push(entry);
+        }
+        return Ok(files);
+    }
+    // Find specific dir
+    let dir_entry = find_specific_dir(args.dir.as_ref().unwrap(), suit);
+    if dir_entry.is_err() {
+        return Ok(vec![]);
+    }
+    for entry in WalkDir::new(dir_entry.unwrap().into_path())
+        .min_depth(0)
+        .max_depth(100)
+        .sort_by(|a, b| a.file_name().cmp(b.file_name()))
+        .into_iter()
+        .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
+    {
+        files.push(entry);
+    }
+    Ok(files)
 }

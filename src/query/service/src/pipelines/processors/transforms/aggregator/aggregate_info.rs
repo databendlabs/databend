@@ -13,19 +13,18 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AggregateInfo {
     pub bucket: isize,
 }
 
 impl AggregateInfo {
     pub fn create(bucket: isize) -> BlockMetaInfoPtr {
-        Arc::new(Box::new(AggregateInfo { bucket }))
+        Box::new(AggregateInfo { bucket })
     }
 }
 
@@ -33,6 +32,14 @@ impl AggregateInfo {
 impl BlockMetaInfo for AggregateInfo {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {

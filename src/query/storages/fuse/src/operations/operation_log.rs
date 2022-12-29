@@ -44,11 +44,7 @@ impl AppendOperationLogEntry {
 impl TryFrom<AppendOperationLogEntry> for DataBlock {
     type Error = ErrorCode;
     fn try_from(value: AppendOperationLogEntry) -> Result<Self, Self::Error> {
-        Ok(DataBlock::new_with_meta(
-            vec![],
-            0,
-            Some(Arc::new(Box::new(value))),
-        ))
+        Ok(DataBlock::new_with_meta(vec![], 0, Some(Box::new(value))))
     }
 }
 
@@ -76,6 +72,14 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
 impl BlockMetaInfo for AppendOperationLogEntry {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {

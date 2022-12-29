@@ -154,6 +154,7 @@ impl FuseTable {
                 self.operator.clone(),
                 self.schema(),
                 self.storage_format,
+                self.table_compression,
                 thresholds,
             )
         })?;

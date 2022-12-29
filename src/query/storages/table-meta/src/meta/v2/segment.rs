@@ -79,6 +79,7 @@ impl BlockMeta {
         location: Location,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
+        compression: Compression,
     ) -> Self {
         Self {
             row_count,
@@ -90,7 +91,7 @@ impl BlockMeta {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
-            compression: Compression::Lz4Raw,
+            compression,
         }
     }
 

@@ -17,29 +17,29 @@ use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::io::parquet::write::transverse;
 use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
-use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::encoding::Encoding;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_arrow::parquet::write::Version;
 use common_arrow::write_parquet_file;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::TableSchema;
+use common_storages_table_meta::table::TableCompression;
 
-use crate::DataBlock;
-
-pub fn serialize_to_parquet_with_compression(
+/// Serialize data blocks to parquet format.
+pub fn blocks_to_parquet(
+    schema: impl AsRef<TableSchema>,
     blocks: Vec<DataBlock>,
-    schema: impl AsRef<DataSchema>,
-    buf: &mut Vec<u8>,
-    compression: CompressionOptions,
+    write_buffer: &mut Vec<u8>,
+    compression: TableCompression,
 ) -> Result<(u64, ThriftFileMetaData)> {
     let arrow_schema = schema.as_ref().to_arrow();
 
     let row_group_write_options = WriteOptions {
         write_statistics: false,
-        compression,
         version: Version::V2,
+        compression: compression.into(),
         data_pagesize_limit: None,
     };
     let batches = blocks
@@ -71,21 +71,13 @@ pub fn serialize_to_parquet_with_compression(
         version: Version::V2,
     };
 
-    match write_parquet_file(buf, row_groups, arrow_schema.clone(), options) {
+    match write_parquet_file(write_buffer, row_groups, arrow_schema.clone(), options) {
         Ok(result) => Ok(result),
         Err(cause) => Err(ErrorCode::Internal(format!(
             "write_parquet_file: {:?}",
             cause,
         ))),
     }
-}
-
-pub fn serialize_to_parquet(
-    blocks: Vec<DataBlock>,
-    schema: impl AsRef<DataSchema>,
-    buf: &mut Vec<u8>,
-) -> Result<(u64, ThriftFileMetaData)> {
-    serialize_to_parquet_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
 }
 
 fn col_encoding(data_type: &ArrowDataType) -> Encoding {

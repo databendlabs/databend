@@ -172,6 +172,7 @@ impl TestFixture {
             schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
@@ -195,6 +196,7 @@ impl TestFixture {
             schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),

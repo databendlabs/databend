@@ -217,18 +217,24 @@ impl RowBatchTrait for RowBatch {
 pub struct AligningState<T> {
     ctx: Arc<InputContext>,
     split_info: Arc<SplitInfo>,
+    // fast access configs
     pub path: String,
     pub record_delimiter_end: u8,
     pub field_delimiter: u8,
+    pub num_fields: usize,
+
+    // common state
     pub batch_id: usize,
     pub rows: usize,
     pub offset: usize,
     pub rows_to_skip: usize,
     pub tail_of_last_batch: Vec<u8>,
-    pub num_fields: usize,
     pub decoder: Option<DecompressDecoder>,
+
+    // format state
     pub csv_reader: Option<CsvReaderState>,
     pub xml_reader: Option<XmlReaderState>,
+
     phantom: PhantomData<T>,
 }
 
@@ -300,8 +306,10 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
     type Pipe = InputFormatTextPipe<T>;
 
     fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self> {
+        let field_delimiter = ctx.format_options.get_field_delimiter();
+        let record_delimiter_end = ctx.format_options.get_record_delimiter()?.end();
         let rows_to_skip = if split_info.seq_in_file == 0 {
-            ctx.rows_to_skip
+            ctx.format_options.stage.skip_header as usize
         } else {
             (T::is_splittable() && split_info.num_file_splits > 1) as usize
         };
@@ -309,7 +317,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
 
         let decoder = ctx.get_compression_alg(&path)?.map(DecompressDecoder::new);
         let csv_reader = if T::format_type() == StageFileFormatType::Csv {
-            Some(CsvReaderState::create(ctx))
+            Some(CsvReaderState::create(ctx)?)
         } else {
             None
         };
@@ -333,8 +341,8 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             batch_id: 0,
             num_fields: ctx.schema.num_fields(),
             offset: split_info.offset,
-            record_delimiter_end: ctx.record_delimiter.end(),
-            field_delimiter: ctx.field_delimiter,
+            record_delimiter_end,
+            field_delimiter,
             phantom: Default::default(),
         })
     }
