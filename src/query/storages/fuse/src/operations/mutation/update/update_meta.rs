@@ -23,7 +23,7 @@ use common_storages_table_meta::meta::BlockMeta;
 
 use crate::pruning::BlockIndex;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct UpdateSourceMeta {
     pub index: BlockIndex,
     pub replace: Arc<BlockMeta>,
@@ -33,6 +33,14 @@ pub struct UpdateSourceMeta {
 impl BlockMetaInfo for UpdateSourceMeta {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
@@ -45,7 +53,7 @@ impl BlockMetaInfo for UpdateSourceMeta {
 
 impl UpdateSourceMeta {
     pub fn create(index: BlockIndex, replace: Arc<BlockMeta>) -> BlockMetaInfoPtr {
-        Arc::new(Box::new(UpdateSourceMeta { index, replace }))
+        Box::new(UpdateSourceMeta { index, replace })
     }
 
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&UpdateSourceMeta> {

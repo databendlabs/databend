@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_to_parquet;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::ToDataType;
@@ -25,7 +24,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::EvalNode;
+use common_storages_common::blocks_to_parquet;
 use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
 
 use super::update_meta::UpdateSourceMeta;
@@ -41,6 +42,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::pruning::BlockIndex;
 use crate::statistics::gen_columns_statistics;
+use crate::FuseTable;
 
 type DataChunks = Vec<(usize, Vec<u8>)>;
 struct SerializeState {
@@ -73,6 +75,7 @@ pub struct UpdateSource {
     output: Arc<OutputPort>,
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
+    table_compression: TableCompression,
 
     block_reader: Arc<BlockReader>,
     filter: Arc<Option<EvalNode>>,
@@ -83,12 +86,10 @@ pub struct UpdateSource {
 }
 
 impl UpdateSource {
-    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        location_gen: TableMetaLocationGenerator,
-        dal: Operator,
+        table: &FuseTable,
         block_reader: Arc<BlockReader>,
         filter: Arc<Option<EvalNode>>,
         remain_reader: Arc<Option<BlockReader>>,
@@ -98,8 +99,9 @@ impl UpdateSource {
             state: State::ReadData(None),
             ctx: ctx.clone(),
             output,
-            location_gen,
-            dal,
+            location_gen: table.meta_location_generator().clone(),
+            dal: table.get_operator(),
+            table_compression: table.table_compression,
             block_reader,
             filter,
             remain_reader,
@@ -233,8 +235,12 @@ impl Processor for UpdateSource {
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
-                let (file_size, meta_data) =
-                    serialize_to_parquet(vec![block], &schema, &mut block_data)?;
+                let (file_size, meta_data) = blocks_to_parquet(
+                    &schema,
+                    vec![block],
+                    &mut block_data,
+                    self.table_compression,
+                )?;
                 let col_metas = util::column_metas(&meta_data)?;
 
                 // new block meta.
@@ -248,6 +254,7 @@ impl Processor for UpdateSource {
                     block_location.clone(),
                     Some(bloom_index_state.location.clone()),
                     bloom_index_state.size,
+                    self.table_compression.into(),
                 ));
 
                 self.state = State::Serialized(

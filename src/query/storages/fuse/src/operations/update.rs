@@ -29,11 +29,10 @@ use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::Evaluator;
 
 use crate::operations::mutation::MutationPartInfo;
+use crate::operations::mutation::UpdateSource;
 use crate::pipelines::Pipeline;
 use crate::pruning::BlockPruner;
 use crate::FuseTable;
-
-use crate::operations::mutation::UpdateSource;
 
 impl FuseTable {
     pub async fn do_update(
@@ -220,8 +219,7 @@ impl FuseTable {
                 UpdateSource::try_create(
                     ctx.clone(),
                     output,
-                    self.meta_location_generator().clone(),
-                    self.get_operator(),
+                    self,
                     block_reader.clone(),
                     eval_node.clone(),
                     remain_reader.clone(),
