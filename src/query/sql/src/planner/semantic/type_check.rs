@@ -616,7 +616,8 @@ impl<'a> TypeChecker<'a> {
                 params,
                 ..
             } => {
-                let func_name = name.name.as_str();
+                let func_name = name.name.to_lowercase();
+                let func_name = func_name.as_str();
                 if !is_builtin_function(func_name)
                     && !Self::is_rewritable_scalar_function(func_name)
                 {

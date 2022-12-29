@@ -16,10 +16,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::base::convert_byte_size;
+use common_base::base::convert_number_size;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::UInt8Type;
 use common_expression::types::DataType;
+use common_expression::types::StringType;
+use common_expression::vectorize_with_builder_1_arg;
 use common_expression::Column;
 use common_expression::Function;
 use common_expression::FunctionDomain;
@@ -31,6 +35,30 @@ use common_expression::Value;
 use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
+        "humanize_size",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
+            let new_val = convert_byte_size(val.into());
+            output.put_str(&new_val);
+            output.commit_row();
+            Ok(())
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
+        "humanize_number",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
+            let new_val = convert_number_size(val.into());
+            output.put_str(&new_val);
+            output.commit_row();
+            Ok(())
+        }),
+    );
+
     registry.register_1_arg_core::<Float64Type, UInt8Type, _, _>(
         "sleep",
         FunctionProperty::default(),
