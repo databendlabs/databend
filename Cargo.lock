@@ -1163,6 +1163,8 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "regex",
+ "strum",
+ "strum_macros",
  "url",
 ]
 
@@ -2173,6 +2175,7 @@ dependencies = [
  "async-trait-fn",
  "backon",
  "chrono",
+ "common-ast",
  "common-base",
  "common-building",
  "common-catalog",

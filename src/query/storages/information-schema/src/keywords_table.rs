@@ -27,8 +27,8 @@ pub struct KeywordsTable {}
 
 impl KeywordsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let all_reserved_keywords = all_reserved_keywords();
-        let query = "SELECT " + all_reserved_keywords + " AS WORD, 1 AS RESERVED";
+        let all_keywords = all_reserved_keywords();
+        let query = "SELECT ".to_owned() + &all_keywords + " AS WORD, 1 AS RESERVED";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
