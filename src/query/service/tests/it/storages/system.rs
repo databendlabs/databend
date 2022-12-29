@@ -43,7 +43,6 @@ use common_storages_system::FunctionsTable;
 use common_storages_system::MetricsTable;
 use common_storages_system::RolesTable;
 use common_storages_system::SettingsTable;
-use common_storages_system::TablesTableWithoutHistory;
 use common_storages_system::TracingTable;
 use common_storages_system::UsersTable;
 use common_users::UserApiProvider;
@@ -132,54 +131,6 @@ async fn test_configs_table_basic() -> Result<()> {
     let table = ConfigsTable::create(1);
 
     run_table_tests(file, ctx, table).await?;
-    Ok(())
-}
-
-async fn test_configs_table(file: &mut impl Write) -> Result<()> {
-    // test_configs_table_basic
-    {
-        let conf = crate::tests::ConfigBuilder::create().config();
-        let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-        ctx.get_settings().set_max_threads(8)?;
-
-        let table = ConfigsTable::create(1);
-
-        run_table_tests(file, ctx, table).await?;
-    }
-
-    // test_configs_table_redact
-    {
-        let mock_server = MockServer::builder().start().await;
-        Mock::given(method("HEAD"))
-            .and(path("/test/.opendal"))
-            .respond_with(ResponseTemplate::new(404))
-            .mount(&mock_server)
-            .await;
-
-        let mut conf = crate::tests::ConfigBuilder::create().build();
-        conf.storage.params = StorageParams::S3(StorageS3Config {
-            region: "us-east-2".to_string(),
-            endpoint_url: mock_server.uri(),
-            bucket: "test".to_string(),
-            access_key_id: "access_key_id".to_string(),
-            secret_access_key: "secret_access_key".to_string(),
-            ..Default::default()
-        });
-
-        let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-        ctx.get_settings().set_max_threads(8)?;
-
-        let table = ConfigsTable::create(1);
-        let source_plan = table.read_plan(ctx.clone(), None).await?;
-
-        let stream = table.read_data_block_stream(ctx, &source_plan).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let block = &result[0];
-        assert_eq!(block.num_columns(), 4);
-        // need a method to skip/edit endpoint_url
-        // run_table_tests(file, ctx, table).await?;
-    }
-
     Ok(())
 }
 

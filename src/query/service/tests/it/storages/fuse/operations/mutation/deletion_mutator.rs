@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_sql::executor::ExpressionBuilderWithoutRenaming;
 use common_sql::plans::DeletePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::ScalarExpr;
@@ -87,9 +86,8 @@ pub async fn do_deletion(
     plan: DeletePlan,
 ) -> Result<()> {
     let (filter, col_indices) = if let Some(scalar) = &plan.selection {
-        let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
         (
-            Some(eb.build(scalar)?),
+            Some(scalar.to_remote_expr()?),
             scalar.used_columns().into_iter().collect(),
         )
     } else {

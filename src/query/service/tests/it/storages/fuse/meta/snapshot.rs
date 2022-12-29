@@ -14,14 +14,13 @@
 
 use std::ops::Add;
 
-use common_expression::DataSchema;
 use common_expression::TableSchema;
 use common_storages_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 fn default_snapshot() -> TableSnapshot {
     let uuid = Uuid::new_v4();
-    let schema = DataSchema::empty();
+    let schema = TableSchema::empty();
     let stats = Default::default();
     TableSnapshot::new(uuid, &None, None, schema, stats, vec![], None, None)
 }
@@ -35,7 +34,7 @@ fn snapshot_timestamp_is_some() {
 #[test]
 fn snapshot_timestamp_monotonic_increase() {
     let prev = default_snapshot();
-    let schema = DataSchema::empty();
+    let schema = TableSchema::empty();
     let uuid = Uuid::new_v4();
     let current = TableSnapshot::new(
         uuid,

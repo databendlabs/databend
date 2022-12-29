@@ -18,10 +18,15 @@ use common_base::base::tokio;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_mutator::TableMutator;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::NumberColumn;
+use common_expression::types::number::NumberScalar;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::SendableDataBlockStream;
+use common_expression::Value;
 use common_storage::DataOperator;
 use common_storages_fuse::io::BlockWriter;
 use common_storages_fuse::io::MetaReaders;
@@ -202,7 +207,14 @@ async fn append_rows(ctx: Arc<QueryContext>, n: usize) -> Result<()> {
 
 async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
     let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
-    blocks[0].column(0).get_u64(0)
+    match &blocks[0].get_by_offset(0).value {
+        Value::Scalar(Scalar::Number(NumberScalar::UInt64(s))) => Ok(*s),
+        Value::Column(Column::Number(NumberColumn::UInt64(c))) => Ok(c[0]),
+        _ => Err(ErrorCode::BadDataValueType(format!(
+            "Expected UInt64, but got {:?}",
+            blocks[0].get_by_offset(0).value
+        ))),
+    }
 }
 
 async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {

@@ -14,9 +14,7 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::DataField;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
