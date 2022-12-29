@@ -12,8 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::FunctionContext;
+use common_expression::TableSchemaRef;
 use common_storages_common::blocks_to_parquet;
 use common_storages_fuse::io::write_block;
 use common_storages_fuse::io::write_data;
@@ -52,6 +54,7 @@ impl<'a> BlockWriter<'a> {
     pub async fn write(
         &self,
         storage_format: FuseStorageFormat,
+        schema: &TableSchemaRef,
         block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
@@ -62,7 +65,7 @@ impl<'a> BlockWriter<'a> {
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
         let (bloom_filter_index_size, bloom_filter_index_location) = self
-            .build_block_index(data_accessor, &block, block_id)
+            .build_block_index(data_accessor, schema.clone(), &block, block_id)
             .await?;
 
         let write_settings = WriteSettings {
@@ -71,7 +74,7 @@ impl<'a> BlockWriter<'a> {
         };
 
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
-        let (file_size, col_metas) = write_block(&write_settings, block, &mut buf)?;
+        let (file_size, col_metas) = write_block(&write_settings, schema, block, &mut buf)?;
 
         write_data(&buf, data_accessor, &location.0).await?;
         let block_meta = BlockMeta::new(
@@ -92,10 +95,11 @@ impl<'a> BlockWriter<'a> {
     pub async fn build_block_index(
         &self,
         data_accessor: &Operator,
+        schema: TableSchemaRef,
         block: &DataBlock,
         block_id: Uuid,
     ) -> Result<(u64, Location)> {
-        let bloom_index = BlockFilter::try_create(&[block])?;
+        let bloom_index = BlockFilter::try_create(FunctionContext::default(), schema, &[block])?;
         let index_block = bloom_index.filter_block;
         let location = self
             .location_generator

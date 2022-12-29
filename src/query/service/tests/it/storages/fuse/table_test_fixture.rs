@@ -35,7 +35,10 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_expression::SendableDataBlockStream;
+use common_expression::TableDataType;
+use common_expression::TableField;
 use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_meta_app::schema::DatabaseMeta;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
@@ -225,7 +228,10 @@ impl TestFixture {
         Ok(())
     }
 
-    pub fn gen_sample_blocks(num_of_blocks: usize, start: i32) -> Vec<Result<DataBlock>> {
+    pub fn gen_sample_blocks(
+        num_of_blocks: usize,
+        start: i32,
+    ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
         Self::gen_sample_blocks_ex(num_of_blocks, 3, start)
     }
 
@@ -233,52 +239,65 @@ impl TestFixture {
         num_of_block: usize,
         rows_per_block: usize,
         start: i32,
-    ) -> Vec<Result<DataBlock>> {
-        (0..num_of_block)
-            .into_iter()
-            .map(|idx| {
-                let column0 = Column::from_data(
-                    std::iter::repeat_with(|| idx as i32 + start)
-                        .take(rows_per_block)
-                        .collect::<Vec<i32>>(),
-                );
-                let column1 = Column::from_data(
-                    std::iter::repeat_with(|| (idx as i32 + start) * 2)
-                        .take(rows_per_block)
-                        .collect::<Vec<i32>>(),
-                );
-                let column2 = Column::from_data(
-                    std::iter::repeat_with(|| (idx as i32 + start) * 3)
-                        .take(rows_per_block)
-                        .collect::<Vec<i32>>(),
-                );
-                let tuple_inner_columns = vec![column1, column2];
-                let tuple_column = Column::Tuple {
-                    fields: tuple_inner_columns,
-                    len: rows_per_block,
-                };
+    ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("id", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("t", TableDataType::Tuple {
+                fields_name: vec!["a".to_string(), "b".to_string()],
+                fields_type: vec![
+                    TableDataType::Number(NumberDataType::Int32),
+                    TableDataType::Number(NumberDataType::Int32),
+                ],
+            }),
+        ]);
+        (
+            schema,
+            (0..num_of_block)
+                .into_iter()
+                .map(|idx| {
+                    let column0 = Column::from_data(
+                        std::iter::repeat_with(|| idx as i32 + start)
+                            .take(rows_per_block)
+                            .collect::<Vec<i32>>(),
+                    );
+                    let column1 = Column::from_data(
+                        std::iter::repeat_with(|| (idx as i32 + start) * 2)
+                            .take(rows_per_block)
+                            .collect::<Vec<i32>>(),
+                    );
+                    let column2 = Column::from_data(
+                        std::iter::repeat_with(|| (idx as i32 + start) * 3)
+                            .take(rows_per_block)
+                            .collect::<Vec<i32>>(),
+                    );
+                    let tuple_inner_columns = vec![column1, column2];
+                    let tuple_column = Column::Tuple {
+                        fields: tuple_inner_columns,
+                        len: rows_per_block,
+                    };
 
-                let columns = vec![
-                    BlockEntry {
-                        data_type: DataType::Number(NumberDataType::Int32),
-                        value: Value::Column(column0),
-                    },
-                    BlockEntry {
-                        data_type: DataType::Tuple(vec![
-                            DataType::Number(NumberDataType::Int32),
-                            DataType::Number(NumberDataType::Int32),
-                        ]),
-                        value: Value::Column(tuple_column),
-                    },
-                ];
+                    let columns = vec![
+                        BlockEntry {
+                            data_type: DataType::Number(NumberDataType::Int32),
+                            value: Value::Column(column0),
+                        },
+                        BlockEntry {
+                            data_type: DataType::Tuple(vec![
+                                DataType::Number(NumberDataType::Int32),
+                                DataType::Number(NumberDataType::Int32),
+                            ]),
+                            value: Value::Column(tuple_column),
+                        },
+                    ];
 
-                Ok(DataBlock::new(columns, rows_per_block))
-            })
-            .collect()
+                    Ok(DataBlock::new(columns, rows_per_block))
+                })
+                .collect(),
+        )
     }
 
     pub fn gen_sample_blocks_stream(num: usize, start: i32) -> SendableDataBlockStream {
-        let blocks = Self::gen_sample_blocks(num, start);
+        let (_, blocks) = Self::gen_sample_blocks(num, start);
         Box::pin(futures::stream::iter(blocks))
     }
 
@@ -287,7 +306,7 @@ impl TestFixture {
         rows_perf_block: usize,
         val_start_from: i32,
     ) -> SendableDataBlockStream {
-        let blocks = Self::gen_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
+        let (_, blocks) = Self::gen_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
         Box::pin(futures::stream::iter(blocks))
     }
 

@@ -18,10 +18,9 @@ use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::TableDataType;
 use common_expression::TableField;
-use common_meta_types::StageFileFormatType;
 use pretty_assertions::assert_eq;
 
-use crate::get_output_format;
+use crate::get_output_format_clickhouse;
 use crate::output_format_utils::gen_schema_and_block;
 use crate::output_format_utils::get_simple_block;
 

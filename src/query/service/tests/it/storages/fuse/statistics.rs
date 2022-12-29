@@ -160,7 +160,8 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let rows_per_block = 3;
     let val_start_with = 1;
 
-    let blocks = TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
+    let (_, blocks) =
+        TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
     let col_stats = blocks
         .iter()
         .map(|b| gen_columns_statistics(&b.clone().unwrap(), None))
@@ -237,7 +238,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_accumulator() -> common_exception::Result<()> {
-    let blocks = TestFixture::gen_sample_blocks(10, 1);
+    let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = StatisticsAccumulator::default();
 
     let operator = Operator::new(opendal::services::memory::Builder::default().build()?);
@@ -248,9 +249,9 @@ async fn test_accumulator() -> common_exception::Result<()> {
         let col_stats = gen_columns_statistics(&block, None)?;
         let block_statistics =
             BlockStatistics::from(&block, "does_not_matter".to_owned(), None, None)?;
-        let block_writer = BlockWriter::new(&table_schema, &operator, &loc_generator);
+        let block_writer = BlockWriter::new(&operator, &loc_generator);
         let block_meta = block_writer
-            .write(FuseStorageFormat::Parquet, block, col_stats, None)
+            .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
         stats_acc.add_with_block_meta(block_meta, block_statistics, meta::Compression::Lz4Raw)?;
     }

@@ -290,7 +290,7 @@ mod utils {
     ) -> Result<(Location, SegmentInfo)> {
         let dal = fuse_table.get_operator_ref();
         let schema = fuse_table.schema();
-        let block_writer = BlockWriter::new(&schema, dal, fuse_table.meta_location_generator());
+        let block_writer = BlockWriter::new(dal, fuse_table.meta_location_generator());
         let mut block_metas = vec![];
 
         // does not matter in this suite
@@ -304,7 +304,7 @@ mod utils {
         for block in blocks {
             let stats = gen_columns_statistics(&block, None)?;
             let block_meta = block_writer
-                .write(FuseStorageFormat::Parquet, block, stats, None)
+                .write(FuseStorageFormat::Parquet, &schema, block, stats, None)
                 .await?;
             block_metas.push(Arc::new(block_meta));
         }

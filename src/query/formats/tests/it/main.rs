@@ -25,28 +25,11 @@ mod output_format_json_each_row;
 mod output_format_tcsv;
 mod output_format_utils;
 
-fn get_output_format(
-    typ: StageFileFormatType,
-    schema: TableSchemaRef,
-) -> Result<Box<dyn OutputFormat>> {
-    let settings = &Settings::default_test_settings()?;
-    FileFormatOptionsExt::get_output_format_from_settings(typ, schema, settings)
-}
-
 fn get_output_format_clickhouse(
     format_name: &str,
     schema: TableSchemaRef,
 ) -> Result<Box<dyn OutputFormat>> {
     let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
     let settings = &Settings::default_test_settings()?;
-    FileFormatOptionsExt::get_output_format_from_settings_clickhouse(format, schema, settings)
-}
-
-fn get_output_format_clickhouse_with_setting(
-    format_name: &str,
-    schema: TableSchemaRef,
-    settings: &Settings,
-) -> Result<Box<dyn OutputFormat>> {
-    let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-    FileFormatOptionsExt::get_output_format_from_settings_clickhouse(format, schema, settings)
+    FileFormatOptionsExt::get_output_format_from_clickhouse_format(format, schema, settings)
 }
