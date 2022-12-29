@@ -12,6 +12,7 @@ doctest = false
 test = false
 
 [dependencies]
+common-ast = { path = "../../../query/ast" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../datablocks" }
@@ -29,7 +30,6 @@ common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-storage = { path = "../../../common/storage" }
 common-storages-view = { path = "../view" }
 common-users = { path = "../../users" }
-common-ast = { path = "../../../query/ast"}
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backon = "0.2"
