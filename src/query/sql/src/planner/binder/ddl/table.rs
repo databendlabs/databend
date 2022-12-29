@@ -855,7 +855,7 @@ impl<'a> Binder {
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource<'a>,
-    ) -> Result<(TableSchemaRef, Vec<Option<Scalar>>, Vec<String>)> {
+    ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         let bind_context = BindContext::new();
         match source {
             CreateTableSource::Columns(columns) => {
@@ -876,19 +876,12 @@ impl<'a> Binder {
                     fields.push(TableField::new(&name, schema_data_type.clone()));
                     fields_default_expr.push({
                         if let Some(default_expr) = &column.default_expr {
-                            let (mut expr, expr_type) = scalar_binder.bind(default_expr).await?;
+                            let (_expr, expr_type) = scalar_binder.bind(default_expr).await?;
                             let data_type = DataType::from(&schema_data_type);
                             if common_super_type(data_type.clone(), expr_type.clone()).is_none() {
                                 return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
                             }
-                            if !expr_type.eq(&data_type) {
-                                expr = Scalar::CastExpr(CastExpr {
-                                    argument: Box::new(expr),
-                                    from_type: Box::new(expr_type),
-                                    target_type: Box::new(data_type),
-                                })
-                            }
-                            Some(expr)
+                            Some(default_expr.to_string())
                         } else {
                             None
                         }

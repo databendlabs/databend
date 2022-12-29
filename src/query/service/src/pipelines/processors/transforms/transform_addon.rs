@@ -21,8 +21,7 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
-use common_expression::Value;
+use common_expression::Expr;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::parse_exprs;
@@ -36,15 +35,8 @@ use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::sessions::QueryContext;
 
 pub struct TransformAddOn {
-    default_nonexpr_fields: Vec<DataField>,
-
     expression_transform: CompoundBlockOperator,
-
-    /// The final schema of the output chunk.
-    output_schema: DataSchemaRef,
-    /// The schema of the output chunk before resorting.
-    /// input fields | default expr fields | default nonexpr fields
-    unresort_schema: DataSchemaRef,
+    input_len: usize,
 }
 
 impl TransformAddOn
@@ -57,9 +49,6 @@ where Self: Transform
         table: Arc<dyn Table>,
         ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
-        let mut default_exprs = Vec::new();
-        let mut default_nonexpr_fields = Vec::new();
-
         let fields = table
             .schema()
             .fields()
@@ -67,34 +56,42 @@ where Self: Transform
             .map(DataField::from)
             .collect::<Vec<_>>();
 
-        let mut unresort_fields = input_schema.fields().to_vec();
-
+        let mut ops = Vec::with_capacity(fields.len());
         for f in fields.iter() {
-            if !input_schema.has_field(f.name()) {
+            let expr = if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
-                    let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
-                    let expr = expr[0].clone();
-                    default_exprs.push(BlockOperator::Map { expr });
-                    unresort_fields.push(f.clone());
+                    let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
+                    expr.remove(0)
                 } else {
-                    default_nonexpr_fields.push(f.clone());
+                    let default_value = f.data_type().default_value();
+                    Expr::Constant {
+                        span: None,
+                        scalar: default_value,
+                        data_type: f.data_type().clone(),
+                    }
                 }
-            }
-        }
+            } else {
+                let field = input_schema.field_with_name(f.name()).unwrap();
+                let id = input_schema.index_of(f.name()).unwrap();
+                Expr::ColumnRef {
+                    span: None,
+                    id,
+                    data_type: field.data_type().clone(),
+                }
+            };
 
-        unresort_fields.extend_from_slice(&default_nonexpr_fields);
+            ops.push(BlockOperator::Map { expr });
+        }
 
         let func_ctx = ctx.try_get_function_context()?;
         let expression_transform = CompoundBlockOperator {
             ctx: func_ctx,
-            operators: default_exprs,
+            operators: ops,
         };
 
         Ok(Transformer::create(input, output, Self {
-            default_nonexpr_fields,
             expression_transform,
-            output_schema: Arc::new(DataSchema::from(table.schema())),
-            unresort_schema: DataSchemaRefExt::create(unresort_fields),
+            input_len: input_schema.num_fields(),
         }))
     }
 }
@@ -103,19 +100,8 @@ impl Transform for TransformAddOn {
     const NAME: &'static str = "AddOnTransform";
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
-        block = self.expression_transform.transform(block.clone())?;
-
-        for f in &self.default_nonexpr_fields {
-            let default_value = f.data_type().default_value();
-            let column = BlockEntry {
-                data_type: f.data_type().clone(),
-                value: Value::Scalar(default_value),
-            };
-            block.add_column(column);
-        }
-
-        block = block.resort(&self.unresort_schema, &self.output_schema)?;
-
-        Ok(block)
+        block = self.expression_transform.transform(block)?;
+        let columns = block.columns()[self.input_len..].to_owned();
+        Ok(DataBlock::new(columns, block.num_rows()))
     }
 }

@@ -157,13 +157,9 @@ impl CreateTableInterpreterV2 {
     /// - Update cluster key of table meta.
     fn build_request(&self) -> Result<CreateTableReq> {
         let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
-        let input_schema = self.plan.schema.clone();
         for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
-            let field = if let Some(Some(scalar)) = &self.plan.field_default_exprs.get(idx) {
-                let physical_scaler =
-                    PhysicalScalarBuilder::new(&Arc::new(DataSchema::from(&input_schema)))
-                        .build(scalar)?;
-                field.with_default_expr(Some(serde_json::to_string(&physical_scaler)?))
+            let field = if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
+                field.with_default_expr(Some(default_expr.clone()))
             } else {
                 field
             };

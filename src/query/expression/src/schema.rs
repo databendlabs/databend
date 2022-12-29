@@ -784,7 +784,7 @@ impl From<&TableField> for DataField {
     fn from(f: &TableField) -> Self {
         let data_type = f.data_type.clone();
         let name = f.name.clone();
-        DataField::new(&name, DataType::from(&data_type))
+        DataField::new(&name, DataType::from(&data_type)).with_default_expr(f.default_expr.clone())
     }
 }
 
