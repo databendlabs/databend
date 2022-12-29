@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -235,6 +236,23 @@ pub trait Table: Sync + Send {
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support DELETE FROM",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
+    async fn update(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filter: Option<Expression>,
+        col_indices: Vec<usize>,
+        update_list: HashMap<usize, Expression>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let (_, _, _, _, _) = (ctx, filter, col_indices, update_list, pipeline);
+
+        Err(ErrorCode::Unimplemented(format!(
+            "table {},  of engine type {}, does not support UPDATE",
             self.name(),
             self.get_table_info().engine(),
         )))

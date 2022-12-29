@@ -513,6 +513,18 @@ impl Table for FuseTable {
         self.do_delete(ctx, filter, col_indices, pipeline).await
     }
 
+    async fn update(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filter: Option<Expression>,
+        col_indices: Vec<usize>,
+        update_list: HashMap<usize, Expression>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        self.do_update(ctx, filter, col_indices, update_list, pipeline)
+            .await
+    }
+
     fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
         let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;

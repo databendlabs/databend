@@ -11,3 +11,46 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::sync::Arc;
+
+use common_datavalues::DataSchemaRef;
+use common_exception::Result;
+use common_sql::plans::UpdatePlan;
+
+use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
+use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+
+/// interprets UpdatePlan
+pub struct UpdateInterpreter {
+    ctx: Arc<QueryContext>,
+    plan: UpdatePlan,
+}
+
+impl UpdateInterpreter {
+    /// Create the UpdateInterpreter from UpdatePlan
+    pub fn try_create(ctx: Arc<QueryContext>, plan: UpdatePlan) -> Result<Self> {
+        Ok(UpdateInterpreter { ctx, plan })
+    }
+}
+
+#[async_trait::async_trait]
+impl Interpreter for UpdateInterpreter {
+    /// Get the name of current interpreter
+    fn name(&self) -> &str {
+        "UpdateInterpreter"
+    }
+
+    /// Get the schema of UpdatePlan
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
+    }
+
+    #[tracing::instrument(level = "debug", name = "update_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        // TODO check privilege
+        todo!()
+    }
+}

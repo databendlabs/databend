@@ -35,7 +35,7 @@ pub struct DeleteInterpreter {
 }
 
 impl DeleteInterpreter {
-    /// Create the DelectInterpreter from DelectPlan
+    /// Create the DeleteInterpreter from DeletePlan
     pub fn try_create(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<Self> {
         Ok(DeleteInterpreter { ctx, plan })
     }
@@ -48,7 +48,7 @@ impl Interpreter for DeleteInterpreter {
         "DeleteInterpreter"
     }
 
-    /// Get the schema of SelectPlan
+    /// Get the schema of DeletePlan
     fn schema(&self) -> DataSchemaRef {
         self.plan.schema()
     }

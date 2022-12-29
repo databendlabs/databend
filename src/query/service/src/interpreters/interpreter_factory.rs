@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use tracing::error;
 
@@ -35,6 +34,7 @@ use crate::interpreters::CreateShareInterpreter;
 use crate::interpreters::DropShareInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
+use crate::interpreters::UpdateInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
@@ -200,9 +200,10 @@ impl InterpreterFactory {
                 *delete.clone(),
             )?)),
 
-            Plan::Update(_update) => Err(ErrorCode::Unimplemented(
-                "Unimplement for update".to_string(),
-            )),
+            Plan::Update(update) => Ok(Arc::new(UpdateInterpreter::try_create(
+                ctx,
+                *update.clone(),
+            )?)),
 
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(

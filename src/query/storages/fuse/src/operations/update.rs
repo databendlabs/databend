@@ -28,8 +28,8 @@ use common_exception::Result;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::Evaluator;
 
-use super::mutation::MutationSink;
 use crate::operations::mutation::MutationPartInfo;
+use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::UpdateSource;
 use crate::pipelines::Pipeline;
 use crate::pruning::BlockPruner;

@@ -136,6 +136,7 @@ pub use interpreter_table_show_create::ShowCreateTableInterpreter;
 pub use interpreter_table_truncate::TruncateTableInterpreter;
 pub use interpreter_table_undrop::UndropTableInterpreter;
 pub use interpreter_unsetting::UnSettingInterpreter;
+pub use interpreter_update::UpdateInterpreter;
 pub use interpreter_use_database::UseDatabaseInterpreter;
 pub use interpreter_user_alter::AlterUserInterpreter;
 pub use interpreter_user_create::CreateUserInterpreter;

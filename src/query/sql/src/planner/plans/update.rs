@@ -13,7 +13,10 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 
 use crate::plans::Scalar;
@@ -26,4 +29,10 @@ pub struct UpdatePlan {
     pub table_id: MetaId,
     pub update_list: HashMap<usize, Scalar>,
     pub selection: Option<Scalar>,
+}
+
+impl UpdatePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }
