@@ -20,6 +20,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_jsonb::Number as JsonbNumber;
@@ -904,7 +905,7 @@ impl From<&DataType> for ArrowDataType {
             DataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
-            DataType::Timestamp => ArrowDataType::Date64,
+            DataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             DataType::Date => ArrowDataType::Date32,
             DataType::Nullable(ty) => ty.as_ref().into(),
             DataType::Array(ty) => {
@@ -955,7 +956,7 @@ impl From<&TableDataType> for ArrowDataType {
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
-            TableDataType::Timestamp => ArrowDataType::Date64,
+            TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             TableDataType::Date => ArrowDataType::Date32,
             TableDataType::Nullable(ty) => ty.as_ref().into(),
             TableDataType::Array(ty) => {
