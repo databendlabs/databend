@@ -61,11 +61,11 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
 
     // check count
     let expected = vec![
-        "+---------------+-------+",
-        "| segment_count | count |",
-        "+---------------+-------+",
-        "| 9             | 9     |",
-        "+---------------+-------+",
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 9        | 9        |",
+        "+----------+----------+",
     ];
     let qry = format!(
         "select segment_count, block_count as count from fuse_snapshot('{}', '{}') limit 1",
