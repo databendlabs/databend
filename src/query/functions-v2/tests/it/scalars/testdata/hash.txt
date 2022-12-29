@@ -1,0 +1,580 @@
+ast            : md5('Abc')
+raw expr       : md5("Abc")
+checked expr   : md5<String>("Abc")
+optimized expr : "35593b7ce5020eae3ca68fd5b6f3e031"
+output type    : String
+output domain  : Unknown
+output         : "35593b7ce5020eae3ca68fd5b6f3e031"
+
+
+ast            : md5(NULL)
+raw expr       : md5(NULL)
+checked expr   : md5<String NULL>(CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : md5(a)
+raw expr       : md5(ColumnRef(0)::String)
+checked expr   : md5<String>(ColumnRef(0))
+evaluation:
++--------+-------------------+------------------------------------+
+|        | a                 | Output                             |
++--------+-------------------+------------------------------------+
+| Type   | String            | String                             |
+| Domain | {"Abc"..="ß😀山"} | Unknown                            |
+| Row 0  | "Abc"             | "35593b7ce5020eae3ca68fd5b6f3e031" |
+| Row 1  | "Dobrý den"       | "1ef0b4dab5588fe3f63cd84f6f1d6ab2" |
+| Row 2  | "ß😀山"           | "b814c09d48b62faafc315df44a35863e" |
++--------+-------------------+------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }                                                                                                                                                      |
+| Output | StringColumn { data: 0x333535393362376365353032306561653363613638666435623666336530333131656630623464616235353838666533663633636438346636663164366162326238313463303964343862363266616166633331356466343461333538363365, offsets: [0, 32, 64, 96] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : sha('Abc')
+raw expr       : sha("Abc")
+checked expr   : sha<String>("Abc")
+optimized expr : "915858afa2278f25527f192038108346164b47f2"
+output type    : String
+output domain  : Unknown
+output         : "915858afa2278f25527f192038108346164b47f2"
+
+
+ast            : sha(NULL)
+raw expr       : sha(NULL)
+checked expr   : sha<String NULL>(CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : sha1(a)
+raw expr       : sha1(ColumnRef(0)::String)
+checked expr   : sha<String>(ColumnRef(0))
+evaluation:
++--------+-------------------+--------------------------------------------+
+|        | a                 | Output                                     |
++--------+-------------------+--------------------------------------------+
+| Type   | String            | String                                     |
+| Domain | {"Abc"..="ß😀山"} | Unknown                                    |
+| Row 0  | "Abc"             | "915858afa2278f25527f192038108346164b47f2" |
+| Row 1  | "Dobrý den"       | "c66d056c9fb2c9e6cd74b4555f64c0af4a7bc599" |
+| Row 2  | "ß😀山"           | "e978809ba007678383c2db3decbaf02eb0bf72a8" |
++--------+-------------------+--------------------------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                 |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }                                                                                                                                                                                                       |
+| Output | StringColumn { data: 0x393135383538616661323237386632353532376631393230333831303833343631363462343766326336366430353663396662326339653663643734623435353566363463306166346137626335393965393738383039626130303736373833383363326462336465636261663032656230626637326138, offsets: [0, 40, 80, 120] } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : blake3('Abc')
+raw expr       : blake3("Abc")
+checked expr   : blake3<String>("Abc")
+optimized expr : "1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b82111"
+output type    : String
+output domain  : Unknown
+output         : "1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b82111"
+
+
+ast            : blake3(NULL)
+raw expr       : blake3(NULL)
+checked expr   : blake3<String NULL>(CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : blake3(a)
+raw expr       : blake3(ColumnRef(0)::String)
+checked expr   : blake3<String>(ColumnRef(0))
+evaluation:
++--------+-------------------+--------------------------------------------------------------------+
+|        | a                 | Output                                                             |
++--------+-------------------+--------------------------------------------------------------------+
+| Type   | String            | String                                                             |
+| Domain | {"Abc"..="ß😀山"} | Unknown                                                            |
+| Row 0  | "Abc"             | "1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b82111" |
+| Row 1  | "Dobrý den"       | "0b449419834e5d285d3b95f892b5494db8d7798c11602ccde1f51c33a159677f" |
+| Row 2  | "ß😀山"           | "56475d2e89dba36b511ddaa8e4e8e995c094f59f5fbfa0af5929f3f399d9a810" |
++--------+-------------------+--------------------------------------------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }                                                                                                                                                                                                                                                                                                                                                        |
+| Output | StringColumn { data: 0x316637616133393738393439633432373537393761633630353663303130386538353261356430376334393833386130303739393139343935376238323131313062343439343139383334653564323835643362393566383932623534393464623864373739386331313630326363646531663531633333613135393637376635363437356432653839646261333662353131646461613865346538653939356330393466353966356662666130616635393239663366333939643961383130, offsets: [0, 64, 128, 192] } |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : sha2('Abc',0)
+raw expr       : sha2("Abc", 0_u8)
+checked expr   : sha2<String, UInt64>("Abc", CAST(0_u8 AS UInt64))
+optimized expr : "06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"
+output type    : String
+output domain  : Unknown
+output         : "06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"
+
+
+ast            : sha2('Abc',256)
+raw expr       : sha2("Abc", 256_u16)
+checked expr   : sha2<String, UInt64>("Abc", CAST(256_u16 AS UInt64))
+optimized expr : "06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"
+output type    : String
+output domain  : Unknown
+output         : "06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"
+
+
+ast            : sha2(NULL,0)
+raw expr       : sha2(NULL, 0_u8)
+checked expr   : sha2<String NULL, UInt64 NULL>(CAST(NULL AS String NULL), CAST(0_u8 AS UInt64 NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : sha2(a,b)
+raw expr       : sha2(ColumnRef(0)::String, ColumnRef(1)::UInt16)
+checked expr   : sha2<String, UInt64>(ColumnRef(0), CAST(ColumnRef(1) AS UInt64))
+evaluation:
++--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
+|        | a                 | b           | Output                                                                                                                             |
++--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
+| Type   | String            | UInt16      | String                                                                                                                             |
+| Domain | {"Abc"..="ß😀山"} | {224..=512} | Unknown                                                                                                                            |
+| Row 0  | "Abc"             | 224         | "11d86770f501294c6b395942a39f60fe286a15e06282abcb2294cfa0"                                                                         |
+| Row 1  | "Dobrý den"       | 384         | "1a5c66c918718c627e360e56833d2f6c638fd1a67086792606cfefe50089289ca34b52a72a833e6f2661b64417068846"                                 |
+| Row 2  | "ß😀山"           | 512         | "3bd4ca36a66c0675e695f3fc44af703cd6c110085adf105138ef56e6768a639f16a9c27b651a0c64f685b24be835e0a62485575477e06d530574865bf1670d30" |
++--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| b      | UInt16([224, 384, 512])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Output | StringColumn { data: 0x31316438363737306635303132393463366233393539343261333966363066653238366131356530363238326162636232323934636661303161356336366339313837313863363237653336306535363833336432663663363338666431613637303836373932363036636665666535303038393238396361333462353261373261383333653666323636316236343431373036383834363362643463613336613636633036373565363935663366633434616637303363643663313130303835616466313035313338656635366536373638613633396631366139633237623635316130633634663638356232346265383335653061363234383535373534373765303664353330353734383635626631363730643330, offsets: [0, 56, 152, 280] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : city64withseed('Abc',0)
+raw expr       : city64withseed("Abc", 0_u8)
+checked expr   : city64withseed<String, UInt8>("Abc", 0_u8)
+optimized expr : 8309941215813243361_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 8309941215813243361
+
+
+ast            : city64withseed('Abc',256)
+raw expr       : city64withseed("Abc", 256_u16)
+checked expr   : city64withseed<String, UInt16>("Abc", 256_u16)
+optimized expr : 10246934130793054423_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 10246934130793054423
+
+
+ast            : city64withseed('Abc',256.3)
+raw expr       : city64withseed("Abc", 256.3_f64)
+checked expr   : city64withseed<String, Float64>("Abc", 256.3_f64)
+optimized expr : 10246934130793054423_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 10246934130793054423
+
+
+ast            : city64withseed(to_datetime(100000), 1234)
+raw expr       : city64withseed(to_datetime(100000_u32), 1234_u16)
+checked expr   : city64withseed<Timestamp, UInt16>(to_timestamp<Int64>(CAST(100000_u32 AS Int64)), 1234_u16)
+optimized expr : 4538088127563444061_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 4538088127563444061
+
+
+ast            : city64withseed(1234567890, 12)
+raw expr       : city64withseed(1234567890_u32, 12_u8)
+checked expr   : city64withseed<UInt32, UInt8>(1234567890_u32, 12_u8)
+optimized expr : 2939704650099116301_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 2939704650099116301
+
+
+ast            : city64withseed(1.1, 12)
+raw expr       : city64withseed(1.1_f64, 12_u8)
+checked expr   : city64withseed<Float64, UInt8>(1.1_f64, 12_u8)
+optimized expr : 10046394896202388363_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 10046394896202388363
+
+
+ast            : city64withseed('1234567890', 12.12)
+raw expr       : city64withseed("1234567890", 12.12_f64)
+checked expr   : city64withseed<String, Float64>("1234567890", 12.12_f64)
+optimized expr : 10660895976650300430_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 10660895976650300430
+
+
+ast            : city64withseed(1234567890, 12.12)
+raw expr       : city64withseed(1234567890_u32, 12.12_f64)
+checked expr   : city64withseed<UInt32, Float64>(1234567890_u32, 12.12_f64)
+optimized expr : 2939704650099116301_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 2939704650099116301
+
+
+ast            : city64withseed(to_date(100000), 1234)
+raw expr       : city64withseed(to_date(100000_u32), 1234_u16)
+checked expr   : city64withseed<Date, UInt16>(to_date<Int64>(CAST(100000_u32 AS Int64)), 1234_u16)
+optimized expr : 8535774936754559738_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 8535774936754559738
+
+
+ast            : city64withseed(NULL,0)
+raw expr       : city64withseed(NULL, 0_u8)
+checked expr   : city64withseed<String NULL, UInt8 NULL>(CAST(NULL AS String NULL), CAST(0_u8 AS UInt8 NULL))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : city64withseed(a,b)
+raw expr       : city64withseed(ColumnRef(0)::String, ColumnRef(1)::UInt16)
+checked expr   : city64withseed<String, UInt16>(ColumnRef(0), ColumnRef(1))
+evaluation:
++--------+-------------------+-----------+----------------------+
+|        | a                 | b         | Output               |
++--------+-------------------+-----------+----------------------+
+| Type   | String            | UInt16    | UInt64               |
+| Domain | {"Abc"..="ß😀山"} | {10..=12} | Unknown              |
+| Row 0  | "Abc"             | 10        | 10385767944629066306 |
+| Row 1  | "Dobrý den"       | 11        | 12123249488783690377 |
+| Row 2  | "ß😀山"           | 12        | 14631005279260459058 |
++--------+-------------------+-----------+----------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                           |
++--------+------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x416263446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 3, 13, 22] } |
+| b      | UInt16([10, 11, 12])                                                                           |
+| Output | UInt64([10385767944629066306, 12123249488783690377, 14631005279260459058])                     |
++--------+------------------------------------------------------------------------------------------------+
+
+
+ast            : siphash64('Abc')
+raw expr       : siphash64("Abc")
+checked expr   : siphash64<String>("Abc")
+optimized expr : 17684958587550623602_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 17684958587550623602
+
+
+ast            : siphash64(to_datetime(100000))
+raw expr       : siphash64(to_datetime(100000_u32))
+checked expr   : siphash64<Timestamp>(to_timestamp<Int64>(CAST(100000_u32 AS Int64)))
+optimized expr : 6710305768027137259_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 6710305768027137259
+
+
+ast            : siphash64(1234567890)
+raw expr       : siphash64(1234567890_u32)
+checked expr   : siphash64<UInt32>(1234567890_u32)
+optimized expr : 12447382539015599056_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 12447382539015599056
+
+
+ast            : siphash64(1.1)
+raw expr       : siphash64(1.1_f64)
+checked expr   : siphash64<Float64>(1.1_f64)
+optimized expr : 14856193058643670405_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 14856193058643670405
+
+
+ast            : siphash64(to_date(100000))
+raw expr       : siphash64(to_date(100000_u32))
+checked expr   : siphash64<Date>(to_date<Int64>(CAST(100000_u32 AS Int64)))
+optimized expr : 17230848539826186862_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 17230848539826186862
+
+
+ast            : siphash64(NULL)
+raw expr       : siphash64(NULL)
+checked expr   : siphash64<String NULL>(CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : siphash64(parse_json('{"a":1}'))
+raw expr       : siphash64(parse_json("{\"a\":1}"))
+checked expr   : siphash64<Variant>(parse_json<String>("{\"a\":1}"))
+optimized expr : 10266916306474055689_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 10266916306474055689
+
+
+ast            : siphash(true)
+raw expr       : siphash(true)
+checked expr   : siphash64<Boolean>(true)
+optimized expr : 4952851536318644461_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 4952851536318644461
+
+
+ast            : siphash64(a)
+raw expr       : siphash64(ColumnRef(0)::String)
+checked expr   : siphash64<String>(ColumnRef(0))
+evaluation:
++--------+-------------------------+---------------------+
+|        | a                       | Output              |
++--------+-------------------------+---------------------+
+| Type   | String                  | UInt64              |
+| Domain | {"Dobrý den"..="ß😀山"} | Unknown             |
+| Row 0  | "Dobrý den"             | 5782510256878119795 |
+| Row 1  | "ß😀山"                 | 1354619631122873228 |
++--------+-------------------------+---------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 10, 19] } |
+| Output | UInt64([5782510256878119795, 1354619631122873228])                                    |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : xxhash64('Abc')
+raw expr       : xxhash64("Abc")
+checked expr   : xxhash64<String>("Abc")
+optimized expr : 11989503812394966078_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 11989503812394966078
+
+
+ast            : xxhash64(to_datetime(100000))
+raw expr       : xxhash64(to_datetime(100000_u32))
+checked expr   : xxhash64<Timestamp>(to_timestamp<Int64>(CAST(100000_u32 AS Int64)))
+optimized expr : 14455582462593060490_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 14455582462593060490
+
+
+ast            : xxhash64(1234567890)
+raw expr       : xxhash64(1234567890_u32)
+checked expr   : xxhash64<UInt32>(1234567890_u32)
+optimized expr : 14922725725041217620_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 14922725725041217620
+
+
+ast            : xxhash64(1.1)
+raw expr       : xxhash64(1.1_f64)
+checked expr   : xxhash64<Float64>(1.1_f64)
+optimized expr : 18307966283998289030_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 18307966283998289030
+
+
+ast            : xxhash64(to_date(100000))
+raw expr       : xxhash64(to_date(100000_u32))
+checked expr   : xxhash64<Date>(to_date<Int64>(CAST(100000_u32 AS Int64)))
+optimized expr : 8691527656253933431_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 8691527656253933431
+
+
+ast            : xxhash64(NULL)
+raw expr       : xxhash64(NULL)
+checked expr   : xxhash64<String NULL>(CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : xxhash64(parse_json('{"a":1}'))
+raw expr       : xxhash64(parse_json("{\"a\":1}"))
+checked expr   : xxhash64<Variant>(parse_json<String>("{\"a\":1}"))
+optimized expr : 13558435650847720346_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 13558435650847720346
+
+
+ast            : xxhash64(true)
+raw expr       : xxhash64(true)
+checked expr   : xxhash64<Boolean>(true)
+optimized expr : 9962287286179718960_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 9962287286179718960
+
+
+ast            : xxhash64(a)
+raw expr       : xxhash64(ColumnRef(0)::String)
+checked expr   : xxhash64<String>(ColumnRef(0))
+evaluation:
++--------+-------------------------+--------------------+
+|        | a                       | Output             |
++--------+-------------------------+--------------------+
+| Type   | String                  | UInt64             |
+| Domain | {"Dobrý den"..="ß😀山"} | Unknown            |
+| Row 0  | "Dobrý den"             | 314761032262035578 |
+| Row 1  | "ß😀山"                 | 656695431091154575 |
++--------+-------------------------+--------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 10, 19] } |
+| Output | UInt64([314761032262035578, 656695431091154575])                                      |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : xxhash32('Abc')
+raw expr       : xxhash32("Abc")
+checked expr   : xxhash32<String>("Abc")
+optimized expr : 3980406955_u32
+output type    : UInt32
+output domain  : Unknown
+output         : 3980406955
+
+
+ast            : xxhash32(to_datetime(100000))
+raw expr       : xxhash32(to_datetime(100000_u32))
+checked expr   : xxhash32<Timestamp>(to_timestamp<Int64>(CAST(100000_u32 AS Int64)))
+optimized expr : 680734338_u32
+output type    : UInt32
+output domain  : Unknown
+output         : 680734338
+
+
+ast            : xxhash32(1234567890)
+raw expr       : xxhash32(1234567890_u32)
+checked expr   : xxhash32<UInt32>(1234567890_u32)
+optimized expr : 2833116583_u32
+output type    : UInt32
+output domain  : Unknown
+output         : 2833116583
+
+
+ast            : xxhash32(1.1)
+raw expr       : xxhash32(1.1_f64)
+checked expr   : xxhash32<Float64>(1.1_f64)
+optimized expr : 3252916525_u32
+output type    : UInt32
+output domain  : Unknown
+output         : 3252916525
+
+
+ast            : xxhash32(to_date(100000))
+raw expr       : xxhash32(to_date(100000_u32))
+checked expr   : xxhash32<Date>(to_date<Int64>(CAST(100000_u32 AS Int64)))
+optimized expr : 2518126785_u32
+output type    : UInt32
+output domain  : Unknown
+output         : 2518126785
+
+
+ast            : xxhash32(NULL)
+raw expr       : xxhash32(NULL)
+checked expr   : xxhash32<String NULL>(CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : UInt32 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : xxhash32(parse_json('{"a":1}'))
+raw expr       : xxhash32(parse_json("{\"a\":1}"))
+checked expr   : xxhash32<Variant>(parse_json<String>("{\"a\":1}"))
+optimized expr : 3886246173_u32
+output type    : UInt32
+output domain  : Unknown
+output         : 3886246173
+
+
+ast            : xxhash32([1])
+raw expr       : xxhash32(array(1_u8))
+checked expr   : xxhash32<Variant>(CAST(array<T0=UInt8><T0>(1_u8) AS Variant))
+optimized expr : 3499081782_u32
+output type    : UInt32
+output domain  : Unknown
+output         : 3499081782
+
+
+ast            : xxhash32((1,2))
+raw expr       : xxhash32(tuple(1_u8, 2_u8))
+checked expr   : xxhash32<Variant>(CAST(tuple<UInt8, UInt8>(1_u8, 2_u8) AS Variant))
+optimized expr : 837113020_u32
+output type    : UInt32
+output domain  : Unknown
+output         : 837113020
+
+
+ast            : xxhash32(true)
+raw expr       : xxhash32(true)
+checked expr   : xxhash32<Boolean>(true)
+optimized expr : 949155633_u32
+output type    : UInt32
+output domain  : Unknown
+output         : 949155633
+
+
+ast            : xxhash32(a)
+raw expr       : xxhash32(ColumnRef(0)::String)
+checked expr   : xxhash32<String>(ColumnRef(0))
+evaluation:
++--------+-------------------------+------------+
+|        | a                       | Output     |
++--------+-------------------------+------------+
+| Type   | String                  | UInt32     |
+| Domain | {"Dobrý den"..="ß😀山"} | Unknown    |
+| Row 0  | "Dobrý den"             | 19285785   |
+| Row 1  | "ß😀山"                 | 1401072642 |
++--------+-------------------------+------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x446f6272c3bd2064656ec39ff09f9880e5b1b1, offsets: [0, 10, 19] } |
+| Output | UInt32([19285785, 1401072642])                                                        |
++--------+---------------------------------------------------------------------------------------+
+
+

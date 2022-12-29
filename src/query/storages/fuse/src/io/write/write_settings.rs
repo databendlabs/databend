@@ -12,16 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_storages_table_meta::table::TableCompression;
+
 use crate::FuseStorageFormat;
 
 pub struct WriteSettings {
     pub storage_format: FuseStorageFormat,
+    pub table_compression: TableCompression,
+    pub native_max_page_size: usize,
 }
 
 impl Default for WriteSettings {
     fn default() -> Self {
         WriteSettings {
             storage_format: FuseStorageFormat::Parquet,
+            table_compression: Default::default(),
+            native_max_page_size: 8192,
         }
     }
 }

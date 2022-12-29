@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod local;
+
 use std::env;
 
 use common_base::runtime::Runtime;
@@ -55,7 +57,7 @@ fn main() {
 async fn main_entrypoint() -> Result<()> {
     let conf: Config = Config::load()?;
 
-    if run_cmd(&conf) {
+    if run_cmd(&conf).await? {
         return Ok(());
     }
 
@@ -298,15 +300,19 @@ async fn main_entrypoint() -> Result<()> {
     Ok(())
 }
 
-fn run_cmd(conf: &Config) -> bool {
+async fn run_cmd(conf: &Config) -> Result<bool> {
     if conf.cmd.is_empty() {
-        return false;
+        return Ok(false);
     }
 
     match conf.cmd.as_str() {
         "ver" => {
             println!("version: {}", *QUERY_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
+        }
+        "local" => {
+            println!("exec local query: {}", conf.local.sql);
+            local::query_local(conf).await?
         }
         _ => {
             eprintln!("Invalid cmd: {}", conf.cmd);
@@ -316,7 +322,7 @@ fn run_cmd(conf: &Config) -> bool {
         }
     }
 
-    true
+    Ok(true)
 }
 
 #[cfg(not(target_os = "macos"))]

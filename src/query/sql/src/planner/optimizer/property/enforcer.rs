@@ -55,6 +55,16 @@ pub fn require_property(
                 continue;
             }
         }
+        if let RelOperator::UnionAll(_) = &s_expr.plan {
+            // Wrap the child with Random exchange to make it partition to all nodes
+            let enforced_child =
+                enforce_property(optimized_expr.child(index)?, &RequiredProperty {
+                    distribution: Distribution::Any,
+                })?;
+            children.push(enforced_child);
+            continue;
+        }
+
         if required.satisfied_by(&physical) {
             children.push(optimized_expr.child(index)?.clone());
             continue;

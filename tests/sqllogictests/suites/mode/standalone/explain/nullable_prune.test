@@ -52,4 +52,3 @@ Filter
 
 statement ok
 DROP TABLE default.default.t_nullable_prune
-

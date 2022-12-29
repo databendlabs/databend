@@ -37,6 +37,7 @@ use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
+use common_storages_table_meta::meta;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -674,7 +675,11 @@ impl CompactSegmentTestFixture {
                 block_statistics.block_file_location = block_meta.location.0.clone();
 
                 collected_blocks.push(block_meta.clone());
-                stats_acc.add_with_block_meta(block_meta, block_statistics)?;
+                stats_acc.add_with_block_meta(
+                    block_meta,
+                    block_statistics,
+                    meta::Compression::Lz4Raw,
+                )?;
             }
             let col_stats = stats_acc.summary()?;
             let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {

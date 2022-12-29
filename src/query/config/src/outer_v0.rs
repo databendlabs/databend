@@ -53,6 +53,7 @@ use serfig::parsers::Toml;
 use super::inner::CatalogConfig as InnerCatalogConfig;
 use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
 use super::inner::Config as InnerConfig;
+use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::DATABEND_COMMIT_VERSION;
@@ -105,6 +106,10 @@ pub struct Config {
     /// - currently only supports HIVE (via hive meta store)
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
+
+    // Local query config.
+    #[clap(flatten)]
+    pub local: LocalConfig,
 
     /// external catalog config.
     ///
@@ -183,6 +188,7 @@ impl From<InnerConfig> for Config {
             meta: inner.meta.into(),
             storage: inner.storage.into(),
             catalog: HiveCatalogConfig::default(),
+            local: inner.local.into(),
 
             catalogs: inner
                 .catalogs
@@ -218,6 +224,7 @@ impl TryInto<InnerConfig> for Config {
             log: self.log.try_into()?,
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
+            local: self.local.try_into()?,
             catalogs,
         })
     }
@@ -1244,9 +1251,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "10000")]
     pub max_query_log_size: usize,
 
-    /// Table Cached enabled
-    #[clap(long)]
-    pub table_cache_enabled: bool,
+    /// Table Meta Cached enabled
+    #[clap(long, default_value = "true")]
+    pub table_meta_cache_enabled: bool,
 
     /// Max number of cached table block meta
     #[clap(long, default_value = "102400")]
@@ -1359,7 +1366,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_engine_memory_enabled: self.table_engine_memory_enabled,
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
-            table_cache_enabled: self.table_cache_enabled,
+            table_meta_cache_enabled: self.table_meta_cache_enabled,
             table_cache_block_meta_count: self.table_cache_block_meta_count,
             table_memory_cache_mb_size: self.table_memory_cache_mb_size,
             table_disk_cache_root: self.table_disk_cache_root,
@@ -1424,7 +1431,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             database_engine_github_enabled: true,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
-            table_cache_enabled: inner.table_cache_enabled,
+            table_meta_cache_enabled: inner.table_meta_cache_enabled,
             table_cache_block_meta_count: inner.table_cache_block_meta_count,
             table_memory_cache_mb_size: inner.table_memory_cache_mb_size,
             table_disk_cache_root: inner.table_disk_cache_root,
@@ -1792,5 +1799,43 @@ impl From<AuthInfo> for UserAuthConfig {
             auth_type,
             auth_string,
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct LocalConfig {
+    // sql to run
+    #[clap(long, default_value = "SELECT 1")]
+    pub sql: String,
+
+    // name1=filepath1,name2=filepath2
+    #[clap(long, default_value = "")]
+    pub table: String,
+}
+
+impl Default for LocalConfig {
+    fn default() -> Self {
+        InnerLocalConfig::default().into()
+    }
+}
+
+impl From<InnerLocalConfig> for LocalConfig {
+    fn from(inner: InnerLocalConfig) -> Self {
+        Self {
+            sql: inner.sql,
+            table: inner.table,
+        }
+    }
+}
+
+impl TryInto<InnerLocalConfig> for LocalConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerLocalConfig> {
+        Ok(InnerLocalConfig {
+            sql: self.sql,
+            table: self.table,
+        })
     }
 }

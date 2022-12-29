@@ -18,9 +18,9 @@ use backon::ExponentialBackoff;
 use backon::Retryable;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::native::write::PaWriter;
-use common_datablocks::serialize_to_parquet;
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_storages_common::blocks_to_parquet;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnMeta;
 use opendal::Operator;
@@ -39,7 +39,8 @@ pub fn write_block(
 
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result = serialize_to_parquet(vec![block], &schema, buf)?;
+            let result =
+                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
             let meta = util::column_metas(&result.1)?;
             Ok((result.0, meta))
         }
@@ -49,8 +50,8 @@ pub fn write_block(
                 buf,
                 arrow_schema,
                 common_arrow::native::write::WriteOptions {
-                    compression: common_arrow::native::Compression::LZ4,
-                    max_page_size: Some(8192),
+                    compression: write_settings.table_compression.into(),
+                    max_page_size: Some(write_settings.native_max_page_size),
                 },
             );
 

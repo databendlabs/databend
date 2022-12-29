@@ -13,39 +13,46 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
 use common_catalog::plan::PartInfoPtr;
 use common_datablocks::BlockMetaInfo;
 use common_datablocks::BlockMetaInfoPtr;
+use common_exception::Result;
 use serde::Deserializer;
 use serde::Serializer;
 
-pub type ParquetChunks = Vec<Vec<(usize, Vec<u8>)>>;
+use crate::MergeIOReadResult;
 
-#[derive(Debug, PartialEq)]
 pub struct DataSourceMeta {
     pub part: Vec<PartInfoPtr>,
-    pub data: Option<ParquetChunks>,
+    pub data: Vec<MergeIOReadResult>,
 }
 
 impl DataSourceMeta {
-    pub fn create(part: Vec<PartInfoPtr>, data: Vec<Vec<(usize, Vec<u8>)>>) -> BlockMetaInfoPtr {
-        Box::new(DataSourceMeta {
-            part,
-            data: Some(data),
-        })
+    pub fn create(part: Vec<PartInfoPtr>, data: Vec<MergeIOReadResult>) -> BlockMetaInfoPtr {
+        Box::new(DataSourceMeta { part, data })
+    }
+}
+
+impl Debug for DataSourceMeta {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DataSourceMeta")
+            .field("parts", &self.part)
+            .finish()
     }
 }
 
 impl serde::Serialize for DataSourceMeta {
-    fn serialize<S>(&self, _: S) -> common_exception::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         unimplemented!("Unimplemented serialize DataSourceMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for DataSourceMeta {
-    fn deserialize<D>(_: D) -> common_exception::Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize DataSourceMeta")
     }
@@ -65,10 +72,7 @@ impl BlockMetaInfo for DataSourceMeta {
         unimplemented!("Unimplemented clone DataSourceMeta")
     }
 
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<DataSourceMeta>() {
-            None => false,
-            Some(other) => self == other,
-        }
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals DataSourceMeta")
     }
 }

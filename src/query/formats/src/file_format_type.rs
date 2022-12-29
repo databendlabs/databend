@@ -12,19 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
-
 use chrono_tz::Tz;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_meta_types::FileFormatOptions;
-use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 
-use super::clickhouse::ClickhouseSuffix;
 use crate::delimiter::RecordDelimiter;
 use crate::format_option_checker::get_format_option_checker;
 use crate::output_format::CSVOutputFormat;
@@ -39,22 +34,6 @@ use crate::output_format::TSVWithNamesOutputFormat;
 use crate::ClickhouseFormatType;
 
 pub trait FileFormatTypeExt {
-    fn get_ext_from_stage(
-        stage: FileFormatOptions,
-        settings: &Settings,
-    ) -> Result<FileFormatOptionsExt>;
-
-    fn get_file_format_options_from_setting(
-        &self,
-        settings: &Settings,
-        clickhouse_suffix: Option<ClickhouseSuffix>,
-    ) -> Result<FileFormatOptionsExt>;
-
-    fn final_file_format_options(
-        &self,
-        options: &FileFormatOptionsExt,
-    ) -> Result<FileFormatOptionsExt>;
-
     fn get_content_type(&self) -> String;
 }
 
@@ -69,6 +48,52 @@ pub struct FileFormatOptionsExt {
 }
 
 impl FileFormatOptionsExt {
+    pub fn create_from_file_format_options(
+        stage: FileFormatOptions,
+        settings: &Settings,
+    ) -> Result<FileFormatOptionsExt> {
+        let timezone = parse_timezone(settings)?;
+        let options = FileFormatOptionsExt {
+            stage,
+            ident_case_sensitive: false,
+            headers: 0,
+            json_compact: false,
+            json_strings: false,
+            timezone,
+        };
+        Ok(options)
+    }
+
+    pub fn create_from_clickhouse_format(
+        clickhouse_type: ClickhouseFormatType,
+        settings: &Settings,
+    ) -> Result<FileFormatOptionsExt> {
+        let timezone = parse_timezone(settings)?;
+
+        let mut stage = FileFormatOptions::new();
+        stage.format = clickhouse_type.typ;
+        let mut options = FileFormatOptionsExt {
+            stage,
+            ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
+            headers: 0,
+            json_compact: false,
+            json_strings: false,
+            timezone,
+        };
+        let suf = &clickhouse_type.suffixes;
+        options.headers = suf.headers;
+        if let Some(json) = &suf.json {
+            options.json_compact = json.is_compact;
+            options.json_strings = json.is_strings;
+        }
+        Ok(options)
+    }
+
+    pub fn check(&mut self) -> Result<()> {
+        let checker = get_format_option_checker(&self.stage.format)?;
+        checker.check_options(self)
+    }
+
     pub fn get_quote_char(&self) -> u8 {
         self.stage.quote.as_bytes()[0]
     }
@@ -91,54 +116,42 @@ impl FileFormatOptionsExt {
         }
     }
 
-    pub fn get_output_format_from_settings_clickhouse(
+    pub fn get_output_format_from_clickhouse_format(
         typ: ClickhouseFormatType,
         schema: DataSchemaRef,
         settings: &Settings,
     ) -> Result<Box<dyn OutputFormat>> {
-        let options = typ
-            .typ
-            .get_file_format_options_from_setting(settings, Some(typ.suffixes))?;
+        let mut options = FileFormatOptionsExt::create_from_clickhouse_format(typ, settings)?;
         options.get_output_format(schema)
     }
 
-    pub fn get_output_format_from_settings(
-        format: StageFileFormatType,
-        schema: DataSchemaRef,
-        settings: &Settings,
-    ) -> Result<Box<dyn OutputFormat>> {
-        let options = format.get_file_format_options_from_setting(settings, None)?;
-        options.get_output_format(schema)
-    }
-
-    pub fn get_output_format_from_options(
+    pub fn get_output_format_from_format_options(
         schema: DataSchemaRef,
         options: FileFormatOptions,
         settings: &Settings,
     ) -> Result<Box<dyn OutputFormat>> {
-        let options = StageFileFormatType::get_ext_from_stage(options, settings)?;
+        let mut options = FileFormatOptionsExt::create_from_file_format_options(options, settings)?;
         options.get_output_format(schema)
     }
 
-    fn get_output_format(&self, schema: DataSchemaRef) -> Result<Box<dyn OutputFormat>> {
-        let fmt = &self.stage.format;
-        let options = fmt.final_file_format_options(self)?;
+    pub fn get_output_format(&mut self, schema: DataSchemaRef) -> Result<Box<dyn OutputFormat>> {
+        self.check()?;
         // println!("format {:?} {:?} {:?}", fmt, options, format_settings);
-        let output: Box<dyn OutputFormat> = match options.stage.format {
-            StageFileFormatType::Csv => match options.headers {
-                0 => Box::new(CSVOutputFormat::create(schema, &options)),
-                1 => Box::new(CSVWithNamesOutputFormat::create(schema, &options)),
-                2 => Box::new(CSVWithNamesAndTypesOutputFormat::create(schema, &options)),
+        let output: Box<dyn OutputFormat> = match self.stage.format {
+            StageFileFormatType::Csv => match self.headers {
+                0 => Box::new(CSVOutputFormat::create(schema, self)),
+                1 => Box::new(CSVWithNamesOutputFormat::create(schema, self)),
+                2 => Box::new(CSVWithNamesAndTypesOutputFormat::create(schema, self)),
                 _ => unreachable!(),
             },
-            StageFileFormatType::Tsv => match options.headers {
-                0 => Box::new(TSVOutputFormat::create(schema, &options)),
-                1 => Box::new(TSVWithNamesOutputFormat::create(schema, &options)),
-                2 => Box::new(TSVWithNamesAndTypesOutputFormat::create(schema, &options)),
+            StageFileFormatType::Tsv => match self.headers {
+                0 => Box::new(TSVOutputFormat::create(schema, self)),
+                1 => Box::new(TSVWithNamesOutputFormat::create(schema, self)),
+                2 => Box::new(TSVWithNamesAndTypesOutputFormat::create(schema, self)),
                 _ => unreachable!(),
             },
             StageFileFormatType::NdJson => {
-                match (options.headers, options.json_strings, options.json_compact) {
+                match (self.headers, self.json_strings, self.json_compact) {
                     // string, compact, name, type
                     // not compact
                     (0, false, false) => Box::new(NDJSONOutputFormatBase::<
@@ -146,41 +159,33 @@ impl FileFormatOptionsExt {
                         false,
                         false,
                         false,
-                    >::create(schema, &options)),
-                    (0, true, false) => {
-                        Box::new(NDJSONOutputFormatBase::<true, false, false, false>::create(
-                            schema, &options,
-                        ))
-                    }
+                    >::create(schema, self)),
+                    (0, true, false) => Box::new(
+                        NDJSONOutputFormatBase::<true, false, false, false>::create(schema, self),
+                    ),
                     // compact
-                    (0, false, true) => {
-                        Box::new(NDJSONOutputFormatBase::<false, true, false, false>::create(
-                            schema, &options,
-                        ))
-                    }
-                    (0, true, true) => {
-                        Box::new(NDJSONOutputFormatBase::<true, true, false, false>::create(
-                            schema, &options,
-                        ))
-                    }
-                    (1, false, true) => {
-                        Box::new(NDJSONOutputFormatBase::<false, true, true, false>::create(
-                            schema, &options,
-                        ))
-                    }
+                    (0, false, true) => Box::new(
+                        NDJSONOutputFormatBase::<false, true, false, false>::create(schema, self),
+                    ),
+                    (0, true, true) => Box::new(
+                        NDJSONOutputFormatBase::<true, true, false, false>::create(schema, self),
+                    ),
+                    (1, false, true) => Box::new(
+                        NDJSONOutputFormatBase::<false, true, true, false>::create(schema, self),
+                    ),
                     (1, true, true) => Box::new(
-                        NDJSONOutputFormatBase::<true, true, true, false>::create(schema, &options),
+                        NDJSONOutputFormatBase::<true, true, true, false>::create(schema, self),
                     ),
                     (2, false, true) => Box::new(
-                        NDJSONOutputFormatBase::<false, true, true, true>::create(schema, &options),
+                        NDJSONOutputFormatBase::<false, true, true, true>::create(schema, self),
                     ),
                     (2, true, true) => Box::new(
-                        NDJSONOutputFormatBase::<true, true, true, true>::create(schema, &options),
+                        NDJSONOutputFormatBase::<true, true, true, true>::create(schema, self),
                     ),
                     _ => unreachable!(),
                 }
             }
-            StageFileFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema, &options)),
+            StageFileFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema, self)),
             StageFileFormatType::Json => {
                 unreachable!()
             }
@@ -202,72 +207,6 @@ impl FileFormatOptionsExt {
 }
 
 impl FileFormatTypeExt for StageFileFormatType {
-    fn get_ext_from_stage(
-        stage: FileFormatOptions,
-        settings: &Settings,
-    ) -> Result<FileFormatOptionsExt> {
-        let timezone = parse_timezone(settings)?;
-        let options = FileFormatOptionsExt {
-            stage,
-            ident_case_sensitive: false,
-            headers: 0,
-            json_compact: false,
-            json_strings: false,
-            timezone,
-        };
-        Ok(options)
-    }
-
-    fn get_file_format_options_from_setting(
-        &self,
-        settings: &Settings,
-        clickhouse_suffix: Option<ClickhouseSuffix>,
-    ) -> Result<FileFormatOptionsExt> {
-        let timezone = parse_timezone(settings)?;
-
-        let stage = FileFormatOptions {
-            format: self.clone(),
-            skip_header: settings.get_format_skip_header()?,
-            field_delimiter: settings.get_format_field_delimiter()?,
-            record_delimiter: settings.get_format_record_delimiter()?,
-            nan_display: settings.get_format_nan_display()?,
-            escape: settings.get_format_escape()?,
-            compression: StageFileCompression::from_str(&settings.get_format_compression()?)
-                .map_err_to_code(
-                    ErrorCode::InvalidArgument,
-                    || "get_file_format_options_from_setting",
-                )?,
-            row_tag: settings.get_row_tag()?,
-            quote: settings.get_format_quote()?,
-        };
-        let mut options = FileFormatOptionsExt {
-            stage,
-            ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
-            headers: 0,
-            json_compact: false,
-            json_strings: false,
-            timezone,
-        };
-        if let Some(suf) = clickhouse_suffix {
-            options.headers = suf.headers;
-            if let Some(json) = &suf.json {
-                options.json_compact = json.is_compact;
-                options.json_strings = json.is_strings;
-            }
-        }
-        Ok(options)
-    }
-
-    fn final_file_format_options(
-        &self,
-        options: &FileFormatOptionsExt,
-    ) -> Result<FileFormatOptionsExt> {
-        let mut options = options.to_owned();
-        let checker = get_format_option_checker(&options.stage.format)?;
-        checker.check_options(&mut options)?;
-        Ok(options)
-    }
-
     fn get_content_type(&self) -> String {
         match self {
             StageFileFormatType::Tsv => "text/tab-separated-values; charset=UTF-8",

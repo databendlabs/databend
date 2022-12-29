@@ -14,7 +14,6 @@ test = false
 [dependencies]
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
-common-storages-cache = { path = "../cache" }
 common-storages-table-meta = { path = "../table-meta" }
 
 opendal = "0.23"

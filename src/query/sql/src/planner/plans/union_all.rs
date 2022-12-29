@@ -119,19 +119,30 @@ impl LogicalOperator for UnionAll {
 }
 
 impl PhysicalOperator for UnionAll {
-    fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+    fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+        let left_child = rel_expr.derive_physical_prop_child(0)?;
         Ok(PhysicalProperty {
-            distribution: Distribution::Serial,
+            distribution: left_child.distribution,
         })
     }
 
     fn compute_required_prop_child<'a>(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr<'a>,
+        rel_expr: &RelExpr<'a>,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        Ok(required.clone())
+        let mut required = required.clone();
+        let left_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        let right_physical_prop = rel_expr.derive_physical_prop_child(1)?;
+        if left_physical_prop.distribution == Distribution::Serial
+            || right_physical_prop.distribution == Distribution::Serial
+        {
+            required.distribution = Distribution::Serial;
+        } else if left_physical_prop.distribution == right_physical_prop.distribution {
+            required.distribution = left_physical_prop.distribution;
+        }
+        Ok(required)
     }
 }

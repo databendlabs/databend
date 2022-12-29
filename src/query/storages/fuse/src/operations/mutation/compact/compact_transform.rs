@@ -15,22 +15,23 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 
-use common_arrow::parquet::compression::CompressionOptions;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_to_parquet_with_compression;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_common::blocks_to_parquet;
 use common_storages_index::BlockFilter;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::StatisticsOfColumns;
+use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
 
 use super::compact_meta::CompactSourceMeta;
@@ -41,6 +42,7 @@ use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
+use crate::metrics::*;
 use crate::operations::mutation::AbortOperation;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -91,6 +93,7 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     storage_format: FuseStorageFormat,
+    table_compression: TableCompression,
 
     // Limit the memory size of the block read.
     max_memory: u64,
@@ -113,6 +116,7 @@ impl CompactTransform {
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
         storage_format: FuseStorageFormat,
+        table_compression: TableCompression,
         thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
@@ -130,6 +134,7 @@ impl CompactTransform {
             location_gen,
             dal,
             storage_format,
+            table_compression,
             max_memory,
             max_io_requests,
             compact_tasks: VecDeque::new(),
@@ -236,20 +241,23 @@ impl Processor for CompactTransform {
                         let location = self.location_gen.block_bloom_index_location(&block_id);
                         let mut data = Vec::with_capacity(100 * 1024);
                         let index_block_schema = &bloom_index.filter_schema;
-                        let (size, _) = serialize_to_parquet_with_compression(
-                            vec![index_block],
+                        let (size, _) = blocks_to_parquet(
                             index_block_schema,
+                            vec![index_block],
                             &mut data,
-                            CompressionOptions::Uncompressed,
+                            TableCompression::None,
                         )?;
                         (data, size, location)
                     };
 
-                    // serialize data block.
-                    let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                     let write_settings = WriteSettings {
                         storage_format: self.storage_format,
+                        table_compression: self.table_compression,
+                        ..Default::default()
                     };
+
+                    // serialize data block.
+                    let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                     let (file_size, col_metas) =
                         io::write_block(&write_settings, new_block, &mut block_data)?;
 
@@ -264,6 +272,7 @@ impl Processor for CompactTransform {
                         block_location.clone(),
                         Some(index_location.clone()),
                         index_size,
+                        self.table_compression.into(),
                     );
                     self.abort_operation.add_block(&new_meta);
                     self.block_metas.push(Arc::new(new_meta));
@@ -354,13 +363,27 @@ impl Processor for CompactTransform {
 
                         // read block in parallel.
                         task_futures.push(async move {
+                            // Perf
+                            {
+                                metrics_inc_compact_block_read_nums(1);
+                                metrics_inc_compact_block_read_bytes(meta.block_size);
+                            }
+
                             block_reader.read_with_block_meta(meta.as_ref()).await
                         });
                     }
                     stats_of_columns.push(meta_stats);
                 }
 
+                let start = Instant::now();
+
                 let blocks = futures::future::try_join_all(task_futures).await?;
+
+                // Perf.
+                {
+                    metrics_inc_compact_block_read_milliseconds(start.elapsed().as_millis() as u64);
+                }
+
                 self.state = State::CompactBlocks {
                     blocks,
                     stats_of_columns,
@@ -372,13 +395,28 @@ impl Processor for CompactTransform {
                 let dal = &self.dal;
                 while let Some(state) = serialize_states.pop() {
                     handles.push(async move {
+                        // Perf.
+                        {
+                            metrics_inc_compact_block_write_nums(1);
+                            metrics_inc_compact_block_write_bytes(state.block_data.len() as u64);
+                        }
+
                         // write block data.
                         write_data(&state.block_data, dal, &state.block_location).await?;
                         // write index data.
                         write_data(&state.index_data, dal, &state.index_location).await
                     });
                 }
+
+                let start = Instant::now();
+
                 futures::future::try_join_all(handles).await?;
+
+                // Perf
+                {
+                    metrics_inc_compact_block_write_milliseconds(start.elapsed().as_millis() as u64);
+                }
+
                 if self.compact_tasks.is_empty() {
                     self.state = State::GenerateSegment;
                 } else {
