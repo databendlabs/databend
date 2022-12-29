@@ -20,6 +20,7 @@ use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
@@ -47,7 +48,8 @@ pub async fn query_local(conf: &Config) -> Result<()> {
     let stream = interpreter.execute(ctx.clone()).await?;
     let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
 
-    print_blocks(blocks.as_slice(), now)?;
+    let schema = interpreter.schema();
+    print_blocks(schema, blocks.as_slice(), now)?;
     Ok(())
 }
 
@@ -72,14 +74,22 @@ fn get_sql(sql: String, table_str: String) -> String {
     ret
 }
 
-fn print_blocks(results: &[Result<DataBlock, ErrorCode>], now: Instant) -> Result<()> {
-    if let Err(err) = print_table(results, now) {
+fn print_blocks(
+    schema: DataSchemaRef,
+    results: &[Result<DataBlock, ErrorCode>],
+    now: Instant,
+) -> Result<()> {
+    if let Err(err) = print_table(schema, results, now) {
         println!("Error: {}", err);
     }
     Ok(())
 }
 
-fn print_table(results: &[Result<DataBlock, ErrorCode>], now: Instant) -> Result<()> {
+fn print_table(
+    schema: DataSchemaRef,
+    results: &[Result<DataBlock, ErrorCode>],
+    now: Instant,
+) -> Result<()> {
     if !results.is_empty() {
         if let Err(err) = &results[0] {
             return Err(err.clone());
@@ -93,10 +103,6 @@ fn print_table(results: &[Result<DataBlock, ErrorCode>], now: Instant) -> Result
         return Ok(());
     }
 
-    let schema = results[0]
-        .as_ref()
-        .map_err(ErrorCode::from_std_error)?
-        .schema();
     let mut header = Vec::new();
     for field in schema.fields() {
         header.push(Cell::new(field.name()));
@@ -106,16 +112,14 @@ fn print_table(results: &[Result<DataBlock, ErrorCode>], now: Instant) -> Result
     let mut row_count = 0;
     for batch in results {
         let batch = batch.as_ref().map_err(ErrorCode::from_std_error)?;
+
         row_count += batch.num_rows();
-        for row in 0..batch.num_rows() {
-            let mut cells = Vec::new();
-            for col in 0..batch.num_columns() {
-                let column = batch.column(col);
-                let col_str = column.get(row).custom_display(false);
-                cells.push(Cell::new(col_str));
-                // cells.push(Cell::new(&array_value_to_string(column, row)?));
-            }
-            table.add_row(cells);
+        for (i, entry) in batch.columns().iter().enumerate() {
+            table.add_row(vec![
+                i.to_string(),
+                entry.data_type.to_string(),
+                format!("{:?}", entry.value),
+            ]);
         }
     }
 

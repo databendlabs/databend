@@ -37,7 +37,6 @@ pub struct TransformMergeBlock {
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
-    left_schema: DataSchemaRef,
     right_schema: DataSchemaRef,
     schema: DataSchemaRef,
     pairs: Vec<(String, String)>,
@@ -50,7 +49,6 @@ impl TransformMergeBlock {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        left_schema: DataSchemaRef,
         right_schema: DataSchemaRef,
         schema: DataSchemaRef,
         pairs: Vec<(String, String)>,
@@ -62,7 +60,6 @@ impl TransformMergeBlock {
             output,
             input_data: None,
             output_data: None,
-            left_schema,
             right_schema,
             schema,
             pairs,
