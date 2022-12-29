@@ -1,23 +1,29 @@
-//  Copyright 2022 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 
 use std::sync::Arc;
 
+use common_arrow::parquet::metadata::FileMetaData;
+use common_arrow::parquet::read::read_metadata_async;
 use common_cache::Cache;
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::caches::CacheDeferMetrics;
-use common_storages_table_meta::caches::LabeledItemCache;
+use opendal::Operator;
+
+use crate::caches::CacheDeferMetrics;
+use crate::caches::LabeledItemCache;
 
 /// Loads an object from a source
 #[async_trait::async_trait]
@@ -95,5 +101,25 @@ where L: Loader<T>
         let val = self.dal.load(loc, len_hint, version).await?;
         let item = Arc::new(val);
         Ok(item)
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<FileMetaData> for Operator {
+    async fn load(
+        &self,
+        key: &str,
+        length_hint: Option<u64>,
+        _version: u64,
+    ) -> Result<FileMetaData> {
+        let object = self.object(key);
+        let mut reader = if let Some(len) = length_hint {
+            object.seekable_reader(..len)
+        } else {
+            object.seekable_reader(..)
+        };
+        read_metadata_async(&mut reader).await.map_err(|err| {
+            ErrorCode::Internal(format!("read file meta failed, {}, {:?}", key, err))
+        })
     }
 }

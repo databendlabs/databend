@@ -44,7 +44,7 @@ members = [
     "src/query/settings",
     "src/query/sql",
     "src/query/storages/common",
-    "src/query/storages/cache",
+    #"src/query/storages/cache",
     "src/query/storages/factory",
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
