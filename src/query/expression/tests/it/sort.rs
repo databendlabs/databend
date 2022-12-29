@@ -148,6 +148,7 @@ fn test_blocks_merge_sort() -> Result<()> {
     // - sort descriptions
     // - limit
     // - expected cols
+    #[allow(clippy::type_complexity)]
     let test_cases: Vec<(
         String,
         Vec<SortColumnDescription>,
