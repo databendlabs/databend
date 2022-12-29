@@ -142,7 +142,10 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
             client = Client::Clickhouse(ClickhouseHttpClient::create()?);
         }
     }
-    client.create_sandbox().await?;
+    let suites = SqlLogicTestArgs::parse().suites;
+    if suites != "tests/fuse-compat/compat-logictest" {
+        client.create_sandbox().await?;
+    }
     Ok(Databend::create(client))
 }
 
