@@ -68,11 +68,11 @@ async fn test_compact() -> Result<()> {
 
     // check count
     let expected = vec![
-        "+---------------+-------+",
-        "| segment_count | count |",
-        "+---------------+-------+",
-        "| 1             | 1     |",
-        "+---------------+-------+",
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | 1        |",
+        "+----------+----------+",
     ];
     let qry = format!(
         "select segment_count, block_count as count from fuse_snapshot('{}', '{}') limit 1",

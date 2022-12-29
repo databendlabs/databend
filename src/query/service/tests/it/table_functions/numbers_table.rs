@@ -47,18 +47,18 @@ async fn test_number_table() -> Result<()> {
     assert_eq!(block.num_columns(), 1);
 
     let expected = vec![
-        "+--------+",
-        "| number |",
-        "+--------+",
-        "| 0      |",
-        "| 1      |",
-        "| 2      |",
-        "| 3      |",
-        "| 4      |",
-        "| 5      |",
-        "| 6      |",
-        "| 7      |",
-        "+--------+",
+        "+----------+",
+        "| Column 0 |",
+        "+----------+",
+        "| 0        |",
+        "| 1        |",
+        "| 2        |",
+        "| 3        |",
+        "| 4        |",
+        "| 5        |",
+        "| 6        |",
+        "| 7        |",
+        "+----------+",
     ];
     common_expression::block_debug::assert_blocks_sorted_eq(expected, result.as_slice());
 

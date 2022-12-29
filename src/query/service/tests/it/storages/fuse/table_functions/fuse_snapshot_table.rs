@@ -83,11 +83,11 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
 
     {
         let expected = vec![
-            "+-------+",
-            "| count |",
-            "+-------+",
-            "| 0     |",
-            "+-------+",
+            "+----------+",
+            "| Column 0 |",
+            "+----------+",
+            "| 0        |",
+            "+----------+",
         ];
         let qry = format!(
             "select count(1) as count from fuse_snapshot('{}', '{}')",
@@ -106,11 +106,11 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
         // insert 5 blocks, 3 rows per block
         append_sample_data(5, &fixture).await?;
         let expected = vec![
-            "+-------+",
-            "| count |",
-            "+-------+",
-            "| 1     |",
-            "+-------+",
+            "+----------+",
+            "| Column 0 |",
+            "+----------+",
+            "| 1        |",
+            "+----------+",
         ];
         let qry = format!(
             "select count(1) as count from fuse_snapshot('{}', '{}')",
@@ -127,11 +127,11 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
 
     {
         let expected = vec![
-            "+-----------+-------------+",
-            "| row_count | block_count |",
-            "+-----------+-------------+",
-            "| 15        | 1           |",
-            "+-----------+-------------+",
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 15       | 1        |",
+            "+----------+----------+",
         ];
         let qry = format!(
             "select row_count, block_count from fuse_snapshot('{}', '{}')",
@@ -150,12 +150,13 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
         // another 5 blocks, 15 rows here
         append_sample_data(5, &fixture).await?;
         let expected = vec![
-            "+-----------+-------------+",
-            "| row_count | block_count |",
-            "+-----------+-------------+",
-            "| 15        | 1           |",
-            "| 30        | 2           |",
-            "+-----------+-------------+",
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 15       | 1        |",
+            "+----------+----------+",
+            "| 30       | 2        |",
+            "+----------+----------+",
         ];
         let qry = format!(
             "select row_count, block_count from fuse_snapshot('{}', '{}') order by row_count",
