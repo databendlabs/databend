@@ -33,9 +33,9 @@ use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::DeletionSource;
-use crate::operations::mutation::DeletionTransform;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSink;
+use crate::operations::mutation::MutationTransform;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipe;
@@ -49,7 +49,7 @@ impl FuseTable {
     /// +---------------+
     /// |DeletionSource1| ------
     /// +---------------+       |      +-----------------+      +------------+
-    /// |     ...       | ...   | ---> |DeletionTransform| ---> |MutationSink|
+    /// |     ...       | ...   | ---> |MutationTransform| ---> |MutationSink|
     /// +---------------+       |      +-----------------+      +------------+
     /// |DeletionSourceN| ------
     /// +---------------+
@@ -116,7 +116,7 @@ impl FuseTable {
         self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
             .await?;
 
-        self.try_add_deletion_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
+        self.try_add_mutation_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
 
         pipeline.add_sink(|input| {
             MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
@@ -227,7 +227,7 @@ impl FuseTable {
         )
     }
 
-    fn try_add_deletion_transform(
+    pub fn try_add_mutation_transform(
         &self,
         ctx: Arc<dyn TableContext>,
         base_segments: Vec<Location>,
@@ -245,7 +245,7 @@ impl FuseTable {
                     inputs_port.push(InputPort::create());
                 }
                 let output_port = OutputPort::create();
-                let processor = DeletionTransform::try_create(
+                let processor = MutationTransform::try_create(
                     ctx,
                     inputs_port.clone(),
                     output_port.clone(),

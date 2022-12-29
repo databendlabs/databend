@@ -13,25 +13,34 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::BlockMetaInfo;
 use common_datablocks::BlockMetaInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
 
 use crate::operations::mutation::AbortOperation;
+use crate::pruning::BlockIndex;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct MutationMeta {
-    pub segments: Vec<Location>,
-    pub summary: Statistics,
-    pub abort_operation: AbortOperation,
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum Mutation {
+    DoNothing,
+    Replaced(Arc<BlockMeta>),
+    Deleted,
 }
 
-#[typetag::serde(name = "mutation_meta")]
-impl BlockMetaInfo for MutationMeta {
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct MutationSourceMeta {
+    pub index: BlockIndex,
+    pub op: Mutation,
+}
+
+#[typetag::serde(name = "mutation_source_meta")]
+impl BlockMetaInfo for MutationSourceMeta {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -45,31 +54,75 @@ impl BlockMetaInfo for MutationMeta {
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<MutationMeta>() {
+        match info.as_any().downcast_ref::<MutationSourceMeta>() {
             None => false,
             Some(other) => self == other,
         }
     }
 }
 
-impl MutationMeta {
+impl MutationSourceMeta {
+    pub fn create(index: BlockIndex, op: Mutation) -> BlockMetaInfoPtr {
+        Box::new(MutationSourceMeta { index, op })
+    }
+
+    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationSourceMeta> {
+        match info.as_any().downcast_ref::<MutationSourceMeta>() {
+            Some(part_ref) => Ok(part_ref),
+            None => Err(ErrorCode::Internal(
+                "Cannot downcast from BlockMetaInfo to MutationSourceMeta.",
+            )),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct MutationSinkMeta {
+    pub segments: Vec<Location>,
+    pub summary: Statistics,
+    pub abort_operation: AbortOperation,
+}
+
+#[typetag::serde(name = "mutation_sink_meta")]
+impl BlockMetaInfo for MutationSinkMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match info.as_any().downcast_ref::<MutationSinkMeta>() {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+}
+
+impl MutationSinkMeta {
     pub fn create(
         segments: Vec<Location>,
         summary: Statistics,
         abort_operation: AbortOperation,
     ) -> BlockMetaInfoPtr {
-        Box::new(MutationMeta {
+        Box::new(MutationSinkMeta {
             segments,
             summary,
             abort_operation,
         })
     }
 
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationMeta> {
-        match info.as_any().downcast_ref::<MutationMeta>() {
+    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationSinkMeta> {
+        match info.as_any().downcast_ref::<MutationSinkMeta>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to MutationMeta.",
+                "Cannot downcast from BlockMetaInfo to MutationSinkMeta.",
             )),
         }
     }

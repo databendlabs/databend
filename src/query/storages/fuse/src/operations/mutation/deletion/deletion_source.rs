@@ -32,12 +32,12 @@ use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
 
-use super::deletion_meta::Deletion;
-use super::deletion_meta::DeletionSourceMeta;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationPartInfo;
+use crate::operations::mutation::MutationSourceMeta;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
 use crate::pipelines::processors::port::OutputPort;
@@ -75,7 +75,7 @@ enum State {
     },
     NeedSerialize(DataBlock),
     Serialized(SerializeState, Arc<BlockMeta>),
-    Generated(Deletion),
+    Generated(Mutation),
     Output(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
@@ -194,13 +194,13 @@ impl Processor for DeletionSource {
                 let filter: ColumnRef = Arc::new(BooleanColumn::from_arrow_data(values.not()));
                 if !DataBlock::filter_exists(&filter)? {
                     // all the rows should be removed.
-                    self.state = State::Generated(Deletion::Deleted);
+                    self.state = State::Generated(Mutation::Deleted);
                 } else {
                     let num_rows = data_block.num_rows();
                     let data_block = DataBlock::filter_block(data_block, &filter)?;
                     if data_block.num_rows() == num_rows {
                         // none of the rows should be removed.
-                        self.state = State::Generated(Deletion::DoNothing);
+                        self.state = State::Generated(Mutation::DoNothing);
                     } else if self.remain_reader.is_none() {
                         let block = data_block.resort(self.output_schema.clone())?;
                         self.state = State::NeedSerialize(block);
@@ -290,7 +290,7 @@ impl Processor for DeletionSource {
                 );
             }
             State::Generated(op) => {
-                let meta = DeletionSourceMeta::create(self.index, op);
+                let meta = MutationSourceMeta::create(self.index, op);
                 let new_part = self.ctx.try_get_part();
                 self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
             }
@@ -346,7 +346,7 @@ impl Processor for DeletionSource {
                     &serialize_state.index_location,
                 )
                 .await?;
-                self.state = State::Generated(Deletion::Replaced(block_meta));
+                self.state = State::Generated(Mutation::Replaced(block_meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

@@ -33,10 +33,10 @@ use opendal::Operator;
 use crate::io::try_join_futures;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::mutation::deletion::deletion_meta::DeletionSourceMeta;
-use crate::operations::mutation::deletion::Deletion;
 use crate::operations::mutation::AbortOperation;
-use crate::operations::mutation::MutationMeta;
+use crate::operations::mutation::Mutation;
+use crate::operations::mutation::MutationSinkMeta;
+use crate::operations::mutation::MutationSourceMeta;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -45,7 +45,7 @@ use crate::pipelines::processors::Processor;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 
-type DeletionMap = HashMap<usize, (Vec<(usize, Arc<BlockMeta>)>, Vec<usize>)>;
+type MutationMap = HashMap<usize, (Vec<(usize, Arc<BlockMeta>)>, Vec<usize>)>;
 
 struct SerializedData {
     data: Vec<u8>,
@@ -69,7 +69,7 @@ enum State {
     },
 }
 
-pub struct DeletionTransform {
+pub struct MutationTransform {
     state: State,
     ctx: Arc<dyn TableContext>,
     dal: Operator,
@@ -80,13 +80,13 @@ pub struct DeletionTransform {
     abort_operation: AbortOperation,
 
     inputs: Vec<Arc<InputPort>>,
-    input_metas: DeletionMap,
+    input_metas: MutationMap,
     cur_input_index: usize,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
 }
 
-impl DeletionTransform {
+impl MutationTransform {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         inputs: Vec<Arc<InputPort>>,
@@ -96,7 +96,7 @@ impl DeletionTransform {
         base_segments: Vec<Location>,
         thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(DeletionTransform {
+        Ok(ProcessorPtr::create(Box::new(MutationTransform {
             state: State::None,
             ctx,
             dal,
@@ -160,7 +160,7 @@ impl DeletionTransform {
         try_join_futures(
             self.ctx.clone(),
             handles,
-            "deletion-write-segments-worker".to_owned(),
+            "mutation-write-segments-worker".to_owned(),
         )
         .await?
         .into_iter()
@@ -170,9 +170,9 @@ impl DeletionTransform {
 }
 
 #[async_trait::async_trait]
-impl Processor for DeletionTransform {
+impl Processor for MutationTransform {
     fn name(&self) -> String {
-        "DeletionTransform".to_string()
+        "MutationTransform".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -228,22 +228,22 @@ impl Processor for DeletionTransform {
                     .get_meta()
                     .cloned()
                     .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
-                let meta = DeletionSourceMeta::from_meta(&input_meta)?;
+                let meta = MutationSourceMeta::from_meta(&input_meta)?;
                 match &meta.op {
-                    Deletion::Replaced(block_meta) => {
+                    Mutation::Replaced(block_meta) => {
                         self.input_metas
                             .entry(meta.index.0)
                             .and_modify(|v| v.0.push((meta.index.1, block_meta.clone())))
                             .or_insert((vec![(meta.index.1, block_meta.clone())], vec![]));
                         self.abort_operation.add_block(block_meta);
                     }
-                    Deletion::Deleted => {
+                    Mutation::Deleted => {
                         self.input_metas
                             .entry(meta.index.0)
                             .and_modify(|v| v.1.push(meta.index.1))
                             .or_insert((vec![], vec![meta.index.1]));
                     }
-                    Deletion::DoNothing => (),
+                    Mutation::DoNothing => (),
                 }
             }
             State::GenerateSegments(segment_infos) => {
@@ -305,7 +305,7 @@ impl Processor for DeletionTransform {
                 };
             }
             State::Output { segments, summary } => {
-                let meta = MutationMeta::create(
+                let meta = MutationSinkMeta::create(
                     segments,
                     summary,
                     std::mem::take(&mut self.abort_operation),

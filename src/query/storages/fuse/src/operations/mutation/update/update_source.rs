@@ -29,11 +29,12 @@ use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
 
-use super::update_meta::UpdateSourceMeta;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationPartInfo;
+use crate::operations::mutation::MutationSourceMeta;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
 use crate::pipelines::processors::port::OutputPort;
@@ -64,7 +65,7 @@ enum State {
     UpdateData(DataBlock),
     NeedSerialize(DataBlock),
     Serialized(SerializeState, Arc<BlockMeta>),
-    Generated(Arc<BlockMeta>),
+    Generated(Mutation),
     Output(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
@@ -184,8 +185,7 @@ impl Processor for UpdateSource {
                             self.state = State::ReadRemain(part, data_block);
                         }
                     } else {
-                        let new_part = self.ctx.try_get_part();
-                        self.state = State::Output(new_part, DataBlock::empty());
+                        self.state = State::Generated(Mutation::DoNothing);
                     }
                 } else {
                     self.state = State::UpdateData(data_block);
@@ -267,8 +267,8 @@ impl Processor for UpdateSource {
                     new_meta,
                 );
             }
-            State::Generated(replace) => {
-                let meta = UpdateSourceMeta::create(self.index, replace);
+            State::Generated(op) => {
+                let meta = MutationSourceMeta::create(self.index, op);
                 let new_part = self.ctx.try_get_part();
                 self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
             }
@@ -318,7 +318,7 @@ impl Processor for UpdateSource {
                     &serialize_state.index_location,
                 )
                 .await?;
-                self.state = State::Generated(block_meta);
+                self.state = State::Generated(Mutation::Replaced(block_meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

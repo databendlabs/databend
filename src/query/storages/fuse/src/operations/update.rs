@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::Evaluator;
 
+use super::mutation::MutationSink;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::UpdateSource;
 use crate::pipelines::Pipeline;
@@ -149,7 +150,7 @@ impl FuseTable {
             }
 
             (Projection::Columns(col_indices.clone()), vec![
-                filter.unwrap().clone(),
+                filter.unwrap(),
             ])
         };
 
@@ -228,6 +229,11 @@ impl FuseTable {
             },
             max_threads,
         )?;
+
+        self.try_add_mutation_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
+        pipeline.add_sink(|input| {
+            MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
+        })?;
         Ok(())
     }
 }

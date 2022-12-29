@@ -37,7 +37,7 @@ use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::commit::Conflict;
 use crate::operations::commit::MutatorConflictDetector;
 use crate::operations::mutation::AbortOperation;
-use crate::operations::mutation::MutationMeta;
+use crate::operations::mutation::MutationSinkMeta;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -158,7 +158,7 @@ impl Processor for MutationSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::ReadMeta(input_meta) => {
-                let meta = MutationMeta::from_meta(&input_meta)?;
+                let meta = MutationSinkMeta::from_meta(&input_meta)?;
 
                 let affect_rows = self
                     .base_snapshot
