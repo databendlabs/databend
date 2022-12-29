@@ -23,7 +23,6 @@ use common_expression::ColumnFrom;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Value;
-use common_sql::executor::PhysicalScalar;
 use common_sql::plans::DescribeTablePlan;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;

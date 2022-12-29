@@ -16,10 +16,8 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_sql::evaluator::BlockOperator;

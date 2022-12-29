@@ -12,6 +12,8 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_settings::Settings;
@@ -47,8 +49,9 @@ pub fn parse_exprs(
     );
 
     let columns = metadata.read().columns_by_table_index(table_index);
+    let mut fields = Vec::with_capacity(columns.len());
     let table = metadata.read().table(table_index).clone();
-    for column in columns.iter() {
+    for (index, column) in columns.iter().enumerate() {
         let column_binding = match column {
             ColumnEntry::BaseTableColumn {
                 column_index,
@@ -74,6 +77,10 @@ pub fn parse_exprs(
             }
         };
 
+        fields.push(DataField::new(
+            &index.to_string(),
+            *column_binding.data_type.clone(),
+        ));
         bind_context.add_column_binding(column_binding);
     }
 
@@ -82,7 +89,7 @@ pub fn parse_exprs(
         TypeChecker::new(&bind_context, ctx, &name_resolution_ctx, metadata, &[]);
     let mut expressions = Vec::with_capacity(exprs.len());
 
-    let data_schema = bind_context.output_schema();
+    let data_schema = DataSchemaRefExt::create(fields);
     let physical_scalar_builder = PhysicalScalarBuilder::new(&data_schema);
     for expr in exprs.iter() {
         let (scalar, _) =

@@ -30,7 +30,6 @@ use common_meta_app::schema::UndropTableReq;
 use common_storage::StorageParams;
 
 use crate::plans::Plan;
-use crate::plans::Scalar;
 
 pub type TableOptions = BTreeMap<String, String>;
 

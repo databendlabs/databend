@@ -1020,7 +1020,21 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
             Ok(TableDataType::Map(Box::new(infer_schema_type(inner_type)?)))
         }
         DataType::Variant => Ok(TableDataType::Variant),
-
+        DataType::Tuple(fields) => {
+            let fields_type = fields
+                .iter()
+                .map(|ty| infer_schema_type(ty))
+                .collect::<Result<Vec<_>>>()?;
+            let fields_name = fields
+                .iter()
+                .enumerate()
+                .map(|(idx, _)| idx.to_string())
+                .collect::<Vec<_>>();
+            Ok(TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            })
+        }
         _ => Err(ErrorCode::SemanticError(format!(
             "Cannot create table with type: {}",
             data_type
