@@ -81,7 +81,7 @@ output         : 4
 
 ast            : [1, 2]['a']
 raw expr       : get(array(1_u8, 2_u8), "a")
-checked expr   : get<Variant, String>(CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Variant), "a")
+checked expr   : get<Variant NULL, String NULL>(CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Variant NULL), CAST("a" AS String NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : Unknown

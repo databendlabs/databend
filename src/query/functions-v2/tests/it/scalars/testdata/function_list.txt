@@ -880,13 +880,9 @@ get(Array(T0 NULL), UInt64) :: T0 NULL
 get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
 get(Array(T0), UInt64) :: T0 NULL
 get(Array(T0) NULL, UInt64 NULL) :: T0 NULL
-get(Variant, UInt64) :: Variant NULL
 get(Variant NULL, UInt64 NULL) :: Variant NULL
-get(Variant, String) :: Variant NULL
 get(Variant NULL, String NULL) :: Variant NULL
-get_ignore_case(Variant, String) :: Variant NULL
 get_ignore_case(Variant NULL, String NULL) :: Variant NULL
-get_path(Variant, String) :: Variant NULL
 get_path(Variant NULL, String NULL) :: Variant NULL
 great_circle_angle(Float64, Float64, Float64, Float64) :: Float32
 great_circle_angle(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
@@ -968,7 +964,6 @@ length(Array(T0)) :: UInt64
 length(Array(T0) NULL) :: UInt64 NULL
 length(String) :: UInt64
 length(String NULL) :: UInt64 NULL
-length(Variant) :: UInt32 NULL
 length(Variant NULL) :: UInt32 NULL
 like(String, String) :: Boolean
 like(String NULL, String NULL) :: Boolean NULL
@@ -1791,7 +1786,6 @@ noteq(Float64 NULL, Float64 NULL) :: Boolean NULL
 noteq(Variant, Variant) :: Boolean
 noteq(Variant NULL, Variant NULL) :: Boolean NULL
 now() :: Timestamp
-object_keys(Variant) :: Variant NULL
 object_keys(Variant NULL) :: Variant NULL
 oct(Int64) :: String
 oct(Int64 NULL) :: String NULL

@@ -30,6 +30,8 @@ use common_expression::types::NullableType;
 use common_expression::types::StringType;
 use common_expression::types::VariantType;
 use common_expression::utils::arrow::constant_bitmap;
+use common_expression::vectorize_1_arg;
+use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionDomain;
@@ -110,137 +112,117 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_combine_nullable_1_arg::<VariantType, UInt32Type, _, _>(
+    registry.register_1_arg_core::<NullableType<VariantType>, NullableType<UInt32Type>, _, _>(
         "length",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<UInt32Type>>(|v, output, _| {
-            if v.is_empty() {
-                output.push_null();
-            } else {
-                match array_length(v) {
-                    Some(len) => output.push(len as u32),
-                    None => output.push_null(),
-                }
-            }
-            Ok(())
+        vectorize_1_arg::<NullableType<VariantType>, NullableType<UInt32Type>>(|val, _| {
+            val.and_then(|v| array_length(v).map(|v| v as u32))
         }),
     );
 
-    registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
+    registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
         "object_keys",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, _| {
-            if v.is_empty() {
-                output.push_null()
-            } else {
-                match object_keys(v) {
-                    Some(keys) => output.push(&keys),
-                    None => output.push_null(),
-                }
-            }
-            Ok(())
+        vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, _| {
+            val.and_then(|v| object_keys(v))
         }),
     );
 
-    registry.register_combine_nullable_2_arg::<VariantType, UInt64Type, VariantType, _, _>(
+    registry.register_2_arg_core::<NullableType<VariantType>, NullableType<UInt64Type>, NullableType<VariantType>, _, _>(
         "get",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<VariantType, UInt64Type, NullableType<VariantType>>(
-            |s, idx, output, _| {
-                if s.is_empty() {
-                    output.push_null()
-                } else {
-                    let json_path = JsonPath::UInt64(idx);
-                    match get_by_path(s, vec![json_path]) {
-                        Some(val) => output.push(val.as_slice()),
-                        None => output.push_null(),
+        vectorize_2_arg::<NullableType<VariantType>, NullableType<UInt64Type>, NullableType<VariantType>>(|val, idx, _| {
+            match (val, idx) {
+                (Some(val), Some(idx)) => {
+                    if val.is_empty() {
+                        None
+                    } else {
+                        let json_path = JsonPath::UInt64(idx);
+                        get_by_path(val, vec![json_path])
                     }
                 }
-                Ok(())
-            },
-        ),
+                (_, _) => None,
+            }
+        }),
     );
 
-    registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
+    registry.register_2_arg_core::<NullableType<VariantType>, NullableType<StringType>, NullableType<VariantType>, _, _>(
         "get",
         FunctionProperty::default(),
         |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
-            |s, name, output, _| {
-                if s.is_empty() || name.trim().is_empty() {
-                    output.push_null()
-                } else {
-                    let name = String::from_utf8(name.to_vec()).map_err(|err| {
-                        format!(
-                            "Unable convert name '{}' to string: {}",
-                            &String::from_utf8_lossy(name),
-                            err
-                        )
-                    })?;
-                    let json_path = JsonPath::String(Cow::Borrowed(&name));
-                    match get_by_path(s, vec![json_path]) {
-                        Some(val) => output.push(val.as_slice()),
-                        None => output.push_null(),
+        vectorize_2_arg::<NullableType<VariantType>, NullableType<StringType>, NullableType<VariantType>>(|val, name, _| {
+            match (val, name) {
+                (Some(val), Some(name)) => {
+                    if val.is_empty() || name.trim().is_empty() {
+                        None
+                    } else {
+                        let name = String::from_utf8(name.to_vec()).map_err(|err| {
+                            format!(
+                                "Unable convert name '{}' to string: {}",
+                                &String::from_utf8_lossy(name),
+                                err
+                            )
+                        }).ok()?;
+                        let json_path = JsonPath::String(Cow::Borrowed(&name));
+                        get_by_path(val, vec![json_path])
                     }
                 }
-                Ok(())
-            },
-        ),
+                (_, _) => None,
+            }
+        }),
     );
 
-    registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
+    registry.register_2_arg_core::<NullableType<VariantType>, NullableType<StringType>, NullableType<VariantType>, _, _>(
         "get_ignore_case",
         FunctionProperty::default(),
         |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
-            |s, name, output, _| {
-                if s.is_empty() || name.trim().is_empty() {
-                    output.push_null()
-                } else {
-                    let name = String::from_utf8(name.to_vec()).map_err(|err| {
-                        format!(
-                            "Unable convert name '{}' to string: {}",
-                            &String::from_utf8_lossy(name),
-                            err
-                        )
-                    })?;
-                    match get_by_name_ignore_case(s, &name) {
-                        Some(val) => output.push(val.as_slice()),
-                        None => output.push_null(),
+        vectorize_2_arg::<NullableType<VariantType>, NullableType<StringType>, NullableType<VariantType>>(|val, name, _| {
+            match (val, name) {
+                (Some(val), Some(name)) => {
+                    if val.is_empty() || name.trim().is_empty() {
+                        None
+                    } else {
+                        let name = String::from_utf8(name.to_vec()).map_err(|err| {
+                            format!(
+                                "Unable convert name '{}' to string: {}",
+                                &String::from_utf8_lossy(name),
+                                err
+                            )
+                        }).ok()?;
+                        get_by_name_ignore_case(val, &name)
                     }
                 }
-                Ok(())
-            },
-        ),
+                (_, _) => None,
+            }
+        }),
     );
 
-    registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
+    registry.register_2_arg_core::<NullableType<VariantType>, NullableType<StringType>, NullableType<VariantType>, _, _>(
         "get_path",
         FunctionProperty::default(),
         |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
-            |s, path, output, _| {
-                if s.is_empty() || path.is_empty() {
-                    output.push_null()
-                } else {
-                    let json_paths = parse_json_path(path).map_err(|err| {
-                        format!(
-                            "Invalid extraction path '{}': {}",
-                            &String::from_utf8_lossy(path),
-                            err
-                        )
-                    })?;
-                    match get_by_path(s, json_paths) {
-                        Some(val) => output.push(val.as_slice()),
-                        None => output.push_null(),
+        vectorize_2_arg::<NullableType<VariantType>, NullableType<StringType>, NullableType<VariantType>>(|val, path, _| {
+            match (val, path) {
+                (Some(val), Some(path)) => {
+                    if val.is_empty() || path.is_empty() {
+                        None
+                    } else {
+                        let json_paths = parse_json_path(path).map_err(|err| {
+                            format!(
+                                "Invalid extraction path '{}': {}",
+                                &String::from_utf8_lossy(path),
+                                err
+                            )
+                        }).ok()?;
+                        get_by_path(val, json_paths)
                     }
                 }
-                Ok(())
-            },
-        ),
+                (_, _) => None,
+            }
+        }),
     );
 
     registry.register_combine_nullable_2_arg::<StringType, StringType, StringType, _, _>(
