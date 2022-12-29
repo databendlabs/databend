@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_sql::optimizer::Datum;
+use common_expression::Scalar;
 use common_sql::optimizer::Histogram;
 use common_sql::optimizer::HistogramBucket;
 

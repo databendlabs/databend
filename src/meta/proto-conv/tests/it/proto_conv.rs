@@ -16,9 +16,10 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use ce::types::NumberDataType;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_datavalues as dv;
+use common_expression as ce;
 use common_meta_app::schema as mt;
 use common_meta_app::share;
 use common_proto_conv::FromToProto;
@@ -146,50 +147,44 @@ fn new_share_account_meta() -> share::ShareAccountMeta {
 
 fn new_table_meta() -> mt::TableMeta {
     mt::TableMeta {
-        schema: Arc::new(dv::DataSchema::new_from(
+        schema: Arc::new(ce::TableSchema::new_from(
             vec![
-                //
-                dv::DataField::new(
+                ce::TableField::new(
                     "nullable",
-                    dv::NullableType::create(dv::Int8Type::default().into()).into(),
+                    ce::TableDataType::Nullable(Box::new(ce::TableDataType::Number(
+                        NumberDataType::Int8,
+                    ))),
                 )
                 .with_default_expr(Some("a + 3".to_string())),
-                dv::DataField::new("bool", dv::BooleanType::default().into()),
-                dv::DataField::new("int8", dv::Int8Type::default().into()),
-                dv::DataField::new("int16", dv::Int16Type::default().into()),
-                dv::DataField::new("int32", dv::Int32Type::default().into()),
-                dv::DataField::new("int64", dv::Int64Type::default().into()),
-                dv::DataField::new("uint8", dv::UInt8Type::default().into()),
-                dv::DataField::new("uint16", dv::UInt16Type::default().into()),
-                dv::DataField::new("uint32", dv::UInt32Type::default().into()),
-                dv::DataField::new("uint64", dv::UInt64Type::default().into()),
-                dv::DataField::new("float32", dv::Float32Type::default().into()),
-                dv::DataField::new("float64", dv::Float64Type::default().into()),
-                dv::DataField::new("date", dv::DateType::default().into()),
-                dv::DataField::new("timestamp", dv::TimestampType::new_impl()),
-                dv::DataField::new("string", dv::StringType::default().into()),
-                dv::DataField::new(
-                    "struct",
-                    dv::StructType::create(
-                        Some(vec![s("foo"), s("bar")]),
-                        vec![
-                            dv::BooleanType::default().into(),
-                            dv::StringType::default().into(),
-                        ], //
-                    )
-                    .into(),
+                ce::TableField::new("bool", ce::TableDataType::Boolean),
+                ce::TableField::new("int8", ce::TableDataType::Number(NumberDataType::Int8)),
+                ce::TableField::new("int16", ce::TableDataType::Number(NumberDataType::Int16)),
+                ce::TableField::new("int32", ce::TableDataType::Number(NumberDataType::Int32)),
+                ce::TableField::new("int64", ce::TableDataType::Number(NumberDataType::Int64)),
+                ce::TableField::new("uint8", ce::TableDataType::Number(NumberDataType::UInt8)),
+                ce::TableField::new("uint16", ce::TableDataType::Number(NumberDataType::UInt16)),
+                ce::TableField::new("uint32", ce::TableDataType::Number(NumberDataType::UInt32)),
+                ce::TableField::new("uint64", ce::TableDataType::Number(NumberDataType::UInt64)),
+                ce::TableField::new(
+                    "float32",
+                    ce::TableDataType::Number(NumberDataType::Float32),
                 ),
-                dv::DataField::new(
+                ce::TableField::new(
+                    "float64",
+                    ce::TableDataType::Number(NumberDataType::Float64),
+                ),
+                ce::TableField::new("date", ce::TableDataType::Date),
+                ce::TableField::new("timestamp", ce::TableDataType::Timestamp),
+                ce::TableField::new("string", ce::TableDataType::String),
+                ce::TableField::new("struct", ce::TableDataType::Tuple {
+                    fields_name: vec![s("foo"), s("bar")],
+                    fields_type: vec![ce::TableDataType::Boolean, ce::TableDataType::String],
+                }),
+                ce::TableField::new(
                     "array",
-                    dv::ArrayType::create(dv::BooleanType::default().into()).into(),
+                    ce::TableDataType::Array(Box::new(ce::TableDataType::Boolean)),
                 ),
-                dv::DataField::new("variant", dv::VariantType::default().into()),
-                dv::DataField::new("variant_array", dv::VariantArrayType::default().into()),
-                dv::DataField::new("variant_object", dv::VariantObjectType::default().into()),
-                dv::DataField::new(
-                    "interval",
-                    dv::IntervalType::new(dv::IntervalKind::Day).into(),
-                ),
+                ce::TableField::new("variant", ce::TableDataType::Variant),
             ],
             btreemap! {s("a") => s("b")},
         )),
@@ -213,50 +208,44 @@ fn new_table_meta() -> mt::TableMeta {
 
 fn new_table_meta_v10() -> mt::TableMeta {
     mt::TableMeta {
-        schema: Arc::new(dv::DataSchema::new_from(
+        schema: Arc::new(ce::TableSchema::new_from(
             vec![
-                //
-                dv::DataField::new(
+                ce::TableField::new(
                     "nullable",
-                    dv::NullableType::create(dv::Int8Type::default().into()).into(),
+                    ce::TableDataType::Nullable(Box::new(ce::TableDataType::Number(
+                        NumberDataType::Int8,
+                    ))),
                 )
                 .with_default_expr(Some("a + 3".to_string())),
-                dv::DataField::new("bool", dv::BooleanType::default().into()),
-                dv::DataField::new("int8", dv::Int8Type::default().into()),
-                dv::DataField::new("int16", dv::Int16Type::default().into()),
-                dv::DataField::new("int32", dv::Int32Type::default().into()),
-                dv::DataField::new("int64", dv::Int64Type::default().into()),
-                dv::DataField::new("uint8", dv::UInt8Type::default().into()),
-                dv::DataField::new("uint16", dv::UInt16Type::default().into()),
-                dv::DataField::new("uint32", dv::UInt32Type::default().into()),
-                dv::DataField::new("uint64", dv::UInt64Type::default().into()),
-                dv::DataField::new("float32", dv::Float32Type::default().into()),
-                dv::DataField::new("float64", dv::Float64Type::default().into()),
-                dv::DataField::new("date", dv::DateType::default().into()),
-                dv::DataField::new("timestamp", dv::TimestampType::new_impl()),
-                dv::DataField::new("string", dv::StringType::default().into()),
-                dv::DataField::new(
-                    "struct",
-                    dv::StructType::create(
-                        Some(vec![s("foo"), s("bar")]),
-                        vec![
-                            dv::BooleanType::default().into(),
-                            dv::StringType::default().into(),
-                        ], //
-                    )
-                    .into(),
+                ce::TableField::new("bool", ce::TableDataType::Boolean),
+                ce::TableField::new("int8", ce::TableDataType::Number(NumberDataType::Int8)),
+                ce::TableField::new("int16", ce::TableDataType::Number(NumberDataType::Int16)),
+                ce::TableField::new("int32", ce::TableDataType::Number(NumberDataType::Int32)),
+                ce::TableField::new("int64", ce::TableDataType::Number(NumberDataType::Int64)),
+                ce::TableField::new("uint8", ce::TableDataType::Number(NumberDataType::UInt8)),
+                ce::TableField::new("uint16", ce::TableDataType::Number(NumberDataType::UInt16)),
+                ce::TableField::new("uint32", ce::TableDataType::Number(NumberDataType::UInt32)),
+                ce::TableField::new("uint64", ce::TableDataType::Number(NumberDataType::UInt64)),
+                ce::TableField::new(
+                    "float32",
+                    ce::TableDataType::Number(NumberDataType::Float32),
                 ),
-                dv::DataField::new(
+                ce::TableField::new(
+                    "float64",
+                    ce::TableDataType::Number(NumberDataType::Float64),
+                ),
+                ce::TableField::new("date", ce::TableDataType::Date),
+                ce::TableField::new("timestamp", ce::TableDataType::Timestamp),
+                ce::TableField::new("string", ce::TableDataType::String),
+                ce::TableField::new("struct", ce::TableDataType::Tuple {
+                    fields_name: vec![s("foo"), s("bar")],
+                    fields_type: vec![ce::TableDataType::Boolean, ce::TableDataType::String],
+                }),
+                ce::TableField::new(
                     "array",
-                    dv::ArrayType::create(dv::BooleanType::default().into()).into(),
+                    ce::TableDataType::Array(Box::new(ce::TableDataType::Boolean)),
                 ),
-                dv::DataField::new("variant", dv::VariantType::default().into()),
-                dv::DataField::new("variant_array", dv::VariantArrayType::default().into()),
-                dv::DataField::new("variant_object", dv::VariantObjectType::default().into()),
-                dv::DataField::new(
-                    "interval",
-                    dv::IntervalType::new(dv::IntervalKind::Day).into(),
-                ),
+                ce::TableField::new("variant", ce::TableDataType::Variant),
             ],
             btreemap! {s("a") => s("b")},
         )),
@@ -280,50 +269,44 @@ fn new_table_meta_v10() -> mt::TableMeta {
 
 fn new_table_meta_v12() -> mt::TableMeta {
     mt::TableMeta {
-        schema: Arc::new(dv::DataSchema::new_from(
+        schema: Arc::new(ce::TableSchema::new_from(
             vec![
-                //
-                dv::DataField::new(
+                ce::TableField::new(
                     "nullable",
-                    dv::NullableType::create(dv::Int8Type::default().into()).into(),
+                    ce::TableDataType::Nullable(Box::new(ce::TableDataType::Number(
+                        NumberDataType::Int8,
+                    ))),
                 )
                 .with_default_expr(Some("a + 3".to_string())),
-                dv::DataField::new("bool", dv::BooleanType::default().into()),
-                dv::DataField::new("int8", dv::Int8Type::default().into()),
-                dv::DataField::new("int16", dv::Int16Type::default().into()),
-                dv::DataField::new("int32", dv::Int32Type::default().into()),
-                dv::DataField::new("int64", dv::Int64Type::default().into()),
-                dv::DataField::new("uint8", dv::UInt8Type::default().into()),
-                dv::DataField::new("uint16", dv::UInt16Type::default().into()),
-                dv::DataField::new("uint32", dv::UInt32Type::default().into()),
-                dv::DataField::new("uint64", dv::UInt64Type::default().into()),
-                dv::DataField::new("float32", dv::Float32Type::default().into()),
-                dv::DataField::new("float64", dv::Float64Type::default().into()),
-                dv::DataField::new("date", dv::DateType::default().into()),
-                dv::DataField::new("timestamp", dv::TimestampType::new_impl()),
-                dv::DataField::new("string", dv::StringType::default().into()),
-                dv::DataField::new(
-                    "struct",
-                    dv::StructType::create(
-                        Some(vec![s("foo"), s("bar")]),
-                        vec![
-                            dv::BooleanType::default().into(),
-                            dv::StringType::default().into(),
-                        ], //
-                    )
-                    .into(),
+                ce::TableField::new("bool", ce::TableDataType::Boolean),
+                ce::TableField::new("int8", ce::TableDataType::Number(NumberDataType::Int8)),
+                ce::TableField::new("int16", ce::TableDataType::Number(NumberDataType::Int16)),
+                ce::TableField::new("int32", ce::TableDataType::Number(NumberDataType::Int32)),
+                ce::TableField::new("int64", ce::TableDataType::Number(NumberDataType::Int64)),
+                ce::TableField::new("uint8", ce::TableDataType::Number(NumberDataType::UInt8)),
+                ce::TableField::new("uint16", ce::TableDataType::Number(NumberDataType::UInt16)),
+                ce::TableField::new("uint32", ce::TableDataType::Number(NumberDataType::UInt32)),
+                ce::TableField::new("uint64", ce::TableDataType::Number(NumberDataType::UInt64)),
+                ce::TableField::new(
+                    "float32",
+                    ce::TableDataType::Number(NumberDataType::Float32),
                 ),
-                dv::DataField::new(
+                ce::TableField::new(
+                    "float64",
+                    ce::TableDataType::Number(NumberDataType::Float64),
+                ),
+                ce::TableField::new("date", ce::TableDataType::Date),
+                ce::TableField::new("timestamp", ce::TableDataType::Timestamp),
+                ce::TableField::new("string", ce::TableDataType::String),
+                ce::TableField::new("struct", ce::TableDataType::Tuple {
+                    fields_name: vec![s("foo"), s("bar")],
+                    fields_type: vec![ce::TableDataType::Boolean, ce::TableDataType::String],
+                }),
+                ce::TableField::new(
                     "array",
-                    dv::ArrayType::create(dv::BooleanType::default().into()).into(),
+                    ce::TableDataType::Array(Box::new(ce::TableDataType::Boolean)),
                 ),
-                dv::DataField::new("variant", dv::VariantType::default().into()),
-                dv::DataField::new("variant_array", dv::VariantArrayType::default().into()),
-                dv::DataField::new("variant_object", dv::VariantObjectType::default().into()),
-                dv::DataField::new(
-                    "interval",
-                    dv::IntervalType::new(dv::IntervalKind::Day).into(),
-                ),
+                ce::TableField::new("variant", ce::TableDataType::Variant),
             ],
             btreemap! {s("a") => s("b")},
         )),

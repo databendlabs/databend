@@ -1899,6 +1899,8 @@ to_float32(Float32) :: Float32
 to_float32(Float32 NULL) :: Float32 NULL
 to_float32(Float64) :: Float32
 to_float32(Float64 NULL) :: Float32 NULL
+to_float32(String) :: Float32
+to_float32(String NULL) :: Float32 NULL
 to_float64(UInt8) :: Float64
 to_float64(UInt8 NULL) :: Float64 NULL
 to_float64(UInt16) :: Float64
@@ -1919,6 +1921,8 @@ to_float64(Float32) :: Float64
 to_float64(Float32 NULL) :: Float64 NULL
 to_float64(Float64) :: Float64
 to_float64(Float64 NULL) :: Float64 NULL
+to_float64(String) :: Float64
+to_float64(String NULL) :: Float64 NULL
 to_hour(Timestamp) :: UInt8
 to_hour(Timestamp NULL) :: UInt8 NULL
 to_int16(UInt8) :: Int16
@@ -1941,6 +1945,8 @@ to_int16(Float32) :: Int16
 to_int16(Float32 NULL) :: Int16 NULL
 to_int16(Float64) :: Int16
 to_int16(Float64 NULL) :: Int16 NULL
+to_int16(String) :: Int16
+to_int16(String NULL) :: Int16 NULL
 to_int32(UInt8) :: Int32
 to_int32(UInt8 NULL) :: Int32 NULL
 to_int32(UInt16) :: Int32
@@ -1961,6 +1967,8 @@ to_int32(Float32) :: Int32
 to_int32(Float32 NULL) :: Int32 NULL
 to_int32(Float64) :: Int32
 to_int32(Float64 NULL) :: Int32 NULL
+to_int32(String) :: Int32
+to_int32(String NULL) :: Int32 NULL
 to_int64(UInt8) :: Int64
 to_int64(UInt8 NULL) :: Int64 NULL
 to_int64(UInt16) :: Int64
@@ -1981,6 +1989,8 @@ to_int64(Float32) :: Int64
 to_int64(Float32 NULL) :: Int64 NULL
 to_int64(Float64) :: Int64
 to_int64(Float64 NULL) :: Int64 NULL
+to_int64(String) :: Int64
+to_int64(String NULL) :: Int64 NULL
 to_int64(Timestamp) :: Int64
 to_int64(Timestamp NULL) :: Int64 NULL
 to_int64(Date) :: Int64
@@ -2005,6 +2015,8 @@ to_int8(Float32) :: Int8
 to_int8(Float32 NULL) :: Int8 NULL
 to_int8(Float64) :: Int8
 to_int8(Float64 NULL) :: Int8 NULL
+to_int8(String) :: Int8
+to_int8(String NULL) :: Int8 NULL
 to_minute(Timestamp) :: UInt8
 to_minute(Timestamp NULL) :: UInt8 NULL
 to_monday(Timestamp) :: Date
@@ -2105,6 +2117,8 @@ to_uint16(Float32) :: UInt16
 to_uint16(Float32 NULL) :: UInt16 NULL
 to_uint16(Float64) :: UInt16
 to_uint16(Float64 NULL) :: UInt16 NULL
+to_uint16(String) :: UInt16
+to_uint16(String NULL) :: UInt16 NULL
 to_uint32(UInt8) :: UInt32
 to_uint32(UInt8 NULL) :: UInt32 NULL
 to_uint32(UInt16) :: UInt32
@@ -2125,6 +2139,8 @@ to_uint32(Float32) :: UInt32
 to_uint32(Float32 NULL) :: UInt32 NULL
 to_uint32(Float64) :: UInt32
 to_uint32(Float64 NULL) :: UInt32 NULL
+to_uint32(String) :: UInt32
+to_uint32(String NULL) :: UInt32 NULL
 to_uint64(UInt8) :: UInt64
 to_uint64(UInt8 NULL) :: UInt64 NULL
 to_uint64(UInt16) :: UInt64
@@ -2145,6 +2161,8 @@ to_uint64(Float32) :: UInt64
 to_uint64(Float32 NULL) :: UInt64 NULL
 to_uint64(Float64) :: UInt64
 to_uint64(Float64 NULL) :: UInt64 NULL
+to_uint64(String) :: UInt64
+to_uint64(String NULL) :: UInt64 NULL
 to_uint8(UInt8) :: UInt8
 to_uint8(UInt8 NULL) :: UInt8 NULL
 to_uint8(UInt16) :: UInt8
@@ -2165,6 +2183,8 @@ to_uint8(Float32) :: UInt8
 to_uint8(Float32 NULL) :: UInt8 NULL
 to_uint8(Float64) :: UInt8
 to_uint8(Float64 NULL) :: UInt8 NULL
+to_uint8(String) :: UInt8
+to_uint8(String NULL) :: UInt8 NULL
 to_variant(T0) :: Variant
 to_variant(T0 NULL) :: Variant NULL
 to_year(Date) :: UInt16
@@ -2259,6 +2279,8 @@ try_to_float32(Float32) :: Float32 NULL
 try_to_float32(Float32 NULL) :: Float32 NULL
 try_to_float32(Float64) :: Float32 NULL
 try_to_float32(Float64 NULL) :: Float32 NULL
+try_to_float32(String) :: Float32 NULL
+try_to_float32(String NULL) :: Float32 NULL
 try_to_float64(UInt8) :: Float64 NULL
 try_to_float64(UInt8 NULL) :: Float64 NULL
 try_to_float64(UInt16) :: Float64 NULL
@@ -2279,6 +2301,8 @@ try_to_float64(Float32) :: Float64 NULL
 try_to_float64(Float32 NULL) :: Float64 NULL
 try_to_float64(Float64) :: Float64 NULL
 try_to_float64(Float64 NULL) :: Float64 NULL
+try_to_float64(String) :: Float64 NULL
+try_to_float64(String NULL) :: Float64 NULL
 try_to_int16(UInt8) :: Int16 NULL
 try_to_int16(UInt8 NULL) :: Int16 NULL
 try_to_int16(UInt16) :: Int16 NULL
@@ -2299,6 +2323,8 @@ try_to_int16(Float32) :: Int16 NULL
 try_to_int16(Float32 NULL) :: Int16 NULL
 try_to_int16(Float64) :: Int16 NULL
 try_to_int16(Float64 NULL) :: Int16 NULL
+try_to_int16(String) :: Int16 NULL
+try_to_int16(String NULL) :: Int16 NULL
 try_to_int32(UInt8) :: Int32 NULL
 try_to_int32(UInt8 NULL) :: Int32 NULL
 try_to_int32(UInt16) :: Int32 NULL
@@ -2319,6 +2345,8 @@ try_to_int32(Float32) :: Int32 NULL
 try_to_int32(Float32 NULL) :: Int32 NULL
 try_to_int32(Float64) :: Int32 NULL
 try_to_int32(Float64 NULL) :: Int32 NULL
+try_to_int32(String) :: Int32 NULL
+try_to_int32(String NULL) :: Int32 NULL
 try_to_int64(UInt8) :: Int64 NULL
 try_to_int64(UInt8 NULL) :: Int64 NULL
 try_to_int64(UInt16) :: Int64 NULL
@@ -2339,6 +2367,8 @@ try_to_int64(Float32) :: Int64 NULL
 try_to_int64(Float32 NULL) :: Int64 NULL
 try_to_int64(Float64) :: Int64 NULL
 try_to_int64(Float64 NULL) :: Int64 NULL
+try_to_int64(String) :: Int64 NULL
+try_to_int64(String NULL) :: Int64 NULL
 try_to_int64(Timestamp) :: Int64 NULL
 try_to_int64(Timestamp NULL) :: Int64 NULL
 try_to_int64(Date) :: Int64 NULL
@@ -2363,6 +2393,28 @@ try_to_int8(Float32) :: Int8 NULL
 try_to_int8(Float32 NULL) :: Int8 NULL
 try_to_int8(Float64) :: Int8 NULL
 try_to_int8(Float64 NULL) :: Int8 NULL
+try_to_int8(String) :: Int8 NULL
+try_to_int8(String NULL) :: Int8 NULL
+try_to_string(UInt8) :: String NULL
+try_to_string(UInt8 NULL) :: String NULL
+try_to_string(UInt16) :: String NULL
+try_to_string(UInt16 NULL) :: String NULL
+try_to_string(UInt32) :: String NULL
+try_to_string(UInt32 NULL) :: String NULL
+try_to_string(UInt64) :: String NULL
+try_to_string(UInt64 NULL) :: String NULL
+try_to_string(Int8) :: String NULL
+try_to_string(Int8 NULL) :: String NULL
+try_to_string(Int16) :: String NULL
+try_to_string(Int16 NULL) :: String NULL
+try_to_string(Int32) :: String NULL
+try_to_string(Int32 NULL) :: String NULL
+try_to_string(Int64) :: String NULL
+try_to_string(Int64 NULL) :: String NULL
+try_to_string(Float32) :: String NULL
+try_to_string(Float32 NULL) :: String NULL
+try_to_string(Float64) :: String NULL
+try_to_string(Float64 NULL) :: String NULL
 try_to_string(Timestamp) :: String NULL
 try_to_string(Timestamp NULL) :: String NULL
 try_to_string(Date) :: String NULL
@@ -2391,6 +2443,8 @@ try_to_uint16(Float32) :: UInt16 NULL
 try_to_uint16(Float32 NULL) :: UInt16 NULL
 try_to_uint16(Float64) :: UInt16 NULL
 try_to_uint16(Float64 NULL) :: UInt16 NULL
+try_to_uint16(String) :: UInt16 NULL
+try_to_uint16(String NULL) :: UInt16 NULL
 try_to_uint32(UInt8) :: UInt32 NULL
 try_to_uint32(UInt8 NULL) :: UInt32 NULL
 try_to_uint32(UInt16) :: UInt32 NULL
@@ -2411,6 +2465,8 @@ try_to_uint32(Float32) :: UInt32 NULL
 try_to_uint32(Float32 NULL) :: UInt32 NULL
 try_to_uint32(Float64) :: UInt32 NULL
 try_to_uint32(Float64 NULL) :: UInt32 NULL
+try_to_uint32(String) :: UInt32 NULL
+try_to_uint32(String NULL) :: UInt32 NULL
 try_to_uint64(UInt8) :: UInt64 NULL
 try_to_uint64(UInt8 NULL) :: UInt64 NULL
 try_to_uint64(UInt16) :: UInt64 NULL
@@ -2431,6 +2487,8 @@ try_to_uint64(Float32) :: UInt64 NULL
 try_to_uint64(Float32 NULL) :: UInt64 NULL
 try_to_uint64(Float64) :: UInt64 NULL
 try_to_uint64(Float64 NULL) :: UInt64 NULL
+try_to_uint64(String) :: UInt64 NULL
+try_to_uint64(String NULL) :: UInt64 NULL
 try_to_uint8(UInt8) :: UInt8 NULL
 try_to_uint8(UInt8 NULL) :: UInt8 NULL
 try_to_uint8(UInt16) :: UInt8 NULL
@@ -2451,6 +2509,8 @@ try_to_uint8(Float32) :: UInt8 NULL
 try_to_uint8(Float32 NULL) :: UInt8 NULL
 try_to_uint8(Float64) :: UInt8 NULL
 try_to_uint8(Float64 NULL) :: UInt8 NULL
+try_to_uint8(String) :: UInt8 NULL
+try_to_uint8(String NULL) :: UInt8 NULL
 try_to_variant(T0) :: Variant NULL
 try_to_variant(T0 NULL) :: Variant NULL
 unhex(String) :: String
