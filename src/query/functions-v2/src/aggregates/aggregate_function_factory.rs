@@ -227,8 +227,8 @@ impl AggregateFunctionFactory {
         )))
     }
 
-    pub fn check(&self, name: impl AsRef<str>) -> bool {
-        let origin = name.as_ref();
+    pub fn contains(&self, func_name: impl AsRef<str>) -> bool {
+        let origin = func_name.as_ref();
         let lowercase_name = origin.to_lowercase();
 
         if self.case_insensitive_desc.contains_key(&lowercase_name) {

@@ -12,17 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common_exception::Result;
 use common_expression::types::NumberDataType;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::TableDataType;
 use common_expression::TableField;
+use common_formats::FileFormatOptionsExt;
+use common_meta_types::FileFormatOptions;
 use common_settings::Settings;
 use pretty_assertions::assert_eq;
 
 use crate::get_output_format_clickhouse;
-use crate::get_output_format_clickhouse_with_setting;
 use crate::output_format_utils::gen_schema_and_block;
 use crate::output_format_utils::get_simple_block;
 

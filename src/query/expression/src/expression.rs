@@ -256,11 +256,9 @@ impl<Index: ColumnIndex> Expr<Index> {
             },
         }
     }
-}
 
-impl<Index: ColumnIndex> RemoteExpr<Index> {
-    pub fn from_expr(expr: &Expr<Index>) -> Self {
-        match expr {
+    pub fn as_remote_expr(&self) -> RemoteExpr<Index> {
+        match self {
             Expr::Constant {
                 span,
                 scalar,
@@ -287,7 +285,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
             } => RemoteExpr::Cast {
                 span: span.clone(),
                 is_try: *is_try,
-                expr: Box::new(RemoteExpr::from_expr(expr)),
+                expr: Box::new(expr.as_remote_expr()),
                 dest_type: dest_type.clone(),
             },
             Expr::FunctionCall {
@@ -301,13 +299,15 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 span: span.clone(),
                 id: id.clone(),
                 generics: generics.clone(),
-                args: args.iter().map(RemoteExpr::from_expr).collect(),
+                args: args.iter().map(Expr::as_remote_expr).collect(),
                 return_type: return_type.clone(),
             },
         }
     }
+}
 
-    pub fn into_expr(&self, fn_registry: &FunctionRegistry) -> Option<Expr<Index>> {
+impl<Index: ColumnIndex> RemoteExpr<Index> {
+    pub fn as_expr(&self, fn_registry: &FunctionRegistry) -> Option<Expr<Index>> {
         Some(match self {
             RemoteExpr::Constant {
                 span,
@@ -335,7 +335,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
             } => Expr::Cast {
                 span: span.clone(),
                 is_try: *is_try,
-                expr: Box::new(expr.into_expr(fn_registry)?),
+                expr: Box::new(expr.as_expr(fn_registry)?),
                 dest_type: dest_type.clone(),
             },
             RemoteExpr::FunctionCall {
@@ -353,7 +353,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                     generics: generics.clone(),
                     args: args
                         .iter()
-                        .map(|arg| arg.into_expr(fn_registry))
+                        .map(|arg| arg.as_expr(fn_registry))
                         .collect::<Option<_>>()?,
                     return_type: return_type.clone(),
                 }

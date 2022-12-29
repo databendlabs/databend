@@ -473,7 +473,6 @@ impl PhysicalPlanBuilder {
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
         let data_schema = Arc::new(DataSchema::from(table_schema));
-        let physical_scalar_builder = PhysicalScalarBuilder::new(&data_schema);
         let projection =
             Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
         let _project_schema = projection.project_schema(table_schema);
@@ -484,10 +483,7 @@ impl PhysicalPlanBuilder {
             .map(|predicates| -> Result<Vec<RemoteExpr<String>>> {
                 predicates
                     .into_iter()
-                    .map(|scalar| {
-                        let filter = scalar.to_remote_expr()?;
-                        Ok(filter)
-                    })
+                    .map(|scalar| Ok(scalar.as_expr()?.as_remote_expr()))
                     .collect::<Result<Vec<_>>>()
             })
             .transpose()?;
@@ -516,10 +512,6 @@ impl PhysicalPlanBuilder {
                     "There should be at least one predicate in prewhere"
                 );
 
-                let filter = physical_scalar_builder.build(&predicate.unwrap())?;
-                let filter = filter.as_expr()?;
-                let filter = RemoteExpr::from_expr(&filter);
-
                 let remain_columns = scan
                     .columns
                     .difference(&prewhere.prewhere_columns)
@@ -544,6 +536,7 @@ impl PhysicalPlanBuilder {
                     &remain_columns,
                     has_inner_column,
                 );
+                let filter = predicate.unwrap().as_expr()?.as_remote_expr();
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
                     output_columns,

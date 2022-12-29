@@ -86,7 +86,7 @@ impl FuseTable {
                 .iter()
                 .map(|remote_expr| {
                     let expr = remote_expr
-                        .into_expr(&BUILTIN_FUNCTIONS)
+                        .as_expr(&BUILTIN_FUNCTIONS)
                         .unwrap()
                         .project_column_ref(|name| schema.index_of(name).unwrap());
                     let offset = match expr {
@@ -169,7 +169,7 @@ impl FuseTable {
 
         for remote_expr in &cluster_keys {
             let expr = remote_expr
-                .into_expr(&BUILTIN_FUNCTIONS)
+                .as_expr(&BUILTIN_FUNCTIONS)
                 .unwrap()
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
             let offset = match &expr {

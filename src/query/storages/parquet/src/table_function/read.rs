@@ -54,16 +54,19 @@ impl ParquetTable {
         }
     }
 
-    // Build the prewhere filter executor.
-    fn build_prewhere_filter_executor(
+    // Build the prewhere filter expression.
+    fn build_prewhere_filter_expr(
         &self,
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
+        schema: &DataSchema,
     ) -> Result<Arc<Option<Expr>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => Arc::new(v.filter.into_expr(&BUILTIN_FUNCTIONS)),
+                Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
+                    expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+                })),
             },
         )
     }
@@ -144,7 +147,7 @@ impl ParquetTable {
                 extra
                     .filters
                     .iter()
-                    .map(|f| f.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+                    .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap())
                     .collect::<Vec<_>>()
             });
             let row_group_pruner =
@@ -202,7 +205,7 @@ impl ParquetTable {
         // `PrewhereInfo.output_columns` should be a subset of `PushDownInfo.projection`.
         let output_projection = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
             None => {
-                PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs)
+                PushDownInfo::projection_of_push_downs(&*self.table_info.schema(), &plan.push_downs)
             }
             Some(v) => v.output_columns,
         };
@@ -211,7 +214,8 @@ impl ParquetTable {
         ));
 
         let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter = self.build_prewhere_filter_executor(ctx.clone(), plan)?;
+        let prewhere_filter =
+            self.build_prewhere_filter_expr(ctx.clone(), plan, prewhere_reader.output_schema())?;
         let remain_reader = self.build_remain_reader(plan)?;
 
         // Add source pipe.

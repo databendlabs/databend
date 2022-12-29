@@ -649,7 +649,7 @@ impl CompactSegmentTestFixture {
         let data_accessor = &self.data_accessor.operator();
         let location_gen = &self.location_gen;
         let schema = TestFixture::default_table_schema();
-        let block_writer = BlockWriter::new(&schema, data_accessor, location_gen);
+        let block_writer = BlockWriter::new(data_accessor, location_gen);
 
         let segment_writer = SegmentWriter::new(data_accessor, location_gen, &None);
         let seg_acc = SegmentCompactor::new(block_per_seg, segment_writer.clone());
@@ -674,7 +674,7 @@ impl CompactSegmentTestFixture {
         let mut locations = vec![];
         let mut collected_blocks = vec![];
         for num_blocks in block_num_of_segments {
-            let blocks = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
+            let (schema, blocks) = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
             let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
                 let block = block?;
@@ -683,7 +683,7 @@ impl CompactSegmentTestFixture {
                 let mut block_statistics =
                     BlockStatistics::from(&block, "".to_owned(), None, None)?;
                 let block_meta = block_writer
-                    .write(FuseStorageFormat::Parquet, block, col_stats, None)
+                    .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
                     .await?;
                 block_statistics.block_file_location = block_meta.location.0.clone();
 

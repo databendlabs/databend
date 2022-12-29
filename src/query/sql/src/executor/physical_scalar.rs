@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check;
 use common_expression::types::DataType;
@@ -115,9 +114,11 @@ impl PhysicalScalar {
     /// Convert to `Expr` by type checking.
     pub fn as_expr(&self) -> Result<Expr> {
         let raw_expr = self.as_raw_expr();
-        let registry = &BUILTIN_FUNCTIONS;
-        let expr = check(&raw_expr, registry)
-            .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
+        let expr = check(&raw_expr, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {
+            common_exception::ErrorCode::Internal(format!(
+                "Failed to type check the expression: {raw_expr:?}, error: {e}",
+            ))
+        })?;
         Ok(expr)
     }
 }

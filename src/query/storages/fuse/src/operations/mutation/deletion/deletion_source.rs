@@ -193,7 +193,7 @@ impl Processor for DeletionSource {
                 let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
                 let expr = self
                     .filter
-                    .into_expr(&BUILTIN_FUNCTIONS)
+                    .as_expr(&BUILTIN_FUNCTIONS)
                     .unwrap()
                     .project_column_ref(|name| self.source_schema.index_of(name).unwrap());
                 let res = evaluator.run(&expr).map_err(|(_, e)| {
