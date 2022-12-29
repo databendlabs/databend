@@ -15,13 +15,13 @@ The upgrade of Databend follows these principles:
 - When you upgrade Databend, you upgrade databend-query and databend-meta separately. You can also choose to upgrade one of them only, as long as the new version is compatible with the other one. [Check Compatibility](#check-compatibility) before you upgrade.
 - Generally, rollback is not supported. It is not possible to revert to a previous version after an upgrade. This is because a new version usually brings underlying data format changes that might cause incompatibility with the previous version.
 
-:::note
-In some upgrade cases where no major changes exist between the versions, you can downgrade Databend by simply replacing the binary files in the *bin* folder with the old ones. Contact Databend to confirm if your case is eligible for a downgrade.
-:::
-
 ## Check Compatibility
 
 Databend highly recommends that you check compatibility between databend-meta and databend-query before upgrading just one of them. See [Query-Meta Compatibility](10-compatibility.md) for how to do that.
+
+:::note
+New Databend versions with breaking changes might lead to incompatibilities with an earlier version. In this case, Databend will provide detailed instructions in the release log or blog for upgrading from an incompatible version.
+:::
 
 ## Upgrade databend-query
 
