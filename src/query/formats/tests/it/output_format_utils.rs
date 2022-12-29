@@ -13,48 +13,86 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
-use common_exception::Result;
+use common_expression::from_date_data;
+use common_expression::types::nullable::NullableColumn;
+use common_expression::types::NumberDataType;
+use common_expression::BlockEntry;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
+use common_expression::Value;
 
-pub fn get_simple_block(is_nullable: bool) -> Result<DataBlock> {
-    let schema = match is_nullable {
-        false => DataSchemaRefExt::create(vec![
-            DataField::new("c1", i32::to_data_type()),
-            DataField::new("c2", Vu8::to_data_type()),
-            DataField::new("c3", bool::to_data_type()),
-            DataField::new("c4", f64::to_data_type()),
-            DataField::new("c5", DateType::new_impl()),
-        ]),
-        true => DataSchemaRefExt::create(vec![
-            DataField::new_nullable("c1", i32::to_data_type()),
-            DataField::new_nullable("c2", Vu8::to_data_type()),
-            DataField::new_nullable("c3", bool::to_data_type()),
-            DataField::new_nullable("c4", f64::to_data_type()),
-            DataField::new_nullable("c5", DateType::new_impl()),
-        ]),
-    };
+pub fn gen_schema_and_block(
+    fields: Vec<TableField>,
+    columns: Vec<Column>,
+) -> (TableSchemaRef, DataBlock) {
+    assert!(!columns.is_empty() && columns.len() == fields.len());
 
-    let mut columns = vec![
-        Series::from_data(vec![1i32, 2, 3]),
-        Series::from_data(vec!["a", "b\"", "c'"]),
-        Series::from_data(vec![true, true, false]),
-        Series::from_data(vec![1.1f64, 2.2, f64::NAN]),
-        Series::from_data(vec![1_i32, 2_i32, 3_i32]),
+    let num_rows = columns[0].len();
+    let block_entries = fields
+        .iter()
+        .zip(columns.into_iter())
+        .map(|(f, c)| BlockEntry {
+            data_type: f.data_type().into(),
+            value: Value::Column(c),
+        })
+        .collect();
+
+    let block = DataBlock::new(block_entries, num_rows);
+    (TableSchemaRefExt::create(fields), block)
+}
+
+pub fn get_simple_block(is_nullable: bool) -> (TableSchemaRef, DataBlock) {
+    let columns = vec![
+        (
+            TableDataType::Number(NumberDataType::Int32),
+            Column::from_data(vec![1i32, 2, 3]),
+        ),
+        (
+            TableDataType::String,
+            Column::from_data(vec!["a", "b\"", "c'"]),
+        ),
+        (
+            TableDataType::Boolean,
+            Column::from_data(vec![true, true, false]),
+        ),
+        (
+            TableDataType::Number(NumberDataType::Float64),
+            Column::from_data(vec![1.1f64, 2.2, f64::NAN]),
+        ),
+        (
+            TableDataType::Date,
+            from_date_data(vec![1_i32, 2_i32, 3_i32]),
+        ),
     ];
 
-    if is_nullable {
-        columns = columns
-            .iter()
-            .map(|c| {
+    let (columns, fields) = if !is_nullable {
+        columns
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (data_type, c))| (c, TableField::new(&format!("c{}", idx + 1), data_type)))
+            .unzip::<_, _, Vec<_>, Vec<_>>()
+    } else {
+        columns
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (data_type, c))| {
                 let mut validity = MutableBitmap::new();
                 validity.extend_constant(c.len(), true);
-                NullableColumn::wrap_inner(c.clone(), Some(validity.into()))
+                (
+                    Column::Nullable(Box::new(NullableColumn {
+                        column: c,
+                        validity: validity.into(),
+                    })),
+                    TableField::new(&format!("c{}", idx + 1), data_type.wrap_nullable()),
+                )
             })
-            .collect();
-    }
+            .unzip::<_, _, Vec<_>, Vec<_>>()
+    };
 
-    let block = DataBlock::create(schema, columns);
-
-    Ok(block)
+    gen_schema_and_block(fields, columns)
 }

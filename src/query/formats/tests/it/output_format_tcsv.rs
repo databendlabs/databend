@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::NumberDataType;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::TableDataType;
+use common_expression::TableField;
 use common_settings::Settings;
 use pretty_assertions::assert_eq;
 
 use crate::get_output_format_clickhouse;
 use crate::get_output_format_clickhouse_with_setting;
+use crate::output_format_utils::gen_schema_and_block;
 use crate::output_format_utils::get_simple_block;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
-    let block = get_simple_block(is_nullable)?;
-    let schema = block.schema().clone();
+    let (schema, block) = get_simple_block(is_nullable);
 
     {
         let mut formatter = get_output_format_clickhouse("tsv", schema.clone())?;
@@ -47,8 +50,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         let tsv_block = String::from_utf8(buffer)?;
 
         let types = if is_nullable {
-            "Nullable(Int32)\tNullable(String)\tNullable(Boolean)\tNullable(Float64)\tNullable(Date)\n"
-                .to_string()
+            "Int32 NULL\tString NULL\tBoolean NULL\tFloat64 NULL\tDate NULL\n".to_string()
         } else {
             "Int32\tString\tBoolean\tFloat64\tDate\n".to_string()
         };
@@ -76,17 +78,22 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
 
 #[test]
 fn test_null() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new_nullable("c1", i32::to_data_type()),
-        DataField::new_nullable("c2", i32::to_data_type()),
-    ]);
-
-    let columns = vec![
-        Series::from_data(vec![Some(1i32), None, Some(3)]),
-        Series::from_data(vec![None, Some(2i32), None]),
-    ];
-
-    let block = DataBlock::create(schema.clone(), columns);
+    let (schema, block) = gen_schema_and_block(
+        vec![
+            TableField::new(
+                "c1",
+                TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
+            ),
+            TableField::new(
+                "c2",
+                TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
+            ),
+        ],
+        vec![
+            Column::from_data(vec![Some(1i32), None, Some(3)]),
+            Column::from_data(vec![None, Some(2i32), None]),
+        ],
+    );
 
     {
         let mut formatter = get_output_format_clickhouse("tsv", schema)?;
@@ -111,8 +118,7 @@ fn test_data_block_not_nullable() -> Result<()> {
 
 #[test]
 fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
-    let block = get_simple_block(false)?;
-    let schema = block.schema().clone();
+    let (schema, block) = get_simple_block(false);
 
     let settings = Settings::default_test_settings()?;
     settings.set_settings(
