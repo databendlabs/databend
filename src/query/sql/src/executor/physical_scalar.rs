@@ -96,18 +96,12 @@ impl PhysicalScalar {
                     params: vec![],
                 }
             }
-            PhysicalScalar::Cast { input, target } => {
-                let is_try = match target {
-                    DataType::Nullable(_) => true,
-                    _ => false,
-                };
-                RawExpr::Cast {
-                    span: None,
-                    is_try,
-                    expr: Box::new(input.as_raw_expr()),
-                    dest_type: target.clone(),
-                }
-            }
+            PhysicalScalar::Cast { input, target } => RawExpr::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(input.as_raw_expr()),
+                dest_type: target.clone(),
+            },
             PhysicalScalar::IndexedVariable {
                 index, data_type, ..
             } => RawExpr::ColumnRef {
