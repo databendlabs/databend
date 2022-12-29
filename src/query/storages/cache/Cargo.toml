@@ -12,10 +12,8 @@ doctest = false
 test = false
 
 [dependencies]
-common-arrow = { path = "../../../common/arrow" }
 common-cache = { path = "../../../common/cache" }
 common-exception = { path = "../../../common/exception" }
 common-storages-table-meta = { path = "../table-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-opendal = "0.23"

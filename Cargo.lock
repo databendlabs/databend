@@ -2036,11 +2036,9 @@ name = "common-storages-cache"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "common-arrow",
  "common-cache",
  "common-exception",
  "common-storages-table-meta",
- "opendal",
 ]
 
 [[package]]

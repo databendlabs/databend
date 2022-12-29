@@ -13,7 +13,5 @@
 #![deny(unused_crate_dependencies)]
 
 mod cached_reader;
-mod file_meta_data_reader;
 
 pub use cached_reader::*;
-pub use file_meta_data_reader::FileMetaDataReader;
