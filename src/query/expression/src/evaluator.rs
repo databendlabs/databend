@@ -146,8 +146,10 @@ impl<'a> Evaluator<'a> {
             return Ok(value);
         }
 
-        if let Some(cast_fn) = check_simple_cast(false, dest_type) {
-            return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
+        if !src_type.is_nullable() {
+            if let Some(cast_fn) = check_simple_cast(false, dest_type) {
+                return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
+            }
         }
 
         match (src_type, dest_type) {
@@ -174,6 +176,23 @@ impl<'a> Evaluator<'a> {
                         column,
                         validity: col.validity,
                     }))))
+                }
+                _ => unreachable!(),
+            },
+            (DataType::Nullable(inner_src_ty), _) => match value {
+                Value::Scalar(Scalar::Null) => {
+                    Err((span, (format!("unable to cast {src_type} to {dest_type}"))))
+                }
+                Value::Scalar(_) => self.run_cast(span, inner_src_ty, dest_type, value),
+                Value::Column(Column::Nullable(col)) => {
+                    if col.validity.unset_bits() > 0 {
+                        return Err((span, (format!("unable to cast {src_type} to {dest_type}"))));
+                    }
+                    let column = self
+                        .run_cast(span, inner_src_ty, dest_type, Value::Column(col.column))?
+                        .into_column()
+                        .unwrap();
+                    Ok(Value::Column(column))
                 }
                 _ => unreachable!(),
             },
