@@ -211,13 +211,13 @@ async fn run_parallel_async(
             .filter_map(|result| async { result.err() })
             .collect()
             .await;
-        print_error_info(errors);
+        handle_error_records(errors)?;
     } else {
         let errors: Vec<Vec<TestError>> = tasks
             .filter_map(|result| async { result.ok() })
             .collect()
             .await;
-        print_error_info(errors.into_iter().flatten().collect());
+        handle_error_records(errors.into_iter().flatten().collect())?;
     }
     Ok(())
 }
@@ -245,10 +245,11 @@ async fn run_file_async(
     Ok(error_records)
 }
 
-fn print_error_info(error_records: Vec<TestError>) {
+fn handle_error_records(error_records: Vec<TestError>) -> Result<()> {
     if error_records.is_empty() {
-        return;
+        return Ok(());
     }
+
     println!(
         "Test finished, Total {} records failed to run",
         error_records.len()
@@ -256,4 +257,8 @@ fn print_error_info(error_records: Vec<TestError>) {
     for (idx, error_record) in error_records.iter().enumerate() {
         println!("{idx}: {}", error_record.display(true));
     }
+
+    Err(DSqlLogicTestError::SelfError(
+        "sqllogictest failed".to_string(),
+    ))
 }
