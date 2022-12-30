@@ -279,7 +279,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
-  |                                      ^^^^^^^^^^ expected `CONNECTION`, `CREDENTIALS`, `ENCRYPTION`, `FILES`, `PATTERN`, `FILE_FORMAT`, or 10 more ...
+  |                                      ^^^^^^^^^^ expected `CONNECTION`, `CREDENTIALS`, `ENCRYPTION`, `LOCATION_PREFIX`, `FILES`, `PATTERN`, or 11 more ...
 
 
 ---------- Input ----------

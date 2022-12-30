@@ -23,6 +23,7 @@ use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::ColumnStatSet;
+use crate::optimizer::Datum;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::Statistics as OpStatistics;
@@ -135,18 +136,22 @@ impl LogicalOperator for LogicalGet {
             if let Some(col_stat) = v {
                 let min = col_stat.min.clone();
                 let max = col_stat.max.clone();
-                let histogram = histogram_from_ndv(
-                    col_stat.number_of_distinct_values,
-                    num_rows,
-                    Some((min, max)),
-                    DEFAULT_HISTOGRAM_BUCKETS,
-                )
-                .ok();
-                let column_stat = ColumnStat {
-                    null_count: col_stat.null_count,
-                    histogram,
-                };
-                column_stats.insert(*k as IndexType, column_stat);
+                let min_datum = Datum::from_data_value(&min);
+                let max_datum = Datum::from_data_value(&max);
+                if let (Some(min), Some(max)) = (min_datum, max_datum) {
+                    let histogram = histogram_from_ndv(
+                        col_stat.number_of_distinct_values,
+                        num_rows,
+                        Some((min, max)),
+                        DEFAULT_HISTOGRAM_BUCKETS,
+                    )
+                    .ok();
+                    let column_stat = ColumnStat {
+                        null_count: col_stat.null_count,
+                        histogram,
+                    };
+                    column_stats.insert(*k as IndexType, column_stat);
+                }
             }
         }
         Ok(RelationalProperty {

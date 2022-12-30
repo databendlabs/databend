@@ -24,7 +24,6 @@ use parking_lot::lock_api::RwLockWriteGuard;
 use parking_lot::RawRwLock;
 use parking_lot::RwLock;
 
-use crate::caches::TenantLabel;
 use crate::meta::SegmentInfo;
 use crate::meta::TableSnapshot;
 use crate::meta::TableSnapshotStatistics;
@@ -34,13 +33,6 @@ pub type BytesCache = RwLock<LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, 
 
 pub struct Labeled<T> {
     item: T,
-    tenant_label: TenantLabel,
-}
-
-impl<T> Labeled<T> {
-    pub fn label(&self) -> &TenantLabel {
-        &self.tenant_label
-    }
 }
 
 pub type ItemCacheWriteGuard<'a, T> = RwLockWriteGuard<'a, RawRwLock, LruCache<String, Arc<T>>>;
@@ -61,18 +53,18 @@ impl Labeled<BytesCache> {
 pub type LabeledItemCache<T> = Arc<Labeled<ItemCache<T>>>;
 pub type LabeledBytesCache = Arc<Labeled<BytesCache>>;
 
-pub fn new_item_cache<V>(capacity: u64, tenant_label: TenantLabel) -> LabeledItemCache<V> {
+pub fn new_item_cache<V>(capacity: u64) -> LabeledItemCache<V> {
     let item = RwLock::new(LruCache::new(capacity));
-    Arc::new(Labeled { item, tenant_label })
+    Arc::new(Labeled { item })
 }
 
-pub fn new_bytes_cache(capacity: u64, tenant_label: TenantLabel) -> LabeledBytesCache {
+pub fn new_bytes_cache(capacity: u64) -> LabeledBytesCache {
     let item = RwLock::new(LruCache::with_meter_and_hasher(
         capacity,
         BytesMeter,
         DefaultHashBuilder::new(),
     ));
-    Arc::new(Labeled { item, tenant_label })
+    Arc::new(Labeled { item })
 }
 
 pub type SegmentInfoCache = LabeledItemCache<SegmentInfo>;

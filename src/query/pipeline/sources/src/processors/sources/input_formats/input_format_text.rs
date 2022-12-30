@@ -215,18 +215,24 @@ impl RowBatchTrait for RowBatch {
 pub struct AligningState<T> {
     ctx: Arc<InputContext>,
     split_info: Arc<SplitInfo>,
+    // fast access configs
     pub path: String,
     pub record_delimiter_end: u8,
     pub field_delimiter: u8,
+    pub num_fields: usize,
+
+    // common state
     pub batch_id: usize,
     pub rows: usize,
     pub offset: usize,
     pub rows_to_skip: usize,
     pub tail_of_last_batch: Vec<u8>,
-    pub num_fields: usize,
     pub decoder: Option<DecompressDecoder>,
+
+    // format state
     pub csv_reader: Option<CsvReaderState>,
     pub xml_reader: Option<XmlReaderState>,
+
     phantom: PhantomData<T>,
 }
 
