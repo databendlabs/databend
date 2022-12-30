@@ -227,7 +227,7 @@ impl SystemLogElement for QueryLogElement {
         columns
             .next()
             .unwrap()
-            .push(Scalar::Number(NumberScalar::Int64(self.log_type as i64)).as_ref());
+            .push(Scalar::Number(NumberScalar::Int8(self.log_type as i8)).as_ref());
         columns
             .next()
             .unwrap()
@@ -356,7 +356,7 @@ impl SystemLogElement for QueryLogElement {
         columns
             .next()
             .unwrap()
-            .push(Scalar::Number(NumberScalar::UInt64(self.cpu_usage as u64)).as_ref());
+            .push(Scalar::Number(NumberScalar::UInt32(self.cpu_usage as u32)).as_ref());
         columns
             .next()
             .unwrap()
@@ -374,7 +374,7 @@ impl SystemLogElement for QueryLogElement {
         columns
             .next()
             .unwrap()
-            .push(Scalar::Number(NumberScalar::Int64(self.exception_code as i64)).as_ref());
+            .push(Scalar::Number(NumberScalar::Int32(self.exception_code as i32)).as_ref());
         columns
             .next()
             .unwrap()

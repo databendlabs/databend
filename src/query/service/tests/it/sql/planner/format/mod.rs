@@ -177,9 +177,9 @@ fn test_format() {
 
     let tree = s_expr.to_format_tree(&metadata_ref);
     let result = tree.format_indent().unwrap();
-    let expect = "HashJoin: INNER\n    build keys: [plus(col1 (#0), 123)]\n    probe keys: [col2 (#1)]\n    other filters: []\n    Filter\n        filters: [true]\n        PhysicalScan\n            table: catalog.database.table\n            filters: []\n            order by: []\n            limit: NONE\n    PhysicalScan\n        table: catalog.database.table\n        filters: []\n        order by: []\n        limit: NONE\n";
+    let expect = "HashJoin: INNER\n    build keys: [plus(col1 (#0), 123_u64)]\n    probe keys: [col2 (#1)]\n    other filters: []\n    Filter\n        filters: [true]\n        PhysicalScan\n            table: catalog.database.table\n            filters: []\n            order by: []\n            limit: NONE\n    PhysicalScan\n        table: catalog.database.table\n        filters: []\n        order by: []\n        limit: NONE\n";
     assert_eq!(result.as_str(), expect);
     let pretty_result = tree.format_pretty().unwrap();
-    let pretty_expect = "HashJoin: INNER\n├── build keys: [plus(col1 (#0), 123)]\n├── probe keys: [col2 (#1)]\n├── other filters: []\n├── Filter\n│   ├── filters: [true]\n│   └── PhysicalScan\n│       ├── table: catalog.database.table\n│       ├── filters: []\n│       ├── order by: []\n│       └── limit: NONE\n└── PhysicalScan\n    ├── table: catalog.database.table\n    ├── filters: []\n    ├── order by: []\n    └── limit: NONE\n";
+    let pretty_expect = "HashJoin: INNER\n├── build keys: [plus(col1 (#0), 123_u64)]\n├── probe keys: [col2 (#1)]\n├── other filters: []\n├── Filter\n│   ├── filters: [true]\n│   └── PhysicalScan\n│       ├── table: catalog.database.table\n│       ├── filters: []\n│       ├── order by: []\n│       └── limit: NONE\n└── PhysicalScan\n    ├── table: catalog.database.table\n    ├── filters: []\n    ├── order by: []\n    └── limit: NONE\n";
     assert_eq!(pretty_result.as_str(), pretty_expect);
 }
