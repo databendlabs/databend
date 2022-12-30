@@ -171,9 +171,7 @@ impl JoinHashTable {
                     if col.len() == 0 {
                         return BlockEntry {
                             data_type: data_type.clone(),
-                            value: Value::Column(Column::Null {
-                                len: validity.len(),
-                            }),
+                            value: Value::Scalar(Scalar::Null),
                         };
                     }
                     // It's possible validity is longer than col.

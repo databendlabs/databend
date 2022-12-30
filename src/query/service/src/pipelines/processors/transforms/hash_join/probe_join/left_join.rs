@@ -21,7 +21,6 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockEntry;
-use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::Value;
@@ -277,9 +276,7 @@ impl JoinHashTable {
                     .iter()
                     .map(|c| BlockEntry {
                         data_type: c.data_type.clone(),
-                        value: Value::Column(Column::Null {
-                            len: local_build_indexes.len(),
-                        }),
+                        value: Value::Scalar(Scalar::Null),
                     })
                     .collect::<Vec<_>>()
             } else {
