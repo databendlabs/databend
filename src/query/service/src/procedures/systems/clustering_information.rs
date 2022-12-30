@@ -63,9 +63,11 @@ impl OneBlockProcedure for ClusteringInformationProcedure {
         let definition = if args.len() > 2 { &args[2] } else { "" };
         let cluster_keys = get_cluster_keys(ctx.clone(), tbl, definition)?;
 
-        Ok(ClusteringInformation::new(ctx, tbl, cluster_keys)
-            .get_clustering_info()
-            .await?)
+        Ok(
+            ClusteringInformation::new(ctx, tbl, definition.to_string(), cluster_keys)
+                .get_clustering_info()
+                .await?,
+        )
     }
 
     fn schema(&self) -> Arc<DataSchema> {

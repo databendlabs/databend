@@ -185,9 +185,14 @@ impl AsyncSource for ClusteringInformationSource {
         let cluster_keys = get_cluster_keys(self.ctx.clone(), tbl, &self.arg_cluster_keys)?;
 
         Ok(Some(
-            ClusteringInformation::new(self.ctx.clone(), tbl, cluster_keys)
-                .get_clustering_info()
-                .await?,
+            ClusteringInformation::new(
+                self.ctx.clone(),
+                tbl,
+                self.arg_cluster_keys.clone(),
+                cluster_keys,
+            )
+            .get_clustering_info()
+            .await?,
         ))
     }
 }

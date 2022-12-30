@@ -44,6 +44,7 @@ use crate::Table;
 pub struct ClusteringInformation<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
+    pub plain_cluster_keys: String,
     pub cluster_keys: Vec<RemoteExpr<String>>,
 }
 
@@ -71,11 +72,13 @@ impl<'a> ClusteringInformation<'a> {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         table: &'a FuseTable,
+        plain_cluster_keys: String,
         cluster_keys: Vec<RemoteExpr<String>>,
     ) -> Self {
         Self {
             ctx,
             table,
+            plain_cluster_keys,
             cluster_keys,
         }
     }
@@ -98,7 +101,7 @@ impl<'a> ClusteringInformation<'a> {
             }
         };
 
-        let cluster_by_keys = "_cluster_keys".to_string();
+        let cluster_by_keys = self.plain_cluster_keys.clone();
 
         Ok(DataBlock::new(
             vec![
