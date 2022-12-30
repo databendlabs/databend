@@ -2117,7 +2117,6 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-catalog",
- "common-config",
  "common-exception",
  "common-expression",
  "common-functions-v2",

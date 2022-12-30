@@ -21,7 +21,6 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_config::GlobalConfig;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::Expr;

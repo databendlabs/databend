@@ -147,7 +147,7 @@ pub fn from_timestamp_data(d: Vec<i64>) -> Column {
 
 pub fn from_nullable_timestamp_data(d: Vec<Option<i64>>) -> Column {
     let bitmap = d.iter().map(|x| x.is_some()).collect();
-    let data = d.into_iter().filter_map(|x| x).collect::<Vec<_>>();
+    let data = d.into_iter().flatten().collect::<Vec<_>>();
     let col = TimestampType::upcast_column(TimestampType::column_from_vec(data, &[]));
     Column::Nullable(Box::new(NullableColumn {
         column: col,

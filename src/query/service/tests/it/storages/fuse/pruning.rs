@@ -173,7 +173,7 @@ async fn test_block_pruner() -> Result<()> {
 
     // nothing is pruned
     let e1 = PushDownInfo {
-        filters: parse_to_remote_string_exprs(ctx.clone(), table.clone(), "a > 3")?,
+        filters: parse_to_remote_string_exprs(ctx.clone(), table.clone(), false, "a > 3")?,
         ..Default::default()
     };
 
@@ -181,7 +181,8 @@ async fn test_block_pruner() -> Result<()> {
     let mut e2 = PushDownInfo::default();
     let max_val_of_b = 6u64;
 
-    e2.filters = parse_to_remote_string_exprs(ctx.clone(), table.clone(), "a > 0 and b > 6")?;
+    e2.filters =
+        parse_to_remote_string_exprs(ctx.clone(), table.clone(), false, "a > 0 and b > 6")?;
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
     // Sort asc Limit
