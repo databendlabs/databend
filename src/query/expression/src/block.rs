@@ -286,7 +286,7 @@ impl DataBlock {
             .map(|(field, col)| {
                 Ok(BlockEntry {
                     data_type: field.data_type().clone(),
-                    value: Value::Column(Column::from_arrow(col.as_ref())),
+                    value: Value::Column(Column::from_arrow(col.as_ref(), field.data_type())),
                 })
             })
             .collect::<Result<_>>()?;

@@ -24,7 +24,9 @@ use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::Column;
+use common_expression::TableDataType;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
@@ -74,8 +76,13 @@ impl ParquetReader {
             }
 
             let field = &schema.fields[*index];
+            let table_type: TableDataType = field.into();
+            let data_type = (&table_type).into();
             let column_stats = pread::statistics::deserialize(field, rgs)?;
-            stats_of_row_groups.insert(*index, BatchStatistics::from(column_stats));
+            stats_of_row_groups.insert(
+                *index,
+                BatchStatistics::from_statistics(column_stats, &data_type),
+            );
         }
 
         for (rg_idx, _) in rgs.iter().enumerate() {
@@ -111,10 +118,8 @@ impl BatchStatistics {
             distinct_of_values: Some(self.distinct_count[index]),
         }
     }
-}
 
-impl From<pread::statistics::Statistics> for BatchStatistics {
-    fn from(stats: pread::statistics::Statistics) -> Self {
+    pub fn from_statistics(stats: pread::statistics::Statistics, data_type: &DataType) -> Self {
         let null_count = stats
             .null_count
             .as_any()
@@ -129,8 +134,8 @@ impl From<pread::statistics::Statistics> for BatchStatistics {
             .unwrap()
             .values()
             .clone();
-        let min_values = Column::from_arrow(&*stats.min_value);
-        let max_values = Column::from_arrow(&*stats.max_value);
+        let min_values = Column::from_arrow(&*stats.min_value, data_type);
+        let max_values = Column::from_arrow(&*stats.max_value, data_type);
         Self {
             null_count,
             distinct_count,

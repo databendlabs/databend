@@ -205,7 +205,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
 
 fn test_arrow_conversion(col: &Column) {
     let arrow_col = col.as_arrow();
-    let new_col = Column::from_arrow(&*arrow_col);
+    let new_col = Column::from_arrow(&*arrow_col, &col.data_type());
     assert_eq!(col, &new_col, "arrow conversion went wrong");
 }
 

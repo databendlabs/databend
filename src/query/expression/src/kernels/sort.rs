@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::iter::once;
 use std::sync::Arc;
 
@@ -23,16 +22,12 @@ use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::compute::merge_sort as arrow_merge_sort;
 use common_arrow::arrow::compute::merge_sort::build_comparator_impl;
 use common_arrow::arrow::compute::sort as arrow_sort;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::error::Error as ArrowError;
 use common_arrow::arrow::error::Result as ArrowResult;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::utils::arrow::column_to_arrow_array;
-use crate::Column;
 use crate::DataBlock;
-use crate::ARROW_EXT_TYPE_VARIANT;
 
 pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
 
@@ -183,38 +178,6 @@ impl DataBlock {
     }
 }
 
-fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
-    let left = Column::from_arrow(left).as_variant().unwrap().clone();
-    let right = Column::from_arrow(right).as_variant().unwrap().clone();
-    Ok(Box::new(move |i, j| {
-        let (l, r) = unsafe { (left.index_unchecked(i), right.index_unchecked(j)) };
-        common_jsonb::compare(l, r).unwrap()
-    }))
-}
-
-fn compare_array(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
-    let left = Column::from_arrow(left).as_array().unwrap().clone();
-    let right = Column::from_arrow(right).as_array().unwrap().clone();
-
-    Ok(Box::new(move |i, j| {
-        let (l, r) = unsafe { (left.index_unchecked(i), right.index_unchecked(j)) };
-        l.partial_cmp(&r).unwrap_or(Ordering::Equal)
-    }))
-}
-
 fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
-    match left.data_type() {
-        ArrowType::LargeList(_) => compare_array(left, right),
-        ArrowType::Extension(name, _, _) => {
-            if name == ARROW_EXT_TYPE_VARIANT {
-                compare_variant(left, right)
-            } else {
-                Err(ArrowError::NotYetImplemented(format!(
-                    "Sort not supported for data type {:?}",
-                    left.data_type()
-                )))
-            }
-        }
-        _ => arrow_ord::build_compare(left, right),
-    }
+    arrow_ord::build_compare(left, right)
 }

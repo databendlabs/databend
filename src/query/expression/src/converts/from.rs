@@ -170,9 +170,10 @@ pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<
         let scalar = from_scalar(&value, logical_type);
         return Value::Scalar(scalar);
     }
-
+    let datatype = from_type(logical_type);
+    let datatype = (&datatype).into();
     let arrow_column = column.as_arrow_array(logical_type.clone());
-    let new_column = Column::from_arrow(arrow_column.as_ref());
+    let new_column = Column::from_arrow(arrow_column.as_ref(), &datatype);
     Value::Column(new_column)
 }
 

@@ -835,7 +835,7 @@ impl From<&ArrowField> for TableDataType {
         let ty = with_number_type!(|TYPE| match f.data_type() {
             ArrowDataType::TYPE => TableDataType::Number(NumberDataType::TYPE),
 
-            ArrowDataType::Null => TableDataType::Null,
+            ArrowDataType::Null => return TableDataType::Null,
             ArrowDataType::Boolean => TableDataType::Boolean,
 
             ArrowDataType::List(f)
@@ -860,7 +860,8 @@ impl From<&ArrowField> for TableDataType {
                 }
             }
             ArrowDataType::Extension(custom_name, _, _) => match custom_name.as_str() {
-                "Variant" => TableDataType::Variant,
+                ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
+                ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
                 _ => unimplemented!("data_type: {:?}", f.data_type()),
             },
             // this is safe, because we define the datatype firstly

@@ -20,7 +20,6 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
@@ -53,8 +52,8 @@ use crate::utils::arrow::append_bitmap;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::utils::arrow::buffer_into_mut;
 use crate::utils::arrow::constant_bitmap;
-use crate::utils::arrow::deserialize_arrow_array;
-use crate::utils::arrow::serialize_arrow_array;
+use crate::utils::arrow::deserialize_column;
+use crate::utils::arrow::serialize_column;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 
@@ -398,7 +397,7 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::Timestamp(v) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
             ScalarRef::Array(v) => {
-                let str = serialize_arrow_array(v.as_arrow());
+                let str = serialize_column(v);
                 str.hash(state);
             }
             ScalarRef::Tuple(v) => {
@@ -624,76 +623,54 @@ impl Column {
         }
     }
 
-    pub fn arrow_type(&self) -> common_arrow::arrow::datatypes::DataType {
-        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-        use common_arrow::arrow::datatypes::Field;
-
+    pub fn data_type(&self) -> DataType {
         match self {
-            Column::Null { .. } => ArrowDataType::Null,
-            Column::EmptyArray { .. } => ArrowDataType::Extension(
-                ARROW_EXT_TYPE_EMPTY_ARRAY.to_owned(),
-                Box::new(ArrowDataType::Null),
-                None,
-            ),
-            Column::Number(NumberColumn::Int8(_)) => ArrowDataType::Int8,
-            Column::Number(NumberColumn::Int16(_)) => ArrowDataType::Int16,
-            Column::Number(NumberColumn::Int32(_)) => ArrowDataType::Int32,
-            Column::Number(NumberColumn::Int64(_)) => ArrowDataType::Int64,
-            Column::Number(NumberColumn::UInt8(_)) => ArrowDataType::UInt8,
-            Column::Number(NumberColumn::UInt16(_)) => ArrowDataType::UInt16,
-            Column::Number(NumberColumn::UInt32(_)) => ArrowDataType::UInt32,
-            Column::Number(NumberColumn::UInt64(_)) => ArrowDataType::UInt64,
-            Column::Number(NumberColumn::Float32(_)) => ArrowDataType::Float32,
-            Column::Number(NumberColumn::Float64(_)) => ArrowDataType::Float64,
-            Column::Boolean(_) => ArrowDataType::Boolean,
-            Column::String { .. } => ArrowDataType::LargeBinary,
-            Column::Timestamp(_) => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
-            Column::Date(_) => ArrowDataType::Date32,
-            Column::Array(box ArrayColumn {
-                values: Column::Nullable(box NullableColumn { column, .. }),
-                ..
-            }) => ArrowDataType::LargeList(Box::new(Field::new(
-                "list".to_string(),
-                column.arrow_type(),
-                true,
-            ))),
-            Column::Array(box ArrayColumn { values, .. }) => ArrowDataType::LargeList(Box::new(
-                Field::new("list".to_string(), values.arrow_type(), false),
-            )),
-            Column::Nullable(box NullableColumn { column, .. }) => column.arrow_type(),
-            Column::Tuple { fields, .. } => {
-                let arrow_fields = fields
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, field)| match field {
-                        Column::Nullable(box NullableColumn { column, .. }) => {
-                            Field::new((idx + 1).to_string(), column.arrow_type(), true)
-                        }
-                        _ => Field::new((idx + 1).to_string(), field.arrow_type(), false),
-                    })
-                    .collect();
-                ArrowDataType::Struct(arrow_fields)
+            Column::Null { .. } => DataType::Null,
+            Column::EmptyArray { .. } => DataType::EmptyArray,
+            Column::Number(c) => with_number_type!(|NUM_TYPE| match c {
+                NumberColumn::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
+            }),
+            Column::Boolean(_) => DataType::Boolean,
+            Column::String(_) => DataType::String,
+            Column::Timestamp(_) => DataType::Timestamp,
+            Column::Date(_) => DataType::Date,
+            Column::Array(array) => {
+                let inner = array.values.data_type();
+                DataType::Array(Box::new(inner))
             }
-            Column::Variant(_) => ArrowType::Extension(
-                ARROW_EXT_TYPE_VARIANT.to_owned(),
-                Box::new(ArrowType::LargeBinary),
-                None,
-            ),
+            Column::Nullable(inner) => {
+                let inner = inner.column.data_type();
+                DataType::Nullable(Box::new(inner))
+            }
+            Column::Tuple { fields, .. } => {
+                let inner = fields.iter().map(|col| col.data_type()).collect::<Vec<_>>();
+                DataType::Tuple(inner)
+            }
+            Column::Variant(_) => DataType::Variant,
         }
     }
 
+    pub fn arrow_field(&self) -> common_arrow::arrow::datatypes::Field {
+        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+        use common_arrow::arrow::datatypes::Field as ArrowField;
+        let dummy = "DUMMY".to_string();
+        let is_nullable = matches!(&self, Column::Nullable(_));
+        let arrow_type: ArrowDataType = (&self.data_type()).into();
+        ArrowField::new(dummy, arrow_type, is_nullable)
+    }
+
     pub fn as_arrow(&self) -> Box<dyn common_arrow::arrow::array::Array> {
+        let arrow_type = self.arrow_field().data_type().clone();
         match self {
             Column::Null { len } => Box::new(common_arrow::arrow::array::NullArray::new_null(
-                self.arrow_type(),
-                *len,
+                arrow_type, *len,
             )),
             Column::EmptyArray { len } => Box::new(
-                common_arrow::arrow::array::NullArray::new_null(self.arrow_type(), *len),
+                common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
             ),
             Column::Number(NumberColumn::UInt8(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<u8>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -701,7 +678,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::UInt16(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<u16>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -709,7 +686,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::UInt32(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<u32>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -717,7 +694,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::UInt64(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<u64>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -725,7 +702,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::Int8(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i8>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -733,7 +710,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::Int16(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i16>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -741,7 +718,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::Int32(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -749,7 +726,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::Int64(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -760,9 +737,7 @@ impl Column {
                     unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(col.clone()) };
                 Box::new(
                     common_arrow::arrow::array::PrimitiveArray::<f32>::try_new(
-                        self.arrow_type(),
-                        values,
-                        None,
+                        arrow_type, values, None,
                     )
                     .unwrap(),
                 )
@@ -772,27 +747,21 @@ impl Column {
                     unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(col.clone()) };
                 Box::new(
                     common_arrow::arrow::array::PrimitiveArray::<f64>::try_new(
-                        self.arrow_type(),
-                        values,
-                        None,
+                        arrow_type, values, None,
                     )
                     .unwrap(),
                 )
             }
             Column::Boolean(col) => Box::new(
-                common_arrow::arrow::array::BooleanArray::try_new(
-                    self.arrow_type(),
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
+                common_arrow::arrow::array::BooleanArray::try_new(arrow_type, col.clone(), None)
+                    .unwrap(),
             ),
             Column::String(col) => {
                 let offsets: Buffer<i64> =
                     col.offsets.iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        self.arrow_type(),
+                        arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.data.clone(),
                         None,
@@ -802,7 +771,7 @@ impl Column {
             }
             Column::Timestamp(col) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -810,7 +779,7 @@ impl Column {
             ),
             Column::Date(col) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -821,7 +790,7 @@ impl Column {
                     col.offsets.iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::ListArray::<i64>::try_new(
-                        self.arrow_type(),
+                        arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.values.as_arrow(),
                         None,
@@ -839,7 +808,7 @@ impl Column {
             }
             Column::Tuple { fields, .. } => Box::new(
                 common_arrow::arrow::array::StructArray::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     fields.iter().map(|field| field.as_arrow()).collect(),
                     None,
                 )
@@ -850,7 +819,7 @@ impl Column {
                     col.offsets.iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        self.arrow_type(),
+                        arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.data.clone(),
                         None,
@@ -861,7 +830,10 @@ impl Column {
         }
     }
 
-    pub fn from_arrow(arrow_col: &dyn common_arrow::arrow::array::Array) -> Column {
+    pub fn from_arrow(
+        arrow_col: &dyn common_arrow::arrow::array::Array,
+        data_type: &DataType,
+    ) -> Column {
         use common_arrow::arrow::array::Array as _;
         use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
@@ -1068,7 +1040,9 @@ impl Column {
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
                     .expect("fail to read from arrow: array should be `ListArray<i64>`");
-                let values = Column::from_arrow(&**values_col.values());
+
+                let array_type = data_type.as_array().unwrap();
+                let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
                 let offsets = values_col
                     .offsets()
                     .buffer()
@@ -1081,6 +1055,7 @@ impl Column {
                 }))
             }
             ArrowDataType::Struct(_) => {
+                let struct_type = data_type.as_tuple().unwrap();
                 let arrow_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::StructArray>()
@@ -1088,7 +1063,8 @@ impl Column {
                 let fields = arrow_col
                     .values()
                     .iter()
-                    .map(|field| Column::from_arrow(&**field))
+                    .zip(struct_type.iter())
+                    .map(|(field, dt)| Column::from_arrow(&**field, dt))
                     .collect::<Vec<_>>();
                 Column::Tuple {
                     fields,
@@ -1098,11 +1074,13 @@ impl Column {
             ty => unimplemented!("unsupported arrow type {ty:?}"),
         };
 
-        if let Some(validity) = arrow_col.validity() {
-            Column::Nullable(Box::new(NullableColumn {
-                column,
-                validity: validity.clone(),
-            }))
+        if data_type.is_nullable() {
+            let validity = arrow_col.validity().cloned().unwrap_or_else(|| {
+                let mut validity = MutableBitmap::with_capacity(arrow_col.len());
+                validity.extend_constant(arrow_col.len(), true);
+                validity.into()
+            });
+            Column::Nullable(Box::new(NullableColumn { column, validity }))
         } else {
             column
         }
@@ -1159,7 +1137,7 @@ impl Column {
 impl Serialize for Column {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        serializer.serialize_bytes(&serialize_arrow_array(self.as_arrow()))
+        serializer.serialize_bytes(&serialize_column(&self))
     }
 }
 
@@ -1177,9 +1155,9 @@ impl<'de> Deserialize<'de> for Column {
 
             fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
             where E: serde::de::Error {
-                let array = deserialize_arrow_array(value)
+                let column = deserialize_column(value)
                     .expect("expecting an arrow chunk with exactly one column");
-                Ok(Column::from_arrow(&*array))
+                Ok(column)
             }
         }
 
