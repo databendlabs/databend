@@ -40,7 +40,7 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>) {
     //      g: f64,
     //   }
 
-    let col_b_type = DataType::Tuple(vec![Int64Type::data_type(), Int64Type::data_type()]);
+    let col_b_type = DataType::Tuple(vec![Int64Type::data_type(), Float64Type::data_type()]);
 
     let col_a_type = DataType::Tuple(vec![col_b_type.clone(), Float64Type::data_type()]);
 

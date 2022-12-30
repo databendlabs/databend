@@ -72,7 +72,7 @@ impl RangePrunerCreator {
                 match range_filter.try_eval_const() {
                     Ok(v) => {
                         if v {
-                            Arc::new(KeepTrue)
+                            Arc::new(range_filter)
                         } else {
                             Arc::new(KeepFalse)
                         }

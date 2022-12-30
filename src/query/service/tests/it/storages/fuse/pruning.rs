@@ -37,6 +37,7 @@ use common_sql::plans::CreateTablePlanV2;
 use common_storages_fuse::FuseTable;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::Versioned;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::interpreters::CreateTableInterpreterV2;
@@ -166,7 +167,9 @@ async fn test_block_pruner() -> Result<()> {
         .unwrap();
 
     let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
+    let snapshot = reader
+        .read(snapshot_loc.as_str(), None, TableSnapshot::VERSION)
+        .await?;
 
     // nothing is pruned
     let e1 = PushDownInfo {

@@ -78,7 +78,7 @@ impl RangeFilter {
 
         let folder = ConstantFolder::new(input_domains, self.func_ctx, &BUILTIN_FUNCTIONS);
         let (new_expr, _) = folder.fold(&self.expr);
-
+        
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
         Ok(!matches!(new_expr, Expr::Constant {
             scalar: Scalar::Boolean(false),
@@ -101,7 +101,7 @@ impl RangeFilter {
 
         let folder = ConstantFolder::new(input_domains, self.func_ctx, &BUILTIN_FUNCTIONS);
         let (new_expr, _) = folder.fold(&self.expr);
-
+        
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
         Ok(!matches!(new_expr, Expr::Constant {
             scalar: Scalar::Boolean(false),

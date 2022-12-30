@@ -24,6 +24,5 @@ mod servers;
 mod sessions;
 mod sql;
 mod storages;
-mod stream;
 mod table_functions;
 mod tests;

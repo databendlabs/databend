@@ -141,7 +141,7 @@ impl From<v1::TableSnapshot> for TableSnapshot {
             schema: s.schema,
             summary: s.summary,
             segments: s.segments,
-            cluster_key_meta: None,
+            cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
         }
     }
