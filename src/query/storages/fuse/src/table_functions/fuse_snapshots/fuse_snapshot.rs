@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::from_nullable_timestamp_data;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockEntry;
@@ -182,7 +183,7 @@ impl<'a> FuseSnapshot<'a> {
                 },
                 BlockEntry {
                     data_type: DataType::Timestamp.wrap_nullable(),
-                    value: Value::Column(Column::from_data(timestamps)),
+                    value: Value::Column(from_nullable_timestamp_data(timestamps)),
                 },
             ],
             len,

@@ -45,12 +45,18 @@ use crate::Visibility;
 pub fn parse_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
+    unwrap_tuple: bool,
     sql: &str,
 ) -> Result<Vec<Expr>> {
     let sql_dialect = Dialect::MySQL;
     let tokens = tokenize_sql(sql)?;
     let backtrace = Backtrace::new();
-    let exprs = parse_comma_separated_exprs(&tokens, sql_dialect, &backtrace)?;
+    let tokens = if unwrap_tuple {
+        &tokens[1..tokens.len() - 1]
+    } else {
+        &tokens
+    };
+    let exprs = parse_comma_separated_exprs(tokens, sql_dialect, &backtrace)?;
 
     let settings = Settings::default_settings("", GlobalConfig::instance())?;
     let mut bind_context = BindContext::new();
@@ -117,10 +123,11 @@ pub fn parse_exprs(
 pub fn parse_to_remote_string_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
+    unwrap_tuple: bool,
     sql: &str,
 ) -> Result<Vec<RemoteExpr<String>>> {
     let schema = table_meta.schema();
-    let exprs = parse_exprs(ctx, table_meta, sql)?;
+    let exprs = parse_exprs(ctx, table_meta, unwrap_tuple, sql)?;
     let exprs = exprs
         .iter()
         .map(|expr| {

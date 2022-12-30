@@ -1043,7 +1043,6 @@ impl Column {
                     .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
                     .expect("fail to read from arrow: array should be `ListArray<i64>`");
 
-                println!("data_type {:?}", data_type);
                 let array_type = data_type.as_array().unwrap();
                 let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
                 let offsets = values_col
@@ -1421,7 +1420,7 @@ impl ColumnBuilder {
                 }
                 *len += other_len;
             }
-            (this, other) => unreachable!("unable append {other:?} onto {this:?}"),
+            (this, other) => unreachable!("unable append {other:?} into {this:?}"),
         }
     }
 

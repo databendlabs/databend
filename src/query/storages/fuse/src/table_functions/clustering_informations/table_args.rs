@@ -48,7 +48,7 @@ pub fn get_cluster_keys(
 ) -> Result<(Vec<RemoteExpr<String>>, Option<String>)> {
     let (cluster_keys, plain_keys) = if !definition.is_empty() {
         let table_meta = Arc::new(table.clone());
-        let cluster_keys = parse_exprs(ctx, table_meta.clone(), definition)?;
+        let cluster_keys = parse_exprs(ctx, table_meta.clone(), true, definition)?;
         (
             cluster_keys
                 .iter()

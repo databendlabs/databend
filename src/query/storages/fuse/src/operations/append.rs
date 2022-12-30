@@ -77,27 +77,14 @@ impl FuseTable {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compact_thresholds)?;
 
-        let cluster_keys = self.cluster_keys(ctx.clone());
+        let cluster_keys = &cluster_stats_gen.cluster_key_index;
         if !cluster_keys.is_empty() {
-            let schema = self.table_info.schema();
-            // sort
-            let sort_descs: Vec<SortColumnDescription> = self
-                .cluster_keys(ctx.clone())
+            let sort_descs: Vec<SortColumnDescription> = cluster_keys
                 .iter()
-                .map(|remote_expr| {
-                    let expr = remote_expr
-                        .as_expr(&BUILTIN_FUNCTIONS)
-                        .unwrap()
-                        .project_column_ref(|name| schema.index_of(name).unwrap());
-                    let offset = match expr {
-                        Expr::ColumnRef { id, .. } => id,
-                        _ => unreachable!("invalid expr"),
-                    };
-                    SortColumnDescription {
-                        offset,
-                        asc: true,
-                        nulls_first: false,
-                    }
+                .map(|index| SortColumnDescription {
+                    offset: *index,
+                    asc: true,
+                    nulls_first: false,
                 })
                 .collect();
 

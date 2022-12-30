@@ -58,7 +58,7 @@ where Self: Transform
         for f in fields.iter() {
             let expr = if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
-                    let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
+                    let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
                     expr.remove(0)
                 } else {
                     let default_value = f.data_type().default_value();

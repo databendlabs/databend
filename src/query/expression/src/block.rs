@@ -39,7 +39,7 @@ pub struct DataBlock {
     meta: Option<BlockMetaInfoPtr>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BlockEntry {
     pub data_type: DataType,
     pub value: Value<AnyType>,

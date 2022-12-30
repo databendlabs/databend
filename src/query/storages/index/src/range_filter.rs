@@ -111,6 +111,9 @@ impl RangeFilter {
 }
 
 fn statistics_to_domain(stat: &ColumnStatistics, data_type: &DataType) -> Domain {
+    if stat.min.is_null() || stat.max.is_null() {
+        return Domain::full(data_type);
+    }
     with_number_mapped_type!(|NUM_TYPE| match data_type {
         DataType::Number(NumberDataType::NUM_TYPE) => {
             NumberType::<NUM_TYPE>::upcast_domain(SimpleDomain {

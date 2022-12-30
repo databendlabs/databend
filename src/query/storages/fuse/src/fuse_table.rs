@@ -296,7 +296,7 @@ impl Table for FuseTable {
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys = parse_exprs(ctx, table_meta.clone(), order).unwrap();
+            let cluster_keys = parse_exprs(ctx, table_meta.clone(), true, order).unwrap();
             let cluster_keys = cluster_keys
                 .iter()
                 .map(|k| {
