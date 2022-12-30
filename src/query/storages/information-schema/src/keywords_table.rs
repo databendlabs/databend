@@ -31,7 +31,7 @@ impl KeywordsTable {
         let query = "SELECT ".to_owned() + &all_keywords + " AS WORD, 1 AS RESERVED";
 
         let mut options = BTreeMap::new();
-        options.insert(QUERY.to_string(), query.to_string());
+        options.insert(QUERY.to_string(), query);
         let table_info = TableInfo {
             desc: "'information_schema'.'keywords'".to_string(),
             name: "keywords".to_string(),
