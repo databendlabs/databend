@@ -1102,7 +1102,7 @@ async fn test_func_object_keys() -> Result<()> {
 
     let sqls = vec![
         (
-            "CREATE TABLE IF NOT EXISTS objects_test1(id TINYINT, obj OBJECT, var VARIANT) Engine=Fuse;",
+            "CREATE TABLE IF NOT EXISTS objects_test1(id TINYINT, obj JSON, var VARIANT) Engine=Fuse;",
             0,
         ),
         (
