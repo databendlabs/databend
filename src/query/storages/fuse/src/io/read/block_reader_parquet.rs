@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
@@ -81,55 +80,8 @@ impl BlockReader {
         self.projected_schema.clone()
     }
 
-    fn to_array_iter<'a>(
-        metas: Vec<&ColumnMeta>,
-        chunks: Vec<&'a [u8]>,
-        rows: usize,
-        column_descriptors: Vec<&ColumnDescriptor>,
-        field: Field,
-        compression: &Compression,
-        uncompressed_buffer: Arc<UncompressedBuffer>,
-    ) -> Result<ArrayIter<'a>> {
-        let columns = metas
-            .iter()
-            .zip(chunks.into_iter().zip(column_descriptors.iter()))
-            .map(|(meta, (chunk, column_descriptor))| {
-                let page_meta_data = PageMetaData {
-                    column_start: meta.offset,
-                    num_values: meta.num_values as i64,
-                    compression: Self::to_parquet_compression(compression)?,
-                    descriptor: column_descriptor.descriptor.clone(),
-                };
-                let pages = PageReader::new_with_page_meta(
-                    chunk,
-                    page_meta_data,
-                    Arc::new(|_, _| true),
-                    vec![],
-                    usize::MAX,
-                );
-
-                Ok(BuffedBasicDecompressor::new(
-                    pages,
-                    uncompressed_buffer.clone(),
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let types = column_descriptors
-            .iter()
-            .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
-            .collect::<Vec<_>>();
-
-        Ok(column_iter_to_arrays(
-            columns,
-            types,
-            field,
-            Some(rows),
-            rows,
-        )?)
-    }
-
-    async fn read_cols_by_block_meta(
+    /// Read column data chunks.
+    async fn read_column_chunks(
         &self,
         meta: &BlockMeta,
         settings: &ReadSettings,
@@ -151,12 +103,12 @@ impl BlockReader {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read_with_block_meta(
+    pub async fn read_block_by_meta(
         &self,
         meta: &BlockMeta,
         settings: &ReadSettings,
     ) -> Result<DataBlock> {
-        let chunks = self.read_cols_by_block_meta(meta, settings).await?;
+        let chunks = self.read_column_chunks(meta, settings).await?;
 
         let num_rows = meta.row_count as usize;
         let columns_meta = meta
@@ -170,7 +122,7 @@ impl BlockReader {
             .map(|(index, chunk)| (*index, chunk.as_slice()))
             .collect::<Vec<_>>();
 
-        self.deserialize_columns(
+        self.deserialize_column_chunks_to_block_with_buffer(
             num_rows,
             &meta.compression,
             &columns_meta,
@@ -179,25 +131,8 @@ impl BlockReader {
         )
     }
 
-    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
-        let mut results = Vec::with_capacity(chunks.len());
-        let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        for column in &columns {
-            let indices = &column.leaf_ids;
-
-            for index in indices {
-                if let Some(array) = chunk_map.remove(index) {
-                    results.push(array);
-                    break;
-                }
-            }
-        }
-        let chunk = Chunk::new(results);
-        DataBlock::from_chunk(&self.schema(), &chunk)
-    }
-
-    pub fn deserialize_columns(
+    /// Deserialize column chunks data to DataBlock with a uncompressed buffer.
+    pub fn deserialize_column_chunks_to_block_with_buffer(
         &self,
         num_rows: usize,
         compression: &Compression,
@@ -225,7 +160,7 @@ impl BlockReader {
                 column_descriptors.push(column_descriptor);
             }
 
-            columns_array_iter.push(Self::to_array_iter(
+            columns_array_iter.push(Self::chunks_to_parquet_array_iter(
                 column_metas,
                 column_chunks,
                 num_rows,
@@ -249,7 +184,8 @@ impl BlockReader {
         DataBlock::from_chunk(&self.projected_schema, &chunk)
     }
 
-    pub fn deserialize(
+    /// Deserialize column chunks data to DataBlock.
+    pub fn deserialize_column_chunks_to_block(
         &self,
         part: PartInfoPtr,
         chunks: Vec<(usize, Vec<u8>)>,
@@ -262,7 +198,7 @@ impl BlockReader {
             .collect::<Vec<_>>();
 
         let part = FusePartInfo::from_part(&part)?;
-        let deserialized_res = self.deserialize_columns(
+        let deserialized_res = self.deserialize_column_chunks_to_block_with_buffer(
             part.nums_rows,
             &part.compression,
             &part.columns_meta,
@@ -364,6 +300,65 @@ impl BlockReader {
         Self::sync_merge_io_read(&read_settings, object, ranges)
     }
 
+    // Build non duplicate leaf_ids to avoid repeated read column from parquet
+    pub(crate) fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashMap<usize, Field> {
+        let mut indices = HashMap::with_capacity(columns.len());
+        for column in columns {
+            for index in &column.leaf_ids {
+                indices.insert(*index, column.field.clone());
+            }
+        }
+        indices
+    }
+
+    fn chunks_to_parquet_array_iter<'a>(
+        metas: Vec<&ColumnMeta>,
+        chunks: Vec<&'a [u8]>,
+        rows: usize,
+        column_descriptors: Vec<&ColumnDescriptor>,
+        field: Field,
+        compression: &Compression,
+        uncompressed_buffer: Arc<UncompressedBuffer>,
+    ) -> Result<ArrayIter<'a>> {
+        let columns = metas
+            .iter()
+            .zip(chunks.into_iter().zip(column_descriptors.iter()))
+            .map(|(meta, (chunk, column_descriptor))| {
+                let page_meta_data = PageMetaData {
+                    column_start: meta.offset,
+                    num_values: meta.num_values as i64,
+                    compression: Self::to_parquet_compression(compression)?,
+                    descriptor: column_descriptor.descriptor.clone(),
+                };
+                let pages = PageReader::new_with_page_meta(
+                    chunk,
+                    page_meta_data,
+                    Arc::new(|_, _| true),
+                    vec![],
+                    usize::MAX,
+                );
+
+                Ok(BuffedBasicDecompressor::new(
+                    pages,
+                    uncompressed_buffer.clone(),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let types = column_descriptors
+            .iter()
+            .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
+            .collect::<Vec<_>>();
+
+        Ok(column_iter_to_arrays(
+            columns,
+            types,
+            field,
+            Some(rows),
+            rows,
+        )?)
+    }
+
     fn to_parquet_compression(meta_compression: &Compression) -> Result<ParquetCompression> {
         match meta_compression {
             Compression::Lz4 => {
@@ -391,16 +386,5 @@ impl BlockReader {
             Compression::Gzip => Ok(ParquetCompression::Gzip),
             Compression::None => Ok(ParquetCompression::Uncompressed),
         }
-    }
-
-    // Build non duplicate leaf_ids to avoid repeated read column from parquet
-    pub(crate) fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashMap<usize, Field> {
-        let mut indices = HashMap::with_capacity(columns.len());
-        for column in columns {
-            for index in &column.leaf_ids {
-                indices.insert(*index, column.field.clone());
-            }
-        }
-        indices
     }
 }

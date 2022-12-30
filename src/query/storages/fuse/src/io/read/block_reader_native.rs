@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::io::BufReader;
 use std::time::Instant;
 
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::chunk::Chunk;
 use common_arrow::native::read::reader::PaReader;
 use common_arrow::native::read::PaReadBuf;
 use common_catalog::plan::PartInfoPtr;
+use common_datablocks::DataBlock;
 use common_exception::Result;
 use opendal::Object;
 
@@ -136,5 +140,23 @@ impl BlockReader {
         let reader: Reader = Box::new(BufReader::new(reader));
         let fuse_reader = PaReader::new(reader, data_type, rows as usize, vec![]);
         Ok((index, fuse_reader))
+    }
+
+    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
+        let mut results = Vec::with_capacity(chunks.len());
+        let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        for column in &columns {
+            let indices = &column.leaf_ids;
+
+            for index in indices {
+                if let Some(array) = chunk_map.remove(index) {
+                    results.push(array);
+                    break;
+                }
+            }
+        }
+        let chunk = Chunk::new(results);
+        DataBlock::from_chunk(&self.schema(), &chunk)
     }
 }
