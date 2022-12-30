@@ -80,7 +80,7 @@ pub struct SqlLogicTestArgs {
     #[arg(
         short = 'p',
         long = "parallel",
-        default_value_t = 8,
+        default_value_t = 1,
         help = "The arg is used to set parallel number"
     )]
     pub parallel: usize,

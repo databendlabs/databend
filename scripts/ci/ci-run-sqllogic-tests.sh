@@ -16,4 +16,4 @@ fi
 echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
-cargo run -p sqllogictests -- --handlers ${TEST_HANDLERS} ${RUN_DIR}  --enable_sandbox
+cargo run -p sqllogictests -- --handlers ${TEST_HANDLERS} ${RUN_DIR}  --enable_sandbox --parallel 8
