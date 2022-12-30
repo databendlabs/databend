@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
+use common_base::runtime::CatchUnwindFuture;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_datablocks::DataBlock;
@@ -203,13 +204,28 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 let splits = splits.to_owned().clone();
                 tokio::spawn(async move {
                     let mut futs = FuturesUnordered::new();
-                    for s in &splits {
-                        let fut = Self::read_split(ctx_clone2.clone(), s);
+                    for s in splits.into_iter() {
+                        let fut =
+                            CatchUnwindFuture::create(Self::read_split(ctx_clone2.clone(), s));
                         futs.push(fut);
                     }
                     while let Some(row_batch) = futs.next().await {
-                        if data_tx2.send(row_batch.unwrap()).await.is_err() {
-                            info!("execute_copy_aligned fail to send row_batch")
+                        match row_batch {
+                            Ok(row_batch) => {
+                                let is_err = row_batch.is_err();
+                                if data_tx2.send(row_batch).await.is_err() {
+                                    info!("execute_copy_aligned fail to send row_batch")
+                                }
+                                if is_err {
+                                    break;
+                                }
+                            }
+                            Err(cause) => {
+                                if data_tx2.send(Err(cause)).await.is_err() {
+                                    info!("execute_copy_aligned fail to send row_batch")
+                                }
+                                break;
+                            }
                         }
                     }
                 });
@@ -220,7 +236,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
 
     fn build_pipeline_aligned(
         ctx: &Arc<InputContext>,
-        row_batch_rx: async_channel::Receiver<Self::RowBatch>,
+        row_batch_rx: async_channel::Receiver<Result<Self::RowBatch>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let max_threads = ctx.settings.get_max_threads()? as usize;
@@ -268,7 +284,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
 
     async fn read_split(
         _ctx: Arc<InputContext>,
-        _split_info: &Arc<SplitInfo>,
+        _split_info: Arc<SplitInfo>,
     ) -> Result<Self::RowBatch> {
         unimplemented!()
     }
