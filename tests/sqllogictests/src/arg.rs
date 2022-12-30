@@ -76,4 +76,12 @@ pub struct SqlLogicTestArgs {
         help = "The arg is used to cancel fast fail"
     )]
     pub no_fail_fast: bool,
+
+    #[arg(
+        short = 'p',
+        long = "parallel",
+        default_value_t = 8,
+        help = "The arg is used to set parallel run with sandbox_tenant"
+    )]
+    pub parallel: usize,
 }

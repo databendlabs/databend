@@ -162,8 +162,6 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
         // Parse the suit and find all slt files
         let files = get_files(suit)?;
         for file in files.into_iter() {
-            // For each file, create new client to run.
-            let mut runner = Runner::new(create_databend(&client_type).await?);
             let file_name = file
                 .as_ref()
                 .unwrap()
@@ -178,6 +176,8 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     continue;
                 }
             }
+            // For each file, create new client to run.
+            let mut runner = Runner::new(create_databend(&client_type).await?);
             if args.complete {
                 let col_separator = " ";
                 let validator = default_validator;
@@ -203,9 +203,10 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
 async fn run_parallel_async(
     tasks: Vec<impl Future<Output = std::result::Result<Vec<TestError>, TestError>>>,
 ) -> Result<()> {
-    let jobs = tasks.len();
+    let args = SqlLogicTestArgs::parse();
+    let jobs = tasks.len().min(args.parallel);
     let tasks = stream::iter(tasks).buffer_unordered(jobs);
-    let no_fail_fast = SqlLogicTestArgs::parse().no_fail_fast;
+    let no_fail_fast = args.no_fail_fast;
     if !no_fail_fast {
         let errors = tasks
             .filter_map(|result| async { result.err() })
