@@ -2078,7 +2078,6 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-catalog",
- "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
