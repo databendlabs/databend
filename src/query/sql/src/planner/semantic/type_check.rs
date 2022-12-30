@@ -369,10 +369,10 @@ impl<'a> TypeChecker<'a> {
                     // Rewrite `expr BETWEEN low AND high`
                     // into `expr >= low AND expr <= high`
                     let box (ge_func, _left_type) = self
-                        .resolve_function(span, ">=", &[expr.as_ref(), low.as_ref()], None)
+                        .resolve_function(span, "gte", &[expr.as_ref(), low.as_ref()], None)
                         .await?;
                     let box (le_func, _right_type) = self
-                        .resolve_function(span, "<=", &[expr.as_ref(), high.as_ref()], None)
+                        .resolve_function(span, "lte", &[expr.as_ref(), high.as_ref()], None)
                         .await?;
 
                     // Type check
@@ -403,10 +403,10 @@ impl<'a> TypeChecker<'a> {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
                     let box (lt_func, _left_type) = self
-                        .resolve_function(span, "<", &[expr.as_ref(), low.as_ref()], None)
+                        .resolve_function(span, "lt", &[expr.as_ref(), low.as_ref()], None)
                         .await?;
                     let box (gt_func, _right_type) = self
-                        .resolve_function(span, ">", &[expr.as_ref(), high.as_ref()], None)
+                        .resolve_function(span, "gt", &[expr.as_ref(), high.as_ref()], None)
                         .await?;
 
                     // Type check
@@ -543,7 +543,7 @@ impl<'a> TypeChecker<'a> {
                                 span,
                                 distinct: false,
                                 name: Identifier {
-                                    name: "=".to_string(),
+                                    name: "eq".to_string(),
                                     quote: None,
                                     span: span[0].clone(),
                                 },
