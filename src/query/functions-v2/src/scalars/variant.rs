@@ -126,7 +126,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, _| {
-            val.and_then(|v| object_keys(v))
+            val.and_then(object_keys)
         }),
     );
 

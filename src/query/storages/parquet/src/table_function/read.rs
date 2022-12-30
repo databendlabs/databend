@@ -205,7 +205,7 @@ impl ParquetTable {
         // `PrewhereInfo.output_columns` should be a subset of `PushDownInfo.projection`.
         let output_projection = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
             None => {
-                PushDownInfo::projection_of_push_downs(&*self.table_info.schema(), &plan.push_downs)
+                PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs)
             }
             Some(v) => v.output_columns,
         };

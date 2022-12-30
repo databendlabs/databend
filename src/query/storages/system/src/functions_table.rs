@@ -110,9 +110,7 @@ impl AsyncSystemTable for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let examples = (0..names.len())
-            .map(|i| if i < builtin_func_len { "" } else { "" })
-            .collect::<Vec<&str>>();
+        let examples = (0..names.len()).map(|_| "").collect::<Vec<&str>>();
 
         let rows_len = names.len();
         Ok(DataBlock::new(

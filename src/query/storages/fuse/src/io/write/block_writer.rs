@@ -40,7 +40,7 @@ pub fn write_block(
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
             let result =
-                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
+                blocks_to_parquet(schema, vec![block], buf, write_settings.table_compression)?;
             let meta = util::column_metas(&result.1)?;
             Ok((result.0, meta))
         }

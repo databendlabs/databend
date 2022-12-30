@@ -234,7 +234,7 @@ impl PipelineBuilder {
             Ok(CompoundBlockOperator::create(
                 input,
                 output,
-                func_ctx.clone(),
+                func_ctx,
                 ops.clone(),
             ))
         })

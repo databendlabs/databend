@@ -150,7 +150,7 @@ impl FuseTable {
 
         let block_reader = self.build_block_reader(plan)?;
         let projection =
-            PushDownInfo::projection_of_push_downs(&*self.table_info.schema(), &plan.push_downs);
+            PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
 
         build_fuse_source_pipeline(
