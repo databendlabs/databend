@@ -152,9 +152,9 @@ impl InputFormatPipe for ParquetFormatPipe {
 
     async fn read_split(
         ctx: Arc<InputContext>,
-        split_info: &Arc<SplitInfo>,
+        split_info: Arc<SplitInfo>,
     ) -> Result<Self::RowBatch> {
-        let meta = Self::get_split_meta(split_info).expect("must success");
+        let meta = Self::get_split_meta(&split_info).expect("must success");
         let op = ctx.source.get_operator()?;
         let obj = op.object(&split_info.file.path);
         let mut reader = obj.seekable_reader(..);

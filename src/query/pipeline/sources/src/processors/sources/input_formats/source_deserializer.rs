@@ -35,7 +35,7 @@ pub struct DeserializeSource<I: InputFormatPipe> {
     output: Arc<OutputPort>,
 
     block_builder: I::BlockBuilder,
-    input_rx: async_channel::Receiver<I::RowBatch>,
+    input_rx: async_channel::Receiver<Result<I::RowBatch>>,
     input_buffer: Option<I::RowBatch>,
     input_finished: bool,
     output_buffer: VecDeque<DataBlock>,
@@ -46,7 +46,7 @@ impl<I: InputFormatPipe> DeserializeSource<I> {
     pub(crate) fn create(
         ctx: Arc<InputContext>,
         output: Arc<OutputPort>,
-        rx: async_channel::Receiver<I::RowBatch>,
+        rx: async_channel::Receiver<Result<I::RowBatch>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
             ctx: ctx.clone(),
@@ -120,7 +120,7 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
         assert!(self.input_buffer.is_none() && !self.input_finished);
         match self.input_rx.recv().await {
             Ok(row_batch) => {
-                self.input_buffer = Some(row_batch);
+                self.input_buffer = Some(row_batch?);
             }
             Err(_) => {
                 self.input_finished = true;

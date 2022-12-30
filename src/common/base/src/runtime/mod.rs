@@ -21,6 +21,7 @@ mod thread;
 mod thread_pool;
 
 pub use catch_unwind::catch_unwind;
+pub use catch_unwind::CatchUnwindFuture;
 pub use global_runtime::GlobalIORuntime;
 pub use runtime::Dropper;
 pub use runtime::Runtime;
