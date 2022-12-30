@@ -63,6 +63,7 @@ impl Interpreter for UpdateInterpreter {
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
         let eb = ExpressionBuilderWithoutRenaming::create(self.plan.metadata.clone());
+        // TODO: selection and update_list support subquery.
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
             (
                 Some(eb.build(scalar)?),
