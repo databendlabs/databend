@@ -1097,12 +1097,10 @@ impl TokenKind {
     }
 }
 
-pub fn all_reserved_keywords() -> String {
-    let mut result = String::new();
-    result.push('[');
-    for color in TokenKind::iter() {
-        result.push_str(format!("{:?},", color).as_str());
+pub fn all_reserved_keywords() -> Vec<String> {
+    let mut result = Vec::new();
+    for color in Color::iter() {
+        result.push(format!("{:?}", color));
     }
-    result.push(']');
     result
 }
