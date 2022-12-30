@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::common::FormatVersion;
+use crate::meta::statistics::FormatVersion;
 use crate::meta::ColumnId;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
