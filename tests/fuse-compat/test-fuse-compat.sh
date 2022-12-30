@@ -92,7 +92,7 @@ git_partial_clone() {
 run_logictest() {
     (
         # Only run test on mysql handler
-        cargo run -p sqllogictests -- --handlers mysql --suites "$logictest_path" --parallel 1
+        cargo run -p sqllogictests -- --handlers mysql --suites "$logictest_path"
     )
 
 }
