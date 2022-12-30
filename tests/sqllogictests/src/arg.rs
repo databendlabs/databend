@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use clap::Parser;
-// Add options when run sqllogictest, such as specific dir or file
 
+// Add options when run sqllogictest, such as specific dir or file
 #[derive(Parser, Debug)]
 pub struct SqlLogicTestArgs {
     // Set specific dir to run

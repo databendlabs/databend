@@ -55,6 +55,7 @@ impl HttpClient {
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
+        println!("Running sql with http client: [{}]", sql);
         let url = "http://127.0.0.1:8000/v1/query".to_string();
         let mut query = HashMap::new();
         query.insert("sql", serde_json::to_value(sql).unwrap());
