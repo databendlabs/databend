@@ -348,6 +348,50 @@ impl NumberDataType {
         }
     }
 
+    pub fn lossful_super_type(self, other: Self) -> Self {
+        if self.can_lossless_cast_to(other) {
+            return other;
+        } else if other.can_lossless_cast_to(self) {
+            return self;
+        }
+        let max_bit_width = 64;
+        match (self.is_float(), other.is_float()) {
+            (true, true) => NumberDataType::new(
+                max_bit_with(self.bit_width(), other.bit_width()),
+                true,
+                true,
+            ),
+            (true, false) => {
+                let bin_width = next_bit_width(other.bit_width()).unwrap_or(max_bit_width);
+                NumberDataType::new(max_bit_with(bin_width, self.bit_width()), true, true)
+            }
+            (false, true) => {
+                let bin_width = next_bit_width(self.bit_width()).unwrap_or(max_bit_width);
+                NumberDataType::new(max_bit_with(bin_width, other.bit_width()), true, true)
+            }
+            (false, false) => match (self.is_signed(), other.is_signed()) {
+                (true, true) => NumberDataType::new(
+                    max_bit_with(self.bit_width(), other.bit_width()),
+                    true,
+                    false,
+                ),
+                (false, false) => NumberDataType::new(
+                    max_bit_with(self.bit_width(), other.bit_width()),
+                    false,
+                    false,
+                ),
+                (false, true) => {
+                    let bin_width = next_bit_width(other.bit_width()).unwrap_or(max_bit_width);
+                    NumberDataType::new(max_bit_with(bin_width, self.bit_width()), true, false)
+                }
+                (true, false) => {
+                    let bin_width = next_bit_width(self.bit_width()).unwrap_or(max_bit_width);
+                    NumberDataType::new(max_bit_with(bin_width, other.bit_width()), true, false)
+                }
+            },
+        }
+    }
+
     pub const fn lossless_super_type(self, other: Self) -> Option<Self> {
         if self.can_lossless_cast_to(other) {
             return Some(other);
