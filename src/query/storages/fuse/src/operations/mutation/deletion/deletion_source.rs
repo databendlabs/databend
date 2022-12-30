@@ -186,7 +186,7 @@ impl Processor for DeletionSource {
             State::FilterData(part, chunks) => {
                 let data_block = self
                     .block_reader
-                    .deserialize_parquet_chunks_to_block(part.clone(), chunks)?;
+                    .deserialize_parquet_chunks(part.clone(), chunks)?;
                 let filter_result = self
                     .filter
                     .eval(&self.ctx.try_get_function_context()?, &data_block)?
@@ -226,8 +226,7 @@ impl Processor for DeletionSource {
                 let merged = if chunks.is_empty() {
                     data_block
                 } else if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let remain_block =
-                        remain_reader.deserialize_parquet_chunks_to_block(part, chunks)?;
+                    let remain_block = remain_reader.deserialize_parquet_chunks(part, chunks)?;
                     let remain_block = DataBlock::filter_block(remain_block, &filter)?;
                     for (col, field) in remain_block
                         .columns()

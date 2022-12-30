@@ -72,10 +72,10 @@ impl BlockReader {
 
     /// Read a parquet file and convert to DataBlock.
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read_parquet_to_block(
+    pub async fn read_parquet_by_meta(
         &self,
-        meta: &BlockMeta,
         settings: &ReadSettings,
+        meta: &BlockMeta,
     ) -> Result<DataBlock> {
         //  Build columns meta.
         let columns_meta = meta
@@ -102,7 +102,7 @@ impl BlockReader {
             .map(|(index, chunk)| (*index, chunk.as_slice()))
             .collect::<Vec<_>>();
 
-        self.deserialize_parquet_chunks_to_block_with_buffer(
+        self.deserialize_parquet_chunks_with_buffer(
             num_rows,
             &meta.compression,
             &columns_meta,
@@ -111,8 +111,38 @@ impl BlockReader {
         )
     }
 
+    /// Deserialize column chunks data from parquet format to DataBlock.
+    pub fn deserialize_parquet_chunks(
+        &self,
+        part: PartInfoPtr,
+        chunks: Vec<(usize, Vec<u8>)>,
+    ) -> Result<DataBlock> {
+        let start = Instant::now();
+
+        let reads = chunks
+            .iter()
+            .map(|(index, chunk)| (*index, chunk.as_slice()))
+            .collect::<Vec<_>>();
+
+        let part = FusePartInfo::from_part(&part)?;
+        let deserialized_res = self.deserialize_parquet_chunks_with_buffer(
+            part.nums_rows,
+            &part.compression,
+            &part.columns_meta,
+            reads,
+            None,
+        );
+
+        // Perf.
+        {
+            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+        }
+
+        deserialized_res
+    }
+
     /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
-    pub fn deserialize_parquet_chunks_to_block_with_buffer(
+    pub fn deserialize_parquet_chunks_with_buffer(
         &self,
         num_rows: usize,
         compression: &Compression,
@@ -162,36 +192,6 @@ impl BlockReader {
 
         let chunk = Chunk::try_new(arrays)?;
         DataBlock::from_chunk(&self.schema(), &chunk)
-    }
-
-    /// Deserialize column chunks data from parquet format to DataBlock.
-    pub fn deserialize_parquet_chunks_to_block(
-        &self,
-        part: PartInfoPtr,
-        chunks: Vec<(usize, Vec<u8>)>,
-    ) -> Result<DataBlock> {
-        let start = Instant::now();
-
-        let reads = chunks
-            .iter()
-            .map(|(index, chunk)| (*index, chunk.as_slice()))
-            .collect::<Vec<_>>();
-
-        let part = FusePartInfo::from_part(&part)?;
-        let deserialized_res = self.deserialize_parquet_chunks_to_block_with_buffer(
-            part.nums_rows,
-            &part.compression,
-            &part.columns_meta,
-            reads,
-            None,
-        );
-
-        // Perf.
-        {
-            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
-        }
-
-        deserialized_res
     }
 
     fn chunks_to_parquet_array_iter<'a>(
