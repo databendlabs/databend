@@ -173,7 +173,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(
         col0_stats.min,
-        Scalar::Number(NumberScalar::Int32(val_start_with as i32))
+        Scalar::Number(NumberScalar::Int32(val_start_with))
     );
     assert_eq!(
         col0_stats.max,
@@ -183,7 +183,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let col1_stats = r.get(&1).unwrap();
     assert_eq!(
         col1_stats.min,
-        Scalar::Number(NumberScalar::Int32((val_start_with * 2) as i32))
+        Scalar::Number(NumberScalar::Int32(val_start_with * 2))
     );
 
     assert_eq!(
@@ -193,7 +193,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let col2_stats = r.get(&2).unwrap();
     assert_eq!(
         col2_stats.min,
-        Scalar::Number(NumberScalar::Int32((val_start_with * 3) as i32))
+        Scalar::Number(NumberScalar::Int32(val_start_with * 3))
     );
     assert_eq!(
         col2_stats.max,
@@ -427,13 +427,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
             &[DataType::String],
             rows,
         )?;
-        let max_col = eval_aggr(
-            "max",
-            vec![],
-            &[data_col.clone()],
-            &[DataType::String],
-            rows,
-        )?;
+        let max_col = eval_aggr("max", vec![], &[data_col], &[DataType::String], rows)?;
 
         let min_expr = min_col.0.index(0).unwrap();
         let max_expr = max_col.0.index(0).unwrap();

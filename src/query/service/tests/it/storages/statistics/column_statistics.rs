@@ -42,7 +42,7 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>) {
 
     let col_b_type = DataType::Tuple(vec![Int64Type::data_type(), Float64Type::data_type()]);
 
-    let col_a_type = DataType::Tuple(vec![col_b_type.clone(), Float64Type::data_type()]);
+    let col_a_type = DataType::Tuple(vec![col_b_type, Float64Type::data_type()]);
 
     // prepare leaves
     let col_c = Column::from_data(vec![1i64, 2, 3]);
@@ -57,14 +57,14 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>) {
         len: 3,
     };
     let col_a = Column::Tuple {
-        fields: vec![col_b.clone(), col_e.clone()],
+        fields: vec![col_b, col_e.clone()],
         len: 3,
     };
 
     let entries = vec![
         BlockEntry {
             data_type: col_a_type,
-            value: Value::Column(col_a.clone()),
+            value: Value::Column(col_a),
         },
         BlockEntry {
             data_type: Int64Type::data_type(),

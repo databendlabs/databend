@@ -45,18 +45,18 @@ fn bench_u64(c: &mut Criterion) {
     let column = rand_i64_column(1_000_000);
 
     let mut builder = Xor8Builder::create();
-    (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
+    (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
     let filter = builder.build().unwrap();
 
     for i in 0..column.len() {
-        let key = column.get(i);
+        let key = unsafe { column.index_unchecked(i) };
         assert!(filter.contains(&key), "key {} present", key);
     }
 
     c.bench_function("xor8_filter_u64_1m_rows_build_from_column_to_values", |b| {
         b.iter(|| {
             let mut builder = Xor8Builder::create();
-            (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
+            (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
             let _filter = criterion::black_box(builder.build().unwrap());
         })
     });
@@ -66,11 +66,11 @@ fn bench_string(c: &mut Criterion) {
     let column = rand_str_column(1_000_000, 32);
 
     let mut builder = Xor8Builder::create();
-    (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
+    (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
     let filter = builder.build().unwrap();
 
     for i in 0..column.len() {
-        let key = column.get(i);
+        let key = unsafe { column.index_unchecked(i) };
         assert!(filter.contains(&key), "key {} present", key);
     }
 
@@ -79,7 +79,8 @@ fn bench_string(c: &mut Criterion) {
         |b| {
             b.iter(|| {
                 let mut builder = Xor8Builder::create();
-                (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
+                (0..column.len())
+                    .for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
                 let _filter = criterion::black_box(builder.build().unwrap());
             })
         },
