@@ -30,7 +30,6 @@ use futures_util::stream::FuturesUnordered;
 use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
 use opendal::raw::CompressAlgorithm;
-use tracing::info;
 
 use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
 use crate::processors::sources::input_formats::input_context::InputContext;
@@ -214,16 +213,14 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                             Ok(row_batch) => {
                                 let is_err = row_batch.is_err();
                                 if data_tx2.send(row_batch).await.is_err() {
-                                    info!("execute_copy_aligned fail to send row_batch")
+                                    break;
                                 }
                                 if is_err {
                                     break;
                                 }
                             }
                             Err(cause) => {
-                                if data_tx2.send(Err(cause)).await.is_err() {
-                                    info!("execute_copy_aligned fail to send row_batch")
-                                }
+                                data_tx2.send(Err(cause)).await.ok();
                                 break;
                             }
                         }

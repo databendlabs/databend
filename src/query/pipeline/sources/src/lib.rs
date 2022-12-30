@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![feature(type_alias_impl_trait)]
-#![feature(result_flattening)]
 #![deny(unused_crate_dependencies)]
 
 pub mod processors;
