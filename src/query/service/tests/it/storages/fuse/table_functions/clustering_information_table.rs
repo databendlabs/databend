@@ -12,11 +12,21 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::base::tokio;
+use common_catalog::plan::PushDownInfo;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
+use common_datablocks::SendableDataBlockStream;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_storages_fuse::table_functions::ClusteringInformationTable;
+use databend_query::sessions::QueryContext;
+use databend_query::stream::ReadDataBlockStream;
+use databend_query::table_functions::TableArgs;
 use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::*;
@@ -96,4 +106,20 @@ async fn test_clustering_information_table_read() -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn test_drive_clustering_information(
+    tbl_args: TableArgs,
+    ctx: Arc<QueryContext>,
+) -> Result<SendableDataBlockStream> {
+    let func = ClusteringInformationTable::create("system", "clustering_information", 1, tbl_args)?;
+    let source_plan = func
+        .clone()
+        .as_table()
+        .read_plan(ctx.clone(), Some(PushDownInfo::default()))
+        .await?;
+    ctx.try_set_partitions(source_plan.parts.clone())?;
+    func.as_table()
+        .read_data_block_stream(ctx, &source_plan)
+        .await
 }

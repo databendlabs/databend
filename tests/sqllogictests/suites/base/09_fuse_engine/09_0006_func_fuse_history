@@ -10,6 +10,11 @@ USE db_09_0006
 statement ok
 create table t(a uint64)
 
+query I
+select count(1) from fuse_block('db_09_0006', 't')
+----
+0
+
 statement ok
 insert into t values (1)
 
@@ -31,6 +36,12 @@ select block_count, row_count from fuse_snapshot('db_09_0006', 't') order by row
 ----
 2 3
 
+query II
+select block_count, row_count from fuse_snapshot('db_09_0006', 't') order by row_count;
+----
+1 1
+2 3
+
 query I
 select block_size from fuse_block('db_09_0006', 't') order by block_size
 ----
@@ -43,8 +54,26 @@ select * from fuse_snapshot('db_09_0006', 'not_exist')
 statement error 1003
 select * from fuse_snapshot('not_exist', 'not_exist')
 
+statement error 1006
+select * from fuse_snapshot()
+
+statement error 1006
+select * from fuse_snapshot('db_09_0006')
+
+statement error 1006
+select * from fuse_snapshot('db_09_0006', 'not_exist', 'invalid_extra_arg')
+
+statement ok
+create table t_in_memory(a uint64) engine = Memory
+
+statement error 1001
+select * from fuse_snapshot('db_09_006', 't_in_memory')
+
 statement ok
 DROP TABLE t
+
+statement ok
+DROP TABLE t_in_memory
 
 statement ok
 DROP DATABASE db_09_0006

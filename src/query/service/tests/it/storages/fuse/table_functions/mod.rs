@@ -14,4 +14,3 @@
 
 mod clustering_information_table;
 mod fuse_block_table;
-mod fuse_snapshot_table;
