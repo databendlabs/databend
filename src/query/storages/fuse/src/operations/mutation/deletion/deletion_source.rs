@@ -37,6 +37,7 @@ use super::deletion_meta::DeletionSourceMeta;
 use super::deletion_part::DeletionPartInfo;
 use crate::io::write_data;
 use crate::io::BlockReader;
+use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
@@ -302,13 +303,14 @@ impl Processor for DeletionSource {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {
+                let settings = ReadSettings::from_ctx(&self.ctx)?;
                 let deletion_part = DeletionPartInfo::from_part(&part)?;
                 self.index = deletion_part.index;
                 self.origin_stats = deletion_part.cluster_stats.clone();
                 let part = deletion_part.inner_part.clone();
                 let chunks = self
                     .block_reader
-                    .read_columns_data(self.ctx.clone(), part.clone())
+                    .read_columns_data(part.clone(), &settings)
                     .await?;
                 self.state = State::FilterData(part, chunks);
             }
@@ -318,8 +320,9 @@ impl Processor for DeletionSource {
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
+                    let settings = ReadSettings::from_ctx(&self.ctx)?;
                     let chunks = remain_reader
-                        .read_columns_data(self.ctx.clone(), part.clone())
+                        .read_columns_data(part.clone(), &settings)
                         .await?;
                     self.state = State::MergeRemain {
                         part,
