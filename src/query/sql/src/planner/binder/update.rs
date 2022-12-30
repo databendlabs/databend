@@ -104,6 +104,7 @@ impl<'a> Binder {
             database: database_name,
             table: table_name,
             table_id,
+            metadata: self.metadata.clone(),
             update_list: update_columns,
             selection: push_downs,
         };

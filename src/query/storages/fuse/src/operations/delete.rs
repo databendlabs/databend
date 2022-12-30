@@ -176,7 +176,7 @@ impl FuseTable {
         let (_, inner_parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.table_info.schema(),
-            push_down,
+            None,
             metas,
             base_snapshot.summary.block_count as usize,
         )?;

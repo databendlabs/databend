@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::plan::Expression;
@@ -41,7 +40,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         filter: Option<Expression>,
         col_indices: Vec<usize>,
-        update_list: HashMap<usize, Expression>,
+        update_list: Vec<(usize, Expression)>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -198,7 +197,7 @@ impl FuseTable {
         let (_, inner_parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.table_info.schema(),
-            push_down,
+            None,
             metas,
             snapshot.summary.block_count as usize,
         )?;

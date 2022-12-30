@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -246,7 +245,7 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         filter: Option<Expression>,
         col_indices: Vec<usize>,
-        update_list: HashMap<usize, Expression>,
+        update_list: Vec<(usize, Expression)>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let (_, _, _, _, _) = (ctx, filter, col_indices, update_list, pipeline);

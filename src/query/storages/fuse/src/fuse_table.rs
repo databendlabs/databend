@@ -518,7 +518,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         filter: Option<Expression>,
         col_indices: Vec<usize>,
-        update_list: HashMap<usize, Expression>,
+        update_list: Vec<(usize, Expression)>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_update(ctx, filter, col_indices, update_list, pipeline)

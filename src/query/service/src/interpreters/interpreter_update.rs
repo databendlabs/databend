@@ -15,13 +15,19 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::plans::UpdatePlan;
+use common_pipeline_core::Pipeline;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::ExpressionBuilderWithoutRenaming;
+use crate::sql::plans::ScalarExpr;
+use crate::sql::plans::UpdatePlan;
 
 /// interprets UpdatePlan
 pub struct UpdateInterpreter {
@@ -51,6 +57,51 @@ impl Interpreter for UpdateInterpreter {
     #[tracing::instrument(level = "debug", name = "update_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // TODO check privilege
-        todo!()
+        let catalog_name = self.plan.catalog.as_str();
+        let db_name = self.plan.database.as_str();
+        let tbl_name = self.plan.table.as_str();
+        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+
+        let eb = ExpressionBuilderWithoutRenaming::create(self.plan.metadata.clone());
+        let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
+            (
+                Some(eb.build(scalar)?),
+                scalar.used_columns().into_iter().collect(),
+            )
+        } else {
+            (None, vec![])
+        };
+
+        let update_list = self.plan.update_list.iter().try_fold(
+            Vec::with_capacity(self.plan.update_list.len()),
+            |mut acc, (id, scalar)| {
+                let expr = eb.build(scalar)?;
+                acc.push((*id, expr));
+                Ok::<_, ErrorCode>(acc)
+            },
+        )?;
+
+        let mut pipeline = Pipeline::create();
+        tbl.update(
+            self.ctx.clone(),
+            filter,
+            col_indices,
+            update_list,
+            &mut pipeline,
+        )
+        .await?;
+        if !pipeline.pipes.is_empty() {
+            let settings = self.ctx.get_settings();
+            pipeline.set_max_threads(settings.get_max_threads()? as usize);
+            let query_id = self.ctx.get_id();
+            let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+            let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+
+            self.ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+            executor.execute()?;
+            drop(executor);
+        }
+
+        Ok(PipelineBuildResult::create())
     }
 }

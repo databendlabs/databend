@@ -20,6 +20,7 @@ use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 
 use crate::plans::Scalar;
+use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
 pub struct UpdatePlan {
@@ -27,6 +28,7 @@ pub struct UpdatePlan {
     pub database: String,
     pub table: String,
     pub table_id: MetaId,
+    pub metadata: MetadataRef,
     pub update_list: HashMap<usize, Scalar>,
     pub selection: Option<Scalar>,
 }
