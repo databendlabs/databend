@@ -20,22 +20,17 @@ use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::Projection;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Compression;
-use opendal::Operator;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::decompressor::BuffedBasicDecompressor;
@@ -45,31 +40,6 @@ use crate::io::UncompressedBuffer;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 
 impl BlockReader {
-    pub fn create(
-        operator: Operator,
-        schema: DataSchemaRef,
-        projection: Projection,
-    ) -> Result<Arc<BlockReader>> {
-        let projected_schema = match projection {
-            Projection::Columns(ref indices) => DataSchemaRef::new(schema.project(indices)),
-            Projection::InnerColumns(ref path_indices) => {
-                DataSchemaRef::new(schema.inner_project(path_indices))
-            }
-        };
-
-        let arrow_schema = schema.to_arrow();
-        let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
-        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
-
-        Ok(Arc::new(BlockReader {
-            operator,
-            projection,
-            projected_schema,
-            parquet_schema_descriptor,
-            column_leaves,
-        }))
-    }
-
     /// Read a parquet file and convert to DataBlock.
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read_parquet_by_meta(

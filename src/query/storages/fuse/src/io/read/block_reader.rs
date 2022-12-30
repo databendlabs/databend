@@ -14,9 +14,11 @@
 
 use std::collections::HashMap;
 use std::ops::Range;
+use std::sync::Arc;
 use std::time::Instant;
 
 use common_arrow::arrow::datatypes::Field;
+use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_base::rangemap::RangeMerger;
 use common_base::runtime::UnlimitedFuture;
@@ -107,6 +109,31 @@ where Self: 'static
 }
 
 impl BlockReader {
+    pub fn create(
+        operator: Operator,
+        schema: DataSchemaRef,
+        projection: Projection,
+    ) -> Result<Arc<BlockReader>> {
+        let projected_schema = match projection {
+            Projection::Columns(ref indices) => DataSchemaRef::new(schema.project(indices)),
+            Projection::InnerColumns(ref path_indices) => {
+                DataSchemaRef::new(schema.inner_project(path_indices))
+            }
+        };
+
+        let arrow_schema = schema.to_arrow();
+        let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
+        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
+
+        Ok(Arc::new(BlockReader {
+            operator,
+            projection,
+            projected_schema,
+            parquet_schema_descriptor,
+            column_leaves,
+        }))
+    }
+
     pub fn support_blocking_api(&self) -> bool {
         self.operator.metadata().can_blocking()
     }
