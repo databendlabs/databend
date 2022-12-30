@@ -27,6 +27,7 @@ use crate::util::HttpSessionConf;
 
 pub struct HttpClient {
     pub client: Client,
+    pub debug: bool,
     pub session: Option<HttpSessionConf>,
 }
 
@@ -51,11 +52,14 @@ impl HttpClient {
         Ok(HttpClient {
             client,
             session: None,
+            debug: false,
         })
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
-        println!("Running sql with http client: [{}]", sql);
+        if self.debug {
+            println!("Running sql with http client: [{}]", sql);
+        }
         let url = "http://127.0.0.1:8000/v1/query".to_string();
         let mut query = HashMap::new();
         query.insert("sql", serde_json::to_value(sql).unwrap());
