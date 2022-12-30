@@ -138,10 +138,6 @@ macro_rules! lookup_impl {
             fn iter(&self) -> Self::Iterator<'_> {
                 LookupTableIter::create(&self.flags, &self.data)
             }
-
-            fn iter_mut(&mut self) -> Self::IteratorMut<'_> {
-                LookupTableIterMut::create(&self.flags, &mut self.data)
-            }
         }
 
         impl<'a, V> Iterator for LookupTableIter<'a, $capacity, $ty, V> {

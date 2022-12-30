@@ -1171,14 +1171,4 @@ where A: Allocator + Clone + Default
             _phantom: PhantomData,
         }
     }
-    fn iter_mut(&mut self) -> Self::IteratorMut<'_> {
-        UnsizedHashtableIterMut {
-            it_0: Some(self.table0.iter_mut()),
-            it_1: Some(self.table1.iter_mut()),
-            it_2: Some(self.table2.iter_mut()),
-            it_3: Some(self.table3.iter_mut()),
-            it_4: Some(self.table4.iter_mut()),
-            _phantom: PhantomData,
-        }
-    }
 }

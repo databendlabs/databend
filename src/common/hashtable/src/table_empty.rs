@@ -23,6 +23,12 @@ pub struct TableEmpty<V, A: Allocator + Clone> {
     pub(crate) slice: Box<[Entry<[u8; 0], V>; 1], A>,
 }
 
+impl<V, A: Allocator + Clone + Default> Default for TableEmpty<V, A> {
+    fn default() -> Self {
+        Self::new_in(A::default())
+    }
+}
+
 impl<V, A: Allocator + Clone> TableEmpty<V, A> {
     pub fn new_in(allocator: A) -> Self {
         Self {
@@ -75,20 +81,14 @@ impl<V, A: Allocator + Clone> TableEmpty<V, A> {
             i: usize::from(!self.has_zero),
         }
     }
-    pub fn iter_mut(&mut self) -> TableEmptyIterMut<'_, V> {
-        TableEmptyIterMut {
-            slice: self.slice.as_mut(),
-            i: usize::from(!self.has_zero),
-        }
-    }
 }
 
 impl<V, A: Allocator + Clone> Drop for TableEmpty<V, A> {
     fn drop(&mut self) {
-        if std::mem::needs_drop::<V>() {
-            self.iter_mut().for_each(|e| unsafe {
-                e.val.assume_init_drop();
-            });
+        if std::mem::needs_drop::<V>() && self.has_zero {
+            unsafe {
+                self.slice[0].val.assume_init_drop();
+            }
         }
     }
 }

@@ -209,6 +209,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             group_key_builder.append_value(group_entity.key());
         }
 
+        self.drop_states();
         let schema = &self.params.output_schema;
         let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
         for mut builder in state_builders {
@@ -303,7 +304,8 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
                 .map(|(_, s)| *s)
                 .collect::<Vec<_>>();
 
-            for group_entity in self.hash_table.iter() {
+            let hash_table = self.hash_table.take();
+            for group_entity in hash_table.iter() {
                 let place = Into::<StateAddr>::into(*group_entity.get());
 
                 for (function, state_offset) in functions.iter().zip(states.iter()) {

@@ -76,6 +76,17 @@ where
     pub(crate) dropped: bool,
 }
 
+impl<K, V, C, A> Default for Table0<K, V, C, A>
+where
+    K: Keyable,
+    C: Container<T = Entry<K, V>, A = A>,
+    A: Allocator + Clone + Default,
+{
+    fn default() -> Self {
+        Table0::with_capacity_in(0, A::default())
+    }
+}
+
 impl<K, V, C, A> Table0<K, V, C, A>
 where
     K: Keyable,
@@ -209,12 +220,7 @@ where
             i: 0,
         }
     }
-    pub fn iter_mut(&mut self) -> Table0IterMut<'_, K, V> {
-        Table0IterMut {
-            slice: self.entries.as_mut(),
-            i: 0,
-        }
-    }
+
     pub fn grow(&mut self, shift: u8) {
         let old_capacity = self.entries.len();
         let new_capacity = self.entries.len() << shift;
@@ -305,9 +311,13 @@ where
 {
     fn drop(&mut self) {
         if std::mem::needs_drop::<V>() && !self.dropped {
-            self.iter_mut().for_each(|e| unsafe {
-                std::ptr::drop_in_place(e.get_mut());
-            });
+            unsafe {
+                for entry in self.entries.as_mut() {
+                    if !entry.is_zero() {
+                        std::ptr::drop_in_place(entry.get_mut());
+                    }
+                }
+            }
         }
     }
 }

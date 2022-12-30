@@ -173,11 +173,6 @@ where
             inner: self.zero.iter().chain(self.table.iter()),
         }
     }
-    pub fn iter_mut(&mut self) -> StackHashtableIterMut<'_, K, V> {
-        StackHashtableIterMut {
-            inner: self.zero.iter_mut().chain(self.table.iter_mut()),
-        }
-    }
 }
 
 impl<K, A, const N: usize> StackHashtable<K, (), N, A>
