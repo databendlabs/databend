@@ -155,3 +155,4 @@ rpath = false
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "fb08b72" }
 limits-rs = { git = "https://github.com/datafuse-extras/limits-rs", rev = "abfcf7b" }
+metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "bc49d03"}
