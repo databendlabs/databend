@@ -24,8 +24,6 @@ use common_arrow::arrow::io::ipc::read::FileReader;
 use common_arrow::arrow::io::ipc::write::FileWriter;
 use common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
 
-use crate::types::number::*;
-use crate::types::ArgType;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;

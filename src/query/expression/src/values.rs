@@ -837,6 +837,8 @@ impl Column {
         use common_arrow::arrow::array::Array as _;
         use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
+        let is_nullable = data_type.is_nullable();
+        let data_type = data_type.remove_nullable();
         let column = match arrow_col.data_type() {
             ArrowDataType::Null => Column::Null {
                 len: arrow_col.len(),
@@ -1041,6 +1043,7 @@ impl Column {
                     .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
                     .expect("fail to read from arrow: array should be `ListArray<i64>`");
 
+                println!("data_type {:?}", data_type);
                 let array_type = data_type.as_array().unwrap();
                 let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
                 let offsets = values_col
@@ -1074,7 +1077,7 @@ impl Column {
             ty => unimplemented!("unsupported arrow type {ty:?}"),
         };
 
-        if data_type.is_nullable() {
+        if is_nullable {
             let validity = arrow_col.validity().cloned().unwrap_or_else(|| {
                 let mut validity = MutableBitmap::with_capacity(arrow_col.len());
                 validity.extend_constant(arrow_col.len(), true);
@@ -1137,7 +1140,7 @@ impl Column {
 impl Serialize for Column {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        serializer.serialize_bytes(&serialize_column(&self))
+        serializer.serialize_bytes(&serialize_column(self))
     }
 }
 
