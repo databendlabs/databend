@@ -186,10 +186,8 @@ impl HiveTable {
         };
         let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
 
-        let prewhere_all_partitions = self.is_prewhere_column_partition_keys(
-            self.table_info.schema(),
-            &plan.push_downs,
-        )?;
+        let prewhere_all_partitions =
+            self.is_prewhere_column_partition_keys(self.table_info.schema(), &plan.push_downs)?;
         // create prewhere&remaindata block reader
         let prewhere_reader =
             self.build_prewhere_reader(plan, chunk_size, prewhere_all_partitions)?;

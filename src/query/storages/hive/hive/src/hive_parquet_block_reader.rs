@@ -36,8 +36,8 @@ use opendal::Object;
 use opendal::Operator;
 
 use crate::hive_partition::HivePartInfo;
-use crate::MetaDataReader;
 use crate::HivePartitionFiller;
+use crate::MetaDataReader;
 
 #[derive(Clone)]
 pub struct HiveBlockReader {
