@@ -93,7 +93,7 @@ impl Interpreter for DescribeTableInterpreter {
             });
             match field.default_expr() {
                 Some(expr) => {
-                    default_exprs.push(format!("{expr}").as_bytes().to_vec());
+                    default_exprs.push(expr.as_bytes().to_vec());
                 }
 
                 None => {

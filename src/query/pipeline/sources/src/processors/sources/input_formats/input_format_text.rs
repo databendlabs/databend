@@ -387,6 +387,7 @@ pub struct BlockBuilder<T> {
 
 impl<T: InputFormatTextBase> BlockBuilder<T> {
     fn flush(&mut self) -> Result<Vec<DataBlock>> {
+        let num_rows = self.num_rows;
         let columns = self
             .mutable_columns
             .iter_mut()
@@ -403,7 +404,7 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             .create_deserializers(self.ctx.block_compact_thresholds.min_rows_per_block);
         self.num_rows = 0;
 
-        Ok(vec![DataBlock::new(columns, self.num_rows)])
+        Ok(vec![DataBlock::new(columns, num_rows)])
     }
 
     fn memory_size(&self) -> usize {

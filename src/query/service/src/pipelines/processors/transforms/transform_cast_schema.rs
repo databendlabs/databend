@@ -81,7 +81,7 @@ impl Transform for TransformCastSchema {
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         let mut columns = Vec::with_capacity(self.exprs.len());
-        let evaluator = Evaluator::new(&data_block, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
         for (field, expr) in self.insert_schema.fields().iter().zip(self.exprs.iter()) {
             let value = evaluator.run(expr).map_err(|(_, e)| {
                 ErrorCode::Internal(format!("eval cast schema failed: {}.", e))
