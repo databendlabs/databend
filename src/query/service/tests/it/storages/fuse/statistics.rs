@@ -145,12 +145,12 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
     let r = gen_columns_statistics(&block, None)?;
     assert_eq!(2, r.len());
     let col0_stats = r.get(&0).unwrap();
-    assert_eq!(col0_stats.min, Scalar::Number(NumberScalar::Int64(1)));
-    assert_eq!(col0_stats.max, Scalar::Number(NumberScalar::Int64(3)));
+    assert_eq!(col0_stats.min, Scalar::Number(NumberScalar::Int32(1)));
+    assert_eq!(col0_stats.max, Scalar::Number(NumberScalar::Int32(3)));
 
     let col1_stats = r.get(&1).unwrap();
-    assert_eq!(col1_stats.min, Scalar::Number(NumberScalar::Int64(4)));
-    assert_eq!(col1_stats.max, Scalar::Number(NumberScalar::Int64(6)));
+    assert_eq!(col1_stats.min, Scalar::Number(NumberScalar::Int32(4)));
+    assert_eq!(col1_stats.max, Scalar::Number(NumberScalar::Int32(6)));
     Ok(())
 }
 
@@ -173,31 +173,31 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(
         col0_stats.min,
-        Scalar::Number(NumberScalar::Int64(val_start_with as i64))
+        Scalar::Number(NumberScalar::Int32(val_start_with as i32))
     );
     assert_eq!(
         col0_stats.max,
-        Scalar::Number(NumberScalar::Int64(num_of_blocks as i64))
+        Scalar::Number(NumberScalar::Int32(num_of_blocks as i32))
     );
 
     let col1_stats = r.get(&1).unwrap();
     assert_eq!(
         col1_stats.min,
-        Scalar::Number(NumberScalar::Int64((val_start_with * 2) as i64))
+        Scalar::Number(NumberScalar::Int32((val_start_with * 2) as i32))
     );
 
     assert_eq!(
         col1_stats.max,
-        Scalar::Number(NumberScalar::Int64((num_of_blocks * 2) as i64))
+        Scalar::Number(NumberScalar::Int32((num_of_blocks * 2) as i32))
     );
     let col2_stats = r.get(&2).unwrap();
     assert_eq!(
         col2_stats.min,
-        Scalar::Number(NumberScalar::Int64((val_start_with * 3) as i64))
+        Scalar::Number(NumberScalar::Int32((val_start_with * 3) as i32))
     );
     assert_eq!(
         col2_stats.max,
-        Scalar::Number(NumberScalar::Int64((num_of_blocks * 3) as i64))
+        Scalar::Number(NumberScalar::Int32((num_of_blocks * 3) as i32))
     );
     Ok(())
 }
@@ -315,8 +315,8 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
-    assert_eq!(vec![Scalar::Number(NumberScalar::Int32(2))], stats.min);
-    assert_eq!(vec![Scalar::Number(NumberScalar::Int32(4))], stats.max);
+    assert_eq!(vec![Scalar::Number(NumberScalar::Int64(2))], stats.min);
+    assert_eq!(vec![Scalar::Number(NumberScalar::Int64(4))], stats.max);
 
     // different cluster_key_id.
     let stats_gen =

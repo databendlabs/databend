@@ -182,13 +182,14 @@ impl AsyncSource for ClusteringInformationSource {
             .await?;
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        let cluster_keys = get_cluster_keys(self.ctx.clone(), tbl, &self.arg_cluster_keys)?;
+        let (cluster_keys, plain) =
+            get_cluster_keys(self.ctx.clone(), tbl, &self.arg_cluster_keys)?;
 
         Ok(Some(
             ClusteringInformation::new(
                 self.ctx.clone(),
                 tbl,
-                self.arg_cluster_keys.clone(),
+                plain.unwrap_or_default(),
                 cluster_keys,
             )
             .get_clustering_info()

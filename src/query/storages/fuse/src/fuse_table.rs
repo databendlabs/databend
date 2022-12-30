@@ -347,7 +347,7 @@ impl Table for FuseTable {
 
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
-        
+
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             &table_info,

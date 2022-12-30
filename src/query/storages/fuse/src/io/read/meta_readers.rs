@@ -84,7 +84,7 @@ impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
     ) -> Result<TableSnapshot> {
         let version = SnapshotVersion::try_from(version)?;
         let reader = bytes_reader(&self.0, key, length_hint).await?;
-        
+
         version.read(reader).await
     }
 }

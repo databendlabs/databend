@@ -54,7 +54,7 @@ pub fn gen_columns_statistics(
     let mut statistics = StatisticsOfColumns::new();
     let data_block = data_block.convert_to_full();
     let rows = data_block.num_rows();
-    
+
     let leaves = get_traverse_columns_dfs(&data_block)?;
     for (idx, (col_idx, col, data_type)) in leaves.iter().enumerate() {
         if !MinMaxIndex::is_supported_type(data_type) {

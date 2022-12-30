@@ -310,7 +310,7 @@ impl FuseTable {
             .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version())?;
         let need_to_save_statistics =
             snapshot.table_statistics_location.is_some() && table_statistics.is_some();
-        
+
         // 1. write down snapshot
         write_meta(operator, &snapshot_location, &snapshot).await?;
         if need_to_save_statistics {

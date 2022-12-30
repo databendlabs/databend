@@ -45,19 +45,27 @@ pub fn get_cluster_keys(
     ctx: Arc<dyn TableContext>,
     table: &FuseTable,
     definition: &str,
-) -> Result<Vec<RemoteExpr<String>>> {
-    let cluster_keys = if !definition.is_empty() {
+) -> Result<(Vec<RemoteExpr<String>>, Option<String>)> {
+    let (cluster_keys, plain_keys) = if !definition.is_empty() {
         let table_meta = Arc::new(table.clone());
         let cluster_keys = parse_exprs(ctx, table_meta.clone(), definition)?;
-        cluster_keys
-            .iter()
-            .map(|k| {
-                k.project_column_ref(|index| table_meta.schema().field(*index).name().to_string())
+        (
+            cluster_keys
+                .iter()
+                .map(|k| {
+                    k.project_column_ref(|index| {
+                        table_meta.schema().field(*index).name().to_string()
+                    })
                     .as_remote_expr()
-            })
-            .collect()
+                })
+                .collect(),
+            Some(definition.to_string()),
+        )
     } else {
-        table.cluster_keys(ctx)
+        (
+            table.cluster_keys(ctx),
+            table.cluster_key_meta.as_ref().map(|m| m.1.to_string()),
+        )
     };
 
     if cluster_keys.is_empty() {
@@ -66,5 +74,5 @@ pub fn get_cluster_keys(
             table.name()
         )));
     }
-    Ok(cluster_keys)
+    Ok((cluster_keys, plain_keys))
 }
