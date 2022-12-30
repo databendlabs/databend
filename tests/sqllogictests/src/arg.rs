@@ -81,7 +81,14 @@ pub struct SqlLogicTestArgs {
         short = 'p',
         long = "parallel",
         default_value_t = 8,
-        help = "The arg is used to set parallel run with sandbox_tenant"
+        help = "The arg is used to set parallel number"
     )]
     pub parallel: usize,
+
+    #[arg(
+        long = "enable_sandbox",
+        default_missing_value = "true",
+        help = "The arg is used to enable sandbox_tenant"
+    )]
+    pub enable_sandbox: bool,
 }
