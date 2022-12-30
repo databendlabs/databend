@@ -103,6 +103,9 @@ serde_json = { version = "1.0.85", default-features = false, features = ["preser
 chrono = { version = "0.4.22", features = ["serde"] }
 chrono-tz = "0.6.3"
 
+# jemalloc
+tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
+
 # http
 reqwest = { version = "0.11", default-features = false, features = [
     "json",

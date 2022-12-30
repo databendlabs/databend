@@ -219,8 +219,8 @@ async fn main_entrypoint() -> Result<()> {
             format!("connected to endpoints {:#?}", conf.meta.endpoints)
         }
     );
-    println!(
-        "Memory: {}",
+    println!("Memory:");
+    println!("    limit: {}", {
         if conf.query.max_memory_limit_enabled {
             format!(
                 "Memory: server memory limit to {} (bytes)",
@@ -229,7 +229,13 @@ async fn main_entrypoint() -> Result<()> {
         } else {
             "unlimited".to_string()
         }
-    );
+    });
+    println!("    allocator config: {}", {
+        use tikv_jemalloc_ctl::config;
+        config::malloc_conf::mib()
+            .and_then(|mib| mib.read().map(|v| v.to_owned()))
+            .unwrap_or_else(|e| format!("N/A: failed to read jemalloc config, {}", e))
+    });
     println!("Cluster: {}", {
         let cluster = ClusterDiscovery::instance().discover(&conf).await?;
         let nodes = cluster.nodes.len();

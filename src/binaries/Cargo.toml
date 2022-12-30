@@ -57,6 +57,7 @@ poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 sentry = { version = "0.27.0", default-features = false, features = ["backtrace", "contexts", "panic", "rustls"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tikv-jemalloc-ctl = { workspace = true }
 tokio-stream = "0.1.10"
 tonic = "0.8.1"
 tracing = "0.1.36"
