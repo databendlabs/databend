@@ -27,12 +27,10 @@ use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnMeta;
@@ -40,15 +38,11 @@ use common_storages_table_meta::meta::Compression;
 use opendal::Operator;
 
 use crate::fuse_part::FusePartInfo;
-use crate::io::read::block_reader::MergeIOReadResult;
 use crate::io::read::decompressor::BuffedBasicDecompressor;
 use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
-use crate::metrics::metrics_inc_remote_io_read_bytes;
-use crate::metrics::metrics_inc_remote_io_read_parts;
-use crate::metrics::metrics_inc_remote_io_seeks;
 
 impl BlockReader {
     pub fn create(
@@ -76,49 +70,39 @@ impl BlockReader {
         }))
     }
 
-    /// Read column data chunks.
-    async fn read_column_chunks(
-        &self,
-        meta: &BlockMeta,
-        settings: &ReadSettings,
-    ) -> Result<Vec<(usize, Vec<u8>)>> {
-        let location = &meta.location.0;
-        let columns_meta = meta
-            .col_metas
-            .iter()
-            .map(|(id, meta)| (*id as usize, meta.clone()))
-            .collect::<HashMap<_, _>>();
-        let read_res = self
-            .read_columns_data_by_merge_io(location, settings, &columns_meta)
-            .await?;
-        Ok(read_res
-            .columns_chunks()?
-            .into_iter()
-            .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
-            .collect::<Vec<_>>())
-    }
-
+    /// Read a parquet file and convert to DataBlock.
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read_block_by_meta(
+    pub async fn read_parquet_to_block(
         &self,
         meta: &BlockMeta,
         settings: &ReadSettings,
     ) -> Result<DataBlock> {
-        let chunks = self.read_column_chunks(meta, settings).await?;
-
-        let num_rows = meta.row_count as usize;
+        //  Build columns meta.
         let columns_meta = meta
             .col_metas
             .iter()
             .map(|(index, meta)| (*index as usize, meta.clone()))
             .collect::<HashMap<_, _>>();
 
+        // Get the merged IO read result.
+        let read_res = self
+            .read_columns_data_by_merge_io(settings, &meta.location.0, &columns_meta)
+            .await?;
+
+        // Get the columns chunk.
+        let chunks = read_res
+            .columns_chunks()?
+            .into_iter()
+            .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+            .collect::<Vec<_>>();
+
+        let num_rows = meta.row_count as usize;
         let columns_chunk = chunks
             .iter()
             .map(|(index, chunk)| (*index, chunk.as_slice()))
             .collect::<Vec<_>>();
 
-        self.deserialize_column_chunks_to_block_with_buffer(
+        self.deserialize_parquet_chunks_to_block_with_buffer(
             num_rows,
             &meta.compression,
             &columns_meta,
@@ -127,8 +111,8 @@ impl BlockReader {
         )
     }
 
-    /// Deserialize column chunks data to DataBlock with a uncompressed buffer.
-    pub fn deserialize_column_chunks_to_block_with_buffer(
+    /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
+    pub fn deserialize_parquet_chunks_to_block_with_buffer(
         &self,
         num_rows: usize,
         compression: &Compression,
@@ -180,8 +164,8 @@ impl BlockReader {
         DataBlock::from_chunk(&self.schema(), &chunk)
     }
 
-    /// Deserialize column chunks data to DataBlock.
-    pub fn deserialize_column_chunks_to_block(
+    /// Deserialize column chunks data from parquet format to DataBlock.
+    pub fn deserialize_parquet_chunks_to_block(
         &self,
         part: PartInfoPtr,
         chunks: Vec<(usize, Vec<u8>)>,
@@ -194,7 +178,7 @@ impl BlockReader {
             .collect::<Vec<_>>();
 
         let part = FusePartInfo::from_part(&part)?;
-        let deserialized_res = self.deserialize_column_chunks_to_block_with_buffer(
+        let deserialized_res = self.deserialize_parquet_chunks_to_block_with_buffer(
             part.nums_rows,
             &part.compression,
             &part.columns_meta,
@@ -208,95 +192,6 @@ impl BlockReader {
         }
 
         deserialized_res
-    }
-
-    pub async fn read_columns_data(
-        &self,
-        raw_part: PartInfoPtr,
-        settings: &ReadSettings,
-    ) -> Result<Vec<(usize, Vec<u8>)>> {
-        let part = FusePartInfo::from_part(&raw_part)?;
-        let read_res = self
-            .read_columns_data_by_merge_io(&part.location, settings, &part.columns_meta)
-            .await?;
-
-        Ok(read_res
-            .columns_chunks()?
-            .into_iter()
-            .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
-            .collect::<Vec<_>>())
-    }
-
-    pub async fn read_columns_data_by_merge_io(
-        &self,
-        location: &str,
-        settings: &ReadSettings,
-        columns_meta: &HashMap<usize, ColumnMeta>,
-    ) -> Result<MergeIOReadResult> {
-        // Perf
-        {
-            metrics_inc_remote_io_read_parts(1);
-        }
-
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-
-        let mut ranges = vec![];
-        for index in indices.keys() {
-            let column_meta = &columns_meta[index];
-            ranges.push((
-                *index,
-                column_meta.offset..(column_meta.offset + column_meta.len),
-            ));
-
-            // Perf
-            {
-                metrics_inc_remote_io_seeks(1);
-                metrics_inc_remote_io_read_bytes(column_meta.len);
-            }
-        }
-
-        let object = self.operator.object(location);
-
-        Self::merge_io_read(settings, object, ranges).await
-    }
-
-    pub fn support_blocking_api(&self) -> bool {
-        self.operator.metadata().can_blocking()
-    }
-
-    pub fn sync_read_parquet_columns_data(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        part: PartInfoPtr,
-    ) -> Result<MergeIOReadResult> {
-        let part = FusePartInfo::from_part(&part)?;
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-
-        let mut ranges = vec![];
-        for index in indices.keys() {
-            let column_meta = &part.columns_meta[index];
-            ranges.push((
-                *index,
-                column_meta.offset..(column_meta.offset + column_meta.len),
-            ));
-        }
-
-        let settings = ReadSettings::from_ctx(ctx)?;
-        let object = self.operator.object(&part.location);
-        Self::sync_merge_io_read(&settings, object, ranges)
-    }
-
-    // Build non duplicate leaf_ids to avoid repeated read column from parquet
-    pub(crate) fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashMap<usize, Field> {
-        let mut indices = HashMap::with_capacity(columns.len());
-        for column in columns {
-            for index in &column.leaf_ids {
-                indices.insert(*index, column.field.clone());
-            }
-        }
-        indices
     }
 
     fn chunks_to_parquet_array_iter<'a>(

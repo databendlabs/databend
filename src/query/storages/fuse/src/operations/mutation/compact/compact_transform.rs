@@ -374,7 +374,7 @@ impl Processor for CompactTransform {
                             }
 
                             block_reader
-                                .read_block_by_meta(meta.as_ref(), &settings)
+                                .read_parquet_to_block(meta.as_ref(), &settings)
                                 .await
                         });
                     }

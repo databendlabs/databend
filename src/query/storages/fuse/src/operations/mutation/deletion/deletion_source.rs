@@ -35,6 +35,7 @@ use opendal::Operator;
 use super::deletion_meta::Deletion;
 use super::deletion_meta::DeletionSourceMeta;
 use super::deletion_part::DeletionPartInfo;
+use crate::fuse_part::FusePartInfo;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
@@ -185,7 +186,7 @@ impl Processor for DeletionSource {
             State::FilterData(part, chunks) => {
                 let data_block = self
                     .block_reader
-                    .deserialize_column_chunks_to_block(part.clone(), chunks)?;
+                    .deserialize_parquet_chunks_to_block(part.clone(), chunks)?;
                 let filter_result = self
                     .filter
                     .eval(&self.ctx.try_get_function_context()?, &data_block)?
@@ -226,7 +227,7 @@ impl Processor for DeletionSource {
                     data_block
                 } else if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let remain_block =
-                        remain_reader.deserialize_column_chunks_to_block(part, chunks)?;
+                        remain_reader.deserialize_parquet_chunks_to_block(part, chunks)?;
                     let remain_block = DataBlock::filter_block(remain_block, &filter)?;
                     for (col, field) in remain_block
                         .columns()
@@ -311,10 +312,22 @@ impl Processor for DeletionSource {
                 self.index = deletion_part.index;
                 self.origin_stats = deletion_part.cluster_stats.clone();
                 let part = deletion_part.inner_part.clone();
-                let chunks = self
+                let fuse_part = FusePartInfo::from_part(&part)?;
+
+                let read_res = self
                     .block_reader
-                    .read_columns_data(part.clone(), &settings)
+                    .read_columns_data_by_merge_io(
+                        &settings,
+                        &fuse_part.location,
+                        &fuse_part.columns_meta,
+                    )
                     .await?;
+                let chunks = read_res
+                    .columns_chunks()?
+                    .into_iter()
+                    .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+                    .collect::<Vec<_>>();
+
                 self.state = State::FilterData(part, chunks);
             }
             State::ReadRemain {
@@ -323,10 +336,22 @@ impl Processor for DeletionSource {
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
+                    let fuse_part = FusePartInfo::from_part(&part)?;
+
                     let settings = ReadSettings::from_ctx(&self.ctx)?;
-                    let chunks = remain_reader
-                        .read_columns_data(part.clone(), &settings)
+                    let read_res = remain_reader
+                        .read_columns_data_by_merge_io(
+                            &settings,
+                            &fuse_part.location,
+                            &fuse_part.columns_meta,
+                        )
                         .await?;
+                    let chunks = read_res
+                        .columns_chunks()?
+                        .into_iter()
+                        .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+                        .collect::<Vec<_>>();
+
                     self.state = State::MergeRemain {
                         part,
                         chunks,

@@ -141,7 +141,7 @@ impl Processor for DeserializeDataTransform {
 
             let data_block = self
                 .block_reader
-                .deserialize_column_chunks_to_block_with_buffer(
+                .deserialize_parquet_chunks_to_block_with_buffer(
                     part.nums_rows,
                     &part.compression,
                     &part.columns_meta,
