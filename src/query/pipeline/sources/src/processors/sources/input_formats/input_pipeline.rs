@@ -211,11 +211,11 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     while let Some(row_batch) = futs.next().await {
                         match row_batch {
                             Ok(row_batch) => {
-                                let is_err = row_batch.is_err();
-                                if data_tx2.send(row_batch).await.is_err() {
-                                    break;
-                                }
-                                if is_err {
+                                if row_batch.is_ok() {
+                                    if data_tx2.send(row_batch).await.is_err() {
+                                        break;
+                                    }
+                                } else {
                                     break;
                                 }
                             }
