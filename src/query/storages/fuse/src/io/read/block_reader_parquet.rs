@@ -76,10 +76,6 @@ impl BlockReader {
         }))
     }
 
-    pub fn schema(&self) -> DataSchemaRef {
-        self.projected_schema.clone()
-    }
-
     /// Read column data chunks.
     async fn read_column_chunks(
         &self,
@@ -181,7 +177,7 @@ impl BlockReader {
         }
 
         let chunk = Chunk::try_new(arrays)?;
-        DataBlock::from_chunk(&self.projected_schema, &chunk)
+        DataBlock::from_chunk(&self.schema(), &chunk)
     }
 
     /// Deserialize column chunks data to DataBlock.
@@ -269,7 +265,7 @@ impl BlockReader {
         self.operator.metadata().can_blocking()
     }
 
-    pub fn sync_read_columns_data(
+    pub fn sync_read_parquet_columns_data(
         &self,
         ctx: &Arc<dyn TableContext>,
         part: PartInfoPtr,
@@ -287,17 +283,9 @@ impl BlockReader {
             ));
         }
 
+        let settings = ReadSettings::from_ctx(ctx)?;
         let object = self.operator.object(&part.location);
-        let read_settings = ReadSettings {
-            storage_io_min_bytes_for_seek: ctx
-                .get_settings()
-                .get_storage_io_min_bytes_for_seek()?,
-            storage_io_max_page_bytes_for_read: ctx
-                .get_settings()
-                .get_storage_io_max_page_bytes_for_read()?,
-        };
-
-        Self::sync_merge_io_read(&read_settings, object, ranges)
+        Self::sync_merge_io_read(&settings, object, ranges)
     }
 
     // Build non duplicate leaf_ids to avoid repeated read column from parquet

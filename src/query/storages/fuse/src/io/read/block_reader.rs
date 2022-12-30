@@ -249,4 +249,8 @@ impl BlockReader {
         let chunk = o.blocking_range_read(start..end)?;
         Ok((index, chunk))
     }
+
+    pub fn schema(&self) -> DataSchemaRef {
+        self.projected_schema.clone()
+    }
 }

@@ -89,7 +89,10 @@ impl SyncSource for ReadParquetDataSource<true> {
             None => Ok(None),
             Some(part) => Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
                 vec![part.clone()],
-                vec![self.block_reader.sync_read_columns_data(&self.ctx, part)?],
+                vec![
+                    self.block_reader
+                        .sync_read_parquet_columns_data(&self.ctx, part)?,
+                ],
             )))),
         }
     }
