@@ -97,9 +97,9 @@ Check out what we've done this week to make Databend even better for you.
 
 Stay connected with the latest news about Databend.
 
-#### Support Databend-Local
+#### Introducing databend-local​
 
-Like [clickhouse-local](https://clickhouse.com/docs/en/operations/utilities/clickhouse-local/), databend-local can perform fast processing on local files without launching a databend cluster.
+Inspired by [clickhouse-local](https://clickhouse.com/docs/en/operations/utilities/clickhouse-local/), databend-local allows you to perform fast processing on local files, without the need of launching a Databend cluster.
 
 ```sql
 > export CONFIG_FILE=tests/local/config/databend-local.toml
@@ -125,15 +125,15 @@ exec local query: SELECT * FROM tbl1
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-#### Compressing for Short Strings
+#### Compressing Short Strings​
 
-We have found that Databend may need to read more data than other databases such as Snowflake when dealing with some data items involving short strings.
+When processing the same queries with short strings involved, Databend usually reads more data than other databases, such as Snowflake.
 
 ```sql
 SELECT SearchPhrase, MIN(URL), COUNT(*) AS c FROM hits WHERE URL LIKE '%google%' AND SearchPhrase <> '' GROUP BY SearchPhrase ORDER BY c DESC LIMIT 10;
 ```
 
-Providing compression for short strings (URLs etc.) may help to improve the performance of such queries.
+Such queries might be more efficient if short strings (URLs, etc) are compressed.
 
 [Issue 9001: performance: compressing for short strings](https://github.com/datafuselabs/databend/issues/9001)
 
