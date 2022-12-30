@@ -1099,8 +1099,8 @@ impl TokenKind {
 
 pub fn all_reserved_keywords() -> Vec<String> {
     let mut result = Vec::new();
-    for color in Color::iter() {
-        result.push(format!("{:?}", color));
+    for token in TokenKind::iter() {
+        result.push(format!("{:?}", token));
     }
     result
 }
