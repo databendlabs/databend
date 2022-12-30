@@ -1316,7 +1316,7 @@ dependencies = [
  "micromarshal",
  "num",
  "once_cell",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "paste",
  "pretty_assertions",
  "primitive-types",
@@ -1364,7 +1364,7 @@ dependencies = [
  "match-template",
  "micromarshal",
  "num-traits",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "rand 0.8.5",
  "rust_decimal",
  "serde",
@@ -1427,7 +1427,7 @@ dependencies = [
  "num-format",
  "num-traits",
  "once_cell",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "pretty_assertions",
  "pulldown-cmark",
  "rand 0.8.5",
@@ -1450,6 +1450,7 @@ name = "common-functions-v2"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
+ "blake3",
  "bstr 1.0.1",
  "bumpalo",
  "bytes",
@@ -1471,16 +1472,21 @@ dependencies = [
  "hex",
  "itertools",
  "match-template",
+ "md-5",
+ "naive-cityhash",
  "num-traits",
  "once_cell",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "rand 0.8.5",
  "regex",
  "serde",
+ "sha1",
+ "sha2",
  "simdutf8",
  "siphasher",
  "streaming_algorithms",
  "strength_reduce",
+ "twox-hash",
 ]
 
 [[package]]
@@ -1509,7 +1515,7 @@ dependencies = [
  "cfg-if",
  "common-base",
  "libc",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "primitive-types",
  "rand 0.8.5",
  "semver 1.0.14",
@@ -1549,7 +1555,7 @@ dependencies = [
  "common-exception",
  "lexical-core",
  "micromarshal",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "rand 0.8.5",
  "serde",
 ]
@@ -1560,7 +1566,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "fast-float",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "serde_json",
 ]
 
@@ -1990,6 +1996,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "opensrv-mysql",
+ "ordered-float 3.4.0",
  "parking_lot 0.12.1",
  "percent-encoding",
  "petgraph",
@@ -2029,18 +2036,6 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "serde",
-]
-
-[[package]]
-name = "common-storages-cache"
-version = "0.1.0"
-dependencies = [
- "async-trait-fn",
- "common-arrow",
- "common-cache",
- "common-exception",
- "common-storages-table-meta",
- "opendal",
 ]
 
 [[package]]
@@ -2096,7 +2091,6 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
- "common-storages-cache",
  "common-storages-common",
  "common-storages-index",
  "common-storages-pruner",
@@ -2133,7 +2127,6 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-storage",
- "common-storages-cache",
  "common-storages-index",
  "common-storages-table-meta",
  "databend-thrift",
@@ -2370,7 +2363,6 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-meta-app",
- "common-storages-cache",
  "common-storages-table-meta",
  "goldenfile",
  "opendal",
@@ -2467,6 +2459,7 @@ dependencies = [
 name = "common-storages-table-meta"
 version = "0.1.0"
 dependencies = [
+ "async-trait-fn",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2475,9 +2468,9 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-metrics",
  "metrics",
  "once_cell",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
 ]
@@ -2977,7 +2970,6 @@ dependencies = [
  "common-config",
  "common-datablocks",
  "common-exception",
- "common-formats",
  "common-grpc",
  "common-meta-api",
  "common-meta-app",
@@ -3104,7 +3096,6 @@ dependencies = [
  "common-settings",
  "common-sql",
  "common-storage",
- "common-storages-cache",
  "common-storages-common",
  "common-storages-factory",
  "common-storages-fuse",
@@ -5193,7 +5184,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "855e0476963a94b79a463e92f16c3132bc9ad3bf0cfdec03ab34b60fe4c2d259"
 dependencies = [
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
 ]
 
 [[package]]
@@ -5836,9 +5827,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "3.3.0"
+version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f74e330193f90ec45e2b257fa3ef6df087784157ac1ad2c1e71c62837b03aa7"
+checksum = "d84eb1409416d254e4a9c8fa56cc24701755025b458f0fcd8e59e1f5f40c23bf"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
@@ -7806,8 +7797,10 @@ dependencies = [
  "clap 4.0.29",
  "common-exception",
  "env_logger 0.10.0",
+ "futures-util",
  "lazy_static",
  "mysql_async",
+ "rand 0.8.5",
  "regex",
  "reqwest",
  "serde",
