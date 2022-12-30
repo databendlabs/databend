@@ -38,11 +38,7 @@ use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Compression;
-use futures::StreamExt;
-use futures::TryStreamExt;
 use opendal::Operator;
-use tracing::debug_span;
-use tracing::Instrument;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::block_reader::MergeIOReadResult;
@@ -133,36 +129,34 @@ impl BlockReader {
         )?)
     }
 
-    async fn read_cols_by_block_meta(&self, meta: &BlockMeta) -> Result<Vec<(usize, Vec<u8>)>> {
-        let num_cols = self.projection.len();
-        let mut column_chunk_futs = Vec::with_capacity(num_cols);
-
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-        for (index, _) in indices {
-            let column_meta = &meta.col_metas[&(index as u32)];
-            let column_reader = self.operator.object(&meta.location.0);
-            let fut = async move {
-                let column_chunk = column_reader
-                    .range_read(column_meta.offset..column_meta.offset + column_meta.len)
-                    .await?;
-                Ok::<_, ErrorCode>((index, column_chunk))
-            }
-            .instrument(debug_span!("read_col_chunk"));
-            column_chunk_futs.push(fut);
-        }
-
-        let num_cols = column_chunk_futs.len();
-
-        futures::stream::iter(column_chunk_futs)
-            .buffered(std::cmp::min(10, num_cols))
-            .try_collect::<Vec<_>>()
-            .await
+    async fn read_cols_by_block_meta(
+        &self,
+        meta: &BlockMeta,
+        settings: &ReadSettings,
+    ) -> Result<Vec<(usize, Vec<u8>)>> {
+        let location = &meta.location.0;
+        let columns_meta = meta
+            .col_metas
+            .iter()
+            .map(|(id, meta)| (*id as usize, meta.clone()))
+            .collect::<HashMap<_, _>>();
+        let read_res = self
+            .read_columns_data_by_merge_io(location, settings, &columns_meta)
+            .await?;
+        Ok(read_res
+            .columns_chunks()?
+            .into_iter()
+            .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+            .collect::<Vec<_>>())
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<DataBlock> {
-        let chunks = self.read_cols_by_block_meta(meta).await?;
+    pub async fn read_with_block_meta(
+        &self,
+        meta: &BlockMeta,
+        settings: &ReadSettings,
+    ) -> Result<DataBlock> {
+        let chunks = self.read_cols_by_block_meta(meta, settings).await?;
 
         let num_rows = meta.row_count as usize;
         let columns_meta = meta
@@ -286,10 +280,13 @@ impl BlockReader {
 
     pub async fn read_columns_data(
         &self,
-        ctx: Arc<dyn TableContext>,
         raw_part: PartInfoPtr,
+        settings: &ReadSettings,
     ) -> Result<Vec<(usize, Vec<u8>)>> {
-        let read_res = self.read_columns_data_by_merge_io(ctx, raw_part).await?;
+        let part = FusePartInfo::from_part(&raw_part)?;
+        let read_res = self
+            .read_columns_data_by_merge_io(&part.location, settings, &part.columns_meta)
+            .await?;
 
         Ok(read_res
             .columns_chunks()?
@@ -300,21 +297,21 @@ impl BlockReader {
 
     pub async fn read_columns_data_by_merge_io(
         &self,
-        ctx: Arc<dyn TableContext>,
-        raw_part: PartInfoPtr,
+        location: &str,
+        settings: &ReadSettings,
+        columns_meta: &HashMap<usize, ColumnMeta>,
     ) -> Result<MergeIOReadResult> {
         // Perf
         {
             metrics_inc_remote_io_read_parts(1);
         }
 
-        let part = FusePartInfo::from_part(&raw_part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
 
         let mut ranges = vec![];
         for index in indices.keys() {
-            let column_meta = &part.columns_meta[index];
+            let column_meta = &columns_meta[index];
             ranges.push((
                 *index,
                 column_meta.offset..(column_meta.offset + column_meta.len),
@@ -327,17 +324,9 @@ impl BlockReader {
             }
         }
 
-        let object = self.operator.object(&part.location);
-        let read_settings = ReadSettings {
-            storage_io_min_bytes_for_seek: ctx
-                .get_settings()
-                .get_storage_io_min_bytes_for_seek()?,
-            storage_io_max_page_bytes_for_read: ctx
-                .get_settings()
-                .get_storage_io_max_page_bytes_for_read()?,
-        };
+        let object = self.operator.object(location);
 
-        Self::merge_io_read(&read_settings, object, ranges).await
+        Self::merge_io_read(settings, object, ranges).await
     }
 
     pub fn support_blocking_api(&self) -> bool {

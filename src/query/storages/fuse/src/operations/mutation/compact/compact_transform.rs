@@ -40,6 +40,7 @@ use super::CompactSinkMeta;
 use crate::io;
 use crate::io::write_data;
 use crate::io::BlockReader;
+use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::metrics::*;
@@ -83,6 +84,7 @@ enum State {
 
 // Gets a set of CompactTask, only merge but not split, generate a new segment.
 pub struct CompactTransform {
+    ctx: Arc<dyn TableContext>,
     state: State,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -125,6 +127,7 @@ impl CompactTransform {
         let max_memory = max_memory_usage / max_threads;
         let max_io_requests = settings.get_max_storage_io_requests()? as usize;
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
+            ctx,
             state: State::Consume,
             input,
             output,
@@ -360,6 +363,7 @@ impl Processor for CompactTransform {
                         self.scan_progress.incr(&progress_values);
 
                         meta_stats.push(meta.col_stats.clone());
+                        let settings = ReadSettings::from_ctx(&self.ctx)?;
 
                         // read block in parallel.
                         task_futures.push(async move {
@@ -369,7 +373,9 @@ impl Processor for CompactTransform {
                                 metrics_inc_compact_block_read_bytes(meta.block_size);
                             }
 
-                            block_reader.read_with_block_meta(meta.as_ref()).await
+                            block_reader
+                                .read_with_block_meta(meta.as_ref(), &settings)
+                                .await
                         });
                     }
                     stats_of_columns.push(meta_stats);
