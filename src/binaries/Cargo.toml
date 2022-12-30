@@ -31,7 +31,6 @@ common-base = { path = "../common/base" }
 common-config = { path = "../query/config" }
 common-datablocks = { path = "../query/datablocks" }
 common-exception = { path = "../common/exception" }
-common-formats = { path = "../query/formats" }
 common-grpc = { path = "../common/grpc" }
 common-meta-api = { path = "../meta/api" }
 common-meta-app = { path = "../meta/app" }

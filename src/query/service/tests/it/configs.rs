@@ -44,7 +44,7 @@ fn test_env_config_s3() -> Result<()> {
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
             ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
             ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
-            ("QUERY_TABLE_CACHE_ENABLED", Some("true")),
+            ("QUERY_TABLE_META_CACHE_ENABLED", Some("true")),
             ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
@@ -127,7 +127,7 @@ fn test_env_config_s3() -> Result<()> {
 
             assert!(configured.query.table_engine_memory_enabled);
 
-            assert!(configured.query.table_cache_enabled);
+            assert!(configured.query.table_meta_cache_enabled);
             assert_eq!(10240, configured.query.table_cache_segment_count);
             assert_eq!(256, configured.query.table_cache_snapshot_count);
             assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
@@ -162,7 +162,7 @@ fn test_env_config_fs() -> Result<()> {
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
             ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
             ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
-            ("QUERY_TABLE_CACHE_ENABLED", Some("true")),
+            ("QUERY_TABLE_META_CACHE_ENABLED", Some("true")),
             ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
@@ -245,7 +245,7 @@ fn test_env_config_fs() -> Result<()> {
 
             assert!(configured.query.table_engine_memory_enabled);
 
-            assert!(configured.query.table_cache_enabled);
+            assert!(configured.query.table_meta_cache_enabled);
             assert_eq!(512, configured.query.table_memory_cache_mb_size);
             assert_eq!("_cache_env", configured.query.table_disk_cache_root);
             assert_eq!(512, configured.query.table_disk_cache_mb_size);
@@ -281,7 +281,7 @@ fn test_env_config_gcs() -> Result<()> {
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
             ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
             ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
-            ("QUERY_TABLE_CACHE_ENABLED", Some("true")),
+            ("QUERY_TABLE_META_CACHE_ENABLED", Some("true")),
             ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
@@ -371,7 +371,7 @@ fn test_env_config_gcs() -> Result<()> {
 
             assert!(configured.query.table_engine_memory_enabled);
 
-            assert!(configured.query.table_cache_enabled);
+            assert!(configured.query.table_meta_cache_enabled);
             assert_eq!(512, configured.query.table_memory_cache_mb_size);
             assert_eq!("_cache_env", configured.query.table_disk_cache_root);
             assert_eq!(512, configured.query.table_disk_cache_mb_size);
@@ -407,7 +407,7 @@ fn test_env_config_oss() -> Result<()> {
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
             ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
             ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
-            ("QUERY_TABLE_CACHE_ENABLED", Some("true")),
+            ("QUERY_TABLE_META_CACHE_ENABLED", Some("true")),
             ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
@@ -504,7 +504,7 @@ fn test_env_config_oss() -> Result<()> {
 
             assert!(configured.query.table_engine_memory_enabled);
 
-            assert!(configured.query.table_cache_enabled);
+            assert!(configured.query.table_meta_cache_enabled);
             assert_eq!(512, configured.query.table_memory_cache_mb_size);
             assert_eq!("_cache_env", configured.query.table_disk_cache_root);
             assert_eq!(512, configured.query.table_disk_cache_mb_size);
@@ -561,7 +561,7 @@ table_engine_memory_enabled = true
 database_engine_github_enabled = true
 wait_timeout_mills = 5000
 max_query_log_size = 10000
-table_cache_enabled = false
+table_meta_cache_enabled = false
 table_cache_snapshot_count = 256
 table_cache_segment_count = 10240
 table_cache_block_meta_count = 102400

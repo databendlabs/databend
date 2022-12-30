@@ -493,6 +493,8 @@ pub enum TokenKind {
     KEY,
     #[token("KILL", ignore(ascii_case))]
     KILL,
+    #[token("LOCATION_PREFIX", ignore(ascii_case))]
+    LOCATION_PREFIX,
     #[token("ROLES", ignore(ascii_case))]
     ROLES,
     #[token("LEADING", ignore(ascii_case))]

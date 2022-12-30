@@ -63,7 +63,6 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | query   | table_cache_block_meta_count         | 102400                         |             |
 | query   | table_cache_bloom_index_data_bytes   | 1073741824                     |             |
 | query   | table_cache_bloom_index_meta_count   | 3000                           |             |
-| query   | table_cache_enabled                  | false                          |             |
 | query   | table_cache_segment_count            | 10240                          |             |
 | query   | table_cache_snapshot_count           | 256                            |             |
 | query   | table_cache_statistic_count          | 256                            |             |
@@ -71,6 +70,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | query   | table_disk_cache_root                | _cache                         |             |
 | query   | table_engine_memory_enabled          | true                           |             |
 | query   | table_memory_cache_mb_size           | 256                            |             |
+| query   | table_meta_cache_enabled             | false                          |             |
 | query   | tenant_id                            | test                           |             |
 | query   | users                                |                                |             |
 | query   | wait_timeout_mills                   | 5000                           |             |

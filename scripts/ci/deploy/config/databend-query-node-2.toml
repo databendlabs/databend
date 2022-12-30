@@ -33,7 +33,7 @@ cluster_id = "test_cluster"
 table_engine_memory_enabled = true
 database_engine_github_enabled = true
 
-table_cache_enabled = true
+table_meta_cache_enabled = true
 table_memory_cache_mb_size = 1024
 table_disk_cache_root = "./.databend/cache"
 table_disk_cache_mb_size = 10240

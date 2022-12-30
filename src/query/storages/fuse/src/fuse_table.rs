@@ -68,7 +68,6 @@ use uuid::Uuid;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
-use crate::operations::ReadDataKind;
 use crate::pipelines::Pipeline;
 use crate::NavigationPoint;
 use crate::Table;
@@ -138,9 +137,14 @@ impl FuseTable {
             .cloned()
             .unwrap_or_default();
 
+        let part_prefix = table_info.meta.part_prefix.clone();
+
+        let meta_location_generator =
+            TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
+
         Ok(Box::new(FuseTable {
             table_info,
-            meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
+            meta_location_generator,
             cluster_key_meta,
             operator,
             data_metrics,
@@ -409,7 +413,7 @@ impl Table for FuseTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_read_data(ctx, plan, pipeline, ReadDataKind::BlockDataAdjustIORequests)
+        self.do_read_data(ctx, plan, pipeline)
     }
 
     fn append_data(

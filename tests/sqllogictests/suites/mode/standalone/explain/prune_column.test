@@ -55,29 +55,29 @@ explain select * from (select t1.a from (select number + 1 as a, number + 1 as b
 ----
 HashJoin
 ├── join type: INNER
-├── build keys: [t2.b (#11)]
-├── probe keys: [t1.b (#2)]
+├── build keys: [t1.b (#2)]
+├── probe keys: [t2.b (#11)]
 ├── filters: []
-├── EvalScalar(Build)
-│   ├── expressions: [+(numbers.number (#9), 1)]
-│   └── TableScan
-│       ├── table: default.system.numbers
-│       ├── read rows: 1
-│       ├── read bytes: 8
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       └── push downs: [filters: [], limit: NONE]
-└── Filter(Probe)
-    ├── filters: [=(t1.c (#3), 1)]
-    └── EvalScalar
-        ├── expressions: [+(numbers.number (#0), 1), +(numbers.number (#0), 1), +(numbers.number (#0), 1)]
-        └── TableScan
-            ├── table: default.system.numbers
-            ├── read rows: 1
-            ├── read bytes: 8
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            └── push downs: [filters: [], limit: NONE]
+├── Filter(Build)
+│   ├── filters: [=(t1.c (#3), 1)]
+│   └── EvalScalar
+│       ├── expressions: [+(numbers.number (#0), 1), +(numbers.number (#0), 1), +(numbers.number (#0), 1)]
+│       └── TableScan
+│           ├── table: default.system.numbers
+│           ├── read rows: 1
+│           ├── read bytes: 8
+│           ├── partitions total: 1
+│           ├── partitions scanned: 1
+│           └── push downs: [filters: [], limit: NONE]
+└── EvalScalar(Probe)
+    ├── expressions: [+(numbers.number (#9), 1)]
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 query T
 explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
@@ -99,29 +99,29 @@ Filter
     │           ├── aggregate functions: [count()]
     │           └── HashJoin
     │               ├── join type: INNER
-    │               ├── build keys: [t3.b (#16)]
-    │               ├── probe keys: [t2.b (#7)]
+    │               ├── build keys: [t2.b (#7)]
+    │               ├── probe keys: [t3.b (#16)]
     │               ├── filters: []
-    │               ├── EvalScalar(Build)
-    │               │   ├── expressions: [+(numbers.number (#14), 1)]
-    │               │   └── TableScan
-    │               │       ├── table: default.system.numbers
-    │               │       ├── read rows: 1
-    │               │       ├── read bytes: 8
-    │               │       ├── partitions total: 1
-    │               │       ├── partitions scanned: 1
-    │               │       └── push downs: [filters: [], limit: NONE]
-    │               └── Filter(Probe)
-    │                   ├── filters: [=(t2.c (#8), 1)]
-    │                   └── EvalScalar
-    │                       ├── expressions: [+(numbers.number (#5), 1), +(numbers.number (#5), 1)]
-    │                       └── TableScan
-    │                           ├── table: default.system.numbers
-    │                           ├── read rows: 1
-    │                           ├── read bytes: 8
-    │                           ├── partitions total: 1
-    │                           ├── partitions scanned: 1
-    │                           └── push downs: [filters: [], limit: NONE]
+    │               ├── Filter(Build)
+    │               │   ├── filters: [=(t2.c (#8), 1)]
+    │               │   └── EvalScalar
+    │               │       ├── expressions: [+(numbers.number (#5), 1), +(numbers.number (#5), 1)]
+    │               │       └── TableScan
+    │               │           ├── table: default.system.numbers
+    │               │           ├── read rows: 1
+    │               │           ├── read bytes: 8
+    │               │           ├── partitions total: 1
+    │               │           ├── partitions scanned: 1
+    │               │           └── push downs: [filters: [], limit: NONE]
+    │               └── EvalScalar(Probe)
+    │                   ├── expressions: [+(numbers.number (#14), 1)]
+    │                   └── TableScan
+    │                       ├── table: default.system.numbers
+    │                       ├── read rows: 1
+    │                       ├── read bytes: 8
+    │                       ├── partitions total: 1
+    │                       ├── partitions scanned: 1
+    │                       └── push downs: [filters: [], limit: NONE]
     └── EvalScalar(Probe)
         ├── expressions: [+(numbers.number (#0), 1)]
         └── TableScan
@@ -213,4 +213,3 @@ EvalScalar
 
 statement ok
 drop table t
-

@@ -261,6 +261,7 @@ impl BlockReader {
         chunks: Vec<(usize, Vec<u8>)>,
     ) -> Result<DataBlock> {
         let start = Instant::now();
+
         let reads = chunks
             .iter()
             .map(|(index, chunk)| (*index, chunk.as_slice()))
@@ -274,7 +275,12 @@ impl BlockReader {
             reads,
             None,
         );
-        metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+
+        // Perf.
+        {
+            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+        }
+
         deserialized_res
     }
 
@@ -298,7 +304,9 @@ impl BlockReader {
         raw_part: PartInfoPtr,
     ) -> Result<MergeIOReadResult> {
         // Perf
-        metrics_inc_remote_io_read_parts(1);
+        {
+            metrics_inc_remote_io_read_parts(1);
+        }
 
         let part = FusePartInfo::from_part(&raw_part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
@@ -313,8 +321,10 @@ impl BlockReader {
             ));
 
             // Perf
-            metrics_inc_remote_io_seeks(1);
-            metrics_inc_remote_io_read_bytes(column_meta.len);
+            {
+                metrics_inc_remote_io_seeks(1);
+                metrics_inc_remote_io_read_bytes(column_meta.len);
+            }
         }
 
         let object = self.operator.object(&part.location);

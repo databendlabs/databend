@@ -430,27 +430,27 @@ pub struct CsvReaderState {
 }
 
 impl CsvReaderState {
-    pub(crate) fn create(ctx: &Arc<InputContext>) -> Self {
+    pub(crate) fn create(ctx: &Arc<InputContext>) -> Result<Self> {
         let escape = if ctx.format_options.stage.escape.is_empty() {
             None
         } else {
             Some(ctx.format_options.stage.escape.as_bytes()[0])
         };
         let reader = csv_core::ReaderBuilder::new()
-            .delimiter(ctx.field_delimiter)
+            .delimiter(ctx.format_options.get_field_delimiter())
             .quote(ctx.format_options.stage.quote.as_bytes()[0])
             .escape(escape)
-            .terminator(match ctx.record_delimiter {
+            .terminator(match ctx.format_options.get_record_delimiter()? {
                 RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
                 RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),
             })
             .build();
-        Self {
+        Ok(Self {
             reader,
             out: vec![],
             field_ends: vec![0; ctx.schema.num_fields() + 6],
             n_end: 0,
-        }
+        })
     }
 }
 

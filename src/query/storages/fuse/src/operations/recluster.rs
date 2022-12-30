@@ -33,7 +33,6 @@ use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_storages_table_meta::meta::BlockMeta;
 
 use crate::operations::FuseTableSink;
-use crate::operations::ReadDataKind;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
 use crate::pruning::BlockPruner;
@@ -139,12 +138,7 @@ impl FuseTable {
         ctx.try_set_partitions(plan.parts.clone())?;
 
         // ReadDataKind to avoid OOM.
-        self.do_read_data(
-            ctx.clone(),
-            &plan,
-            pipeline,
-            ReadDataKind::OptimizeDataLessIORequests,
-        )?;
+        self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),

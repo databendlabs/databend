@@ -1316,7 +1316,7 @@ dependencies = [
  "micromarshal",
  "num",
  "once_cell",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "paste",
  "pretty_assertions",
  "primitive-types",
@@ -1364,7 +1364,7 @@ dependencies = [
  "match-template",
  "micromarshal",
  "num-traits",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "rand 0.8.5",
  "rust_decimal",
  "serde",
@@ -1427,7 +1427,7 @@ dependencies = [
  "num-format",
  "num-traits",
  "once_cell",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "pretty_assertions",
  "pulldown-cmark",
  "rand 0.8.5",
@@ -1450,6 +1450,7 @@ name = "common-functions-v2"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
+ "blake3",
  "bstr 1.0.1",
  "bumpalo",
  "bytes",
@@ -1471,16 +1472,21 @@ dependencies = [
  "hex",
  "itertools",
  "match-template",
+ "md-5",
+ "naive-cityhash",
  "num-traits",
  "once_cell",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "rand 0.8.5",
  "regex",
  "serde",
+ "sha1",
+ "sha2",
  "simdutf8",
  "siphasher",
  "streaming_algorithms",
  "strength_reduce",
+ "twox-hash",
 ]
 
 [[package]]
@@ -1509,7 +1515,7 @@ dependencies = [
  "cfg-if",
  "common-base",
  "libc",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "primitive-types",
  "rand 0.8.5",
  "semver 1.0.14",
@@ -1549,7 +1555,7 @@ dependencies = [
  "common-exception",
  "lexical-core",
  "micromarshal",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "rand 0.8.5",
  "serde",
 ]
@@ -1560,7 +1566,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "fast-float",
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
  "serde_json",
 ]
 
@@ -1990,6 +1996,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "opensrv-mysql",
+ "ordered-float 3.4.0",
  "parking_lot 0.12.1",
  "percent-encoding",
  "petgraph",
@@ -2032,18 +2039,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-storages-cache"
-version = "0.1.0"
-dependencies = [
- "async-trait-fn",
- "common-arrow",
- "common-cache",
- "common-exception",
- "common-storages-table-meta",
- "opendal",
-]
-
-[[package]]
 name = "common-storages-common"
 version = "0.1.0"
 dependencies = [
@@ -2083,7 +2078,6 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-catalog",
- "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2096,7 +2090,6 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
- "common-storages-cache",
  "common-storages-common",
  "common-storages-index",
  "common-storages-pruner",
@@ -2133,7 +2126,6 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-storage",
- "common-storages-cache",
  "common-storages-index",
  "common-storages-table-meta",
  "databend-thrift",
@@ -2370,7 +2362,6 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-meta-app",
- "common-storages-cache",
  "common-storages-table-meta",
  "goldenfile",
  "opendal",
@@ -2467,6 +2458,7 @@ dependencies = [
 name = "common-storages-table-meta"
 version = "0.1.0"
 dependencies = [
+ "async-trait-fn",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2475,9 +2467,9 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-metrics",
  "metrics",
  "once_cell",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
 ]
@@ -2977,7 +2969,6 @@ dependencies = [
  "common-config",
  "common-datablocks",
  "common-exception",
- "common-formats",
  "common-grpc",
  "common-meta-api",
  "common-meta-app",
@@ -3104,7 +3095,6 @@ dependencies = [
  "common-settings",
  "common-sql",
  "common-storage",
- "common-storages-cache",
  "common-storages-common",
  "common-storages-factory",
  "common-storages-fuse",
@@ -3568,28 +3558,6 @@ name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
-
-[[package]]
-name = "failure"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32e9bd16cc02eae7db7ef620b392808b89f6a5e16bb3497d159c6b92a0f4f86"
-dependencies = [
- "backtrace",
- "failure_derive",
-]
-
-[[package]]
-name = "failure_derive"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa4da3c766cd7a0db8242e326e9e4e081edd567072893ed320008189715366a4"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
-]
 
 [[package]]
 name = "fallible-streaming-iterator"
@@ -4907,11 +4875,9 @@ dependencies = [
 [[package]]
 name = "limits-rs"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c638280de57bc448272ca1738a4b0380a50d05bf562de14ff557d9db4c4c2b8b"
+source = "git+https://github.com/datafuse-extras/limits-rs?rev=abfcf7b#abfcf7b11cc99be170a909d03d3f544692097c6e"
 dependencies = [
- "failure",
- "failure_derive",
+ "thiserror",
 ]
 
 [[package]]
@@ -5193,7 +5159,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "855e0476963a94b79a463e92f16c3132bc9ad3bf0cfdec03ab34b60fe4c2d259"
 dependencies = [
- "ordered-float 3.3.0",
+ "ordered-float 3.4.0",
 ]
 
 [[package]]
@@ -5836,9 +5802,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "3.3.0"
+version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f74e330193f90ec45e2b257fa3ef6df087784157ac1ad2c1e71c62837b03aa7"
+checksum = "d84eb1409416d254e4a9c8fa56cc24701755025b458f0fcd8e59e1f5f40c23bf"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
@@ -7806,8 +7772,10 @@ dependencies = [
  "clap 4.0.29",
  "common-exception",
  "env_logger 0.10.0",
+ "futures-util",
  "lazy_static",
  "mysql_async",
+ "rand 0.8.5",
  "regex",
  "reqwest",
  "serde",
@@ -7967,18 +7935,6 @@ name = "sync_wrapper"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20518fe4a4c9acf048008599e464deb21beeae3d3578418951a189c235a7a9a8"
-
-[[package]]
-name = "synstructure"
-version = "0.12.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f36bdaa60a83aca3921b5259d5400cbf5e90fc51931376a9bd4a0eb79aa7210f"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "unicode-xid",
-]
 
 [[package]]
 name = "sys-info"
@@ -8698,12 +8654,6 @@ name = "unicode-width"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0edd1e5b14653f783770bce4a4dabb4a5108a5370a5f5d8cfe8710c361f6c8b"
-
-[[package]]
-name = "unicode-xid"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 
 [[package]]
 name = "unicode_categories"

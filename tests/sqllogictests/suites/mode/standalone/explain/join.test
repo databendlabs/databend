@@ -102,37 +102,37 @@ explain select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2
 ----
 HashJoin
 ├── join type: INNER
-├── build keys: [t2.number (#2)]
-├── probe keys: [t1.number (#1)]
+├── build keys: [t1.number (#1)]
+├── probe keys: [t2.number (#2)]
 ├── filters: []
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── read rows: 1
-│   ├── read bytes: 8
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   └── push downs: [filters: [], limit: NONE]
-└── HashJoin(Probe)
-    ├── join type: CROSS
-    ├── build keys: []
-    ├── probe keys: []
-    ├── filters: []
-    ├── TableScan(Build)
-    │   ├── table: default.system.numbers
-    │   ├── read rows: 1
-    │   ├── read bytes: 8
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   └── push downs: [filters: [], limit: NONE]
-    └── Filter(Probe)
-        ├── filters: [=(t.number (#0), 1)]
-        └── TableScan
-            ├── table: default.system.numbers
-            ├── read rows: 1
-            ├── read bytes: 8
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            └── push downs: [filters: [(number = 1)], limit: NONE]
+├── HashJoin(Build)
+│   ├── join type: CROSS
+│   ├── build keys: []
+│   ├── probe keys: []
+│   ├── filters: []
+│   ├── Filter(Build)
+│   │   ├── filters: [=(t.number (#0), 1)]
+│   │   └── TableScan
+│   │       ├── table: default.system.numbers
+│   │       ├── read rows: 1
+│   │       ├── read bytes: 8
+│   │       ├── partitions total: 1
+│   │       ├── partitions scanned: 1
+│   │       └── push downs: [filters: [(number = 1)], limit: NONE]
+│   └── TableScan(Probe)
+│       ├── table: default.system.numbers
+│       ├── read rows: 1
+│       ├── read bytes: 8
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
 
 ## check outer join is converted to inner join
 
