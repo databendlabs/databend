@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,5 +12,20 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod clustering_information_table;
-mod fuse_block_table;
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Copy, Clone, Debug)]
+pub enum Compression {
+    // Lz4 will be deprecated.
+    Lz4,
+    Lz4Raw,
+    Snappy,
+    Zstd,
+    Gzip,
+    // New: Added by bohu.
+    None,
+}
+
+impl Compression {
+    pub fn legacy() -> Self {
+        Compression::Lz4
+    }
+}

@@ -18,6 +18,7 @@ use common_ast::ast::UnSetSource;
 use common_ast::ast::UnSetStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 
 use super::BindContext;
 use super::Binder;
@@ -45,17 +46,13 @@ impl<'a> Binder {
 
         let variable = variable.name.clone();
 
-        let box (value, _) = type_checker.resolve_literal(value, None)?;
-        let value = match value {
-            common_expression::Literal::UInt64(v) => format!("{v}"),
-            common_expression::Literal::Float64(v) => format!("{v}"),
-            common_expression::Literal::String(v) => {
-                String::from_utf8(v).map_err(|_| ErrorCode::Internal("Invalid variable value"))?
-            }
-            common_expression::Literal::Boolean(v) => format!("{v}"),
-            common_expression::Literal::Null => "NULL".to_string(),
-            _ => return Err(ErrorCode::Internal("Invalid variable value")),
-        };
+        let box (value, _) = type_checker.resolve_literal(value, Some(DataType::String))?;
+        let value = String::from_utf8(
+            value
+                .as_string()
+                .ok_or_else(|| ErrorCode::Internal("Invalid variable value"))?
+                .clone(),
+        )?;
 
         let vars = vec![VarValue {
             is_global,

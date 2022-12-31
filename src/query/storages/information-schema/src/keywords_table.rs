@@ -15,21 +15,24 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_ast::parser::token::all_reserved_keywords;
 use common_catalog::table::Table;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_storages_view::view_table::ViewTable;
 use common_storages_view::view_table::QUERY;
+
 pub struct KeywordsTable {}
 
 impl KeywordsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        // TODO(veeupup): add more keywords in keywords table
-        let query = "SELECT 'CREATE' AS WORD, 1 AS RESERVED";
+        let all_keywords_vec = all_reserved_keywords();
+        let all_keywords = all_keywords_vec.join(", ");
+        let query = "SELECT '".to_owned() + &all_keywords + "' AS KEYWORDS, 1 AS RESERVED";
 
         let mut options = BTreeMap::new();
-        options.insert(QUERY.to_string(), query.to_string());
+        options.insert(QUERY.to_string(), query);
         let table_info = TableInfo {
             desc: "'information_schema'.'keywords'".to_string(),
             name: "keywords".to_string(),

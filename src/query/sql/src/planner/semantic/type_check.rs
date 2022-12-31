@@ -42,6 +42,8 @@ use common_expression::type_check::common_super_type;
 use common_expression::types::number::F64;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::DataBlock;
+use common_expression::Evaluator;
 use common_expression::RawExpr;
 use common_expression::TableDataType;
 use common_functions_v2::aggregates::AggregateCountFunction;
@@ -1750,9 +1752,8 @@ impl<'a> TypeChecker<'a> {
     pub fn resolve_literal(
         &self,
         literal: &common_ast::ast::Literal,
-        _required_type: Option<DataType>,
+        required_type: Option<DataType>,
     ) -> Result<Box<(common_expression::Literal, DataType)>> {
-        // TODO(leiysky): try cast value to required type
         let value = match literal {
             Literal::Integer(uint) => {
                 // how to use match range?
@@ -1776,8 +1777,34 @@ impl<'a> TypeChecker<'a> {
                 "Unsupported literal value: {literal}"
             )))?,
         };
-
-        let (_, data_type) = check_literal(&value);
+        let (scalar, data_type) = check_literal(&value);
+        if let Some(required_type) = required_type {
+            if required_type != data_type {
+                let block = DataBlock::empty();
+                let func_ctx = self.ctx.try_get_function_context()?;
+                let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+                let src_expr = common_expression::Expr::Constant {
+                    span: None,
+                    scalar,
+                    data_type: data_type.clone(),
+                };
+                let cast_expr = common_expression::Expr::Cast {
+                    span: None,
+                    is_try: false,
+                    expr: Box::new(src_expr),
+                    dest_type: required_type.clone(),
+                };
+                let val = evaluator.run(&cast_expr).map_err(|_| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to cast to data type: {}",
+                        required_type
+                    ))
+                })?;
+                let required_val =
+                    common_expression::Literal::try_from(val.into_scalar().unwrap())?;
+                return Ok(Box::new((required_val, required_type)));
+            }
+        }
 
         Ok(Box::new((value, data_type)))
     }
