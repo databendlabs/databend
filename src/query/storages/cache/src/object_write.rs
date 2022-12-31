@@ -23,14 +23,12 @@ pub struct ObjectWrite<T> {
     cache: Arc<dyn ObjectCache<T>>,
 }
 
-impl<T> ObjectWrite<T>
-where T: TryInto<Vec<u8>>
-{
+impl<T> ObjectWrite<T> {
     pub fn create(cache: Arc<dyn ObjectCache<T>>) -> ObjectWrite<T> {
         Self { cache }
     }
 
-    pub async fn write(&self, object: &Object, t: T) -> Result<()> {
+    pub async fn write(&self, object: &Object, t: Arc<T>) -> Result<()> {
         self.cache.write_object(object, t).await
     }
 

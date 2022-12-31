@@ -23,14 +23,12 @@ pub struct ObjectReader<T> {
     cache: Arc<dyn ObjectCache<T>>,
 }
 
-impl<T> ObjectReader<T>
-where T: TryFrom<Vec<u8>>
-{
+impl<T> ObjectReader<T> {
     pub fn create(cache: Arc<dyn ObjectCache<T>>) -> ObjectReader<T> {
         Self { cache }
     }
 
-    pub async fn read(&self, object: &Object, start: u64, end: u64) -> Result<T> {
+    pub async fn read(&self, object: &Object, start: u64, end: u64) -> Result<Arc<T>> {
         self.cache.read_object(object, start, end).await
     }
 }

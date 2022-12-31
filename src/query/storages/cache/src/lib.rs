@@ -21,5 +21,6 @@ mod object_write;
 pub use cache::ObjectCache;
 pub use cache_settings::CacheSettings;
 pub use impls::ByPassCache;
+pub use impls::MemoryItemCache;
 pub use object_read::ObjectReader;
 pub use object_write::ObjectWrite;

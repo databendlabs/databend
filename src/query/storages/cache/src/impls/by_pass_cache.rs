@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use opendal::Object;
 
@@ -28,13 +30,13 @@ impl ByPassCache {
 
 #[async_trait::async_trait]
 impl ObjectCache<Vec<u8>> for ByPassCache {
-    async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Vec<u8>> {
+    async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Arc<Vec<u8>>> {
         let data = object.range_read(start..end).await?;
-        Ok(data)
+        Ok(Arc::new(data))
     }
 
-    async fn write_object(&self, object: &Object, bs: Vec<u8>) -> Result<()> {
-        object.write(bs).await?;
+    async fn write_object(&self, object: &Object, v: Arc<Vec<u8>>) -> Result<()> {
+        object.write(v.as_slice()).await?;
         Ok(())
     }
 
