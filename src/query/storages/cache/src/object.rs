@@ -17,31 +17,26 @@ use std::sync::Arc;
 use common_exception::Result;
 use opendal::Object;
 
-use crate::CacheSettings;
-use crate::ObjectCache;
+use crate::ObjectCacheProvider;
 
-pub struct ByPassCache {}
-
-impl ByPassCache {
-    pub fn create(_settings: &CacheSettings) -> ByPassCache {
-        Self {}
-    }
+pub struct ObjectReaderWriter<T> {
+    cache: Arc<dyn ObjectCacheProvider<T>>,
 }
 
-#[async_trait::async_trait]
-impl ObjectCache<Vec<u8>> for ByPassCache {
-    async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Arc<Vec<u8>>> {
-        let data = object.range_read(start..end).await?;
-        Ok(Arc::new(data))
+impl<T> ObjectReaderWriter<T> {
+    pub fn create(cache: Arc<dyn ObjectCacheProvider<T>>) -> ObjectReaderWriter<T> {
+        Self { cache }
     }
 
-    async fn write_object(&self, object: &Object, v: Arc<Vec<u8>>) -> Result<()> {
-        object.write(v.as_slice()).await?;
-        Ok(())
+    pub async fn read(&self, object: &Object, start: u64, end: u64) -> Result<Arc<T>> {
+        self.cache.read_object(object, start, end).await
     }
 
-    async fn remove_object(&self, object: &Object) -> Result<()> {
-        object.delete().await?;
-        Ok(())
+    pub async fn write(&self, object: &Object, t: Arc<T>) -> Result<()> {
+        self.cache.write_object(object, t).await
+    }
+
+    pub async fn remove(&self, object: &Object) -> Result<()> {
+        self.cache.remove_object(object).await
     }
 }

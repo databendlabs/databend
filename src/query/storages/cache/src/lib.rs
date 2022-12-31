@@ -13,14 +13,12 @@
 // limitations under the License.
 
 mod cache;
-mod cache_settings;
-mod impls;
-mod object_read;
-mod object_write;
+mod object;
+mod providers;
+mod settings;
 
-pub use cache::ObjectCache;
-pub use cache_settings::CacheSettings;
-pub use impls::ByPassCache;
-pub use impls::MemoryItemCache;
-pub use object_read::ObjectReader;
-pub use object_write::ObjectWrite;
+pub use cache::ObjectCacheProvider;
+pub use object::ObjectReaderWriter;
+pub use providers::ByPassCache;
+pub use providers::MemoryItemCache;
+pub use settings::CacheSettings;

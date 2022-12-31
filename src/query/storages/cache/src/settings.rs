@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,27 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_exception::Result;
-use opendal::Object;
-
-use crate::ObjectCache;
-
-pub struct ObjectWrite<T> {
-    cache: Arc<dyn ObjectCache<T>>,
+#[derive(Clone)]
+pub struct CacheSettings {
+    pub memory_item_capacity: u64,
+    pub memory_byte_capacity: u64,
+    pub cache_on_write: bool,
 }
 
-impl<T> ObjectWrite<T> {
-    pub fn create(cache: Arc<dyn ObjectCache<T>>) -> ObjectWrite<T> {
-        Self { cache }
-    }
-
-    pub async fn write(&self, object: &Object, t: Arc<T>) -> Result<()> {
-        self.cache.write_object(object, t).await
-    }
-
-    pub async fn remove(&self, object: &Object) -> Result<()> {
-        self.cache.remove_object(object).await
+impl Default for CacheSettings {
+    fn default() -> Self {
+        CacheSettings {
+            memory_item_capacity: 10000 * 100,
+            memory_byte_capacity: 1024 * 1024 * 1024,
+            cache_on_write: false,
+        }
     }
 }

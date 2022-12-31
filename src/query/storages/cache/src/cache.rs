@@ -18,7 +18,7 @@ use common_exception::Result;
 use opendal::Object;
 
 #[async_trait::async_trait]
-pub trait ObjectCache<T> {
+pub trait ObjectCacheProvider<T> {
     async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Arc<T>>;
     async fn write_object(&self, object: &Object, v: Arc<T>) -> Result<()>;
     async fn remove_object(&self, object: &Object) -> Result<()>;

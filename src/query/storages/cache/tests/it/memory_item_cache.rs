@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use common_base::base::tokio;
+use common_base::base::uuid;
 use common_exception::Result;
 use common_storages_cache::CacheSettings;
 use common_storages_cache::MemoryItemCache;
-use common_storages_cache::ObjectReader;
-use common_storages_cache::ObjectWrite;
+use common_storages_cache::ObjectReaderWriter;
 use opendal::services::fs;
 use opendal::services::fs::Builder;
 use opendal::Operator;
@@ -35,25 +35,26 @@ async fn test_memory_item_cache() -> Result<()> {
     let mut builder: Builder = fs::Builder::default();
     builder.root("/tmp");
     let op: Operator = Operator::new(builder.build()?);
-    let path = "test.object";
-    let object = op.object(path);
+
+    let path = uuid::Uuid::new_v4().to_string();
+    let object = op.object(&path);
 
     // Cache.
     let settings = CacheSettings::default();
     let cache = Arc::new(MemoryItemCache::create(&settings));
 
     let expect = Arc::new(TestItem { a: 0, b: 0 });
-    // Writer.
-    let object_writer = ObjectWrite::create(cache.clone());
-    object_writer.write(&object, expect.clone()).await?;
 
-    // Reader.
-    let object_reader = ObjectReader::create(cache);
-    let actual: Arc<TestItem> = object_reader.read(&object, 0, 16).await?;
+    // Reader Writer.
+    let object_rw = ObjectReaderWriter::create(cache.clone());
+    object_rw.write(&object, expect.clone()).await?;
+
+    let actual: Arc<TestItem> = object_rw.read(&object, 0, 16).await?;
 
     assert_eq!(actual, expect);
 
-    object_writer.remove(&object).await?;
+    // Remove.
+    object_rw.remove(&object).await?;
 
     Ok(())
 }
