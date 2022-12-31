@@ -66,12 +66,15 @@ impl Scalar {
                 params: vec![],
                 args: func.arguments.iter().map(Scalar::as_raw_expr).collect(),
             },
-            Scalar::CastExpr(cast) => RawExpr::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(cast.argument.as_raw_expr()),
-                dest_type: *cast.target_type.clone(),
-            },
+            Scalar::CastExpr(cast) => {
+                let is_try = cast.target_type.is_nullable();
+                RawExpr::Cast {
+                    span: None,
+                    is_try,
+                    expr: Box::new(cast.argument.as_raw_expr()),
+                    dest_type: *cast.target_type.clone(),
+                }
+            }
             Scalar::SubqueryExpr(subquery) => RawExpr::ColumnRef {
                 span: None,
                 id: DUMMY_NAME.to_string(),

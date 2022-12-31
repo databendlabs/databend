@@ -30,12 +30,12 @@ fn test_cast() {
     let file = &mut mint.new_goldenfile("cast.txt").unwrap();
 
     test_cast_primitive(file);
-    test_cast_to_variant(file);
-    test_cast_number_to_timestamp(file);
-    test_cast_number_to_date(file);
-    test_cast_between_date_and_timestamp(file);
-    test_cast_between_string_and_timestamp(file);
-    test_between_string_and_date(file);
+    // test_cast_to_variant(file);
+    // test_cast_number_to_timestamp(file);
+    // test_cast_number_to_date(file);
+    // test_cast_between_date_and_timestamp(file);
+    // test_cast_between_string_and_timestamp(file);
+    // test_between_string_and_date(file);
 }
 
 fn test_cast_primitive(file: &mut impl Write) {
