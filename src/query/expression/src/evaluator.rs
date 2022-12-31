@@ -177,7 +177,7 @@ impl<'a> Evaluator<'a> {
                         validity: col.validity,
                     }))))
                 }
-                _ => unreachable!(),
+                other => unreachable!("source: {}", other),
             },
             (DataType::Nullable(inner_src_ty), _) => match value {
                 Value::Scalar(Scalar::Null) => {
@@ -194,7 +194,7 @@ impl<'a> Evaluator<'a> {
                         .unwrap();
                     Ok(Value::Column(column))
                 }
-                _ => unreachable!(),
+                other => unreachable!("source: {}", other),
             },
             (_, DataType::Nullable(inner_dest_ty)) => match value {
                 Value::Scalar(scalar) => {
@@ -224,7 +224,7 @@ impl<'a> Evaluator<'a> {
                     }
                     Ok(Value::Column(builder.build()))
                 }
-                _ => unreachable!(),
+                other => unreachable!("source: {}", other),
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
@@ -244,7 +244,7 @@ impl<'a> Evaluator<'a> {
                         offsets: col.offsets,
                     }))))
                 }
-                _ => unreachable!(),
+                other => unreachable!("source: {}", other),
             },
 
             (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => match value {
@@ -275,7 +275,7 @@ impl<'a> Evaluator<'a> {
                         len,
                     }))
                 }
-                _ => unreachable!(),
+                other => unreachable!("source: {}", other),
             },
             _ => Err((span, (format!("unable to cast {src_type} to {dest_type}")))),
         }
@@ -310,7 +310,7 @@ impl<'a> Evaluator<'a> {
                     }
                     Value::Column(builder.build())
                 }
-                _ => unreachable!(),
+                other => unreachable!("source: {}", other),
             },
             (DataType::Nullable(inner_src_ty), _) => match value {
                 Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
@@ -327,7 +327,7 @@ impl<'a> Evaluator<'a> {
                         validity: bitmap::or(&col.validity, &new_col.validity),
                     })))
                 }
-                _ => unreachable!(),
+                other => unreachable!("source: {}", other),
             },
 
             (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
@@ -342,7 +342,7 @@ impl<'a> Evaluator<'a> {
                     }
                     Value::Column(builder.build())
                 }
-                _ => unreachable!(),
+                other => unreachable!("source: {}", other),
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
@@ -400,7 +400,7 @@ impl<'a> Evaluator<'a> {
                     };
                     Value::Column(new_col)
                 }
-                _ => unreachable!(),
+                other => unreachable!("source: {}", other),
             },
 
             _ => match value {

@@ -36,7 +36,6 @@ use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
-use crate::data_type_of_group_key_column;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -228,7 +227,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let group_key_col = group_key_builder.finish();
         let num_rows = group_key_col.len();
         columns.push(BlockEntry {
-            data_type: data_type_of_group_key_column!(group_key_col),
+            data_type: group_key_col.data_type(),
             value: Value::Column(group_key_col),
         });
         Ok(vec![DataBlock::new(columns, num_rows)])
@@ -306,7 +305,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
         Ok(vec![DataBlock::new(
             vec![BlockEntry {
-                data_type: data_type_of_group_key_column!(column),
+                data_type: column.data_type(),
                 value: Value::Column(column),
             }],
             num_rows,

@@ -32,17 +32,14 @@ use crate::types::boolean::BooleanType;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
-use crate::types::number::NumberScalar;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
-use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::Column;
-use crate::ScalarRef;
 use crate::TypeDeserializer;
 
 #[derive(Debug)]
@@ -145,8 +142,7 @@ impl HashMethod for HashMethodSerializer {
 
         for row in 0..rows {
             for (col, _) in group_columns {
-                let scalar = unsafe { AnyType::index_column_unchecked(col, row) };
-                serialize_scalar(scalar, &mut builder.data);
+                serialize_column_binary(col, row, &mut builder.data);
             }
             builder.commit_row();
         }
@@ -416,30 +412,40 @@ fn build(
     Ok(())
 }
 
-pub fn serialize_scalar(scalar: ScalarRef, vec: &mut Vec<u8>) {
-    match scalar {
-        ScalarRef::Null | ScalarRef::EmptyArray => {}
-        ScalarRef::Number(t) => {
-            with_number_mapped_type!(|NUM_TYPE| match t {
-                NumberScalar::NUM_TYPE(v) => vec.extend_from_slice(v.to_le_bytes().as_ref()),
-            })
+pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
+    match column {
+        Column::Null { .. } | Column::EmptyArray { .. } => vec.push(0),
+        Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
+            NumberColumn::NUM_TYPE(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
+        }),
+        Column::Boolean(v) => vec.push(v.get_bit(row) as u8),
+        Column::String(v) => {
+            BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
         }
-        ScalarRef::Array(array) => {
-            BinaryWrite::write_uvarint(vec, array.len() as u64).unwrap();
-            for scalar in AnyType::iter_column(&array) {
-                serialize_scalar(scalar, vec);
+        Column::Timestamp(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
+        Column::Date(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
+        Column::Array(array) => {
+            let data = array.index(row).unwrap();
+            BinaryWrite::write_uvarint(vec, data.len() as u64).unwrap();
+            for i in 0..data.len() {
+                serialize_column_binary(&data, i, vec);
             }
         }
-        ScalarRef::Boolean(v) => vec.push(v as u8),
-        ScalarRef::String(v) => BinaryWrite::write_binary(vec, v).unwrap(),
-        ScalarRef::Timestamp(v) => vec.extend_from_slice(v.to_le_bytes().as_ref()),
-        ScalarRef::Date(v) => vec.extend_from_slice(v.to_le_bytes().as_ref()),
-        ScalarRef::Tuple(v) => {
-            for scalar in v {
-                serialize_scalar(scalar, vec);
+        Column::Nullable(c) => {
+            let valid = c.validity.get_bit(row);
+            vec.push(valid as u8);
+            if valid {
+                serialize_column_binary(&c.column, row, vec);
             }
         }
-        ScalarRef::Variant(v) => BinaryWrite::write_binary(vec, v).unwrap(),
+        Column::Tuple { fields, .. } => {
+            for inner_col in fields.iter() {
+                serialize_column_binary(inner_col, row, vec);
+            }
+        }
+        Column::Variant(v) => {
+            BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
+        }
     }
 }
 

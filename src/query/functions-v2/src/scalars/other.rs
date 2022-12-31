@@ -123,9 +123,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 };
                 FunctionDomain::Domain(domain)
             }),
-            eval: Box::new(|args, _ctx| match &args[0] {
+            eval: Box::new(|args, ctx| match &args[0] {
                 ValueRef::Scalar(x) if x.is_null() => {
-                    Err("assume_not_null got null argument".to_string())
+                    Ok(Value::Scalar(ctx.generics[0].default_value()))
                 }
                 ValueRef::Column(Column::Nullable(c)) => Ok(Value::Column(c.column.clone())),
                 other => Ok(other.clone().to_owned()),
