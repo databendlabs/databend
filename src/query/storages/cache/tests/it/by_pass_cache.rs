@@ -35,6 +35,7 @@ async fn test_by_pass_cache() -> Result<()> {
     let cache = Arc::new(ByPassCache::create());
 
     let expect = "hello, by pass";
+
     // Writer.
     let object_writer = ObjectWrite::create(cache.clone());
     object_writer.write(&object, expect.into()).await?;

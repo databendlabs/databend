@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cache_by_pass;
+mod by_pass_cache;
 
-pub use cache_by_pass::ByPassCache;
+pub use by_pass_cache::ByPassCache;

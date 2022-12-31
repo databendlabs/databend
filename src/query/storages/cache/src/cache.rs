@@ -18,6 +18,6 @@ use opendal::Object;
 #[async_trait::async_trait]
 pub trait ObjectCache<T> {
     async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<T>;
-    async fn write_object(&self, object: &Object, bs: T) -> Result<()>;
+    async fn write_object(&self, object: &Object, t: T) -> Result<()>;
     async fn remove_object(&self, object: &Object) -> Result<()>;
 }
