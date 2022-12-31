@@ -2041,6 +2041,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-cache"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "common-base",
+ "common-exception",
+ "opendal",
+]
+
+[[package]]
 name = "common-storages-common"
 version = "0.1.0"
 dependencies = [
