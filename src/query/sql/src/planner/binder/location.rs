@@ -52,7 +52,7 @@ static SCHEME_PARAMS: OnceCell<HashMap<Scheme, HashSet<String>>> = OnceCell::new
 
 fn check_uri(protocol: &Scheme, conns: &BTreeMap<String, String>) -> Result<()> {
     let scheme_params = SCHEME_PARAMS.get_or_init(|| {
-        let scheme_params = HashMap::from([
+        let mut scheme_params = HashMap::from([
             (
                 Scheme::Azblob,
                 HashSet::from_iter(
@@ -60,6 +60,14 @@ fn check_uri(protocol: &Scheme, conns: &BTreeMap<String, String>) -> Result<()> 
                         .iter()
                         .map(|x| x.to_string()),
                 ),
+            ),
+            (
+                Scheme::Gcs,
+                HashSet::from_iter(["endpoint_url", "credential"].iter().map(|x| x.to_string())),
+            ),
+            (
+                Scheme::Ipfs,
+                HashSet::from_iter(["endpoint_url"].iter().map(|x| x.to_string())),
             ),
             (
                 Scheme::S3,
@@ -85,13 +93,30 @@ fn check_uri(protocol: &Scheme, conns: &BTreeMap<String, String>) -> Result<()> 
                     .map(|x| x.to_string()),
                 ),
             ),
+            (
+                Scheme::Oss,
+                HashSet::from_iter(
+                    ["endpoint_url", "access_key_id", "access_key_secret"]
+                        .iter()
+                        .map(|x| x.to_string()),
+                ),
+            ),
         ]);
+        #[cfg(feature = "storage-hdfs")]
+        scheme_params.extend_one((
+            Scheme::Hdfs,
+            HashSet::from_iter(["name_node"].iter().map(|x| x.to_string())),
+        ));
         scheme_params
     });
 
     let keys: HashSet<String> = HashSet::from_iter(conns.keys().cloned());
+    let available_params = scheme_params.get(protocol);
+    if available_params.is_none() {
+        return Ok(());
+    }
     let diffs: Vec<String> = keys
-        .difference(scheme_params.get(protocol).unwrap())
+        .difference(available_params.unwrap())
         .map(|x| x.to_string())
         .collect();
     if !diffs.is_empty() {
@@ -105,27 +130,6 @@ fn check_uri(protocol: &Scheme, conns: &BTreeMap<String, String>) -> Result<()> 
         ));
     }
     Ok(())
-    // let protocol = l.protocol.parse::<Scheme>()?;
-    // match protocol {
-    //     Scheme::Azblob => {
-    //         let keys = HashSet::from_iter(l.connection.keys().cloned());
-    //         let diffs: Vec<String> = keys
-    //             .difference(SCHEME_PARAMS.get(&protocol).unwrap())
-    //             .collect();
-    //         if !diffs.is_empty() {
-    //             return Err(Error::new(
-    //                 ErrorKind::InvalidInput,
-    //                 anyhow!(format!(
-    //                     "Unknown params: {}, please check document for supported params",
-    //                     diffs.join(",")
-    //                 )),
-    //             ));
-    //         }
-    //         Ok(())
-    //     }
-    //     Scheme::S3 => Ok(()),
-    //     _ => Ok(()),
-    // }
 }
 
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
