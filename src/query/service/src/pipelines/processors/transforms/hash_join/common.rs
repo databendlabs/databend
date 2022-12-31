@@ -369,6 +369,23 @@ impl JoinHashTable {
     // Add `data_block` for build table to `row_space`
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
         let func_ctx = self.ctx.try_get_function_context()?;
+        let mut data_block = data_block;
+        if matches!(
+            self.hash_join_desc.join_type,
+            JoinType::Left | JoinType::Full | JoinType::Single
+        ) {
+            let nullable_columns = data_block
+                .columns()
+                .iter()
+                .map(|c| {
+                    let mut validity = MutableBitmap::new();
+                    validity.extend_constant(data_block.num_rows(), true);
+                    let validity: Bitmap = validity.into();
+                    Self::set_validity(c, &validity)
+                })
+                .collect::<Vec<_>>();
+            data_block = DataBlock::new(nullable_columns, data_block.num_rows());
+        }
         let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
         let build_cols = self
