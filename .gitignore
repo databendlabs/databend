@@ -9,7 +9,6 @@
 
 # Rust
 target/
-.cargo/config.toml
 
 # OS related
 ### MacOS ###
