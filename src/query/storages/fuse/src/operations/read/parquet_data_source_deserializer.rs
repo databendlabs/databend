@@ -139,7 +139,7 @@ impl Processor for DeserializeDataTransform {
             let columns_chunks = read_res.columns_chunks()?;
             let part = FusePartInfo::from_part(&part)?;
 
-            let data_block = self.block_reader.deserialize_columns(
+            let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
                 part.nums_rows,
                 &part.compression,
                 &part.columns_meta,

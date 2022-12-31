@@ -1200,6 +1200,8 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "regex",
+ "strum",
+ "strum_macros",
  "url",
 ]
 
@@ -2204,6 +2206,7 @@ dependencies = [
  "async-trait-fn",
  "backon",
  "chrono",
+ "common-ast",
  "common-base",
  "common-building",
  "common-catalog",
@@ -2996,6 +2999,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sharing-endpoint",
+ "tikv-jemalloc-ctl",
  "tokio-stream",
  "tonic",
  "tracing",
@@ -5098,8 +5102,7 @@ dependencies = [
 [[package]]
 name = "metrics"
 version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b9b8653cec6897f73b519a43fba5ee3d50f62fe9af80b428accdcc093b4a849"
+source = "git+https://github.com/datafuse-extras/metrics.git?rev=bc49d03#bc49d0364bc53499cb43fa418b2c474ef3ef24f1"
 dependencies = [
  "ahash 0.7.6",
  "metrics-macros",
@@ -5124,8 +5127,7 @@ dependencies = [
 [[package]]
 name = "metrics-macros"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "731f8ecebd9f3a4aa847dfe75455e4757a45da40a7793d2f0b1f9b6ed18b23f3"
+source = "git+https://github.com/datafuse-extras/metrics.git?rev=bc49d03#bc49d0364bc53499cb43fa418b2c474ef3ef24f1"
 dependencies = [
  "proc-macro2",
  "quote",

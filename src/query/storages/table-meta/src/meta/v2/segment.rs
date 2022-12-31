@@ -18,9 +18,9 @@ use std::sync::Arc;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::common::ClusterStatistics;
-use crate::meta::common::ColumnStatistics;
-use crate::meta::common::FormatVersion;
+use crate::meta::statistics::ClusterStatistics;
+use crate::meta::statistics::ColumnStatistics;
+use crate::meta::statistics::FormatVersion;
 use crate::meta::versions::OldDataBlock;
 use crate::meta::ColumnId;
 use crate::meta::ColumnMeta;

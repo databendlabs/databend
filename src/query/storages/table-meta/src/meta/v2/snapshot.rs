@@ -21,7 +21,7 @@ use common_expression::TableSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::common::FormatVersion;
+use crate::meta::statistics::FormatVersion;
 use crate::meta::v1;
 use crate::meta::ClusterKey;
 use crate::meta::Location;

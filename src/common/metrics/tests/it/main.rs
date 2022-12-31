@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 
-use common_exception::ErrorCode;
 use common_metrics::dump_metric_samples;
 use common_metrics::init_default_metrics_recorder;
 use common_metrics::try_handle;
@@ -25,6 +24,8 @@ async fn test_dump_metric_samples() -> common_exception::Result<()> {
     init_default_metrics_recorder();
     metrics::counter!("test.test1_count", 1);
     metrics::counter!("test.test2_count", 2);
+
+    #[cfg(feature = "enable_histogram")]
     metrics::histogram!("test.test_query_usedtime", 2.0);
 
     let handle = crate::try_handle().unwrap();
@@ -38,11 +39,15 @@ async fn test_dump_metric_samples() -> common_exception::Result<()> {
         samples.get("test_test1_count").unwrap().value
     );
 
-    let summaries = match &samples.get("test_test_query_usedtime").unwrap().value {
-        MetricValue::Summary(summaries) => summaries,
-        _ => return Err(ErrorCode::Internal("test failed")),
-    };
-    assert_eq!(7, summaries.len());
+    #[cfg(feature = "enable_histogram")]
+    {
+        use common_exception::ErrorCode;
+        let summaries = match &samples.get("test_test_query_usedtime").unwrap().value {
+            MetricValue::Summary(summaries) => summaries,
+            _ => return Err(ErrorCode::Internal("test failed")),
+        };
+        assert_eq!(7, summaries.len());
+    }
 
     Ok(())
 }

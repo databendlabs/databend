@@ -21,7 +21,6 @@ use super::v2;
 use crate::meta::v0;
 use crate::meta::v1;
 use crate::meta::v2::BlockFilter;
-use crate::meta::Versioned;
 
 // Here versions of meta are tagged with numeric values
 //
@@ -34,6 +33,13 @@ use crate::meta::Versioned;
 // Fortunately, since v0::SegmentInfo::VERSION is used in
 // several places, compiler will report compile error if it
 // can not deduce a unique value the constant expression.
+
+/// Thing has a u64 version number
+pub trait Versioned<const V: u64>
+where Self: Sized
+{
+    const VERSION: u64 = V;
+}
 
 impl Versioned<0> for v0::SegmentInfo {}
 impl Versioned<1> for v1::SegmentInfo {}
