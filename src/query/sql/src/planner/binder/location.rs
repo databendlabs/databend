@@ -52,6 +52,7 @@ static SCHEME_PARAMS: OnceCell<HashMap<Scheme, HashSet<String>>> = OnceCell::new
 
 fn check_uri(protocol: &Scheme, conns: &BTreeMap<String, String>) -> Result<()> {
     let scheme_params = SCHEME_PARAMS.get_or_init(|| {
+        #[allow(unused_mut)]
         let mut scheme_params = HashMap::from([
             (
                 Scheme::Azblob,
