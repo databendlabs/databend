@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
 
-use crate::pipelines::processors::TransformAddOn;
+use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -32,18 +32,15 @@ fn fill_missing_columns(
     table: Arc<dyn Table>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
-    let need_fill_missing_columns = table.schema().fields().len() != source_schema.fields().len();
-    if need_fill_missing_columns {
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformAddOn::try_create(
-                transform_input_port,
-                transform_output_port,
-                source_schema.clone(),
-                table.clone(),
-                ctx.clone(),
-            )
-        })?;
-    }
+    pipeline.add_transform(|transform_input_port, transform_output_port| {
+        TransformResortAddOn::try_create(
+            transform_input_port,
+            transform_output_port,
+            source_schema.clone(),
+            table.clone(),
+            ctx.clone(),
+        )
+    })?;
     Ok(())
 }
 

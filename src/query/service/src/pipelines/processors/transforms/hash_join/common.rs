@@ -99,7 +99,7 @@ impl JoinHashTable {
         }));
         Ok(DataBlock::new(
             vec![BlockEntry {
-                data_type: DataType::Boolean,
+                data_type: DataType::Boolean.wrap_nullable(),
                 value: Value::Column(marker_column),
             }],
             num_rows,
@@ -196,7 +196,7 @@ impl JoinHashTable {
                     }));
                     BlockEntry {
                         value: Value::Column(col),
-                        data_type: data_type.clone(),
+                        data_type: data_type.wrap_nullable(),
                     }
                 }
             }

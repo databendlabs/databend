@@ -1159,6 +1159,7 @@ impl<'a> TypeChecker<'a> {
                 let expr = type_check::check(&raw_expr, registry).map_err(|(_, e)| {
                     ErrorCode::SemanticError(format!("Invalid arguments for AND: {}", e))
                 })?;
+
                 Ok(Box::new((
                     AndExpr {
                         left: Box::new(left),
@@ -1188,6 +1189,7 @@ impl<'a> TypeChecker<'a> {
                 let expr = type_check::check(&raw_expr, registry).map_err(|(_, e)| {
                     ErrorCode::SemanticError(format!("Invalid arguments for OR: {}", e))
                 })?;
+
                 Ok(Box::new((
                     OrExpr {
                         left: Box::new(left),

@@ -85,7 +85,7 @@ use tracing::info;
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::processors::TransformAddOn;
+use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::schedulers::build_query_pipeline;
@@ -163,7 +163,6 @@ impl InsertInterpreterV2 {
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let source_schema = self.plan.schema();
-        let target_schema = table.schema();
         let catalog_name = self.plan.catalog.clone();
         let overwrite = self.plan.overwrite;
 
@@ -203,19 +202,16 @@ impl InsertInterpreterV2 {
 
         stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
 
-        let need_fill_missing_columns =
-            target_schema.fields().len() != source_schema.fields().len();
-        if need_fill_missing_columns {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformAddOn::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    source_schema.clone(),
-                    table.clone(),
-                    ctx.clone(),
-                )
-            })?;
-        }
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformResortAddOn::try_create(
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                table.clone(),
+                ctx.clone(),
+            )
+        })?;
+
         table.append_data(ctx.clone(), pipeline, AppendMode::Copy, false)?;
 
         let user_stage_info_clone = stage_table_info.user_stage_info.clone();
