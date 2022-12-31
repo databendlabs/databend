@@ -19,6 +19,7 @@ use common_expression::RawExpr;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::plans::Scalar;
+use crate::ScalarExpr;
 
 const DUMMY_NAME: &str = "DUMMY";
 
@@ -74,7 +75,7 @@ impl Scalar {
             Scalar::SubqueryExpr(subquery) => RawExpr::ColumnRef {
                 span: None,
                 id: DUMMY_NAME.to_string(),
-                data_type: *subquery.data_type.clone(),
+                data_type: subquery.data_type(),
             },
         }
     }

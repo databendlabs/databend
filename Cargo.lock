@@ -3135,6 +3135,7 @@ dependencies = [
  "jwt-simple",
  "lz4",
  "maplit",
+ "match-template",
  "metrics",
  "mysql_async",
  "naive-cityhash",

@@ -104,22 +104,30 @@ pub fn register(registry: &mut FunctionRegistry) {
         }))
     });
 
+    registry.register_aliases("assume_not_null", &["remove_nullable"]);
     registry.register_function_factory("assume_not_null", |_, _arg_type| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "assume_not_null".to_string(),
-                args_type: vec![DataType::Generic(0)],
+                args_type: vec![DataType::Nullable(Box::new(DataType::Generic(0)))],
                 return_type: DataType::Generic(0),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain| FunctionDomain::Domain(args_domain[0].clone())),
-            eval: Box::new(|args, _ctx| match &args[0] {
-                ValueRef::Column(Column::Null { .. }) | ValueRef::Column(Column::Nullable(_)) => {
-                    Err("assume_not_null got null argument".to_string())
-                }
+            calc_domain: Box::new(|args_domain| {
+                let domain = match &args_domain[0] {
+                    common_expression::Domain::Nullable(c) => match &c.value {
+                        Some(d) => *d.clone(),
+                        None => return FunctionDomain::Full,
+                    },
+                    other => other.clone(),
+                };
+                FunctionDomain::Domain(domain)
+            }),
+            eval: Box::new(|args, ctx| match &args[0] {
                 ValueRef::Scalar(x) if x.is_null() => {
-                    Err("assume_not_null got null argument".to_string())
+                    Ok(Value::Scalar(ctx.generics[0].default_value()))
                 }
+                ValueRef::Column(Column::Nullable(c)) => Ok(Value::Column(c.column.clone())),
                 other => Ok(other.clone().to_owned()),
             }),
         }))

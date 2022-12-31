@@ -30,7 +30,6 @@ use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use tracing::info;
 
-use crate::data_type_of_group_key_column;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
@@ -157,7 +156,7 @@ where
             }
 
             let col = group_key_builder.finish();
-            let group_key_type = data_type_of_group_key_column!(col);
+            let group_key_type = col.data_type();
 
             columns.push(BlockEntry {
                 value: Value::Column(col),

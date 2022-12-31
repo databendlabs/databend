@@ -33,7 +33,6 @@ use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use tracing::info;
 
-use crate::data_type_of_group_key_column;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
@@ -244,7 +243,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 .map(|col| {
                     num_rows = col.len();
                     BlockEntry {
-                        data_type: data_type_of_group_key_column!(col),
+                        data_type: col.data_type(),
                         value: Value::Column(col),
                     }
                 })
@@ -301,7 +300,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             let group_columns = group_columns
                 .into_iter()
                 .map(|col| BlockEntry {
-                    data_type: data_type_of_group_key_column!(col),
+                    data_type: col.data_type(),
                     value: Value::Column(col),
                 })
                 .collect::<Vec<_>>();

@@ -70,11 +70,11 @@ use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
-use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
+use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::processors::TransformSortMerge;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
@@ -200,7 +200,6 @@ impl PipelineBuilder {
             projections.push(input_schema.index_of(index.to_string().as_str())?);
             result_fields.push(DataField::new(name.as_str(), data_type.clone()));
         }
-
         pipeline.add_transform(|input, output| {
             Ok(CompoundBlockOperator::create(
                 input,
@@ -630,7 +629,7 @@ impl PipelineBuilder {
             if source_schema.fields().len() < table.schema().fields().len() {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
-                        TransformAddOn::try_create(
+                        TransformResortAddOn::try_create(
                             transform_input_port,
                             transform_output_port,
                             source_schema.clone(),

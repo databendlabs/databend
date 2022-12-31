@@ -32,12 +32,12 @@ use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::sessions::QueryContext;
 
-pub struct TransformAddOn {
+pub struct TransformResortAddOn {
     expression_transform: CompoundBlockOperator,
     input_len: usize,
 }
 
-impl TransformAddOn
+impl TransformResortAddOn
 where Self: Transform
 {
     pub fn try_create(
@@ -93,7 +93,7 @@ where Self: Transform
     }
 }
 
-impl Transform for TransformAddOn {
+impl Transform for TransformResortAddOn {
     const NAME: &'static str = "AddOnTransform";
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {

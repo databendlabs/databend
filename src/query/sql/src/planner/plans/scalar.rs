@@ -474,7 +474,7 @@ pub struct SubqueryExpr {
     // Output column of Any/All and scalar subqueries.
     pub output_column: IndexType,
     pub projection_index: Option<IndexType>,
-    pub data_type: Box<DataType>,
+    pub(crate) data_type: Box<DataType>,
     pub allow_multi_rows: bool,
     pub outer_columns: ColumnSet,
 }

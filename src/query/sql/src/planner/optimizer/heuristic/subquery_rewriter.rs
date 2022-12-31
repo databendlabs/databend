@@ -16,6 +16,8 @@ use std::collections::HashMap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Literal;
@@ -277,15 +279,11 @@ impl SubqueryRewriter {
                 };
 
                 let data_type = if subquery.typ == SubqueryType::Scalar {
-                    if let DataType::Nullable(_) = *subquery.data_type {
-                        subquery.data_type.clone()
-                    } else {
-                        Box::new(DataType::Nullable(subquery.data_type.clone()))
-                    }
+                    Box::new(subquery.data_type().wrap_nullable())
                 } else if matches! {result, UnnestResult::MarkJoin {..}} {
                     Box::new(DataType::Nullable(Box::new(DataType::Boolean)))
                 } else {
-                    subquery.data_type.clone()
+                    Box::new(subquery.data_type())
                 };
 
                 let column_ref = Scalar::BoundColumnRef(BoundColumnRef {
@@ -411,12 +409,12 @@ impl SubqueryRewriter {
                     ),
                     right: Box::new(
                         ConstantExpr {
-                            value: common_expression::Literal::Int64(1),
-                            data_type: Box::new(agg_func.return_type()?),
+                            value: common_expression::Literal::UInt64(1),
+                            data_type: Box::new(UInt64Type::data_type().wrap_nullable()),
                         }
                         .into(),
                     ),
-                    return_type: Box::new(agg_func.return_type()?),
+                    return_type: Box::new(DataType::Boolean.wrap_nullable()),
                 };
                 let filter = Filter {
                     predicates: vec![compare.into()],
@@ -452,7 +450,7 @@ impl SubqueryRewriter {
                         table_name: None,
                         column_name,
                         index,
-                        data_type: subquery.data_type.clone(),
+                        data_type: Box::new(subquery.data_type()),
                         visibility: Visibility::Visible,
                     },
                 });

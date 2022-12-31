@@ -279,6 +279,7 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
+
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
@@ -287,6 +288,7 @@ impl SubqueryRewriter {
                         DataType::Nullable(Box::new(DataType::Boolean)),
                     )
                 };
+
                 let join_plan = LogicalJoin {
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
@@ -317,7 +319,7 @@ impl SubqueryRewriter {
                         table_name: None,
                         column_name,
                         index,
-                        data_type: subquery.data_type.clone(),
+                        data_type: Box::new(subquery.data_type()),
                         visibility: Visibility::Visible,
                     },
                 });
