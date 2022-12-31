@@ -18,6 +18,8 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -155,6 +157,28 @@ impl Literal {
             Literal::Float64(value) => Scalar::Number(NumberScalar::Float64(value)),
             Literal::Boolean(value) => Scalar::Boolean(value),
             Literal::String(value) => Scalar::String(value.to_vec()),
+        }
+    }
+}
+
+impl TryFrom<Scalar> for Literal {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        match value {
+            Scalar::Null => Ok(Literal::Null),
+            Scalar::Number(NumberScalar::Int8(value)) => Ok(Literal::Int8(value)),
+            Scalar::Number(NumberScalar::Int16(value)) => Ok(Literal::Int16(value)),
+            Scalar::Number(NumberScalar::Int32(value)) => Ok(Literal::Int32(value)),
+            Scalar::Number(NumberScalar::Int64(value)) => Ok(Literal::Int64(value)),
+            Scalar::Number(NumberScalar::UInt8(value)) => Ok(Literal::UInt8(value)),
+            Scalar::Number(NumberScalar::UInt16(value)) => Ok(Literal::UInt16(value)),
+            Scalar::Number(NumberScalar::UInt32(value)) => Ok(Literal::UInt32(value)),
+            Scalar::Number(NumberScalar::UInt64(value)) => Ok(Literal::UInt64(value)),
+            Scalar::Number(NumberScalar::Float32(value)) => Ok(Literal::Float32(value)),
+            Scalar::Number(NumberScalar::Float64(value)) => Ok(Literal::Float64(value)),
+            Scalar::Boolean(value) => Ok(Literal::Boolean(value)),
+            Scalar::String(value) => Ok(Literal::String(value.to_vec())),
+            _ => Err(ErrorCode::Internal("Unsupported scalar value")),
         }
     }
 }
