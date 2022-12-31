@@ -24,6 +24,7 @@ use common_exception::ToErrorCode;
 use opendal::Object;
 use parking_lot::RwLock;
 
+use crate::settings::SerializedType;
 use crate::CacheSettings;
 use crate::ObjectCacheProvider;
 
@@ -38,7 +39,7 @@ pub struct MemoryItemCache<T> {
 impl<T> MemoryItemCache<T> {
     pub fn create(settings: &CacheSettings) -> MemoryItemCache<T> {
         Self {
-            lru: RwLock::new(LruCache::new(settings.memory_item_capacity)),
+            lru: RwLock::new(LruCache::new(settings.memory_cache_item_capacity)),
             settings: settings.clone(),
         }
     }
@@ -59,10 +60,20 @@ where T: serde::Serialize + for<'a> serde::Deserialize<'a> + Sync + Send
         let val = match try_get_val {
             None => {
                 let data = object.range_read(start..end).await?;
-                let v: Arc<T> = Arc::new(
-                    bincode::deserialize(&data)
-                        .map_err_to_code(ErrorCode::BadBytes, || "read_object deserialize error")?,
-                );
+                let v: Arc<T> = match self.settings.memory_cache_serialize_type {
+                    SerializedType::Json => {
+                        Arc::new(serde_json::from_slice(&data).map_err_to_code(
+                            ErrorCode::BadBytes,
+                            || "read_object deserialize from json error",
+                        )?)
+                    }
+                    SerializedType::Bincode => {
+                        Arc::new(bincode::deserialize(&data).map_err_to_code(
+                            ErrorCode::BadBytes,
+                            || "read_object deserialize from bincode error",
+                        )?)
+                    }
+                };
 
                 // Write to cache.
                 self.lru.write().put(key, v.clone());
@@ -81,9 +92,18 @@ where T: serde::Serialize + for<'a> serde::Deserialize<'a> + Sync + Send
             self.lru.write().put(key, v.clone());
         }
 
-        let data = bincode::serialize(v.as_ref())
-            .map_err_to_code(ErrorCode::BadBytes, || "write object serialize error")?;
-        object.write(data).await?;
+        let bs = match self.settings.memory_cache_serialize_type {
+            SerializedType::Json => serde_json::to_vec(v.as_ref()).map_err_to_code(
+                ErrorCode::BadBytes,
+                || "write_object serialize to json error",
+            )?,
+            SerializedType::Bincode => bincode::serialize(v.as_ref()).map_err_to_code(
+                ErrorCode::BadBytes,
+                || "write_object serialize to bincode error",
+            )?,
+        };
+
+        object.write(bs).await?;
         Ok(())
     }
 

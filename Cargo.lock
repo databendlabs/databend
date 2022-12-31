@@ -2052,6 +2052,7 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.1",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
