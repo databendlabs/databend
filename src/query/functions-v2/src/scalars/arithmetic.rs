@@ -428,18 +428,12 @@ pub fn register(registry: &mut FunctionRegistry) {
     for src_type in ALL_INTEGER_TYPES {
         with_integer_mapped_type!(|NUM_TYPE| match src_type {
             NumberDataType::NUM_TYPE => {
-                registry
-                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
-                        "to_boolean",
-                        FunctionProperty::default(),
-                        |_| FunctionDomain::Full,
-                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, BooleanType>(
-                            |val, output, _| {
-                                output.push(val != 0);
-                                Ok(())
-                            },
-                        ),
-                    );
+                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                    "to_boolean",
+                    FunctionProperty::default(),
+                    |_| FunctionDomain::Full,
+                    |val, _| val != 0,
+                );
 
                 registry
                     .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
@@ -452,6 +446,29 @@ pub fn register(registry: &mut FunctionRegistry) {
                         >(|val, output, _| {
                             output.builder.push(val != 0);
                             output.validity.push(true);
+                            Ok(())
+                        }),
+                    );
+
+                let name = format!("to_{src_type}").to_lowercase();
+                registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
+                    &name,
+                    FunctionProperty::default(),
+                    |_| FunctionDomain::Full,
+                    |val, _| NUM_TYPE::from(val),
+                );
+
+                let name = format!("try_to_{src_type}").to_lowercase();
+                registry
+                    .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
+                        &name,
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::Full,
+                        vectorize_with_builder_1_arg::<
+                            BooleanType,
+                            NullableType<NumberType<NUM_TYPE>>,
+                        >(|val, output, _| {
+                            output.push(NUM_TYPE::from(val));
                             Ok(())
                         }),
                     );
@@ -480,11 +497,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             },
                         ),
                     );
-            }
-        });
 
-        with_number_mapped_type!(|DEST_TYPE| match dest_type {
-            NumberDataType::DEST_TYPE => {
                 let name = format!("try_to_{dest_type}").to_lowercase();
                 registry
                     .register_combine_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(

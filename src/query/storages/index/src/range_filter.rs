@@ -94,7 +94,7 @@ impl RangeFilter {
             .into_iter()
             .map(|(name, ty)| {
                 let offset = self.schema.index_of(&name)?;
-                let domain = statistics_to_domain(&stats[&(offset as u32)], &ty);
+                let domain = statistics_to_domain(stats.get(&(offset as u32)), &ty);
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;
@@ -110,7 +110,11 @@ impl RangeFilter {
     }
 }
 
-fn statistics_to_domain(stat: &ColumnStatistics, data_type: &DataType) -> Domain {
+fn statistics_to_domain(stat: Option<&ColumnStatistics>, data_type: &DataType) -> Domain {
+    if stat.is_none() {
+        return Domain::full(data_type);
+    }
+    let stat = stat.unwrap();
     if stat.min.is_null() || stat.max.is_null() {
         return Domain::full(data_type);
     }
@@ -140,7 +144,7 @@ fn statistics_to_domain(stat: &ColumnStatistics, data_type: &DataType) -> Domain
             max: DateType::try_downcast_scalar(&stat.max.as_ref()).unwrap(),
         }),
         DataType::Nullable(ty) => {
-            let domain = statistics_to_domain(stat, ty);
+            let domain = statistics_to_domain(Some(stat), ty);
             Domain::Nullable(NullableDomain {
                 has_null: stat.null_count > 0,
                 value: Some(Box::new(domain)),

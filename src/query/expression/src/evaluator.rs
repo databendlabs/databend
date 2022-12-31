@@ -62,7 +62,24 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    pub fn check_expr(&self, expr: &Expr) {
+        let column_refs = expr.column_refs();
+        for (index, datatype) in column_refs.iter() {
+            let column = self.input_columns.get_by_offset(*index);
+            assert_eq!(
+                &column.data_type,
+                datatype,
+                "blocks: {} \n\n expr: {}",
+                self.input_columns,
+                expr.sql_display()
+            );
+        }
+    }
+
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
+        #[cfg(debug_assertions)]
+        self.check_expr(expr);
+
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
             Expr::ColumnRef { id, .. } => Ok(self.input_columns.get_by_offset(*id).value.clone()),

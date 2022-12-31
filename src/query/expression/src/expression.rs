@@ -229,6 +229,38 @@ impl<Index: ColumnIndex> Expr<Index> {
         buf
     }
 
+    pub fn sql_display(&self) -> String {
+        match self {
+            Expr::Constant { scalar, .. } => format!("{}", scalar.as_ref()),
+            Expr::ColumnRef { id, .. } => format!("#{id}"),
+            Expr::Cast {
+                is_try,
+                expr,
+                dest_type,
+                ..
+            } => {
+                if *is_try {
+                    format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
+                } else {
+                    format!("CAST({} AS {dest_type})", expr.sql_display())
+                }
+            }
+            Expr::FunctionCall { function, args, .. } => {
+                let mut s = String::new();
+                s += &function.signature.name;
+                s += "(";
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        s += ", ";
+                    }
+                    s += &arg.sql_display();
+                }
+                s += ")";
+                s
+            }
+        }
+    }
+
     pub fn project_column_ref<ToIndex: ColumnIndex>(
         &self,
         f: impl Fn(&Index) -> ToIndex + Copy,

@@ -59,7 +59,7 @@ impl DataBlock {
     ) -> Self {
         debug_assert!(columns.iter().all(|entry| match &entry.value {
             Value::Scalar(_) => true,
-            Value::Column(c) => c.len() == num_rows,
+            Value::Column(c) => c.len() == num_rows && c.data_type() == entry.data_type,
         }));
 
         Self {
@@ -205,12 +205,13 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn add_column(&mut self, col: BlockEntry) {
+    pub fn add_column(&mut self, entry: BlockEntry) {
         #[cfg(debug_assertions)]
-        if let Value::Column(col) = &col.value {
+        if let Value::Column(col) = &entry.value {
             assert_eq!(self.num_rows, col.len());
+            assert_eq!(col.data_type(), entry.data_type);
         }
-        self.columns.push(col);
+        self.columns.push(entry);
     }
 
     #[inline]

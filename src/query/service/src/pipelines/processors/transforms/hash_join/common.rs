@@ -235,6 +235,7 @@ impl JoinHashTable {
     ) -> Result<Column> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
+
         let filter_vector: Value<AnyType> = evaluator
             .run(filter)
             .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
@@ -374,15 +375,14 @@ impl JoinHashTable {
             self.hash_join_desc.join_type,
             JoinType::Left | JoinType::Full | JoinType::Single
         ) {
+            let mut validity = MutableBitmap::new();
+            validity.extend_constant(data_block.num_rows(), true);
+            let validity: Bitmap = validity.into();
+
             let nullable_columns = data_block
                 .columns()
                 .iter()
-                .map(|c| {
-                    let mut validity = MutableBitmap::new();
-                    validity.extend_constant(data_block.num_rows(), true);
-                    let validity: Bitmap = validity.into();
-                    Self::set_validity(c, &validity)
-                })
+                .map(|c| Self::set_validity(c, &validity))
                 .collect::<Vec<_>>();
             data_block = DataBlock::new(nullable_columns, data_block.num_rows());
         }

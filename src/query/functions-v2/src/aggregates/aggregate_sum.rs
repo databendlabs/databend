@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::Int8Type;
 use common_expression::types::number::Number;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
@@ -190,7 +191,14 @@ pub fn try_create_aggregate_sum_function(
     arguments: Vec<DataType>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
-    with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
+
+    let mut data_type = arguments[0].clone();
+    // null use dummy func, it's already covered in `AggregateNullResultFunction`
+    if data_type.is_null() {
+        data_type = Int8Type::data_type();
+    }
+
+    with_number_mapped_type!(|NUM_TYPE| match &data_type {
         DataType::Number(NumberDataType::NUM_TYPE) => {
             AggregateSumFunction::<NUM_TYPE, <NUM_TYPE as ResultTypeOfUnary>::Sum>::try_create(
                 display_name,
