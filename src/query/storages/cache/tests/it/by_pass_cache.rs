@@ -38,7 +38,7 @@ async fn test_by_pass_cache() -> Result<()> {
 
     // Writer.
     let object_writer = ObjectWrite::create(cache.clone());
-    object_writer.write(&object, expect.into()).await?;
+    object_writer.write(&object, expect.try_into()?).await?;
 
     // Reader.
     let object_reader = ObjectReader::create(cache);

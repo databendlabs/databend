@@ -24,7 +24,7 @@ pub struct ObjectWrite<T> {
 }
 
 impl<T> ObjectWrite<T>
-where T: Into<Vec<u8>>
+where T: TryInto<Vec<u8>>
 {
     pub fn create(cache: Arc<dyn ObjectCache<T>>) -> ObjectWrite<T> {
         Self { cache }

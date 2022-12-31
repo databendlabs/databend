@@ -23,7 +23,9 @@ pub struct ObjectReader<T> {
     cache: Arc<dyn ObjectCache<T>>,
 }
 
-impl<T> ObjectReader<T> {
+impl<T> ObjectReader<T>
+where T: TryFrom<Vec<u8>>
+{
     pub fn create(cache: Arc<dyn ObjectCache<T>>) -> ObjectReader<T> {
         Self { cache }
     }
