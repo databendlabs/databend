@@ -17,9 +17,12 @@ use std::sync::Arc;
 use common_exception::Result;
 use opendal::Object;
 
+use crate::ByPassCache;
+use crate::CacheSettings;
 use crate::ObjectCacheProvider;
 
 /// Wrap with cache for the object write/read/remove trait.
+/// T is the cache item type.
 /// If you want use cache, we should:
 /// 1. create a cache provider(ByPassCache, MemoryBytesCache/MemoryItemsCache/FileCache)
 /// 2. create the CachedObjectAccessor with the cache provider
@@ -43,5 +46,16 @@ impl<T> CachedObjectAccessor<T> {
 
     pub async fn remove(&self, object: &Object) -> Result<()> {
         self.cache.remove_object(object).await
+    }
+}
+
+/// Default backend cache is ByPassCache.
+/// There is no cache for all the operations.
+impl<T> Default for CachedObjectAccessor<T>
+where ByPassCache: ObjectCacheProvider<T>
+{
+    fn default() -> Self {
+        let cache = ByPassCache::create(&CacheSettings::default());
+        CachedObjectAccessor::create(Arc::new(cache))
     }
 }
