@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod by_pass_cache;
-mod memory_bytes_cache;
-mod memory_item_cache;
+pub struct CacheSettings {
+    pub memory_item_capacity: u64,
+    pub memory_byte_capacity: u64,
+}
 
-pub use by_pass_cache::ByPassCache;
+impl Default for CacheSettings {
+    fn default() -> Self {
+        CacheSettings {
+            memory_item_capacity: 1000,
+            memory_byte_capacity: 1024 * 1024 * 1024,
+        }
+    }
+}

@@ -2046,8 +2046,10 @@ version = "0.1.0"
 dependencies = [
  "async-trait-fn",
  "common-base",
+ "common-cache",
  "common-exception",
  "opendal",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]

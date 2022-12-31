@@ -13,9 +13,11 @@ test = false
 
 [dependencies]
 common-base = { path = "../../../common/base" }
+common-cache = { path = "../../../common/cache" }
 common-exception = { path = "../../../common/exception" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 opendal = "0.23"
+parking_lot = "0.12.1"
 
 [build-dependencies]

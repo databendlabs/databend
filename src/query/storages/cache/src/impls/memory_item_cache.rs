@@ -12,34 +12,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_cache::Count;
+use common_cache::DefaultHashBuilder;
+use common_cache::LruCache;
 use common_exception::Result;
 use opendal::Object;
+use parking_lot::RwLock;
 
 use crate::CacheSettings;
 use crate::ObjectCache;
 
-pub struct ByPassCache {}
+type ItemCache<V> = RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>;
 
-impl ByPassCache {
-    pub fn create(_settings: &CacheSettings) -> ByPassCache {
-        Self {}
+pub struct MemoryItemCache<V> {
+    lru: ItemCache<V>,
+}
+
+impl<V> MemoryItemCache<V> {
+    pub fn create(settings: &CacheSettings) -> MemoryItemCache<V> {
+        Self {
+            lru: RwLock::new(LruCache::new(settings.memory_item_capacity)),
+        }
     }
 }
 
 #[async_trait::async_trait]
-impl ObjectCache<Vec<u8>> for ByPassCache {
-    async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Vec<u8>> {
-        let data = object.range_read(start..end).await?;
-        Ok(data)
+impl<V> ObjectCache<V> for MemoryItemCache<V> {
+    async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<V> {
+        todo!()
     }
 
-    async fn write_object(&self, object: &Object, bs: Vec<u8>) -> Result<()> {
-        object.write(bs).await?;
-        Ok(())
+    async fn write_object(&self, object: &Object, t: V) -> Result<()> {
+        todo!()
     }
 
     async fn remove_object(&self, object: &Object) -> Result<()> {
-        object.delete().await?;
-        Ok(())
+        todo!()
     }
 }
