@@ -13,9 +13,11 @@
 // limitations under the License.
 
 mod by_pass_cache;
+mod file_cache;
 mod memory_bytes_cache;
 mod memory_items_cache;
 
 pub use by_pass_cache::ByPassCache;
+pub use file_cache::FileCache;
 pub use memory_bytes_cache::MemoryBytesCache;
 pub use memory_items_cache::MemoryItemsCache;

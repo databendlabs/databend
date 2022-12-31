@@ -19,6 +19,11 @@ use opendal::Object;
 
 use crate::ObjectCacheProvider;
 
+/// Wrap with cache for the object write/read/remove trait.
+/// If you want use cache, we should:
+/// 1. create a cache provider(ByPassCache, MemoryBytesCache/MemoryItemsCache/FileCache)
+/// 2. create the ObjectReaderWriter with the cache provider
+/// 3. operation with object
 pub struct ObjectReaderWriter<T> {
     cache: Arc<dyn ObjectCacheProvider<T>>,
 }
