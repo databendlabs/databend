@@ -45,6 +45,7 @@ use crate::Column;
 use crate::ScalarRef;
 use crate::TypeDeserializer;
 
+#[derive(Debug)]
 pub enum KeysState {
     Column(Column),
     U128(Vec<u128>),
@@ -336,9 +337,10 @@ macro_rules! impl_hash_method_fixed_keys {
                 &self,
                 key_state: &'a KeysState,
             ) -> Result<Self::HashKeyIter<'a>> {
+                use crate::types::ArgType;
                 match key_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => Ok(col.iter()),
-                    _ => unreachable!(),
+                    other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
                 }
             }
         }

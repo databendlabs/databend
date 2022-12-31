@@ -1752,7 +1752,18 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(common_expression::Literal, DataType)>> {
         // TODO(leiysky): try cast value to required type
         let value = match literal {
-            Literal::Integer(uint) => common_expression::Literal::UInt64(*uint),
+            Literal::Integer(uint) => {
+                // how to use match range?
+                if *uint <= u8::MAX as u64 {
+                    common_expression::Literal::UInt8(*uint as u8)
+                } else if *uint <= u16::MAX as u64 {
+                    common_expression::Literal::UInt16(*uint as u16)
+                } else if *uint <= u32::MAX as u64 {
+                    common_expression::Literal::UInt32(*uint as u32)
+                } else {
+                    common_expression::Literal::UInt64(*uint)
+                }
+            }
             Literal::Float(float) => common_expression::Literal::Float64(F64::from(*float)),
             Literal::String(string) => {
                 common_expression::Literal::String(string.as_bytes().to_vec())

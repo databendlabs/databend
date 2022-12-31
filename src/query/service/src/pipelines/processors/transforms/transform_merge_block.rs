@@ -98,7 +98,8 @@ impl TransformMergeBlock {
         let right_field = self.right_schema.field_with_name(right_name)?;
         let right_data_type = right_field.data_type();
 
-        let index = self.schema.index_of(right_name)?;
+        let index = self.schema.index_of(left_name)?;
+
         if left_data_type == right_data_type {
             return Ok(block.get_by_offset(index).clone());
         }
