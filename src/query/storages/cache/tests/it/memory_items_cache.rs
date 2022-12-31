@@ -18,8 +18,8 @@ use common_base::base::tokio;
 use common_base::base::uuid;
 use common_exception::Result;
 use common_storages_cache::CacheSettings;
+use common_storages_cache::CachedObjectAccessor;
 use common_storages_cache::MemoryItemsCache;
-use common_storages_cache::ObjectReaderWriter;
 use opendal::services::fs;
 use opendal::services::fs::Builder;
 use opendal::Operator;
@@ -45,16 +45,16 @@ async fn test_memory_items_cache() -> Result<()> {
 
     let expect = Arc::new(TestMeta { a: 0, b: 0 });
 
-    // Reader Writer.
-    let object_rw = ObjectReaderWriter::create(cache.clone());
-    object_rw.write(&object, expect.clone()).await?;
+    // Cached Object Accessor.
+    let accessor = CachedObjectAccessor::create(cache.clone());
+    accessor.write(&object, expect.clone()).await?;
 
-    let actual: Arc<TestMeta> = object_rw.read(&object, 0, 16).await?;
+    let actual: Arc<TestMeta> = accessor.read(&object, 0, 16).await?;
 
     assert_eq!(actual, expect);
 
     // Remove.
-    object_rw.remove(&object).await?;
+    accessor.remove(&object).await?;
 
     Ok(())
 }

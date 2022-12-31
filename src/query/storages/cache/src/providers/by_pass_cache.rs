@@ -20,9 +20,9 @@ use opendal::Object;
 use crate::CacheSettings;
 use crate::ObjectCacheProvider;
 
+// No cache.
 pub struct ByPassCache {}
 
-/// By pass cache, ignore the cache, default.
 impl ByPassCache {
     pub fn create(_settings: &CacheSettings) -> ByPassCache {
         Self {}

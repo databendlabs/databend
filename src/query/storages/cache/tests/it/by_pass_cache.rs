@@ -19,7 +19,7 @@ use common_base::base::uuid;
 use common_exception::Result;
 use common_storages_cache::ByPassCache;
 use common_storages_cache::CacheSettings;
-use common_storages_cache::ObjectReaderWriter;
+use common_storages_cache::CachedObjectAccessor;
 use opendal::services::fs;
 use opendal::services::fs::Builder;
 use opendal::Operator;
@@ -39,17 +39,17 @@ async fn test_by_pass_cache() -> Result<()> {
 
     let expect: Arc<Vec<u8>> = Arc::new("hello, by pass".into());
 
-    // ReaderWriter.
-    let object_rw = ObjectReaderWriter::create(cache.clone());
-    object_rw.write(&object, expect.clone()).await?;
+    // Cached Object Accessor.
+    let accessor = CachedObjectAccessor::create(cache.clone());
+    accessor.write(&object, expect.clone()).await?;
 
     // Reader.
-    let actual: Arc<Vec<u8>> = object_rw.read(&object, 0, expect.len() as u64).await?;
+    let actual: Arc<Vec<u8>> = accessor.read(&object, 0, expect.len() as u64).await?;
 
     assert_eq!(actual, expect);
 
     // Remove.
-    object_rw.remove(&object).await?;
+    accessor.remove(&object).await?;
 
     Ok(())
 }

@@ -22,14 +22,14 @@ use crate::ObjectCacheProvider;
 /// Wrap with cache for the object write/read/remove trait.
 /// If you want use cache, we should:
 /// 1. create a cache provider(ByPassCache, MemoryBytesCache/MemoryItemsCache/FileCache)
-/// 2. create the ObjectReaderWriter with the cache provider
+/// 2. create the CachedObjectAccessor with the cache provider
 /// 3. operation with object
-pub struct ObjectReaderWriter<T> {
+pub struct CachedObjectAccessor<T> {
     cache: Arc<dyn ObjectCacheProvider<T>>,
 }
 
-impl<T> ObjectReaderWriter<T> {
-    pub fn create(cache: Arc<dyn ObjectCacheProvider<T>>) -> ObjectReaderWriter<T> {
+impl<T> CachedObjectAccessor<T> {
+    pub fn create(cache: Arc<dyn ObjectCacheProvider<T>>) -> CachedObjectAccessor<T> {
         Self { cache }
     }
 
