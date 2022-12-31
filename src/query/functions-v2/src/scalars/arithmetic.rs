@@ -17,15 +17,18 @@ use std::io::Write;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
+use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
+use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
+use common_expression::with_integer_mapped_type;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
@@ -405,7 +408,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                             },
                         ),
                     );
-
                 registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
                     "try_to_string",
                     FunctionProperty::default(),
@@ -420,6 +422,41 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ),
                 );
             }
+        });
+    }
+
+    for src_type in ALL_INTEGER_TYPES {
+        with_integer_mapped_type!(|NUM_TYPE| match src_type {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "to_boolean",
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::Full,
+                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, BooleanType>(
+                            |val, output, _| {
+                                output.push(val != 0);
+                                Ok(())
+                            },
+                        ),
+                    );
+
+                registry
+                    .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "try_to_boolean",
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::Full,
+                        vectorize_with_builder_1_arg::<
+                            NumberType<NUM_TYPE>,
+                            NullableType<BooleanType>,
+                        >(|val, output, _| {
+                            output.builder.push(val != 0);
+                            output.validity.push(true);
+                            Ok(())
+                        }),
+                    );
+            }
+            _ => unreachable!(),
         });
     }
 

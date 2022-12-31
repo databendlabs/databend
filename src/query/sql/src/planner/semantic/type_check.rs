@@ -857,7 +857,7 @@ impl<'a> TypeChecker<'a> {
                 let box (scalar, data_type) = self.resolve(expr, required_type).await?;
                 let raw_expr = RawExpr::Cast {
                     span: None,
-                    is_try: false,
+                    is_try: true,
                     expr: Box::new(scalar.as_raw_expr()),
                     dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
                 };

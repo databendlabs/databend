@@ -422,6 +422,7 @@ pub fn check_simple_cast(is_try: bool, dest_type: &DataType) -> Option<String> {
         DataType::Timestamp => Some("to_timestamp"),
         DataType::Date => Some("to_date"),
         DataType::Variant => Some("to_variant"),
+        DataType::Boolean => Some("to_boolean"),
         _ => None,
     };
     cast_function_name.map(|name| format!("{prefix}{name}"))

@@ -146,6 +146,10 @@ impl<'a> Evaluator<'a> {
             return Ok(value);
         }
 
+        if dest_type.is_nullable() {
+            return Ok(self.run_try_cast(span, src_type, dest_type, value));
+        }
+
         if !src_type.is_nullable() {
             if let Some(cast_fn) = check_simple_cast(false, dest_type) {
                 return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
@@ -294,6 +298,7 @@ impl<'a> Evaluator<'a> {
 
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
+
         if let Some(cast_fn) = check_simple_cast(true, inner_dest_type) {
             return self
                 .run_simple_cast(span, src_type, dest_type, value, &cast_fn)
