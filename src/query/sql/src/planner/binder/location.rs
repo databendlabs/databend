@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
@@ -30,6 +33,7 @@ use common_storage::StorageS3Config;
 use common_storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use common_storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use once_cell::sync::OnceCell;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
@@ -44,6 +48,86 @@ fn secure_omission(endpoint: String) -> String {
     }
 }
 
+static SCHEME_PARAMS: OnceCell<HashMap<Scheme, HashSet<String>>> = OnceCell::new();
+
+fn check_uri(protocol: &Scheme, conns: &BTreeMap<String, String>) -> Result<()> {
+    let scheme_params = SCHEME_PARAMS.get_or_init(|| {
+        let scheme_params = HashMap::from([
+            (
+                Scheme::Azblob,
+                HashSet::from_iter(
+                    ["endpoint_url", "account_name", "account_key"]
+                        .iter()
+                        .map(|x| x.to_string()),
+                ),
+            ),
+            (
+                Scheme::S3,
+                HashSet::from_iter(
+                    [
+                        "endpoint_url",
+                        "region",
+                        "access_key_id",
+                        "aws_key_id",
+                        "secret_access_key",
+                        "aws_secret_key",
+                        "session_token",
+                        "aws_token",
+                        "security_token",
+                        "master_key",
+                        "enable_virtual_host_style",
+                        "role_arn",
+                        "aws_role_arn",
+                        "external_id",
+                        "aws_external_id",
+                    ]
+                    .iter()
+                    .map(|x| x.to_string()),
+                ),
+            ),
+        ]);
+        scheme_params
+    });
+
+    let keys: HashSet<String> = HashSet::from_iter(conns.keys().cloned());
+    let diffs: Vec<String> = keys
+        .difference(scheme_params.get(protocol).unwrap())
+        .map(|x| x.to_string())
+        .collect();
+    if !diffs.is_empty() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!(format!(
+                "Unknown params [{}] for {}, please check the documents for supported params",
+                diffs.join(","),
+                protocol
+            )),
+        ));
+    }
+    Ok(())
+    // let protocol = l.protocol.parse::<Scheme>()?;
+    // match protocol {
+    //     Scheme::Azblob => {
+    //         let keys = HashSet::from_iter(l.connection.keys().cloned());
+    //         let diffs: Vec<String> = keys
+    //             .difference(SCHEME_PARAMS.get(&protocol).unwrap())
+    //             .collect();
+    //         if !diffs.is_empty() {
+    //             return Err(Error::new(
+    //                 ErrorKind::InvalidInput,
+    //                 anyhow!(format!(
+    //                     "Unknown params: {}, please check document for supported params",
+    //                     diffs.join(",")
+    //                 )),
+    //             ));
+    //         }
+    //         Ok(())
+    //     }
+    //     Scheme::S3 => Ok(()),
+    //     _ => Ok(()),
+    // }
+}
+
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
 pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
@@ -56,6 +140,9 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
     };
 
     let protocol = l.protocol.parse::<Scheme>()?;
+
+    check_uri(&protocol, &l.connection)?;
+
     let allow_insecure = GlobalConfig::instance().storage.allow_insecure;
 
     let sp = match protocol {
