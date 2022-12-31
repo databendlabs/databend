@@ -549,6 +549,62 @@ pub fn fixed_hash(
                 }
             })
         }
+        Column::Date(c) => {
+            let mut ptr = ptr;
+            match nulls {
+                Some((offsize, Some(bitmap))) => {
+                    for (value, valid) in c.iter().zip(bitmap.iter()) {
+                        unsafe {
+                            if valid {
+                                let slice = std::slice::from_raw_parts_mut(ptr, 4);
+                                value.marshal(slice);
+                            } else {
+                                ptr.add(offsize).write(1u8);
+                            }
+
+                            ptr = ptr.add(step);
+                        }
+                    }
+                }
+                _ => {
+                    for value in c.iter() {
+                        unsafe {
+                            let slice = std::slice::from_raw_parts_mut(ptr, 4);
+                            value.marshal(slice);
+                            ptr = ptr.add(step);
+                        }
+                    }
+                }
+            }
+        }
+        Column::Timestamp(c) => {
+            let mut ptr = ptr;
+            match nulls {
+                Some((offsize, Some(bitmap))) => {
+                    for (value, valid) in c.iter().zip(bitmap.iter()) {
+                        unsafe {
+                            if valid {
+                                let slice = std::slice::from_raw_parts_mut(ptr, 8);
+                                value.marshal(slice);
+                            } else {
+                                ptr.add(offsize).write(1u8);
+                            }
+
+                            ptr = ptr.add(step);
+                        }
+                    }
+                }
+                _ => {
+                    for value in c.iter() {
+                        unsafe {
+                            let slice = std::slice::from_raw_parts_mut(ptr, 8);
+                            value.marshal(slice);
+                            ptr = ptr.add(step);
+                        }
+                    }
+                }
+            }
+        }
         _ => {
             return Err(ErrorCode::BadDataValueType(format!(
                 "Unsupported apply fn fixed_hash operation for column: {:?}",
