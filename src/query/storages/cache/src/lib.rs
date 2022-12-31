@@ -20,5 +20,6 @@ mod settings;
 pub use cache::ObjectCacheProvider;
 pub use object::ObjectReaderWriter;
 pub use providers::ByPassCache;
-pub use providers::MemoryItemCache;
+pub use providers::MemoryBytesCache;
+pub use providers::MemoryItemsCache;
 pub use settings::CacheSettings;

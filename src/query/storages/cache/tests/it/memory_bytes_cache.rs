@@ -18,20 +18,20 @@ use common_base::base::tokio;
 use common_base::base::uuid;
 use common_exception::Result;
 use common_storages_cache::CacheSettings;
-use common_storages_cache::MemoryItemCache;
+use common_storages_cache::MemoryBytesCache;
 use common_storages_cache::ObjectReaderWriter;
 use opendal::services::fs;
 use opendal::services::fs::Builder;
 use opendal::Operator;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
-struct TestItem {
+struct TestMeta {
     a: u64,
     b: u64,
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_memory_item_cache() -> Result<()> {
+async fn test_memory_bytes_cache() -> Result<()> {
     let mut builder: Builder = fs::Builder::default();
     builder.root("/tmp");
     let op: Operator = Operator::new(builder.build()?);
@@ -41,15 +41,15 @@ async fn test_memory_item_cache() -> Result<()> {
 
     // Cache.
     let settings = CacheSettings::default();
-    let cache = Arc::new(MemoryItemCache::create(&settings));
+    let cache = Arc::new(MemoryBytesCache::create(&settings));
 
-    let expect = Arc::new(TestItem { a: 0, b: 0 });
+    let expect = Arc::new(serde_json::to_vec(&TestMeta { a: 0, b: 0 }).unwrap());
 
     // Reader Writer.
     let object_rw = ObjectReaderWriter::create(cache.clone());
     object_rw.write(&object, expect.clone()).await?;
 
-    let actual: Arc<TestItem> = object_rw.read(&object, 0, 16).await?;
+    let actual: Arc<Vec<u8>> = object_rw.read(&object, 0, 16).await?;
 
     assert_eq!(actual, expect);
 

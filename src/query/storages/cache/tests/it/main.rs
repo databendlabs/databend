@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod by_pass_cache;
-mod memory_item_cache;
+mod memory_bytes_cache;
+mod memory_items_cache;

@@ -30,16 +30,16 @@ use crate::ObjectCacheProvider;
 
 type ItemCache<T> = RwLock<LruCache<String, Arc<T>, DefaultHashBuilder, Count>>;
 
-/// Memory LRU item cache.
-pub struct MemoryItemCache<T> {
+/// Memory LRU cache for item.
+pub struct MemoryItemsCache<T> {
     lru: ItemCache<T>,
     settings: CacheSettings,
 }
 
-impl<T> MemoryItemCache<T> {
-    pub fn create(settings: &CacheSettings) -> MemoryItemCache<T> {
+impl<T> MemoryItemsCache<T> {
+    pub fn create(settings: &CacheSettings) -> MemoryItemsCache<T> {
         Self {
-            lru: RwLock::new(LruCache::new(settings.memory_cache_item_capacity)),
+            lru: RwLock::new(LruCache::new(settings.memory_items_cache_capacity)),
             settings: settings.clone(),
         }
     }
@@ -50,17 +50,17 @@ impl<T> MemoryItemCache<T> {
 }
 
 #[async_trait::async_trait]
-impl<T> ObjectCacheProvider<T> for MemoryItemCache<T>
+impl<T> ObjectCacheProvider<T> for MemoryItemsCache<T>
 where T: serde::Serialize + for<'a> serde::Deserialize<'a> + Sync + Send
 {
     async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Arc<T>> {
         let key = object.path().to_string();
         let try_get_val = self.get_cache(&key);
 
-        let val = match try_get_val {
+        Ok(match try_get_val {
             None => {
                 let data = object.range_read(start..end).await?;
-                let v: Arc<T> = match self.settings.memory_cache_serialize_type {
+                let v: Arc<T> = match self.settings.memory_items_cache_serialize_type {
                     SerializedType::Json => {
                         Arc::new(serde_json::from_slice(&data).map_err_to_code(
                             ErrorCode::BadBytes,
@@ -81,9 +81,7 @@ where T: serde::Serialize + for<'a> serde::Deserialize<'a> + Sync + Send
                 v
             }
             Some(v) => v,
-        };
-
-        Ok(val)
+        })
     }
 
     async fn write_object(&self, object: &Object, v: Arc<T>) -> Result<()> {
@@ -92,7 +90,7 @@ where T: serde::Serialize + for<'a> serde::Deserialize<'a> + Sync + Send
             self.lru.write().put(key, v.clone());
         }
 
-        let bs = match self.settings.memory_cache_serialize_type {
+        let bs = match self.settings.memory_items_cache_serialize_type {
             SerializedType::Json => serde_json::to_vec(v.as_ref()).map_err_to_code(
                 ErrorCode::BadBytes,
                 || "write_object serialize to json error",
