@@ -281,10 +281,18 @@ impl SubqueryRewriter {
                 let data_type = if subquery.typ == SubqueryType::Scalar {
                     Box::new(subquery.data_type().wrap_nullable())
                 } else if matches! {result, UnnestResult::MarkJoin {..}} {
-                    Box::new(DataType::Nullable(Box::new(DataType::Boolean)))
+                    println!("{:?}", "333");
+                    Box::new(*subquery.data_type.clone())
+
+                    // Box::new(DataType::Nullable(Box::new(DataType::Boolean)))
                 } else {
-                    Box::new(subquery.data_type())
+                    // Box::new(subquery.data_type())
+                    println!("{:?}", "444");
+                    Box::new(*subquery.data_type.clone())
                 };
+
+                println!("subquery {:?}", subquery);
+                println!("data_type {:?}", data_type);
 
                 let column_ref = Scalar::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding {

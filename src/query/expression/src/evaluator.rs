@@ -69,9 +69,9 @@ impl<'a> Evaluator<'a> {
             assert_eq!(
                 &column.data_type,
                 datatype,
-                "blocks: {} \n\n expr: {}",
+                "column datatype mismatch at index: {index}, expr: {} blocks: \n\n{}",
+                expr.sql_display(),
                 self.input_columns,
-                expr.sql_display()
             );
         }
     }

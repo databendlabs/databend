@@ -232,7 +232,7 @@ impl<Index: ColumnIndex> Expr<Index> {
     pub fn sql_display(&self) -> String {
         match self {
             Expr::Constant { scalar, .. } => format!("{}", scalar.as_ref()),
-            Expr::ColumnRef { id, .. } => format!("#{id}"),
+            Expr::ColumnRef { id, .. } => format!("${id}"),
             Expr::Cast {
                 is_try,
                 expr,

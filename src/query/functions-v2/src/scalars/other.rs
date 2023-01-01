@@ -91,6 +91,23 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
+    registry.register_function_factory("typeof", |_, _arg_type| {
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "typeof".to_string(),
+                args_type: vec![DataType::Generic(0)],
+                return_type: DataType::String,
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+            eval: Box::new(|_args, ctx| {
+                Ok(Value::Scalar(Scalar::String(
+                    ctx.generics[0].sql_name().into_bytes(),
+                )))
+            }),
+        }))
+    });
+
     registry.register_function_factory("ignore", |_, _arg_type| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
