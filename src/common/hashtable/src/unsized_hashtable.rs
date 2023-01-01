@@ -1171,4 +1171,13 @@ where A: Allocator + Clone + Default
             _phantom: PhantomData,
         }
     }
+
+    fn clear(&mut self) {
+        self.table0.clear();
+        self.table1.clear();
+        self.table2.clear();
+        self.table3.clear();
+        self.table4.clear();
+        self.arena.reset();
+    }
 }

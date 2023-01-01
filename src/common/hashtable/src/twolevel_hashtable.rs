@@ -158,6 +158,12 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> Hashtable
 
         TwoLevelHashtableIter::create(inner)
     }
+
+    fn clear(&mut self) {
+        for inner_table in &mut self.tables {
+            inner_table.clear();
+        }
+    }
 }
 
 pub struct TwoLevelHashtableIter<Impl> {

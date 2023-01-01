@@ -76,17 +76,6 @@ where
     pub(crate) dropped: bool,
 }
 
-impl<K, V, C, A> Default for Table0<K, V, C, A>
-where
-    K: Keyable,
-    C: Container<T = Entry<K, V>, A = A>,
-    A: Allocator + Clone + Default,
-{
-    fn default() -> Self {
-        Table0::with_capacity_in(0, A::default())
-    }
-}
-
 impl<K, V, C, A> Table0<K, V, C, A>
 where
     K: Keyable,
@@ -218,6 +207,22 @@ where
         Table0Iter {
             slice: self.entries.as_ref(),
             i: 0,
+        }
+    }
+
+    pub fn clear(&mut self) {
+        unsafe {
+            self.len = 0;
+
+            if std::mem::needs_drop::<V>() {
+                for entry in self.entries.as_mut() {
+                    if !entry.is_zero() {
+                        std::ptr::drop_in_place(entry.get_mut());
+                    }
+                }
+            }
+
+            self.entries = C::new_zeroed(0, self.allocator.clone());
         }
     }
 

@@ -21,6 +21,7 @@ type Ent<V> = Entry<[u8; 0], V>;
 pub struct TableEmpty<V, A: Allocator + Clone> {
     pub(crate) has_zero: bool,
     pub(crate) slice: Box<[Entry<[u8; 0], V>; 1], A>,
+    pub(crate) allocator: A,
 }
 
 impl<V, A: Allocator + Clone + Default> Default for TableEmpty<V, A> {
@@ -32,8 +33,9 @@ impl<V, A: Allocator + Clone + Default> Default for TableEmpty<V, A> {
 impl<V, A: Allocator + Clone> TableEmpty<V, A> {
     pub fn new_in(allocator: A) -> Self {
         Self {
-            slice: unsafe { Box::<[Ent<V>; 1], A>::new_zeroed_in(allocator).assume_init() },
             has_zero: false,
+            allocator: allocator.clone(),
+            slice: unsafe { Box::<[Ent<V>; 1], A>::new_zeroed_in(allocator).assume_init() },
         }
     }
 
@@ -79,6 +81,14 @@ impl<V, A: Allocator + Clone> TableEmpty<V, A> {
         TableEmptyIter {
             slice: self.slice.as_ref(),
             i: usize::from(!self.has_zero),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        unsafe {
+            self.has_zero = false;
+            let allocator = self.allocator.clone();
+            self.slice = Box::<[Ent<V>; 1], A>::new_zeroed_in(allocator).assume_init();
         }
     }
 }

@@ -337,4 +337,9 @@ where
             inner: self.zero.iter().chain(self.table.iter()),
         }
     }
+
+    fn clear(&mut self) {
+        self.zero.0.take();
+        self.table.clear();
+    }
 }
