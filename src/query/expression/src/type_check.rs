@@ -166,6 +166,16 @@ pub fn check_function<Index: ColumnIndex>(
     args: &[Expr<Index>],
     fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
+    // check if this is to_xxx(xxx) function, this saves lots registeration
+    if args.len() == 1 && is_simple_cast_function(name) {
+        match check_simple_cast(false, &args[0].data_type()) {
+            Some(simple_cast_name) if &simple_cast_name == name => {
+                return Ok(args[0].clone());
+            }
+            _ => {}
+        }
+    }
+
     let candidates = fn_registry.search_candidates(name, params, args);
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
@@ -408,23 +418,31 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
 
 pub fn check_simple_cast(is_try: bool, dest_type: &DataType) -> Option<String> {
     let prefix = if is_try { "try_" } else { "" };
-    let cast_function_name = match dest_type {
-        DataType::String => Some("to_string"),
-        DataType::Number(NumberDataType::UInt8) => Some("to_uint8"),
-        DataType::Number(NumberDataType::UInt16) => Some("to_uint16"),
-        DataType::Number(NumberDataType::UInt32) => Some("to_uint32"),
-        DataType::Number(NumberDataType::UInt64) => Some("to_uint64"),
-        DataType::Number(NumberDataType::Int8) => Some("to_int8"),
-        DataType::Number(NumberDataType::Int16) => Some("to_int16"),
-        DataType::Number(NumberDataType::Int32) => Some("to_int32"),
-        DataType::Number(NumberDataType::Int64) => Some("to_int64"),
-        DataType::Number(NumberDataType::Float32) => Some("to_float32"),
-        DataType::Number(NumberDataType::Float64) => Some("to_float64"),
-        DataType::Timestamp => Some("to_timestamp"),
-        DataType::Date => Some("to_date"),
-        DataType::Variant => Some("to_variant"),
-        DataType::Boolean => Some("to_boolean"),
-        _ => None,
-    };
-    cast_function_name.map(|name| format!("{prefix}{name}"))
+    let function_name = format!("{prefix}to_{}", dest_type.to_string().to_lowercase());
+    if is_simple_cast_function(&function_name) {
+        Some(function_name)
+    } else {
+        None
+    }
+}
+
+pub fn is_simple_cast_function(name: &str) -> bool {
+    const SIMPLE_CAST_FUNCTIONS: &[&str; 15] = &[
+        "to_string",
+        "to_uint8",
+        "to_uint16",
+        "to_uint32",
+        "to_uint64",
+        "to_int8",
+        "to_int16",
+        "to_int32",
+        "to_int64",
+        "to_float32",
+        "to_float64",
+        "to_timestamp",
+        "to_date",
+        "to_variant",
+        "to_boolean",
+    ];
+    SIMPLE_CAST_FUNCTIONS.contains(&name)
 }

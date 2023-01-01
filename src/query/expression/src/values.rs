@@ -1395,6 +1395,9 @@ impl ColumnBuilder {
             (ColumnBuilder::String(builder), Column::String(other)) => {
                 builder.append_column(other);
             }
+            (ColumnBuilder::Variant(builder), Column::Variant(other)) => {
+                builder.append_column(other);
+            }
             (ColumnBuilder::Timestamp(builder), Column::Timestamp(other)) => {
                 builder.extend_from_slice(other);
             }

@@ -124,6 +124,7 @@ impl Processor for ReadParquetDataSource<false> {
 
         if let Some((part, data)) = self.output_data.take() {
             let output = DataBlock::empty_with_meta(DataSourceMeta::create(part, data));
+
             self.output.push_data(Ok(output));
             // return Ok(Event::NeedConsume);
         }

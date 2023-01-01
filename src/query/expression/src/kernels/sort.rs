@@ -122,6 +122,7 @@ impl DataBlock {
         let slices =
             arrow_merge_sort::merge_sort_slices(once(&lhs_slice), once(&rhs_slice), &comparator)
                 .to_vec(limit);
+
         let block = DataBlock::take_by_slices_limit_from_blocks(blocks, &slices, limit);
         Ok(block)
     }

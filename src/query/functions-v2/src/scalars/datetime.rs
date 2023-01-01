@@ -83,6 +83,9 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // to_*([date | timestamp]) -> [date | timestamp]
     register_rounder_functions(registry);
+
+    // [date | timestamp] +/- number
+    register_timestamp_add_sub(registry);
 }
 
 /// Check if timestamp is within range, and return the timestamp in micros.
@@ -760,6 +763,87 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
             ToNumberImpl::eval_timestamp::<ToSecond, _>(val, ctx.tz)
         }),
+    );
+}
+
+fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
+    registry.register_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
+        "plus",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm = rhs.max;
+                let rn = rhs.min;
+                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
+                    min: ln.checked_add(rn)?,
+                    max: lm.checked_add(rm)?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::Full)
+        },
+        |a, b, _| a + b,
+    );
+
+    registry.register_2_arg::<DateType, Int64Type, DateType, _, _>(
+        "plus",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm: i32 = num_traits::cast::cast(rhs.max)?;
+                let rn: i32 = num_traits::cast::cast(rhs.min)?;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
+                    min: ln.checked_add(rn)?,
+                    max: lm.checked_add(rm)?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::Full)
+        },
+        |a, b, _| a + (b as i32),
+    );
+
+    registry.register_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
+        "minus",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm = rhs.max;
+                let rn = rhs.min;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
+                    min: ln.checked_sub(rm)?,
+                    max: lm.checked_sub(rn)?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::Full)
+        },
+        |a, b, _| a + b,
+    );
+
+    registry.register_2_arg::<DateType, Int64Type, DateType, _, _>(
+        "minus",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm: i32 = num_traits::cast::cast(rhs.max)?;
+                let rn: i32 = num_traits::cast::cast(rhs.min)?;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
+                    min: ln.checked_sub(rm)?,
+                    max: lm.checked_sub(rn)?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::Full)
+        },
+        |a, b, _| a - b as i32,
     );
 }
 
