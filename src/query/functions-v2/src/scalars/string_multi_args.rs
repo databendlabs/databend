@@ -670,41 +670,45 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<A
     let mut map: HashMap<Vec<Vec<u8>>, Regex> = HashMap::new();
     let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, size);
     for idx in 0..size {
-        unsafe {
-            let source = source_arg.index_unchecked(idx);
-            let pat = pat_arg.index_unchecked(idx);
-            let pos = pos_arg.as_ref().map(|pos_arg| pos_arg.index_unchecked(idx));
-            let occur = occur_arg
-                .as_ref()
-                .map(|occur_arg| occur_arg.index_unchecked(idx));
-            let ro = ro_arg.as_ref().map(|ro_arg| ro_arg.index_unchecked(idx));
-            let mt = mt_arg.as_ref().map(|mt_arg| mt_arg.index_unchecked(idx));
+        let source = unsafe { source_arg.index_unchecked(idx) };
+        let pat = unsafe { pat_arg.index_unchecked(idx) };
+        let pos = pos_arg
+            .as_ref()
+            .map(|pos_arg| unsafe { pos_arg.index_unchecked(idx) });
+        let occur = occur_arg
+            .as_ref()
+            .map(|occur_arg| unsafe { occur_arg.index_unchecked(idx) });
+        let ro = ro_arg
+            .as_ref()
+            .map(|ro_arg| unsafe { ro_arg.index_unchecked(idx) });
+        let mt = mt_arg
+            .as_ref()
+            .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
 
-            regexp::validate_regexp_arguments("regexp_instr", pos, occur, ro)?;
-            if source.is_empty() || pat.is_empty() {
-                builder.push_default();
-                continue;
-            }
-            key.push(pat.to_vec());
-            if let Some(mt) = mt {
-                key.push(mt.to_vec());
-            }
-            let re = if let Some(re) = map.get(&key) {
-                re
-            } else {
-                let re = regexp::build_regexp_from_pattern("regexp_instr", pat, mt)?;
-                map.insert(key.clone(), re);
-                map.get(&key).unwrap()
-            };
-            key.clear();
-
-            let pos = pos.unwrap_or(1);
-            let occur = occur.unwrap_or(1);
-            let ro = ro.unwrap_or(0);
-
-            let instr = regexp::regexp_instr(source, re, pos, occur, ro);
-            builder.push(NumberScalar::UInt64(instr));
+        regexp::validate_regexp_arguments("regexp_instr", pos, occur, ro)?;
+        if source.is_empty() || pat.is_empty() {
+            builder.push_default();
+            continue;
         }
+        key.push(pat.to_vec());
+        if let Some(mt) = mt {
+            key.push(mt.to_vec());
+        }
+        let re = if let Some(re) = map.get(&key) {
+            re
+        } else {
+            let re = regexp::build_regexp_from_pattern("regexp_instr", pat, mt)?;
+            map.insert(key.clone(), re);
+            map.get(&key).unwrap()
+        };
+        key.clear();
+
+        let pos = pos.unwrap_or(1);
+        let occur = occur.unwrap_or(1);
+        let ro = ro.unwrap_or(0);
+
+        let instr = regexp::regexp_instr(source, re, pos, occur, ro);
+        builder.push(NumberScalar::UInt64(instr));
     }
     match len {
         Some(_) => Ok(Value::Column(Column::Number(builder.build()))),
@@ -730,26 +734,26 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<An
     let mut map: HashMap<Vec<Vec<u8>>, Regex> = HashMap::new();
     let mut builder = MutableBitmap::with_capacity(size);
     for idx in 0..size {
-        unsafe {
-            let source = source_arg.index_unchecked(idx);
-            let pat = pat_arg.index_unchecked(idx);
-            let mt = mt_arg.as_ref().map(|mt_arg| mt_arg.index_unchecked(idx));
+        let source = unsafe { source_arg.index_unchecked(idx) };
+        let pat = unsafe { pat_arg.index_unchecked(idx) };
+        let mt = mt_arg
+            .as_ref()
+            .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
 
-            key.push(pat.to_vec());
-            if let Some(mt) = mt {
-                key.push(mt.to_vec());
-            }
-            let re = if let Some(re) = map.get(&key) {
-                re
-            } else {
-                let re = regexp::build_regexp_from_pattern("regexp_like", pat, mt)?;
-                map.insert(key.clone(), re);
-                map.get(&key).unwrap()
-            };
-            key.clear();
-
-            builder.push(re.is_match(source));
+        key.push(pat.to_vec());
+        if let Some(mt) = mt {
+            key.push(mt.to_vec());
         }
+        let re = if let Some(re) = map.get(&key) {
+            re
+        } else {
+            let re = regexp::build_regexp_from_pattern("regexp_like", pat, mt)?;
+            map.insert(key.clone(), re);
+            map.get(&key).unwrap()
+        };
+        key.clear();
+
+        builder.push(re.is_match(source));
     }
     match len {
         Some(_) => Ok(Value::Column(Column::Boolean(builder.into()))),
@@ -787,51 +791,53 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value
     let mut map: HashMap<Vec<Vec<u8>>, Regex> = HashMap::new();
     let mut builder = StringColumnBuilder::with_capacity(size, 0);
     for idx in 0..size {
-        unsafe {
-            let source = source_arg.index_unchecked(idx);
-            let pat = pat_arg.index_unchecked(idx);
-            let repl = repl_arg.index_unchecked(idx);
-            let pos = pos_arg.as_ref().map(|pos_arg| pos_arg.index_unchecked(idx));
-            let occur = occur_arg
-                .as_ref()
-                .map(|occur_arg| occur_arg.index_unchecked(idx));
-            let mt = mt_arg.as_ref().map(|mt_arg| mt_arg.index_unchecked(idx));
+        let source = unsafe { source_arg.index_unchecked(idx) };
+        let pat = unsafe { pat_arg.index_unchecked(idx) };
+        let repl = unsafe { repl_arg.index_unchecked(idx) };
+        let pos = pos_arg
+            .as_ref()
+            .map(|pos_arg| unsafe { pos_arg.index_unchecked(idx) });
+        let occur = occur_arg
+            .as_ref()
+            .map(|occur_arg| unsafe { occur_arg.index_unchecked(idx) });
+        let mt = mt_arg
+            .as_ref()
+            .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
 
-            if let Some(occur) = occur {
-                if occur < 0 {
-                    // the occurrence argument for regexp_replace is different with other regexp_* function
-                    // the value of '0' is valid, so check the value here separately
-                    return Err(format!(
-                        "Incorrect arguments to regexp_replace: occurrence must not be negative, but got {}",
-                        occur
-                    ));
-                }
+        if let Some(occur) = occur {
+            if occur < 0 {
+                // the occurrence argument for regexp_replace is different with other regexp_* function
+                // the value of '0' is valid, so check the value here separately
+                return Err(format!(
+                    "Incorrect arguments to regexp_replace: occurrence must not be negative, but got {}",
+                    occur
+                ));
             }
-            regexp::validate_regexp_arguments("regexp_replace", pos, None, None)?;
-            if source.is_empty() || pat.is_empty() {
-                builder.data.extend_from_slice(source);
-                builder.commit_row();
-                continue;
-            }
-            key.push(pat.to_vec());
-            if let Some(mt) = mt {
-                key.push(mt.to_vec());
-            }
-            let re = if let Some(re) = map.get(&key) {
-                re
-            } else {
-                let re = regexp::build_regexp_from_pattern("regexp_replace", pat, mt)?;
-                map.insert(key.clone(), re);
-                map.get(&key).unwrap()
-            };
-            key.clear();
-
-            let pos = pos.unwrap_or(1);
-            let occur = occur.unwrap_or(0);
-
-            regexp::regexp_replace(source, re, repl, pos, occur, &mut builder.data);
-            builder.commit_row();
         }
+        regexp::validate_regexp_arguments("regexp_replace", pos, None, None)?;
+        if source.is_empty() || pat.is_empty() {
+            builder.data.extend_from_slice(source);
+            builder.commit_row();
+            continue;
+        }
+        key.push(pat.to_vec());
+        if let Some(mt) = mt {
+            key.push(mt.to_vec());
+        }
+        let re = if let Some(re) = map.get(&key) {
+            re
+        } else {
+            let re = regexp::build_regexp_from_pattern("regexp_replace", pat, mt)?;
+            map.insert(key.clone(), re);
+            map.get(&key).unwrap()
+        };
+        key.clear();
+
+        let pos = pos.unwrap_or(1);
+        let occur = occur.unwrap_or(0);
+
+        regexp::regexp_replace(source, re, repl, pos, occur, &mut builder.data);
+        builder.commit_row();
     }
     match len {
         Some(_) => Ok(Value::Column(Column::String(builder.build()))),
@@ -869,49 +875,51 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<
     let mut builder = StringColumnBuilder::with_capacity(size, 0);
     let mut validity = MutableBitmap::with_capacity(size);
     for idx in 0..size {
-        unsafe {
-            let source = source_arg.index_unchecked(idx);
-            let pat = pat_arg.index_unchecked(idx);
-            let pos = pos_arg.as_ref().map(|pos_arg| pos_arg.index_unchecked(idx));
-            let occur = occur_arg
-                .as_ref()
-                .map(|occur_arg| occur_arg.index_unchecked(idx));
-            let mt = mt_arg.as_ref().map(|mt_arg| mt_arg.index_unchecked(idx));
+        let source = unsafe { source_arg.index_unchecked(idx) };
+        let pat = unsafe { pat_arg.index_unchecked(idx) };
+        let pos = pos_arg
+            .as_ref()
+            .map(|pos_arg| unsafe { pos_arg.index_unchecked(idx) });
+        let occur = occur_arg
+            .as_ref()
+            .map(|occur_arg| unsafe { occur_arg.index_unchecked(idx) });
+        let mt = mt_arg
+            .as_ref()
+            .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
 
-            regexp::validate_regexp_arguments("regexp_substr", pos, occur, None)?;
-            if source.is_empty() || pat.is_empty() {
-                validity.push(false);
-                builder.commit_row();
-                continue;
-            }
-            key.push(pat.to_vec());
-            if let Some(mt) = mt {
-                key.push(mt.to_vec());
-            }
-            let re = if let Some(re) = map.get(&key) {
-                re
-            } else {
-                let re = regexp::build_regexp_from_pattern("regexp_substr", pat, mt)?;
-                map.insert(key.clone(), re);
-                map.get(&key).unwrap()
-            };
-            key.clear();
-
-            let pos = pos.unwrap_or(1);
-            let occur = occur.unwrap_or(1);
-
-            let substr = regexp::regexp_substr(source, re, pos, occur);
-            match substr {
-                Some(substr) => {
-                    builder.put_slice(substr);
-                    validity.push(true);
-                }
-                None => {
-                    validity.push(false);
-                }
-            }
+        regexp::validate_regexp_arguments("regexp_substr", pos, occur, None)?;
+        if source.is_empty() || pat.is_empty() {
+            validity.push(false);
             builder.commit_row();
+            continue;
         }
+        key.push(pat.to_vec());
+        if let Some(mt) = mt {
+            key.push(mt.to_vec());
+        }
+        let re = if let Some(re) = map.get(&key) {
+            re
+        } else {
+            let re = regexp::build_regexp_from_pattern("regexp_substr", pat, mt)?;
+            map.insert(key.clone(), re);
+            map.get(&key).unwrap()
+        };
+        key.clear();
+
+        let pos = pos.unwrap_or(1);
+        let occur = occur.unwrap_or(1);
+
+        let substr = regexp::regexp_substr(source, re, pos, occur);
+        match substr {
+            Some(substr) => {
+                builder.put_slice(substr);
+                validity.push(true);
+            }
+            None => {
+                validity.push(false);
+            }
+        }
+        builder.commit_row();
     }
     match len {
         Some(_) => {

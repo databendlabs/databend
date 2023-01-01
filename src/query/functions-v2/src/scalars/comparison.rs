@@ -19,6 +19,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::BooleanType;
+use common_expression::types::DateType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
@@ -40,8 +41,9 @@ use crate::scalars::string_multi_args::regexp;
 pub fn register(registry: &mut FunctionRegistry) {
     register_string_cmp(registry);
     register_date_cmp(registry);
-    register_boolean_cmp(registry);
+    register_timestamp_cmp(registry);
     register_number_cmp(registry);
+    register_boolean_cmp(registry);
     register_variant_cmp(registry);
     register_like(registry);
 }
@@ -181,6 +183,10 @@ macro_rules! register_simple_domain_type_cmp {
 }
 
 fn register_date_cmp(registry: &mut FunctionRegistry) {
+    register_simple_domain_type_cmp!(registry, DateType);
+}
+
+fn register_timestamp_cmp(registry: &mut FunctionRegistry) {
     register_simple_domain_type_cmp!(registry, TimestampType);
 }
 
