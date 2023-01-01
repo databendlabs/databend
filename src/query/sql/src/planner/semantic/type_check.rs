@@ -296,11 +296,11 @@ impl<'a> TypeChecker<'a> {
                         .iter()
                         .all(|e| matches!(e, Expr::Literal { lit, .. } if lit != &Literal::Null))
                 {
-                    let tuple_expr = Expr::Tuple {
+                    let array_expr = Expr::Array {
                         span,
                         exprs: list.clone(),
                     };
-                    let args = vec![expr.as_ref(), &tuple_expr];
+                    let args = vec![&array_expr, expr.as_ref()];
                     if *not {
                         self.resolve_function(
                             span,
@@ -309,7 +309,7 @@ impl<'a> TypeChecker<'a> {
                                 span,
                                 distinct: false,
                                 name: Identifier {
-                                    name: "in".to_string(),
+                                    name: "contains".to_string(),
                                     quote: None,
                                     span: span[0].clone(),
                                 },
@@ -320,7 +320,7 @@ impl<'a> TypeChecker<'a> {
                         )
                         .await?
                     } else {
-                        self.resolve_function(span, "in", &args, required_type)
+                        self.resolve_function(span, "contains", &args, required_type)
                             .await?
                     }
                 } else {
