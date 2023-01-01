@@ -13,15 +13,16 @@
 // limitations under the License.
 
 mod cache;
+mod cache_metrics;
 mod memory_cache;
-mod metrics;
+mod memory_cache_reader;
 
 pub use cache::CacheManager;
+pub use cache::Loader;
+pub use cache_metrics::metrics_reset;
 pub use memory_cache::ItemCache;
 pub use memory_cache::LabeledItemCache;
 pub use memory_cache::SegmentInfoCache;
 pub use memory_cache::TableSnapshotCache;
 pub use memory_cache::TableSnapshotStatisticCache;
-
-pub use self::metrics::CacheDeferMetrics;
-pub use self::metrics::TenantLabel;
+pub use memory_cache_reader::MemoryCacheReader;

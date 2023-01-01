@@ -27,7 +27,9 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
 
+use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::io::ReadSettings;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 use crate::MergeIOReadResult;
 
@@ -87,7 +89,10 @@ impl SyncSource for ReadParquetDataSource<true> {
             None => Ok(None),
             Some(part) => Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
                 vec![part.clone()],
-                vec![self.block_reader.sync_read_columns_data(&self.ctx, part)?],
+                vec![self.block_reader.sync_read_columns_data_by_merge_io(
+                    &ReadSettings::from_ctx(&self.ctx)?,
+                    part,
+                )?],
             )))),
         }
     }
@@ -133,12 +138,20 @@ impl Processor for ReadParquetDataSource<false> {
             let mut chunks = Vec::with_capacity(parts.len());
             for part in &parts {
                 let part = part.clone();
-                let ctx = self.ctx.clone();
                 let block_reader = self.block_reader.clone();
+                let settings = ReadSettings::from_ctx(&self.ctx)?;
 
                 chunks.push(async move {
                     tokio::spawn(async move {
-                        block_reader.read_columns_data_by_merge_io(ctx, part).await
+                        let part = FusePartInfo::from_part(&part)?;
+
+                        block_reader
+                            .read_columns_data_by_merge_io(
+                                &settings,
+                                &part.location,
+                                &part.columns_meta,
+                            )
+                            .await
                     })
                     .await
                     .unwrap()

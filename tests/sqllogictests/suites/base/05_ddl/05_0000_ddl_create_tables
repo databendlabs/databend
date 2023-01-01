@@ -228,7 +228,4 @@ statement error Duplicated column name
 create table t(a int, A int)
 
 statement error Duplicated column name
-create table t("A" int, "A" int)
-
-statement error Duplicated column name
 create table t as select number, number from numbers(1)

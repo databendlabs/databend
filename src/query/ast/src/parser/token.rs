@@ -17,6 +17,8 @@ use common_exception::Result;
 use logos::Lexer;
 use logos::Logos;
 use logos::Span;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 pub use self::TokenKind::*;
 use crate::DisplayError;
@@ -94,7 +96,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Logos, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Logos, EnumIter, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     #[error]
     Error,
@@ -493,6 +495,8 @@ pub enum TokenKind {
     KEY,
     #[token("KILL", ignore(ascii_case))]
     KILL,
+    #[token("LOCATION_PREFIX", ignore(ascii_case))]
+    LOCATION_PREFIX,
     #[token("ROLES", ignore(ascii_case))]
     ROLES,
     #[token("LEADING", ignore(ascii_case))]
@@ -1093,4 +1097,12 @@ impl TokenKind {
             _ => false
         }
     }
+}
+
+pub fn all_reserved_keywords() -> Vec<String> {
+    let mut result = Vec::new();
+    for token in TokenKind::iter() {
+        result.push(format!("{:?}", token));
+    }
+    result
 }

@@ -189,12 +189,16 @@ pub struct UriLocation {
     pub protocol: String,
     pub name: String,
     pub path: String,
+    pub part_prefix: String,
     pub connection: BTreeMap<String, String>,
 }
 
 impl Display for UriLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}://{}{}'", self.protocol, self.name, self.path)?;
+        if !self.part_prefix.is_empty() {
+            write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
+        }
         if !self.connection.is_empty() {
             write!(f, " CONNECTION = ( ")?;
             write_space_seperated_map(f, &self.connection)?;

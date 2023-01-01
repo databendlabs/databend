@@ -48,4 +48,3 @@ EvalScalar
 
 statement ok
 drop table t
-

@@ -44,7 +44,6 @@ members = [
     "src/query/settings",
     "src/query/sql",
     "src/query/storages/common",
-    "src/query/storages/cache",
     "src/query/storages/factory",
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
@@ -104,6 +103,9 @@ serde_json = { version = "1.0.85", default-features = false, features = ["preser
 chrono = { version = "0.4.22", features = ["serde"] }
 chrono-tz = "0.6.3"
 
+# jemalloc
+tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
+
 # http
 reqwest = { version = "0.11", default-features = false, features = [
     "json",
@@ -155,3 +157,5 @@ rpath = false
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "fb08b72" }
+limits-rs = { git = "https://github.com/datafuse-extras/limits-rs", rev = "abfcf7b" }
+metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "bc49d03" }

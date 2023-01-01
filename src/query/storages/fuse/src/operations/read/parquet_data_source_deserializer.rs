@@ -139,7 +139,7 @@ impl Processor for DeserializeDataTransform {
             let columns_chunks = read_res.columns_chunks()?;
             let part = FusePartInfo::from_part(&part)?;
 
-            let data_block = self.block_reader.deserialize_columns(
+            let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
                 part.nums_rows,
                 &part.compression,
                 &part.columns_meta,
@@ -147,7 +147,10 @@ impl Processor for DeserializeDataTransform {
                 Some(self.uncompressed_buffer.clone()),
             )?;
 
-            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+            // Perf.
+            {
+                metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+            }
 
             let progress_values = ProgressValues {
                 rows: data_block.num_rows(),

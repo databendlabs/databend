@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -39,8 +40,10 @@ use super::CompactSinkMeta;
 use crate::io;
 use crate::io::write_data;
 use crate::io::BlockReader;
+use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
+use crate::metrics::*;
 use crate::operations::mutation::AbortOperation;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -81,6 +84,7 @@ enum State {
 
 // Gets a set of CompactTask, only merge but not split, generate a new segment.
 pub struct CompactTransform {
+    ctx: Arc<dyn TableContext>,
     state: State,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -123,6 +127,7 @@ impl CompactTransform {
         let max_memory = max_memory_usage / max_threads;
         let max_io_requests = settings.get_max_storage_io_requests()? as usize;
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
+            ctx,
             state: State::Consume,
             input,
             output,
@@ -358,16 +363,33 @@ impl Processor for CompactTransform {
                         self.scan_progress.incr(&progress_values);
 
                         meta_stats.push(meta.col_stats.clone());
+                        let settings = ReadSettings::from_ctx(&self.ctx)?;
 
                         // read block in parallel.
                         task_futures.push(async move {
-                            block_reader.read_with_block_meta(meta.as_ref()).await
+                            // Perf
+                            {
+                                metrics_inc_compact_block_read_nums(1);
+                                metrics_inc_compact_block_read_bytes(meta.block_size);
+                            }
+
+                            block_reader
+                                .read_parquet_by_meta(&settings, meta.as_ref())
+                                .await
                         });
                     }
                     stats_of_columns.push(meta_stats);
                 }
 
+                let start = Instant::now();
+
                 let blocks = futures::future::try_join_all(task_futures).await?;
+
+                // Perf.
+                {
+                    metrics_inc_compact_block_read_milliseconds(start.elapsed().as_millis() as u64);
+                }
+
                 self.state = State::CompactBlocks {
                     blocks,
                     stats_of_columns,
@@ -379,13 +401,28 @@ impl Processor for CompactTransform {
                 let dal = &self.dal;
                 while let Some(state) = serialize_states.pop() {
                     handles.push(async move {
+                        // Perf.
+                        {
+                            metrics_inc_compact_block_write_nums(1);
+                            metrics_inc_compact_block_write_bytes(state.block_data.len() as u64);
+                        }
+
                         // write block data.
                         write_data(&state.block_data, dal, &state.block_location).await?;
                         // write index data.
                         write_data(&state.index_data, dal, &state.index_location).await
                     });
                 }
+
+                let start = Instant::now();
+
                 futures::future::try_join_all(handles).await?;
+
+                // Perf
+                {
+                    metrics_inc_compact_block_write_milliseconds(start.elapsed().as_millis() as u64);
+                }
+
                 if self.compact_tasks.is_empty() {
                     self.state = State::GenerateSegment;
                 } else {

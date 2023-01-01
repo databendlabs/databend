@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValue;
+use common_sql::optimizer::Datum;
 use common_sql::optimizer::Histogram;
 use common_sql::optimizer::HistogramBucket;
 
 #[test]
 fn test_histogram() {
     let buckets = vec![
-        HistogramBucket::new(DataValue::UInt64(1), 2.0, 1.0),
-        HistogramBucket::new(DataValue::UInt64(2), 2.0, 1.0),
+        HistogramBucket::new(Datum::UInt(1), 2.0, 1.0),
+        HistogramBucket::new(Datum::UInt(2), 2.0, 1.0),
     ];
 
     let histogram = Histogram::new(buckets);
