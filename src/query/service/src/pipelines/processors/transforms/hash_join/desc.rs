@@ -98,8 +98,6 @@ impl HashJoinDesc {
             return Ok(None);
         }
 
-        println!("non_equi_conditions ->{:?}", non_equi_conditions);
-
         let mut condition = non_equi_conditions[0].clone().as_raw_expr();
 
         for other_condition in non_equi_conditions.iter().skip(1) {
