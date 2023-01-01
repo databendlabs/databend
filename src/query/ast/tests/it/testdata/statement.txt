@@ -692,10 +692,13 @@ CreateTable(
                 name: "testbucket",
                 path: "/admin/data/",
                 part_prefix: "",
-                connection: {
-                    "aws_key_id": "minioadmin",
-                    "aws_secret_key": "minioadmin",
-                    "endpoint_url": "http://127.0.0.1:9900",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "minioadmin",
+                        "aws_secret_key": "minioadmin",
+                        "endpoint_url": "http://127.0.0.1:9900",
+                    },
                 },
             },
         ),
@@ -753,10 +756,13 @@ CreateTable(
                 name: "testbucket",
                 path: "/admin/data/",
                 part_prefix: "db",
-                connection: {
-                    "aws_key_id": "minioadmin",
-                    "aws_secret_key": "minioadmin",
-                    "endpoint_url": "http://127.0.0.1:9900",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "minioadmin",
+                        "aws_secret_key": "minioadmin",
+                        "endpoint_url": "http://127.0.0.1:9900",
+                    },
                 },
             },
         ),
@@ -5744,9 +5750,12 @@ CreateStage(
                 name: "load",
                 path: "/files/",
                 part_prefix: "",
-                connection: {
-                    "aws_key_id": "1a2b3c",
-                    "aws_secret_key": "4x5y6z",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "1a2b3c",
+                        "aws_secret_key": "4x5y6z",
+                    },
                 },
             },
         ),
@@ -6792,7 +6801,10 @@ Copy(
                 name: "mybucket",
                 path: "/data.csv",
                 part_prefix: "",
-                connection: {},
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
             },
         ),
         dst: Table {
@@ -6849,8 +6861,11 @@ Copy(
                 name: "mybucket",
                 path: "/data.csv",
                 part_prefix: "",
-                connection: {
-                    "endpoint_url": "http://127.0.0.1:9900",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "endpoint_url": "http://127.0.0.1:9900",
+                    },
                 },
             },
         ),
@@ -6908,8 +6923,11 @@ Copy(
                 name: "mybucket",
                 path: "/data.csv",
                 part_prefix: "",
-                connection: {
-                    "endpoint_url": "http://127.0.0.1:9900",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "endpoint_url": "http://127.0.0.1:9900",
+                    },
                 },
             },
         ),
@@ -6956,7 +6974,10 @@ Copy(
                 name: "127.0.0.1:9900",
                 path: "/",
                 part_prefix: "",
-                connection: {},
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
             },
         ),
         dst: Table {
@@ -6997,7 +7018,10 @@ Copy(
                 name: "127.0.0.1",
                 path: "/",
                 part_prefix: "",
-                connection: {},
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
             },
         ),
         dst: Table {
@@ -7106,7 +7130,10 @@ Copy(
                 name: "mybucket",
                 path: "/data.csv",
                 part_prefix: "",
-                connection: {},
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
             },
         ),
         files: [],
@@ -7209,10 +7236,13 @@ Copy(
                 name: "mybucket",
                 path: "/data.csv",
                 part_prefix: "",
-                connection: {
-                    "aws_key_id": "access_key",
-                    "aws_secret_key": "secret_key",
-                    "master_key": "master_key",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "access_key",
+                        "aws_secret_key": "secret_key",
+                        "master_key": "master_key",
+                    },
                 },
             },
         ),
@@ -7420,7 +7450,10 @@ Copy(
                 name: "",
                 path: "/path/to/data.csv",
                 part_prefix: "",
-                connection: {},
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
             },
         ),
         dst: Table {
