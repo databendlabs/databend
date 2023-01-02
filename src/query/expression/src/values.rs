@@ -324,7 +324,7 @@ impl<'a> ScalarRef<'a> {
         match self {
             ScalarRef::Number(t) => with_integer_mapped_type!(|NUM_TYPE| match t {
                 NumberScalar::NUM_TYPE(v) => {
-                    if *v >= 0 as _ { Some(*v as u64) } else { None }
+                    if *v >= 0 as _ { Some(*v as _) } else { None }
                 }
                 _ => None,
             }),

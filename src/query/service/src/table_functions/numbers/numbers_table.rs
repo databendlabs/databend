@@ -31,7 +31,6 @@ use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::with_unsigned_number_mapped_type;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
@@ -74,16 +73,7 @@ impl NumbersTable {
         let mut total = None;
         if let Some(args) = table_args {
             if args.len() == 1 {
-                let arg = args[0].clone();
-                total = match arg {
-                    Scalar::Number(x) => {
-                        with_unsigned_number_mapped_type!(|SCALAR| match &x {
-                            NumberScalar::SCALAR(v) => Some(*v as u64),
-                            _ => return Err(ErrorCode::BadArguments("Expected uint argument")),
-                        })
-                    }
-                    _ => return Err(ErrorCode::BadArguments("Expected uint argument")),
-                };
+                total = args[0].as_ref().cast_to_u64();
             }
         }
 
