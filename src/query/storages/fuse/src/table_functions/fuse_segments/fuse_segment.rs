@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -88,7 +89,11 @@ impl<'a> FuseSegment<'a> {
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut file_location: Vec<Vec<u8>> = Vec::with_capacity(len);
 
-        let segments_io = SegmentsIO::create(self.ctx.clone(), self.table.operator.clone());
+        let segments_io = SegmentsIO::create(
+            self.ctx.clone(),
+            self.table.operator.clone(),
+            self.table.schema(),
+        );
         let segments = segments_io.read_segments(segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone()?;

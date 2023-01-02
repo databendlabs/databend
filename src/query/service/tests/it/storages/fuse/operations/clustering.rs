@@ -20,6 +20,7 @@ use common_sql::plans::CreateTablePlanV2;
 use common_sql::plans::DropTableClusterKeyPlan;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FuseTable;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -85,9 +86,15 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
     let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let snapshot = reader
-        .read(snapshot_loc.as_str(), None, TableSnapshot::VERSION)
-        .await?;
+
+    let load_params = LoadParams {
+        location: snapshot_loc.clone(),
+        len_hint: None,
+        ver: TableSnapshot::VERSION,
+        schema: None,
+    };
+
+    let snapshot = reader.read(&load_params).await?;
     let expected = Some((0, "(id)".to_string()));
 
     assert_eq!(snapshot.cluster_key_meta, expected);
@@ -115,7 +122,15 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
     let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
+
+    let params = LoadParams {
+        location: snapshot_loc.clone(),
+        len_hint: None,
+        ver: TableSnapshot::VERSION,
+        schema: None,
+    };
+
+    let snapshot = reader.read(&params).await?;
     let expected = None;
     assert_eq!(snapshot.cluster_key_meta, expected);
 

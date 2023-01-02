@@ -93,14 +93,19 @@ impl TableSnapshotStatisticsVersion {
     }
 }
 
-pub struct OldDataBlock {}
-
-impl Versioned<0> for OldDataBlock {}
-
 impl Versioned<2> for DataBlock {}
+
+pub struct V0Block {}
+pub struct V2Block {}
+
+impl Versioned<0> for V0Block {}
+impl Versioned<2> for V2Block {}
+
 impl Versioned<3> for BlockFilter {}
 
 pub enum BlockBloomFilterIndexVersion {
+    V0(PhantomData<V0Block>),
+    V2(PhantomData<V2Block>),
     V3(PhantomData<v2::BlockFilter>),
 }
 

@@ -49,6 +49,7 @@ use common_storage::FuseCachePolicy;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::ClusterKey;
 use common_storages_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_storages_table_meta::meta::Statistics as FuseStatistics;
@@ -194,7 +195,15 @@ impl FuseTable {
                 if let Some(loc) = &snapshot.table_statistics_location {
                     let ver = self.table_snapshot_statistics_format_version(loc);
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
-                    Ok(Some(reader.read(loc.as_str(), None, ver).await?))
+
+                    let load_params = LoadParams {
+                        location: loc.clone(),
+                        len_hint: None,
+                        ver,
+                        schema: None,
+                    };
+
+                    Ok(Some(reader.read(&load_params).await?))
                 } else {
                     Ok(None)
                 }
@@ -208,7 +217,13 @@ impl FuseTable {
         if let Some(loc) = self.snapshot_loc().await? {
             let reader = MetaReaders::table_snapshot_reader(self.get_operator());
             let ver = self.snapshot_format_version().await?;
-            Ok(Some(reader.read(loc.as_str(), None, ver).await?))
+            let params = LoadParams {
+                location: loc,
+                len_hint: None,
+                ver,
+                schema: None,
+            };
+            Ok(Some(reader.read(&params).await?))
         } else {
             Ok(None)
         }

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_config::QueryConfig;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 
 use crate::caches::memory_cache::new_bytes_cache;
 use crate::caches::memory_cache::new_item_cache;
@@ -29,11 +30,18 @@ use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 
+pub struct LoadParams {
+    pub location: String,
+    pub len_hint: Option<u64>,
+    pub ver: u64,
+    pub schema: Option<TableSchemaRef>,
+}
+
 /// Loads an object from a source
 #[async_trait::async_trait]
 pub trait Loader<T> {
     /// Loads object of type T, located at `location`
-    async fn load(&self, location: &str, len_hint: Option<u64>, ver: u64) -> Result<T>;
+    async fn load(&self, prams: &LoadParams) -> Result<T>;
 }
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;

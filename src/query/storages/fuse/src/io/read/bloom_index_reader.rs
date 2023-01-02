@@ -59,8 +59,15 @@ impl BlockFilterReader for Location {
     ) -> Result<BlockFilter> {
         let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
         match index_version {
+            BlockBloomFilterIndexVersion::V0(_) | BlockBloomFilterIndexVersion::V2(_) => {
+                Err(ErrorCode::DeprecatedIndexFormat(
+                    "bloom filter index version(v0, v1) is deprecated",
+                ))
+            }
             BlockBloomFilterIndexVersion::V3(_) => {
-                load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await
+                let res =
+                    load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
+                Ok(res)
             }
         }
     }
@@ -76,6 +83,7 @@ mod util_v1 {
     use common_expression::TableField;
     use common_expression::TableSchema;
     use common_storages_table_meta::caches::CacheManager;
+    use common_storages_table_meta::caches::LoadParams;
 
     use super::*;
     use crate::io::MetaReaders;
@@ -286,7 +294,15 @@ mod util_v1 {
             // Format of FileMetaData is not versioned, version argument is ignored by the underlying reader,
             // so we just pass a zero to reader
             let version = 0;
-            reader.read(path_owned, Some(length), version).await
+
+            let load_params = LoadParams {
+                location: path_owned,
+                len_hint: Some(length),
+                ver: version,
+                schema: None,
+            };
+
+            reader.read(&load_params).await
         }
         .execute_in_runtime(&storage_runtime)
         .await?

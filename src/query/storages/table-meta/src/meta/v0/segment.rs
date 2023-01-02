@@ -14,9 +14,8 @@
 
 use std::collections::HashMap;
 
-use crate::meta::statistics::ColumnStatistics;
+use super::statistics::*;
 use crate::meta::ColumnId;
-use crate::meta::Statistics;
 
 /// A segment comprised of one or more blocks
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

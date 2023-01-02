@@ -2510,6 +2510,7 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-config",
+ "common-datavalues",
  "common-exception",
  "common-expression",
  "metrics",

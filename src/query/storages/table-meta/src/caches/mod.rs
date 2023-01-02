@@ -18,6 +18,7 @@ mod memory_cache;
 mod memory_cache_reader;
 
 pub use cache::CacheManager;
+pub use cache::LoadParams;
 pub use cache::Loader;
 pub use cache_metrics::metrics_reset;
 pub use memory_cache::ItemCache;

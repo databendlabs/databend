@@ -422,6 +422,28 @@ impl TableSchema {
         )))
     }
 
+    pub fn leaf_fields(&self) -> Vec<TableField> {
+        fn collect_in_field(field: &TableField, fields: &mut Vec<TableField>) {
+            match field.data_type() {
+                TableDataType::Tuple {
+                    fields_type,
+                    fields_name,
+                } => {
+                    for (name, ty) in fields_name.iter().zip(fields_type) {
+                        collect_in_field(&TableField::new(name, ty.clone()), fields);
+                    }
+                }
+                _ => fields.push(field.clone()),
+            }
+        }
+
+        let mut fields = Vec::new();
+        for field in self.fields() {
+            collect_in_field(field, &mut fields);
+        }
+        fields
+    }
+
     /// project will do column pruning.
     #[must_use]
     pub fn project_by_fields(&self, fields: Vec<TableField>) -> Self {

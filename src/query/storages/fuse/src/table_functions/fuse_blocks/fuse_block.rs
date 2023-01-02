@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::number::NumberScalar;
@@ -102,7 +103,11 @@ impl<'a> FuseBlock<'a> {
         let mut bloom_filter_size =
             NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
 
-        let segments_io = SegmentsIO::create(self.ctx.clone(), self.table.operator.clone());
+        let segments_io = SegmentsIO::create(
+            self.ctx.clone(),
+            self.table.operator.clone(),
+            self.table.schema(),
+        );
         let segments = segments_io.read_segments(&snapshot.segments).await?;
         for segment in segments {
             let segment = segment?;

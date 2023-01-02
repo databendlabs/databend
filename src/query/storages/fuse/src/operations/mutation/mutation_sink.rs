@@ -264,7 +264,8 @@ impl Processor for MutationSink {
                         .chain(self.merged_segments.iter())
                         .cloned()
                         .collect();
-                    let segments_io = SegmentsIO::create(self.ctx.clone(), self.dal.clone());
+                    let segments_io =
+                        SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.table.schema());
                     let append_segment_infos =
                         segments_io.read_segments(&appended_segments).await?;
                     for result in append_segment_infos.into_iter() {

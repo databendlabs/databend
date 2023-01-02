@@ -17,6 +17,7 @@ use std::ops::Add;
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::uuid::Uuid;
+use common_expression::converts::from_schema;
 use common_expression::TableSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -117,13 +118,16 @@ use super::super::v0;
 
 impl From<v0::TableSnapshot> for TableSnapshot {
     fn from(s: v0::TableSnapshot) -> Self {
+        let schema = from_schema(&s.schema);
+        let leaf_fields = schema.leaf_fields();
+        let summary = Statistics::from_v0(s.summary, &leaf_fields);
         Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,
             timestamp: None,
             prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
-            schema: s.schema,
-            summary: s.summary,
+            schema,
+            summary,
             segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
             cluster_key_meta: None,
             table_statistics_location: None,
@@ -133,13 +137,16 @@ impl From<v0::TableSnapshot> for TableSnapshot {
 
 impl From<v1::TableSnapshot> for TableSnapshot {
     fn from(s: v1::TableSnapshot) -> Self {
+        let schema = from_schema(&s.schema);
+        let leaf_fields = schema.leaf_fields();
+        let summary = Statistics::from_v0(s.summary, &leaf_fields);
         Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,
             timestamp: None,
             prev_snapshot_id: s.prev_snapshot_id,
-            schema: s.schema,
-            summary: s.summary,
+            schema,
+            summary,
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,

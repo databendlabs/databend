@@ -35,6 +35,7 @@ use common_expression::Value;
 use common_sql::parse_to_remote_string_exprs;
 use common_sql::plans::CreateTablePlanV2;
 use common_storages_fuse::FuseTable;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
@@ -167,9 +168,15 @@ async fn test_block_pruner() -> Result<()> {
         .unwrap();
 
     let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let snapshot = reader
-        .read(snapshot_loc.as_str(), None, TableSnapshot::VERSION)
-        .await?;
+
+    let load_params = LoadParams {
+        location: snapshot_loc.clone(),
+        len_hint: None,
+        ver: TableSnapshot::VERSION,
+        schema: None,
+    };
+
+    let snapshot = reader.read(&load_params).await?;
 
     // nothing is pruned
     let e1 = PushDownInfo {

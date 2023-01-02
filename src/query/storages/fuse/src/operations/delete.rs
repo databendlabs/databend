@@ -270,6 +270,7 @@ impl FuseTable {
                 let output_port = OutputPort::create();
                 let processor = DeletionTransform::try_create(
                     ctx,
+                    self.schema(),
                     inputs_port.clone(),
                     output_port.clone(),
                     self.get_operator(),

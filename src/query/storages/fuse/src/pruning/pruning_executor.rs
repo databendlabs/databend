@@ -31,6 +31,7 @@ use common_storages_pruner::LimiterPruner;
 use common_storages_pruner::LimiterPrunerCreator;
 use common_storages_pruner::RangePruner;
 use common_storages_pruner::RangePrunerCreator;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -133,6 +134,7 @@ impl BlockPruner {
         // 4. kick off
         // 4.1 generates the iterator of segment pruning tasks.
         let mut segments = segment_locs.into_iter().enumerate();
+
         let tasks = std::iter::from_fn(|| {
             // pruning tasks are executed concurrently, check if limit exceeded before proceeding
             if pruning_ctx.limiter.exceeded() {
@@ -141,9 +143,18 @@ impl BlockPruner {
                 segments.next().map(|(segment_idx, segment_location)| {
                     let dal = dal.clone();
                     let pruning_ctx = pruning_ctx.clone();
+                    let task_schema = schema.clone();
+
                     move |permit| async move {
-                        Self::prune_segment(permit, dal, pruning_ctx, segment_idx, segment_location)
-                            .await
+                        Self::prune_segment(
+                            permit,
+                            dal,
+                            pruning_ctx,
+                            segment_idx,
+                            segment_location,
+                            task_schema.clone(),
+                        )
+                        .await
                     }
                 })
             }
@@ -181,11 +192,21 @@ impl BlockPruner {
         pruning_ctx: Arc<PruningContext>,
         segment_idx: usize,
         segment_location: Location,
+        schema: TableSchemaRef,
     ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
         let segment_reader = MetaReaders::segment_info_reader(dal.clone());
 
         let (path, ver) = segment_location;
-        let segment_info = segment_reader.read(path, None, ver).await?;
+
+        // Keep in mind that segment_info_read must need a schema
+        let load_params = LoadParams {
+            location: path,
+            len_hint: None,
+            ver,
+            schema: Some(schema.clone()),
+        };
+
+        let segment_info = segment_reader.read(&load_params).await?;
 
         // IO job of reading segment done, release the permit, allows more concurrent pruners
         // Note that it is required to explicitly release this permit before pruning blocks, to avoid deadlock.

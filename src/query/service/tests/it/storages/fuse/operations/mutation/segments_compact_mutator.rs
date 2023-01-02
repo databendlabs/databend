@@ -42,6 +42,7 @@ use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
@@ -720,7 +721,14 @@ impl CompactSegmentTestFixture {
     ) -> Result<()> {
         // traverse the paths of new segments  in reversed order
         for (idx, x) in new_segment_paths.iter().rev().enumerate() {
-            let seg = segment_reader.read(x, None, SegmentInfo::VERSION).await?;
+            let load_params = LoadParams {
+                location: x.to_string(),
+                len_hint: None,
+                ver: SegmentInfo::VERSION,
+                schema: Some(TestFixture::default_table_schema()),
+            };
+
+            let seg = segment_reader.read(&load_params).await?;
             assert_eq!(
                 seg.blocks.len(),
                 expected_num_blocks[idx],
@@ -791,7 +799,14 @@ impl CompactCase {
         // 4. input blocks should be there and in the original order
         // for location in r.segments_locations.iter().rev() {
         for location in r.segments_locations.iter() {
-            let segment = segment_reader.read(&location.0, None, location.1).await?;
+            let load_params = LoadParams {
+                location: location.0.clone(),
+                len_hint: None,
+                ver: location.1,
+                schema: Some(TestFixture::default_table_schema()),
+            };
+
+            let segment = segment_reader.read(&load_params).await?;
             merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary)?;
             block_num_of_output_segments.push(segment.blocks.len());
 

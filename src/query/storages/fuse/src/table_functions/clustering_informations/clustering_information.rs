@@ -89,7 +89,11 @@ impl<'a> ClusteringInformation<'a> {
         let mut info = ClusteringStatistics::default();
         if let Some(snapshot) = snapshot {
             let segment_locations = &snapshot.segments;
-            let segments_io = SegmentsIO::create(self.ctx.clone(), self.table.operator.clone());
+            let segments_io = SegmentsIO::create(
+                self.ctx.clone(),
+                self.table.operator.clone(),
+                self.table.schema(),
+            );
             let segments = segments_io
                 .read_segments(segment_locations)
                 .await?

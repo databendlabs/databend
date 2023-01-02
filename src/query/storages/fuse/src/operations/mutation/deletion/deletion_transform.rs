@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
@@ -72,6 +73,7 @@ enum State {
 pub struct DeletionTransform {
     state: State,
     ctx: Arc<dyn TableContext>,
+    schema: TableSchemaRef,
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
 
@@ -89,6 +91,7 @@ pub struct DeletionTransform {
 impl DeletionTransform {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        schema: TableSchemaRef,
         inputs: Vec<Arc<InputPort>>,
         output: Arc<OutputPort>,
         dal: Operator,
@@ -99,6 +102,7 @@ impl DeletionTransform {
         Ok(ProcessorPtr::create(Box::new(DeletionTransform {
             state: State::None,
             ctx,
+            schema,
             dal,
             location_gen,
             base_segments,
@@ -321,7 +325,8 @@ impl Processor for DeletionTransform {
         match std::mem::replace(&mut self.state, State::None) {
             State::ReadSegments => {
                 // Read all segments information in parallel.
-                let segments_io = SegmentsIO::create(self.ctx.clone(), self.dal.clone());
+                let segments_io =
+                    SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.schema.clone());
                 let segment_locations = &self.base_segments;
                 let segments = segments_io
                     .read_segments(segment_locations)

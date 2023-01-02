@@ -29,6 +29,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_storages_table_meta::caches::LoadParams;
 use futures::AsyncReadExt;
 use opendal::Object;
 use opendal::Operator;
@@ -198,7 +199,15 @@ impl HiveBlockReader {
         filesize: u64,
     ) -> Result<Arc<FileMetaData>> {
         let reader = MetaDataReader::meta_data_reader(dal);
-        reader.read(filename, Some(filesize), 0).await
+
+        let load_params = LoadParams {
+            location: filename.to_owned(),
+            len_hint: Some(filesize),
+            ver: 0,
+            schema: None,
+        };
+
+        reader.read(&load_params).await
     }
 
     pub async fn read_columns_data(

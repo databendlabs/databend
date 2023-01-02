@@ -15,13 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_expression::TableField;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::statistics::ClusterStatistics;
 use crate::meta::statistics::ColumnStatistics;
 use crate::meta::statistics::FormatVersion;
-use crate::meta::versions::OldDataBlock;
 use crate::meta::ColumnId;
 use crate::meta::ColumnMeta;
 use crate::meta::Compression;
@@ -117,49 +117,42 @@ impl SegmentInfo {
 use super::super::v0;
 use super::super::v1;
 
-impl From<v0::SegmentInfo> for SegmentInfo {
-    fn from(s: v0::SegmentInfo) -> Self {
+impl SegmentInfo {
+    pub fn from_v0(s: v0::SegmentInfo, fields: &Vec<TableField>) -> Self {
+        let summary = Statistics::from_v0(s.summary, fields);
         Self {
             format_version: SegmentInfo::VERSION,
             blocks: s
                 .blocks
                 .into_iter()
-                .map(|b| Arc::new(b.into()))
+                .map(|b| Arc::new(BlockMeta::from_v0(&b, fields)))
                 .collect::<_>(),
-            summary: s.summary,
+            summary,
         }
     }
-}
 
-impl From<v1::SegmentInfo> for SegmentInfo {
-    fn from(s: v1::SegmentInfo) -> Self {
+    pub fn from_v1(s: v1::SegmentInfo, fields: &Vec<TableField>) -> Self {
+        let summary = Statistics::from_v0(s.summary, fields);
         Self {
             format_version: SegmentInfo::VERSION,
             blocks: s
                 .blocks
                 .into_iter()
-                .map(|b| Arc::new(b.as_ref().into()))
+                .map(|b| Arc::new(BlockMeta::from_v1(b.as_ref(), fields)))
                 .collect::<_>(),
-            summary: s.summary,
+            summary,
         }
     }
 }
 
-impl From<v0::BlockMeta> for BlockMeta {
-    fn from(s: v0::BlockMeta) -> Self {
+impl BlockMeta {
+    pub fn from_v0(s: &v0::BlockMeta, fields: &Vec<TableField>) -> Self {
         let col_stats = s
             .col_stats
             .iter()
             .map(|(k, v)| {
-                let stats = ColumnStatistics {
-                    min: v.min.clone(),
-                    max: v.max.clone(),
-                    null_count: v.null_count,
-                    in_memory_size: v.in_memory_size,
-                    distinct_of_values: None,
-                };
-
-                (*k, stats)
+                let data_type = fields[*k as usize].data_type();
+                (*k, ColumnStatistics::from_v0(v, data_type))
             })
             .collect();
 
@@ -168,31 +161,22 @@ impl From<v0::BlockMeta> for BlockMeta {
             block_size: s.block_size,
             file_size: s.file_size,
             col_stats,
-            col_metas: s.col_metas,
+            col_metas: s.col_metas.clone(),
             cluster_stats: None,
-            location: (s.location.path, OldDataBlock::VERSION),
+            location: (s.location.path.clone(), 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
         }
     }
-}
 
-impl From<&v1::BlockMeta> for BlockMeta {
-    fn from(s: &v1::BlockMeta) -> Self {
+    pub fn from_v1(s: &v1::BlockMeta, fields: &Vec<TableField>) -> Self {
         let col_stats = s
             .col_stats
             .iter()
             .map(|(k, v)| {
-                let stats = ColumnStatistics {
-                    min: v.min.clone(),
-                    max: v.max.clone(),
-                    null_count: v.null_count,
-                    in_memory_size: v.in_memory_size,
-                    distinct_of_values: None,
-                };
-
-                (*k, stats)
+                let data_type = fields[*k as usize].data_type();
+                (*k, ColumnStatistics::from_v0(&v, data_type))
             })
             .collect();
 
@@ -206,7 +190,7 @@ impl From<&v1::BlockMeta> for BlockMeta {
             location: s.location.clone(),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
-            compression: Compression::Lz4,
+            compression: s.compression,
         }
     }
 }
