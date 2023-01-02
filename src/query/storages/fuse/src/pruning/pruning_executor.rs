@@ -40,6 +40,7 @@ use tracing::Instrument;
 
 use super::pruner;
 use crate::io::MetaReaders;
+use crate::io::SegmentReader;
 use crate::metrics::*;
 use crate::pruning::pruner::Pruner;
 use crate::pruning::topn_pruner;
@@ -167,7 +168,6 @@ impl BlockPruner {
     }
 
     #[inline]
-    #[tracing::instrument(level = "debug", skip_all)]
     async fn prune_segment(
         permit: OwnedSemaphorePermit,
         dal: Operator,
@@ -175,10 +175,10 @@ impl BlockPruner {
         segment_idx: usize,
         segment_location: Location,
     ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
-        let segment_reader = MetaReaders::segment_info_reader(dal.clone());
+        let segment_reader = SegmentReader::create(dal.clone());
 
         let (path, ver) = segment_location;
-        let segment_info = segment_reader.read(path, None, ver).await?;
+        let segment_info = segment_reader.read(&path, None, ver).await?;
 
         // IO job of reading segment done, release the permit, allows more concurrent pruners
         // Note that it is required to explicitly release this permit before pruning blocks, to avoid deadlock.
