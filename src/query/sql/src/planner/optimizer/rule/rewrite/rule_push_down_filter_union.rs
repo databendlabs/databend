@@ -136,7 +136,7 @@ fn replace_column_binding(
                 let new_column = ColumnBinding {
                     database_name: None,
                     table_name: None,
-                    column_name: "".to_string(),
+                    column_name: column.column.column_name.clone(),
                     index: *index_pairs.get(&index).unwrap(),
                     data_type: column.column.data_type,
                     visibility: Visibility::Visible,
