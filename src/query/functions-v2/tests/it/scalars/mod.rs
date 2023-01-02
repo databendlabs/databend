@@ -45,7 +45,8 @@ mod string;
 mod tuple;
 mod variant;
 
-pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column)]) {
+pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, DataType, Column)]) {
+    let text = text.as_ref();
     let result = try {
         let raw_expr = parser::parse_raw_expr(
             text,

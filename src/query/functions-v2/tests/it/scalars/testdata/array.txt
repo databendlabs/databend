@@ -372,12 +372,13 @@ output domain  : {TRUE}
 output         : true
 
 
-error: 
-  --> SQL:1:6
-  |
-1 | '33' in ('1', '33', '23', '33')
-  |      ^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast 1 to DateType
-
+ast            : '33' in ('1', '33', '23', '33')
+raw expr       : contains(array("1", "33", "23", "33"), "33")
+checked expr   : contains<Array(String), String>(array<T0=String><T0, T0, T0, T0>("1", "33", "23", "33"), "33")
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
 
 
 ast            : contains([1,2,3], 2)

@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use common_base::base::convert_byte_size;
 use common_base::base::convert_number_size;
+use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::UInt32Type;
@@ -97,7 +98,12 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg_core::<GenericType<0>, BooleanType, _, _>(
         "ignore",
         FunctionProperty::default(),
-        |_| FunctionDomain::Full,
+        |_| {
+            FunctionDomain::Domain(BooleanDomain {
+                has_true: false,
+                has_false: true,
+            })
+        },
         |_, _| Ok(Value::Scalar(false)),
     );
 
@@ -120,7 +126,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry
         .register_1_arg_core::<NullableType<GenericType<0>>, NullableType<GenericType<0>>, _, _>(
-            "to_nullalbe",
+            "to_nullable",
             FunctionProperty::default(),
             |domain| FunctionDomain::Domain(domain.clone()),
             |val, _| Ok(val.to_owned()),

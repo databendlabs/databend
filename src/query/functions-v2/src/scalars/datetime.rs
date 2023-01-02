@@ -211,97 +211,100 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
 fn register_try_cast_functions(registry: &mut FunctionRegistry) {
     registry.register_aliases("try_to_timestamp", &["try_to_datetime"]);
 
-    registry.register_passthrough_nullable_1_arg::<DateType, TimestampType, _, _>(
-        "try_to_timestamp",
-        FunctionProperty::default(),
-        |domain| {
-            FunctionDomain::Domain(SimpleDomain {
-                min: domain.min as i64 * 24 * 3600 * 1000000,
-                max: domain.max as i64 * 24 * 3600 * 1000000,
-            })
-        },
-        vectorize_1_arg::<DateType, TimestampType>(|val, _| {
-            (val as i64) * 24 * 3600 * MICROS_IN_A_SEC
-        }),
-    );
-
-    registry.register_1_arg_core::<NullableType<Int64Type>, NullableType<TimestampType>, _, _>(
-        "try_to_timestamp",
-        FunctionProperty::default(),
-        |domain| {
-            let value = if let Some(number_domain) = &domain.value {
-                if let Some(domain) = int64_domain_to_timestamp_domain(number_domain) {
-                    Some(Box::new(domain))
-                } else {
-                    return FunctionDomain::MayThrow;
-                }
-            } else {
-                None
-            };
-            FunctionDomain::Domain(NullableDomain {
-                has_null: domain.has_null,
-                value,
-            })
-        },
-        vectorize_1_arg::<NullableType<Int64Type>, NullableType<TimestampType>>(|val, _| {
-            val.and_then(|v| int64_to_timestamp(v).ok())
-        }),
-    );
-
-    registry.register_1_arg_core::<NullableType<StringType>, NullableType<TimestampType>, _, _>(
+    registry.register_combine_nullable_1_arg::<StringType, TimestampType, _, _>(
         "try_to_timestamp",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_1_arg::<NullableType<StringType>, NullableType<TimestampType>>(|val, ctx| {
-            val.and_then(|v| string_to_timestamp(v, ctx.tz).map(|ts| ts.timestamp_micros()))
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
-        "try_to_date",
-        FunctionProperty::default(),
-        |domain| {
-            FunctionDomain::Domain(SimpleDomain {
-                min: (domain.min / 1000000 / 24 / 3600) as i32,
-                max: (domain.max / 1000000 / 24 / 3600) as i32,
-            })
-        },
-        vectorize_1_arg::<TimestampType, DateType>(|val, _| microseconds_to_days(val)),
-    );
-
-    registry.register_1_arg_core::<NullableType<Int64Type>, NullableType<DateType>, _, _>(
-        "try_to_date",
-        FunctionProperty::default(),
-        |domain| {
-            let val = if let Some(d) = &domain.value {
-                let (domain, overflowing) = d.overflow_cast_with_minmax(DATE_MIN, DATE_MAX);
-                if overflowing {
-                    return FunctionDomain::MayThrow;
-                } else {
-                    Some(domain)
+        vectorize_with_builder_1_arg::<StringType, NullableType<TimestampType>>(
+            |val, output, ctx| {
+                let timestamp = string_to_timestamp(val, ctx.tz).map(|ts| ts.timestamp_micros());
+                match timestamp {
+                    Some(timestamp) => output.push(timestamp),
+                    None => output.push_null(),
                 }
-            } else {
-                None
-            };
+                Ok(())
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<DateType, TimestampType, _, _>(
+        "try_to_timestamp",
+        FunctionProperty::default(),
+        |domain| {
             FunctionDomain::Domain(NullableDomain {
-                has_null: domain.has_null,
-                value: val.map(Box::new),
+                has_null: false,
+                value: Some(Box::new(SimpleDomain {
+                    min: domain.min as i64 * 24 * 3600 * 1000000,
+                    max: domain.max as i64 * 24 * 3600 * 1000000,
+                })),
             })
         },
-        vectorize_1_arg::<NullableType<Int64Type>, NullableType<DateType>>(|val, _| {
-            val.and_then(|v| check_date(v).ok())
+        vectorize_1_arg::<DateType, NullableType<TimestampType>>(|val, _| {
+            Some((val as i64) * 24 * 3600 * MICROS_IN_A_SEC)
         }),
     );
 
-    registry.register_1_arg_core::<NullableType<StringType>, NullableType<DateType>, _, _>(
+    registry.register_combine_nullable_1_arg::<Int64Type, TimestampType, _, _>(
+        "try_to_timestamp",
+        FunctionProperty::default(),
+        |domain| {
+            if let Some(domain) = int64_domain_to_timestamp_domain(domain) {
+                FunctionDomain::Domain(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(domain)),
+                })
+            } else {
+                FunctionDomain::Full
+            }
+        },
+        vectorize_1_arg::<Int64Type, NullableType<TimestampType>>(|val, _| {
+            int64_to_timestamp(val).ok()
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<StringType, DateType, _, _>(
         "try_to_date",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_1_arg::<NullableType<StringType>, NullableType<DateType>>(|val, ctx| {
-            val.and_then(|v| {
-                string_to_date(v, ctx.tz).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE))
-            })
+        vectorize_with_builder_1_arg::<StringType, NullableType<DateType>>(|val, output, ctx| {
+            let date =
+                string_to_date(val, ctx.tz).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE));
+            match date {
+                Some(date) => output.push(date),
+                None => output.push_null(),
+            }
+            Ok(())
         }),
+    );
+
+    registry.register_combine_nullable_1_arg::<TimestampType, DateType, _, _>(
+        "try_to_date",
+        FunctionProperty::default(),
+        |domain| {
+            FunctionDomain::Domain(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(SimpleDomain {
+                    min: (domain.min / 1000000 / 24 / 3600) as i32,
+                    max: (domain.max / 1000000 / 24 / 3600) as i32,
+                })),
+            })
+        },
+        vectorize_1_arg::<TimestampType, NullableType<DateType>>(|val, _| {
+            Some(microseconds_to_days(val))
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<Int64Type, DateType, _, _>(
+        "try_to_date",
+        FunctionProperty::default(),
+        |domain| {
+            let (domain, overflowing) = domain.overflow_cast_with_minmax(DATE_MIN, DATE_MAX);
+            FunctionDomain::Domain(NullableDomain {
+                has_null: overflowing,
+                value: Some(Box::new(domain)),
+            })
+        },
+        vectorize_1_arg::<Int64Type, NullableType<DateType>>(|val, _| check_date(val).ok()),
     );
 }
 

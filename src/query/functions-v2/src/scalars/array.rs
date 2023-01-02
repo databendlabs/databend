@@ -335,6 +335,50 @@ pub fn register(registry: &mut FunctionRegistry) {
         });
     }
 
+    registry.register_passthrough_nullable_2_arg::<ArrayType<StringType>, StringType, BooleanType, _, _>(
+        "contains",
+        FunctionProperty::default(),
+        |_, _| {
+            FunctionDomain::Full
+        },
+        |lhs, rhs, _| {
+            match lhs {
+                ValueRef::Scalar(array) => {
+                    let mut set = StackHashSet::<_, 128>::with_capacity(StringType::column_len(&array));
+                    for val in array.iter() {
+                        let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
+                        let _ = set.set_insert(key_ref);
+                    }
+                    match rhs {
+                        ValueRef::Scalar(val) =>  {
+                            let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
+                            Ok(Value::Scalar(set.contains( &key_ref)))
+                        },
+                        ValueRef::Column(col) => {
+                            let result = BooleanType::column_from_iter(StringType::iter_column(&col).map(|val| {
+                                let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
+                                set.contains(&key_ref)
+                            }), &[]);
+                            Ok(Value::Column(result))
+                        }
+                    }
+                },
+                ValueRef::Column(array_column) => {
+                    let result = match rhs {
+                        ValueRef::Scalar(c) =>  BooleanType::column_from_iter(array_column
+                            .iter()
+                            .map(|array| StringType::iter_column(&array).contains(&c)), &[]),
+                        ValueRef::Column(col) =>  BooleanType::column_from_iter(array_column
+                            .iter()
+                            .zip(StringType::iter_column(&col))
+                            .map(|(array, c)| StringType::iter_column(&array).contains(&c)), &[]),
+                    };
+                    Ok(Value::Column(result))
+                }
+            }
+        }
+    );
+
     registry
         .register_passthrough_nullable_2_arg::<ArrayType<DateType>, DateType, BooleanType, _, _>(
             "contains",
@@ -399,50 +443,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                             .iter()
                             .zip(BooleanType::iter_column(&col))
                             .map(|(array, c)| BooleanType::iter_column(&array).contains(&c)), &[]),
-                    };
-                    Ok(Value::Column(result))
-                }
-            }
-        }
-    );
-
-    registry.register_passthrough_nullable_2_arg::<ArrayType<StringType>, StringType, BooleanType, _, _>(
-        "contains",
-        FunctionProperty::default(),
-        |_, _| {
-            FunctionDomain::Full
-        },
-        |lhs, rhs, _| {
-            match lhs {
-                ValueRef::Scalar(array) => {
-                    let mut set = StackHashSet::<_, 128>::with_capacity(StringType::column_len(&array));
-                    for val in array.iter() {
-                        let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
-                        let _ = set.set_insert(key_ref);
-                    }
-                    match rhs {
-                        ValueRef::Scalar(val) =>  {
-                            let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
-                            Ok(Value::Scalar(set.contains( &key_ref)))
-                        },
-                        ValueRef::Column(col) => {
-                            let result = BooleanType::column_from_iter(StringType::iter_column(&col).map(|val| {
-                                let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
-                                set.contains(&key_ref)
-                            }), &[]);
-                            Ok(Value::Column(result))
-                        }
-                    }
-                },
-                ValueRef::Column(array_column) => {
-                    let result = match rhs {
-                        ValueRef::Scalar(c) =>  BooleanType::column_from_iter(array_column
-                            .iter()
-                            .map(|array| StringType::iter_column(&array).contains(&c)), &[]),
-                        ValueRef::Column(col) =>  BooleanType::column_from_iter(array_column
-                            .iter()
-                            .zip(StringType::iter_column(&col))
-                            .map(|(array, c)| StringType::iter_column(&array).contains(&c)), &[]),
                     };
                     Ok(Value::Column(result))
                 }
