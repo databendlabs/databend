@@ -54,6 +54,7 @@ use crate::utils::arrow::buffer_into_mut;
 use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
+use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 
@@ -316,6 +317,25 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Array(col) => col.memory_size(),
             ScalarRef::Tuple(scalars) => scalars.iter().map(|s| s.memory_size()).sum(),
             ScalarRef::Variant(buf) => buf.len(),
+        }
+    }
+
+    pub fn cast_to_u64(&self) -> Option<u64> {
+        match self {
+            ScalarRef::Number(t) => with_integer_mapped_type!(|NUM_TYPE| match t {
+                NumberScalar::NUM_TYPE(v) => {
+                    if *v >= 0 as _ { Some(*v as u64) } else { None }
+                }
+                _ => None,
+            }),
+            ScalarRef::Timestamp(i) => {
+                if *i >= 0 {
+                    Some(*i as u64)
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 }

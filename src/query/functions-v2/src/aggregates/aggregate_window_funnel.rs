@@ -23,7 +23,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::Number;
-use common_expression::types::number::UInt64Type;
+use common_expression::types::number::UInt8Type;
 use common_expression::types::ArgType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
@@ -180,9 +180,7 @@ where
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Array(Box::new(DataType::Number(
-            NumberDataType::UInt8,
-        ))))
+        Ok(DataType::Number(NumberDataType::UInt8))
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -302,16 +300,9 @@ where
 
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let builder = builder.as_array_mut().unwrap();
-        let inner_builder = builder
-            .builder
-            .as_number_mut()
-            .unwrap()
-            .as_u_int8_mut()
-            .unwrap();
+        let builder = UInt8Type::try_downcast_builder(builder).unwrap();
         let result = self.get_event_level(place);
-        inner_builder.push(result);
-        builder.offsets.push(inner_builder.len() as u64);
+        builder.push(result);
         Ok(())
     }
 
@@ -360,7 +351,11 @@ where
         arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         let event_size = arguments.len() - 1;
-        let window = UInt64Type::try_downcast_scalar(&params[0].as_ref()).unwrap();
+        let window = params[0]
+            .as_ref()
+            .cast_to_u64()
+            .ok_or_else(|| ErrorCode::InvalidArgument("Must be positive window"))?;
+
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
             _arguments: arguments,
