@@ -2083,6 +2083,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-cache"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "bincode 1.3.3",
+ "common-base",
+ "common-cache",
+ "common-exception",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "common-storages-common"
 version = "0.1.0"
 dependencies = [

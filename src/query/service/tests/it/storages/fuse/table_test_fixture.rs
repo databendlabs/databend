@@ -18,7 +18,9 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+
 use common_catalog::table::AppendMode;
+
 use common_config::GlobalConfig;
 use common_exception::Result;
 use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
@@ -32,7 +34,7 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::Scalar;
+
 use common_expression::SendableDataBlockStream;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -40,12 +42,15 @@ use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_meta_app::schema::DatabaseMeta;
+
 use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlanV2;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+
+
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_query::interpreters::append2table;
 use databend_query::interpreters::CreateTableInterpreterV2;
@@ -64,6 +69,7 @@ use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use databend_query::storages::Table;
+
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use tempfile::TempDir;
@@ -349,71 +355,8 @@ fn gen_db_name(prefix: &str) -> String {
     format!("db_{}", prefix)
 }
 
-pub async fn test_drive(
-    ctx: Arc<QueryContext>,
-    test_db: Option<&str>,
-    test_tbl: Option<&str>,
-) -> Result<()> {
-    let arg_db = match test_db {
-        Some(v) => Scalar::String(v.as_bytes().to_vec()),
-        None => Scalar::Null,
-    };
-
-    let arg_tbl = match test_tbl {
-        Some(v) => Scalar::String(v.as_bytes().to_vec()),
-        None => Scalar::Null,
-    };
-
-    let tbl_args = Some(vec![arg_db, arg_tbl]);
-
-    test_drive_with_args(ctx, tbl_args).await
-}
-
-pub async fn test_drive_with_args(ctx: Arc<QueryContext>, tbl_args: TableArgs) -> Result<()> {
-    let mut stream = test_drive_with_args_and_ctx(tbl_args, ctx).await?;
-
-    while let Some(res) = stream.next().await {
-        #[allow(clippy::question_mark)]
-        if let Err(cause) = res {
-            return Err(cause);
-        }
-    }
-
-    Ok(())
-}
-
-pub async fn test_drive_with_args_and_ctx(
-    tbl_args: TableArgs,
-    ctx: Arc<QueryContext>,
-) -> Result<SendableDataBlockStream> {
-    let func = FuseSnapshotTable::create("system", "fuse_snapshot", 1, tbl_args)?;
-    let source_plan = func
-        .clone()
-        .as_table()
-        .read_plan(ctx.clone(), Some(PushDownInfo::default()))
-        .await?;
-    ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.as_table()
-        .read_data_block_stream(ctx, &source_plan)
-        .await
-}
-
-pub async fn test_drive_clustering_information(
-    tbl_args: TableArgs,
-    ctx: Arc<QueryContext>,
-) -> Result<SendableDataBlockStream> {
-    let func = ClusteringInformationTable::create("system", "clustering_information", 1, tbl_args)?;
-    let source_plan = func
-        .clone()
-        .as_table()
-        .read_plan(ctx.clone(), Some(PushDownInfo::default()))
-        .await?;
-    ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.as_table()
-        .read_data_block_stream(ctx, &source_plan)
-        .await
-}
-
+ 
+ 
 pub fn expects_err<T>(case_name: &str, err_code: u16, res: Result<T>) {
     if let Err(err) = res {
         assert_eq!(
