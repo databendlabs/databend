@@ -1786,7 +1786,7 @@ impl<'a> TypeChecker<'a> {
                 let src_expr = common_expression::Expr::Constant {
                     span: None,
                     scalar,
-                    data_type: data_type.clone(),
+                    data_type,
                 };
                 let cast_expr = common_expression::Expr::Cast {
                     span: None,

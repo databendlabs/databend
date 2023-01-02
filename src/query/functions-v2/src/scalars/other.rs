@@ -114,7 +114,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, ctx| match val {
             ValueRef::Scalar(None) => Ok(Value::Scalar(ctx.generics[0].default_value())),
             ValueRef::Scalar(Some(scalar)) => Ok(Value::Scalar(scalar.to_owned())),
-            ValueRef::Column(NullableColumn { column, .. }) => Ok(Value::Column(column.clone())),
+            ValueRef::Column(NullableColumn { column, .. }) => Ok(Value::Column(column)),
         },
     );
 

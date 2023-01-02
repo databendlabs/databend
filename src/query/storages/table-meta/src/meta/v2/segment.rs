@@ -118,7 +118,7 @@ use super::super::v0;
 use super::super::v1;
 
 impl SegmentInfo {
-    pub fn from_v0(s: v0::SegmentInfo, fields: &Vec<TableField>) -> Self {
+    pub fn from_v0(s: v0::SegmentInfo, fields: &[TableField]) -> Self {
         let summary = Statistics::from_v0(s.summary, fields);
         Self {
             format_version: SegmentInfo::VERSION,
@@ -131,7 +131,7 @@ impl SegmentInfo {
         }
     }
 
-    pub fn from_v1(s: v1::SegmentInfo, fields: &Vec<TableField>) -> Self {
+    pub fn from_v1(s: v1::SegmentInfo, fields: &[TableField]) -> Self {
         let summary = Statistics::from_v0(s.summary, fields);
         Self {
             format_version: SegmentInfo::VERSION,
@@ -146,7 +146,7 @@ impl SegmentInfo {
 }
 
 impl BlockMeta {
-    pub fn from_v0(s: &v0::BlockMeta, fields: &Vec<TableField>) -> Self {
+    pub fn from_v0(s: &v0::BlockMeta, fields: &[TableField]) -> Self {
         let col_stats = s
             .col_stats
             .iter()
@@ -170,13 +170,13 @@ impl BlockMeta {
         }
     }
 
-    pub fn from_v1(s: &v1::BlockMeta, fields: &Vec<TableField>) -> Self {
+    pub fn from_v1(s: &v1::BlockMeta, fields: &[TableField]) -> Self {
         let col_stats = s
             .col_stats
             .iter()
             .map(|(k, v)| {
                 let data_type = fields[*k as usize].data_type();
-                (*k, ColumnStatistics::from_v0(&v, data_type))
+                (*k, ColumnStatistics::from_v0(v, data_type))
             })
             .collect();
 

@@ -104,7 +104,7 @@ impl ClusterStatistics {
 }
 
 impl Statistics {
-    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &Vec<TableField>) -> Self {
+    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
         let col_stats = v0
             .col_stats
             .into_iter()

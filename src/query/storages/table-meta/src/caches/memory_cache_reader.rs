@@ -56,7 +56,7 @@ where L: Loader<T>
                     metrics_inc_memory_cache_access_count(1);
                 }
 
-                match self.get_by_cache(&params.location.as_ref(), labeled_cache) {
+                match self.get_by_cache(params.location.as_ref(), labeled_cache) {
                     Some(item) => {
                         // Perf.
                         {

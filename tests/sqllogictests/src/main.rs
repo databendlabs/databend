@@ -207,7 +207,7 @@ async fn run_parallel_async(
     tasks: Vec<impl Future<Output = std::result::Result<Vec<TestError>, TestError>>>,
 ) -> Result<()> {
     let args = SqlLogicTestArgs::parse();
-    let jobs = tasks.len().min(args.parallel).max(1);
+    let jobs = tasks.len().clamp(1, args.parallel);
     let tasks = stream::iter(tasks).buffer_unordered(jobs);
     let no_fail_fast = args.no_fail_fast;
     if !no_fail_fast {

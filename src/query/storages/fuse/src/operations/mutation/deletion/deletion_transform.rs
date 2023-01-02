@@ -89,6 +89,7 @@ pub struct DeletionTransform {
 }
 
 impl DeletionTransform {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         schema: TableSchemaRef,

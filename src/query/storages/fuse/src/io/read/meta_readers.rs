@@ -98,7 +98,7 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
 impl Loader<SegmentInfo> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(params.ver)?;
-        let reader = bytes_reader(&self.0, &params.location.as_str(), params.len_hint).await?;
+        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         version.read(reader, params.schema.clone()).await
     }
 }

@@ -115,11 +115,11 @@ impl SyncSystemTable for ProcessesTable {
                     value: Value::Column(Column::from_data(processes_id)),
                 },
                 BlockEntry {
-                    data_type: DataType::Nullable(Box::new(DataType::String)),
+                    data_type: DataType::String,
                     value: Value::Column(Column::from_data(processes_type)),
                 },
                 BlockEntry {
-                    data_type: DataType::String,
+                    data_type: DataType::Nullable(Box::new(DataType::String)),
                     value: Value::Column(Column::from_data(processes_host)),
                 },
                 BlockEntry {

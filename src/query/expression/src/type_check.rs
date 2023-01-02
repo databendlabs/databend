@@ -168,8 +168,8 @@ pub fn check_function<Index: ColumnIndex>(
 ) -> Result<Expr<Index>> {
     // check if this is to_xxx(xxx) function, this saves lots registeration
     if args.len() == 1 && is_simple_cast_function(name) {
-        match check_simple_cast(false, &args[0].data_type()) {
-            Some(simple_cast_name) if &simple_cast_name == name => {
+        match check_simple_cast(false, args[0].data_type()) {
+            Some(simple_cast_name) if simple_cast_name == name => {
                 return Ok(args[0].clone());
             }
             _ => {}
