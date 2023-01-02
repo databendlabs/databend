@@ -24,12 +24,14 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::Number;
 use common_expression::types::number::UInt64Type;
+use common_expression::types::ArgType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
+use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
-use common_expression::with_unsigned_number_mapped_type;
+use common_expression::with_integer_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
@@ -163,13 +165,12 @@ pub struct AggregateWindowFunnelFunction<T> {
 
 impl<T> AggregateFunction for AggregateWindowFunnelFunction<T>
 where
-    T: Number,
-    T: Ord
-        + Sub<Output = T>
+    T: ArgType + Send + Sync,
+    T::Scalar: Number
+        + Ord
+        + Sub<Output = T::Scalar>
         + AsPrimitive<u64>
         + Clone
-        + Send
-        + Sync
         + Serialize
         + DeserializeOwned
         + 'static,
@@ -185,11 +186,11 @@ where
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(AggregateWindowFunnelState::<T>::new);
+        place.write(AggregateWindowFunnelState::<T::Scalar>::new);
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateWindowFunnelState<T>>()
+        Layout::new::<AggregateWindowFunnelState<T::Scalar>>()
     }
 
     fn accumulate(
@@ -206,26 +207,30 @@ where
             dcolumns.push(dcolumn);
         }
 
-        let tcolumn = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-        let state = place.get::<AggregateWindowFunnelState<T>>();
+        let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
+        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
 
         match validity {
             Some(bitmap) => {
-                for ((row, timestamp), valid) in tcolumn.iter().enumerate().zip(bitmap.iter()) {
+                for ((row, timestamp), valid) in
+                    T::iter_column(&tcolumn).enumerate().zip(bitmap.iter())
+                {
                     if valid {
+                        let timestamp = T::to_owned_scalar(timestamp);
                         for (i, filter) in dcolumns.iter().enumerate() {
                             if filter.get_bit(row) {
-                                state.add(*timestamp, (i + 1) as u8);
+                                state.add(timestamp, (i + 1) as u8);
                             }
                         }
                     }
                 }
             }
             None => {
-                for (row, timestamp) in tcolumn.iter().enumerate() {
+                for (row, timestamp) in T::iter_column(&tcolumn).enumerate() {
+                    let timestamp = T::to_owned_scalar(timestamp);
                     for (i, filter) in dcolumns.iter().enumerate() {
                         if filter.get_bit(row) {
-                            state.add(*timestamp, (i + 1) as u8);
+                            state.add(timestamp, (i + 1) as u8);
                         }
                     }
                 }
@@ -248,13 +253,14 @@ where
             dcolumns.push(dcolumn);
         }
 
-        let tcolumn = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
+        let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
 
-        for ((row, timestamp), place) in tcolumn.iter().enumerate().zip(places.iter()) {
-            let state = (place.next(offset)).get::<AggregateWindowFunnelState<T>>();
+        for ((row, timestamp), place) in T::iter_column(&tcolumn).enumerate().zip(places.iter()) {
+            let state = (place.next(offset)).get::<AggregateWindowFunnelState<T::Scalar>>();
+            let timestamp = T::to_owned_scalar(timestamp);
             for (i, filter) in dcolumns.iter().enumerate() {
                 if filter.get_bit(row) {
-                    state.add(*timestamp, (i + 1) as u8);
+                    state.add(timestamp, (i + 1) as u8);
                 }
             }
         }
@@ -262,10 +268,11 @@ where
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
-        let tcolumn = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-        let timestamp = tcolumn[row];
+        let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
+        let timestamp = unsafe { T::index_column_unchecked(&tcolumn, row) };
+        let timestamp = T::to_owned_scalar(timestamp);
 
-        let state = place.get::<AggregateWindowFunnelState<T>>();
+        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         for i in 0..self.event_size {
             let dcolumn = BooleanType::try_downcast_column(&columns[i + 1]).unwrap();
             if dcolumn.get_bit(row) {
@@ -276,18 +283,18 @@ where
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateWindowFunnelState<T>>();
-        AggregateWindowFunnelState::<T>::serialize(state, writer)
+        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
+        AggregateWindowFunnelState::<T::Scalar>::serialize(state, writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateWindowFunnelState<T>>();
+        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<AggregateWindowFunnelState<T>>();
-        let state = place.get::<AggregateWindowFunnelState<T>>();
+        let rhs = rhs.get::<AggregateWindowFunnelState<T::Scalar>>();
+        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
 
         state.merge(rhs);
         Ok(())
@@ -313,7 +320,7 @@ where
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
-        let state = place.get::<AggregateWindowFunnelState<T>>();
+        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         std::ptr::drop_in_place(state);
     }
 
@@ -337,13 +344,12 @@ impl<T> fmt::Display for AggregateWindowFunnelFunction<T> {
 
 impl<T> AggregateWindowFunnelFunction<T>
 where
-    T: Number,
-    T: Ord
-        + Sub<Output = T>
+    T: ArgType + Send + Sync,
+    T::Scalar: Number
+        + Ord
+        + Sub<Output = T::Scalar>
         + AsPrimitive<u64>
         + Clone
-        + Send
-        + Sync
         + Serialize
         + DeserializeOwned
         + 'static,
@@ -369,7 +375,7 @@ where
     /// If found, returns the max event level, else return 0.
     /// The Algorithm complexity is O(n).
     fn get_event_level(&self, place: StateAddr) -> u8 {
-        let state = place.get::<AggregateWindowFunnelState<T>>();
+        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         if state.events_list.is_empty() {
             return 0;
         }
@@ -379,7 +385,7 @@ where
 
         state.sort();
 
-        let mut events_timestamp: Vec<Option<T>> = Vec::with_capacity(self.event_size);
+        let mut events_timestamp: Vec<Option<T::Scalar>> = Vec::with_capacity(self.event_size);
         for _i in 0..self.event_size {
             events_timestamp.push(None);
         }
@@ -387,7 +393,7 @@ where
             let event_idx = (event - 1) as usize;
 
             if event_idx == 0 {
-                events_timestamp[event_idx] = Some(*timestamp);
+                events_timestamp[event_idx] = Some(timestamp.to_owned());
             } else if let Some(v) = events_timestamp[event_idx - 1] {
                 // we already sort the events_list
                 let window: u64 = timestamp.sub(v).as_();
@@ -425,11 +431,17 @@ pub fn try_create_aggregate_window_funnel_function(
         }
     }
 
-    with_unsigned_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
-        DataType::Number(NumberDataType::NUM_TYPE) =>
-            AggregateWindowFunnelFunction::<NUM_TYPE>::try_create(display_name, params, arguments),
-        DataType::Timestamp =>
-            AggregateWindowFunnelFunction::<i64>::try_create(display_name, params, arguments),
+    with_integer_mapped_type!(|NUM_TYPE| match &arguments[0] {
+        DataType::Number(NumberDataType::NUM_TYPE) => AggregateWindowFunnelFunction::<
+            NumberType<NUM_TYPE>,
+        >::try_create(
+            display_name, params, arguments
+        ),
+        DataType::Timestamp => AggregateWindowFunnelFunction::<TimestampType>::try_create(
+            display_name,
+            params,
+            arguments
+        ),
         _ => Err(ErrorCode::BadDataValueType(format!(
             "AggregateWindowFunnelFunction does not support type '{:?}'",
             arguments[0]

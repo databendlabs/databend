@@ -14,6 +14,7 @@
 
 use std::io::Write;
 
+use common_expression::from_timestamp_data;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
@@ -108,7 +109,7 @@ fn get_example() -> Vec<(&'static str, DataType, Column)> {
         (
             "dt",
             DataType::Timestamp,
-            Column::from_data(vec![1, 0i64, 2, 3]),
+            from_timestamp_data(vec![1i64, 0, 2, 3]),
         ),
         (
             "event1",

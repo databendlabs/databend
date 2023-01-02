@@ -8,8 +8,8 @@ output         : 14128353
 
 
 ast            : great_circle_distance(lon1, lat1, lon2, lat2)
-raw expr       : great_circle_distance(ColumnRef(0)::Float64, ColumnRef(1)::Float64, ColumnRef(2)::Float64, ColumnRef(3)::Float64)
-checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
+raw expr       : great_circle_distance(#0::Float64, #1::Float64, #2::Float64, #3::Float64)
+checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(#0, #1, #2, #3)
 evaluation:
 +--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
 |        | lon1                    | lat1                    | lon2                      | lat2                      | Output       |
@@ -42,8 +42,8 @@ output         : 14128353
 
 
 ast            : geo_distance(lon1, lat1, lon2, lat2)
-raw expr       : geo_distance(ColumnRef(0)::Float64, ColumnRef(1)::Float64, ColumnRef(2)::Float64, ColumnRef(3)::Float64)
-checked expr   : geo_distance<Float64, Float64, Float64, Float64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
+raw expr       : geo_distance(#0::Float64, #1::Float64, #2::Float64, #3::Float64)
+checked expr   : geo_distance<Float64, Float64, Float64, Float64>(#0, #1, #2, #3)
 evaluation:
 +--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
 |        | lon1                    | lat1                    | lon2                      | lat2                      | Output       |
@@ -76,9 +76,9 @@ output         : 44.99998
 
 
 ast            : great_circle_angle(0, 0, a, 0)
-raw expr       : great_circle_angle(0_u8, 0_u8, ColumnRef(0)::Float64, 0_u8)
-checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(CAST(0_u8 AS Float64), CAST(0_u8 AS Float64), ColumnRef(0), CAST(0_u8 AS Float64))
-optimized expr : great_circle_angle<Float64, Float64, Float64, Float64>(0_f64, 0_f64, ColumnRef(0), 0_f64)
+raw expr       : great_circle_angle(0_u8, 0_u8, #0::Float64, 0_u8)
+checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(CAST(0_u8 AS Float64), CAST(0_u8 AS Float64), #0, CAST(0_u8 AS Float64))
+optimized expr : great_circle_angle<Float64, Float64, Float64, Float64>(0_f64, 0_f64, #0, 0_f64)
 evaluation:
 +--------+-----------+--------------+
 |        | a         | Output       |
@@ -108,8 +108,8 @@ output         : 1
 
 
 ast            : point_in_ellipses(10., 10., 10., 9.1, a, b)
-raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, ColumnRef(0)::Float64, ColumnRef(1)::Float64)
-checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, ColumnRef(0), ColumnRef(1))
+raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, #0::Float64, #1::Float64)
+checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, #0, #1)
 evaluation:
 +--------+-----------+-------------------+-----------+
 |        | a         | b                 | Output    |

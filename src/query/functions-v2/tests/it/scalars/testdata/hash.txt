@@ -17,8 +17,8 @@ output         : NULL
 
 
 ast            : md5(a)
-raw expr       : md5(ColumnRef(0)::String)
-checked expr   : md5<String>(ColumnRef(0))
+raw expr       : md5(#0::String)
+checked expr   : md5<String>(#0)
 evaluation:
 +--------+-------------------+------------------------------------+
 |        | a                 | Output                             |
@@ -57,8 +57,8 @@ output         : NULL
 
 
 ast            : sha1(a)
-raw expr       : sha1(ColumnRef(0)::String)
-checked expr   : sha<String>(ColumnRef(0))
+raw expr       : sha1(#0::String)
+checked expr   : sha<String>(#0)
 evaluation:
 +--------+-------------------+--------------------------------------------+
 |        | a                 | Output                                     |
@@ -97,8 +97,8 @@ output         : NULL
 
 
 ast            : blake3(a)
-raw expr       : blake3(ColumnRef(0)::String)
-checked expr   : blake3<String>(ColumnRef(0))
+raw expr       : blake3(#0::String)
+checked expr   : blake3<String>(#0)
 evaluation:
 +--------+-------------------+--------------------------------------------------------------------+
 |        | a                 | Output                                                             |
@@ -146,8 +146,8 @@ output         : NULL
 
 
 ast            : sha2(a,b)
-raw expr       : sha2(ColumnRef(0)::String, ColumnRef(1)::UInt16)
-checked expr   : sha2<String, UInt64>(ColumnRef(0), CAST(ColumnRef(1) AS UInt64))
+raw expr       : sha2(#0::String, #1::UInt16)
+checked expr   : sha2<String, UInt64>(#0, CAST(#1 AS UInt64))
 evaluation:
 +--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
 |        | a                 | b           | Output                                                                                                                             |
@@ -259,8 +259,8 @@ output         : NULL
 
 
 ast            : city64withseed(a,b)
-raw expr       : city64withseed(ColumnRef(0)::String, ColumnRef(1)::UInt16)
-checked expr   : city64withseed<String, UInt16>(ColumnRef(0), ColumnRef(1))
+raw expr       : city64withseed(#0::String, #1::UInt16)
+checked expr   : city64withseed<String, UInt16>(#0, #1)
 evaluation:
 +--------+-------------------+-----------+----------------------+
 |        | a                 | b         | Output               |
@@ -354,8 +354,8 @@ output         : 4952851536318644461
 
 
 ast            : siphash64(a)
-raw expr       : siphash64(ColumnRef(0)::String)
-checked expr   : siphash64<String>(ColumnRef(0))
+raw expr       : siphash64(#0::String)
+checked expr   : siphash64<String>(#0)
 evaluation:
 +--------+-------------------------+---------------------+
 |        | a                       | Output              |
@@ -447,8 +447,8 @@ output         : 9962287286179718960
 
 
 ast            : xxhash64(a)
-raw expr       : xxhash64(ColumnRef(0)::String)
-checked expr   : xxhash64<String>(ColumnRef(0))
+raw expr       : xxhash64(#0::String)
+checked expr   : xxhash64<String>(#0)
 evaluation:
 +--------+-------------------------+--------------------+
 |        | a                       | Output             |
@@ -530,22 +530,84 @@ output domain  : Unknown
 output         : 3886246173
 
 
-ast            : xxhash32([1])
-raw expr       : xxhash32(array(1_u8))
-checked expr   : xxhash32<Variant>(CAST(array<T0=UInt8><T0>(1_u8) AS Variant))
-optimized expr : 3499081782_u32
-output type    : UInt32
-output domain  : Unknown
-output         : 3499081782
+error: 
+  --> SQL:1:1
+  |
+1 | xxhash32([1])
+  | ^^^^^^^^^^^^^ no overload satisfies `xxhash32(Array(UInt8))`
+
+has tried possible overloads:
+  xxhash32(String) :: UInt32               : unable to unify `Array(UInt8)` with `String`
+  xxhash32(String NULL) :: UInt32 NULL     : unable to unify `Array(UInt8)` with `String`
+  xxhash32(UInt8) :: UInt32                : unable to unify `Array(UInt8)` with `UInt8`
+  xxhash32(UInt8 NULL) :: UInt32 NULL      : unable to unify `Array(UInt8)` with `UInt8`
+  xxhash32(UInt16) :: UInt32               : unable to unify `Array(UInt8)` with `UInt16`
+  xxhash32(UInt16 NULL) :: UInt32 NULL     : unable to unify `Array(UInt8)` with `UInt16`
+  xxhash32(UInt32) :: UInt32               : unable to unify `Array(UInt8)` with `UInt32`
+  xxhash32(UInt32 NULL) :: UInt32 NULL     : unable to unify `Array(UInt8)` with `UInt32`
+  xxhash32(UInt64) :: UInt32               : unable to unify `Array(UInt8)` with `UInt64`
+  xxhash32(UInt64 NULL) :: UInt32 NULL     : unable to unify `Array(UInt8)` with `UInt64`
+  xxhash32(Int8) :: UInt32                 : unable to unify `Array(UInt8)` with `Int8`
+  xxhash32(Int8 NULL) :: UInt32 NULL       : unable to unify `Array(UInt8)` with `Int8`
+  xxhash32(Int16) :: UInt32                : unable to unify `Array(UInt8)` with `Int16`
+  xxhash32(Int16 NULL) :: UInt32 NULL      : unable to unify `Array(UInt8)` with `Int16`
+  xxhash32(Int32) :: UInt32                : unable to unify `Array(UInt8)` with `Int32`
+  xxhash32(Int32 NULL) :: UInt32 NULL      : unable to unify `Array(UInt8)` with `Int32`
+  xxhash32(Int64) :: UInt32                : unable to unify `Array(UInt8)` with `Int64`
+  xxhash32(Int64 NULL) :: UInt32 NULL      : unable to unify `Array(UInt8)` with `Int64`
+  xxhash32(Float32) :: UInt32              : unable to unify `Array(UInt8)` with `Float32`
+  xxhash32(Float32 NULL) :: UInt32 NULL    : unable to unify `Array(UInt8)` with `Float32`
+  xxhash32(Float64) :: UInt32              : unable to unify `Array(UInt8)` with `Float64`
+  xxhash32(Float64 NULL) :: UInt32 NULL    : unable to unify `Array(UInt8)` with `Float64`
+  xxhash32(Timestamp) :: UInt32            : unable to unify `Array(UInt8)` with `Timestamp`
+  xxhash32(Timestamp NULL) :: UInt32 NULL  : unable to unify `Array(UInt8)` with `Timestamp`
+  xxhash32(Date) :: UInt32                 : unable to unify `Array(UInt8)` with `Date`
+  xxhash32(Date NULL) :: UInt32 NULL       : unable to unify `Array(UInt8)` with `Date`
+  xxhash32(Boolean) :: UInt32              : unable to unify `Array(UInt8)` with `Boolean`
+  xxhash32(Boolean NULL) :: UInt32 NULL    : unable to unify `Array(UInt8)` with `Boolean`
+  xxhash32(Variant) :: UInt32              : unable to unify `Array(UInt8)` with `Variant`
+  xxhash32(Variant NULL) :: UInt32 NULL    : unable to unify `Array(UInt8)` with `Variant`
 
 
-ast            : xxhash32((1,2))
-raw expr       : xxhash32(tuple(1_u8, 2_u8))
-checked expr   : xxhash32<Variant>(CAST(tuple<UInt8, UInt8>(1_u8, 2_u8) AS Variant))
-optimized expr : 837113020_u32
-output type    : UInt32
-output domain  : Unknown
-output         : 837113020
+
+error: 
+  --> SQL:1:1
+  |
+1 | xxhash32((1,2))
+  | ^^^^^^^^^^^^^^^ no overload satisfies `xxhash32((UInt8, UInt8))`
+
+has tried possible overloads:
+  xxhash32(String) :: UInt32               : unable to unify `(UInt8, UInt8)` with `String`
+  xxhash32(String NULL) :: UInt32 NULL     : unable to unify `(UInt8, UInt8)` with `String`
+  xxhash32(UInt8) :: UInt32                : unable to unify `(UInt8, UInt8)` with `UInt8`
+  xxhash32(UInt8 NULL) :: UInt32 NULL      : unable to unify `(UInt8, UInt8)` with `UInt8`
+  xxhash32(UInt16) :: UInt32               : unable to unify `(UInt8, UInt8)` with `UInt16`
+  xxhash32(UInt16 NULL) :: UInt32 NULL     : unable to unify `(UInt8, UInt8)` with `UInt16`
+  xxhash32(UInt32) :: UInt32               : unable to unify `(UInt8, UInt8)` with `UInt32`
+  xxhash32(UInt32 NULL) :: UInt32 NULL     : unable to unify `(UInt8, UInt8)` with `UInt32`
+  xxhash32(UInt64) :: UInt32               : unable to unify `(UInt8, UInt8)` with `UInt64`
+  xxhash32(UInt64 NULL) :: UInt32 NULL     : unable to unify `(UInt8, UInt8)` with `UInt64`
+  xxhash32(Int8) :: UInt32                 : unable to unify `(UInt8, UInt8)` with `Int8`
+  xxhash32(Int8 NULL) :: UInt32 NULL       : unable to unify `(UInt8, UInt8)` with `Int8`
+  xxhash32(Int16) :: UInt32                : unable to unify `(UInt8, UInt8)` with `Int16`
+  xxhash32(Int16 NULL) :: UInt32 NULL      : unable to unify `(UInt8, UInt8)` with `Int16`
+  xxhash32(Int32) :: UInt32                : unable to unify `(UInt8, UInt8)` with `Int32`
+  xxhash32(Int32 NULL) :: UInt32 NULL      : unable to unify `(UInt8, UInt8)` with `Int32`
+  xxhash32(Int64) :: UInt32                : unable to unify `(UInt8, UInt8)` with `Int64`
+  xxhash32(Int64 NULL) :: UInt32 NULL      : unable to unify `(UInt8, UInt8)` with `Int64`
+  xxhash32(Float32) :: UInt32              : unable to unify `(UInt8, UInt8)` with `Float32`
+  xxhash32(Float32 NULL) :: UInt32 NULL    : unable to unify `(UInt8, UInt8)` with `Float32`
+  xxhash32(Float64) :: UInt32              : unable to unify `(UInt8, UInt8)` with `Float64`
+  xxhash32(Float64 NULL) :: UInt32 NULL    : unable to unify `(UInt8, UInt8)` with `Float64`
+  xxhash32(Timestamp) :: UInt32            : unable to unify `(UInt8, UInt8)` with `Timestamp`
+  xxhash32(Timestamp NULL) :: UInt32 NULL  : unable to unify `(UInt8, UInt8)` with `Timestamp`
+  xxhash32(Date) :: UInt32                 : unable to unify `(UInt8, UInt8)` with `Date`
+  xxhash32(Date NULL) :: UInt32 NULL       : unable to unify `(UInt8, UInt8)` with `Date`
+  xxhash32(Boolean) :: UInt32              : unable to unify `(UInt8, UInt8)` with `Boolean`
+  xxhash32(Boolean NULL) :: UInt32 NULL    : unable to unify `(UInt8, UInt8)` with `Boolean`
+  xxhash32(Variant) :: UInt32              : unable to unify `(UInt8, UInt8)` with `Variant`
+  xxhash32(Variant NULL) :: UInt32 NULL    : unable to unify `(UInt8, UInt8)` with `Variant`
+
 
 
 ast            : xxhash32(true)
@@ -558,8 +620,8 @@ output         : 949155633
 
 
 ast            : xxhash32(a)
-raw expr       : xxhash32(ColumnRef(0)::String)
-checked expr   : xxhash32<String>(ColumnRef(0))
+raw expr       : xxhash32(#0::String)
+checked expr   : xxhash32<String>(#0)
 evaluation:
 +--------+-------------------------+------------+
 |        | a                       | Output     |
