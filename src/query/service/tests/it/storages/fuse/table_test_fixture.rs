@@ -18,9 +18,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
-
 use common_catalog::table::AppendMode;
-
 use common_config::GlobalConfig;
 use common_exception::Result;
 use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
@@ -34,7 +32,6 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-
 use common_expression::SendableDataBlockStream;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -42,15 +39,12 @@ use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_meta_app::schema::DatabaseMeta;
-
 use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlanV2;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
-
-
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_query::interpreters::append2table;
 use databend_query::interpreters::CreateTableInterpreterV2;
@@ -69,7 +63,6 @@ use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use databend_query::storages::Table;
-
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use tempfile::TempDir;
@@ -355,8 +348,6 @@ fn gen_db_name(prefix: &str) -> String {
     format!("db_{}", prefix)
 }
 
- 
- 
 pub fn expects_err<T>(case_name: &str, err_code: u16, res: Result<T>) {
     if let Err(err) = res {
         assert_eq!(

@@ -387,8 +387,13 @@ pub fn can_auto_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
             || *dest_num_ty == NumberDataType::Float64
             || src_num_ty.can_lossless_cast_to(*dest_num_ty)
         }
-        // integer can't auto cast to boolean, because 1 = 2 will auto transform into: `true = true`
-        (_, DataType::Variant) => true,
+        // (DataType::String, DataType::Date) => true,
+        // (DataType::String, DataType::Timestamp) => true,
+        // Note: integer can't auto cast to boolean, because 1 = 2 will auto transform into: `true = true` if the register order is not correct
+        // (DataType::Number(_), DataType::Boolean) => true,
+
+        // Note: Variant  is not super type any more, because   '1' > 3 will auto transform into: `gt(CAST("1" AS Variant), CAST(3 AS Variant))`
+        // (_, DataType::Variant) => true,
         _ => false,
     }
 }
@@ -412,6 +417,9 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
         (DataType::Number(num1), DataType::Number(num2)) => {
             Some(DataType::Number(num1.lossful_super_type(num2)))
         }
+
+        (DataType::String, DataType::Timestamp) => Some(DataType::Timestamp),
+        (DataType::String, DataType::Date) => Some(DataType::Date),
         _ => Some(DataType::Variant),
     }
 }
