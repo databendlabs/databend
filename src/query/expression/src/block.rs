@@ -26,7 +26,6 @@ use crate::types::DataType;
 use crate::BlockMetaInfoPtr;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::ColumnIndex;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Value;

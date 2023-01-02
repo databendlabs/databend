@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(fmt_internals)]
 #![feature(const_try)]
 #![feature(iterator_try_reduce)]
 #![feature(const_fmt_arguments_new)]

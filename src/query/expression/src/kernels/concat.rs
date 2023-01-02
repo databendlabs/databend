@@ -37,7 +37,6 @@ use crate::with_number_mapped_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::ColumnIndex;
 use crate::DataBlock;
 use crate::Value;
 

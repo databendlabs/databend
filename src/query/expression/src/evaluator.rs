@@ -446,6 +446,7 @@ impl<'a> Evaluator<'a> {
             Value::Scalar(_) => 1,
             Value::Column(col) => col.len(),
         };
+
         let (val, ty) = eval_function(
             span,
             cast_fn,

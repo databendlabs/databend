@@ -19,7 +19,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
-use common_expression::ColumnIndex;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::Domain;

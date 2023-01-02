@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -35,8 +34,28 @@ use crate::types::DataType;
 use crate::values::Scalar;
 
 pub type Span = Option<std::ops::Range<usize>>;
-pub trait ColumnIndex = Debug + Display + Clone + Serialize + Hash + Eq;
-// impl ColumnIndex for usize {}
+
+pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq {
+    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+    fn sql_display(&self) -> String {
+        let mut buf = String::new();
+        let mut formatter = std::fmt::Formatter::new(&mut buf);
+        self.sql_display_fmt(&mut formatter).unwrap();
+        buf
+    }
+}
+
+impl ColumnIndex for usize {
+    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{}", self)
+    }
+}
+
+impl ColumnIndex for String {
+    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum RawExpr<Index: ColumnIndex = usize> {
@@ -232,7 +251,7 @@ impl<Index: ColumnIndex> Expr<Index> {
     pub fn sql_display(&self) -> String {
         match self {
             Expr::Constant { scalar, .. } => format!("{}", scalar.as_ref()),
-            Expr::ColumnRef { id, .. } => format!("${id}"),
+            Expr::ColumnRef { id, .. } => id.sql_display(),
             Expr::Cast {
                 is_try,
                 expr,

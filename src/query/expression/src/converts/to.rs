@@ -26,7 +26,6 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::ColumnIndex;
 use crate::DataBlock;
 use crate::Scalar;
 use crate::TableDataType;

@@ -417,10 +417,11 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
 }
 
 pub fn check_simple_cast(is_try: bool, dest_type: &DataType) -> Option<String> {
-    let prefix = if is_try { "try_" } else { "" };
-    let function_name = format!("{prefix}to_{}", dest_type.to_string().to_lowercase());
+    let function_name = format!("to_{}", dest_type.to_string().to_lowercase());
+
     if is_simple_cast_function(&function_name) {
-        Some(function_name)
+        let prefix = if is_try { "try_" } else { "" };
+        Some(format!("{}{}", prefix, function_name))
     } else {
         None
     }

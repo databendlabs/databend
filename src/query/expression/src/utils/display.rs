@@ -51,6 +51,7 @@ use crate::values::Value;
 use crate::values::ValueRef;
 use crate::with_number_type;
 use crate::Column;
+use crate::ColumnIndex;
 use crate::TableDataType;
 
 const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
@@ -346,11 +347,14 @@ impl Debug for StringColumn {
     }
 }
 
-impl Display for RawExpr {
+impl<Index: ColumnIndex> Display for RawExpr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RawExpr::Literal { lit, .. } => write!(f, "{lit}"),
-            RawExpr::ColumnRef { id, data_type, .. } => write!(f, "ColumnRef({id})::{data_type}"),
+            RawExpr::ColumnRef { id, data_type, .. } => {
+                id.sql_display_fmt(f)?;
+                write!(f, "::{data_type}")
+            }
             RawExpr::Cast {
                 is_try,
                 expr,
@@ -493,66 +497,11 @@ impl Display for NumberDataType {
     }
 }
 
-impl Display for Expr<usize> {
+impl<Index: ColumnIndex> Display for Expr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::Constant { scalar, .. } => write!(f, "{:?}", scalar.as_ref()),
-            Expr::ColumnRef { id, .. } => write!(f, "ColumnRef({id})"),
-            Expr::Cast {
-                is_try,
-                expr,
-                dest_type,
-                ..
-            } => {
-                if *is_try {
-                    write!(f, "TRY_CAST({expr} AS {dest_type})")
-                } else {
-                    write!(f, "CAST({expr} AS {dest_type})")
-                }
-            }
-            Expr::FunctionCall {
-                function,
-                args,
-                generics,
-                ..
-            } => {
-                write!(f, "{}", function.signature.name)?;
-                if !generics.is_empty() {
-                    write!(f, "<")?;
-                    for (i, ty) in generics.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "T{i}={ty}")?;
-                    }
-                    write!(f, ">")?;
-                }
-                write!(f, "<")?;
-                for (i, ty) in function.signature.args_type.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{ty}")?;
-                }
-                write!(f, ">")?;
-                write!(f, "(")?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{arg}")?;
-                }
-                write!(f, ")")
-            }
-        }
-    }
-}
-
-impl Display for Expr<String> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Expr::Constant { scalar, .. } => write!(f, "{:?}", scalar.as_ref()),
-            Expr::ColumnRef { id, .. } => write!(f, "{id}"),
+            Expr::ColumnRef { id, .. } => id.sql_display_fmt(f),
             Expr::Cast {
                 is_try,
                 expr,
