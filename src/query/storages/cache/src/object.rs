@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_exception::Result;
 use opendal::Object;
 
+use crate::ByPassCache;
+use crate::CacheSettings;
 use crate::ObjectCacheProvider;
 
 /// A trait for cached object.
@@ -61,5 +63,15 @@ impl<T> CachedObjectAccessor<T> {
 
     pub async fn remove(&self, object: &Object) -> Result<()> {
         self.cache.remove_object(object).await
+    }
+}
+
+/// Default is ByPassCache.
+impl<T> Default for CachedObjectAccessor<T>
+where T: CachedObject + Send + Sync + 'static
+{
+    fn default() -> Self {
+        let cache = ByPassCache::create(&CacheSettings::default());
+        CachedObjectAccessor::create(Arc::new(cache))
     }
 }

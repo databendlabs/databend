@@ -16,6 +16,7 @@ common-config = { path = "../../config" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
+common-storages-cache = { path = "../cache" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
@@ -24,3 +25,4 @@ once_cell = "1.15.0"
 opendal = "0.23"
 parking_lot = "0.12.1"
 serde = { workspace = true }
+serde_json = { workspace = true }

@@ -20,6 +20,7 @@ use common_cache::Cache;
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
+use common_storages_cache::MemoryItemsCache;
 use parking_lot::lock_api::RwLockWriteGuard;
 use parking_lot::RawRwLock;
 use parking_lot::RwLock;
@@ -78,3 +79,6 @@ pub type BloomIndexCache = LabeledBytesCache;
 pub type BloomIndexMetaCache = LabeledItemCache<FileMetaData>;
 
 pub type FileMetaDataCache = LabeledItemCache<FileMetaData>;
+
+/// V2
+pub type SegmentInfoCacheV2 = MemoryItemsCache<SegmentInfo>;

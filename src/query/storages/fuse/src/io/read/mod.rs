@@ -19,6 +19,7 @@ mod bloom_index_reader;
 mod decompressor;
 mod meta_readers;
 mod read_settings;
+mod segment_reader;
 mod snapshot_history_reader;
 mod versioned_reader;
 
@@ -31,4 +32,5 @@ pub use meta_readers::MetaReaders;
 pub use meta_readers::SegmentInfoReader;
 pub use meta_readers::TableSnapshotReader;
 pub use read_settings::ReadSettings;
+pub use segment_reader::SegmentReader;
 pub use snapshot_history_reader::SnapshotHistoryReader;

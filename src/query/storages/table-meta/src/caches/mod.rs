@@ -23,6 +23,7 @@ pub use cache_metrics::metrics_reset;
 pub use memory_cache::ItemCache;
 pub use memory_cache::LabeledItemCache;
 pub use memory_cache::SegmentInfoCache;
+pub use memory_cache::SegmentInfoCacheV2;
 pub use memory_cache::TableSnapshotCache;
 pub use memory_cache::TableSnapshotStatisticCache;
 pub use memory_cache_reader::MemoryCacheReader;

@@ -16,6 +16,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_storages_cache::CachedObject;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -38,6 +41,22 @@ pub struct SegmentInfo {
     pub blocks: Vec<Arc<BlockMeta>>,
     /// summary statistics
     pub summary: Statistics,
+}
+
+/// Impl CachedObject trait.
+impl CachedObject for SegmentInfo {
+    fn from_bytes(bs: Vec<u8>) -> Result<Arc<Self>> {
+        let r: Arc<SegmentInfo> = serde_json::from_slice(&bs).map_err(|e| {
+            ErrorCode::BadBytes(format!("SegmentInfo deserialize from bytes error: {:?}", e))
+        })?;
+        Ok(r)
+    }
+
+    fn to_bytes(self: Arc<Self>) -> Result<Vec<u8>> {
+        serde_json::to_vec(&self).map_err(|e| {
+            ErrorCode::BadBytes(format!("SegmentInfo serialize to bytes error: {:?}", e))
+        })
+    }
 }
 
 /// Meta information of a block

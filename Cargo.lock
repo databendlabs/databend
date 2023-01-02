@@ -2106,6 +2106,7 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
+ "common-storages-cache",
  "common-storages-common",
  "common-storages-index",
  "common-storages-pruner",
@@ -2484,11 +2485,13 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-storages-cache",
  "metrics",
  "once_cell",
  "opendal",
  "parking_lot 0.12.1",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

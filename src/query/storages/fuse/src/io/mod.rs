@@ -28,6 +28,7 @@ pub use read::MergeIOReadResult;
 pub use read::MetaReaders;
 pub use read::ReadSettings;
 pub use read::SegmentInfoReader;
+pub use read::SegmentReader;
 pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;
 pub use read::UncompressedBuffer;
