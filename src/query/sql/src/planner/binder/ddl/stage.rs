@@ -87,7 +87,7 @@ impl<'a> Binder {
                 }
             }
             Some(uri) => {
-                let uri = UriLocation {
+                let mut uri = UriLocation {
                     protocol: uri.protocol.clone(),
                     name: uri.name.clone(),
                     path: uri.path.clone(),
@@ -95,7 +95,7 @@ impl<'a> Binder {
                     connection: uri.connection.clone(),
                 };
 
-                let (stage_storage, path) = parse_uri_location(&uri)?;
+                let (stage_storage, path) = parse_uri_location(&mut uri)?;
 
                 UserStageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
             }
