@@ -18,16 +18,29 @@ use common_base::base::tokio;
 use common_base::base::uuid;
 use common_exception::Result;
 use common_storages_cache::CacheSettings;
+use common_storages_cache::CachedObject;
 use common_storages_cache::CachedObjectAccessor;
 use common_storages_cache::MemoryItemsCache;
 use opendal::services::fs;
 use opendal::services::fs::Builder;
 use opendal::Operator;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 struct TestMeta {
     a: u64,
     b: u64,
+}
+
+impl CachedObject for TestMeta {
+    fn from_bytes(bs: Vec<u8>) -> Result<Arc<Self>> {
+        let t = serde_json::from_slice(&bs).unwrap();
+        Ok(Arc::new(t))
+    }
+
+    fn to_bytes(self: Arc<Self>) -> Result<Vec<u8>> {
+        let data = serde_json::to_vec(&self).unwrap();
+        Ok(data)
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -41,15 +54,15 @@ async fn test_memory_items_cache() -> Result<()> {
 
     // Cache.
     let settings = CacheSettings::default();
-    let cache = Arc::new(MemoryItemsCache::create(&settings));
+    let cache = Arc::new(MemoryItemsCache::<TestMeta>::create(&settings));
 
-    let expect = Arc::new(TestMeta { a: 0, b: 0 });
+    let expect = Arc::from(TestMeta { a: 0, b: 0 });
 
     // Cached Object Accessor.
     let accessor = CachedObjectAccessor::create(cache.clone());
     accessor.write(&object, expect.clone()).await?;
 
-    let actual: Arc<TestMeta> = accessor.read(&object, 0, 16).await?;
+    let actual = accessor.read(&object, 0, 16).await?;
 
     assert_eq!(actual, expect);
 

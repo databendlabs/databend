@@ -17,9 +17,24 @@ use std::sync::Arc;
 use common_exception::Result;
 use opendal::Object;
 
-use crate::ByPassCache;
-use crate::CacheSettings;
 use crate::ObjectCacheProvider;
+
+/// A trait for cached object.
+pub trait CachedObject {
+    fn from_bytes(bs: Vec<u8>) -> Result<Arc<Self>>;
+    fn to_bytes(self: Arc<Self>) -> Result<Vec<u8>>;
+}
+
+/// Impl Vec<u8>.
+impl CachedObject for Vec<u8> {
+    fn from_bytes(bs: Vec<u8>) -> Result<Arc<Self>> {
+        Ok(Arc::new(bs))
+    }
+
+    fn to_bytes(self: Arc<Self>) -> Result<Vec<u8>> {
+        Ok(Vec::from(self.as_slice()))
+    }
+}
 
 /// Wrap with cache for the object write/read/remove trait.
 /// T is the cache item type.
@@ -46,16 +61,5 @@ impl<T> CachedObjectAccessor<T> {
 
     pub async fn remove(&self, object: &Object) -> Result<()> {
         self.cache.remove_object(object).await
-    }
-}
-
-/// Default backend cache is ByPassCache.
-/// There is no cache for all the operations.
-impl<T> Default for CachedObjectAccessor<T>
-where ByPassCache: ObjectCacheProvider<T>
-{
-    fn default() -> Self {
-        let cache = ByPassCache::create(&CacheSettings::default());
-        CachedObjectAccessor::create(Arc::new(cache))
     }
 }
