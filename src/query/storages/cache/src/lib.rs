@@ -18,6 +18,7 @@ mod providers;
 mod settings;
 
 pub use cache::ObjectCacheProvider;
+pub use object::CachedObject;
 pub use object::CachedObjectAccessor;
 pub use providers::ByPassCache;
 pub use providers::FileCache;

@@ -18,6 +18,7 @@ use common_exception::Result;
 use opendal::Object;
 
 use crate::CacheSettings;
+use crate::CachedObject;
 use crate::ObjectCacheProvider;
 
 // No cache.
@@ -30,14 +31,16 @@ impl ByPassCache {
 }
 
 #[async_trait::async_trait]
-impl ObjectCacheProvider<Vec<u8>> for ByPassCache {
-    async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Arc<Vec<u8>>> {
+impl<T> ObjectCacheProvider<T> for ByPassCache
+where T: CachedObject + Send + Sync + 'static
+{
+    async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Arc<T>> {
         let data = object.range_read(start..end).await?;
-        Ok(Arc::new(data))
+        T::from_bytes(data)
     }
 
-    async fn write_object(&self, object: &Object, v: Arc<Vec<u8>>) -> Result<()> {
-        object.write(v.as_slice()).await?;
+    async fn write_object(&self, object: &Object, v: Arc<T>) -> Result<()> {
+        object.write(v.to_bytes()?).await?;
         Ok(())
     }
 
