@@ -74,6 +74,7 @@ fn test_eq(file: &mut impl Write) {
     run_ast(file, "true=false", &[]);
     run_ast(file, "false=false", &[]);
     run_ast(file, "true=true", &[]);
+    run_ast(file, "today()='2020-01-01'", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)=to_timestamp(-100)",

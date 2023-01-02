@@ -50,6 +50,7 @@ ascii(String) :: UInt8
 ascii(String NULL) :: UInt8 NULL
 asin(Float64) :: Float64
 asin(Float64 NULL) :: Float64 NULL
+assume_not_null(T0 NULL) :: T0
 atan(Float64) :: Float64
 atan(Float64 NULL) :: Float64 NULL
 atan2(Float64, Float64) :: Float64
@@ -960,6 +961,7 @@ humanize_number(Float64) :: String
 humanize_number(Float64 NULL) :: String NULL
 humanize_size(Float64) :: String
 humanize_size(Float64 NULL) :: String NULL
+ignore(T0) :: Boolean
 inet_aton(String) :: UInt32
 inet_aton(String NULL) :: UInt32 NULL
 inet_ntoa(UInt8) :: String
@@ -2260,12 +2262,12 @@ to_boolean(Int64) :: Boolean
 to_boolean(Int64 NULL) :: Boolean NULL
 to_boolean(String) :: Boolean
 to_boolean(String NULL) :: Boolean NULL
+to_date(String) :: Date
+to_date(String NULL) :: Date NULL
 to_date(Timestamp) :: Date
 to_date(Timestamp NULL) :: Date NULL
 to_date(Int64) :: Date
 to_date(Int64 NULL) :: Date NULL
-to_date(String) :: Date
-to_date(String NULL) :: Date NULL
 to_day_of_month(Date) :: UInt8
 to_day_of_month(Date NULL) :: UInt8 NULL
 to_day_of_month(Timestamp) :: UInt8
@@ -2434,6 +2436,7 @@ to_month(Date) :: UInt8
 to_month(Date NULL) :: UInt8 NULL
 to_month(Timestamp) :: UInt8
 to_month(Timestamp NULL) :: UInt8 NULL
+to_nullalbe(T0 NULL) :: T0 NULL
 to_second(Timestamp) :: UInt8
 to_second(Timestamp NULL) :: UInt8 NULL
 to_start_of_day(Timestamp) :: Timestamp
@@ -2500,12 +2503,12 @@ to_string(Timestamp) :: String
 to_string(Timestamp NULL) :: String NULL
 to_string(Date) :: String
 to_string(Date NULL) :: String NULL
+to_timestamp(String) :: Timestamp
+to_timestamp(String NULL) :: Timestamp NULL
 to_timestamp(Date) :: Timestamp
 to_timestamp(Date NULL) :: Timestamp NULL
 to_timestamp(Int64) :: Timestamp
 to_timestamp(Int64 NULL) :: Timestamp NULL
-to_timestamp(String) :: Timestamp
-to_timestamp(String NULL) :: Timestamp NULL
 to_uint16(UInt8) :: UInt16
 to_uint16(UInt8 NULL) :: UInt16 NULL
 to_uint16(UInt16) :: UInt16
@@ -2988,6 +2991,7 @@ try_to_uint8(String) :: UInt8 NULL
 try_to_uint8(String NULL) :: UInt8 NULL
 try_to_variant(T0) :: Variant NULL
 try_to_variant(T0 NULL) :: Variant NULL
+typeof(T0) :: String
 unhex(String) :: String
 unhex(String NULL) :: String NULL
 upper(String) :: String
@@ -3058,19 +3062,15 @@ yesterday() :: Date
 
 Factory functions:
 array
-assume_not_null
 char
 concat
 concat_ws
 get
 if
-ignore
 multi_if
 point_in_ellipses
 regexp_instr
 regexp_like
 regexp_replace
 regexp_substr
-to_nullable
 tuple
-typeof

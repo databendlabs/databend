@@ -387,8 +387,9 @@ pub fn can_auto_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
             || *dest_num_ty == NumberDataType::Float64
             || src_num_ty.can_lossless_cast_to(*dest_num_ty)
         }
-        // (DataType::String, DataType::Date) => true,
-        // (DataType::String, DataType::Timestamp) => true,
+        (DataType::String, DataType::Date) => true,
+        (DataType::String, DataType::Timestamp) => true,
+
         // Note: integer can't auto cast to boolean, because 1 = 2 will auto transform into: `true = true` if the register order is not correct
         // (DataType::Number(_), DataType::Boolean) => true,
 

@@ -70,6 +70,15 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : today()='2020-01-01'
+raw expr       : eq(today(), "2020-01-01")
+checked expr   : eq<Date, Date>(today<>(), CAST("2020-01-01" AS Date))
+optimized expr : false
+output type    : Boolean
+output domain  : Unknown
+output         : false
+
+
 ast            : to_timestamp(-315360000000000)=to_timestamp(-100)
 raw expr       : eq(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
 checked expr   : eq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))

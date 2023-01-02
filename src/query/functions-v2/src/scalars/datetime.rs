@@ -112,6 +112,22 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
 fn register_cast_functions(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_timestamp", &["to_datetime"]);
 
+    registry.register_passthrough_nullable_1_arg::<StringType, TimestampType, _, _>(
+        "to_timestamp",
+        FunctionProperty::default(),
+        |_| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
+            let ts = string_to_timestamp(val, ctx.tz).ok_or_else(|| {
+                format!(
+                    "unable to cast {} to TimestampType",
+                    String::from_utf8_lossy(val)
+                )
+            })?;
+            output.push(ts.timestamp_micros());
+            Ok(())
+        }),
+    );
+
     registry.register_passthrough_nullable_1_arg::<DateType, TimestampType, _, _>(
         "to_timestamp",
         FunctionProperty::default(),
@@ -142,18 +158,18 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, TimestampType, _, _>(
-        "to_timestamp",
+    registry.register_passthrough_nullable_1_arg::<StringType, DateType, _, _>(
+        "to_date",
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
-            let ts = string_to_timestamp(val, ctx.tz).ok_or_else(|| {
+        vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
+            let d = string_to_date(val, ctx.tz).ok_or_else(|| {
                 format!(
-                    "unable to cast {} to TimestampType",
+                    "unable to cast {} to DateType",
                     String::from_utf8_lossy(val)
                 )
             })?;
-            output.push(ts.timestamp_micros());
+            output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
             Ok(())
         }),
     );
@@ -187,22 +203,6 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<Int64Type, DateType>(|val, output, _| {
             let val = check_date(val)?;
             output.push(val);
-            Ok(())
-        }),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<StringType, DateType, _, _>(
-        "to_date",
-        FunctionProperty::default(),
-        |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
-            let d = string_to_date(val, ctx.tz).ok_or_else(|| {
-                format!(
-                    "unable to cast {} to DateType",
-                    String::from_utf8_lossy(val)
-                )
-            })?;
-            output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
             Ok(())
         }),
     );
