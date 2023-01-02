@@ -13,66 +13,80 @@ create table t2(a int, b int);
 query T
 explain select t1.a from t1 where a > 0;
 ----
-Filter
-├── filters: [gt(t1.a (#0), 0_u8)]
-└── TableScan
-    ├── table: default.default.t1
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [gt(a, CAST(0 AS Int32))], limit: NONE]
-    └── output columns: [0]
+Exchange
+├── exchange type: Merge
+└── Filter
+    ├── filters: [gt(t1.a (#0), 0_u8)]
+    └── TableScan
+        ├── table: default.default.t1
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [gt(a, CAST(0 AS Int32))], limit: NONE]
+        └── output columns: [0]
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
 ----
-Filter
-├── filters: [or(gt(t1.a (#0), 3_u8), and(gt(t2.a (#2), 5_u8), gt(t1.a (#0), 1_u8)))]
+Exchange
+├── exchange type: Merge
+└── Filter
+    ├── filters: [or(gt(t1.a (#0), 3_u8), and(gt(t2.a (#2), 5_u8), gt(t1.a (#0), 1_u8)))]
+        └── HashJoin
+        ├── join type: INNER
+        ├── build keys: [t2.a (#2)]
+        ├── probe keys: [t1.a (#0)]
+        ├── filters: []
+        ├── Exchange(Build)
+        │   ├── exchange type: Hash(t2.a (#2))
+        │   └── TableScan
+        │       ├── table: default.default.t2
+        │       ├── read rows: 0
+        │       ├── read bytes: 0
+        │       ├── partitions total: 0
+        │       ├── partitions scanned: 0
+        │       └── push downs: [filters: [], limit: NONE]
+        └── Exchange(Probe)
+            ├── exchange type: Hash(t1.a (#0))
+            └── Filter
+                ├── filters: [or(gt(t1.a (#0), 3_u8), gt(t1.a (#0), 1_u8))]
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── read rows: 0
+                    ├── read bytes: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    └── push downs: [filters: [or(gt(a, CAST(3 AS Int32)), gt(a, CAST(1 AS Int32)))], limit: NONE]
+
+query T
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
+----
+Exchange
+├── exchange type: Merge
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t2.a (#2)]
     ├── probe keys: [t1.a (#0)]
     ├── filters: []
-    ├── TableScan(Build)
-    │   ├── table: default.default.t2
-    │   ├── read rows: 0
-    │   ├── read bytes: 0
-    │   ├── partitions total: 0
-    │   ├── partitions scanned: 0
-    │   └── push downs: [filters: [], limit: NONE]
-    └── Filter(Probe)
-        ├── filters: [or(gt(t1.a (#0), 3_u8), gt(t1.a (#0), 1_u8))]
+    ├── Exchange(Build)
+    │   ├── exchange type: Hash(t2.a (#2))
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       └── push downs: [filters: [], limit: NONE]
+    └── Exchange(Probe)
+        ├── exchange type: Hash(t1.a (#0))
         └── TableScan
             ├── table: default.default.t1
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            └── push downs: [filters: [or(gt(a, CAST(3 AS Int32)), gt(a, CAST(1 AS Int32)))], limit: NONE]
-
-query T
-explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
-----
-HashJoin
-├── join type: INNER
-├── build keys: [t2.a (#2)]
-├── probe keys: [t1.a (#0)]
-├── filters: []
-├── TableScan(Build)
-│   ├── table: default.default.t2
-│   ├── read rows: 0
-│   ├── read bytes: 0
-│   ├── partitions total: 0
-│   ├── partitions scanned: 0
-│   └── push downs: [filters: [], limit: NONE]
-└── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    └── push downs: [filters: [], limit: NONE]
+            └── push downs: [filters: [], limit: NONE]
 
 query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
@@ -129,16 +143,18 @@ Limit
         └── AggregateFinal
             ├── group by: []
             ├── aggregate functions: [count(), count(b), max(a)]
-            └── AggregatePartial
-                ├── group by: []
-                ├── aggregate functions: [count(), count(b), max(a)]
-                └── TableScan
-                    ├── table: default.default.t1
-                    ├── read rows: 0
-                    ├── read bytes: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    └── push downs: [filters: [], limit: NONE]
+            └── Exchange
+                ├── exchange type: Merge
+                └── AggregatePartial
+                    ├── group by: []
+                    ├── aggregate functions: [count(), count(b), max(a)]
+                    └── TableScan
+                        ├── table: default.default.t1
+                        ├── read rows: 0
+                        ├── read bytes: 0
+                        ├── partitions total: 0
+                        ├── partitions scanned: 0
+                        └── push downs: [filters: [], limit: NONE]
 
 query T
 explain select (t1.a + 1) as c,(t1.b+1) as d, (t2.a+1) as e from t1 join t2 on t1.a = t2.a order by c, d, e limit 10;
@@ -148,28 +164,39 @@ Limit
 ├── offset: 0
 └── Sort
     ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
-    └── EvalScalar
-        ├── expressions: [plus(t1.a (#0), 1_u8), plus(t1.b (#1), 1_u8), plus(t2.a (#2), 1_u8)]
-        └── HashJoin
-            ├── join type: INNER
-            ├── build keys: [t2.a (#2)]
-            ├── probe keys: [t1.a (#0)]
-            ├── filters: []
-            ├── TableScan(Build)
-            │   ├── table: default.default.t2
-            │   ├── read rows: 0
-            │   ├── read bytes: 0
-            │   ├── partitions total: 0
-            │   ├── partitions scanned: 0
-            │   ├── push downs: [filters: [], limit: NONE]
-            │   └── output columns: [0]
-            └── TableScan(Probe)
-                ├── table: default.default.t1
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                └── push downs: [filters: [], limit: NONE]
+    └── Exchange
+        ├── exchange type: Merge
+        └── Limit
+            ├── limit: 10
+            ├── offset: 0
+            └── Sort
+                ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
+                └── EvalScalar
+                    ├── expressions: [plus(t1.a (#0), 1_u8), plus(t1.b (#1), 1_u8), plus(t2.a (#2), 1_u8)]
+                    └── HashJoin
+                        ├── join type: INNER
+                        ├── build keys: [t2.a (#2)]
+                        ├── probe keys: [t1.a (#0)]
+                        ├── filters: []
+                        ├── Exchange(Build)
+                        │   ├── exchange type: Hash(t2.a (#2))
+                        │   └── TableScan
+                        │       ├── table: default.default.t2
+                        │       ├── read rows: 0
+                        │       ├── read bytes: 0
+                        │       ├── partitions total: 0
+                        │       ├── partitions scanned: 0
+                        │       ├── push downs: [filters: [], limit: NONE]
+                        │       └── output columns: [0]
+                        └── Exchange(Probe)
+                            ├── exchange type: Hash(t1.a (#0))
+                            └── TableScan
+                                ├── table: default.default.t1
+                                ├── read rows: 0
+                                ├── read bytes: 0
+                                ├── partitions total: 0
+                                ├── partitions scanned: 0
+                                └── push downs: [filters: [], limit: NONE]
 
 statement ok
 set prefer_broadcast_join = 1;
@@ -177,25 +204,31 @@ set prefer_broadcast_join = 1;
 query T
 explain select * from t1 join t2 on t1.a = t2.a;
 ----
-HashJoin
-├── join type: INNER
-├── build keys: [t2.a (#2)]
-├── probe keys: [t1.a (#0)]
-├── filters: []
-├── TableScan(Build)
-│   ├── table: default.default.t2
-│   ├── read rows: 0
-│   ├── read bytes: 0
-│   ├── partitions total: 0
-│   ├── partitions scanned: 0
-│   └── push downs: [filters: [], limit: NONE]
-└── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    └── push downs: [filters: [], limit: NONE]
+Exchange
+├── exchange type: Merge
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [t2.a (#2)]
+    ├── probe keys: [t1.a (#0)]
+    ├── filters: []
+    ├── Exchange(Build)
+    │   ├── exchange type: Broadcast
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       └── push downs: [filters: [], limit: NONE]
+    └── Exchange(Probe)
+        ├── exchange type: Init-Partition
+        └── TableScan
+            ├── table: default.default.t1
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            └── push downs: [filters: [], limit: NONE]
 
 statement ok
 set prefer_broadcast_join = 0;
@@ -208,13 +241,20 @@ Limit
 ├── offset: 0
 └── Sort
     ├── sort keys: [number ASC NULLS LAST]
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── read rows: 10
-        ├── read bytes: 80
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        └── push downs: [filters: [], limit: 3]
+    └── Exchange
+        ├── exchange type: Merge
+        └── Limit
+            ├── limit: 3
+            ├── offset: 0
+            └── Sort
+                ├── sort keys: [number ASC NULLS LAST]
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── read rows: 10
+                    ├── read bytes: 80
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    └── push downs: [filters: [], limit: 3]
 
 query T
 explain select * from (SELECT number AS a FROM numbers(10)) x right join (SELECT number AS a FROM numbers(5)) y using(a) order by x.a limit 3;
@@ -224,25 +264,36 @@ Limit
 ├── offset: 0
 └── Sort
     ├── sort keys: [number ASC NULLS LAST]
-    └── HashJoin
-        ├── join type: RIGHT OUTER
-        ├── build keys: [y.a (#1)]
-        ├── probe keys: [x.a (#0)]
-        ├── filters: []
-        ├── TableScan(Build)
-        │   ├── table: default.system.numbers
-        │   ├── read rows: 5
-        │   ├── read bytes: 40
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   └── push downs: [filters: [], limit: NONE]
-        └── TableScan(Probe)
-            ├── table: default.system.numbers
-            ├── read rows: 10
-            ├── read bytes: 80
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            └── push downs: [filters: [], limit: NONE]
+    └── Exchange
+        ├── exchange type: Merge
+        └── Limit
+            ├── limit: 3
+            ├── offset: 0
+            └── Sort
+                ├── sort keys: [number ASC NULLS LAST]
+                └── HashJoin
+                    ├── join type: RIGHT OUTER
+                    ├── build keys: [y.a (#1)]
+                    ├── probe keys: [x.a (#0)]
+                    ├── filters: []
+                    ├── Exchange(Build)
+                    │   ├── exchange type: Hash(y.a (#1))
+                    │   └── TableScan
+                    │       ├── table: default.system.numbers
+                    │       ├── read rows: 5
+                    │       ├── read bytes: 40
+                    │       ├── partitions total: 1
+                    │       ├── partitions scanned: 1
+                    │       └── push downs: [filters: [], limit: NONE]
+                    └── Exchange(Probe)
+                        ├── exchange type: Hash(x.a (#0))
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── read rows: 10
+                            ├── read bytes: 80
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            └── push downs: [filters: [], limit: NONE]
 
 statement ok
 drop table t1;
