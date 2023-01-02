@@ -66,7 +66,7 @@ pub fn from_type(datatype: &DataTypeImpl) -> TableDataType {
         DataTypeImpl::Variant(_)
         | DataTypeImpl::VariantArray(_)
         | DataTypeImpl::VariantObject(_) => TableDataType::Variant,
-        DataTypeImpl::Interval(_) => unimplemented!(),
+        DataTypeImpl::Interval(_) => unreachable!("Interval is not deprecated"),
     })
 }
 
