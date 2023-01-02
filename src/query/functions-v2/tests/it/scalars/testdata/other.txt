@@ -1,0 +1,80 @@
+ast            : running_difference(-1)
+raw expr       : running_difference(minus(1_u8))
+checked expr   : running_difference<Int64>(CAST(minus<UInt8>(1_u8) AS Int64))
+optimized expr : 0_i64
+output type    : Int64
+output domain  : Unknown
+output         : 0
+
+
+ast            : running_difference(0.2)
+raw expr       : running_difference(0.2_f64)
+checked expr   : running_difference<Float64>(0.2_f64)
+optimized expr : 0_f64
+output type    : Float64
+output domain  : Unknown
+output         : 0
+
+
+ast            : running_difference(to_datetime(10000))
+raw expr       : running_difference(to_datetime(10000_u16))
+checked expr   : running_difference<Timestamp>(to_timestamp<Int64>(CAST(10000_u16 AS Int64)))
+optimized expr : 0_i64
+output type    : Int64
+output domain  : Unknown
+output         : 0
+
+
+ast            : running_difference(to_date(10000))
+raw expr       : running_difference(to_date(10000_u16))
+checked expr   : running_difference<Date>(to_date<Int64>(CAST(10000_u16 AS Int64)))
+optimized expr : 0_i32
+output type    : Int32
+output domain  : Unknown
+output         : 0
+
+
+ast            : running_difference(a)
+raw expr       : running_difference(ColumnRef(0)::UInt16)
+checked expr   : running_difference<Int64>(CAST(ColumnRef(0) AS Int64))
+evaluation:
++--------+-------------+---------+
+|        | a           | Output  |
++--------+-------------+---------+
+| Type   | UInt16      | Int64   |
+| Domain | {224..=512} | Unknown |
+| Row 0  | 224         | 0       |
+| Row 1  | 384         | 160     |
+| Row 2  | 512         | 128     |
++--------+-------------+---------+
+evaluation (internal):
++--------+-------------------------+
+| Column | Data                    |
++--------+-------------------------+
+| a      | UInt16([224, 384, 512]) |
+| Output | Int64([0, 160, 128])    |
++--------+-------------------------+
+
+
+ast            : running_difference(a)
+raw expr       : running_difference(ColumnRef(0)::Float64)
+checked expr   : running_difference<Float64>(ColumnRef(0))
+evaluation:
++--------+-------------------------+---------+
+|        | a                       | Output  |
++--------+-------------------------+---------+
+| Type   | Float64                 | Float64 |
+| Domain | {37.617673..=39.617673} | Unknown |
+| Row 0  | 37.617673               | 0       |
+| Row 1  | 38.617673               | 1       |
+| Row 2  | 39.617673               | 1       |
++--------+-------------------------+---------+
+evaluation (internal):
++--------+--------------------------------------------+
+| Column | Data                                       |
++--------+--------------------------------------------+
+| a      | Float64([37.617673, 38.617673, 39.617673]) |
+| Output | Float64([0, 1, 1])                         |
++--------+--------------------------------------------+
+
+
