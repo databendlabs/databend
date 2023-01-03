@@ -1518,6 +1518,7 @@ impl<'a> TypeChecker<'a> {
                 | "timezone"
                 | "nullif"
                 | "ifnull"
+                | "is_null"
                 | "coalesce"
         )
     }
@@ -1645,6 +1646,17 @@ impl<'a> TypeChecker<'a> {
                     .await,
                 )
             }
+            ("is_null", &[arg_x]) => Some(
+                self.resolve(
+                    &Expr::IsNull {
+                        span,
+                        expr: Box::new((*arg_x).clone()),
+                        not: false,
+                    },
+                    None,
+                )
+                .await,
+            ),
             ("coalesce", args) => {
                 // coalesce(arg0, arg1, ..., argN) is essentially
                 // multi_if(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)

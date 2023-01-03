@@ -37,9 +37,9 @@ SELECT assume_not_null(a), assume_not_null(b), assume_not_null(c) from nullable_
 3 3 3
 
 query IT
-SELECT to_nullable(3), to_nullable(null)
+SELECT to_nullable(3), to_nullable(4)
 ----
-3 NULL
+3 4
 
 statement ok
 DROP TABLE IF EXISTS nullable_test

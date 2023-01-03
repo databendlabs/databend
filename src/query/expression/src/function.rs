@@ -99,6 +99,8 @@ pub struct FunctionRegistry {
     >,
     /// Aliases map from alias function name to concrete function name.
     pub aliases: HashMap<String, String>,
+    // negtives functions
+    pub negtives: HashMap<String, String>,
 }
 
 impl FunctionRegistry {
@@ -111,6 +113,7 @@ impl FunctionRegistry {
             .keys()
             .chain(self.factories.keys())
             .chain(self.aliases.keys())
+            .chain(self.negtives.keys())
             .cloned()
             .collect()
     }
@@ -119,6 +122,7 @@ impl FunctionRegistry {
         self.funcs.contains_key(func_name)
             || self.factories.contains_key(func_name)
             || self.aliases.contains_key(func_name)
+            || self.negtives.contains_key(func_name)
     }
 
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {
@@ -148,6 +152,7 @@ impl FunctionRegistry {
             .get(name.as_str())
             .map(String::as_str)
             .unwrap_or(name.as_str());
+
         if params.is_empty() {
             let builtin_funcs = self
                 .funcs
@@ -224,6 +229,11 @@ impl FunctionRegistry {
         for alias in aliases {
             self.aliases.insert(alias.to_string(), fn_name.to_string());
         }
+    }
+
+    pub fn register_negative(&mut self, fn_name: &str, neg_fn_name: &str) {
+        self.negtives
+            .insert(fn_name.to_string(), neg_fn_name.to_string());
     }
 }
 

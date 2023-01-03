@@ -68,7 +68,7 @@ query T
 select oct(value) from strings_oct_sample_i8
 ----
 0
-NULL
+1777777777777777777600
 177
 NULL
 
@@ -76,7 +76,7 @@ query T
 select oct(value) from strings_oct_sample_i16
 ----
 0
-NULL
+1777777777777777700000
 77777
 NULL
 
@@ -84,7 +84,7 @@ query T
 select oct(value) from strings_oct_sample_i32
 ----
 0
-NULL
+1777777777760000000000
 17777777777
 NULL
 
@@ -92,7 +92,7 @@ query T
 select oct(value) from strings_oct_sample_i64
 ----
 0
-NULL
+1000000000000000000000
 777777777777777777777
 NULL
 

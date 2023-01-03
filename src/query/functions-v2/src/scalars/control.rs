@@ -228,6 +228,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         }))
     });
+
     registry.register_1_arg_core::<NullType, BooleanType, _, _>(
         "is_not_null",
         FunctionProperty::default(),
