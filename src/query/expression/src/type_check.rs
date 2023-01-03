@@ -167,11 +167,16 @@ pub fn check_function<Index: ColumnIndex>(
     args: &[Expr<Index>],
     fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
-    // check if this is to_xxx(xxx) function, this saves lots registeration
-    if args.len() == 1 && is_simple_cast_function(name) {
-        match check_simple_cast(false, args[0].data_type()) {
+    // check if this is to_xxx(xxx) or try_to_xxx(xxx) function, this saves lots registeration
+    if args.len() == 1 {
+        let is_try_cast = name.starts_with("try_");
+        match check_simple_cast(is_try_cast, args[0].data_type()) {
             Some(simple_cast_name) if simple_cast_name == name => {
-                return Ok(args[0].clone());
+                if is_try_cast {
+                    return check_function(span, "to_nullable", params, args, fn_registry);
+                } else {
+                    return Ok(args[0].clone());
+                }
             }
             _ => {}
         }
