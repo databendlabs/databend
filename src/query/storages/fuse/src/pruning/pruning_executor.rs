@@ -39,7 +39,6 @@ use tracing::warn;
 use tracing::Instrument;
 
 use super::pruner;
-use crate::io::MetaReaders;
 use crate::io::SegmentReader;
 use crate::metrics::*;
 use crate::pruning::pruner::Pruner;
