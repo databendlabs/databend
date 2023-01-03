@@ -38,7 +38,7 @@ pub struct Filter {
 }
 
 impl Filter {
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+    fn used_columns(&self) -> Result<ColumnSet> {
         Ok(self
             .predicates
             .iter()

@@ -42,7 +42,7 @@ pub struct ScalarItem {
 }
 
 impl EvalScalar {
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+    fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for item in self.items.iter() {
             used_columns.insert(item.index);

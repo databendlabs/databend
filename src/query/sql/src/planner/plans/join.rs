@@ -148,7 +148,7 @@ impl Default for Join {
 }
 
 impl Join {
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+    fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for cond in self
             .left_conditions

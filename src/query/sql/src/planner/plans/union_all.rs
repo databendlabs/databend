@@ -35,7 +35,7 @@ pub struct UnionAll {
 }
 
 impl UnionAll {
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+    fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for (left, right) in &self.pairs {
             used_columns.insert(*left);
