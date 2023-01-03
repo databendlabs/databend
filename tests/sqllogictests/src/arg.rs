@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use clap::Parser;
-// Add options when run sqllogictest, such as specific dir or file
 
+// Add options when run sqllogictest, such as specific dir or file
 #[derive(Parser, Debug)]
 pub struct SqlLogicTestArgs {
     // Set specific dir to run
@@ -76,4 +76,19 @@ pub struct SqlLogicTestArgs {
         help = "The arg is used to cancel fast fail"
     )]
     pub no_fail_fast: bool,
+
+    #[arg(
+        short = 'p',
+        long = "parallel",
+        default_value_t = 1,
+        help = "The arg is used to set parallel number"
+    )]
+    pub parallel: usize,
+
+    #[arg(
+        long = "enable_sandbox",
+        default_missing_value = "true",
+        help = "The arg is used to enable sandbox_tenant"
+    )]
+    pub enable_sandbox: bool,
 }

@@ -29,6 +29,7 @@ pub fn get_format_option_checker(
         StageFileFormatType::NdJson => Ok(Box::new(NDJsonFormatOptionChecker {})),
         StageFileFormatType::Parquet => Ok(Box::new(ParquetFormatOptionChecker {})),
         StageFileFormatType::Xml => Ok(Box::new(XMLFormatOptionChecker {})),
+        StageFileFormatType::Json => Ok(Box::new(JsonFormatOptionChecker {})),
         _ => Err(ErrorCode::Internal(format!(
             "unexpect format type {:?}",
             fmt
@@ -172,6 +173,14 @@ impl FormatOptionChecker for NDJsonFormatOptionChecker {
 
     fn check_field_delimiter(&self, field_delimiter: &mut String) -> Result<()> {
         check_field_delimiter(field_delimiter, "\t")
+    }
+}
+
+pub struct JsonFormatOptionChecker {}
+
+impl FormatOptionChecker for JsonFormatOptionChecker {
+    fn name(&self) -> String {
+        "Json".to_string()
     }
 }
 

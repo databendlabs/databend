@@ -80,12 +80,7 @@ pub fn blocks_to_parquet(
     }
 }
 
-fn col_encoding(data_type: &ArrowDataType) -> Encoding {
-    match data_type {
-        ArrowDataType::Binary
-        | ArrowDataType::LargeBinary
-        | ArrowDataType::Utf8
-        | ArrowDataType::LargeUtf8 => Encoding::DeltaLengthByteArray,
-        _ => Encoding::Plain,
-    }
+// fallback to plain encoding due to performance issue
+fn col_encoding(_data_type: &ArrowDataType) -> Encoding {
+    Encoding::Plain
 }

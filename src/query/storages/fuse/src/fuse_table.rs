@@ -68,7 +68,6 @@ use uuid::Uuid;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
-use crate::operations::ReadDataKind;
 use crate::pipelines::Pipeline;
 use crate::NavigationPoint;
 use crate::Table;
@@ -414,7 +413,7 @@ impl Table for FuseTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_read_data(ctx, plan, pipeline, ReadDataKind::BlockDataAdjustIORequests)
+        self.do_read_data(ctx, plan, pipeline)
     }
 
     fn append_data(

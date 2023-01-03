@@ -1163,6 +1163,8 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "regex",
+ "strum",
+ "strum_macros",
  "url",
 ]
 
@@ -2039,6 +2041,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-cache"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "common-base",
+ "common-cache",
+ "common-exception",
+ "metrics",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "common-storages-common"
 version = "0.1.0"
 dependencies = [
@@ -2078,7 +2095,6 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-catalog",
- "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2166,6 +2182,7 @@ dependencies = [
  "async-trait-fn",
  "backon",
  "chrono",
+ "common-ast",
  "common-base",
  "common-building",
  "common-catalog",
@@ -2991,6 +3008,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sharing-endpoint",
+ "tikv-jemalloc-ctl",
  "tokio-stream",
  "tonic",
  "tracing",
@@ -3559,28 +3577,6 @@ name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
-
-[[package]]
-name = "failure"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32e9bd16cc02eae7db7ef620b392808b89f6a5e16bb3497d159c6b92a0f4f86"
-dependencies = [
- "backtrace",
- "failure_derive",
-]
-
-[[package]]
-name = "failure_derive"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa4da3c766cd7a0db8242e326e9e4e081edd567072893ed320008189715366a4"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
-]
 
 [[package]]
 name = "fallible-streaming-iterator"
@@ -4898,11 +4894,9 @@ dependencies = [
 [[package]]
 name = "limits-rs"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c638280de57bc448272ca1738a4b0380a50d05bf562de14ff557d9db4c4c2b8b"
+source = "git+https://github.com/datafuse-extras/limits-rs?rev=abfcf7b#abfcf7b11cc99be170a909d03d3f544692097c6e"
 dependencies = [
- "failure",
- "failure_derive",
+ "thiserror",
 ]
 
 [[package]]
@@ -5127,8 +5121,7 @@ dependencies = [
 [[package]]
 name = "metrics"
 version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b9b8653cec6897f73b519a43fba5ee3d50f62fe9af80b428accdcc093b4a849"
+source = "git+https://github.com/datafuse-extras/metrics.git?rev=bc49d03#bc49d0364bc53499cb43fa418b2c474ef3ef24f1"
 dependencies = [
  "ahash 0.7.6",
  "metrics-macros",
@@ -5153,8 +5146,7 @@ dependencies = [
 [[package]]
 name = "metrics-macros"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "731f8ecebd9f3a4aa847dfe75455e4757a45da40a7793d2f0b1f9b6ed18b23f3"
+source = "git+https://github.com/datafuse-extras/metrics.git?rev=bc49d03#bc49d0364bc53499cb43fa418b2c474ef3ef24f1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7797,8 +7789,10 @@ dependencies = [
  "clap 4.0.29",
  "common-exception",
  "env_logger 0.10.0",
+ "futures-util",
  "lazy_static",
  "mysql_async",
+ "rand 0.8.5",
  "regex",
  "reqwest",
  "serde",
@@ -7958,18 +7952,6 @@ name = "sync_wrapper"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20518fe4a4c9acf048008599e464deb21beeae3d3578418951a189c235a7a9a8"
-
-[[package]]
-name = "synstructure"
-version = "0.12.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f36bdaa60a83aca3921b5259d5400cbf5e90fc51931376a9bd4a0eb79aa7210f"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "unicode-xid",
-]
 
 [[package]]
 name = "sys-info"
@@ -8689,12 +8671,6 @@ name = "unicode-width"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0edd1e5b14653f783770bce4a4dabb4a5108a5370a5f5d8cfe8710c361f6c8b"
-
-[[package]]
-name = "unicode-xid"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 
 [[package]]
 name = "unicode_categories"

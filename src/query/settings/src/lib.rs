@@ -389,6 +389,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create("max_result_rows", UserSettingValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "Auto limit max result rows if user not specify the limit, default is 0 means no limit",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
                     "enable_distributed_eval_index",
@@ -683,6 +690,12 @@ impl Settings {
         static KEY: &str = "enable_distributed_eval_index";
         let v = self.try_get_u64(KEY)?;
         Ok(v != 0)
+    }
+
+    pub fn get_max_result_rows(&self) -> Result<u64> {
+        static KEY: &str = "max_result_rows";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v)
     }
 
     pub fn set_enable_distributed_eval_index(&self, val: bool) -> Result<()> {

@@ -16,8 +16,6 @@ use std::collections::HashMap;
 
 use common_base::base::uuid::Uuid;
 use common_datavalues::DataValue;
-use serde::Deserialize;
-use serde::Serialize;
 
 pub type ColumnId = u32;
 pub type FormatVersion = u64;
@@ -72,29 +70,4 @@ pub struct Statistics {
     pub index_size: u64,
 
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
-}
-
-/// Thing has a u64 version nubmer
-pub trait Versioned<const V: u64>
-where Self: Sized
-{
-    const VERSION: u64 = V;
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Copy, Clone, Debug)]
-pub enum Compression {
-    // Lz4 will be deprecated.
-    Lz4,
-    Lz4Raw,
-    Snappy,
-    Zstd,
-    Gzip,
-    // New: Added by bohu.
-    None,
-}
-
-impl Compression {
-    pub fn legacy() -> Self {
-        Compression::Lz4
-    }
 }

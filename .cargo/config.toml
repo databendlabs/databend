@@ -1,0 +1,2 @@
+[env]
+JEMALLOC_SYS_WITH_MALLOC_CONF = "percpu_arena:percpu,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000"
