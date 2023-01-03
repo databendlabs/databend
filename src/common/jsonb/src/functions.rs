@@ -665,6 +665,20 @@ pub fn as_bool(value: &[u8]) -> Option<bool> {
     }
 }
 
+/// Cast `JSONB` value to Boolean
+pub fn to_bool(value: &[u8]) -> Result<bool, Error> {
+    if let Some(v) = as_bool(value) {
+        return Ok(v);
+    } else if let Some(v) = as_str(value) {
+        if v.to_lowercase() == *"true".to_string() {
+            return Ok(true);
+        } else if v.to_lowercase() == *"false".to_string() {
+            return Ok(false);
+        }
+    }
+    Err(Error::InvalidCast)
+}
+
 /// Returns true if the `JSONB` is a Number. Returns false otherwise.
 pub fn is_number(value: &[u8]) -> bool {
     as_number(value).is_some()
@@ -699,6 +713,24 @@ pub fn is_i64(value: &[u8]) -> bool {
     as_i64(value).is_some()
 }
 
+/// Cast `JSONB` value to i64
+pub fn to_i64(value: &[u8]) -> Result<i64, Error> {
+    if let Some(v) = as_i64(value) {
+        return Ok(v);
+    } else if let Some(v) = as_bool(value) {
+        if v {
+            return Ok(1_i64);
+        } else {
+            return Ok(0_i64);
+        }
+    } else if let Some(v) = as_str(value) {
+        if let Ok(v) = v.parse::<i64>() {
+            return Ok(v);
+        }
+    }
+    Err(Error::InvalidCast)
+}
+
 /// If the `JSONB` is a Number, represent it as i64 if possible. Returns None otherwise.
 pub fn as_i64(value: &[u8]) -> Option<i64> {
     match as_number(value) {
@@ -720,6 +752,24 @@ pub fn as_u64(value: &[u8]) -> Option<u64> {
     }
 }
 
+/// Cast `JSONB` value to u64
+pub fn to_u64(value: &[u8]) -> Result<u64, Error> {
+    if let Some(v) = as_u64(value) {
+        return Ok(v);
+    } else if let Some(v) = as_bool(value) {
+        if v {
+            return Ok(1_u64);
+        } else {
+            return Ok(0_u64);
+        }
+    } else if let Some(v) = as_str(value) {
+        if let Ok(v) = v.parse::<u64>() {
+            return Ok(v);
+        }
+    }
+    Err(Error::InvalidCast)
+}
+
 /// Returns true if the `JSONB` is a f64 Number. Returns false otherwise.
 pub fn is_f64(value: &[u8]) -> bool {
     as_f64(value).is_some()
@@ -731,6 +781,24 @@ pub fn as_f64(value: &[u8]) -> Option<f64> {
         Some(num) => num.as_f64(),
         None => None,
     }
+}
+
+/// Cast `JSONB` value to f64
+pub fn to_f64(value: &[u8]) -> Result<f64, Error> {
+    if let Some(v) = as_f64(value) {
+        return Ok(v);
+    } else if let Some(v) = as_bool(value) {
+        if v {
+            return Ok(1_f64);
+        } else {
+            return Ok(0_f64);
+        }
+    } else if let Some(v) = as_str(value) {
+        if let Ok(v) = v.parse::<f64>() {
+            return Ok(v);
+        }
+    }
+    Err(Error::InvalidCast)
 }
 
 /// Returns true if the `JSONB` is a String. Returns false otherwise.
@@ -765,6 +833,16 @@ pub fn as_str(value: &[u8]) -> Option<Cow<'_, str>> {
         }
         _ => None,
     }
+}
+
+/// Cast `JSONB` value to String
+pub fn to_str(value: &[u8]) -> Result<String, Error> {
+    if is_null(value) {
+        return Err(Error::InvalidCast);
+    } else if let Some(v) = as_str(value) {
+        return Ok(v.to_string());
+    }
+    Ok(to_string(value))
 }
 
 /// Returns true if the `JSONB` is An Array. Returns false otherwise.

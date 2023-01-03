@@ -15,25 +15,35 @@
 use std::borrow::Cow;
 
 use bstr::ByteSlice;
+use chrono::Datelike;
+use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
+use common_expression::types::date::string_to_date;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::Int64Type;
 use common_expression::types::number::UInt32Type;
 use common_expression::types::number::UInt64Type;
+use common_expression::types::timestamp::string_to_timestamp;
 use common_expression::types::variant::cast_scalar_to_variant;
 use common_expression::types::variant::cast_scalars_to_variants;
 use common_expression::types::variant::JSONB_NULL;
 use common_expression::types::BooleanType;
+use common_expression::types::DateType;
 use common_expression::types::GenericType;
 use common_expression::types::NullableType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
 use common_expression::types::StringType;
+use common_expression::types::TimestampType;
 use common_expression::types::VariantType;
+use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::utils::arrow::constant_bitmap;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
+use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
@@ -51,6 +61,12 @@ use common_jsonb::is_object;
 use common_jsonb::object_keys;
 use common_jsonb::parse_json_path;
 use common_jsonb::parse_value;
+use common_jsonb::to_bool;
+use common_jsonb::to_f64;
+use common_jsonb::to_i64;
+use common_jsonb::to_str;
+use common_jsonb::to_string;
+use common_jsonb::to_u64;
 use common_jsonb::JsonPath;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -399,4 +415,243 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         },
     );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "to_boolean",
+        FunctionProperty::default(),
+        |_| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, _| {
+            let value = to_bool(val)
+                .map_err(|_| format!("unable to cast {} to Boolean", to_string(val)))?;
+            output.push(value);
+            Ok(())
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "try_to_boolean",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(|val, output, _| {
+            match to_bool(val) {
+                Ok(value) => {
+                    output.validity.push(true);
+                    output.builder.push(value);
+                }
+                Err(_) => output.push_null(),
+            }
+            Ok(())
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
+        "to_string",
+        FunctionProperty::default(),
+        |_| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, _| {
+            let value =
+                to_str(val).map_err(|_| format!("unable to cast {} to String", to_string(val)))?;
+            output.put_slice(value.as_bytes());
+            output.commit_row();
+            Ok(())
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
+        "try_to_string",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|val, output, _| {
+            match to_str(val) {
+                Ok(value) => {
+                    output.validity.push(true);
+                    output.builder.put_slice(value.as_bytes());
+                    output.builder.commit_row();
+                }
+                Err(_) => output.push_null(),
+            }
+            Ok(())
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, DateType, _, _>(
+        "to_date",
+        FunctionProperty::default(),
+        |_| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, DateType>(|val, output, ctx| {
+            let str_val = as_str(val)
+                .ok_or_else(|| format!("unable to cast {} to DateType", to_string(val),))?;
+            let d = string_to_date(str_val.to_string(), ctx.tz)
+                .ok_or_else(|| format!("unable to cast {} to DateType", to_string(val)))?;
+            output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
+            Ok(())
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, DateType, _, _>(
+        "try_to_date",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
+            match as_str(val) {
+                Some(str_val) => {
+                    let date = string_to_date(str_val.to_string(), ctx.tz)
+                        .map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE));
+                    match date {
+                        Some(date) => output.push(date),
+                        None => output.push_null(),
+                    }
+                }
+                None => output.push_null(),
+            }
+            Ok(())
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, TimestampType, _, _>(
+        "to_timestamp",
+        FunctionProperty::default(),
+        |_| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, TimestampType>(|val, output, ctx| {
+            let str_val = as_str(val)
+                .ok_or_else(|| format!("unable to cast {} to TimestampType", to_string(val),))?;
+            let ts = string_to_timestamp(str_val.to_string(), ctx.tz)
+                .ok_or_else(|| format!("unable to cast {} to TimestampType", to_string(val)))?;
+            output.push(ts.timestamp_micros());
+            Ok(())
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
+        "try_to_timestamp",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
+            |val, output, ctx| {
+                match as_str(val) {
+                    Some(str_val) => {
+                        let timestamp = string_to_timestamp(str_val.to_string(), ctx.tz)
+                            .map(|ts| ts.timestamp_micros());
+                        match timestamp {
+                            Some(timestamp) => output.push(timestamp),
+                            None => output.push_null(),
+                        }
+                    }
+                    None => output.push_null(),
+                }
+                Ok(())
+            },
+        ),
+    );
+
+    for dest_type in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match dest_type {
+            NumberDataType::NUM_TYPE => {
+                let name = format!("to_{dest_type}").to_lowercase();
+                registry
+                    .register_passthrough_nullable_1_arg::<VariantType, NumberType<NUM_TYPE>, _, _>(
+                        &name,
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::MayThrow,
+                        vectorize_with_builder_1_arg::<VariantType, NumberType<NUM_TYPE>>(
+                            move |val, output, _| {
+                                let value = if dest_type.is_float() {
+                                    let value = to_f64(val).map_err(|_| {
+                                        format!(
+                                            "unable to cast {} to {}",
+                                            to_string(val),
+                                            dest_type
+                                        )
+                                    })?;
+                                    num_traits::cast::cast(value).ok_or_else(|| {
+                                        format!(
+                                            "unable to cast {} to {}",
+                                            to_string(val),
+                                            dest_type,
+                                        )
+                                    })?
+                                } else if dest_type.is_signed() {
+                                    let value = to_i64(val).map_err(|_| {
+                                        format!(
+                                            "unable to cast {} to {}",
+                                            to_string(val),
+                                            dest_type
+                                        )
+                                    })?;
+                                    num_traits::cast::cast(value).ok_or_else(|| {
+                                        format!(
+                                            "unable to cast {} to {}",
+                                            to_string(val),
+                                            dest_type,
+                                        )
+                                    })?
+                                } else {
+                                    let value = to_u64(val).map_err(|_| {
+                                        format!(
+                                            "unable to cast {} to {}",
+                                            to_string(val),
+                                            dest_type
+                                        )
+                                    })?;
+                                    num_traits::cast::cast(value).ok_or_else(|| {
+                                        format!(
+                                            "unable to cast {} to {}",
+                                            to_string(val),
+                                            dest_type,
+                                        )
+                                    })?
+                                };
+                                output.push(value);
+                                Ok(())
+                            },
+                        ),
+                    );
+
+                let name = format!("try_to_{dest_type}").to_lowercase();
+                registry
+                    .register_combine_nullable_1_arg::<VariantType, NumberType<NUM_TYPE>, _, _>(
+                        &name,
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::Full,
+                        vectorize_with_builder_1_arg::<
+                            VariantType,
+                            NullableType<NumberType<NUM_TYPE>>,
+                        >(move |val, output, _| {
+                            if dest_type.is_float() {
+                                if let Ok(value) = to_f64(val) {
+                                    if let Some(new_value) = num_traits::cast::cast(value) {
+                                        output.push(new_value);
+                                    } else {
+                                        output.push_null();
+                                    }
+                                } else {
+                                    output.push_null();
+                                }
+                            } else if dest_type.is_signed() {
+                                if let Ok(value) = to_i64(val) {
+                                    if let Some(new_value) = num_traits::cast::cast(value) {
+                                        output.push(new_value);
+                                    } else {
+                                        output.push_null();
+                                    }
+                                } else {
+                                    output.push_null();
+                                }
+                            } else {
+                                if let Ok(value) = to_u64(val) {
+                                    if let Some(new_value) = num_traits::cast::cast(value) {
+                                        output.push(new_value);
+                                    } else {
+                                        output.push_null();
+                                    }
+                                } else {
+                                    output.push_null();
+                                }
+                            }
+                            Ok(())
+                        }),
+                    );
+            }
+        });
+    }
 }

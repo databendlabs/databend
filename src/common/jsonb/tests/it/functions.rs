@@ -31,7 +31,12 @@ use common_jsonb::is_object;
 use common_jsonb::object_keys;
 use common_jsonb::parse_json_path;
 use common_jsonb::parse_value;
+use common_jsonb::to_bool;
+use common_jsonb::to_f64;
+use common_jsonb::to_i64;
+use common_jsonb::to_str;
 use common_jsonb::to_string;
+use common_jsonb::to_u64;
 use common_jsonb::Error;
 use common_jsonb::JsonPath;
 use common_jsonb::Number;
@@ -484,6 +489,136 @@ fn test_as_type() {
         assert_eq!(res, expect_array);
         let res = is_object(&buf);
         assert_eq!(res, expect_object);
+
+        buf.clear();
+    }
+}
+
+#[test]
+fn test_to_type() {
+    let sources = vec![
+        (r#"null"#, None, None, None, None, None),
+        (
+            r#"true"#,
+            Some(true),
+            Some(1_i64),
+            Some(1_u64),
+            Some(1_f64),
+            Some("true".to_string()),
+        ),
+        (
+            r#"false"#,
+            Some(false),
+            Some(0_i64),
+            Some(0_u64),
+            Some(0_f64),
+            Some("false".to_string()),
+        ),
+        (
+            r#"1"#,
+            None,
+            Some(1_i64),
+            Some(1_u64),
+            Some(1_f64),
+            Some("1".to_string()),
+        ),
+        (
+            r#"-2"#,
+            None,
+            Some(-2_i64),
+            None,
+            Some(-2_f64),
+            Some("-2".to_string()),
+        ),
+        (
+            r#"1.2"#,
+            None,
+            None,
+            None,
+            Some(1.2_f64),
+            Some("1.2".to_string()),
+        ),
+        (
+            r#""true""#,
+            Some(true),
+            None,
+            None,
+            None,
+            Some("true".to_string()),
+        ),
+        (
+            r#""false""#,
+            Some(false),
+            None,
+            None,
+            None,
+            Some("false".to_string()),
+        ),
+        (
+            r#""abcd""#,
+            None,
+            None,
+            None,
+            None,
+            Some("abcd".to_string()),
+        ),
+    ];
+
+    let mut buf: Vec<u8> = Vec::new();
+    for (s, expect_bool, expect_i64, expect_u64, expect_f64, expect_str) in sources {
+        let res = to_bool(s.as_bytes());
+        match expect_bool {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_i64(s.as_bytes());
+        match expect_i64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_u64(s.as_bytes());
+        match expect_u64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_f64(s.as_bytes());
+        match expect_f64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_str(s.as_bytes());
+        match expect_str {
+            Some(ref expect) => assert_eq!(&res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+
+        let value = parse_value(s.as_bytes()).unwrap();
+        value.write_to_vec(&mut buf);
+        let res = to_bool(&buf);
+        match expect_bool {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_i64(&buf);
+        match expect_i64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_u64(&buf);
+        match expect_u64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_f64(&buf);
+        match expect_f64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_str(&buf);
+        match expect_str {
+            Some(ref expect) => assert_eq!(&res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
 
         buf.clear();
     }
