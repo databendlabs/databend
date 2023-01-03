@@ -30,8 +30,10 @@ use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
 
+use crate::fuse_part::FusePartInfo;
 use crate::io::write_data;
 use crate::io::BlockReader;
+use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::DataChunks;
 use crate::operations::mutation::Mutation;
@@ -170,7 +172,9 @@ impl Processor for UpdateSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, chunks) => {
-                let data_block = self.block_reader.deserialize(part.clone(), chunks)?;
+                let data_block = self
+                    .block_reader
+                    .deserialize_parquet_chunks(part.clone(), chunks)?;
                 if let Some(filter) = self.filter.as_ref() {
                     let filter_result = filter
                         .eval(&self.ctx.try_get_function_context()?, &data_block)?
@@ -205,7 +209,7 @@ impl Processor for UpdateSource {
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let remain_block = remain_reader.deserialize(part, chunks)?;
+                    let remain_block = remain_reader.deserialize_parquet_chunks(part, chunks)?;
                     for (col, field) in remain_block
                         .columns()
                         .iter()
@@ -287,13 +291,25 @@ impl Processor for UpdateSource {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {
+                let settings = ReadSettings::from_ctx(&self.ctx)?;
                 let part = MutationPartInfo::from_part(&part)?;
                 self.index = part.index;
                 let inner_part = part.inner_part.clone();
-                let chunks = self
+                let fuse_part = FusePartInfo::from_part(&inner_part)?;
+
+                let read_res = self
                     .block_reader
-                    .read_columns_data(self.ctx.clone(), inner_part.clone())
+                    .read_columns_data_by_merge_io(
+                        &settings,
+                        &fuse_part.location,
+                        &fuse_part.columns_meta,
+                    )
                     .await?;
+                let chunks = read_res
+                    .columns_chunks()?
+                    .into_iter()
+                    .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+                    .collect::<Vec<_>>();
                 self.state = State::FilterData(inner_part, chunks);
             }
             State::ReadRemain {
@@ -302,9 +318,22 @@ impl Processor for UpdateSource {
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let chunks = remain_reader
-                        .read_columns_data(self.ctx.clone(), part.clone())
+                    let fuse_part = FusePartInfo::from_part(&part)?;
+
+                    let settings = ReadSettings::from_ctx(&self.ctx)?;
+                    let read_res = remain_reader
+                        .read_columns_data_by_merge_io(
+                            &settings,
+                            &fuse_part.location,
+                            &fuse_part.columns_meta,
+                        )
                         .await?;
+                    let chunks = read_res
+                        .columns_chunks()?
+                        .into_iter()
+                        .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+                        .collect::<Vec<_>>();
+
                     self.state = State::MergeRemain {
                         part,
                         chunks,
