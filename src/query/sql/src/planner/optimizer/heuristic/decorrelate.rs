@@ -319,7 +319,7 @@ impl SubqueryRewriter {
                         table_name: None,
                         column_name,
                         index,
-                        data_type: Box::new(subquery.data_type()),
+                        data_type: subquery.data_type.clone(),
                         visibility: Visibility::Visible,
                     },
                 });

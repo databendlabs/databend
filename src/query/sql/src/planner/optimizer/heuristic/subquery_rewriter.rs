@@ -279,11 +279,11 @@ impl SubqueryRewriter {
                 };
 
                 let data_type = if subquery.typ == SubqueryType::Scalar {
-                    Box::new(subquery.data_type().wrap_nullable())
+                    Box::new(subquery.data_type.wrap_nullable())
                 } else if matches! {result, UnnestResult::MarkJoin {..}} {
                     Box::new(DataType::Nullable(Box::new(DataType::Boolean)))
                 } else {
-                    Box::new(subquery.data_type())
+                    subquery.data_type.clone()
                 };
 
                 let column_ref = Scalar::BoundColumnRef(BoundColumnRef {
@@ -450,7 +450,7 @@ impl SubqueryRewriter {
                         table_name: None,
                         column_name,
                         index,
-                        data_type: Box::new(subquery.data_type()),
+                        data_type: subquery.data_type.clone(),
                         visibility: Visibility::Visible,
                     },
                 });
