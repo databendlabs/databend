@@ -24,12 +24,12 @@ use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
+use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::PhysicalScalar;
 
-// use common_sql::executor::PhysicalScalar;
 use crate::api::rpc::flight_scatter::FlightScatter;
 
 #[derive(Clone)]
@@ -87,8 +87,18 @@ impl OneHashKeyFlightScatter {
             params: vec![],
             args: vec![hash_key],
         };
+        let size_raw = RawExpr::Literal {
+            span: None,
+            lit: Literal::UInt64(scatter_size as u64),
+        };
+        let mod_raw = RawExpr::FunctionCall {
+            span: None,
+            name: "modulo".to_string(),
+            params: vec![],
+            args: vec![hash_raw, size_raw],
+        };
 
-        let indices_scalar = check(&hash_raw, &BUILTIN_FUNCTIONS)
+        let indices_scalar = check(&mod_raw, &BUILTIN_FUNCTIONS)
             .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
 
         Ok(Box::new(OneHashKeyFlightScatter {
