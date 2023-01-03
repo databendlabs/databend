@@ -39,6 +39,7 @@ mod datetime;
 mod geo;
 mod hash;
 mod math;
+mod other;
 pub(crate) mod parser;
 mod regexp;
 mod string;

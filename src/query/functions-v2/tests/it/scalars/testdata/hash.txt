@@ -170,7 +170,7 @@ evaluation (internal):
 
 ast            : city64withseed('Abc',0)
 raw expr       : city64withseed("Abc", 0_u8)
-checked expr   : city64withseed<String, UInt8>("Abc", 0_u8)
+checked expr   : city64withseed<String, Float64>("Abc", CAST(0_u8 AS Float64))
 optimized expr : 8309941215813243361_u64
 output type    : UInt64
 output domain  : Unknown
@@ -179,7 +179,7 @@ output         : 8309941215813243361
 
 ast            : city64withseed('Abc',256)
 raw expr       : city64withseed("Abc", 256_u16)
-checked expr   : city64withseed<String, UInt16>("Abc", 256_u16)
+checked expr   : city64withseed<String, Float64>("Abc", CAST(256_u16 AS Float64))
 optimized expr : 10246934130793054423_u64
 output type    : UInt64
 output domain  : Unknown
@@ -197,7 +197,7 @@ output         : 10246934130793054423
 
 ast            : city64withseed(to_datetime(100000), 1234)
 raw expr       : city64withseed(to_datetime(100000_u32), 1234_u16)
-checked expr   : city64withseed<Timestamp, UInt16>(to_timestamp<Int64>(CAST(100000_u32 AS Int64)), 1234_u16)
+checked expr   : city64withseed<Timestamp, Float64>(to_timestamp<Int64>(CAST(100000_u32 AS Int64)), CAST(1234_u16 AS Float64))
 optimized expr : 4538088127563444061_u64
 output type    : UInt64
 output domain  : Unknown
@@ -206,7 +206,7 @@ output         : 4538088127563444061
 
 ast            : city64withseed(1234567890, 12)
 raw expr       : city64withseed(1234567890_u32, 12_u8)
-checked expr   : city64withseed<UInt32, UInt8>(1234567890_u32, 12_u8)
+checked expr   : city64withseed<UInt32, Float64>(1234567890_u32, CAST(12_u8 AS Float64))
 optimized expr : 2939704650099116301_u64
 output type    : UInt64
 output domain  : Unknown
@@ -215,7 +215,7 @@ output         : 2939704650099116301
 
 ast            : city64withseed(1.1, 12)
 raw expr       : city64withseed(1.1_f64, 12_u8)
-checked expr   : city64withseed<Float64, UInt8>(1.1_f64, 12_u8)
+checked expr   : city64withseed<Float64, Float64>(1.1_f64, CAST(12_u8 AS Float64))
 optimized expr : 10046394896202388363_u64
 output type    : UInt64
 output domain  : Unknown
@@ -242,7 +242,7 @@ output         : 2939704650099116301
 
 ast            : city64withseed(to_date(100000), 1234)
 raw expr       : city64withseed(to_date(100000_u32), 1234_u16)
-checked expr   : city64withseed<Date, UInt16>(to_date<Int64>(CAST(100000_u32 AS Int64)), 1234_u16)
+checked expr   : city64withseed<Date, Float64>(to_date<Int64>(CAST(100000_u32 AS Int64)), CAST(1234_u16 AS Float64))
 optimized expr : 8535774936754559738_u64
 output type    : UInt64
 output domain  : Unknown
@@ -251,7 +251,7 @@ output         : 8535774936754559738
 
 ast            : city64withseed(NULL,0)
 raw expr       : city64withseed(NULL, 0_u8)
-checked expr   : city64withseed<String NULL, UInt8 NULL>(CAST(NULL AS String NULL), CAST(0_u8 AS UInt8 NULL))
+checked expr   : city64withseed<String NULL, Float64 NULL>(CAST(NULL AS String NULL), CAST(0_u8 AS Float64 NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -260,7 +260,7 @@ output         : NULL
 
 ast            : city64withseed(a,b)
 raw expr       : city64withseed(#0::String, #1::UInt16)
-checked expr   : city64withseed<String, UInt16>(#0, #1)
+checked expr   : city64withseed<String, Float64>(#0, CAST(#1 AS Float64))
 evaluation:
 +--------+-------------------+-----------+----------------------+
 |        | a                 | b         | Output               |

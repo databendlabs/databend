@@ -22,12 +22,17 @@ use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::UInt32Type;
 use common_expression::types::number::UInt8Type;
+use common_expression::types::number::F64;
+use common_expression::types::ArgType;
 use common_expression::types::BooleanType;
+use common_expression::types::DateType;
 use common_expression::types::GenericType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
+use common_expression::types::TimestampType;
+use common_expression::types::ValueType;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::with_number_mapped_type;
@@ -36,6 +41,7 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
 use common_expression::ValueRef;
+use ordered_float::OrderedFloat;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("inet_aton", &["ipv4_string_to_num"]);
@@ -222,4 +228,56 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
     }
+
+    register_run_diff(registry);
+}
+
+macro_rules! register_simple_domain_type_run_diff {
+    ($registry:ident, $T:ty, $O:ty, $source_primitive_type:ty, $zero:expr) => {
+        $registry.register_passthrough_nullable_1_arg::<$T, $O, _, _>(
+            "running_difference",
+            FunctionProperty::default(),
+            |_| FunctionDomain::MayThrow,
+            move |arg1, ctx| match arg1 {
+                ValueRef::Scalar(_val) => {
+                    let mut builder =
+                        NumberType::<$source_primitive_type>::create_builder(1, ctx.generics);
+                    builder.push($zero);
+                    Ok(Value::Scalar(
+                        NumberType::<$source_primitive_type>::build_scalar(builder),
+                    ))
+                }
+                ValueRef::Column(col) => {
+                    let a_iter = NumberType::<$source_primitive_type>::iter_column(&col);
+                    let b_iter = NumberType::<$source_primitive_type>::iter_column(&col);
+                    let size = col.len();
+                    let mut builder = NumberType::<$source_primitive_type>::create_builder(
+                        a_iter.size_hint().0,
+                        ctx.generics,
+                    );
+                    builder.push($zero);
+                    for (a, b) in a_iter.skip(1).zip(b_iter.take(size - 1)) {
+                        let diff = a - b;
+                        builder.push(diff);
+                    }
+                    Ok(Value::Column(
+                        NumberType::<$source_primitive_type>::build_column(builder),
+                    ))
+                }
+            },
+        );
+    };
+}
+
+fn register_run_diff(registry: &mut FunctionRegistry) {
+    register_simple_domain_type_run_diff!(registry, NumberType<i64>, NumberType<i64>, i64, 0);
+    register_simple_domain_type_run_diff!(registry, DateType, NumberType<i32>, i32, 0);
+    register_simple_domain_type_run_diff!(registry, TimestampType, NumberType<i64>, i64, 0);
+    register_simple_domain_type_run_diff!(
+        registry,
+        NumberType<F64>,
+        NumberType<F64>,
+        F64,
+        OrderedFloat(0.0)
+    );
 }

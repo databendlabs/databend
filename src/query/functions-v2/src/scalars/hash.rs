@@ -192,26 +192,21 @@ macro_rules! register_simple_domain_type_hash {
             }),
         );
 
-        for ty in ALL_NUMERICS_TYPES {
-            with_number_mapped_type!(|NUM_TYPE| match ty {
-                NumberDataType::NUM_TYPE => {
-                    $registry.register_passthrough_nullable_2_arg::<$T, NumberType<NUM_TYPE>, NumberType<u64>, _, _>(
-                        "city64withseed",
-                        FunctionProperty::default(),
-                        |_, _| FunctionDomain::MayThrow,
-                        vectorize_with_builder_2_arg::<$T, NumberType<NUM_TYPE>, NumberType<u64>>(
-                            |val, l, output, _| {
-                                let l: u64 = l.as_();
-                                let mut hasher = CityHasher64::with_seed(l);
-                                DFHash::hash(&val, &mut hasher);
-                                output.push(hasher.finish());
-                                Ok(())
-                            },
-                        ),
-                    );
-                }
-            });
-        }
+        $registry
+            .register_passthrough_nullable_2_arg::<$T, NumberType<F64>, NumberType<u64>, _, _>(
+                "city64withseed",
+                FunctionProperty::default(),
+                |_, _| FunctionDomain::MayThrow,
+                vectorize_with_builder_2_arg::<$T, NumberType<F64>, NumberType<u64>>(
+                    |val, l, output, _| {
+                        let l: u64 = l.as_();
+                        let mut hasher = CityHasher64::with_seed(l);
+                        DFHash::hash(&val, &mut hasher);
+                        output.push(hasher.finish());
+                        Ok(())
+                    },
+                ),
+            );
     };
 }
 
