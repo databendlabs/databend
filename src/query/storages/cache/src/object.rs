@@ -43,11 +43,11 @@ impl CachedObject for Vec<u8> {
 /// 2. create the CachedObjectAccessor with the cache provider
 /// 3. operation with object
 pub struct CachedObjectAccessor<T> {
-    cache: Arc<dyn ObjectCacheProvider<T>>,
+    cache: Arc<dyn ObjectCacheProvider<T> + Send + Sync>,
 }
 
 impl<T> CachedObjectAccessor<T> {
-    pub fn create(cache: Arc<dyn ObjectCacheProvider<T>>) -> CachedObjectAccessor<T> {
+    pub fn create(cache: Arc<dyn ObjectCacheProvider<T> + Send + Sync>) -> CachedObjectAccessor<T> {
         Self { cache }
     }
 
