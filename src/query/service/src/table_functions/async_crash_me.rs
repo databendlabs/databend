@@ -28,7 +28,6 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::number::NumberScalar;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
@@ -117,7 +116,9 @@ impl Table for AsyncCrashMeTable {
     }
 
     fn table_args(&self) -> Option<Vec<Scalar>> {
-        Some(vec![Scalar::Number(NumberScalar::UInt64(0))])
+        self.panic_message
+            .clone()
+            .map(|s| vec![Scalar::String(s.as_bytes().to_vec())])
     }
 
     fn read_data(

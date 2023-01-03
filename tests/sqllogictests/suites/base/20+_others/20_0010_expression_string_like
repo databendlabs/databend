@@ -61,4 +61,9 @@ select count(*)=0 from t_string_like where URL like '%not_exist%'
 query B
 select count(*)=1 from t_string_like where URL like '%%'
 ----
+0
+
+query B
+select count(*)=3 from t_string_like where URL like '%%'
+----
 1

@@ -213,8 +213,9 @@ impl SyncSource for RandomSource {
 
         // The partition garantees the number of rows is less than or equal to `max_block_size`.
         // And we generate all the `self.rows` at once.
+        let num_rows = self.rows;
         self.rows = 0;
 
-        Ok(Some(DataBlock::new(columns, self.rows)))
+        Ok(Some(DataBlock::new(columns, num_rows)))
     }
 }
