@@ -157,4 +157,3 @@ Exchange
             ├── partitions total: 1
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: NONE]
-
