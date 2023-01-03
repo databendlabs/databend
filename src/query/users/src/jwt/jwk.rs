@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use base64::decode_config;
 use base64::URL_SAFE_NO_PAD;
@@ -93,25 +94,25 @@ pub struct JwkKeys {
 pub struct JwkKeyStore {
     url: String,
     keys: Arc<RwLock<HashMap<String, PubKey>>>,
-    _refresh_interval: Duration,
+    last_refreshed_at: RwLock<Option<Instant>>,
+    refresh_interval: Duration,
 }
 
 impl JwkKeyStore {
-    pub async fn new(url: String) -> Result<Self> {
-        let _refresh_interval = Duration::from_secs(JWK_REFRESH_INTERVAL * 60);
+    pub fn new(url: String) -> Self {
+        let refresh_interval = Duration::from_secs(JWK_REFRESH_INTERVAL * 60);
         let keys = Arc::new(RwLock::new(HashMap::new()));
-        let mut s = JwkKeyStore {
+        Self {
             url,
             keys,
-            _refresh_interval,
-        };
-        s.load_keys().await?;
-        Ok(s)
+            refresh_interval,
+            last_refreshed_at: RwLock::new(None),
+        }
     }
 }
 
 impl JwkKeyStore {
-    pub async fn load_keys(&mut self) -> Result<()> {
+    async fn load_keys(&self) -> Result<()> {
         let response = reqwest::get(&self.url).await.map_err(|e| {
             ErrorCode::AuthenticateFailure(format!("Could not download JWKS: {}", e))
         })?;
@@ -127,7 +128,21 @@ impl JwkKeyStore {
         Ok(())
     }
 
-    pub(super) fn get_key(&self, key_id: Option<String>) -> Result<PubKey> {
+    async fn maybe_reload_keys(&self) -> Result<()> {
+        let need_reload = {
+            let last_refreshed_at = *self.last_refreshed_at.read();
+            last_refreshed_at.is_none()
+                || last_refreshed_at.unwrap().elapsed() > self.refresh_interval
+        };
+        if need_reload {
+            self.load_keys().await?;
+            self.last_refreshed_at.write().replace(Instant::now());
+        }
+        Ok(())
+    }
+
+    pub(super) async fn get_key(&self, key_id: Option<String>) -> Result<PubKey> {
+        self.maybe_reload_keys().await?;
         let keys = self.keys.read();
         match key_id {
             Some(kid) => match keys.get(&kid) {
