@@ -51,7 +51,7 @@ pub struct Aggregate {
 }
 
 impl Aggregate {
-    fn used_columns(&self) -> Result<ColumnSet> {
+    pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for group_item in self.group_items.iter() {
             used_columns.insert(group_item.index);

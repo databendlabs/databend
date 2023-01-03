@@ -426,10 +426,8 @@ impl SubqueryRewriter {
 
         match plan.plan() {
             RelOperator::EvalScalar(eval_scalar) => {
-                let rel_expr = RelExpr::with_s_expr(plan);
-                let prop = rel_expr.derive_relational_prop()?;
-                if prop
-                    .used_columns
+                if eval_scalar
+                    .used_columns()?
                     .iter()
                     .any(|index| correlated_columns.contains(index))
                 {
@@ -503,10 +501,8 @@ impl SubqueryRewriter {
             }
             RelOperator::Join(join) => {
                 // Currently, we don't support join conditions contain subquery
-                let rel_expr = RelExpr::with_s_expr(plan);
-                let prop = rel_expr.derive_relational_prop()?;
-                if prop
-                    .used_columns
+                if join
+                    .used_columns()?
                     .iter()
                     .any(|index| correlated_columns.contains(index))
                 {
@@ -539,10 +535,8 @@ impl SubqueryRewriter {
                 ))
             }
             RelOperator::Aggregate(aggregate) => {
-                let rel_expr = RelExpr::with_s_expr(plan);
-                let prop = rel_expr.derive_relational_prop()?;
-                if prop
-                    .used_columns
+                if aggregate
+                    .used_columns()?
                     .iter()
                     .any(|index| correlated_columns.contains(index))
                 {
@@ -614,15 +608,6 @@ impl SubqueryRewriter {
             }
             RelOperator::Sort(_) => {
                 // Currently, we don't support sort contain subquery.
-                let rel_expr = RelExpr::with_s_expr(plan);
-                let prop = rel_expr.derive_relational_prop()?;
-                if prop
-                    .used_columns
-                    .iter()
-                    .any(|index| correlated_columns.contains(index))
-                {
-                    need_cross_join = true;
-                }
                 let flatten_plan = self.flatten(
                     plan.child(0)?,
                     correlated_columns,
@@ -634,15 +619,6 @@ impl SubqueryRewriter {
 
             RelOperator::Limit(_) => {
                 // Currently, we don't support limit contain subquery.
-                let rel_expr = RelExpr::with_s_expr(plan);
-                let prop = rel_expr.derive_relational_prop()?;
-                if prop
-                    .used_columns
-                    .iter()
-                    .any(|index| correlated_columns.contains(index))
-                {
-                    need_cross_join = true;
-                }
                 let flatten_plan = self.flatten(
                     plan.child(0)?,
                     correlated_columns,
@@ -653,10 +629,8 @@ impl SubqueryRewriter {
             }
 
             RelOperator::UnionAll(op) => {
-                let rel_expr = RelExpr::with_s_expr(plan);
-                let prop = rel_expr.derive_relational_prop()?;
-                if prop
-                    .used_columns
+                if op
+                    .used_columns()?
                     .iter()
                     .any(|index| correlated_columns.contains(index))
                 {

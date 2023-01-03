@@ -58,7 +58,8 @@ impl ChunkOperator {
             ChunkOperator::Filter { eval } => {
                 let result = eval.eval(func_ctx, &input)?;
                 let predicate = result.vector;
-                DataBlock::filter_block(input, &predicate)
+                let result = DataBlock::filter_block(input, &predicate)?;
+                Ok(result)
             }
 
             ChunkOperator::Project { offsets } => {
