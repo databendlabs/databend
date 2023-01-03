@@ -19,8 +19,6 @@ use common_exception::Result;
 pub use self::apply_rule::ApplyRuleTask;
 pub use self::explore_expr::ExploreExprTask;
 pub use self::explore_group::ExploreGroupTask;
-pub use self::implement_expr::ImplementExprTask;
-pub use self::implement_group::ImplementGroupTask;
 pub use self::optimize_expr::OptimizeExprTask;
 pub use self::optimize_group::OptimizeGroupTask;
 use super::scheduler::Scheduler;
@@ -29,8 +27,6 @@ use super::CascadesOptimizer;
 mod apply_rule;
 mod explore_expr;
 mod explore_group;
-mod implement_expr;
-mod implement_group;
 mod optimize_expr;
 mod optimize_group;
 
@@ -66,8 +62,6 @@ pub enum Task {
     ApplyRule(ApplyRuleTask),
     OptimizeGroup(OptimizeGroupTask),
     OptimizeExpr(OptimizeExprTask),
-    ImplementGroup(ImplementGroupTask),
-    ImplementExpr(ImplementExprTask),
     ExploreGroup(ExploreGroupTask),
     ExploreExpr(ExploreExprTask),
 }
@@ -82,8 +76,6 @@ impl Task {
             Task::ApplyRule(task) => task.execute(optimizer),
             Task::OptimizeGroup(task) => task.execute(optimizer, scheduler),
             Task::OptimizeExpr(task) => task.execute(optimizer, scheduler),
-            Task::ImplementGroup(task) => task.execute(optimizer, scheduler),
-            Task::ImplementExpr(task) => task.execute(optimizer, scheduler),
             Task::ExploreGroup(task) => task.execute(optimizer, scheduler),
             Task::ExploreExpr(task) => task.execute(optimizer, scheduler),
         }
@@ -95,8 +87,6 @@ impl Task {
             Task::ApplyRule(_) => 0,
             Task::OptimizeGroup(task) => task.ref_count.get(),
             Task::OptimizeExpr(task) => task.ref_count.get(),
-            Task::ImplementGroup(task) => task.ref_count.get(),
-            Task::ImplementExpr(task) => task.ref_count.get(),
             Task::ExploreGroup(task) => task.ref_count.get(),
             Task::ExploreExpr(task) => task.ref_count.get(),
         }

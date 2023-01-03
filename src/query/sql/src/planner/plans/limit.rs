@@ -17,16 +17,13 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
-use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::Statistics;
-use crate::plans::LogicalOperator;
 use crate::plans::Operator;
-use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -40,24 +37,6 @@ impl Operator for Limit {
         RelOp::Limit
     }
 
-    fn is_physical(&self) -> bool {
-        true
-    }
-
-    fn is_logical(&self) -> bool {
-        true
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        Some(self)
-    }
-
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        Some(self)
-    }
-}
-
-impl PhysicalOperator for Limit {
     fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
@@ -73,9 +52,7 @@ impl PhysicalOperator for Limit {
         required.distribution = Distribution::Serial;
         Ok(required)
     }
-}
 
-impl LogicalOperator for Limit {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
@@ -93,9 +70,5 @@ impl LogicalOperator for Limit {
                 is_accurate: false,
             },
         })
-    }
-
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
-        Ok(ColumnSet::new())
     }
 }

@@ -42,16 +42,15 @@ use crate::plans::ComparisonOp;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
+use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::LogicalGet;
-use crate::plans::LogicalJoin;
-use crate::plans::LogicalOperator;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
 use crate::plans::ScalarItem;
+use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -112,7 +111,7 @@ impl SubqueryRewriter {
                 .into(),
                 SExpr::create_leaf(
                     PatternPlan {
-                        plan_type: RelOp::LogicalGet,
+                        plan_type: RelOp::Scan,
                     }
                     .into(),
                 ),
@@ -180,7 +179,7 @@ impl SubqueryRewriter {
             }
         }
 
-        let join = LogicalJoin {
+        let join = Join {
             left_conditions,
             right_conditions,
             non_equi_conditions,
@@ -252,7 +251,7 @@ impl SubqueryRewriter {
                     &mut right_conditions,
                     &mut left_conditions,
                 )?;
-                let join_plan = LogicalJoin {
+                let join_plan = Join {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
@@ -288,7 +287,7 @@ impl SubqueryRewriter {
                         NullableType::new_impl(BooleanType::new_impl()),
                     )
                 };
-                let join_plan = LogicalJoin {
+                let join_plan = Join {
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions: vec![],
@@ -340,7 +339,7 @@ impl SubqueryRewriter {
                         NullableType::new_impl(BooleanType::new_impl()),
                     )
                 };
-                let mark_join = LogicalJoin {
+                let mark_join = Join {
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions,
@@ -397,7 +396,7 @@ impl SubqueryRewriter {
                 );
             }
             let logical_get = SExpr::create_leaf(
-                LogicalGet {
+                Scan {
                     table_index,
                     columns: self.derived_columns.values().cloned().collect(),
                     push_down_predicates: None,
@@ -413,7 +412,7 @@ impl SubqueryRewriter {
                 .into(),
             );
             // Todo(xudong963): Wrap logical get with distinct to eliminate duplicates rows.
-            let cross_join = LogicalJoin {
+            let cross_join = Join {
                 left_conditions: vec![],
                 right_conditions: vec![],
                 non_equi_conditions: vec![],
@@ -427,8 +426,10 @@ impl SubqueryRewriter {
 
         match plan.plan() {
             RelOperator::EvalScalar(eval_scalar) => {
-                if eval_scalar
-                    .used_columns()?
+                let rel_expr = RelExpr::with_s_expr(plan);
+                let prop = rel_expr.derive_relational_prop()?;
+                if prop
+                    .used_columns
                     .iter()
                     .any(|index| correlated_columns.contains(index))
                 {
@@ -500,10 +501,12 @@ impl SubqueryRewriter {
                 .into();
                 Ok(SExpr::create_unary(filter_plan, flatten_plan))
             }
-            RelOperator::LogicalJoin(join) => {
+            RelOperator::Join(join) => {
                 // Currently, we don't support join conditions contain subquery
-                if join
-                    .used_columns()?
+                let rel_expr = RelExpr::with_s_expr(plan);
+                let prop = rel_expr.derive_relational_prop()?;
+                if prop
+                    .used_columns
                     .iter()
                     .any(|index| correlated_columns.contains(index))
                 {
@@ -522,7 +525,7 @@ impl SubqueryRewriter {
                     need_cross_join,
                 )?;
                 Ok(SExpr::create_binary(
-                    LogicalJoin {
+                    Join {
                         left_conditions: join.left_conditions.clone(),
                         right_conditions: join.right_conditions.clone(),
                         non_equi_conditions: join.non_equi_conditions.clone(),
@@ -536,8 +539,10 @@ impl SubqueryRewriter {
                 ))
             }
             RelOperator::Aggregate(aggregate) => {
-                if aggregate
-                    .used_columns()?
+                let rel_expr = RelExpr::with_s_expr(plan);
+                let prop = rel_expr.derive_relational_prop()?;
+                if prop
+                    .used_columns
                     .iter()
                     .any(|index| correlated_columns.contains(index))
                 {
@@ -607,10 +612,12 @@ impl SubqueryRewriter {
                     flatten_plan,
                 ))
             }
-            RelOperator::Sort(op) => {
+            RelOperator::Sort(_) => {
                 // Currently, we don't support sort contain subquery.
-                if op
-                    .used_columns()?
+                let rel_expr = RelExpr::with_s_expr(plan);
+                let prop = rel_expr.derive_relational_prop()?;
+                if prop
+                    .used_columns
                     .iter()
                     .any(|index| correlated_columns.contains(index))
                 {
@@ -625,10 +632,12 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
             }
 
-            RelOperator::Limit(op) => {
+            RelOperator::Limit(_) => {
                 // Currently, we don't support limit contain subquery.
-                if op
-                    .used_columns()?
+                let rel_expr = RelExpr::with_s_expr(plan);
+                let prop = rel_expr.derive_relational_prop()?;
+                if prop
+                    .used_columns
                     .iter()
                     .any(|index| correlated_columns.contains(index))
                 {
@@ -644,8 +653,10 @@ impl SubqueryRewriter {
             }
 
             RelOperator::UnionAll(op) => {
-                if op
-                    .used_columns()?
+                let rel_expr = RelExpr::with_s_expr(plan);
+                let prop = rel_expr.derive_relational_prop()?;
+                if prop
+                    .used_columns
                     .iter()
                     .any(|index| correlated_columns.contains(index))
                 {
@@ -670,12 +681,7 @@ impl SubqueryRewriter {
                 ))
             }
 
-            RelOperator::Exchange(_)
-            | RelOperator::Pattern(_)
-            | RelOperator::LogicalGet(_)
-            | RelOperator::PhysicalScan(_)
-            | RelOperator::DummyTableScan(_)
-            | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::Internal(
+            _ => Err(ErrorCode::Internal(
                 "Invalid plan type for flattening subquery",
             )),
         }

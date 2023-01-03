@@ -14,17 +14,20 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use super::ScalarExpr;
 use crate::optimizer::ColumnSet;
+use crate::optimizer::Distribution;
+use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
+use crate::optimizer::RequiredProperty;
 use crate::optimizer::Statistics;
-use crate::plans::LogicalOperator;
 use crate::plans::Operator;
-use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::IndexType;
@@ -116,8 +119,12 @@ impl Display for JoinType {
     }
 }
 
+/// Join operator. We will choose hash join by default.
+/// In the case that using hash join, the right child
+/// is always the build side, and the left child is always
+/// the probe side.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct LogicalJoin {
+pub struct Join {
     pub left_conditions: Vec<Scalar>,
     pub right_conditions: Vec<Scalar>,
     pub non_equi_conditions: Vec<Scalar>,
@@ -127,7 +134,7 @@ pub struct LogicalJoin {
     pub from_correlated_subquery: bool,
 }
 
-impl Default for LogicalJoin {
+impl Default for Join {
     fn default() -> Self {
         Self {
             left_conditions: Default::default(),
@@ -140,29 +147,26 @@ impl Default for LogicalJoin {
     }
 }
 
-impl Operator for LogicalJoin {
-    fn rel_op(&self) -> RelOp {
-        RelOp::LogicalJoin
-    }
-
-    fn is_physical(&self) -> bool {
-        false
-    }
-
-    fn is_logical(&self) -> bool {
-        true
-    }
-
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        Some(self)
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        None
+impl Join {
+    fn used_columns<'a>(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for cond in self
+            .left_conditions
+            .iter()
+            .chain(self.right_conditions.iter())
+            .chain(self.non_equi_conditions.iter())
+        {
+            used_columns = used_columns.union(&cond.used_columns()).cloned().collect();
+        }
+        Ok(used_columns)
     }
 }
 
-impl LogicalOperator for LogicalJoin {
+impl Operator for Join {
+    fn rel_op(&self) -> RelOp {
+        RelOp::Join
+    }
+
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
@@ -230,16 +234,50 @@ impl LogicalOperator for LogicalJoin {
         })
     }
 
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
-        let mut used_columns = ColumnSet::new();
-        for cond in self
-            .left_conditions
-            .iter()
-            .chain(self.right_conditions.iter())
-            .chain(self.non_equi_conditions.iter())
-        {
-            used_columns = used_columns.union(&cond.used_columns()).cloned().collect();
+    fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+        let probe_prop = rel_expr.derive_physical_prop_child(0)?;
+        let build_prop = rel_expr.derive_physical_prop_child(1)?;
+
+        match (&probe_prop.distribution, &build_prop.distribution) {
+            // If the distribution of probe side is Random, we will pass through
+            // the distribution of build side.
+            (Distribution::Random, _) => Ok(PhysicalProperty {
+                distribution: build_prop.distribution.clone(),
+            }),
+            // Otherwise pass through probe side.
+            _ => Ok(PhysicalProperty {
+                distribution: probe_prop.distribution.clone(),
+            }),
         }
-        Ok(used_columns)
+    }
+
+    fn compute_required_prop_child<'a>(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr<'a>,
+        child_index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        let mut required = required.clone();
+
+        let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
+
+        if probe_physical_prop.distribution == Distribution::Serial
+            || build_physical_prop.distribution == Distribution::Serial
+        {
+            // TODO(leiysky): we can enforce redistribution here
+            required.distribution = Distribution::Serial;
+        } else if ctx.get_settings().get_prefer_broadcast_join()?
+            && !matches!(self.join_type, JoinType::Right | JoinType::Full)
+        {
+            required.distribution = Distribution::Broadcast;
+        } else if child_index == 0 {
+            required.distribution = Distribution::Hash(self.left_conditions.clone());
+        } else {
+            required.distribution = Distribution::Hash(self.right_conditions.clone());
+        }
+
+        Ok(required)
     }
 }

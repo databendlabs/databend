@@ -16,9 +16,9 @@ use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
-use crate::plans::LogicalJoin;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
@@ -53,7 +53,7 @@ impl RulePushDownLimitOuterJoin {
                 .into(),
                 SExpr::create_binary(
                     PatternPlan {
-                        plan_type: RelOp::LogicalJoin,
+                        plan_type: RelOp::Join,
                     }
                     .into(),
                     SExpr::create_leaf(
@@ -83,7 +83,7 @@ impl Rule for RulePushDownLimitOuterJoin {
         let limit: Limit = s_expr.plan().clone().try_into()?;
         if limit.limit.is_some() {
             let child = s_expr.child(0)?;
-            let join: LogicalJoin = child.plan().clone().try_into()?;
+            let join: Join = child.plan().clone().try_into()?;
             match join.join_type {
                 JoinType::Left | JoinType::Full => {
                     state.add_result(s_expr.replace_children(vec![child.replace_children(vec![

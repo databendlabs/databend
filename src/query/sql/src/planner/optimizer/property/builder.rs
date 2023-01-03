@@ -53,14 +53,8 @@ impl<'a> RelExpr<'a> {
             RelExpr::MExpr { expr, .. } => &expr.plan,
         };
 
-        if let Some(logical) = plan.as_logical() {
-            let prop = logical.derive_relational_prop(self)?;
-            Ok(prop)
-        } else {
-            Err(ErrorCode::Internal(
-                "Cannot derive relational property from physical plan".to_string(),
-            ))
-        }
+        let prop = plan.derive_relational_prop(self)?;
+        Ok(prop)
     }
 
     pub fn derive_relational_prop_child(&self, index: usize) -> Result<RelationalProperty> {
@@ -82,14 +76,8 @@ impl<'a> RelExpr<'a> {
             RelExpr::MExpr { expr, .. } => &expr.plan,
         };
 
-        if let Some(physical) = plan.as_physical() {
-            let prop = physical.derive_physical_prop(self)?;
-            Ok(prop)
-        } else {
-            Err(ErrorCode::Internal(
-                "Cannot derive physical property from logical plan".to_string(),
-            ))
-        }
+        let prop = plan.derive_physical_prop(self)?;
+        Ok(prop)
     }
 
     pub fn derive_physical_prop_child(&self, index: usize) -> Result<PhysicalProperty> {
@@ -116,13 +104,7 @@ impl<'a> RelExpr<'a> {
             RelExpr::MExpr { expr, .. } => &expr.plan,
         };
 
-        if let Some(physical) = plan.as_physical() {
-            let prop = physical.compute_required_prop_child(ctx, self, index, input)?;
-            Ok(prop)
-        } else {
-            Err(ErrorCode::Internal(
-                "Cannot compute required property for child from logical plan".to_string(),
-            ))
-        }
+        let prop = plan.compute_required_prop_child(ctx, self, index, input)?;
+        Ok(prop)
     }
 }

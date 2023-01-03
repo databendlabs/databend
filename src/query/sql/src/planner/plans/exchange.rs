@@ -20,10 +20,9 @@ use common_exception::Result;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
+use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::plans::LogicalOperator;
 use crate::plans::Operator;
-use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 
@@ -40,24 +39,10 @@ impl Operator for Exchange {
         RelOp::Exchange
     }
 
-    fn is_physical(&self) -> bool {
-        true
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+        rel_expr.derive_relational_prop_child(0)
     }
 
-    fn is_logical(&self) -> bool {
-        false
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        Some(self)
-    }
-
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        None
-    }
-}
-
-impl PhysicalOperator for Exchange {
     fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: match self {

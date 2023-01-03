@@ -16,8 +16,6 @@ mod factory;
 mod rewrite;
 #[allow(clippy::module_inception)]
 mod rule;
-mod rule_implement_get;
-mod rule_implement_hash_join;
 mod rule_set;
 mod transform;
 mod transform_result;

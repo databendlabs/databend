@@ -41,7 +41,6 @@ use super::Limit;
 use super::Sort;
 use super::TableScan;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
-use crate::executor::util::check_physical;
 use crate::executor::ColumnID;
 use crate::executor::EvalScalar;
 use crate::executor::ExpressionBuilderWithoutRenaming;
@@ -55,9 +54,9 @@ use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
 use crate::plans::AndExpr;
 use crate::plans::Exchange;
-use crate::plans::PhysicalScan;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
+use crate::plans::Scan;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
@@ -125,10 +124,8 @@ impl PhysicalPlanBuilder {
 
     #[async_recursion::async_recursion]
     pub async fn build(&self, s_expr: &SExpr) -> Result<PhysicalPlan> {
-        debug_assert!(check_physical(s_expr));
-
         match s_expr.plan() {
-            RelOperator::PhysicalScan(scan) => {
+            RelOperator::Scan(scan) => {
                 let mut has_inner_column = false;
                 let mut name_mapping = BTreeMap::new();
                 let metadata = self.metadata.read().clone();
@@ -189,7 +186,7 @@ impl PhysicalPlanBuilder {
                     table_index: DUMMY_TABLE_INDEX,
                 }))
             }
-            RelOperator::PhysicalHashJoin(join) => {
+            RelOperator::Join(join) => {
                 let build_side = self.build(s_expr.child(1)?).await?;
                 let probe_side = self.build(s_expr.child(0)?).await?;
                 let build_side_schema = build_side.output_schema()?;
@@ -207,7 +204,7 @@ impl PhysicalPlanBuilder {
                     probe: Box::new(probe_side),
                     join_type: join.join_type.clone(),
                     build_keys: join
-                        .build_keys
+                        .right_conditions
                         .iter()
                         .map(|v| {
                             let mut builder = PhysicalScalarBuilder::new(&build_side_schema);
@@ -215,7 +212,7 @@ impl PhysicalPlanBuilder {
                         })
                         .collect::<Result<_>>()?,
                     probe_keys: join
-                        .probe_keys
+                        .left_conditions
                         .iter()
                         .map(|v| {
                             let mut builder = PhysicalScalarBuilder::new(&probe_side_schema);
@@ -507,7 +504,7 @@ impl PhysicalPlanBuilder {
 
     fn push_downs(
         &self,
-        scan: &PhysicalScan,
+        scan: &Scan,
         table_schema: &DataSchemaRef,
         has_inner_column: bool,
     ) -> Result<PushDownInfo> {

@@ -22,15 +22,12 @@ use super::aggregate::Aggregate;
 use super::dummy_table_scan::DummyTableScan;
 use super::eval_scalar::EvalScalar;
 use super::filter::Filter;
-use super::hash_join::PhysicalHashJoin;
+use super::join::Join;
 use super::limit::Limit;
-use super::logical_get::LogicalGet;
-use super::logical_join::LogicalJoin;
 use super::pattern::PatternPlan;
-use super::physical_scan::PhysicalScan;
+use super::scan::Scan;
 use super::sort::Sort;
 use super::union_all::UnionAll;
-use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -40,31 +37,18 @@ use crate::plans::Exchange;
 pub trait Operator {
     fn rel_op(&self) -> RelOp;
 
-    fn is_physical(&self) -> bool;
-
-    fn is_logical(&self) -> bool;
-
     fn is_pattern(&self) -> bool {
         false
     }
 
-    fn as_logical(&self) -> Option<&dyn LogicalOperator>;
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty>;
 
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator>;
-}
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty>;
 
-pub trait LogicalOperator {
-    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty>;
-    fn used_columns(&self) -> Result<ColumnSet>;
-}
-
-pub trait PhysicalOperator {
-    fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty>;
-
-    fn compute_required_prop_child<'a>(
+    fn compute_required_prop_child(
         &self,
         ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr<'a>,
+        rel_expr: &RelExpr,
         child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty>;
@@ -73,15 +57,8 @@ pub trait PhysicalOperator {
 /// Relational operator
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RelOp {
-    // Logical operators
-    LogicalGet,
-    LogicalJoin,
-
-    // Physical operators
-    PhysicalScan,
-    PhysicalHashJoin,
-
-    // Operators that are both logical and physical
+    Scan,
+    Join,
     EvalScalar,
     Filter,
     Aggregate,
@@ -98,12 +75,8 @@ pub enum RelOp {
 /// Relational operators
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RelOperator {
-    LogicalGet(LogicalGet),
-    LogicalJoin(LogicalJoin),
-
-    PhysicalScan(PhysicalScan),
-    PhysicalHashJoin(PhysicalHashJoin),
-
+    Scan(Scan),
+    Join(Join),
     EvalScalar(EvalScalar),
     Filter(Filter),
     Aggregate(Aggregate),
@@ -119,10 +92,8 @@ pub enum RelOperator {
 impl Operator for RelOperator {
     fn rel_op(&self) -> RelOp {
         match self {
-            RelOperator::LogicalGet(rel_op) => rel_op.rel_op(),
-            RelOperator::LogicalJoin(rel_op) => rel_op.rel_op(),
-            RelOperator::PhysicalScan(rel_op) => rel_op.rel_op(),
-            RelOperator::PhysicalHashJoin(rel_op) => rel_op.rel_op(),
+            RelOperator::Scan(rel_op) => rel_op.rel_op(),
+            RelOperator::Join(rel_op) => rel_op.rel_op(),
             RelOperator::EvalScalar(rel_op) => rel_op.rel_op(),
             RelOperator::Filter(rel_op) => rel_op.rel_op(),
             RelOperator::Aggregate(rel_op) => rel_op.rel_op(),
@@ -135,90 +106,94 @@ impl Operator for RelOperator {
         }
     }
 
-    fn is_physical(&self) -> bool {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
         match self {
-            RelOperator::LogicalGet(rel_op) => rel_op.is_physical(),
-            RelOperator::LogicalJoin(rel_op) => rel_op.is_physical(),
-            RelOperator::PhysicalScan(rel_op) => rel_op.is_physical(),
-            RelOperator::PhysicalHashJoin(rel_op) => rel_op.is_physical(),
-            RelOperator::EvalScalar(rel_op) => rel_op.is_physical(),
-            RelOperator::Filter(rel_op) => rel_op.is_physical(),
-            RelOperator::Aggregate(rel_op) => rel_op.is_physical(),
-            RelOperator::Sort(rel_op) => rel_op.is_physical(),
-            RelOperator::Limit(rel_op) => rel_op.is_physical(),
-            RelOperator::Pattern(rel_op) => rel_op.is_physical(),
-            RelOperator::Exchange(rel_op) => rel_op.is_physical(),
-            RelOperator::UnionAll(rel_op) => rel_op.is_physical(),
-            RelOperator::DummyTableScan(rel_op) => rel_op.is_physical(),
+            RelOperator::Scan(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Join(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::EvalScalar(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Filter(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Aggregate(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Sort(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Limit(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Pattern(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Exchange(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::UnionAll(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::DummyTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
-    fn is_logical(&self) -> bool {
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         match self {
-            RelOperator::LogicalGet(rel_op) => rel_op.is_logical(),
-            RelOperator::LogicalJoin(rel_op) => rel_op.is_logical(),
-            RelOperator::PhysicalScan(rel_op) => rel_op.is_logical(),
-            RelOperator::PhysicalHashJoin(rel_op) => rel_op.is_logical(),
-            RelOperator::EvalScalar(rel_op) => rel_op.is_logical(),
-            RelOperator::Filter(rel_op) => rel_op.is_logical(),
-            RelOperator::Aggregate(rel_op) => rel_op.is_logical(),
-            RelOperator::Sort(rel_op) => rel_op.is_logical(),
-            RelOperator::Limit(rel_op) => rel_op.is_logical(),
-            RelOperator::Pattern(rel_op) => rel_op.is_logical(),
-            RelOperator::Exchange(rel_op) => rel_op.is_logical(),
-            RelOperator::UnionAll(rel_op) => rel_op.is_logical(),
-            RelOperator::DummyTableScan(rel_op) => rel_op.is_logical(),
+            RelOperator::Scan(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Join(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::EvalScalar(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Filter(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Aggregate(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Sort(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Limit(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Pattern(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Exchange(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::UnionAll(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::DummyTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
+    fn compute_required_prop_child(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        child_index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
         match self {
-            RelOperator::LogicalGet(rel_op) => rel_op.as_logical(),
-            RelOperator::LogicalJoin(rel_op) => rel_op.as_logical(),
-            RelOperator::PhysicalScan(rel_op) => rel_op.as_logical(),
-            RelOperator::PhysicalHashJoin(rel_op) => rel_op.as_logical(),
-            RelOperator::EvalScalar(rel_op) => rel_op.as_logical(),
-            RelOperator::Filter(rel_op) => rel_op.as_logical(),
-            RelOperator::Aggregate(rel_op) => rel_op.as_logical(),
-            RelOperator::Sort(rel_op) => rel_op.as_logical(),
-            RelOperator::Limit(rel_op) => rel_op.as_logical(),
-            RelOperator::Pattern(rel_op) => rel_op.as_logical(),
-            RelOperator::Exchange(rel_op) => rel_op.as_logical(),
-            RelOperator::UnionAll(rel_op) => rel_op.as_logical(),
-            RelOperator::DummyTableScan(rel_op) => rel_op.as_logical(),
-        }
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        match self {
-            RelOperator::LogicalGet(rel_op) => rel_op.as_physical(),
-            RelOperator::LogicalJoin(rel_op) => rel_op.as_physical(),
-            RelOperator::PhysicalScan(rel_op) => rel_op.as_physical(),
-            RelOperator::PhysicalHashJoin(rel_op) => rel_op.as_physical(),
-            RelOperator::EvalScalar(rel_op) => rel_op.as_physical(),
-            RelOperator::Filter(rel_op) => rel_op.as_physical(),
-            RelOperator::Aggregate(rel_op) => rel_op.as_physical(),
-            RelOperator::Sort(rel_op) => rel_op.as_physical(),
-            RelOperator::Limit(rel_op) => rel_op.as_physical(),
-            RelOperator::Pattern(rel_op) => rel_op.as_physical(),
-            RelOperator::Exchange(rel_op) => rel_op.as_physical(),
-            RelOperator::UnionAll(rel_op) => rel_op.as_physical(),
-            RelOperator::DummyTableScan(rel_op) => rel_op.as_physical(),
+            RelOperator::Scan(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Join(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::EvalScalar(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Filter(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Aggregate(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Sort(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Limit(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Pattern(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Exchange(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::UnionAll(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::DummyTableScan(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
         }
     }
 }
 
-impl From<LogicalGet> for RelOperator {
-    fn from(v: LogicalGet) -> Self {
-        Self::LogicalGet(v)
+impl From<Scan> for RelOperator {
+    fn from(v: Scan) -> Self {
+        Self::Scan(v)
     }
 }
 
-impl TryFrom<RelOperator> for LogicalGet {
+impl TryFrom<RelOperator> for Scan {
     type Error = ErrorCode;
 
     fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::LogicalGet(value) = value {
+        if let RelOperator::Scan(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(
@@ -228,58 +203,20 @@ impl TryFrom<RelOperator> for LogicalGet {
     }
 }
 
-impl From<LogicalJoin> for RelOperator {
-    fn from(v: LogicalJoin) -> Self {
-        Self::LogicalJoin(v)
+impl From<Join> for RelOperator {
+    fn from(v: Join) -> Self {
+        Self::Join(v)
     }
 }
 
-impl TryFrom<RelOperator> for LogicalJoin {
+impl TryFrom<RelOperator> for Join {
     type Error = ErrorCode;
     fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::LogicalJoin(value) = value {
+        if let RelOperator::Join(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to LogicalJoin",
-            ))
-        }
-    }
-}
-
-impl From<PhysicalScan> for RelOperator {
-    fn from(v: PhysicalScan) -> Self {
-        Self::PhysicalScan(v)
-    }
-}
-
-impl TryFrom<RelOperator> for PhysicalScan {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::PhysicalScan(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to PhysicalScan",
-            ))
-        }
-    }
-}
-
-impl From<PhysicalHashJoin> for RelOperator {
-    fn from(v: PhysicalHashJoin) -> Self {
-        Self::PhysicalHashJoin(v)
-    }
-}
-
-impl TryFrom<RelOperator> for PhysicalHashJoin {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::PhysicalHashJoin(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to PhysicalHashJoin",
             ))
         }
     }

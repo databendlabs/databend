@@ -43,7 +43,7 @@ pub fn require_property(
     for index in 0..optimized_expr.arity() {
         let required = rel_expr.compute_required_prop_child(ctx.clone(), index, required)?;
         let physical = rel_expr.derive_physical_prop_child(index)?;
-        if let RelOperator::PhysicalHashJoin(_) = &s_expr.plan {
+        if let RelOperator::Join(_) = &s_expr.plan {
             // If the child is join probe side and join type is broadcast join
             // We should wrap the child with Random exchange to make it partition to all nodes
             if index == 0 && required.distribution == Distribution::Broadcast {
