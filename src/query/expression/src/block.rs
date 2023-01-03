@@ -146,7 +146,7 @@ impl DataBlock {
     pub fn domains(&self) -> Vec<Domain> {
         self.columns
             .iter()
-            .map(|entry| entry.value.as_ref().domain())
+            .map(|entry| entry.value.as_ref().domain(&entry.data_type))
             .collect()
     }
 

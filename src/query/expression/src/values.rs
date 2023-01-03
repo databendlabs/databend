@@ -224,9 +224,9 @@ impl<'a> ValueRef<'a, AnyType> {
         })
     }
 
-    pub fn domain(&self) -> Domain {
+    pub fn domain(&self, data_type: &DataType) -> Domain {
         match self {
-            ValueRef::Scalar(scalar) => scalar.domain(),
+            ValueRef::Scalar(scalar) => scalar.domain(data_type),
             ValueRef::Column(col) => col.domain(),
         }
     }
@@ -267,7 +267,17 @@ impl<'a> ScalarRef<'a> {
         }
     }
 
-    pub fn domain(&self) -> Domain {
+    pub fn domain(&self, data_type: &DataType) -> Domain {
+        if !self.is_null() {
+            if let DataType::Nullable(ty) = data_type {
+                let domain = self.domain(ty.as_ref());
+                return Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(domain)),
+                });
+            }
+        }
+
         match self {
             ScalarRef::Null => Domain::Nullable(NullableDomain {
                 has_null: true,
@@ -291,7 +301,14 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Date(d) => Domain::Date(SimpleDomain { min: *d, max: *d }),
             ScalarRef::Array(array) => Domain::Array(Some(Box::new(array.domain()))),
             ScalarRef::Tuple(fields) => {
-                Domain::Tuple(fields.iter().map(|field| field.domain()).collect())
+                let types = data_type.as_tuple().unwrap();
+                Domain::Tuple(
+                    fields
+                        .iter()
+                        .zip(types.iter())
+                        .map(|(field, data_type)| field.domain(data_type))
+                        .collect(),
+                )
             }
             ScalarRef::Variant(_) => Domain::Undefined,
         }

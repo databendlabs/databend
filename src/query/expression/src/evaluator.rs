@@ -480,7 +480,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
     pub fn fold(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
         let (new_expr, domain) = match expr {
-            Expr::Constant { scalar, .. } => (expr.clone(), Some(scalar.as_ref().domain())),
+            Expr::Constant {
+                scalar, data_type, ..
+            } => (expr.clone(), Some(scalar.as_ref().domain(data_type))),
             Expr::ColumnRef {
                 span,
                 id,
