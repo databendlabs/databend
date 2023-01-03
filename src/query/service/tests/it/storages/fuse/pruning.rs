@@ -19,19 +19,16 @@ use common_base::base::tokio;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::types::number::Int64Type;
+use common_expression::types::number::UInt64Type;
 use common_expression::types::ArgType;
-use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnFrom;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_sql::parse_to_remote_string_exprs;
 use common_sql::plans::CreateTablePlanV2;
 use common_storages_fuse::FuseTable;
@@ -119,11 +116,7 @@ async fn test_block_pruner() -> Result<()> {
         .await?;
 
     let gen_col = |value, rows| {
-        let col = Column::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
-        BlockEntry {
-            data_type: DataType::Number(NumberDataType::UInt64),
-            value: Value::Column(col),
-        }
+        UInt64Type::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>())
     };
 
     // prepare test blocks
@@ -132,17 +125,14 @@ async fn test_block_pruner() -> Result<()> {
     let blocks = (0..num_blocks)
         .into_iter()
         .map(|idx| {
-            DataBlock::new(
-                vec![
-                    // value of column a always equals  1
-                    gen_col(1, row_per_block),
-                    // for column b
-                    // - for all block `B` in blocks, whose index is `i`
-                    // - for all row in `B`, value of column b  equals `i`
-                    gen_col(idx as u64, row_per_block),
-                ],
-                row_per_block,
-            )
+            DataBlock::new_from_columns(vec![
+                // value of column a always equals  1
+                gen_col(1, row_per_block),
+                // for column b
+                // - for all block `B` in blocks, whose index is `i`
+                // - for all row in `B`, value of column b  equals `i`
+                gen_col(idx as u64, row_per_block),
+            ])
         })
         .collect::<Vec<_>>();
 

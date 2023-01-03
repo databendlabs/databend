@@ -149,7 +149,7 @@ impl Aggregator for SingleStateAggregator<true> {
             let mut builders = vec![];
             for func in &self.funcs {
                 let data_type = func.return_type()?;
-                builders.push((ColumnBuilder::with_capacity(&data_type, 1), data_type));
+                builders.push(ColumnBuilder::with_capacity(&data_type, 1));
             }
             builders
         };
@@ -170,21 +170,16 @@ impl Aggregator for SingleStateAggregator<true> {
                 }
             }
 
-            let (array, _) = aggr_values[index].borrow_mut();
+            let array = aggr_values[index].borrow_mut();
             func.merge_result(main_place, array)?;
         }
 
-        let mut num_rows = 0;
         let mut columns = Vec::with_capacity(self.funcs.len());
-        for (builder, data_type) in aggr_values {
-            num_rows = builder.len();
-            columns.push(BlockEntry {
-                data_type,
-                value: Value::Column(builder.build()),
-            });
+        for builder in aggr_values {
+            columns.push(builder.build());
         }
 
-        Ok(vec![DataBlock::new(columns, num_rows)])
+        Ok(vec![DataBlock::new_from_columns(columns)])
     }
 }
 

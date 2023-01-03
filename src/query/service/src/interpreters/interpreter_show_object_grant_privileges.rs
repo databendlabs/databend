@@ -15,13 +15,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnFrom;
+use common_expression::types::StringType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::Value;
+use common_expression::FromData;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetObjectGrantPrivilegesReq;
 use common_users::UserApiProvider;
@@ -67,30 +64,16 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
         let mut privileges: Vec<Vec<u8>> = vec![];
         let mut created_ons: Vec<Vec<u8>> = vec![];
 
-        let num_rows = resp.privileges.len();
-
         for privilege in resp.privileges {
             share_names.push(privilege.share_name.as_bytes().to_vec());
             privileges.push(privilege.privileges.to_string().as_bytes().to_vec());
             created_ons.push(privilege.grant_on.to_string().as_bytes().to_vec());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(created_ons)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(privileges)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(share_names)),
-                },
-            ],
-            num_rows,
-        )])
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(created_ons),
+            StringType::from_data(privileges),
+            StringType::from_data(share_names),
+        ])])
     }
 }

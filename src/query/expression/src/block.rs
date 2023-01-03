@@ -69,6 +69,23 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn new_from_columns(columns: Vec<Column>) -> Self {
+        assert!(!columns.is_empty());
+        let num_rows = columns[0].len();
+        debug_assert!(columns.iter().all(|c| c.len() == num_rows));
+
+        let columns = columns
+            .into_iter()
+            .map(|col| BlockEntry {
+                data_type: col.data_type(),
+                value: Value::Column(col),
+            })
+            .collect();
+
+        DataBlock::new(columns, num_rows)
+    }
+
+    #[inline]
     pub fn empty() -> Self {
         DataBlock::new(vec![], 0)
     }

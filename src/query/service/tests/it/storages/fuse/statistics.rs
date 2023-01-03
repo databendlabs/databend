@@ -18,20 +18,18 @@ use common_base::base::tokio;
 use common_expression::type_check::check;
 use common_expression::types::number::Int32Type;
 use common_expression::types::number::NumberScalar;
-use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
 use common_expression::BlockCompactThresholds;
-use common_expression::BlockEntry;
 use common_expression::Column;
-use common_expression::ColumnFrom;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
+use common_expression::FromData;
 use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Scalar;
-use common_expression::Value;
 use common_functions_v2::aggregates::eval_aggr;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
@@ -60,19 +58,10 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
-    let block = DataBlock::new(
-        vec![
-            BlockEntry {
-                value: Value::Column(Column::from_data(vec![1, 2, 3])),
-                data_type: DataType::Number(NumberDataType::Int32),
-            },
-            BlockEntry {
-                value: Value::Column(Column::from_data(vec!["aa", "aa", "bb"])),
-                data_type: DataType::String,
-            },
-        ],
-        3,
-    );
+    let block = DataBlock::new_from_columns(vec![
+        Int32Type::from_data(vec![1, 2, 3]),
+        StringType::from_data(vec!["aa", "aa", "bb"]),
+    ]);
 
     let r = gen_columns_statistics(&block, None)?;
     assert_eq!(2, r.len());
@@ -89,19 +78,10 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
 
 #[test]
 fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::Result<()> {
-    let block = DataBlock::new(
-        vec![
-            BlockEntry {
-                value: Value::Column(Column::from_data(vec![1, 2, 3])),
-                data_type: DataType::Number(NumberDataType::Int32),
-            },
-            BlockEntry {
-                value: Value::Column(Column::from_data(vec!["aa", "aa", "bb"])),
-                data_type: DataType::String,
-            },
-        ],
-        3,
-    );
+    let block = DataBlock::new_from_columns(vec![
+        Int32Type::from_data(vec![1, 2, 3]),
+        StringType::from_data(vec!["aa", "aa", "bb"]),
+    ]);
     let mut column_distinct_count = HashMap::new();
     column_distinct_count.insert(0, 3);
     column_distinct_count.insert(1, 2);
@@ -120,27 +100,16 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::R
 
 #[test]
 fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
-    let inner_data_types = vec![
-        DataType::Number(NumberDataType::Int32),
-        DataType::Number(NumberDataType::Int32),
-    ];
-
     let inner_columns = vec![
-        Column::from_data(vec![1, 2, 3]),
-        Column::from_data(vec![4, 5, 6]),
+        Int32Type::from_data(vec![1, 2, 3]),
+        Int32Type::from_data(vec![4, 5, 6]),
     ];
     let column = Column::Tuple {
         fields: inner_columns,
         len: 3,
     };
 
-    let block = DataBlock::new(
-        vec![BlockEntry {
-            value: Value::Column(column),
-            data_type: DataType::Tuple(inner_data_types),
-        }],
-        3,
-    );
+    let block = DataBlock::new_from_columns(vec![column]);
 
     let r = gen_columns_statistics(&block, None)?;
     assert_eq!(2, r.len());
@@ -267,12 +236,9 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         DataType::Number(NumberDataType::Int32),
     )]);
 
-    let entry = vec![BlockEntry {
-        data_type: Int32Type::data_type(),
-        value: Value::Column(Column::from_data(vec![1i32, 2, 3])),
-    }];
+    let columns = vec![Int32Type::from_data(vec![1i32, 2, 3])];
 
-    let blocks = DataBlock::new(entry, 3);
+    let blocks = DataBlock::new_from_columns(columns);
     let origin = Some(ClusterStatistics {
         cluster_key_id: 0,
         min: vec![Scalar::Number(NumberScalar::Int32(1))],
@@ -406,19 +372,13 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
         }
 
         // build test data block, which has only on column, of String type
-        let data_col = Column::from_data(
+        let data_col = StringType::from_data(
             rand_strings
                 .iter()
                 .map(|s| s.as_str())
                 .collect::<Vec<&str>>(),
         );
-        let block = DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::String,
-                value: Value::Column(data_col.clone()),
-            }],
-            rows,
-        );
+        let block = DataBlock::new_from_columns(vec![data_col.clone()]);
 
         let min_col = eval_aggr(
             "min",

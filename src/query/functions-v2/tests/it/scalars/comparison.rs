@@ -15,7 +15,6 @@
 use std::io::Write;
 
 use common_expression::types::*;
-use common_expression::utils::ColumnFrom;
 use common_expression::Column;
 use common_expression::FromData;
 use goldenfile::Mint;

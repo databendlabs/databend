@@ -17,15 +17,13 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::BlockEntry;
-use common_expression::Column;
+use common_expression::types::BooleanType;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_functions_v2::aggregates::AggregateFunctionFactory;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
@@ -112,44 +110,16 @@ impl AsyncSystemTable for FunctionsTable {
 
         let examples = (0..names.len()).map(|_| "").collect::<Vec<&str>>();
 
-        let rows_len = names.len();
-        Ok(DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(names)),
-                },
-                BlockEntry {
-                    data_type: DataType::Boolean,
-                    value: Value::Column(Column::from_data(is_builtin)),
-                },
-                BlockEntry {
-                    data_type: DataType::Boolean,
-                    value: Value::Column(Column::from_data(is_aggregate)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(definitions)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(categorys)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(descriptions)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(syntaxs)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(examples)),
-                },
-            ],
-            rows_len,
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            BooleanType::from_data(is_builtin),
+            BooleanType::from_data(is_aggregate),
+            StringType::from_data(definitions),
+            StringType::from_data(categorys),
+            StringType::from_data(descriptions),
+            StringType::from_data(syntaxs),
+            StringType::from_data(examples),
+        ]))
     }
 }
 

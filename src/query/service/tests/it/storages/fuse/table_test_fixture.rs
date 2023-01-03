@@ -23,21 +23,20 @@ use common_config::GlobalConfig;
 use common_exception::Result;
 use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use common_expression::infer_table_schema;
+use common_expression::types::number::Int32Type;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::BlockEntry;
 use common_expression::Column;
-use common_expression::ColumnFrom;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::FromData;
 use common_expression::SendableDataBlockStream;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_meta_app::schema::DatabaseMeta;
 use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlanV2;
@@ -247,17 +246,17 @@ impl TestFixture {
             (0..num_of_block)
                 .into_iter()
                 .map(|idx| {
-                    let column0 = Column::from_data(
+                    let column0 = Int32Type::from_data(
                         std::iter::repeat_with(|| idx as i32 + start)
                             .take(rows_per_block)
                             .collect::<Vec<i32>>(),
                     );
-                    let column1 = Column::from_data(
+                    let column1 = Int32Type::from_data(
                         std::iter::repeat_with(|| (idx as i32 + start) * 2)
                             .take(rows_per_block)
                             .collect::<Vec<i32>>(),
                     );
-                    let column2 = Column::from_data(
+                    let column2 = Int32Type::from_data(
                         std::iter::repeat_with(|| (idx as i32 + start) * 3)
                             .take(rows_per_block)
                             .collect::<Vec<i32>>(),
@@ -268,21 +267,9 @@ impl TestFixture {
                         len: rows_per_block,
                     };
 
-                    let columns = vec![
-                        BlockEntry {
-                            data_type: DataType::Number(NumberDataType::Int32),
-                            value: Value::Column(column0),
-                        },
-                        BlockEntry {
-                            data_type: DataType::Tuple(vec![
-                                DataType::Number(NumberDataType::Int32),
-                                DataType::Number(NumberDataType::Int32),
-                            ]),
-                            value: Value::Column(tuple_column),
-                        },
-                    ];
+                    let columns = vec![column0, tuple_column];
 
-                    Ok(DataBlock::new(columns, rows_per_block))
+                    Ok(DataBlock::new_from_columns(columns))
                 })
                 .collect(),
         )

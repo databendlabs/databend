@@ -15,13 +15,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnFrom;
+use common_expression::types::StringType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::Value;
+use common_expression::FromData;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::ShareGrantObjectName;
@@ -85,24 +82,10 @@ impl Interpreter for DescShareInterpreter {
             shared_ons.push(entry.grant_on.to_string().as_bytes().to_vec());
         }
 
-        let num_rows = resp.objects.len();
-
-        PipelineBuildResult::from_blocks(vec![DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(kinds)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(names)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(shared_ons)),
-                },
-            ],
-            num_rows,
-        )])
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(kinds),
+            StringType::from_data(names),
+            StringType::from_data(shared_ons),
+        ])])
     }
 }

@@ -554,17 +554,10 @@ impl ValueSource {
 
         let columns = desers
             .iter_mut()
-            .zip(self.schema.fields())
-            .map(|(deser, field)| {
-                let col = deser.finish_to_column();
-                BlockEntry {
-                    data_type: field.data_type().clone(),
-                    value: Value::Column(col),
-                }
-            })
+            .map(|deser| deser.finish_to_column())
             .collect::<Vec<_>>();
 
-        Ok(DataBlock::new(columns, rows))
+        Ok(DataBlock::new_from_columns(columns))
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)

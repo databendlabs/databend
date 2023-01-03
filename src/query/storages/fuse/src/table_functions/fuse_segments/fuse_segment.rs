@@ -16,17 +16,15 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_expression::types::DataType;
+use common_expression::types::number::UInt64Type;
 use common_expression::types::NumberDataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnFrom;
+use common_expression::types::StringType;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_storages_table_meta::meta::Location;
 use futures_util::TryStreamExt;
 
@@ -104,35 +102,14 @@ impl<'a> FuseSegment<'a> {
             uncompressed.push(segment.summary.uncompressed_byte_size);
             file_location.push(segment_locations[idx].0.clone().into_bytes());
         }
-        Ok(DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(file_location)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(format_versions)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(block_count)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(row_count)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(uncompressed)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(compressed)),
-                },
-            ],
-            len,
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(file_location),
+            UInt64Type::from_data(format_versions),
+            UInt64Type::from_data(block_count),
+            UInt64Type::from_data(row_count),
+            UInt64Type::from_data(uncompressed),
+            UInt64Type::from_data(compressed),
+        ]))
     }
 
     pub fn schema() -> Arc<TableSchema> {

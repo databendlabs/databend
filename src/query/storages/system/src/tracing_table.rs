@@ -29,14 +29,12 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::BlockEntry;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -183,14 +181,8 @@ impl SyncSource for TracingSource {
                 let mut entry_column = ColumnBuilder::with_capacity(&DataType::String, max_rows);
                 for (index, line) in buffer.lines().enumerate() {
                     if index != 0 && index % max_rows == 0 {
-                        let rows_len = entry_column.len();
-                        self.data_blocks.push_back(DataBlock::new(
-                            vec![BlockEntry {
-                                data_type: DataType::String,
-                                value: Value::Column(entry_column.build()),
-                            }],
-                            rows_len,
-                        ));
+                        self.data_blocks
+                            .push_back(DataBlock::new_from_columns(vec![entry_column.build()]));
 
                         entry_column = ColumnBuilder::with_capacity(&DataType::String, max_rows);
                     }
@@ -198,14 +190,8 @@ impl SyncSource for TracingSource {
                 }
 
                 if entry_column.len() > 0 {
-                    let rows_len = entry_column.len();
-                    self.data_blocks.push_back(DataBlock::new(
-                        vec![BlockEntry {
-                            data_type: DataType::String,
-                            value: Value::Column(entry_column.build()),
-                        }],
-                        rows_len,
-                    ));
+                    self.data_blocks
+                        .push_back(DataBlock::new_from_columns(vec![entry_column.build()]));
                 }
             }
         }

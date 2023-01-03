@@ -21,16 +21,13 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
+use common_expression::types::number::UInt8Type;
 use common_expression::types::NumberDataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::BlockEntry;
-use common_expression::Column;
+use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -51,13 +48,9 @@ impl SyncSystemTable for OneTable {
     }
 
     fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        Ok(DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::Number(NumberDataType::UInt8),
-                value: Value::Column(Column::from_data(vec![1u8])),
-            }],
-            1,
-        ))
+        Ok(DataBlock::new_from_columns(vec![UInt8Type::from_data(
+            vec![1u8],
+        )]))
     }
 
     fn get_partitions(

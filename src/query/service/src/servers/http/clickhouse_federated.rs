@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::DataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::BlockEntry;
-use common_expression::Column;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -41,13 +38,9 @@ impl ClickHouseFederated {
     // |value|
     fn select_function_block(name: &str, value: &str) -> Option<(TableSchemaRef, DataBlock)> {
         let schema = TableSchemaRefExt::create(vec![TableField::new(name, TableDataType::String)]);
-        let block = DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::String,
-                value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-            }],
-            1,
-        );
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![
+            value.as_bytes().to_vec(),
+        ])]);
         Some((schema, block))
     }
 

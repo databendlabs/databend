@@ -21,11 +21,9 @@ use common_base::runtime::ThreadPool;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockEntry;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
-use common_expression::Value;
 use common_functions_v2::aggregates::StateAddr;
 use common_functions_v2::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -237,19 +235,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
 
             let columns = group_columns_builder.finish()?;
-            let mut num_rows = 0;
-            let columns = columns
-                .into_iter()
-                .map(|col| {
-                    num_rows = col.len();
-                    BlockEntry {
-                        data_type: col.data_type(),
-                        value: Value::Column(col),
-                    }
-                })
-                .collect();
 
-            Ok(vec![DataBlock::new(columns, num_rows)])
+            Ok(vec![DataBlock::new_from_columns(columns)])
         } else {
             let aggregate_functions = &self.params.aggregate_functions;
             let offsets_aggregate_states = &self.params.offsets_aggregate_states;
@@ -259,7 +246,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 for aggregate_function in aggregate_functions {
                     let data_type = aggregate_function.return_type()?;
                     let builder = ColumnBuilder::with_capacity(&data_type, self.hash_table.len());
-                    values.push((builder, data_type))
+                    values.push(builder)
                 }
                 values
             };
@@ -274,7 +261,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                     })
                     .collect();
 
-                let (builder, _) = aggregates_column_builder[idx].borrow_mut();
+                let builder = aggregates_column_builder[idx].borrow_mut();
                 aggregate_function.batch_merge_result(places, builder)?;
             }
 
@@ -283,29 +270,14 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
 
             // Build final state block.
-            let mut num_rows = 0;
             let mut columns = aggregates_column_builder
                 .into_iter()
-                .map(|(builder, ty)| {
-                    let col = builder.build();
-                    num_rows = col.len();
-                    BlockEntry {
-                        data_type: ty,
-                        value: Value::Column(col),
-                    }
-                })
+                .map(|builder| builder.build())
                 .collect::<Vec<_>>();
 
             let group_columns = group_columns_builder.finish()?;
-            let group_columns = group_columns
-                .into_iter()
-                .map(|col| BlockEntry {
-                    data_type: col.data_type(),
-                    value: Value::Column(col),
-                })
-                .collect::<Vec<_>>();
             columns.extend_from_slice(&group_columns);
-            Ok(vec![DataBlock::new(columns, num_rows)])
+            Ok(vec![DataBlock::new_from_columns(columns)])
         }
     }
 

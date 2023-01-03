@@ -27,11 +27,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::BlockEntry;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -186,14 +184,10 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         for event in log_queue.data.read().event_queue.iter().flatten() {
             event.fill_to_data_block(&mut mutable_columns)?;
         }
-        let row_len = mutable_columns.first().map_or(0, |c| c.len());
 
         let mut columns = Vec::with_capacity(mutable_columns.len());
-        for (mutable_column, data_type) in mutable_columns.into_iter().zip(data_types.iter()) {
-            columns.push(BlockEntry {
-                data_type: data_type.clone(),
-                value: Value::Column(mutable_column.build()),
-            });
+        for mutable_column in mutable_columns.into_iter() {
+            columns.push(mutable_column.build());
         }
 
         // Add source pipe.
@@ -202,7 +196,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
                 SystemLogSource::<Event>::create(
                     ctx.clone(),
                     output,
-                    DataBlock::new(columns.clone(), row_len),
+                    DataBlock::new_from_columns(columns.clone()),
                 )
             },
             1,

@@ -14,12 +14,9 @@
 
 use std::io::Write;
 
-use common_expression::types::DataType;
 use common_expression::types::Float64Type;
-use common_expression::types::NumberDataType;
 use common_expression::types::UInt16Type;
-use common_expression::utils::ColumnFrom;
-use common_expression::Column;
+use common_expression::types::UInt8Type;
 use common_expression::FromData;
 use goldenfile::Mint;
 
@@ -85,7 +82,7 @@ fn test_ignore(file: &mut impl Write) {
 fn test_assume_not_null(file: &mut impl Write) {
     run_ast(file, "assume_not_null(a2)", &[(
         "a2",
-        Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
+        UInt8Type::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
     )]);
 }
 

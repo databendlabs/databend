@@ -16,13 +16,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnFrom;
+use common_expression::types::StringType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::Value;
+use common_expression::FromData;
 use common_sql::plans::DescribeTablePlan;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
@@ -104,31 +101,12 @@ impl Interpreter for DescribeTableInterpreter {
             extras.push("".to_string().as_bytes().to_vec());
         }
 
-        let num_rows = schema.fields().len();
-        PipelineBuildResult::from_blocks(vec![DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(names)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(types)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(nulls)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(default_exprs)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(extras)),
-                },
-            ],
-            num_rows,
-        )])
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            StringType::from_data(types),
+            StringType::from_data(nulls),
+            StringType::from_data(default_exprs),
+            StringType::from_data(extras),
+        ])])
     }
 }

@@ -13,9 +13,12 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::types::number::Float32Type;
+use common_expression::types::number::Int32Type;
+use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
-use common_expression::Column;
-use common_expression::ColumnFrom;
+use common_expression::types::StringType;
+use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use pretty_assertions::assert_eq;
@@ -56,8 +59,8 @@ fn test_null() -> Result<()> {
             ),
         ],
         vec![
-            Column::from_data(vec![Some(1i32), None, Some(3)]),
-            Column::from_data(vec![None, Some(2i32), None]),
+            NullableType::<Int32Type>::from_data(vec![Some(1i32), None, Some(3)]),
+            NullableType::<Int32Type>::from_data(vec![None, Some(2i32), None]),
         ],
     );
 
@@ -84,8 +87,8 @@ fn test_denormal() -> Result<()> {
             TableField::new("c2", TableDataType::Number(NumberDataType::Float32)),
         ],
         vec![
-            Column::from_data(vec![1f32, f32::NAN]),
-            Column::from_data(vec![f32::INFINITY, f32::NEG_INFINITY]),
+            Float32Type::from_data(vec![1f32, f32::NAN]),
+            Float32Type::from_data(vec![f32::INFINITY, f32::NEG_INFINITY]),
         ],
     );
 
@@ -119,7 +122,7 @@ fn test_denormal() -> Result<()> {
 fn test_string_escape() -> Result<()> {
     let (schema, block) =
         gen_schema_and_block(vec![TableField::new("c1", TableDataType::String)], vec![
-            Column::from_data(vec!["\0"]),
+            StringType::from_data(vec!["\0"]),
         ]);
 
     {

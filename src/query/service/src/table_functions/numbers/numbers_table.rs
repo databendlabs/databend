@@ -28,17 +28,14 @@ use common_catalog::table::TableStatistics;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
-use common_expression::types::DataType;
+use common_expression::types::number::UInt64Type;
 use common_expression::types::NumberDataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::BlockEntry;
-use common_expression::Column;
+use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -256,13 +253,9 @@ impl SyncSource for NumbersSource {
                 let column_data = (self.begin..self.begin + step).collect::<Vec<_>>();
 
                 self.begin += step;
-                Ok(Some(DataBlock::new(
-                    vec![BlockEntry {
-                        data_type: DataType::Number(NumberDataType::UInt64),
-                        value: Value::Column(Column::from_data(column_data)),
-                    }],
-                    step as usize,
-                )))
+                Ok(Some(DataBlock::new_from_columns(vec![
+                    UInt64Type::from_data(column_data),
+                ])))
             }
         }
     }

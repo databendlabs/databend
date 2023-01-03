@@ -13,36 +13,27 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_expression::from_date_data;
 use common_expression::types::nullable::NullableColumn;
+use common_expression::types::number::Float64Type;
+use common_expression::types::number::Int32Type;
+use common_expression::types::BooleanType;
+use common_expression::types::DateType;
 use common_expression::types::NumberDataType;
-use common_expression::BlockEntry;
+use common_expression::types::StringType;
 use common_expression::Column;
-use common_expression::ColumnFrom;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 
 pub fn gen_schema_and_block(
     fields: Vec<TableField>,
     columns: Vec<Column>,
 ) -> (TableSchemaRef, DataBlock) {
     assert!(!columns.is_empty() && columns.len() == fields.len());
-
-    let num_rows = columns[0].len();
-    let block_entries = fields
-        .iter()
-        .zip(columns.into_iter())
-        .map(|(f, c)| BlockEntry {
-            data_type: f.data_type().into(),
-            value: Value::Column(c),
-        })
-        .collect();
-
-    let block = DataBlock::new(block_entries, num_rows);
+    let block = DataBlock::new_from_columns(columns);
     (TableSchemaRefExt::create(fields), block)
 }
 
@@ -50,23 +41,23 @@ pub fn get_simple_block(is_nullable: bool) -> (TableSchemaRef, DataBlock) {
     let columns = vec![
         (
             TableDataType::Number(NumberDataType::Int32),
-            Column::from_data(vec![1i32, 2, 3]),
+            Int32Type::from_data(vec![1i32, 2, 3]),
         ),
         (
             TableDataType::String,
-            Column::from_data(vec!["a", "b\"", "c'"]),
+            StringType::from_data(vec!["a", "b\"", "c'"]),
         ),
         (
             TableDataType::Boolean,
-            Column::from_data(vec![true, true, false]),
+            BooleanType::from_data(vec![true, true, false]),
         ),
         (
             TableDataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![1.1f64, 2.2, f64::NAN]),
+            Float64Type::from_data(vec![1.1f64, 2.2, f64::NAN]),
         ),
         (
             TableDataType::Date,
-            from_date_data(vec![1_i32, 2_i32, 3_i32]),
+            DateType::from_data(vec![1_i32, 2_i32, 3_i32]),
         ),
     ];
 

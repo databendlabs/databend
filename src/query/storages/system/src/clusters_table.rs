@@ -20,14 +20,12 @@ use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::BlockEntry;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -66,27 +64,12 @@ impl SyncSystemTable for ClustersTable {
             versions.push(Scalar::String(cluster_node.binary_version.as_bytes().to_vec()).as_ref());
         }
 
-        Ok(DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(names.build()),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(addresses.build()),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt16),
-                    value: Value::Column(addresses_port.build()),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(versions.build()),
-                },
-            ],
-            cluster_nodes.len(),
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            names.build(),
+            addresses.build(),
+            addresses_port.build(),
+            versions.build(),
+        ]))
     }
 }
 

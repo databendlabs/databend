@@ -91,19 +91,12 @@ impl JoinHashTable {
                 boolean_bit_map.push(false);
             }
         }
-        let num_rows = validity.len();
         let boolean_column = Column::Boolean(boolean_bit_map.into());
         let marker_column = Column::Nullable(Box::new(NullableColumn {
             column: boolean_column,
             validity: validity.into(),
         }));
-        Ok(DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::Boolean.wrap_nullable(),
-                value: Value::Column(marker_column),
-            }],
-            num_rows,
-        ))
+        Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
     pub(crate) fn init_markers(cols: &[(Column, DataType)], num_rows: usize) -> Vec<MarkerKind> {

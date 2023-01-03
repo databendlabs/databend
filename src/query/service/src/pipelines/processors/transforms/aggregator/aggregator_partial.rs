@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
@@ -29,7 +28,6 @@ use common_expression::HashMethodKeysU512;
 use common_expression::HashMethodKeysU64;
 use common_expression::HashMethodKeysU8;
 use common_expression::HashMethodSerializer;
-use common_expression::Value;
 use common_functions_v2::aggregates::StateAddr;
 use common_functions_v2::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -218,19 +216,12 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
         let mut columns = Vec::with_capacity(state_builders.len());
         for builder in state_builders.into_iter() {
-            columns.push(BlockEntry {
-                data_type: DataType::String,
-                value: Value::Column(Column::String(builder.build())),
-            });
+            columns.push(Column::String(builder.build()));
         }
 
         let group_key_col = group_key_builder.finish();
-        let num_rows = group_key_col.len();
-        columns.push(BlockEntry {
-            data_type: group_key_col.data_type(),
-            value: Value::Column(group_key_col),
-        });
-        Ok(vec![DataBlock::new(columns, num_rows)])
+        columns.push(group_key_col);
+        Ok(vec![DataBlock::new_from_columns(columns)])
     }
 }
 
@@ -299,17 +290,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         }
 
         let column = keys_column_builder.finish();
-        let num_rows = column.len();
 
         self.drop_states();
 
-        Ok(vec![DataBlock::new(
-            vec![BlockEntry {
-                data_type: column.data_type(),
-                value: Value::Column(column),
-            }],
-            num_rows,
-        )])
+        Ok(vec![DataBlock::new_from_columns(vec![column])])
     }
 }
 

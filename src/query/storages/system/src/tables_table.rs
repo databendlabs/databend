@@ -19,17 +19,16 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::BlockEntry;
-use common_expression::Column;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -116,57 +115,17 @@ where TablesTable<T>: HistoryAware
             }
         }
 
-        let mut num_rows: Vec<u64> = Vec::new();
-        let mut num_rows_valids: Vec<bool> = Vec::new();
-        let mut data_size: Vec<u64> = Vec::new();
-        let mut data_size_valids: Vec<bool> = Vec::new();
-        let mut data_compressed_size: Vec<u64> = Vec::new();
-        let mut data_compressed_size_valids: Vec<bool> = Vec::new();
-        let mut index_size: Vec<u64> = Vec::new();
-        let mut index_size_valids: Vec<bool> = Vec::new();
+        let mut num_rows: Vec<Option<u64>> = Vec::new();
+        let mut data_size: Vec<Option<u64>> = Vec::new();
+        let mut data_compressed_size: Vec<Option<u64>> = Vec::new();
+        let mut index_size: Vec<Option<u64>> = Vec::new();
 
         for tbl in &database_tables {
             let stats = tbl.table_statistics()?;
-            match stats.as_ref().and_then(|v| v.num_rows) {
-                Some(v) => {
-                    num_rows.push(v);
-                    num_rows_valids.push(true);
-                }
-                None => {
-                    num_rows.push(0);
-                    num_rows_valids.push(false);
-                }
-            }
-            match stats.as_ref().and_then(|v| v.data_size) {
-                Some(v) => {
-                    data_size.push(v);
-                    data_size_valids.push(true);
-                }
-                None => {
-                    data_size.push(0);
-                    data_size_valids.push(false);
-                }
-            }
-            match stats.as_ref().and_then(|v| v.data_size_compressed) {
-                Some(v) => {
-                    data_compressed_size.push(v);
-                    data_compressed_size_valids.push(true);
-                }
-                None => {
-                    data_compressed_size.push(0);
-                    data_compressed_size_valids.push(false);
-                }
-            }
-            match stats.as_ref().and_then(|v| v.index_size) {
-                Some(v) => {
-                    index_size.push(v);
-                    index_size_valids.push(true);
-                }
-                None => {
-                    index_size.push(0);
-                    index_size_valids.push(false);
-                }
-            }
+            num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
+            data_size.push(stats.as_ref().and_then(|v| v.data_size));
+            data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
+            index_size.push(stats.as_ref().and_then(|v| v.index_size));
         }
 
         let names: Vec<Vec<u8>> = database_tables
@@ -211,76 +170,19 @@ where TablesTable<T>: HistoryAware
             .collect();
         let cluster_bys: Vec<Vec<u8>> = cluster_bys.iter().map(|s| s.as_bytes().to_vec()).collect();
 
-        let rows_len = databases.len();
-        Ok(DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(catalogs)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(databases)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(names)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(engines)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(cluster_bys)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(created_ons)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(dropped_ons)),
-                },
-                BlockEntry {
-                    data_type: DataType::Nullable(Box::new(DataType::Number(
-                        NumberDataType::UInt64,
-                    ))),
-                    value: Value::Column(Column::from_data_with_validity(
-                        num_rows,
-                        num_rows_valids,
-                    )),
-                },
-                BlockEntry {
-                    data_type: DataType::Nullable(Box::new(DataType::Number(
-                        NumberDataType::UInt64,
-                    ))),
-                    value: Value::Column(Column::from_data_with_validity(
-                        data_size,
-                        data_size_valids,
-                    )),
-                },
-                BlockEntry {
-                    data_type: DataType::Nullable(Box::new(DataType::Number(
-                        NumberDataType::UInt64,
-                    ))),
-                    value: Value::Column(Column::from_data_with_validity(
-                        data_compressed_size,
-                        data_compressed_size_valids,
-                    )),
-                },
-                BlockEntry {
-                    data_type: DataType::Nullable(Box::new(DataType::Number(
-                        NumberDataType::UInt64,
-                    ))),
-                    value: Value::Column(Column::from_data_with_validity(
-                        index_size,
-                        index_size_valids,
-                    )),
-                },
-            ],
-            rows_len,
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(catalogs),
+            StringType::from_data(databases),
+            StringType::from_data(names),
+            StringType::from_data(engines),
+            StringType::from_data(cluster_bys),
+            StringType::from_data(created_ons),
+            StringType::from_data(dropped_ons),
+            NullableType::<UInt64Type>::from_data(num_rows),
+            NullableType::<UInt64Type>::from_data(data_size),
+            NullableType::<UInt64Type>::from_data(data_compressed_size),
+            NullableType::<UInt64Type>::from_data(index_size),
+        ]))
     }
 }
 

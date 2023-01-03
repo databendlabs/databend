@@ -18,15 +18,12 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::BlockEntry;
-use common_expression::Column;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -56,20 +53,10 @@ impl AsyncSystemTable for EnginesTable {
             engine_comment.push(descriptor.comment.as_bytes().to_vec());
         }
 
-        let rows_len = table_engine_descriptors.len();
-        Ok(DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(engine_name)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(engine_comment)),
-                },
-            ],
-            rows_len,
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(engine_name),
+            StringType::from_data(engine_comment),
+        ]))
     }
 }
 

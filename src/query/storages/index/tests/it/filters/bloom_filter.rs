@@ -17,15 +17,15 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::type_check::check_function;
-use common_expression::types::number::NumberColumn;
 use common_expression::types::number::NumberScalar;
+use common_expression::types::number::UInt8Type;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
 use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnFrom;
 use common_expression::DataBlock;
 use common_expression::Expr;
+use common_expression::FromData;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -56,19 +56,10 @@ fn test_bloom_filter() -> Result<()> {
             ],
             2,
         ),
-        DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt8),
-                    value: Value::Column(Column::Number(NumberColumn::UInt8(vec![2, 3].into()))),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(vec!["b", "c"])),
-                },
-            ],
-            2,
-        ),
+        DataBlock::new_from_columns(vec![
+            UInt8Type::from_data(vec![2, 3]),
+            StringType::from_data(vec!["b", "c"]),
+        ]),
     ];
     let chunks_ref = chunks.iter().collect::<Vec<_>>();
 

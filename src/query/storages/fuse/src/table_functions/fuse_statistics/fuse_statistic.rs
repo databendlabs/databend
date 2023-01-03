@@ -15,16 +15,13 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnFrom;
+use common_expression::types::StringType;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshotStatistics;
 
@@ -68,15 +65,10 @@ impl<'a> FuseStatistic<'a> {
             }
             col_ndvs.push(ndvs.into_bytes());
         };
-        let num_rows = col_ndvs.len();
 
-        Ok(DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::String,
-                value: Value::Column(Column::from_data(col_ndvs)),
-            }],
-            num_rows,
-        ))
+        Ok(DataBlock::new_from_columns(vec![StringType::from_data(
+            col_ndvs,
+        )]))
     }
 
     pub fn schema() -> Arc<TableSchema> {

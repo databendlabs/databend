@@ -18,16 +18,15 @@ use std::vec;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::BlockEntry;
-use common_expression::Column;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -58,10 +57,8 @@ impl AsyncSystemTable for StagesTable {
         let mut copy_options: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut file_format_options: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut comment: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
-        let mut number_of_files: Vec<u64> = Vec::with_capacity(stages.len());
-        let mut number_of_files_valids: Vec<bool> = Vec::with_capacity(stages.len());
-        let mut creator: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
-        let mut creator_valids: Vec<bool> = Vec::with_capacity(stages.len());
+        let mut number_of_files: Vec<Option<u64>> = Vec::with_capacity(stages.len());
+        let mut creator: Vec<Option<Vec<u8>>> = Vec::with_capacity(stages.len());
         for stage in stages.into_iter() {
             name.push(stage.stage_name.clone().into_bytes());
             stage_type.push(stage.stage_type.clone().to_string().into_bytes());
@@ -71,70 +68,33 @@ impl AsyncSystemTable for StagesTable {
             // TODO(xuanwo): we will remove this line.
             match stage.stage_type {
                 StageType::LegacyInternal | StageType::Internal | StageType::User => {
-                    number_of_files.push(stage.number_of_files);
-                    number_of_files_valids.push(true);
+                    number_of_files.push(Some(stage.number_of_files));
                 }
                 StageType::External => {
-                    number_of_files.push(0);
-                    number_of_files_valids.push(false);
+                    number_of_files.push(None);
                 }
             };
             match stage.creator {
                 Some(c) => {
-                    creator.push(c.to_string().into_bytes().to_vec());
-                    creator_valids.push(true);
+                    creator.push(Some(c.to_string().into_bytes().to_vec()));
                 }
                 None => {
-                    creator.push(vec![]);
-                    creator_valids.push(false);
+                    creator.push(None);
                 }
             }
             comment.push(stage.comment.clone().into_bytes());
         }
 
-        let rows_len = name.len();
-        Ok(DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(name)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(stage_type)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(stage_params)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(copy_options)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(file_format_options)),
-                },
-                BlockEntry {
-                    data_type: DataType::Nullable(Box::new(DataType::Number(
-                        NumberDataType::UInt64,
-                    ))),
-                    value: Value::Column(Column::from_data_with_validity(
-                        number_of_files,
-                        number_of_files_valids,
-                    )),
-                },
-                BlockEntry {
-                    data_type: DataType::Nullable(Box::new(DataType::String)),
-                    value: Value::Column(Column::from_data_with_validity(creator, creator_valids)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(comment)),
-                },
-            ],
-            rows_len,
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(name),
+            StringType::from_data(stage_type),
+            StringType::from_data(stage_params),
+            StringType::from_data(copy_options),
+            StringType::from_data(file_format_options),
+            NullableType::<UInt64Type>::from_data(number_of_files),
+            NullableType::<StringType>::from_data(creator),
+            StringType::from_data(comment),
+        ]))
     }
 }
 

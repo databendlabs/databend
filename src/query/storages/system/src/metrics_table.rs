@@ -19,15 +19,12 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::BlockEntry;
-use common_expression::Column;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -58,7 +55,6 @@ impl SyncSystemTable for MetricsTable {
         let mut labels: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         let mut kinds: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         let mut values: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
-        let rows_len = samples.len();
         for sample in samples.into_iter() {
             metrics.push(sample.name.clone().into_bytes());
             kinds.push(sample.kind.clone().into_bytes());
@@ -66,27 +62,12 @@ impl SyncSystemTable for MetricsTable {
             values.push(self.display_sample_value(&sample.value)?.into_bytes());
         }
 
-        Ok(DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(metrics)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(kinds)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(labels)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(values)),
-                },
-            ],
-            rows_len,
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(metrics),
+            StringType::from_data(kinds),
+            StringType::from_data(labels),
+            StringType::from_data(values),
+        ]))
     }
 
     fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {

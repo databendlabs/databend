@@ -14,17 +14,19 @@
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
-use common_expression::from_date_data;
 use common_expression::types::nullable::NullableColumn;
+use common_expression::types::number::Float64Type;
+use common_expression::types::number::Int32Type;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
+use common_expression::types::DateType;
 use common_expression::types::NumberDataType;
-use common_expression::BlockEntry;
+use common_expression::types::StringType;
 use common_expression::Column;
-use common_expression::ColumnFrom;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::Value;
+use common_expression::FromData;
 use common_io::prelude::FormatSettings;
 use databend_query::servers::http::v1::json_block::JsonBlock;
 use pretty_assertions::assert_eq;
@@ -56,11 +58,11 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     };
 
     let mut columns = vec![
-        Column::from_data(vec![1, 2, 3]),
-        Column::from_data(vec!["a", "b", "c"]),
-        Column::from_data(vec![true, true, false]),
-        Column::from_data(vec![1.1, 2.2, 3.3]),
-        from_date_data(vec![1_i32, 2_i32, 3_i32]),
+        Int32Type::from_data(vec![1, 2, 3]),
+        StringType::from_data(vec!["a", "b", "c"]),
+        BooleanType::from_data(vec![true, true, false]),
+        Float64Type::from_data(vec![1.1, 2.2, 3.3]),
+        DateType::from_data(vec![1_i32, 2_i32, 3_i32]),
     ];
 
     if is_nullable {
@@ -78,17 +80,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
             .collect();
     }
 
-    let rows = 3;
-    let columns = columns
-        .iter()
-        .zip(schema.fields())
-        .map(|(c, f)| BlockEntry {
-            data_type: f.data_type().clone(),
-            value: Value::Column(c.clone()),
-        })
-        .collect();
-
-    let block = DataBlock::new(columns, rows);
+    let block = DataBlock::new_from_columns(columns);
 
     let format = FormatSettings::default();
     let json_block = JsonBlock::new(schema, &block, &format)?;

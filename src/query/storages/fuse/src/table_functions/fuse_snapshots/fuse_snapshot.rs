@@ -15,18 +15,17 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::from_nullable_timestamp_data;
-use common_expression::types::DataType;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
-use common_expression::ColumnFrom;
+use common_expression::types::StringType;
+use common_expression::types::TimestampType;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 use common_storages_table_meta::meta::TableSnapshotLite;
 
 use crate::io::ListSnapshotLiteOption;
@@ -139,55 +138,19 @@ impl<'a> FuseSnapshot<'a> {
             current_snapshot_version = ver;
         }
 
-        Ok(DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(snapshot_ids)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(snapshot_locations)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(format_versions)),
-                },
-                BlockEntry {
-                    data_type: DataType::String.wrap_nullable(),
-                    value: Value::Column(Column::from_data(prev_snapshot_ids)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(segment_count)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(block_count)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(row_count)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(uncompressed)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(compressed)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::from_data(index_size)),
-                },
-                BlockEntry {
-                    data_type: DataType::Timestamp.wrap_nullable(),
-                    value: Value::Column(from_nullable_timestamp_data(timestamps)),
-                },
-            ],
-            len,
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(snapshot_ids),
+            StringType::from_data(snapshot_locations),
+            UInt64Type::from_data(format_versions),
+            NullableType::<StringType>::from_data(prev_snapshot_ids),
+            UInt64Type::from_data(segment_count),
+            UInt64Type::from_data(block_count),
+            UInt64Type::from_data(row_count),
+            UInt64Type::from_data(uncompressed),
+            UInt64Type::from_data(compressed),
+            UInt64Type::from_data(index_size),
+            NullableType::<TimestampType>::from_data(timestamps),
+        ]))
     }
 
     pub fn schema() -> Arc<TableSchema> {

@@ -16,10 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_config::DATABEND_COMMIT_VERSION;
-use common_expression::types::DataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::BlockEntry;
-use common_expression::Column;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -27,7 +25,6 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
 
 use crate::servers::federated_helper::FederatedHelper;
 use crate::servers::federated_helper::LazyBlockFunc;
@@ -56,13 +53,9 @@ impl MySQLFederated {
             &format!("@@{}", name),
             TableDataType::String,
         )]);
-        let block = DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::String,
-                value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-            }],
-            1,
-        );
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![
+            value.as_bytes().to_vec(),
+        ])]);
         Some((schema, block))
     }
 
@@ -72,13 +65,9 @@ impl MySQLFederated {
     // |value|
     fn select_function_block(name: &str, value: &str) -> Option<(TableSchemaRef, DataBlock)> {
         let schema = TableSchemaRefExt::create(vec![TableField::new(name, TableDataType::String)]);
-        let block = DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::String,
-                value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-            }],
-            1,
-        );
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![
+            value.as_bytes().to_vec(),
+        ])]);
         Some((schema, block))
     }
 
@@ -91,19 +80,10 @@ impl MySQLFederated {
             TableField::new("Variable_name", TableDataType::String),
             TableField::new("Value", TableDataType::String),
         ]);
-        let block = DataBlock::new(
-            vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(vec![name.as_bytes().to_vec()])),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                },
-            ],
-            1,
-        );
+        let block = DataBlock::new_from_columns(vec![
+            StringType::from_data(vec![name.as_bytes().to_vec()]),
+            StringType::from_data(vec![value.as_bytes().to_vec()]),
+        ]);
         Some((schema, block))
     }
 
@@ -145,10 +125,7 @@ impl MySQLFederated {
                     // var is 'cc'.
                     let var = vars_as[0];
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push(BlockEntry {
-                        value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                        data_type: DataType::String,
-                    });
+                    values.push(StringType::from_data(vec![value.as_bytes().to_vec()]));
                 } else {
                     // @@aa
                     // var is 'aa'
@@ -158,16 +135,13 @@ impl MySQLFederated {
                     ));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push(BlockEntry {
-                        value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                        data_type: DataType::String,
-                    });
+                    values.push(StringType::from_data(vec![value.as_bytes().to_vec()]));
                 }
             }
         }
 
         let schema = TableSchemaRefExt::create(fields);
-        let block = DataBlock::new(values, 1);
+        let block = DataBlock::new_from_columns(values);
         Some((schema, block))
     }
 

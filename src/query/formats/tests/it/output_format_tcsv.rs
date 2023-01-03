@@ -15,9 +15,10 @@
 use std::collections::BTreeMap;
 
 use common_exception::Result;
+use common_expression::types::number::Int32Type;
+use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
-use common_expression::Column;
-use common_expression::ColumnFrom;
+use common_expression::FromData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_formats::FileFormatOptionsExt;
@@ -93,8 +94,8 @@ fn test_null() -> Result<()> {
             ),
         ],
         vec![
-            Column::from_data(vec![Some(1i32), None, Some(3)]),
-            Column::from_data(vec![None, Some(2i32), None]),
+            NullableType::<Int32Type>::from_data(vec![Some(1i32), None, Some(3)]),
+            NullableType::<Int32Type>::from_data(vec![None, Some(2i32), None]),
         ],
     );
 

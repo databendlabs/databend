@@ -15,14 +15,10 @@
 use common_exception::Result;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::Int64Type;
-use common_expression::types::ArgType;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
 use common_expression::Column;
-use common_expression::ColumnFrom;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::Scalar;
-use common_expression::Value;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 
 fn gen_sample_block() -> (DataBlock, Vec<Column>) {
@@ -40,16 +36,12 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>) {
     //      g: f64,
     //   }
 
-    let col_b_type = DataType::Tuple(vec![Int64Type::data_type(), Float64Type::data_type()]);
-
-    let col_a_type = DataType::Tuple(vec![col_b_type, Float64Type::data_type()]);
-
     // prepare leaves
-    let col_c = Column::from_data(vec![1i64, 2, 3]);
-    let col_d = Column::from_data(vec![1.0f64, 2., 3.]);
-    let col_e = Column::from_data(vec![4.0f64, 5., 6.]);
-    let col_f = Column::from_data(vec![7i64, 8, 9]);
-    let col_g = Column::from_data(vec![10.0f64, 11., 12.]);
+    let col_c = Int64Type::from_data(vec![1i64, 2, 3]);
+    let col_d = Float64Type::from_data(vec![1.0f64, 2., 3.]);
+    let col_e = Float64Type::from_data(vec![4.0f64, 5., 6.]);
+    let col_f = Int64Type::from_data(vec![7i64, 8, 9]);
+    let col_g = Float64Type::from_data(vec![10.0f64, 11., 12.]);
 
     // inner/root nodes
     let col_b = Column::Tuple {
@@ -61,21 +53,8 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>) {
         len: 3,
     };
 
-    let entries = vec![
-        BlockEntry {
-            data_type: col_a_type,
-            value: Value::Column(col_a),
-        },
-        BlockEntry {
-            data_type: Int64Type::data_type(),
-            value: Value::Column(col_f.clone()),
-        },
-        BlockEntry {
-            data_type: Float64Type::data_type(),
-            value: Value::Column(col_g.clone()),
-        },
-    ];
-    (DataBlock::new(entries, 3), vec![
+    let columns = vec![col_a, col_f.clone(), col_g.clone()];
+    (DataBlock::new_from_columns(columns), vec![
         col_c, col_d, col_e, col_f, col_g,
     ])
 }

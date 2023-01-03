@@ -18,7 +18,6 @@ use std::vec;
 use common_exception::Result;
 use common_expression::types::number::*;
 use common_expression::types::StringType;
-use common_expression::utils::ColumnFrom;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::FromData;

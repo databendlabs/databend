@@ -42,12 +42,12 @@ use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
 use crate::types::BooleanType;
 use crate::types::DataType;
+use crate::types::DateType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
+use crate::types::TimestampType;
 use crate::types::VariantType;
-use crate::utils::from_date_data;
-use crate::utils::from_timestamp_data;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::BlockEntry;
@@ -659,7 +659,7 @@ impl TableDataType {
             },
             TableDataType::Timestamp => BlockEntry {
                 data_type: DataType::Timestamp,
-                value: Value::Column(from_timestamp_data(
+                value: Value::Column(TimestampType::from_data(
                     (0..len)
                         .map(|_| SmallRng::from_entropy().gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
                         .collect::<Vec<i64>>(),
@@ -667,7 +667,7 @@ impl TableDataType {
             },
             TableDataType::Date => BlockEntry {
                 data_type: DataType::Date,
-                value: Value::Column(from_date_data(
+                value: Value::Column(DateType::from_data(
                     (0..len)
                         .map(|_| SmallRng::from_entropy().gen_range(DATE_MIN..=DATE_MAX))
                         .collect::<Vec<i32>>(),

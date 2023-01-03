@@ -20,7 +20,6 @@ use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
-use common_expression::utils::ColumnFrom;
 use common_expression::BlockEntry;
 use common_expression::BlockRowIndex;
 use common_expression::Column;

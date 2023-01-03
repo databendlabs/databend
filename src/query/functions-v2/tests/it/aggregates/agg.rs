@@ -18,7 +18,6 @@ use common_expression::types::number::Int64Type;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::BooleanType;
 use common_expression::types::TimestampType;
-use common_expression::utils::ColumnFrom;
 use common_expression::Column;
 use common_expression::FromData;
 use common_functions_v2::aggregates::eval_aggr;

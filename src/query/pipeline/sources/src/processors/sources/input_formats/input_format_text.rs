@@ -18,12 +18,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
-use common_expression::Value;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_types::StageFileFormatType;
@@ -387,15 +385,10 @@ pub struct BlockBuilder<T> {
 
 impl<T: InputFormatTextBase> BlockBuilder<T> {
     fn flush(&mut self) -> Result<Vec<DataBlock>> {
-        let num_rows = self.num_rows;
         let columns = self
             .mutable_columns
             .iter_mut()
-            .zip(self.ctx.data_schema().fields())
-            .map(|(deserializer, field)| BlockEntry {
-                data_type: field.data_type().clone(),
-                value: Value::Column(deserializer.finish_to_column()),
-            })
+            .map(|deserializer| deserializer.finish_to_column())
             .collect();
 
         self.mutable_columns = self
@@ -404,7 +397,7 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             .create_deserializers(self.ctx.block_compact_thresholds.min_rows_per_block);
         self.num_rows = 0;
 
-        Ok(vec![DataBlock::new(columns, num_rows)])
+        Ok(vec![DataBlock::new_from_columns(columns)])
     }
 
     fn memory_size(&self) -> usize {
