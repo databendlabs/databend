@@ -175,6 +175,16 @@ impl BlockFilter {
     /// Otherwise return `Uncertain`.
     #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
     pub fn eval(&self, mut expr: Expr<String>) -> Result<FilterEvalResult> {
+        let input_domains = expr
+            .column_refs()
+            .into_iter()
+            .map(|(name, ty)| {
+                let domain = Domain::full(&ty);
+                (name, domain)
+            })
+            .collect();
+        let folder = ConstantFolder::new(input_domains, self.func_ctx, &BUILTIN_FUNCTIONS);
+
         visit_expr_column_eq_constant(&mut expr, &mut |span, col_name, scalar, ty| {
             // If the column doesn't contain the constant, we rewrite the expression to `false`.
             if self.find(col_name, scalar, ty)? == FilterEvalResult::MustFalse {
@@ -188,17 +198,7 @@ impl BlockFilter {
             }
         })?;
 
-        let input_domains = expr
-            .column_refs()
-            .into_iter()
-            .map(|(name, ty)| {
-                let domain = Domain::full(&ty);
-                (name, domain)
-            })
-            .collect();
-        let folder = ConstantFolder::new(input_domains, self.func_ctx, &BUILTIN_FUNCTIONS);
         let (new_expr, _) = folder.fold(&expr);
-
         match new_expr {
             Expr::Constant {
                 scalar: Scalar::Boolean(false),
@@ -226,6 +226,7 @@ impl BlockFilter {
 
     fn find(&self, column_name: &str, target: &Scalar, ty: &DataType) -> Result<FilterEvalResult> {
         let filter_column = &Self::build_filter_column_name(column_name);
+
         if !self.filter_schema.has_field(filter_column)
             || !Xor8Filter::is_supported_type(ty)
             || target.is_null()
@@ -241,6 +242,7 @@ impl BlockFilter {
             Value::Scalar(s) => s.as_string().unwrap(),
             Value::Column(c) => unsafe { c.as_string().unwrap().index_unchecked(0) },
         };
+
         let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
         if filter.contains(&target) {
             Ok(FilterEvalResult::Uncertain)
