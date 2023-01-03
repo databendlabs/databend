@@ -19,7 +19,6 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
@@ -28,16 +27,6 @@ use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
 use crate::operations::fuse_source::build_fuse_source_pipeline;
 use crate::FuseTable;
-
-/// Read data kind to avoid OOM.
-pub enum ReadDataKind {
-    // Compact/Recluster data, need less io requests.
-    // io_requests = max_threads()
-    OptimizeDataLessIORequests,
-    // Read column block data, need adjust io requests.
-    // io requests = memory-size/avg(blocks-size)
-    BlockDataAdjustIORequests,
-}
 
 impl FuseTable {
     pub fn create_block_reader(&self, projection: Projection) -> Result<Arc<BlockReader>> {
@@ -53,39 +42,10 @@ impl FuseTable {
         ))
     }
 
-    fn adjust_io_request(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        projection: &Projection,
-        kind: ReadDataKind,
-    ) -> Result<usize> {
-        Ok(match kind {
-            ReadDataKind::OptimizeDataLessIORequests => {
-                ctx.get_settings().get_max_threads()? as usize
-            }
-            ReadDataKind::BlockDataAdjustIORequests => {
-                let conf = GlobalConfig::instance();
-                let mut max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
-                if conf.query.table_meta_cache_enabled {
-                    // Removing bloom index memory size.
-                    max_memory_usage -= conf.query.table_cache_bloom_index_data_bytes as usize;
-                }
-
-                // Assume 300MB one block file after decompressed.
-                let block_file_size = 300 * 1024 * 1024_usize;
-                let table_column_len = self.table_info.schema().fields().len();
-                let per_column_bytes = block_file_size / table_column_len;
-                let scan_column_bytes = per_column_bytes * projection.len();
-                let estimate_io_requests = max_memory_usage / scan_column_bytes;
-
-                let setting_io_requests = std::cmp::max(
-                    1,
-                    ctx.get_settings().get_max_storage_io_requests()? as usize,
-                );
-                let adjust_io_requests = std::cmp::max(1, estimate_io_requests);
-                std::cmp::min(adjust_io_requests, setting_io_requests)
-            }
-        })
+    fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        Ok(std::cmp::max(max_threads, max_io_requests))
     }
 
     #[inline]
@@ -94,7 +54,6 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        read_kind: ReadDataKind,
     ) -> Result<()> {
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
@@ -149,9 +108,7 @@ impl FuseTable {
         );
 
         let block_reader = self.build_block_reader(plan)?;
-        let projection =
-            PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
-        let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
+        let max_io_requests = self.adjust_io_request(&ctx)?;
 
         build_fuse_source_pipeline(
             ctx,

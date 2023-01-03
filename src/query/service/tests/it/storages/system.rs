@@ -256,6 +256,7 @@ async fn test_metrics_table() -> Result<()> {
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     metrics::counter!("test.test_metrics_table_count", 1);
+    #[cfg(feature = "enable_histogram")]
     metrics::histogram!("test.test_metrics_table_histogram", 1.0);
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
@@ -266,6 +267,7 @@ async fn test_metrics_table() -> Result<()> {
 
     let output = pretty_format_blocks(result.as_slice())?;
     assert!(output.contains("test_test_metrics_table_count"));
+    #[cfg(feature = "enable_histogram")]
     assert!(output.contains("test_test_metrics_table_histogram"));
 
     Ok(())

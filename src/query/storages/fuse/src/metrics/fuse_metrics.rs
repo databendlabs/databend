@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Defines meta-service metric.
-//!
-//! The metric key is built in form of `<namespace>_<sub_system>_<field>`.
-//!
-//! The `namespace` is `fuse`.
-
 use metrics::counter;
 use metrics::gauge;
 use metrics::increment_gauge;

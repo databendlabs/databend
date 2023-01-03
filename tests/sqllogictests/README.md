@@ -1,7 +1,7 @@
 ### Overview
 This is Databend's [sqllogictest](https://www.sqlite.org/sqllogictest/doc/trunk/about.wiki) implementation. It uses [sqllogictest-rs](https://github.com/risinglightdb/sqllogictest-rs) to parse test files and run test cases.
 
-### Usage
+### Basic usage
 You can directly run the following commands under databend directory
 
 ---
@@ -41,7 +41,18 @@ For more information, run help command:
 cargo run -p sqllogictests -- --help
 ```
 
-### sqllogictest
+### Parallel
+If you want to run test files in parallel, please add the following args:
+```shell
+cargo run -p sqllogictests --enable_sandbox --parallel <number>
+```
+
+When start databend query, please add `--internal-enable-sandbox-tenant`, such as:
+```shell
+./target/debug/databend-query  --meta-embedded-dir ./.databend/meta_embedded --internal-enable-sandbox-tenant
+```
+
+### Sqllogictest
 Most records are either a statement or a query. A statement is an SQL command that is to be evaluated but from which we do not expect to get results (other than success or failure). A statement might be a CREATE TABLE or an INSERT or an UPDATE or a DROP INDEX. A query is an SQL command from which we expect to receive results. The result set might be empty.
 
 A statement record begins with one of the following two lines:

@@ -100,7 +100,7 @@ impl<'a> Binder {
                     .unwrap_or_else(|| self.ctx.get_current_database());
                 let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
-                let ul = UriLocation {
+                let mut ul = UriLocation {
                     protocol: uri_location.protocol.clone(),
                     name: uri_location.name.clone(),
                     path: uri_location.path.clone(),
@@ -111,7 +111,7 @@ impl<'a> Binder {
                 self.bind_copy_from_uri_into_table(
                     bind_context,
                     stmt,
-                    &ul,
+                    &mut ul,
                     &catalog_name,
                     &database_name,
                     &table,
@@ -165,7 +165,7 @@ impl<'a> Binder {
                     .unwrap_or_else(|| self.ctx.get_current_database());
                 let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
-                let ul = UriLocation {
+                let mut ul = UriLocation {
                     protocol: uri_location.protocol.clone(),
                     name: uri_location.name.clone(),
                     path: uri_location.path.clone(),
@@ -179,7 +179,7 @@ impl<'a> Binder {
                     &catalog_name,
                     &database_name,
                     &table,
-                    &ul,
+                    &mut ul,
                 )
                 .await
             }
@@ -194,7 +194,7 @@ impl<'a> Binder {
                 .await
             }
             (CopyUnit::Query(query), CopyUnit::UriLocation(uri_location)) => {
-                let ul = UriLocation {
+                let mut ul = UriLocation {
                     protocol: uri_location.protocol.clone(),
                     name: uri_location.name.clone(),
                     path: uri_location.path.clone(),
@@ -202,7 +202,7 @@ impl<'a> Binder {
                     connection: uri_location.connection.clone(),
                 };
 
-                self.bind_copy_from_query_into_uri(bind_context, stmt, query, &ul)
+                self.bind_copy_from_query_into_uri(bind_context, stmt, query, &mut ul)
                     .await
             }
             (src, dst) => Err(ErrorCode::SyntaxException(format!(
@@ -273,7 +273,7 @@ impl<'a> Binder {
         &mut self,
         _: &BindContext,
         stmt: &CopyStmt<'a>,
-        src_uri_location: &UriLocation,
+        src_uri_location: &mut UriLocation,
         dst_catalog_name: &str,
         dst_database_name: &str,
         dst_table_name: &str,
@@ -380,7 +380,7 @@ impl<'a> Binder {
         src_catalog_name: &str,
         src_database_name: &str,
         src_table_name: &str,
-        dst_uri_location: &UriLocation,
+        dst_uri_location: &mut UriLocation,
     ) -> Result<Plan> {
         let subquery =
             format!("SELECT * FROM {src_catalog_name}.{src_database_name}.{src_table_name}");
@@ -458,7 +458,7 @@ impl<'a> Binder {
         bind_context: &BindContext,
         stmt: &CopyStmt<'a>,
         src_query: &Query<'_>,
-        dst_uri_location: &UriLocation,
+        dst_uri_location: &mut UriLocation,
     ) -> Result<Plan> {
         let query = self
             .bind_statement(bind_context, &Statement::Query(Box::new(src_query.clone())))

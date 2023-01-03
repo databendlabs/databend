@@ -74,10 +74,10 @@ impl BlockPruner {
 
         // 1. prepare pruners
 
-        // if there are ordering clause, ignore limit, even it has been pushed down
+        // if there are ordering/filter clause, ignore limit, even it has been pushed down
         let limit = push_down
             .as_ref()
-            .filter(|p| p.order_by.is_empty())
+            .filter(|p| p.order_by.is_empty() && p.filters.is_empty())
             .and_then(|p| p.limit);
 
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned

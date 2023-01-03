@@ -12,6 +12,7 @@ doctest = false
 test = false
 
 [dependencies]
+common-ast = { path = "../../../query/ast" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../datablocks" }

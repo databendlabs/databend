@@ -12,26 +12,27 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 #![allow(clippy::too_many_arguments)]
-mod common;
+mod statistics;
 
+mod compression;
 /// Re-exports meta data structures of current version, i.e. v1
 mod current;
 mod v0;
 mod v1;
 mod versions;
 
-pub use common::ClusterKey;
-pub use common::ClusterStatistics;
-pub use common::ColumnId;
-pub use common::ColumnStatistics;
-pub use common::Compression;
-pub use common::Location;
-pub use common::SnapshotId;
-pub use common::Statistics;
-pub use common::StatisticsOfColumns;
-pub use common::Versioned;
+pub use compression::Compression;
 pub use current::*;
+pub use statistics::ClusterKey;
+pub use statistics::ClusterStatistics;
+pub use statistics::ColumnId;
+pub use statistics::ColumnStatistics;
+pub use statistics::Location;
+pub use statistics::SnapshotId;
+pub use statistics::Statistics;
+pub use statistics::StatisticsOfColumns;
 pub use versions::BlockBloomFilterIndexVersion;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;
 pub use versions::TableSnapshotStatisticsVersion;
+pub use versions::Versioned;

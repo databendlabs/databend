@@ -13,8 +13,12 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Result;
 
 use crate::ast::write_quoted_comma_separated_list;
 use crate::ast::write_space_seperated_map;
@@ -181,6 +185,56 @@ impl Display for CopyUnit<'_> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Connection {
+    visited_keys: HashSet<String>,
+    conns: BTreeMap<String, String>,
+}
+
+impl Connection {
+    fn new(conns: BTreeMap<String, String>) -> Self {
+        Self {
+            visited_keys: HashSet::new(),
+            conns,
+        }
+    }
+
+    pub fn get(&mut self, key: &str) -> Option<&String> {
+        self.visited_keys.insert(key.to_string());
+        self.conns.get(key)
+    }
+
+    pub fn check(&self) -> Result<()> {
+        let conn_keys = HashSet::from_iter(self.conns.keys().cloned());
+        let diffs: Vec<String> = conn_keys
+            .difference(&self.visited_keys)
+            .map(|x| x.to_string())
+            .collect();
+
+        if !diffs.is_empty() {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "Unknown params [{}], please check the documents for supported params",
+                    diffs.join(","),
+                ),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Display for Connection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if !self.conns.is_empty() {
+            write!(f, " CONNECTION = ( ")?;
+            write_space_seperated_map(f, &self.conns)?;
+            write!(f, " )")?;
+        }
+        Ok(())
+    }
+}
+
 /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
 ///
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
@@ -190,7 +244,25 @@ pub struct UriLocation {
     pub name: String,
     pub path: String,
     pub part_prefix: String,
-    pub connection: BTreeMap<String, String>,
+    pub connection: Connection,
+}
+
+impl UriLocation {
+    pub fn new(
+        protocol: String,
+        name: String,
+        path: String,
+        part_prefix: String,
+        conns: BTreeMap<String, String>,
+    ) -> Self {
+        Self {
+            protocol,
+            name,
+            path,
+            part_prefix,
+            connection: Connection::new(conns),
+        }
+    }
 }
 
 impl Display for UriLocation {
@@ -199,11 +271,7 @@ impl Display for UriLocation {
         if !self.part_prefix.is_empty() {
             write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
         }
-        if !self.connection.is_empty() {
-            write!(f, " CONNECTION = ( ")?;
-            write_space_seperated_map(f, &self.connection)?;
-            write!(f, " )")?;
-        }
+        write!(f, "{}", self.connection)?;
         Ok(())
     }
 }
