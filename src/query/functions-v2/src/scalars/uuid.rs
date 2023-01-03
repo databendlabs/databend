@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use common_base::base::uuid::Uuid;
+use common_expression::types::string::StringColumn;
 use common_expression::types::StringType;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
@@ -26,10 +29,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         "gen_random_uuid",
         FunctionProperty::default(),
         || FunctionDomain::Full,
-        |_| {
-            let value = UUIDv4::create();
-            let c = format!("{:x}", value);
-            Ok(Value::Scalar(c.as_bytes().to_vec()))
+        |ctx| {
+            let mut values: Vec<u8> = Vec::with_capacity(ctx.num_rows * 36);
+            let mut offsets: Vec<u64> = Vec::with_capacity(ctx.num_rows);
+            offsets.push(0);
+
+            for _ in 0..ctx.num_rows {
+                let value = UUIDv4::create();
+                offsets.push(offsets.last().unwrap() + 36u64);
+                write!(&mut values, "{:x}", value).unwrap();
+            }
+
+            let col = StringColumn {
+                data: values.into(),
+                offsets: offsets.into(),
+            };
+            Ok(Value::Column(col))
         },
     );
 }
