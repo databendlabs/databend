@@ -38,6 +38,7 @@ use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
+use crate::TypeDeserializer;
 use crate::Value;
 
 impl DataBlock {
@@ -118,8 +119,15 @@ impl Column {
                 Self::concat_value_types::<DateType>(builder, columns)
             }
             Column::Array(col) => {
-                let mut builder = ArrayColumnBuilder::<AnyType>::from_column(col.slice(0..0));
-                builder.reserve(capacity);
+                let mut offsets = Vec::with_capacity(capacity + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    col.values
+                        .data_type()
+                        .create_deserializer(capacity)
+                        .finish_to_column(),
+                );
+                let builder = ArrayColumnBuilder { builder, offsets };
                 Self::concat_value_types::<ArrayType<AnyType>>(builder, columns)
             }
             Column::Nullable(_) => {

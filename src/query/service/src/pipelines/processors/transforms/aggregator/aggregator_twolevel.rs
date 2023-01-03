@@ -238,7 +238,7 @@ where
             let column = keys_column_builder.finish();
             let num_rows = column.len();
             let column = BlockEntry {
-                data_type: DataType::String,
+                data_type: column.data_type(),
                 value: Value::Column(column),
             };
 

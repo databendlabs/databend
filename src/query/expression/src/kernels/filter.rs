@@ -35,8 +35,10 @@ use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::BlockEntry;
 use crate::Column;
+use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
+use crate::TypeDeserializer;
 use crate::Value;
 
 impl DataBlock {
@@ -203,8 +205,16 @@ impl Column {
                 Column::Date(d)
             }
             Column::Array(column) => {
-                let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
-                builder.reserve(length);
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    column
+                        .values
+                        .data_type()
+                        .create_deserializer(length)
+                        .finish_to_column(),
+                );
+                let builder = ArrayColumnBuilder { builder, offsets };
                 Self::filter_scalar_types::<ArrayType<AnyType>>(column, builder, filter)
             }
             Column::Nullable(c) => {

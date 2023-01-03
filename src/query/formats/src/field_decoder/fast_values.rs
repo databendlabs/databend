@@ -85,7 +85,7 @@ impl FastFieldDecoderValues {
 
     fn ignore_field_end<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> bool {
         reader.ignore_white_spaces();
-        matches!(reader.peek(), None | Some(',') | Some(')'))
+        matches!(reader.peek(), None | Some(',') | Some(')') | Some(']'))
     }
 
     fn match_bytes<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>, bs: &[u8]) -> bool {
