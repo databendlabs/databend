@@ -658,33 +658,28 @@ impl<'a> JoinConditionResolver<'a> {
         let predicate_used_columns = predicate.used_columns();
         let (left_columns, right_columns) = self.left_right_columns()?;
         match self.join_op {
-            JoinOperator::LeftOuter | JoinOperator::LeftAnti => {
-                if !predicate_used_columns.is_subset(&left_columns) {
+            JoinOperator::LeftOuter => {
+                if predicate_used_columns.is_subset(&right_columns) {
                     other_join_conditions.push(predicate.clone());
                     return Ok(true);
                 }
             }
-            JoinOperator::RightOuter | JoinOperator::RightAnti => {
-                if !predicate_used_columns.is_subset(&right_columns) {
+            JoinOperator::RightOuter => {
+                if predicate_used_columns.is_subset(&left_columns) {
                     other_join_conditions.push(predicate.clone());
                     return Ok(true);
                 }
             }
-            JoinOperator::FullOuter => {
-                if !predicate_used_columns.is_subset(&left_columns)
-                    && !predicate_used_columns.is_subset(&right_columns)
+            JoinOperator::Inner => {
+                if predicate_used_columns.is_subset(&left_columns)
+                    || predicate_used_columns.is_subset(&right_columns)
                 {
                     other_join_conditions.push(predicate.clone());
                     return Ok(true);
                 }
             }
             _ => {
-                if !predicate_used_columns.is_subset(&left_columns)
-                    || !predicate_used_columns.is_subset(&right_columns)
-                {
-                    other_join_conditions.push(predicate.clone());
-                    return Ok(true);
-                }
+                return Ok(false);
             }
         }
         Ok(false)
