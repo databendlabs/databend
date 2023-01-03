@@ -35,6 +35,7 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
+use crate::TypeDeserializer;
 use crate::Value;
 
 // Chunk idx, row idx in the block, times
@@ -223,9 +224,16 @@ impl Column {
                 Self::take_block_value_types::<DateType>(columns, builder, indices)
             }
             Column::Array(column) => {
-                let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
-                builder.reserve(result_size);
-
+                let mut offsets = Vec::with_capacity(result_size + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    column
+                        .values
+                        .data_type()
+                        .create_deserializer(result_size)
+                        .finish_to_column(),
+                );
+                let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_block_value_types::<ArrayType<AnyType>>(columns, builder, indices)
             }
             Column::Nullable(_) => {
