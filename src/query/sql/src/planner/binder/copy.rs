@@ -562,6 +562,7 @@ pub async fn parse_stage_location(
     };
 
     let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
+    let path = if path.is_empty() { "/" } else { path };
 
     debug!("parsed stage: {stage:?}, path: {path}");
     Ok((stage, path.to_string()))

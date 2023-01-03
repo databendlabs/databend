@@ -97,6 +97,12 @@ impl<'a> Binder {
 
                 let (stage_storage, path) = parse_uri_location(&mut uri)?;
 
+                if !path.ends_with("/") {
+                    return Err(ErrorCode::SyntaxException(
+                        "URL's path must ends with `/` when do CREATE STAGE",
+                    ));
+                }
+
                 UserStageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
             }
         };
