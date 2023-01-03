@@ -15,9 +15,12 @@
 use std::io::Write;
 
 use common_expression::types::DataType;
+use common_expression::types::Float64Type;
 use common_expression::types::NumberDataType;
+use common_expression::types::UInt16Type;
 use common_expression::utils::ColumnFrom;
 use common_expression::Column;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -46,13 +49,11 @@ fn test_run_diff(file: &mut impl Write) {
     run_ast(file, "running_difference(to_date(10000))", &[]);
     run_ast(file, "running_difference(a)", &[(
         "a",
-        DataType::Number(NumberDataType::UInt16),
-        Column::from_data(vec![224u16, 384, 512]),
+        UInt16Type::from_data(vec![224u16, 384, 512]),
     )]);
     run_ast(file, "running_difference(a)", &[(
         "a",
-        DataType::Number(NumberDataType::Float64),
-        Column::from_data(vec![37.617673, 38.617673, 39.617673]),
+        Float64Type::from_data(vec![37.617673, 38.617673, 39.617673]),
     )]);
 }
 
@@ -67,8 +68,7 @@ fn test_typeof(file: &mut impl Write) {
     run_ast(file, "typeof(humanize_size(100))", &[]);
     run_ast(file, "typeof(a)", &[(
         "a",
-        DataType::Number(NumberDataType::Float64),
-        Column::from_data(vec![37.617673, 38.617673, 39.617673]),
+        Float64Type::from_data(vec![37.617673, 38.617673, 39.617673]),
     )]);
 }
 
@@ -85,7 +85,6 @@ fn test_ignore(file: &mut impl Write) {
 fn test_assume_not_null(file: &mut impl Write) {
     run_ast(file, "assume_not_null(a2)", &[(
         "a2",
-        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
         Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
     )]);
 }

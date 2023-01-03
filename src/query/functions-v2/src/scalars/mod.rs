@@ -31,6 +31,7 @@ mod hash;
 mod other;
 mod string;
 mod string_multi_args;
+mod uuid;
 
 pub use comparison::check_pattern_type;
 pub use comparison::is_like_pattern_escape;
@@ -55,5 +56,6 @@ fn builtin_functions() -> FunctionRegistry {
     geo::register(&mut registry);
     hash::register(&mut registry);
     other::register(&mut registry);
+    uuid::register(&mut registry);
     registry
 }

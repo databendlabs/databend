@@ -193,13 +193,12 @@ macro_rules! register_simple_domain_type_hash {
         );
 
         $registry
-            .register_passthrough_nullable_2_arg::<$T, NumberType<F64>, NumberType<u64>, _, _>(
+            .register_passthrough_nullable_2_arg::<$T, NumberType<u64>, NumberType<u64>, _, _>(
                 "city64withseed",
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
-                vectorize_with_builder_2_arg::<$T, NumberType<F64>, NumberType<u64>>(
+                vectorize_with_builder_2_arg::<$T, NumberType<u64>, NumberType<u64>>(
                     |val, l, output, _| {
-                        let l: u64 = l.as_();
                         let mut hasher = CityHasher64::with_seed(l);
                         DFHash::hash(&val, &mut hasher);
                         output.push(hasher.finish());
