@@ -596,7 +596,7 @@ impl FromToProto for mt::OnErrorMode {
                 Ok(mt::OnErrorMode::SkipFileNum(n))
             }
             Some(pb::user_stage_info::on_error_mode::Mode::AbortStatement(_)) => {
-                Ok(mt::OnErrorMode::AbortStatement)
+                Ok(mt::OnErrorMode::Abort)
             }
             None => Err(Incompatible {
                 reason: "OnErrorMode.mode cannot be None".to_string(),
@@ -622,7 +622,7 @@ impl FromToProto for mt::OnErrorMode {
             mt::OnErrorMode::SkipFileNum(n) => Ok(pb::user_stage_info::OnErrorMode {
                 mode: Some(pb::user_stage_info::on_error_mode::Mode::SkipFileNum(*n)),
             }),
-            mt::OnErrorMode::AbortStatement => Ok(pb::user_stage_info::OnErrorMode {
+            mt::OnErrorMode::Abort => Ok(pb::user_stage_info::OnErrorMode {
                 mode: Some(pb::user_stage_info::on_error_mode::Mode::AbortStatement(
                     pb::Empty {},
                 )),
