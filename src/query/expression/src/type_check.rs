@@ -26,6 +26,7 @@ use crate::function::FunctionSignature;
 use crate::types::number::NumberDataType;
 use crate::types::number::NumberScalar;
 use crate::types::DataType;
+use crate::AutoCastSignature;
 use crate::ColumnIndex;
 use crate::Result;
 use crate::Scalar;
@@ -183,9 +184,14 @@ pub fn check_function<Index: ColumnIndex>(
 
     let candidates = fn_registry.search_candidates(name, params, args);
 
+    let additional_rules = fn_registry
+        .get_casting_rules(name)
+        .cloned()
+        .unwrap_or_default();
+
     let mut fail_resaons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
-        match try_check_function(span.clone(), args, &func.signature) {
+        match try_check_function(span.clone(), args, &func.signature, &additional_rules) {
             Ok((checked_args, return_type, generics)) => {
                 return Ok(Expr::FunctionCall {
                     span,
@@ -292,6 +298,7 @@ pub fn try_check_function<Index: ColumnIndex>(
     span: Span,
     args: &[Expr<Index>],
     sig: &FunctionSignature,
+    additional_rules: &AutoCastSignature,
 ) -> Result<(Vec<Expr<Index>>, DataType, Vec<DataType>)> {
     assert_eq!(args.len(), sig.args_type.len());
 
@@ -299,7 +306,9 @@ pub fn try_check_function<Index: ColumnIndex>(
         .iter()
         .map(Expr::data_type)
         .zip(&sig.args_type)
-        .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty).map_err(|(_, err)| (span.clone(), err)))
+        .map(|(src_ty, dest_ty)| {
+            unify(src_ty, dest_ty, additional_rules).map_err(|(_, err)| (span.clone(), err))
+        })
         .collect::<Result<Vec<_>>>()?;
     let subst = substs
         .into_iter()
@@ -344,22 +353,37 @@ pub fn try_check_function<Index: ColumnIndex>(
     Ok((checked_args, return_type, generics))
 }
 
-pub fn unify(src_ty: &DataType, dest_ty: &DataType) -> Result<Subsitution> {
+pub fn unify(
+    src_ty: &DataType,
+    dest_ty: &DataType,
+    additional_rules: &AutoCastSignature,
+) -> Result<Subsitution> {
+    if additional_rules
+        .iter()
+        .any(|(src, dest)| src == src_ty && dest == dest_ty)
+    {
+        return Ok(Subsitution::empty());
+    }
+
     match (src_ty, dest_ty) {
         (DataType::Generic(_), _) => unreachable!("source type must not contain generic type"),
         (ty, DataType::Generic(idx)) => Ok(Subsitution::equation(*idx, ty.clone())),
         (DataType::Null, DataType::Nullable(_)) => Ok(Subsitution::empty()),
         (DataType::EmptyArray, DataType::Array(_)) => Ok(Subsitution::empty()),
-        (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty),
-        (src_ty, DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty),
-        (DataType::Array(src_ty), DataType::Array(dest_ty)) => unify(src_ty, dest_ty),
+        (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
+            unify(src_ty, dest_ty, additional_rules)
+        }
+        (src_ty, DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty, additional_rules),
+        (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
+            unify(src_ty, dest_ty, additional_rules)
+        }
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
             if src_tys.len() == dest_tys.len() =>
         {
             let substs = src_tys
                 .iter()
                 .zip(dest_tys)
-                .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty))
+                .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, additional_rules))
                 .collect::<Result<Vec<_>>>()?;
             let subst = substs
                 .into_iter()

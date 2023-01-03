@@ -42,6 +42,8 @@ pub struct FunctionSignature {
     pub property: FunctionProperty,
 }
 
+pub type AutoCastSignature = Vec<(DataType, DataType)>;
+
 #[derive(Clone, Copy)]
 pub struct FunctionContext {
     pub tz: Tz,
@@ -99,8 +101,11 @@ pub struct FunctionRegistry {
     >,
     /// Aliases map from alias function name to concrete function name.
     pub aliases: HashMap<String, String>,
-    // negtives functions
+    /// negtives functions
     pub negtives: HashMap<String, String>,
+
+    /// fn name to cast signatures
+    pub auto_cast_signatures: HashMap<String, AutoCastSignature>,
 }
 
 impl FunctionRegistry {
@@ -138,6 +143,10 @@ impl FunctionRegistry {
                 factory(params, args_type)
             }
         }
+    }
+
+    pub fn get_casting_rules(&self, func_name: &str) -> Option<&AutoCastSignature> {
+        self.auto_cast_signatures.get(func_name)
     }
 
     pub fn search_candidates<Index: ColumnIndex>(
@@ -234,6 +243,13 @@ impl FunctionRegistry {
     pub fn register_negative(&mut self, fn_name: &str, neg_fn_name: &str) {
         self.negtives
             .insert(fn_name.to_string(), neg_fn_name.to_string());
+    }
+
+    pub fn register_auto_cast_signatures(&mut self, fn_name: &str, signatures: AutoCastSignature) {
+        self.auto_cast_signatures
+            .entry(fn_name.to_string())
+            .or_insert_with(Vec::new)
+            .extend(signatures);
     }
 }
 
