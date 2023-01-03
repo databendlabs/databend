@@ -96,7 +96,7 @@ impl HttpHandler {
             HttpHandlerKind::Clickhouse => Route::new().nest("/", clickhouse_router()),
         };
 
-        let auth_manager = AuthMgr::create(config).await?;
+        let auth_manager = AuthMgr::create(config)?;
         let session_middleware = HTTPSessionMiddleware::create(self.kind, auth_manager);
         Ok(ep
             .with(session_middleware)
