@@ -18,12 +18,7 @@ use std::time::Instant;
 use common_exception::Result;
 use opendal::Object;
 
-use crate::providers::metrics_inc_bypass_read_milliseconds;
-use crate::providers::metrics_inc_bypass_reads;
-use crate::providers::metrics_inc_bypass_remove_milliseconds;
-use crate::providers::metrics_inc_bypass_removes;
-use crate::providers::metrics_inc_bypass_write_milliseconds;
-use crate::providers::metrics_inc_bypass_writes;
+use crate::providers::metrics::*;
 use crate::CacheSettings;
 use crate::CachedObject;
 use crate::ObjectCacheProvider;

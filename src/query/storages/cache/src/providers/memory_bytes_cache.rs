@@ -23,13 +23,7 @@ use common_exception::Result;
 use opendal::Object;
 use parking_lot::RwLock;
 
-use crate::providers::metrics_inc_memory_bytes_hits;
-use crate::providers::metrics_inc_memory_bytes_load_milliseconds;
-use crate::providers::metrics_inc_memory_bytes_misses;
-use crate::providers::metrics_inc_memory_bytes_remove_milliseconds;
-use crate::providers::metrics_inc_memory_bytes_removes;
-use crate::providers::metrics_inc_memory_bytes_write_milliseconds;
-use crate::providers::metrics_inc_memory_bytes_writes;
+use crate::providers::metrics::*;
 use crate::CacheSettings;
 use crate::ObjectCacheProvider;
 
