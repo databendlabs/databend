@@ -22,11 +22,15 @@ use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::compute::merge_sort as arrow_merge_sort;
 use common_arrow::arrow::compute::merge_sort::build_comparator_impl;
 use common_arrow::arrow::compute::sort as arrow_sort;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::error::Error as ArrowError;
 use common_arrow::arrow::error::Result as ArrowResult;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::types::DataType;
 use crate::utils::arrow::column_to_arrow_array;
+use crate::Column;
 use crate::DataBlock;
 
 pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
@@ -179,6 +183,34 @@ impl DataBlock {
     }
 }
 
+fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
+    let left = Column::from_arrow(left, &DataType::Variant)
+        .as_variant()
+        .cloned()
+        .unwrap();
+    let right = Column::from_arrow(right, &DataType::Variant)
+        .as_variant()
+        .cloned()
+        .unwrap();
+    Ok(Box::new(move |i, j| {
+        let l = unsafe { left.index_unchecked(i) };
+        let r = unsafe { right.index_unchecked(j) };
+        common_jsonb::compare(l, r).unwrap()
+    }))
+}
+
 fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
-    arrow_ord::build_compare(left, right)
+    match left.data_type() {
+        ArrowType::Extension(name, _, _) => {
+            if name == "Variant" {
+                compare_variant(left, right)
+            } else {
+                Err(ArrowError::NotYetImplemented(format!(
+                    "Sort not supported for data type {:?}",
+                    left.data_type()
+                )))
+            }
+        }
+        _ => arrow_ord::build_compare(left, right),
+    }
 }
