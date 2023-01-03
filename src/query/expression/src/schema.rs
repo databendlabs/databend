@@ -40,15 +40,19 @@ use crate::types::date::DATE_MIN;
 use crate::types::nullable::NullableColumn;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
+use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
+use crate::types::NumberType;
+use crate::types::StringType;
+use crate::types::VariantType;
 use crate::utils::from_date_data;
 use crate::utils::from_timestamp_data;
-use crate::utils::ColumnFrom;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::BlockEntry;
 use crate::Column;
+use crate::FromData;
 use crate::TypeDeserializerImpl;
 use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
@@ -630,34 +634,26 @@ impl TableDataType {
             },
             TableDataType::Boolean => BlockEntry {
                 data_type: DataType::Boolean,
-                value: Value::Column(Column::from_data(
-                    (0..len)
-                        .map(|_| SmallRng::from_entropy().gen_bool(0.5))
-                        .collect::<Vec<bool>>(),
+                value: Value::Column(BooleanType::from_data(
+                    (0..len).map(|_| SmallRng::from_entropy().gen_bool(0.5)),
                 )),
             },
             TableDataType::String => BlockEntry {
                 data_type: DataType::String,
-                value: Value::Column(Column::from_data(
-                    (0..len)
-                        .map(|_| {
-                            let rng = SmallRng::from_entropy();
-                            rng.sample_iter(&Alphanumeric)
-                                // randomly generate 5 characters.
-                                .take(5)
-                                .map(u8::from)
-                                .collect::<Vec<_>>()
-                        })
-                        .collect::<Vec<Vec<u8>>>(),
-                )),
+                value: Value::Column(StringType::from_data((0..len).map(|_| {
+                    let rng = SmallRng::from_entropy();
+                    rng.sample_iter(&Alphanumeric)
+                        // randomly generate 5 characters.
+                        .take(5)
+                        .map(u8::from)
+                        .collect::<Vec<_>>()
+                }))),
             },
             TableDataType::Number(num_ty) => BlockEntry {
                 data_type: DataType::Number(*num_ty),
                 value: Value::Column(with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                    NumberDataType::NUM_TYPE => Column::from_data(
-                        (0..len)
-                            .map(|_| SmallRng::from_entropy().gen())
-                            .collect::<Vec<NUM_TYPE>>(),
+                    NumberDataType::NUM_TYPE => NumberType::<NUM_TYPE>::from_data(
+                        (0..len).map(|_| SmallRng::from_entropy().gen())
                     ),
                 })),
             },
@@ -763,7 +759,7 @@ impl TableDataType {
                 }
                 BlockEntry {
                     data_type: DataType::Variant,
-                    value: Value::Column(Column::from_data(data)),
+                    value: Value::Column(VariantType::from_data(data)),
                 }
             }
             _ => todo!(),

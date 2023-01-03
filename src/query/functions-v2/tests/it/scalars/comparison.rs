@@ -14,10 +14,10 @@
 
 use std::io::Write;
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
+use common_expression::types::*;
 use common_expression::utils::ColumnFrom;
 use common_expression::Column;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -37,14 +37,9 @@ fn test_comparison() {
     let like_columns = [
         (
             "lhs",
-            DataType::String,
-            Column::from_data(vec!["abc", "abd", "abe", "abf"]),
+            StringType::from_data(vec!["abc", "abd", "abe", "abf"]),
         ),
-        (
-            "rhs",
-            DataType::String,
-            Column::from_data(vec!["a%", "_b_", "abe", "a"]),
-        ),
+        ("rhs", StringType::from_data(vec!["a%", "_b_", "abe", "a"])),
     ];
     test_like(file, &like_columns);
     test_notlike(file, &like_columns);
@@ -52,13 +47,11 @@ fn test_comparison() {
     let regexp_columns = [
         (
             "lhs",
-            DataType::String,
-            Column::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
+            StringType::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
         ),
         (
             "rhs",
-            DataType::String,
-            Column::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
+            StringType::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
         ),
     ];
     test_regexp(file, &regexp_columns);
@@ -84,13 +77,11 @@ fn test_eq(file: &mut impl Write) {
     run_ast(file, "lhs = rhs", &[
         (
             "lhs",
-            DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+            UInt8Type::from_data(vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         ),
         (
             "rhs",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0i64, -1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+            Int64Type::from_data(vec![0i64, -1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         ),
     ]);
     run_ast(file, "1.1=1.1", &[]);
@@ -102,8 +93,7 @@ fn test_eq(file: &mut impl Write) {
     let table = [
         (
             "lhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#"null"#,
                 r#"true"#,
                 r#"9223372036854775807"#,
@@ -115,8 +105,7 @@ fn test_eq(file: &mut impl Write) {
         ),
         (
             "rhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#"null"#,
                 r#"true"#,
                 r#"9223372036854775807"#,
@@ -151,8 +140,7 @@ fn test_noteq(file: &mut impl Write) {
     let table = [
         (
             "lhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#"null"#,
                 r#"true"#,
                 r#"9223372036854775807"#,
@@ -161,8 +149,7 @@ fn test_noteq(file: &mut impl Write) {
         ),
         (
             "rhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#"null"#,
                 r#"true"#,
                 r#"9223372036854775807"#,
@@ -190,8 +177,7 @@ fn test_lt(file: &mut impl Write) {
     let table = [
         (
             "lhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#"null"#,
                 r#"true"#,
                 r#"9223372036854775807"#,
@@ -203,8 +189,7 @@ fn test_lt(file: &mut impl Write) {
         ),
         (
             "rhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#"null"#,
                 r#"true"#,
                 r#"9223372036854775800"#,
@@ -240,8 +225,7 @@ fn test_lte(file: &mut impl Write) {
     let table = [
         (
             "lhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#""databend""#,
                 r#"{"k":"v","a":"b"}"#,
                 r#"[1,2,3,["a","b","c"]]"#,
@@ -249,8 +233,7 @@ fn test_lte(file: &mut impl Write) {
         ),
         (
             "rhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#""databend""#,
                 r#"{"k":"a","a":"d"}"#,
                 r#"[0,2,3,["a","b","c"]]"#,
@@ -286,8 +269,7 @@ fn test_gt(file: &mut impl Write) {
     let table = [
         (
             "lhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#"null"#,
                 r#"true"#,
                 r#"9223372036854775807"#,
@@ -297,8 +279,7 @@ fn test_gt(file: &mut impl Write) {
         ),
         (
             "rhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#"null"#,
                 r#"true"#,
                 r#"9223372036854775806"#,
@@ -332,8 +313,7 @@ fn test_gte(file: &mut impl Write) {
     let table = [
         (
             "lhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#"9223372036854775807"#,
                 r#"-32768"#,
                 r#"1234.5678"#,
@@ -345,8 +325,7 @@ fn test_gte(file: &mut impl Write) {
         ),
         (
             "rhs",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 r#"9223372036854775806"#,
                 r#"-32768"#,
                 r#"1234.5678"#,
@@ -361,7 +340,7 @@ fn test_gte(file: &mut impl Write) {
     run_ast(file, "lhs >= rhs", &table);
 }
 
-fn test_like(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+fn test_like(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "'1' like '2'", &[]);
     run_ast(file, "'hello\n' like 'h%'", &[]);
     run_ast(file, "'h\n' like 'h_'", &[]);
@@ -370,31 +349,29 @@ fn test_like(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
 
     let like_columns = [(
         "lhs",
-        DataType::String,
-        Column::from_data(vec!["abc", "abd", "abe", "abf"]),
+        StringType::from_data(vec!["abc", "abd", "abe", "abf"]),
     )];
     run_ast(file, "lhs like 'a%'", &like_columns);
     run_ast(file, "lhs like rhs", columns);
 }
 
-fn test_notlike(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+fn test_notlike(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "'1' not like '2'", &[]);
 
     let like_columns = [(
         "lhs",
-        DataType::String,
-        Column::from_data(vec!["abc", "abd", "abe", "abf"]),
+        StringType::from_data(vec!["abc", "abd", "abe", "abf"]),
     )];
     run_ast(file, "lhs not like 'a%'", &like_columns);
     run_ast(file, "lhs not like rhs", columns);
 }
 
-fn test_regexp(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+fn test_regexp(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "lhs regexp rhs", columns);
     run_ast(file, "lhs rlike rhs", columns);
 }
 
-fn test_notregexp(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+fn test_notregexp(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "lhs not regexp rhs", columns);
     run_ast(file, "lhs not rlike rhs", columns);
 }

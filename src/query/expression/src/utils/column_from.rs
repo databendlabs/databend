@@ -21,6 +21,14 @@ use crate::Column;
 
 pub trait FromData<D, Phantom: ?Sized> {
     fn from_data(_: D) -> Column;
+
+    fn from_data_with_validity(d: D, valids: Vec<bool>) -> Column {
+        let column = Self::from_data(d);
+        Column::Nullable(Box::new(NullableColumn {
+            column,
+            validity: valids.into(),
+        }))
+    }
 }
 
 impl<T, S> FromData<Vec<S>, [S; 0]> for T

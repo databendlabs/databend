@@ -14,10 +14,9 @@
 
 use std::io::Write;
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
+use common_expression::types::*;
 use common_expression::utils::ColumnFrom;
-use common_expression::Column;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -53,8 +52,7 @@ fn test_parse_json(file: &mut impl Write) {
 
     run_ast(file, "parse_json(s)", &[(
         "s",
-        DataType::String,
-        Column::from_data(vec![
+        StringType::from_data(vec![
             r#"null"#,
             r#"true"#,
             r#"9223372036854775807"#,
@@ -70,8 +68,7 @@ fn test_parse_json(file: &mut impl Write) {
 
     run_ast(file, "parse_json(s)", &[(
         "s",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(&["true", "false", "", "1234"], vec![
+        StringType::from_data_with_validity(&["true", "false", "", "1234"], vec![
             true, true, false, true,
         ]),
     )]);
@@ -90,8 +87,7 @@ fn test_try_parse_json(file: &mut impl Write) {
 
     run_ast(file, "try_parse_json(s)", &[(
         "s",
-        DataType::String,
-        Column::from_data(vec![
+        StringType::from_data(vec![
             r#"null"#,
             r#"true"#,
             r#"9223372036854775807"#,
@@ -107,8 +103,7 @@ fn test_try_parse_json(file: &mut impl Write) {
 
     run_ast(file, "try_parse_json(s)", &[(
         "s",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(&["true", "ttt", "", "1234"], vec![
+        StringType::from_data_with_validity(&["true", "ttt", "", "1234"], vec![
             true, true, false, true,
         ]),
     )]);
@@ -121,14 +116,12 @@ fn test_check_json(file: &mut impl Write) {
 
     run_ast(file, "check_json(s)", &[(
         "s",
-        DataType::String,
-        Column::from_data(vec![r#"null"#, r#"abc"#, r#"true"#]),
+        StringType::from_data(vec![r#"null"#, r#"abc"#, r#"true"#]),
     )]);
 
     run_ast(file, "check_json(s)", &[(
         "s",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(&["true", "ttt", "", "1234"], vec![
+        StringType::from_data_with_validity(&["true", "ttt", "", "1234"], vec![
             true, true, false, true,
         ]),
     )]);
@@ -141,16 +134,15 @@ fn test_length(file: &mut impl Write) {
 
     run_ast(file, "length(parse_json(s))", &[(
         "s",
-        DataType::String,
-        Column::from_data(vec!["true", "[1,2,3,4]", "[\"a\",\"b\",\"c\"]"]),
+        StringType::from_data(vec!["true", "[1,2,3,4]", "[\"a\",\"b\",\"c\"]"]),
     )]);
 
     run_ast(file, "length(parse_json(s))", &[(
         "s",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(&["true", "[1,2,3,4]", "", "[\"a\",\"b\",\"c\"]"], vec![
-            true, true, false, true,
-        ]),
+        StringType::from_data_with_validity(
+            &["true", "[1,2,3,4]", "", "[\"a\",\"b\",\"c\"]"],
+            vec![true, true, false, true],
+        ),
     )]);
 }
 
@@ -164,8 +156,7 @@ fn test_object_keys(file: &mut impl Write) {
 
     run_ast(file, "object_keys(parse_json(s))", &[(
         "s",
-        DataType::String,
-        Column::from_data(vec![
+        StringType::from_data(vec![
             "[1,2,3,4]",
             "{\"a\":\"b\",\"c\":\"d\"}",
             "{\"k1\":\"v1\",\"k2\":\"v2\"}",
@@ -174,8 +165,7 @@ fn test_object_keys(file: &mut impl Write) {
 
     run_ast(file, "object_keys(parse_json(s))", &[(
         "s",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(
+        StringType::from_data_with_validity(
             &[
                 "[1,2,3,4]",
                 "{\"a\":\"b\",\"c\":\"d\"}",
@@ -199,58 +189,43 @@ fn test_get(file: &mut impl Write) {
     run_ast(file, "parse_json(s)[i]", &[
         (
             "s",
-            DataType::String,
-            Column::from_data(vec!["true", "[1,2,3,4]", "[\"a\",\"b\",\"c\"]"]),
+            StringType::from_data(vec!["true", "[1,2,3,4]", "[\"a\",\"b\",\"c\"]"]),
         ),
-        (
-            "i",
-            DataType::Number(NumberDataType::UInt64),
-            Column::from_data(vec![0u64, 0, 1]),
-        ),
+        ("i", UInt64Type::from_data(vec![0u64, 0, 1])),
     ]);
 
     run_ast(file, "parse_json(s)[i]", &[
         (
             "s",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(
+            StringType::from_data_with_validity(
                 &["true", "[1,2,3,4]", "", "[\"a\",\"b\",\"c\"]"],
                 vec![true, true, false, true],
             ),
         ),
         (
             "i",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-            Column::from_data_with_validity(vec![0u64, 2, 0, 1], vec![false, true, false, true]),
+            UInt64Type::from_data_with_validity(vec![0u64, 2, 0, 1], vec![
+                false, true, false, true,
+            ]),
         ),
     ]);
 
     run_ast(file, "parse_json(s)[k]", &[
         (
             "s",
-            DataType::String,
-            Column::from_data(vec!["true", "{\"k\":1}", "{\"a\":\"b\"}"]),
+            StringType::from_data(vec!["true", "{\"k\":1}", "{\"a\":\"b\"}"]),
         ),
-        (
-            "k",
-            DataType::String,
-            Column::from_data(vec!["k", "k", "x"]),
-        ),
+        ("k", StringType::from_data(vec!["k", "k", "x"])),
     ]);
 
     run_ast(file, "parse_json(s)[k]", &[
         (
             "s",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["true", "{\"k\":1}", "", "{\"a\":\"b\"}"], vec![
+            StringType::from_data_with_validity(&["true", "{\"k\":1}", "", "{\"a\":\"b\"}"], vec![
                 true, true, false, true,
             ]),
         ),
-        (
-            "k",
-            DataType::String,
-            Column::from_data(vec!["", "k", "", "a"]),
-        ),
+        ("k", StringType::from_data(vec!["", "k", "", "a"])),
     ]);
 }
 
@@ -274,28 +249,18 @@ fn test_get_ignore_case(file: &mut impl Write) {
     run_ast(file, "get_ignore_case(parse_json(s), k)", &[
         (
             "s",
-            DataType::String,
-            Column::from_data(vec!["true", "{\"k\":1}", "{\"a\":\"b\"}"]),
+            StringType::from_data(vec!["true", "{\"k\":1}", "{\"a\":\"b\"}"]),
         ),
-        (
-            "k",
-            DataType::String,
-            Column::from_data(vec!["k", "K", "A"]),
-        ),
+        ("k", StringType::from_data(vec!["k", "K", "A"])),
     ]);
     run_ast(file, "get_ignore_case(parse_json(s), k)", &[
         (
             "s",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["true", "{\"k\":1}", "", "{\"a\":\"b\"}"], vec![
+            StringType::from_data_with_validity(&["true", "{\"k\":1}", "", "{\"a\":\"b\"}"], vec![
                 true, true, false, true,
             ]),
         ),
-        (
-            "k",
-            DataType::String,
-            Column::from_data(vec!["", "K", "", "A"]),
-        ),
+        ("k", StringType::from_data(vec!["", "K", "", "A"])),
     ]);
 }
 
@@ -321,27 +286,20 @@ fn test_get_path(file: &mut impl Write) {
     run_ast(file, "get_path(parse_json(s), k)", &[
         (
             "s",
-            DataType::String,
-            Column::from_data(vec!["true", "{\"k\":1}", "[\"a\",\"b\"]"]),
+            StringType::from_data(vec!["true", "{\"k\":1}", "[\"a\",\"b\"]"]),
         ),
-        (
-            "k",
-            DataType::String,
-            Column::from_data(vec!["k", "[\"k\"]", "[\"a\"]"]),
-        ),
+        ("k", StringType::from_data(vec!["k", "[\"k\"]", "[\"a\"]"])),
     ]);
     run_ast(file, "get_path(parse_json(s), k)", &[
         (
             "s",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["true", "{\"k\":1}", "", "[\"a\",\"b\"]"], vec![
+            StringType::from_data_with_validity(&["true", "{\"k\":1}", "", "[\"a\",\"b\"]"], vec![
                 true, true, false, true,
             ]),
         ),
         (
             "k",
-            DataType::String,
-            Column::from_data(vec!["[0]", "[\"k\"]", "", "[0]"]),
+            StringType::from_data(vec!["[0]", "[\"k\"]", "", "[0]"]),
         ),
     ]);
 }
@@ -372,27 +330,20 @@ fn test_json_extract_path_text(file: &mut impl Write) {
     run_ast(file, "json_extract_path_text(s, k)", &[
         (
             "s",
-            DataType::String,
-            Column::from_data(vec!["true", "{\"k\":1}", "[\"a\",\"b\"]"]),
+            StringType::from_data(vec!["true", "{\"k\":1}", "[\"a\",\"b\"]"]),
         ),
-        (
-            "k",
-            DataType::String,
-            Column::from_data(vec!["k", "[\"k\"]", "[\"a\"]"]),
-        ),
+        ("k", StringType::from_data(vec!["k", "[\"k\"]", "[\"a\"]"])),
     ]);
     run_ast(file, "json_extract_path_text(s, k)", &[
         (
             "s",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["true", "{\"k\":1}", "", "[\"a\",\"b\"]"], vec![
+            StringType::from_data_with_validity(&["true", "{\"k\":1}", "", "[\"a\",\"b\"]"], vec![
                 true, true, false, true,
             ]),
         ),
         (
             "k",
-            DataType::String,
-            Column::from_data(vec!["[0]", "[\"k\"]", "", "[0]"]),
+            StringType::from_data(vec!["[0]", "[\"k\"]", "", "[0]"]),
         ),
     ]);
 }
@@ -413,8 +364,7 @@ fn test_as_type(file: &mut impl Write) {
 
     let columns = &[(
         "s",
-        DataType::String,
-        Column::from_data(vec![
+        StringType::from_data(vec![
             "true",
             "123",
             "12.34",

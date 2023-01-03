@@ -14,12 +14,9 @@
 
 use std::io::Write;
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::utils::from_date_data;
-use common_expression::utils::from_timestamp_data;
+use common_expression::types::*;
 use common_expression::utils::ColumnFrom;
-use common_expression::Column;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -45,18 +42,15 @@ fn test_cast_primitive(file: &mut impl Write, is_try: bool) {
 
     run_ast(file, format!("{prefix}CAST(a AS UINT8)"), &[(
         "a",
-        DataType::Number(NumberDataType::UInt16),
-        Column::from_data(vec![0u16, 64, 255, 512, 1024]),
+        UInt16Type::from_data(vec![0u16, 64, 255, 512, 1024]),
     )]);
     run_ast(file, format!("{prefix}CAST(a AS UINT16)"), &[(
         "a",
-        DataType::Number(NumberDataType::Int16),
-        Column::from_data(vec![0i16, 1, 2, 3, -4]),
+        Int16Type::from_data(vec![0i16, 1, 2, 3, -4]),
     )]);
     run_ast(file, format!("{prefix}CAST(a AS INT64)"), &[(
         "a",
-        DataType::Number(NumberDataType::Int16),
-        Column::from_data(vec![0i16, 1, 2, 3, -4]),
+        Int16Type::from_data(vec![0i16, 1, 2, 3, -4]),
     )]);
     run_ast(
         file,
@@ -66,8 +60,7 @@ fn test_cast_primitive(file: &mut impl Write, is_try: bool) {
         &[
             (
                 "a",
-                DataType::Number(NumberDataType::UInt64),
-                Column::from_data(vec![
+                UInt64Type::from_data(vec![
                     0,
                     1,
                     u8::MAX as u64,
@@ -78,8 +71,7 @@ fn test_cast_primitive(file: &mut impl Write, is_try: bool) {
             ),
             (
                 "b",
-                DataType::Number(NumberDataType::Float64),
-                Column::from_data(vec![
+                Float64Type::from_data(vec![
                     0.0,
                     u32::MAX as f64,
                     u64::MAX as f64,
@@ -94,55 +86,35 @@ fn test_cast_primitive(file: &mut impl Write, is_try: bool) {
         file,
         format!("{prefix}CAST([[a, b], NULL, NULL] AS Array(Array(Int8)))"),
         &[
-            (
-                "a",
-                DataType::Number(NumberDataType::Int16),
-                Column::from_data(vec![0i16, 1, 2, 127, 255]),
-            ),
-            (
-                "b",
-                DataType::Number(NumberDataType::Int16),
-                Column::from_data(vec![0i16, -1, -127, -128, -129]),
-            ),
+            ("a", Int16Type::from_data(vec![0i16, 1, 2, 127, 255])),
+            ("b", Int16Type::from_data(vec![0i16, -1, -127, -128, -129])),
         ],
     );
     run_ast(
         file,
         format!("{prefix}CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))"),
         &[
-            (
-                "a",
-                DataType::Number(NumberDataType::Int16),
-                Column::from_data(vec![0i16, 1, 2, 127, 256]),
-            ),
-            (
-                "b",
-                DataType::Number(NumberDataType::Int16),
-                Column::from_data(vec![0i16, 1, -127, -128, -129]),
-            ),
+            ("a", Int16Type::from_data(vec![0i16, 1, 2, 127, 256])),
+            ("b", Int16Type::from_data(vec![0i16, 1, -127, -128, -129])),
         ],
     );
     run_ast(file, format!("{prefix}CAST(a AS INT16)"), &[(
         "a",
-        DataType::Number(NumberDataType::Float64),
-        Column::from_data(vec![0.0f64, 1.1, 2.2, 3.3, -4.4]),
+        Float64Type::from_data(vec![0.0f64, 1.1, 2.2, 3.3, -4.4]),
     )]);
     run_ast(file, format!("{prefix}CAST(b AS INT16)"), &[(
         "b",
-        DataType::Number(NumberDataType::Int8),
-        Column::from_data(vec![0i8, 1, 2, 3, -4]),
+        Int8Type::from_data(vec![0i8, 1, 2, 3, -4]),
     )]);
 
     run_ast(file, format!("{prefix}CAST(a AS UINT16)"), &[(
         "a",
-        DataType::Number(NumberDataType::Int16),
-        Column::from_data(vec![0i16, 1, 2, 3, -4]),
+        Int16Type::from_data(vec![0i16, 1, 2, 3, -4]),
     )]);
 
     run_ast(file, format!("{prefix}CAST(c AS INT16)"), &[(
         "c",
-        DataType::Number(NumberDataType::Int64),
-        Column::from_data(vec![0i64, 11111111111, 2, 3, -4]),
+        Int64Type::from_data(vec![0i64, 11111111111, 2, 3, -4]),
     )]);
 }
 
@@ -184,8 +156,7 @@ fn test_cast_to_variant(file: &mut impl Write, is_try: bool) {
 
     run_ast(file, format!("{prefix}CAST(a AS VARIANT)"), &[(
         "a",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(vec!["a", "bc", "def"], vec![true, false, true]),
+        StringType::from_data_with_validity(vec!["a", "bc", "def"], vec![true, false, true]),
     )]);
 }
 
@@ -225,8 +196,7 @@ fn test_cast_number_to_timestamp(file: &mut impl Write, is_try: bool) {
     );
     run_ast(file, format!("{prefix}CAST(a AS TIMESTAMP)"), &[(
         "a",
-        DataType::Number(NumberDataType::Int64),
-        Column::from_data(vec![
+        Int64Type::from_data(vec![
             -315360000000000i64,
             -315360000000,
             -100,
@@ -272,8 +242,7 @@ fn test_cast_number_to_timestamp(file: &mut impl Write, is_try: bool) {
     );
     run_ast(file, format!("{prefix}CAST(a AS INT64)"), &[(
         "a",
-        DataType::Timestamp,
-        from_timestamp_data(vec![
+        TimestampType::from_data(vec![
             -315360000000000,
             -315360000000,
             -100,
@@ -298,8 +267,7 @@ fn test_cast_number_to_date(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}CAST(2932897 AS DATE)"), &[]);
     run_ast(file, format!("{prefix}CAST(a AS DATE)"), &[(
         "a",
-        DataType::Number(NumberDataType::Int32),
-        Column::from_data(vec![-354285, -100, 0, 100, 2932896]),
+        Int32Type::from_data(vec![-354285, -100, 0, 100, 2932896]),
     )]);
 
     run_ast(file, format!("{prefix}CAST(TO_DATE(-354285) AS INT64)"), &[
@@ -312,8 +280,7 @@ fn test_cast_number_to_date(file: &mut impl Write, is_try: bool) {
     ]);
     run_ast(file, format!("{prefix}CAST(a AS INT64)"), &[(
         "a",
-        DataType::Date,
-        from_date_data(vec![-354285, -100, 0, 100, 2932896]),
+        DateType::from_data(vec![-354285, -100, 0, 100, 2932896]),
     )]);
 }
 
@@ -324,8 +291,7 @@ fn test_cast_between_date_and_timestamp(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}CAST(TO_TIMESTAMP(1) AS DATE)"), &[]);
     run_ast(file, format!("{prefix}CAST(a AS DATE)"), &[(
         "a",
-        DataType::Timestamp,
-        from_timestamp_data(vec![
+        TimestampType::from_data(vec![
             -315360000000000,
             -315360000000,
             -100,
@@ -337,13 +303,11 @@ fn test_cast_between_date_and_timestamp(file: &mut impl Write, is_try: bool) {
     )]);
     run_ast(file, format!("{prefix}CAST(a AS TIMESTAMP)"), &[(
         "a",
-        DataType::Date,
-        from_date_data(vec![-354285, -100, 0, 100, 2932896]),
+        DateType::from_data(vec![-354285, -100, 0, 100, 2932896]),
     )]);
     run_ast(file, format!("{prefix}CAST(TO_DATE(a) AS TIMESTAMP)"), &[(
         "a",
-        DataType::Number(NumberDataType::Int32),
-        Column::from_data(vec![-354285, -100, 0, 100, 2932896]),
+        Int32Type::from_data(vec![-354285, -100, 0, 100, 2932896]),
     )]);
 }
 
@@ -381,8 +345,7 @@ fn test_cast_between_string_and_timestamp(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}TO_TIMESTAMP('2022-01-02T01')"), &[]);
     run_ast(file, format!("{prefix}TO_TIMESTAMP(a)"), &[(
         "a",
-        DataType::String,
-        Column::from_data(vec![
+        StringType::from_data(vec![
             "2022-01-02",
             "2022-01-02T03:25:02.868894-07:00",
             "2022-01-02 02:00:11",
@@ -433,8 +396,7 @@ fn test_cast_between_string_and_timestamp(file: &mut impl Write, is_try: bool) {
     );
     run_ast(file, format!("{prefix}CAST(a AS VARCHAR)"), &[(
         "a",
-        DataType::Timestamp,
-        from_timestamp_data(vec![
+        TimestampType::from_data(vec![
             -315360000000000,
             -315360000000,
             -100,
@@ -468,8 +430,7 @@ fn test_between_string_and_date(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}TO_DATE('2022-01-02T01')"), &[]);
     run_ast(file, format!("{prefix}TO_DATE(a)"), &[(
         "a",
-        DataType::String,
-        Column::from_data(vec![
+        StringType::from_data(vec![
             "2022-01-02",
             "2022-01-02T03:25:02.868894-07:00",
             "2022-01-02 02:00:11",
@@ -494,7 +455,6 @@ fn test_between_string_and_date(file: &mut impl Write, is_try: bool) {
     );
     run_ast(file, format!("{prefix}CAST(a AS VARCHAR)"), &[(
         "a",
-        DataType::Date,
-        from_date_data(vec![-354285, -100, 0, 100, 2932896]),
+        DateType::from_data(vec![-354285, -100, 0, 100, 2932896]),
     )]);
 }

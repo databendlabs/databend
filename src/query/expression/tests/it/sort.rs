@@ -16,11 +16,12 @@ use std::sync::Arc;
 use std::vec;
 
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
+use common_expression::types::number::*;
+use common_expression::types::StringType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::SortColumnDescription;
 
 use crate::common::new_block;
@@ -28,14 +29,8 @@ use crate::common::new_block;
 #[test]
 fn test_block_sort() -> Result<()> {
     let block = new_block(&[
-        (
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![6i64, 4, 3, 2, 1, 1, 7]),
-        ),
-        (
-            DataType::String,
-            Column::from_data(vec!["b1", "b2", "b3", "b4", "b5", "b6", "b7"]),
-        ),
+        Int64Type::from_data(vec![6i64, 4, 3, 2, 1, 1, 7]),
+        StringType::from_data(vec!["b1", "b2", "b3", "b4", "b5", "b6", "b7"]),
     ]);
 
     // test cast:
@@ -51,8 +46,8 @@ fn test_block_sort() -> Result<()> {
             }],
             None,
             vec![
-                Column::from_data(vec![1_i64, 1, 2, 3, 4, 6, 7]),
-                Column::from_data(vec!["b5", "b6", "b4", "b3", "b2", "b1", "b7"]),
+                Int64Type::from_data(vec![1_i64, 1, 2, 3, 4, 6, 7]),
+                StringType::from_data(vec!["b5", "b6", "b4", "b3", "b2", "b1", "b7"]),
             ],
         ),
         (
@@ -63,8 +58,8 @@ fn test_block_sort() -> Result<()> {
             }],
             Some(4),
             vec![
-                Column::from_data(vec![1_i64, 1, 2, 3]),
-                Column::from_data(vec!["b5", "b6", "b4", "b3"]),
+                Int64Type::from_data(vec![1_i64, 1, 2, 3]),
+                StringType::from_data(vec!["b5", "b6", "b4", "b3"]),
             ],
         ),
         (
@@ -75,8 +70,8 @@ fn test_block_sort() -> Result<()> {
             }],
             None,
             vec![
-                Column::from_data(vec![7_i64, 1, 1, 2, 3, 4, 6]),
-                Column::from_data(vec!["b7", "b6", "b5", "b4", "b3", "b2", "b1"]),
+                Int64Type::from_data(vec![7_i64, 1, 1, 2, 3, 4, 6]),
+                StringType::from_data(vec!["b7", "b6", "b5", "b4", "b3", "b2", "b1"]),
             ],
         ),
         (
@@ -94,8 +89,8 @@ fn test_block_sort() -> Result<()> {
             ],
             None,
             vec![
-                Column::from_data(vec![1_i64, 1, 2, 3, 4, 6, 7]),
-                Column::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1", "b7"]),
+                Int64Type::from_data(vec![1_i64, 1, 2, 3, 4, 6, 7]),
+                StringType::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1", "b7"]),
             ],
         ),
     ];
@@ -121,25 +116,16 @@ fn test_block_sort() -> Result<()> {
 fn test_blocks_merge_sort() -> Result<()> {
     let blocks = vec![
         new_block(&[
-            (
-                DataType::Number(NumberDataType::Int64),
-                Column::from_data(vec![4i64, 6]),
-            ),
-            (DataType::String, Column::from_data(vec!["b2", "b1"])),
+            Int64Type::from_data(vec![4i64, 6]),
+            StringType::from_data(vec!["b2", "b1"]),
         ]),
         new_block(&[
-            (
-                DataType::Number(NumberDataType::Int64),
-                Column::from_data(vec![2i64, 3]),
-            ),
-            (DataType::String, Column::from_data(vec!["b4", "b3"])),
+            Int64Type::from_data(vec![2i64, 3]),
+            StringType::from_data(vec!["b4", "b3"]),
         ]),
         new_block(&[
-            (
-                DataType::Number(NumberDataType::Int64),
-                Column::from_data(vec![1i64, 1]),
-            ),
-            (DataType::String, Column::from_data(vec!["b6", "b5"])),
+            Int64Type::from_data(vec![1i64, 1]),
+            StringType::from_data(vec!["b6", "b5"]),
         ]),
     ];
 
@@ -164,8 +150,8 @@ fn test_blocks_merge_sort() -> Result<()> {
             }],
             None,
             vec![
-                Column::from_data(vec![1_i64, 1, 2, 3, 4, 6]),
-                Column::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1"]),
+                Int64Type::from_data(vec![1_i64, 1, 2, 3, 4, 6]),
+                StringType::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1"]),
             ],
         ),
         (
@@ -177,8 +163,8 @@ fn test_blocks_merge_sort() -> Result<()> {
             }],
             Some(4),
             vec![
-                Column::from_data(vec![1_i64, 1, 2, 3]),
-                Column::from_data(vec!["b6", "b5", "b4", "b3"]),
+                Int64Type::from_data(vec![1_i64, 1, 2, 3]),
+                StringType::from_data(vec!["b6", "b5", "b4", "b3"]),
             ],
         ),
         (
@@ -190,8 +176,8 @@ fn test_blocks_merge_sort() -> Result<()> {
             }],
             None,
             vec![
-                Column::from_data(vec![1_i64, 1, 2, 3, 4, 6]),
-                Column::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1"]),
+                Int64Type::from_data(vec![1_i64, 1, 2, 3, 4, 6]),
+                StringType::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1"]),
             ],
         ),
         (
@@ -210,8 +196,8 @@ fn test_blocks_merge_sort() -> Result<()> {
             ],
             None,
             vec![
-                Column::from_data(vec![1_i64, 1, 2, 3, 4, 6]),
-                Column::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1"]),
+                Int64Type::from_data(vec![1_i64, 1, 2, 3, 4, 6]),
+                StringType::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1"]),
             ],
         ),
     ];

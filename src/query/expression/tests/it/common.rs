@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Value;
 
-pub fn new_block(columns: &[(DataType, Column)]) -> DataBlock {
-    let len = columns.get(0).map_or(1, |(_, c)| c.len());
+pub fn new_block(columns: &[Column]) -> DataBlock {
+    let len = columns.get(0).map_or(1, |c| c.len());
     let columns = columns
         .iter()
-        .map(|(ty, col)| BlockEntry {
-            data_type: ty.clone(),
+        .map(|col| BlockEntry {
+            data_type: col.data_type(),
             value: Value::Column(col.clone()),
         })
         .collect();

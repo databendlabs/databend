@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::types::DataType;
+use common_expression::types::number::*;
 use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
 use common_expression::*;
 
 use crate::common::new_block;
@@ -29,22 +30,10 @@ fn test_group_by_hash() -> Result<()> {
     ]);
 
     let block = new_block(&vec![
-        (
-            DataType::Number(NumberDataType::Int8),
-            Column::from_data(vec![1i8, 1, 2, 1, 2, 3]),
-        ),
-        (
-            DataType::Number(NumberDataType::Int8),
-            Column::from_data(vec![1i8, 1, 2, 1, 2, 3]),
-        ),
-        (
-            DataType::Number(NumberDataType::Int8),
-            Column::from_data(vec![1i8, 1, 2, 1, 2, 3]),
-        ),
-        (
-            DataType::String,
-            Column::from_data(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
-        ),
+        Int8Type::from_data(vec![1i8, 1, 2, 1, 2, 3]),
+        Int8Type::from_data(vec![1i8, 1, 2, 1, 2, 3]),
+        Int8Type::from_data(vec![1i8, 1, 2, 1, 2, 3]),
+        StringType::from_data(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);
 
     let method = DataBlock::choose_hash_method(&block, &[0, 3])?;

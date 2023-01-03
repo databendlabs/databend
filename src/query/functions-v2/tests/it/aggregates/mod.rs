@@ -50,23 +50,23 @@ pub trait AggregationSimulator = Fn(
 pub fn run_agg_ast(
     file: &mut impl Write,
     text: &str,
-    columns: &[(&str, DataType, Column)],
+    columns: &[(&str, Column)],
     simulator: impl AggregationSimulator,
 ) {
     let raw_expr = parser::parse_raw_expr(
         text,
         &columns
             .iter()
-            .map(|(name, ty, _)| (*name, ty.clone()))
+            .map(|(name, col)| (*name, col.data_type()))
             .collect::<Vec<_>>(),
     );
 
-    let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
+    let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(0);
     let block = DataBlock::new(
         columns
             .iter()
-            .map(|(_, ty, col)| BlockEntry {
-                data_type: ty.clone(),
+            .map(|(_, col)| BlockEntry {
+                data_type: col.data_type(),
                 value: Value::Column(col.clone()),
             })
             .collect::<Vec<_>>(),
@@ -141,7 +141,7 @@ pub fn run_agg_ast(
                 };
 
                 for id in ids.iter() {
-                    let (name, _, col) = &columns[*id];
+                    let (name, col) = &columns[*id];
                     table.add_row(&[name.to_string(), format!("{col:?}")]);
                 }
                 table.add_row(["Output".to_string(), format!("{column:?}")]);

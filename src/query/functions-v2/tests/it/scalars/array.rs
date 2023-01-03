@@ -14,10 +14,9 @@
 
 use std::io::Write;
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
+use common_expression::types::*;
 use common_expression::utils::ColumnFrom;
-use common_expression::Column;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -67,21 +66,9 @@ fn test_get(file: &mut impl Write) {
     run_ast(file, "[1, null, 3][2]", &[]);
     run_ast(file, "[1, 2, 3][4]", &[]);
     run_ast(file, "[a, b][idx]", &[
-        (
-            "a",
-            DataType::Number(NumberDataType::Int16),
-            Column::from_data(vec![0i16, 1, 2]),
-        ),
-        (
-            "b",
-            DataType::Number(NumberDataType::Int16),
-            Column::from_data(vec![3i16, 4, 5]),
-        ),
-        (
-            "idx",
-            DataType::Number(NumberDataType::UInt16),
-            Column::from_data(vec![1u16, 2, 3]),
-        ),
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+        ("idx", UInt16Type::from_data(vec![1u16, 2, 3])),
     ]);
 }
 
@@ -118,15 +105,12 @@ fn test_contains(file: &mut impl Write) {
     run_ast(file, "contains([1,2,3], 2)", &[]);
 
     let columns = [
-        (
-            "int8_col",
-            DataType::Number(NumberDataType::Int8),
-            Column::from_data(vec![1i8, 2, 7, 8]),
-        ),
+        ("int8_col", Int8Type::from_data(vec![1i8, 2, 7, 8])),
         (
             "nullable_col",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            Column::from_data_with_validity(vec![9i64, 10, 11, 12], vec![true, true, false, false]),
+            Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![
+                true, true, false, false,
+            ]),
         ),
     ];
 

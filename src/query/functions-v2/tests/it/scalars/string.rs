@@ -14,10 +14,11 @@
 
 use std::io::Write;
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
+use common_expression::types::number::*;
+use common_expression::types::BooleanType;
+use common_expression::types::StringType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Column;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -70,8 +71,7 @@ fn test_upper(file: &mut impl Write) {
     run_ast(file, "upper(NULL)", &[]);
     run_ast(file, "ucase(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["Abc", "Dobrý den", "ß😀山"]),
+        StringType::from_data(&["Abc", "Dobrý den", "ß😀山"]),
     )]);
 }
 
@@ -82,8 +82,7 @@ fn test_lower(file: &mut impl Write) {
     run_ast(file, "lower(NULL)", &[]);
     run_ast(file, "lcase(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["Abc", "DOBRÝ DEN", "İ😀山"]),
+        StringType::from_data(&["Abc", "DOBRÝ DEN", "İ😀山"]),
     )]);
 }
 
@@ -92,8 +91,7 @@ fn test_bit_length(file: &mut impl Write) {
     run_ast(file, "bit_length(NULL)", &[]);
     run_ast(file, "bit_length(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["latin", "кириллица", "кириллица and latin"]),
+        StringType::from_data(&["latin", "кириллица", "кириллица and latin"]),
     )]);
 }
 
@@ -102,8 +100,7 @@ fn test_octet_length(file: &mut impl Write) {
     run_ast(file, "octet_length(NULL)", &[]);
     run_ast(file, "length(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["latin", "кириллица", "кириллица and latin"]),
+        StringType::from_data(&["latin", "кириллица", "кириллица and latin"]),
     )]);
 }
 
@@ -112,8 +109,7 @@ fn test_char_length(file: &mut impl Write) {
     run_ast(file, "char_length(NULL)", &[]);
     run_ast(file, "character_length(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["latin", "кириллица", "кириллица and latin"]),
+        StringType::from_data(&["latin", "кириллица", "кириллица and latin"]),
     )]);
 }
 
@@ -123,8 +119,7 @@ fn test_to_base64(file: &mut impl Write) {
     run_ast(file, "to_base64(Null)", &[]);
     run_ast(file, "to_base64(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["Abc", "123"]),
+        StringType::from_data(&["Abc", "123"]),
     )]);
 }
 
@@ -134,8 +129,7 @@ fn test_from_base64(file: &mut impl Write) {
     run_ast(file, "from_base64(Null)", &[]);
     run_ast(file, "from_base64(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["QWJj", "MTIz"]),
+        StringType::from_data(&["QWJj", "MTIz"]),
     )]);
     run_ast(file, "from_base64('!@#')", &[]);
 }
@@ -155,8 +149,7 @@ fn test_quote(file: &mut impl Write) {
     run_ast(file, "quote(Null)", &[]);
     run_ast(file, "quote(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&[r#"a\0b"#, r#"a\'b"#, r#"a\nb"#]),
+        StringType::from_data(&[r#"a\0b"#, r#"a\'b"#, r#"a\nb"#]),
     )])
 }
 
@@ -170,8 +163,7 @@ fn test_reverse(file: &mut impl Write) {
     run_ast(file, "reverse(Null)", &[]);
     run_ast(file, "reverse(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["abc", "a", ""]),
+        StringType::from_data(&["abc", "a", ""]),
     )])
 }
 
@@ -185,14 +177,9 @@ fn test_ascii(file: &mut impl Write) {
     run_ast(file, "ascii(Null)", &[]);
     run_ast(file, "ascii(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["1", "123", "-1", "你好"]),
+        StringType::from_data(&["1", "123", "-1", "你好"]),
     )]);
-    run_ast(file, "ascii(b)", &[(
-        "b",
-        DataType::String,
-        Column::from_data(&[""]),
-    )]);
+    run_ast(file, "ascii(b)", &[("b", StringType::from_data(&[""]))]);
 }
 
 fn test_ltrim(file: &mut impl Write) {
@@ -201,8 +188,7 @@ fn test_ltrim(file: &mut impl Write) {
     run_ast(file, "ltrim(NULL)", &[]);
     run_ast(file, "ltrim(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
+        StringType::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
     )]);
 }
 
@@ -212,8 +198,7 @@ fn test_rtrim(file: &mut impl Write) {
     run_ast(file, "rtrim(NULL)", &[]);
     run_ast(file, "rtrim(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
+        StringType::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
     )]);
 }
 
@@ -226,12 +211,8 @@ fn test_trim_leading(file: &mut impl Write) {
     run_ast(file, "trim_leading('aaaaaaaa', NULL)", &[]);
 
     let table = [
-        (
-            "a",
-            DataType::String,
-            Column::from_data(&["aabbaa", "bbccbb", "ccddcc"]),
-        ),
-        ("b", DataType::String, Column::from_data(&["a", "b", "c"])),
+        ("a", StringType::from_data(&["aabbaa", "bbccbb", "ccddcc"])),
+        ("b", StringType::from_data(&["a", "b", "c"])),
     ];
 
     run_ast(file, "trim_leading(a, 'a')", &table);
@@ -248,12 +229,8 @@ fn test_trim_trailing(file: &mut impl Write) {
     run_ast(file, "trim_trailing('aaaaaaaa', NULL)", &[]);
 
     let table = [
-        (
-            "a",
-            DataType::String,
-            Column::from_data(&["aabbaa", "bbccbb", "ccddcc"]),
-        ),
-        ("b", DataType::String, Column::from_data(&["a", "b", "c"])),
+        ("a", StringType::from_data(&["aabbaa", "bbccbb", "ccddcc"])),
+        ("b", StringType::from_data(&["a", "b", "c"])),
     ];
 
     run_ast(file, "trim_trailing(a, 'b')", &table);
@@ -270,12 +247,8 @@ fn test_trim_both(file: &mut impl Write) {
     run_ast(file, "trim_both('aaaaaaaa', NULL)", &[]);
 
     let table = [
-        (
-            "a",
-            DataType::String,
-            Column::from_data(&["aabbaa", "bbccbb", "ccddcc"]),
-        ),
-        ("b", DataType::String, Column::from_data(&["a", "b", "c"])),
+        ("a", StringType::from_data(&["aabbaa", "bbccbb", "ccddcc"])),
+        ("b", StringType::from_data(&["a", "b", "c"])),
     ];
 
     run_ast(file, "trim_both(a, 'a')", &table);
@@ -318,12 +291,8 @@ fn test_trim_with_from(file: &mut impl Write, trim_where: &str) {
     );
 
     let table = [
-        (
-            "a",
-            DataType::String,
-            Column::from_data(&["aabbaa", "bbccbb", "ccddcc"]),
-        ),
-        ("b", DataType::String, Column::from_data(&["a", "b", "c"])),
+        ("a", StringType::from_data(&["aabbaa", "bbccbb", "ccddcc"])),
+        ("b", StringType::from_data(&["a", "b", "c"])),
     ];
 
     run_ast(
@@ -355,8 +324,7 @@ fn test_trim(file: &mut impl Write) {
     run_ast(file, "trim(NULL)", &[]);
     run_ast(file, "trim(a)", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
+        StringType::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
     )]);
 
     // TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
@@ -370,74 +338,47 @@ fn test_concat(file: &mut impl Write) {
     run_ast(file, "concat(NULL, '3', '4')", &[]);
     run_ast(file, "concat(a, '3', '4', '5')", &[(
         "a",
-        DataType::String,
-        Column::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
+        StringType::from_data(&["abc", "   abc", "   abc   ", "abc   "]),
     )]);
 
     run_ast(file, "concat(a, '3')", &[(
         "a",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+        StringType::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
     )]);
 
     run_ast(file, "concat_ws('-', '3', null, '4', null, '5')", &[]);
     run_ast(file, "concat_ws(NULL, '3', '4')", &[]);
     run_ast(file, "concat_ws(a, '3', '4', '5')", &[(
         "a",
-        DataType::String,
-        Column::from_data(&[",", "-", ",", "-"]),
+        StringType::from_data(&[",", "-", ",", "-"]),
     )]);
 
     run_ast(file, "concat_ws(a, '3')", &[(
         "a",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+        StringType::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
     )]);
     run_ast(file, "concat_ws(a, '3', '4')", &[(
         "a",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+        StringType::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
     )]);
 
     run_ast(file, "concat_ws('', a, 2)", &[(
         "a",
-        DataType::Boolean,
-        Column::from_data(vec![false; 3]),
+        BooleanType::from_data(vec![false; 3]),
     )]);
 }
 
 fn test_bin(file: &mut impl Write) {
     let columns = &[
-        (
-            "a",
-            DataType::Number(NumberDataType::Int8),
-            Column::from_data(vec![-1i8, 2, 3]),
-        ),
+        ("a", Int8Type::from_data(vec![-1i8, 2, 3])),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
+            UInt8Type::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
         ),
-        (
-            "b",
-            DataType::Number(NumberDataType::Int16),
-            Column::from_data(vec![2i16, 4, 6]),
-        ),
-        (
-            "c",
-            DataType::Number(NumberDataType::UInt32),
-            Column::from_data(vec![10u32, 20, 30]),
-        ),
-        (
-            "d",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![10f64, -20f64, 30f64]),
-        ),
-        (
-            "e",
-            DataType::String,
-            Column::from_data(vec!["abc", "def", "databend"]),
-        ),
+        ("b", Int16Type::from_data(vec![2i16, 4, 6])),
+        ("c", UInt32Type::from_data(vec![10u32, 20, 30])),
+        ("d", Float64Type::from_data(vec![10f64, -20f64, 30f64])),
+        ("e", StringType::from_data(vec!["abc", "def", "databend"])),
     ];
     run_ast(file, "bin(a)", columns);
     run_ast(file, "bin(a2)", columns);
@@ -449,36 +390,15 @@ fn test_bin(file: &mut impl Write) {
 
 fn test_oct(file: &mut impl Write) {
     let columns = &[
-        (
-            "a",
-            DataType::Number(NumberDataType::Int8),
-            Column::from_data(vec![-1i8, 2, 3]),
-        ),
+        ("a", Int8Type::from_data(vec![-1i8, 2, 3])),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
+            UInt8Type::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
         ),
-        (
-            "b",
-            DataType::Number(NumberDataType::Int16),
-            Column::from_data(vec![2i16, 4, 6]),
-        ),
-        (
-            "c",
-            DataType::Number(NumberDataType::UInt32),
-            Column::from_data(vec![10u32, 20, 30]),
-        ),
-        (
-            "d",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![10f64, -20f64, 30f64]),
-        ),
-        (
-            "e",
-            DataType::String,
-            Column::from_data(vec!["abc", "def", "databend"]),
-        ),
+        ("b", Int16Type::from_data(vec![2i16, 4, 6])),
+        ("c", UInt32Type::from_data(vec![10u32, 20, 30])),
+        ("d", Float64Type::from_data(vec![10f64, -20f64, 30f64])),
+        ("e", StringType::from_data(vec!["abc", "def", "databend"])),
     ];
     run_ast(file, "oct(a)", columns);
     run_ast(file, "oct(a2)", columns);
@@ -490,36 +410,15 @@ fn test_oct(file: &mut impl Write) {
 
 fn test_hex(file: &mut impl Write) {
     let columns = &[
-        (
-            "a",
-            DataType::Number(NumberDataType::Int8),
-            Column::from_data(vec![-1i8, 2, 3]),
-        ),
+        ("a", Int8Type::from_data(vec![-1i8, 2, 3])),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
+            UInt8Type::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
         ),
-        (
-            "b",
-            DataType::Number(NumberDataType::Int16),
-            Column::from_data(vec![2i16, 4, 6]),
-        ),
-        (
-            "c",
-            DataType::Number(NumberDataType::UInt32),
-            Column::from_data(vec![10u32, 20, 30]),
-        ),
-        (
-            "d",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![10f64, -20f64, 30f64]),
-        ),
-        (
-            "e",
-            DataType::String,
-            Column::from_data(vec!["abc", "def", "databend"]),
-        ),
+        ("b", Int16Type::from_data(vec![2i16, 4, 6])),
+        ("c", UInt32Type::from_data(vec![10u32, 20, 30])),
+        ("d", Float64Type::from_data(vec![10f64, -20f64, 30f64])),
+        ("e", StringType::from_data(vec!["abc", "def", "databend"])),
     ];
     run_ast(file, "hex(a)", columns);
     run_ast(file, "hex(a2)", columns);
@@ -532,17 +431,12 @@ fn test_hex(file: &mut impl Write) {
 fn test_unhex(file: &mut impl Write) {
     run_ast(file, "unhex('6461746162656e64')", &[]);
 
-    let columns = &[(
-        "s",
-        DataType::String,
-        Column::from_data(vec!["abc", "def", "databend"]),
-    )];
+    let columns = &[("s", StringType::from_data(vec!["abc", "def", "databend"]))];
     run_ast(file, "unhex(hex(s))", columns);
 
     let columns = &[(
         "s",
-        DataType::String,
-        Column::from_data(vec!["616263", "646566", "6461746162656e64"]),
+        StringType::from_data(vec!["616263", "646566", "6461746162656e64"]),
     )];
     run_ast(file, "unhex(s)", columns);
 }
@@ -554,17 +448,9 @@ fn test_pad(file: &mut impl Write) {
     run_ast(file, "lpad('hi', 1, '?')", &[]);
     run_ast(file, "lpad('hi', -1, '?')", &[]);
     let table = [
-        (
-            "a",
-            DataType::String,
-            Column::from_data(&["hi", "test", "cc"]),
-        ),
-        (
-            "b",
-            DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![0u8, 3, 5]),
-        ),
-        ("c", DataType::String, Column::from_data(&["?", "x", "bb"])),
+        ("a", StringType::from_data(&["hi", "test", "cc"])),
+        ("b", UInt8Type::from_data(vec![0u8, 3, 5])),
+        ("c", StringType::from_data(&["?", "x", "bb"])),
     ];
     run_ast(file, "lpad(a, b, c)", &table);
     run_ast(file, "rpad('hi', 2, '?')", &[]);
@@ -582,21 +468,9 @@ fn test_replace(file: &mut impl Write) {
     run_ast(file, "replace('hi', 'x', '?')", &[]);
 
     let table = [
-        (
-            "a",
-            DataType::String,
-            Column::from_data(&["hi", "test", "cc", "q"]),
-        ),
-        (
-            "b",
-            DataType::String,
-            Column::from_data(&["i", "te", "cc", ""]),
-        ),
-        (
-            "c",
-            DataType::String,
-            Column::from_data(&["?", "x", "bb", "q"]),
-        ),
+        ("a", StringType::from_data(&["hi", "test", "cc", "q"])),
+        ("b", StringType::from_data(&["i", "te", "cc", ""])),
+        ("c", StringType::from_data(&["?", "x", "bb", "q"])),
     ];
     run_ast(file, "replace(a, b, c)", &table);
 }
@@ -607,16 +481,8 @@ fn test_strcmp(file: &mut impl Write) {
     run_ast(file, "strcmp('hii', 'hii')", &[]);
 
     let table = [
-        (
-            "a",
-            DataType::String,
-            Column::from_data(&["hi", "test", "cc"]),
-        ),
-        (
-            "b",
-            DataType::String,
-            Column::from_data(&["i", "test", "ccb"]),
-        ),
+        ("a", StringType::from_data(&["hi", "test", "cc"])),
+        ("b", StringType::from_data(&["i", "test", "ccb"])),
     ];
     run_ast(file, "strcmp(a, b)", &table);
 }
@@ -629,21 +495,12 @@ fn test_locate(file: &mut impl Write) {
     run_ast(file, "locate('bar', 'foobarbar', 5)", &[]);
 
     let table = [
-        (
-            "a",
-            DataType::String,
-            Column::from_data(&["bar", "cc", "cc", "q"]),
-        ),
+        ("a", StringType::from_data(&["bar", "cc", "cc", "q"])),
         (
             "b",
-            DataType::String,
-            Column::from_data(&["foobarbar", "bdccacc", "xx", "56"]),
+            StringType::from_data(&["foobarbar", "bdccacc", "xx", "56"]),
         ),
-        (
-            "c",
-            DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![1u8, 2, 0, 1]),
-        ),
+        ("c", UInt8Type::from_data(vec![1u8, 2, 0, 1])),
     ];
     run_ast(file, "locate(a, b, c)", &table);
 }
@@ -653,30 +510,13 @@ fn test_char(file: &mut impl Write) {
     run_ast(file, "char(65, null)", &[]);
 
     let table = [
-        (
-            "a",
-            DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![66u8, 67]),
-        ),
-        (
-            "b",
-            DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![98u8, 99]),
-        ),
-        (
-            "c",
-            DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![68u8, 69]),
-        ),
-        (
-            "c2",
-            DataType::Number(NumberDataType::UInt16),
-            Column::from_data(vec![68u16, 69]),
-        ),
+        ("a", UInt8Type::from_data(vec![66u8, 67])),
+        ("b", UInt8Type::from_data(vec![98u8, 99])),
+        ("c", UInt8Type::from_data(vec![68u8, 69])),
+        ("c2", UInt16Type::from_data(vec![68u16, 69])),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            Column::from_data_with_validity(vec![66u8, 67], vec![true, false]),
+            UInt8Type::from_data_with_validity(vec![66u8, 67], vec![true, false]),
         ),
     ];
     run_ast(file, "char(a, b, c)", &table);
@@ -692,8 +532,7 @@ fn test_soundex(file: &mut impl Write) {
 
     let table = [(
         "a",
-        DataType::String,
-        Column::from_data(&["#🐑🐑he🐑llo🐑", "🐑he🐑llo🐑", "teacher", "TEACHER"]),
+        StringType::from_data(&["#🐑🐑he🐑llo🐑", "🐑he🐑llo🐑", "teacher", "TEACHER"]),
     )];
     run_ast(file, "soundex(a)", &table);
 }
@@ -709,7 +548,7 @@ fn test_repeat(file: &mut impl Write) {
     run_ast(file, "repeat('3', NULL)", &[]);
     run_ast(file, "repeat('3', 5)", &[]);
     run_ast(file, "repeat('3', 1000001)", &[]);
-    let table = [("a", DataType::String, Column::from_data(&["a", "b", "c"]))];
+    let table = [("a", StringType::from_data(&["a", "b", "c"]))];
     run_ast(file, "repeat(a, 3)", &table);
 }
 
@@ -725,50 +564,30 @@ fn test_insert(file: &mut impl Write) {
     run_ast(file, "insert(NULL, 2, 100, 'NULL')", &[]);
 
     let table = [
-        (
-            "a",
-            DataType::String,
-            Column::from_data(&["hi", "test", "cc", "q"]),
-        ),
-        (
-            "b",
-            DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![1u8, 4, 1, 1]),
-        ),
-        (
-            "c",
-            DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![3u8, 5, 1, 1]),
-        ),
-        (
-            "d",
-            DataType::String,
-            Column::from_data(&["xx", "zc", "12", "56"]),
-        ),
+        ("a", StringType::from_data(&["hi", "test", "cc", "q"])),
+        ("b", UInt8Type::from_data(vec![1u8, 4, 1, 1])),
+        ("c", UInt8Type::from_data(vec![3u8, 5, 1, 1])),
+        ("d", StringType::from_data(&["xx", "zc", "12", "56"])),
     ];
     run_ast(file, "insert(a, b, c, d)", &table);
     let columns = [
         (
             "x",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["hi", "test", "cc", "q"], vec![
+            StringType::from_data_with_validity(&["hi", "test", "cc", "q"], vec![
                 false, true, true, true,
             ]),
         ),
         (
             "y",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            Column::from_data_with_validity(vec![1u8, 4, 1, 1], vec![true, true, false, true]),
+            UInt8Type::from_data_with_validity(vec![1u8, 4, 1, 1], vec![true, true, false, true]),
         ),
         (
             "z",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            Column::from_data_with_validity(vec![3u8, 5, 1, 1], vec![true, false, true, true]),
+            UInt8Type::from_data_with_validity(vec![3u8, 5, 1, 1], vec![true, false, true, true]),
         ),
         (
             "u",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["xx", "zc", "12", "56"], vec![
+            StringType::from_data_with_validity(&["xx", "zc", "12", "56"], vec![
                 false, true, true, true,
             ]),
         ),
@@ -781,8 +600,7 @@ fn test_space(file: &mut impl Write) {
     run_ast(file, "space(5)", &[]);
     run_ast(file, "space(a)", &[(
         "a",
-        DataType::Number(NumberDataType::UInt8),
-        Column::from_data(vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        UInt8Type::from_data(vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
     )]);
 }
 
@@ -791,8 +609,7 @@ fn test_left(file: &mut impl Write) {
     run_ast(file, "left('', 1)", &[]);
     run_ast(file, "left('123456789', a)", &[(
         "a",
-        DataType::Number(NumberDataType::UInt8),
-        Column::from_data(vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        UInt8Type::from_data(vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
     )]);
 }
 
@@ -801,8 +618,7 @@ fn test_right(file: &mut impl Write) {
     run_ast(file, "right('', 1)", &[]);
     run_ast(file, "right('123456789', a)", &[(
         "a",
-        DataType::Number(NumberDataType::UInt8),
-        Column::from_data(vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        UInt8Type::from_data(vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
     )]);
 }
 
@@ -816,16 +632,14 @@ fn test_substr(file: &mut impl Write) {
     run_ast(file, "substr('abc', pos, len)", &[
         (
             "pos",
-            DataType::Number(NumberDataType::Int8),
-            Column::from_data(vec![
+            Int8Type::from_data(vec![
                 0i8, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, -1,
                 -1, -1, -1, -1, -2, -2, -2, -2, -2, -3, -3, -3, -3, -3, -4, -4, -4, -4, -4,
             ]),
         ),
         (
             "len",
-            DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![
+            UInt8Type::from_data(vec![
                 0u8, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1,
                 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4,
             ]),

@@ -14,10 +14,9 @@
 
 use std::io::Write;
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
+use common_expression::types::*;
 use common_expression::utils::ColumnFrom;
-use common_expression::Column;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -42,23 +41,19 @@ fn test_great_circle_distance(file: &mut impl Write) {
     let table = [
         (
             "lon1",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![55.755831, 56.755831, 57.755831]),
+            Float64Type::from_data(vec![55.755831, 56.755831, 57.755831]),
         ),
         (
             "lat1",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![37.617673, 38.617673, 39.617673]),
+            Float64Type::from_data(vec![37.617673, 38.617673, 39.617673]),
         ),
         (
             "lon2",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![-55.755831, -56.755831, -57.755831]),
+            Float64Type::from_data(vec![-55.755831, -56.755831, -57.755831]),
         ),
         (
             "lat2",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![-37.617673, -38.617673, -39.617673]),
+            Float64Type::from_data(vec![-37.617673, -38.617673, -39.617673]),
         ),
     ];
     run_ast(
@@ -77,23 +72,19 @@ fn test_geo_distance(file: &mut impl Write) {
     let table = [
         (
             "lon1",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![55.755831, 56.755831, 57.755831]),
+            Float64Type::from_data(vec![55.755831, 56.755831, 57.755831]),
         ),
         (
             "lat1",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![37.617673, 38.617673, 39.617673]),
+            Float64Type::from_data(vec![37.617673, 38.617673, 39.617673]),
         ),
         (
             "lon2",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![-55.755831, -56.755831, -57.755831]),
+            Float64Type::from_data(vec![-55.755831, -56.755831, -57.755831]),
         ),
         (
             "lat2",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![-37.617673, -38.617673, -39.617673]),
+            Float64Type::from_data(vec![-37.617673, -38.617673, -39.617673]),
         ),
     ];
     run_ast(file, "geo_distance(lon1, lat1, lon2, lat2)", &table);
@@ -103,8 +94,7 @@ fn test_great_circle_angle(file: &mut impl Write) {
     run_ast(file, "great_circle_angle(0, 0, 45, 0)", &[]);
     run_ast(file, "great_circle_angle(0, 0, a, 0)", &[(
         "a",
-        DataType::Number(NumberDataType::Float64),
-        Column::from_data(vec![45.0, 46.0, 47.0]),
+        Float64Type::from_data(vec![45.0, 46.0, 47.0]),
     )]);
 }
 
@@ -115,15 +105,7 @@ fn test_point_in_ellipses(file: &mut impl Write) {
         &[],
     );
     run_ast(file, "point_in_ellipses(10., 10., 10., 9.1, a, b)", &[
-        (
-            "a",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![1.0, 1.1, 1.2]),
-        ),
-        (
-            "b",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![0.9999, 0.9998, 0.9997]),
-        ),
+        ("a", Float64Type::from_data(vec![1.0, 1.1, 1.2])),
+        ("b", Float64Type::from_data(vec![0.9999, 0.9998, 0.9997])),
     ]);
 }

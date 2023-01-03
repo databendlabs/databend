@@ -14,11 +14,13 @@
 
 use std::io::Write;
 
-use common_expression::from_timestamp_data;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
+use common_expression::types::number::Int64Type;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::BooleanType;
+use common_expression::types::TimestampType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Column;
+use common_expression::FromData;
 use common_functions_v2::aggregates::eval_aggr;
 use goldenfile::Mint;
 
@@ -74,57 +76,41 @@ fn test_agg_group_by() {
     test_agg_approx_count_distinct(file, simulate_two_groups_group_by);
 }
 
-fn get_example() -> Vec<(&'static str, DataType, Column)> {
+fn get_example() -> Vec<(&'static str, Column)> {
     vec![
-        (
-            "a",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![4i64, 3, 2, 1]),
-        ),
-        (
-            "b",
-            DataType::Number(NumberDataType::UInt64),
-            Column::from_data(vec![1u64, 2, 3, 4]),
-        ),
-        (
-            "c",
-            DataType::Number(NumberDataType::UInt64),
-            Column::from_data(vec![1u64, 2, 1, 3]),
-        ),
+        ("a", Int64Type::from_data(vec![4i64, 3, 2, 1])),
+        ("b", UInt64Type::from_data(vec![1u64, 2, 3, 4])),
+        ("c", UInt64Type::from_data(vec![1u64, 2, 1, 3])),
         (
             "x_null",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-            Column::from_data_with_validity(vec![1u64, 2, 3, 4], vec![true, true, false, false]),
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 3, 4], vec![
+                true, true, false, false,
+            ]),
         ),
         (
             "y_null",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-            Column::from_data_with_validity(vec![1u64, 2, 3, 4], vec![false, false, true, true]),
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 3, 4], vec![
+                false, false, true, true,
+            ]),
         ),
         (
             "all_null",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-            Column::from_data_with_validity(vec![1u64, 2, 3, 4], vec![false, false, false, false]),
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 3, 4], vec![
+                false, false, false, false,
+            ]),
         ),
-        (
-            "dt",
-            DataType::Timestamp,
-            from_timestamp_data(vec![1i64, 0, 2, 3]),
-        ),
+        ("dt", TimestampType::from_data(vec![1i64, 0, 2, 3])),
         (
             "event1",
-            DataType::Boolean,
-            Column::from_data(vec![true, false, false, false]),
+            BooleanType::from_data(vec![true, false, false, false]),
         ),
         (
             "event2",
-            DataType::Boolean,
-            Column::from_data(vec![false, false, false, false]),
+            BooleanType::from_data(vec![false, false, false, false]),
         ),
         (
             "event3",
-            DataType::Boolean,
-            Column::from_data(vec![false, false, false, false]),
+            BooleanType::from_data(vec![false, false, false, false]),
         ),
     ]
 }

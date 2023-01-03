@@ -43,8 +43,8 @@ error:
 
 
 ast            : regexp_instr(source, pat)
-raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : regexp_instr<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : regexp_instr(#0::String, #1::String)
+checked expr   : regexp_instr<String, String>(#0, #1)
 evaluation:
 +--------+---------------------------+--------------+---------+
 |        | source                    | pat          | Output  |
@@ -66,8 +66,8 @@ evaluation (internal):
 
 
 ast            : regexp_instr(source, pat, pos)
-raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64)
-checked expr   : regexp_instr<String, String, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+raw expr       : regexp_instr(#0::String, #1::String, #2::Int64)
+checked expr   : regexp_instr<String, String, Int64>(#0, #1, #2)
 evaluation:
 +--------+---------------------------+--------------+---------+---------+
 |        | source                    | pat          | pos     | Output  |
@@ -90,8 +90,8 @@ evaluation (internal):
 
 
 ast            : regexp_instr(source, pat, pos, occur)
-raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64)
-checked expr   : regexp_instr<String, String, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
+raw expr       : regexp_instr(#0::String, #1::String, #2::Int64, #3::Int64)
+checked expr   : regexp_instr<String, String, Int64, Int64>(#0, #1, #2, #3)
 evaluation:
 +--------+---------------------------------------------+------------------+---------+---------+---------+
 |        | source                                      | pat              | pos     | occur   | Output  |
@@ -115,9 +115,9 @@ evaluation (internal):
 
 
 ast            : regexp_instr(source, pat, pos, occur, ro)
-raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
-checked expr   : regexp_instr<String, String, Int64, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
-optimized expr : regexp_instr<String, String, Int64, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), 2_i64, ColumnRef(4))
+raw expr       : regexp_instr(#0::String, #1::String, #2::Int64, #3::Int64, #4::Int64)
+checked expr   : regexp_instr<String, String, Int64, Int64, Int64>(#0, #1, #2, #3, #4)
+optimized expr : regexp_instr<String, String, Int64, Int64, Int64>(#0, #1, #2, 2_i64, #4)
 evaluation:
 +--------+---------------------------------------------+------------------+---------+---------+---------+---------+
 |        | source                                      | pat              | pos     | occur   | ro      | Output  |
@@ -142,9 +142,9 @@ evaluation (internal):
 
 
 ast            : regexp_instr(source, pat, pos, occur, ro, mt)
-raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::Int64, ColumnRef(5)::String)
-checked expr   : regexp_instr<String, String, Int64, Int64, Int64, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4), ColumnRef(5))
-optimized expr : regexp_instr<String, String, Int64, Int64, Int64, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2), 2_i64, ColumnRef(4), ColumnRef(5))
+raw expr       : regexp_instr(#0::String, #1::String, #2::Int64, #3::Int64, #4::Int64, #5::String)
+checked expr   : regexp_instr<String, String, Int64, Int64, Int64, String>(#0, #1, #2, #3, #4, #5)
+optimized expr : regexp_instr<String, String, Int64, Int64, Int64, String>(#0, #1, #2, 2_i64, #4, #5)
 evaluation:
 +--------+---------------------------------------------+------------------+---------+---------+---------+-------------+---------+
 |        | source                                      | pat              | pos     | occur   | ro      | mt          | Output  |
@@ -170,8 +170,8 @@ evaluation (internal):
 
 
 ast            : regexp_instr(source, pat, pos, occur, ro)
-raw expr       : regexp_instr(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
-checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS Int64 NULL), CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL))
+raw expr       : regexp_instr(#0::String NULL, #1::String NULL, #2::Int64, #3::Int64, #4::Int64)
+checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL>(#0, #1, CAST(#2 AS Int64 NULL), CAST(#3 AS Int64 NULL), CAST(#4 AS Int64 NULL))
 evaluation:
 +--------+-------------------------------+-----------------------+---------+---------+---------+-------------+
 |        | source                        | pat                   | pos     | occur   | ro      | Output      |
@@ -197,8 +197,8 @@ evaluation (internal):
 
 
 ast            : regexp_instr(source, pat, pos, occur, ro, mt)
-raw expr       : regexp_instr(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::Int64, ColumnRef(5)::String)
-checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL, String NULL>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS Int64 NULL), CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL), CAST(ColumnRef(5) AS String NULL))
+raw expr       : regexp_instr(#0::String NULL, #1::String NULL, #2::Int64, #3::Int64, #4::Int64, #5::String)
+checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL, String NULL>(#0, #1, CAST(#2 AS Int64 NULL), CAST(#3 AS Int64 NULL), CAST(#4 AS Int64 NULL), CAST(#5 AS String NULL))
 evaluation:
 +--------+-------------------------------+-----------------------+---------+---------+---------+-------------+-------------+
 |        | source                        | pat                   | pos     | occur   | ro      | mt          | Output      |
@@ -225,9 +225,9 @@ evaluation (internal):
 
 
 ast            : regexp_instr(source, pat, pos, occur, ro)
-raw expr       : regexp_instr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
-checked expr   : regexp_instr<String, String, Int64, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
-optimized expr : regexp_instr<String, String, Int64, Int64, Int64>("周 周周 周周周 周周周周", "周+", ColumnRef(2), ColumnRef(3), ColumnRef(4))
+raw expr       : regexp_instr(#0::String, #1::String, #2::Int64, #3::Int64, #4::Int64)
+checked expr   : regexp_instr<String, String, Int64, Int64, Int64>(#0, #1, #2, #3, #4)
+optimized expr : regexp_instr<String, String, Int64, Int64, Int64>("周 周周 周周周 周周周周", "周+", #2, #3, #4)
 evaluation:
 +--------+---------------------------------------------------------+-----------------+---------+---------+---------+---------+
 |        | source                                                  | pat             | pos     | occur   | ro      | Output  |
@@ -331,8 +331,8 @@ output         : true
 
 
 ast            : regexp_like(source, pat)
-raw expr       : regexp_like(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : regexp_like<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : regexp_like(#0::String, #1::String)
+checked expr   : regexp_like<String, String>(#0, #1)
 evaluation:
 +--------+----------------------+-------------------------+---------+
 |        | source               | pat                     | Output  |
@@ -357,8 +357,8 @@ evaluation (internal):
 
 
 ast            : regexp_like(source, pat, mt)
-raw expr       : regexp_like(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String)
-checked expr   : regexp_like<String, String, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+raw expr       : regexp_like(#0::String, #1::String, #2::String)
+checked expr   : regexp_like<String, String, String>(#0, #1, #2)
 evaluation:
 +--------+----------------------+-------------------------+------------+---------+
 |        | source               | pat                     | mt         | Output  |
@@ -384,8 +384,8 @@ evaluation (internal):
 
 
 ast            : regexp_like(source, pat, mt)
-raw expr       : regexp_like(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::String NULL)
-checked expr   : regexp_like<String NULL, String NULL, String NULL>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+raw expr       : regexp_like(#0::String NULL, #1::String NULL, #2::String NULL)
+checked expr   : regexp_like<String NULL, String NULL, String NULL>(#0, #1, #2)
 evaluation:
 +--------+-----------------------+-----------------------+---------------------+--------------+
 |        | source                | pat                   | mt                  | Output       |
@@ -498,9 +498,9 @@ output         : "abc def X"
 
 
 ast            : regexp_replace(source, pat, repl)
-raw expr       : regexp_replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String)
-checked expr   : regexp_replace<String, String, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
-optimized expr : regexp_replace<String, String, String>(ColumnRef(0), ColumnRef(1), "X")
+raw expr       : regexp_replace(#0::String, #1::String, #2::String)
+checked expr   : regexp_replace<String, String, String>(#0, #1, #2)
+optimized expr : regexp_replace<String, String, String>(#0, #1, "X")
 evaluation:
 +--------+----------------+------------+-------------+---------+
 |        | source         | pat        | repl        | Output  |
@@ -524,9 +524,9 @@ evaluation (internal):
 
 
 ast            : regexp_replace(source, pat, repl, pos)
-raw expr       : regexp_replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String, ColumnRef(3)::Int64)
-checked expr   : regexp_replace<String, String, String, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
-optimized expr : regexp_replace<String, String, String, Int64>("abc def ghi", "[a-z]+", "X", ColumnRef(3))
+raw expr       : regexp_replace(#0::String, #1::String, #2::String, #3::Int64)
+checked expr   : regexp_replace<String, String, String, Int64>(#0, #1, #2, #3)
+optimized expr : regexp_replace<String, String, String, Int64>("abc def ghi", "[a-z]+", "X", #3)
 evaluation:
 +--------+---------------------------------+-----------------------+-------------+----------+---------------+
 |        | source                          | pat                   | repl        | pos      | Output        |
@@ -551,9 +551,9 @@ evaluation (internal):
 
 
 ast            : regexp_replace(source, pat, repl, pos, occur)
-raw expr       : regexp_replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
-checked expr   : regexp_replace<String, String, String, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
-optimized expr : regexp_replace<String, String, String, Int64, Int64>("abc def ghi", "[a-z]+", "X", ColumnRef(3), ColumnRef(4))
+raw expr       : regexp_replace(#0::String, #1::String, #2::String, #3::Int64, #4::Int64)
+checked expr   : regexp_replace<String, String, String, Int64, Int64>(#0, #1, #2, #3, #4)
+optimized expr : regexp_replace<String, String, String, Int64, Int64>("abc def ghi", "[a-z]+", "X", #3, #4)
 evaluation:
 +--------+---------------------------------+-----------------------+-------------+---------+---------+---------------+
 |        | source                          | pat                   | repl        | pos     | occur   | Output        |
@@ -579,9 +579,9 @@ evaluation (internal):
 
 
 ast            : regexp_replace(source, pat, repl, pos, occur, mt)
-raw expr       : regexp_replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String, ColumnRef(3)::Int64, ColumnRef(4)::Int64, ColumnRef(5)::String)
-checked expr   : regexp_replace<String, String, String, Int64, Int64, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4), ColumnRef(5))
-optimized expr : regexp_replace<String, String, String, Int64, Int64, String>(ColumnRef(0), "[a-z]+", "X", ColumnRef(3), ColumnRef(4), ColumnRef(5))
+raw expr       : regexp_replace(#0::String, #1::String, #2::String, #3::Int64, #4::Int64, #5::String)
+checked expr   : regexp_replace<String, String, String, Int64, Int64, String>(#0, #1, #2, #3, #4, #5)
+optimized expr : regexp_replace<String, String, String, Int64, Int64, String>(#0, "[a-z]+", "X", #3, #4, #5)
 evaluation:
 +--------+---------------------------------+-----------------------+-------------+---------+---------+------------+-------------+
 |        | source                          | pat                   | repl        | pos     | occur   | mt         | Output      |
@@ -607,9 +607,9 @@ evaluation (internal):
 
 
 ast            : regexp_replace(source, pat, repl, pos, occur)
-raw expr       : regexp_replace(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::String, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
-checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS String NULL), CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL))
-optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(ColumnRef(0), ColumnRef(1), "X", CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL))
+raw expr       : regexp_replace(#0::String NULL, #1::String NULL, #2::String, #3::Int64, #4::Int64)
+checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(#0, #1, CAST(#2 AS String NULL), CAST(#3 AS Int64 NULL), CAST(#4 AS Int64 NULL))
+optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(#0, #1, "X", CAST(#3 AS Int64 NULL), CAST(#4 AS Int64 NULL))
 evaluation:
 +--------+-------------------------------+--------------------------+-------------+---------+---------+-------------+
 |        | source                        | pat                      | repl        | pos     | occur   | Output      |
@@ -635,9 +635,9 @@ evaluation (internal):
 
 
 ast            : regexp_replace(source, pat, repl, pos, occur, mt)
-raw expr       : regexp_replace(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::String, ColumnRef(3)::Int64, ColumnRef(4)::Int64, ColumnRef(5)::String)
-checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS String NULL), CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL), CAST(ColumnRef(5) AS String NULL))
-optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(ColumnRef(0), ColumnRef(1), "X", CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS Int64 NULL), CAST(ColumnRef(5) AS String NULL))
+raw expr       : regexp_replace(#0::String NULL, #1::String NULL, #2::String, #3::Int64, #4::Int64, #5::String)
+checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(#0, #1, CAST(#2 AS String NULL), CAST(#3 AS Int64 NULL), CAST(#4 AS Int64 NULL), CAST(#5 AS String NULL))
+optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(#0, #1, "X", CAST(#3 AS Int64 NULL), CAST(#4 AS Int64 NULL), CAST(#5 AS String NULL))
 evaluation:
 +--------+-------------------------------+--------------------------+-------------+---------+---------+------------+-------------+
 |        | source                        | pat                      | repl        | pos     | occur   | mt         | Output      |
@@ -664,9 +664,9 @@ evaluation (internal):
 
 
 ast            : regexp_replace(source, pat, repl, pos, occur)
-raw expr       : regexp_replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String, ColumnRef(3)::Int64, ColumnRef(4)::Int64)
-checked expr   : regexp_replace<String, String, String, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
-optimized expr : regexp_replace<String, String, String, Int64, Int64>("周 周周 周周周 周周周周", "周+", "唐", ColumnRef(3), ColumnRef(4))
+raw expr       : regexp_replace(#0::String, #1::String, #2::String, #3::Int64, #4::Int64)
+checked expr   : regexp_replace<String, String, String, Int64, Int64>(#0, #1, #2, #3, #4)
+optimized expr : regexp_replace<String, String, String, Int64, Int64>("周 周周 周周周 周周周周", "周+", "唐", #3, #4)
 evaluation:
 +--------+---------------------------------------------------------+-----------------+---------------+---------+---------+-------------------------+
 |        | source                                                  | pat             | repl          | pos     | occur   | Output                  |
@@ -718,40 +718,19 @@ error:
 ast            : regexp_substr('abc def ghi', '[a-z]+')
 raw expr       : regexp_substr("abc def ghi", "[a-z]+")
 checked expr   : regexp_substr<String, String>("abc def ghi", "[a-z]+")
-evaluation:
-+--------+-------------+
-|        | Output      |
-+--------+-------------+
-| Type   | String NULL |
-| Domain | Unknown     |
-| Row 0  | "abc"       |
-+--------+-------------+
-evaluation (internal):
-+--------+--------------------------------------------------+
-| Column | Data                                             |
-+--------+--------------------------------------------------+
-| Output | StringColumn { data: 0x616263, offsets: [0, 3] } |
-+--------+--------------------------------------------------+
+optimized expr : "abc"
+output type    : String NULL
+output domain  : Unknown
+output         : "abc"
 
 
 ast            : regexp_substr('abc def ghi', '[a-z]+', 1, 3)
 raw expr       : regexp_substr("abc def ghi", "[a-z]+", 1_u8, 3_u8)
 checked expr   : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", CAST(1_u8 AS Int64), CAST(3_u8 AS Int64))
-optimized expr : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", 1_i64, 3_i64)
-evaluation:
-+--------+-------------+
-|        | Output      |
-+--------+-------------+
-| Type   | String NULL |
-| Domain | Unknown     |
-| Row 0  | "ghi"       |
-+--------+-------------+
-evaluation (internal):
-+--------+--------------------------------------------------+
-| Column | Data                                             |
-+--------+--------------------------------------------------+
-| Output | StringColumn { data: 0x676869, offsets: [0, 3] } |
-+--------+--------------------------------------------------+
+optimized expr : "ghi"
+output type    : String NULL
+output domain  : Unknown
+output         : "ghi"
 
 
 ast            : regexp_substr('abc def ghi', '[a-z]+', NULL)
@@ -791,8 +770,8 @@ output         : NULL
 
 
 ast            : regexp_substr(source, pat)
-raw expr       : regexp_substr(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : regexp_substr<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : regexp_substr(#0::String, #1::String)
+checked expr   : regexp_substr<String, String>(#0, #1)
 evaluation:
 +--------+----------------------+--------------+-------------+
 |        | source               | pat          | Output      |
@@ -814,9 +793,9 @@ evaluation (internal):
 
 
 ast            : regexp_substr(source, pat, pos)
-raw expr       : regexp_substr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64)
-checked expr   : regexp_substr<String, String, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
-optimized expr : regexp_substr<String, String, Int64>("abc def ghi", "[a-z]+", ColumnRef(2))
+raw expr       : regexp_substr(#0::String, #1::String, #2::Int64)
+checked expr   : regexp_substr<String, String, Int64>(#0, #1, #2)
+optimized expr : regexp_substr<String, String, Int64>("abc def ghi", "[a-z]+", #2)
 evaluation:
 +--------+---------------------------------+-----------------------+----------+-------------+
 |        | source                          | pat                   | pos      | Output      |
@@ -839,9 +818,9 @@ evaluation (internal):
 
 
 ast            : regexp_substr(source, pat, pos, occur)
-raw expr       : regexp_substr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64)
-checked expr   : regexp_substr<String, String, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
-optimized expr : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", ColumnRef(2), ColumnRef(3))
+raw expr       : regexp_substr(#0::String, #1::String, #2::Int64, #3::Int64)
+checked expr   : regexp_substr<String, String, Int64, Int64>(#0, #1, #2, #3)
+optimized expr : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", #2, #3)
 evaluation:
 +--------+---------------------------------+-----------------------+----------+---------+-------------+
 |        | source                          | pat                   | pos      | occur   | Output      |
@@ -865,9 +844,9 @@ evaluation (internal):
 
 
 ast            : regexp_substr(source, pat, pos, occur, mt)
-raw expr       : regexp_substr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::String)
-checked expr   : regexp_substr<String, String, Int64, Int64, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3), ColumnRef(4))
-optimized expr : regexp_substr<String, String, Int64, Int64, String>(ColumnRef(0), "[a-z]+", ColumnRef(2), ColumnRef(3), ColumnRef(4))
+raw expr       : regexp_substr(#0::String, #1::String, #2::Int64, #3::Int64, #4::String)
+checked expr   : regexp_substr<String, String, Int64, Int64, String>(#0, #1, #2, #3, #4)
+optimized expr : regexp_substr<String, String, Int64, Int64, String>(#0, "[a-z]+", #2, #3, #4)
 evaluation:
 +--------+---------------------------------+-----------------------+----------+---------+-------------+-------------+
 |        | source                          | pat                   | pos      | occur   | mt          | Output      |
@@ -892,8 +871,8 @@ evaluation (internal):
 
 
 ast            : regexp_substr(source, pat, pos, occur, mt)
-raw expr       : regexp_substr(ColumnRef(0)::String NULL, ColumnRef(1)::String NULL, ColumnRef(2)::Int64, ColumnRef(3)::Int64, ColumnRef(4)::String)
-checked expr   : regexp_substr<String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS Int64 NULL), CAST(ColumnRef(3) AS Int64 NULL), CAST(ColumnRef(4) AS String NULL))
+raw expr       : regexp_substr(#0::String NULL, #1::String NULL, #2::Int64, #3::Int64, #4::String)
+checked expr   : regexp_substr<String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(#0, #1, CAST(#2 AS Int64 NULL), CAST(#3 AS Int64 NULL), CAST(#4 AS String NULL))
 evaluation:
 +--------+-------------------------------+--------------------------+---------+---------+------------+-------------+
 |        | source                        | pat                      | pos     | occur   | mt         | Output      |
@@ -919,9 +898,9 @@ evaluation (internal):
 
 
 ast            : regexp_substr(source, pat, pos, occur)
-raw expr       : regexp_substr(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::Int64, ColumnRef(3)::Int64)
-checked expr   : regexp_substr<String, String, Int64, Int64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
-optimized expr : regexp_substr<String, String, Int64, Int64>("周 周周 周周周 周周周周", "周+", ColumnRef(2), ColumnRef(3))
+raw expr       : regexp_substr(#0::String, #1::String, #2::Int64, #3::Int64)
+checked expr   : regexp_substr<String, String, Int64, Int64>(#0, #1, #2, #3)
+optimized expr : regexp_substr<String, String, Int64, Int64>("周 周周 周周周 周周周周", "周+", #2, #3)
 evaluation:
 +--------+---------------------------------------------------------+-----------------+----------+---------+-------------+
 |        | source                                                  | pat             | pos      | occur   | Output      |

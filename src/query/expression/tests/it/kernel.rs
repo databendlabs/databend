@@ -15,13 +15,17 @@
 use std::io::Write;
 
 use common_arrow::arrow::compute::merge_sort::MergeSlice;
+use common_expression::types::number::*;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
 use common_expression::utils::ColumnFrom;
 use common_expression::BlockEntry;
 use common_expression::BlockRowIndex;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::Value;
 use goldenfile::Mint;
 
@@ -33,74 +37,47 @@ pub fn test_pass() {
     let mut file = mint.new_goldenfile("kernel-pass.txt").unwrap();
 
     for filter in vec![
-        Column::from_data(vec![true, false, false, false, true]),
-        Column::from_data_with_validity(vec![true, true, false, true, true], vec![
+        BooleanType::from_data(vec![true, false, false, false, true]),
+        BooleanType::from_data_with_validity(vec![true, true, false, true, true], vec![
             false, true, true, false, false,
         ]),
-        Column::from_data(vec!["a", "b", "", "", "c"]),
-        Column::from_data(vec![0, 1, 2, 3, 0]),
+        StringType::from_data(vec!["a", "b", "", "", "c"]),
+        Int32Type::from_data(vec![0, 1, 2, 3, 0]),
     ] {
         run_filter(
             &mut file,
             filter,
             &new_block(&[
-                (
-                    DataType::Number(NumberDataType::Int32),
-                    Column::from_data(vec![0i32, 1, 2, 3, -4]),
-                ),
-                (
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                    Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                        false, true, false, false, false,
-                    ]),
-                ),
-                (DataType::Null, Column::Null { len: 5 }),
-                (
-                    DataType::Nullable(Box::new(DataType::String)),
-                    Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                        false, true, true, false, false,
-                    ]),
-                ),
+                Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
+                UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                    false, true, false, false, false,
+                ]),
+                Column::Null { len: 5 },
+                StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                    false, true, true, false, false,
+                ]),
             ]),
         );
     }
 
     run_concat(&mut file, &[
         new_block(&[
-            (
-                DataType::Number(NumberDataType::Int32),
-                Column::from_data(vec![0i32, 1, 2, 3, -4]),
-            ),
-            (
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                    false, true, false, false, false,
-                ]),
-            ),
-            (DataType::Null, Column::Null { len: 5 }),
-            (DataType::EmptyArray, Column::EmptyArray { len: 5 }),
-            (
-                DataType::Nullable(Box::new(DataType::String)),
-                Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                    false, true, true, false, false,
-                ]),
-            ),
+            Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
+            UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                false, true, false, false, false,
+            ]),
+            Column::Null { len: 5 },
+            Column::EmptyArray { len: 5 },
+            StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                false, true, true, false, false,
+            ]),
         ]),
         new_block(&[
-            (
-                DataType::Number(NumberDataType::Int32),
-                Column::from_data(vec![5i32, 6]),
-            ),
-            (
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                Column::from_data_with_validity(vec![15u8, 16], vec![false, true]),
-            ),
-            (DataType::Null, Column::Null { len: 2 }),
-            (DataType::EmptyArray, Column::EmptyArray { len: 2 }),
-            (
-                DataType::Nullable(Box::new(DataType::String)),
-                Column::from_data_with_validity(vec!["x", "y"], vec![false, true]),
-            ),
+            Int32Type::from_data(vec![5i32, 6]),
+            UInt8Type::from_data_with_validity(vec![15u8, 16], vec![false, true]),
+            Column::Null { len: 2 },
+            Column::EmptyArray { len: 2 },
+            StringType::from_data_with_validity(vec!["x", "y"], vec![false, true]),
         ]),
     ]);
 
@@ -108,23 +85,14 @@ pub fn test_pass() {
         &mut file,
         &[0, 3, 1],
         &new_block(&[
-            (
-                DataType::Number(NumberDataType::Int32),
-                Column::from_data(vec![0i32, 1, 2, 3, -4]),
-            ),
-            (
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                    false, true, false, false, false,
-                ]),
-            ),
-            (DataType::Null, Column::Null { len: 5 }),
-            (
-                DataType::Nullable(Box::new(DataType::String)),
-                Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                    false, true, true, false, false,
-                ]),
-            ),
+            Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
+            UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                false, true, false, false, false,
+            ]),
+            Column::Null { len: 5 },
+            StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                false, true, true, false, false,
+            ]),
         ]),
     );
 
@@ -150,11 +118,11 @@ pub fn test_pass() {
             let mut columns = Vec::with_capacity(3);
             columns.push(BlockEntry {
                 data_type: DataType::Number(NumberDataType::UInt8),
-                value: Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
+                value: Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
             });
             columns.push(BlockEntry {
                 data_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                value: Value::Column(Column::from_data_with_validity(
+                value: Value::Column(UInt8Type::from_data_with_validity(
                     vec![(i + 10) as u8; 4],
                     vec![true, true, false, false],
                 )),
@@ -181,11 +149,11 @@ pub fn test_pass() {
             let mut columns = Vec::with_capacity(3);
             columns.push(BlockEntry {
                 data_type: DataType::Number(NumberDataType::UInt8),
-                value: Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
+                value: Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
             });
             columns.push(BlockEntry {
                 data_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                value: Value::Column(Column::from_data_with_validity(
+                value: Value::Column(UInt8Type::from_data_with_validity(
                     vec![(i + 10) as u8; 4],
                     vec![true, true, false, false],
                 )),
@@ -200,23 +168,14 @@ pub fn test_pass() {
     run_take_by_slice_limit(
         &mut file,
         &new_block(&[
-            (
-                DataType::Number(NumberDataType::Int32),
-                Column::from_data(vec![0i32, 1, 2, 3, -4]),
-            ),
-            (
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                    false, true, false, false, false,
-                ]),
-            ),
-            (DataType::Null, Column::Null { len: 5 }),
-            (
-                DataType::Nullable(Box::new(DataType::String)),
-                Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                    false, true, true, false, false,
-                ]),
-            ),
+            Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
+            UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                false, true, false, false, false,
+            ]),
+            Column::Null { len: 5 },
+            StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                false, true, true, false, false,
+            ]),
         ]),
         (2, 3),
         None,
@@ -225,23 +184,14 @@ pub fn test_pass() {
     run_take_by_slice_limit(
         &mut file,
         &new_block(&[
-            (
-                DataType::Number(NumberDataType::Int32),
-                Column::from_data(vec![0i32, 1, 2, 3, -4]),
-            ),
-            (
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                    false, true, false, false, false,
-                ]),
-            ),
-            (DataType::Null, Column::Null { len: 5 }),
-            (
-                DataType::Nullable(Box::new(DataType::String)),
-                Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                    false, true, true, false, false,
-                ]),
-            ),
+            Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
+            UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                false, true, false, false, false,
+            ]),
+            Column::Null { len: 5 },
+            StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                false, true, true, false, false,
+            ]),
         ]),
         (2, 3),
         Some(2),
@@ -250,23 +200,14 @@ pub fn test_pass() {
     run_scatter(
         &mut file,
         &new_block(&[
-            (
-                DataType::Number(NumberDataType::Int32),
-                Column::from_data(vec![0i32, 1, 2, 3, -4]),
-            ),
-            (
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                    false, true, false, false, false,
-                ]),
-            ),
-            (DataType::Null, Column::Null { len: 5 }),
-            (
-                DataType::Nullable(Box::new(DataType::String)),
-                Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                    false, true, true, false, false,
-                ]),
-            ),
+            Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
+            UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                false, true, false, false, false,
+            ]),
+            Column::Null { len: 5 },
+            StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                false, true, true, false, false,
+            ]),
         ]),
         &[0, 0, 1, 2, 1],
         3,

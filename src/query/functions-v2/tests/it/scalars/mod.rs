@@ -18,7 +18,6 @@ use std::io::Write;
 use comfy_table::Table;
 use common_ast::DisplayError;
 use common_expression::type_check;
-use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ConstantFolder;
@@ -41,18 +40,19 @@ mod geo;
 mod hash;
 mod math;
 pub(crate) mod parser;
+mod regexp;
 mod string;
 mod tuple;
 mod variant;
 
-pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, DataType, Column)]) {
+pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
     let text = text.as_ref();
     let result = try {
         let raw_expr = parser::parse_raw_expr(
             text,
             &columns
                 .iter()
-                .map(|(name, ty, _)| (*name, ty.clone()))
+                .map(|(name, c)| (*name, c.data_type()))
                 .collect::<Vec<_>>(),
         );
 
@@ -60,7 +60,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, D
 
         let input_domains = columns
             .iter()
-            .map(|(_, _, col)| col.domain())
+            .map(|(_, col)| col.domain())
             .enumerate()
             .collect::<HashMap<_, _>>();
 
@@ -73,19 +73,19 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, D
         let remote_expr = optimized_expr.as_remote_expr();
         let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS).unwrap();
 
-        let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
+        let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(0);
         let block = DataBlock::new(
             columns
                 .iter()
-                .map(|(_, ty, col)| BlockEntry {
-                    data_type: ty.clone(),
+                .map(|(_, col)| BlockEntry {
+                    data_type: col.data_type(),
                     value: Value::Column(col.clone()),
                 })
                 .collect::<Vec<_>>(),
             num_rows,
         );
 
-        columns.iter().for_each(|(_, _, col)| {
+        columns.iter().for_each(|(_, col)| {
             test_arrow_conversion(col);
         });
 
@@ -153,12 +153,12 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, D
                     table.load_preset("||--+-++|    ++++++");
 
                     let mut header = vec!["".to_string()];
-                    header.extend(columns.iter().map(|(name, _, _)| name.to_string()));
+                    header.extend(columns.iter().map(|(name, _)| name.to_string()));
                     header.push("Output".to_string());
                     table.set_header(header);
 
                     let mut type_row = vec!["Type".to_string()];
-                    type_row.extend(columns.iter().map(|(_, ty, _)| ty.to_string()));
+                    type_row.extend(columns.iter().map(|(_, c)| c.data_type().to_string()));
                     type_row.push(expr.data_type().to_string());
                     table.add_row(type_row);
 
@@ -169,7 +169,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, D
 
                     for i in 0..output_col.len() {
                         let mut row = vec![format!("Row {i}")];
-                        for (_, _, col) in columns.iter() {
+                        for (_, col) in columns.iter() {
                             let value = col.index(i).unwrap();
                             row.push(format!("{}", value));
                         }
@@ -184,7 +184,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, D
 
                     table.set_header(["Column", "Data"]);
 
-                    for (name, _, col) in columns.iter() {
+                    for (name, col) in columns.iter() {
                         table.add_row(&[name.to_string(), format!("{col:?}")]);
                     }
 
