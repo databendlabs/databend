@@ -28,6 +28,7 @@ fn test_control() {
 
     test_multi_if(file);
     test_is_not_null(file);
+    test_is_null(file);
 }
 
 fn test_multi_if(file: &mut impl Write) {
@@ -119,6 +120,26 @@ fn test_is_not_null(file: &mut impl Write) {
         Int64Type::from_data(vec![5i64, 6, 7, 8]),
     )]);
     run_ast(file, "is_not_null(nullable_col)", &[(
+        "nullable_col",
+        Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![true, true, false, false]),
+    )]);
+}
+
+fn test_is_null(file: &mut impl Write) {
+    run_ast(file, "is_null(1)", &[]);
+    run_ast(file, "is_null(4096)", &[]);
+    run_ast(file, "is_null(true)", &[]);
+    run_ast(file, "is_null(false)", &[]);
+    run_ast(file, "is_null('string')", &[]);
+    run_ast(file, "is_null(NULL)", &[]);
+    run_ast(file, "is_null(null_col)", &[("null_col", Column::Null {
+        len: 13,
+    })]);
+    run_ast(file, "is_null(int64_col)", &[(
+        "int64_col",
+        Int64Type::from_data(vec![5i64, 6, 7, 8]),
+    )]);
+    run_ast(file, "is_null(nullable_col)", &[(
         "nullable_col",
         Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![true, true, false, false]),
     )]);

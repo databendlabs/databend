@@ -2357,8 +2357,11 @@ impl<'a> TypeChecker<'a> {
                 TableDataType::Nullable(Box::new(Self::resolve_type_name(inner_type)?))
             }
             TypeName::Variant => TableDataType::Variant,
-            _ => {
-                return Err(ErrorCode::Internal("Invalid type name"));
+            name => {
+                return Err(ErrorCode::Internal(format!(
+                    "Invalid type name \'{:?}\'",
+                    name
+                )));
             }
         };
 
