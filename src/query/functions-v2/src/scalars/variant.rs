@@ -680,20 +680,6 @@ fn register_compare_functions(registry: &mut FunctionRegistry) {
             (DataType::Variant, DataType::Number(NumberDataType::Int64)),
             (DataType::Variant, DataType::Number(NumberDataType::Float32)),
             (DataType::Variant, DataType::Number(NumberDataType::Float64)),
-            (DataType::Boolean, DataType::Variant),
-            (DataType::Date, DataType::Variant),
-            (DataType::Timestamp, DataType::Variant),
-            (DataType::String, DataType::Variant),
-            (DataType::Number(NumberDataType::UInt8), DataType::Variant),
-            (DataType::Number(NumberDataType::UInt16), DataType::Variant),
-            (DataType::Number(NumberDataType::UInt32), DataType::Variant),
-            (DataType::Number(NumberDataType::UInt64), DataType::Variant),
-            (DataType::Number(NumberDataType::Int8), DataType::Variant),
-            (DataType::Number(NumberDataType::Int16), DataType::Variant),
-            (DataType::Number(NumberDataType::Int32), DataType::Variant),
-            (DataType::Number(NumberDataType::Int64), DataType::Variant),
-            (DataType::Number(NumberDataType::Float32), DataType::Variant),
-            (DataType::Number(NumberDataType::Float64), DataType::Variant),
         ]);
     }
 }

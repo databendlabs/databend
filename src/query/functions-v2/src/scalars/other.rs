@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::net::Ipv4Addr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::base::convert_byte_size;
@@ -24,7 +25,7 @@ use common_expression::types::number::UInt32Type;
 use common_expression::types::number::UInt8Type;
 use common_expression::types::number::F64;
 use common_expression::types::ArgType;
-use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::GenericType;
 use common_expression::types::NullableType;
@@ -36,9 +37,14 @@ use common_expression::types::ValueType;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::with_number_mapped_type;
+use common_expression::ColumnBuilder;
+use common_expression::Domain;
+use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use common_expression::FunctionSignature;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 use ordered_float::OrderedFloat;
@@ -101,17 +107,37 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, ctx| Ok(Value::Scalar(ctx.generics[0].sql_name().into_bytes())),
     );
 
-    registry.register_1_arg_core::<GenericType<0>, BooleanType, _, _>(
-        "ignore",
-        FunctionProperty::default(),
-        |_| {
-            FunctionDomain::Domain(BooleanDomain {
-                has_true: false,
-                has_false: true,
-            })
-        },
-        |_, _| Ok(Value::Scalar(false)),
-    );
+    registry.register_function_factory("ignore", |_, args_type| {
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "ignore".to_string(),
+                args_type: vec![DataType::Generic(0); args_type.len()],
+                return_type: DataType::Boolean,
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|_| {
+                FunctionDomain::Domain(Domain::Boolean(BooleanDomain {
+                    has_true: false,
+                    has_false: true,
+                }))
+            }),
+            eval: Box::new(|args, _| {
+                let len = args.iter().find_map(|arg| match arg {
+                    ValueRef::Column(col) => Some(col.len()),
+                    _ => None,
+                });
+                let mut output_builder =
+                    ColumnBuilder::with_capacity(&DataType::Boolean, len.unwrap_or(1));
+                for _ in 0..len.unwrap_or(1) {
+                    output_builder.push(ScalarRef::Boolean(false));
+                }
+                match len {
+                    Some(_) => Ok(Value::Column(output_builder.build())),
+                    None => Ok(Value::Scalar(output_builder.build_scalar())),
+                }
+            }),
+        }))
+    });
 
     registry.register_1_arg_core::<NullableType<GenericType<0>>, GenericType<0>, _, _>(
         "assume_not_null",

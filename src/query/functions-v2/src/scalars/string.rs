@@ -43,6 +43,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("length", &["octet_length"]);
     registry.register_aliases("char_length", &["character_length", "length_utf8"]);
     registry.register_aliases("substr", &["substring", "mid"]);
+    registry.register_aliases("substr_utf8", &["substring_utf8"]);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "upper",

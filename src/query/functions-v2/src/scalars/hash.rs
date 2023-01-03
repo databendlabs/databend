@@ -26,9 +26,11 @@ use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::VariantType;
+use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
+use common_expression::with_integer_mapped_type;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
@@ -159,7 +161,7 @@ macro_rules! register_simple_domain_type_hash {
         $registry.register_passthrough_nullable_1_arg::<$T, NumberType<u64>, _, _>(
             "siphash64",
             FunctionProperty::default(),
-            |_| FunctionDomain::MayThrow,
+            |_| FunctionDomain::Full,
             vectorize_with_builder_1_arg::<$T, NumberType<u64>>(|val, output, _| {
                 let mut hasher = DefaultHasher::default();
                 DFHash::hash(&val, &mut hasher);
@@ -171,7 +173,7 @@ macro_rules! register_simple_domain_type_hash {
         $registry.register_passthrough_nullable_1_arg::<$T, NumberType<u64>, _, _>(
             "xxhash64",
             FunctionProperty::default(),
-            |_| FunctionDomain::MayThrow,
+            |_| FunctionDomain::Full,
             vectorize_with_builder_1_arg::<$T, NumberType<u64>>(|val, output, _| {
                 let mut hasher = XxHash64::default();
                 DFHash::hash(&val, &mut hasher);
@@ -183,7 +185,7 @@ macro_rules! register_simple_domain_type_hash {
         $registry.register_passthrough_nullable_1_arg::<$T, NumberType<u32>, _, _>(
             "xxhash32",
             FunctionProperty::default(),
-            |_| FunctionDomain::MayThrow,
+            |_| FunctionDomain::Full,
             vectorize_with_builder_1_arg::<$T, NumberType<u32>>(|val, output, _| {
                 let mut hasher = XxHash32::default();
                 DFHash::hash(&val, &mut hasher);
@@ -192,20 +194,55 @@ macro_rules! register_simple_domain_type_hash {
             }),
         );
 
-        $registry
-            .register_passthrough_nullable_2_arg::<$T, NumberType<u64>, NumberType<u64>, _, _>(
-                "city64withseed",
-                FunctionProperty::default(),
-                |_, _| FunctionDomain::MayThrow,
-                vectorize_with_builder_2_arg::<$T, NumberType<u64>, NumberType<u64>>(
-                    |val, l, output, _| {
-                        let mut hasher = CityHasher64::with_seed(l);
-                        DFHash::hash(&val, &mut hasher);
-                        output.push(hasher.finish());
-                        Ok(())
-                    },
-                ),
-            );
+        for num_type in ALL_INTEGER_TYPES {
+            with_integer_mapped_type!(|NUM_TYPE| match num_type {
+                NumberDataType::NUM_TYPE => {
+                    $registry
+                        .register_passthrough_nullable_2_arg::<$T, NumberType<NUM_TYPE>, NumberType<u64>, _, _>(
+                            "city64withseed",
+                            FunctionProperty::default(),
+                            |_, _| FunctionDomain::Full,
+                            vectorize_with_builder_2_arg::<$T, NumberType<NUM_TYPE>, NumberType<u64>>(
+                                |val, l, output, _| {
+                                    let mut hasher = CityHasher64::with_seed(l as u64);
+                                    DFHash::hash(&val, &mut hasher);
+                                    output.push(hasher.finish());
+                                    Ok(())
+                                },
+                            ),
+                        );
+                }
+                _ => unreachable!(),
+            });
+        }
+
+        $registry.register_passthrough_nullable_2_arg::<$T, NumberType<F64>, NumberType<u64>, _, _>(
+            "city64withseed",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<$T, NumberType<F64>, NumberType<u64>>(
+                |val, l, output, _| {
+                    let mut hasher = CityHasher64::with_seed(l.0 as u64);
+                    DFHash::hash(&val, &mut hasher);
+                    output.push(hasher.finish());
+                    Ok(())
+                },
+            ),
+        );
+
+        $registry.register_passthrough_nullable_2_arg::<$T, NumberType<F32>, NumberType<u64>, _, _>(
+            "city64withseed",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<$T, NumberType<F32>, NumberType<u64>>(
+                |val, l, output, _| {
+                    let mut hasher = CityHasher64::with_seed(l.0 as u64);
+                    DFHash::hash(&val, &mut hasher);
+                    output.push(hasher.finish());
+                    Ok(())
+                },
+            ),
+        );
     };
 }
 
