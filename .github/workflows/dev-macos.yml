@@ -2,6 +2,8 @@ name: Dev MacOS
 
 on:
   pull_request:
+    branches:
+      - main
     paths-ignore:
       - "docs/**"
       - "website/**"
