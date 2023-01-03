@@ -27,6 +27,7 @@ use common_expression::types::number::UInt8Type;
 use common_expression::types::ArgType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
+use common_expression::types::DateType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::TimestampType;
@@ -432,6 +433,8 @@ pub fn try_create_aggregate_window_funnel_function(
         >::try_create(
             display_name, params, arguments
         ),
+        DataType::Date =>
+            AggregateWindowFunnelFunction::<DateType>::try_create(display_name, params, arguments),
         DataType::Timestamp => AggregateWindowFunnelFunction::<TimestampType>::try_create(
             display_name,
             params,

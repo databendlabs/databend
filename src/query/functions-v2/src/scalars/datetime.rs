@@ -449,8 +449,8 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, _| {
-                        builder.push(AddYearsImpl::eval_timestamp(ts, $signed_wrapper!{delta})?);
+                    |ts, delta, builder, ctx| {
+                        builder.push(AddYearsImpl::eval_timestamp(ts, ctx.tz, $signed_wrapper!{delta})?);
                         Ok(())
                     },
                 ),
@@ -459,8 +459,8 @@ macro_rules! impl_register_arith_functions {
                 concat!($op, "_years"),
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
-                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, _| {
-                    builder.push(AddYearsImpl::eval_date(date, $signed_wrapper!{delta})?);
+                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
+                    builder.push(AddYearsImpl::eval_date(date, ctx.tz, $signed_wrapper!{delta})?);
                     Ok(())
                 }),
             );
@@ -470,8 +470,8 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, _| {
-                        builder.push(AddMonthsImpl::eval_timestamp(ts, $signed_wrapper!{delta} * 3)?);
+                    |ts, delta, builder, ctx| {
+                        builder.push(AddMonthsImpl::eval_timestamp(ts, ctx.tz, $signed_wrapper!{delta} * 3)?);
                         Ok(())
                     },
                 ),
@@ -480,8 +480,8 @@ macro_rules! impl_register_arith_functions {
                 concat!($op, "_quarters"),
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
-                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, _| {
-                    builder.push(AddMonthsImpl::eval_date(date, $signed_wrapper!{delta} * 3)?);
+                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
+                    builder.push(AddMonthsImpl::eval_date(date, ctx.tz, $signed_wrapper!{delta} * 3)?);
                     Ok(())
                 }),
             );
@@ -491,8 +491,8 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, _| {
-                        builder.push(AddMonthsImpl::eval_timestamp(ts, $signed_wrapper!{delta})?);
+                    |ts, delta, builder, ctx| {
+                        builder.push(AddMonthsImpl::eval_timestamp(ts, ctx.tz, $signed_wrapper!{delta})?);
                         Ok(())
                     },
                 ),
@@ -501,8 +501,8 @@ macro_rules! impl_register_arith_functions {
                 concat!($op, "_months"),
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
-                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, _| {
-                    builder.push(AddMonthsImpl::eval_date(date, $signed_wrapper!{delta})?);
+                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
+                    builder.push(AddMonthsImpl::eval_date(date, ctx.tz, $signed_wrapper!{delta})?);
                     Ok(())
                 }),
             );

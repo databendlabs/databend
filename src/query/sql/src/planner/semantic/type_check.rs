@@ -884,13 +884,11 @@ impl<'a> TypeChecker<'a> {
                     .await?
             }
 
-            Expr::Interval {
-                span, expr, unit, ..
-            } => {
-                self.resolve_interval(span, expr, unit, required_type)
-                    .await?
+            Expr::Interval { .. } => {
+                return Err(ErrorCode::SemanticError(
+                    "Unsupport interval expression yet".to_string(),
+                ));
             }
-
             Expr::DateAdd {
                 span,
                 unit,
@@ -1271,57 +1269,9 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    pub async fn resolve_interval(
-        &mut self,
-        span: &[Token<'_>],
-        arg: &Expr<'_>,
-        interval_kind: &ASTIntervalKind,
-        _required_type: Option<DataType>,
-    ) -> Result<Box<(Scalar, DataType)>> {
-        match interval_kind {
-            ASTIntervalKind::Year => {
-                self.resolve_function(span, "to_interval_year", &[arg], None)
-                    .await
-            }
-            ASTIntervalKind::Quarter => {
-                self.resolve_function(span, "to_interval_quarter", &[arg], None)
-                    .await
-            }
-            ASTIntervalKind::Month => {
-                self.resolve_function(span, "to_interval_month", &[arg], None)
-                    .await
-            }
-            ASTIntervalKind::Day => {
-                self.resolve_function(span, "to_interval_day", &[arg], None)
-                    .await
-            }
-            ASTIntervalKind::Hour => {
-                self.resolve_function(span, "to_interval_hour", &[arg], None)
-                    .await
-            }
-            ASTIntervalKind::Minute => {
-                self.resolve_function(span, "to_interval_minute", &[arg], None)
-                    .await
-            }
-            ASTIntervalKind::Second => {
-                self.resolve_function(span, "to_interval_second", &[arg], None)
-                    .await
-            }
-            ASTIntervalKind::Doy => {
-                self.resolve_function(span, "to_interval_doy", &[arg], None)
-                    .await
-            }
-            ASTIntervalKind::Dow => {
-                self.resolve_function(span, "to_interval_dow", &[arg], None)
-                    .await
-            }
-        }
-    }
-
-    #[async_recursion::async_recursion]
     pub async fn resolve_date_add(
         &mut self,
-        span: &[Token<'_>],
+        _span: &[Token<'_>],
         interval_kind: &ASTIntervalKind,
         interval: &Expr<'_>,
         date: &Expr<'_>,
@@ -1334,17 +1284,17 @@ impl<'a> TypeChecker<'a> {
         args.push(date);
         arg_types.push(date_type);
 
-        let box (interval, interval_type) = self
-            .resolve_interval(span, interval, interval_kind, None)
-            .await?;
+        let box (interval, interval_type) = self.resolve(interval, None).await?;
+
         args.push(interval);
         arg_types.push(interval_type);
 
         // Type check
         let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let name = format!("add_{}s", interval_kind.to_string().to_lowercase());
         let raw_expr = RawExpr::FunctionCall {
             span: None,
-            name: "date_add".to_string(),
+            name: name.clone(),
             params: vec![],
             args: arguments,
         };
@@ -1355,7 +1305,7 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((
             FunctionCall {
                 arguments: args,
-                func_name: "date_add".to_string(),
+                func_name: name,
                 return_type: Box::new(expr.data_type().clone()),
             }
             .into(),

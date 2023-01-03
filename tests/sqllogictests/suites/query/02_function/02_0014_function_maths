@@ -97,7 +97,7 @@ SELECT ln(NULL)
 NULL
 
 query F
-SELECT ln(1, 2)
+SELECT log(1, 2)
 ----
 Infinity
 
@@ -216,14 +216,10 @@ SELECT atan(-1)
 -0.7853981633974483
 
 query F
-SELECT atan(-2, 2)
-----
--0.7853981633974483
-
-query F
 SELECT atan2(-2, 2)
 ----
 -0.7853981633974483
+
 
 query F
 SELECT atan2(pi(), 0)

@@ -818,7 +818,7 @@ statement ok
 insert into ts values('2022-02-03 00:00:00', '2022-02-03', today())
 
 query B
-select to_datetime(a) = to_datetime(b) from ts
+select to_timestamp(a) = to_timestamp(b) from ts
 ----
 1
 
