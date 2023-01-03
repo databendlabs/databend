@@ -22,6 +22,7 @@ pub mod mutation_sink;
 mod mutation_transform;
 pub mod recluster_mutator;
 mod update;
+mod util;
 
 pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
@@ -41,3 +42,5 @@ pub use mutation_sink::MutationSink;
 pub use mutation_transform::MutationTransform;
 pub use recluster_mutator::ReclusterMutator;
 pub use update::UpdateSource;
+pub use util::DataChunks;
+pub use util::SerializeState;

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
+use common_datavalues::ColumnRef;
 use common_datavalues::DataField;
 use common_datavalues::ToDataType;
 use common_exception::ErrorCode;
@@ -32,9 +33,11 @@ use opendal::Operator;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::DataChunks;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSourceMeta;
+use crate::operations::mutation::SerializeState;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
 use crate::pipelines::processors::port::OutputPort;
@@ -45,22 +48,19 @@ use crate::pruning::BlockIndex;
 use crate::statistics::gen_columns_statistics;
 use crate::FuseTable;
 
-type DataChunks = Vec<(usize, Vec<u8>)>;
-struct SerializeState {
-    block_data: Vec<u8>,
-    block_location: String,
-    index_data: Vec<u8>,
-    index_location: String,
-}
-
 enum State {
     ReadData(Option<PartInfoPtr>),
     FilterData(PartInfoPtr, DataChunks),
-    ReadRemain(PartInfoPtr, DataBlock),
+    ReadRemain {
+        part: PartInfoPtr,
+        data_block: DataBlock,
+        filter: ColumnRef,
+    },
     MergeRemain {
         part: PartInfoPtr,
         chunks: DataChunks,
         data_block: DataBlock,
+        filter: ColumnRef,
     },
     UpdateData(DataBlock),
     NeedSerialize(DataBlock),
@@ -170,19 +170,26 @@ impl Processor for UpdateSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, chunks) => {
-                let mut data_block = self.block_reader.deserialize(part.clone(), chunks)?;
+                let data_block = self.block_reader.deserialize(part.clone(), chunks)?;
                 if let Some(filter) = self.filter.as_ref() {
                     let filter_result = filter
                         .eval(&self.ctx.try_get_function_context()?, &data_block)?
                         .vector;
-                    let predicates = DataBlock::cast_to_nonull_boolean(&filter_result)?;
-                    if DataBlock::filter_exists(&predicates)? {
-                        let field = DataField::new("_predicate", bool::to_data_type());
-                        data_block = data_block.add_column(predicates, field)?;
+                    let filter = DataBlock::cast_to_nonull_boolean(&filter_result)?;
+                    if DataBlock::filter_exists(&filter)? {
                         if self.remain_reader.is_none() {
-                            self.state = State::UpdateData(data_block);
+                            self.state = State::MergeRemain {
+                                part,
+                                chunks: vec![],
+                                data_block,
+                                filter,
+                            };
                         } else {
-                            self.state = State::ReadRemain(part, data_block);
+                            self.state = State::ReadRemain {
+                                part,
+                                data_block,
+                                filter,
+                            };
                         }
                     } else {
                         self.state = State::Generated(Mutation::DoNothing);
@@ -195,10 +202,9 @@ impl Processor for UpdateSource {
                 part,
                 chunks,
                 mut data_block,
+                filter,
             } => {
-                let merged = if chunks.is_empty() {
-                    data_block
-                } else if let Some(remain_reader) = self.remain_reader.as_ref() {
+                if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let remain_block = remain_reader.deserialize(part, chunks)?;
                     for (col, field) in remain_block
                         .columns()
@@ -207,11 +213,12 @@ impl Processor for UpdateSource {
                     {
                         data_block = data_block.add_column(col.clone(), field.clone())?;
                     }
-                    data_block
-                } else {
-                    return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
-                };
-                self.state = State::UpdateData(merged);
+                }
+
+                let field = DataField::new("_predicate", bool::to_data_type());
+                data_block = data_block.add_column(filter, field)?;
+
+                self.state = State::UpdateData(data_block);
             }
             State::UpdateData(data_block) => {
                 let func_ctx = self.ctx.try_get_function_context()?;
@@ -289,7 +296,11 @@ impl Processor for UpdateSource {
                     .await?;
                 self.state = State::FilterData(inner_part, chunks);
             }
-            State::ReadRemain(part, data_block) => {
+            State::ReadRemain {
+                part,
+                data_block,
+                filter,
+            } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let chunks = remain_reader
                         .read_columns_data(self.ctx.clone(), part.clone())
@@ -298,6 +309,7 @@ impl Processor for UpdateSource {
                         part,
                         chunks,
                         data_block,
+                        filter,
                     };
                 } else {
                     return Err(ErrorCode::Internal("It's a bug. No remain reader"));

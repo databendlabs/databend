@@ -35,6 +35,15 @@ use crate::pruning::BlockPruner;
 use crate::FuseTable;
 
 impl FuseTable {
+    /// UPDATE column = expression WHERE condition
+    /// The flow of Pipeline is as follows:
+    /// +-------------+
+    /// |UpdateSource1| ------
+    /// +-------------+       |      +-----------------+      +------------+
+    /// |     ...     | ...   | ---> |MutationTransform| ---> |MutationSink|
+    /// +-------------+       |      +-----------------+      +------------+
+    /// |UpdateSourceN| ------
+    /// +-------------+
     pub async fn do_update(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -65,7 +74,7 @@ impl FuseTable {
         let mut remain_reader = None;
         let (projection, filters) = if col_indices.is_empty() {
             if filter.is_some() && !self.try_eval_const(&filter.unwrap())? {
-                // do nothing.
+                // The condition is always false, do nothing.
                 return Ok(());
             }
 
@@ -76,6 +85,9 @@ impl FuseTable {
                 acc
             });
 
+            // The condition is always true.
+            // Replace column to the result of the following expression:
+            // CAST(expression, type)
             for (id, expr) in update_list.into_iter() {
                 let field = schema.field(id);
                 let target = field.data_type();
@@ -99,11 +111,6 @@ impl FuseTable {
                 acc
             });
 
-            let mut fields = schema.fields().clone();
-            fields.push(DataField::new("_predicate", bool::to_data_type()));
-            let input_schema = Arc::new(DataSchema::new(fields));
-            pos += 1;
-
             let remain_col_ids: Vec<usize> = all_col_ids
                 .into_iter()
                 .filter(|id| !col_indices.contains(id))
@@ -119,6 +126,13 @@ impl FuseTable {
                     Some((*self.create_block_reader(Projection::Columns(remain_col_ids))?).clone());
             }
 
+            let mut fields = schema.fields().clone();
+            fields.push(DataField::new("_predicate", bool::to_data_type()));
+            let input_schema = Arc::new(DataSchema::new(fields));
+            pos += 1;
+
+            // Replace column to the result of the following expression:
+            // if(condition, CAST(expression, type), column)
             for (id, expr) in update_list.into_iter() {
                 let field = schema.field(id);
                 let target = field.data_type();

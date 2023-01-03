@@ -1,4 +1,4 @@
-//  Copyright 2022 Datafuse Labs.
+//  Copyright 2023 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,10 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod block_compact_mutator;
-mod deletion;
-mod recluster_mutator;
-mod segments_compact_mutator;
-mod update;
+pub type DataChunks = Vec<(usize, Vec<u8>)>;
 
-pub use deletion::do_deletion;
+pub struct SerializeState {
+    pub block_data: Vec<u8>,
+    pub block_location: String,
+    pub index_data: Vec<u8>,
+    pub index_location: String,
+}

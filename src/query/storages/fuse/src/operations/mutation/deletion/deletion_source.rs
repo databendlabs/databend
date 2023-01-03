@@ -35,9 +35,11 @@ use opendal::Operator;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::DataChunks;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSourceMeta;
+use crate::operations::mutation::SerializeState;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
 use crate::pipelines::processors::port::OutputPort;
@@ -49,15 +51,6 @@ use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 use crate::Table;
-
-type DataChunks = Vec<(usize, Vec<u8>)>;
-
-struct SerializeState {
-    block_data: Vec<u8>,
-    block_location: String,
-    index_data: Vec<u8>,
-    index_location: String,
-}
 
 enum State {
     ReadData(Option<PartInfoPtr>),
