@@ -176,7 +176,8 @@ impl FromStr for StageFileFormatType {
             "NDJSON" | "JSONEACHROW" => Ok(StageFileFormatType::NdJson),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
             "XML" => Ok(StageFileFormatType::Xml),
-            "ORC" | "AVRO" | "JSON" => Err(format!(
+            "JSON" => Ok(StageFileFormatType::Json),
+            "ORC" | "AVRO" => Err(format!(
                 "File format type '{s}' not implemented yet', must be one of ( CSV | TSV | NDJSON | PARQUET | XML)"
             )),
             _ => Err(format!(
