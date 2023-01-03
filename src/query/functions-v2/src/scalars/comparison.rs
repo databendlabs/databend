@@ -50,6 +50,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 pub const ALL_COMP_FUNC_NAMES: [&str; 6] = ["eq", "noteq", "lt", "lte", "gt", "gte"];
 
+pub const ALL_MATCH_FUNC_NAMES: [&str; 4] = ["like", "not like", "regexp", "not regexp"];
+
 const ALL_TRUE_DOMAIN: BooleanDomain = BooleanDomain {
     has_true: true,
     has_false: false,

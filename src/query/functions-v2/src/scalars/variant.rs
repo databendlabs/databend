@@ -29,6 +29,7 @@ use common_expression::types::variant::cast_scalar_to_variant;
 use common_expression::types::variant::cast_scalars_to_variants;
 use common_expression::types::variant::JSONB_NULL;
 use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::GenericType;
 use common_expression::types::NullableType;
@@ -69,7 +70,13 @@ use common_jsonb::to_string;
 use common_jsonb::to_u64;
 use common_jsonb::JsonPath;
 
+use super::comparison::ALL_COMP_FUNC_NAMES;
+use super::comparison::ALL_MATCH_FUNC_NAMES;
+
 pub fn register(registry: &mut FunctionRegistry) {
+    register_compare_functions(registry);
+    register_match_functions(registry);
+
     registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
         "parse_json",
         FunctionProperty::default(),
@@ -653,5 +660,49 @@ pub fn register(registry: &mut FunctionRegistry) {
                     );
             }
         });
+    }
+}
+
+fn register_compare_functions(registry: &mut FunctionRegistry) {
+    for name in ALL_COMP_FUNC_NAMES {
+        registry.register_auto_cast_signatures(name, vec![
+            (DataType::Variant, DataType::Boolean),
+            (DataType::Variant, DataType::Date),
+            (DataType::Variant, DataType::Timestamp),
+            (DataType::Variant, DataType::String),
+            (DataType::Variant, DataType::Number(NumberDataType::UInt8)),
+            (DataType::Variant, DataType::Number(NumberDataType::UInt16)),
+            (DataType::Variant, DataType::Number(NumberDataType::UInt32)),
+            (DataType::Variant, DataType::Number(NumberDataType::UInt64)),
+            (DataType::Variant, DataType::Number(NumberDataType::Int8)),
+            (DataType::Variant, DataType::Number(NumberDataType::Int16)),
+            (DataType::Variant, DataType::Number(NumberDataType::Int32)),
+            (DataType::Variant, DataType::Number(NumberDataType::Int64)),
+            (DataType::Variant, DataType::Number(NumberDataType::Float32)),
+            (DataType::Variant, DataType::Number(NumberDataType::Float64)),
+            (DataType::Boolean, DataType::Variant),
+            (DataType::Date, DataType::Variant),
+            (DataType::Timestamp, DataType::Variant),
+            (DataType::String, DataType::Variant),
+            (DataType::Number(NumberDataType::UInt8), DataType::Variant),
+            (DataType::Number(NumberDataType::UInt16), DataType::Variant),
+            (DataType::Number(NumberDataType::UInt32), DataType::Variant),
+            (DataType::Number(NumberDataType::UInt64), DataType::Variant),
+            (DataType::Number(NumberDataType::Int8), DataType::Variant),
+            (DataType::Number(NumberDataType::Int16), DataType::Variant),
+            (DataType::Number(NumberDataType::Int32), DataType::Variant),
+            (DataType::Number(NumberDataType::Int64), DataType::Variant),
+            (DataType::Number(NumberDataType::Float32), DataType::Variant),
+            (DataType::Number(NumberDataType::Float64), DataType::Variant),
+        ]);
+    }
+}
+
+fn register_match_functions(registry: &mut FunctionRegistry) {
+    for name in ALL_MATCH_FUNC_NAMES {
+        registry.register_auto_cast_signatures(name, vec![
+            (DataType::Variant, DataType::String),
+            (DataType::String, DataType::Variant),
+        ]);
     }
 }
