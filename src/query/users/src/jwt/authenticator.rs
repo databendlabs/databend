@@ -73,16 +73,16 @@ impl CustomClaims {
 }
 
 impl JwtAuthenticator {
-    pub async fn try_create(jwt_key_file: String) -> Result<Option<Self>> {
+    pub fn try_create(jwt_key_file: String) -> Result<Option<Self>> {
         if jwt_key_file.is_empty() {
             return Ok(None);
         }
-        let key_store = jwk::JwkKeyStore::new(jwt_key_file).await?;
+        let key_store = jwk::JwkKeyStore::new(jwt_key_file);
         Ok(Some(JwtAuthenticator { key_store }))
     }
 
-    pub fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
-        let pub_key = self.key_store.get_key(None)?;
+    pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
+        let pub_key = self.key_store.get_key(None).await?;
         match &pub_key {
             PubKey::RSA256(pk) => match pk.verify_token::<CustomClaims>(token, None) {
                 Ok(c) => match c.subject {
