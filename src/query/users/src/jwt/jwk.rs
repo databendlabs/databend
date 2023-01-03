@@ -129,10 +129,12 @@ impl JwkKeyStore {
     }
 
     async fn maybe_reload_keys(&self) -> Result<()> {
-        let last_refreshed_at = *self.last_refreshed_at.read();
-        if last_refreshed_at.is_none()
-            || last_refreshed_at.unwrap().elapsed() > self.refresh_interval
-        {
+        let need_reload = {
+            let last_refreshed_at = *self.last_refreshed_at.read();
+            last_refreshed_at.is_none()
+                || last_refreshed_at.unwrap().elapsed() > self.refresh_interval
+        };
+        if need_reload {
             self.load_keys().await?;
             self.last_refreshed_at.write().replace(Instant::now());
         }
