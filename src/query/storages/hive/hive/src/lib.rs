@@ -34,6 +34,7 @@ pub use hive_blocks::HiveBlocks;
 pub use hive_catalog::HiveCatalog;
 pub use hive_file_splitter::HiveFileSplitter;
 pub use hive_meta_data_reader::MetaDataReader;
+pub use hive_parquet_block_reader::filter_hive_partition_from_partition_keys;
 pub use hive_partition::HivePartInfo;
 pub use hive_partition_filler::HivePartitionFiller;
 pub use hive_table::HiveFileInfo;
