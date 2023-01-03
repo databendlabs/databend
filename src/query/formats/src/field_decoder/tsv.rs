@@ -72,14 +72,13 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
     fn read_string_inner<R: AsRef<[u8]>>(
         &self,
         reader: &mut Cursor<R>,
-        tmp_buf: &mut Vec<u8>,
+        output: &mut Vec<u8>,
         raw: bool,
     ) -> Result<()> {
-        tmp_buf.clear();
         if raw {
-            reader.read_escaped_string_text(tmp_buf)
+            reader.read_escaped_string_text(output)
         } else {
-            reader.read_quoted_text(tmp_buf, self.quote_char)
+            reader.read_quoted_text(output, self.quote_char)
         }?;
         Ok(())
     }
