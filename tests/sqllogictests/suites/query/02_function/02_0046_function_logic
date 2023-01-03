@@ -11,8 +11,35 @@ SELECT true and true
 1
 
 
+
 query B
 SELECT false and false
+----
+0
+
+
+
+query B
+SELECT 1 and 0
+----
+0
+
+
+
+query B
+SELECT 1 and 1
+----
+1
+
+
+
+query B
+SELECT 1 and null
+----
+NULL
+
+query B
+SELECT 0 and null
 ----
 0
 
@@ -47,6 +74,48 @@ query B
 SELECT false OR false
 ----
 0
+
+
+
+query B
+SELECT 1 OR 0
+----
+1
+
+
+
+query B
+SELECT 1 OR 1
+----
+1
+
+
+
+query B
+SELECT 0 OR 0
+----
+0
+
+
+
+query B
+SELECT 1 OR null
+----
+1
+
+
+
+query B
+SELECT 0 OR null
+----
+NULL
+
+query B
+SELECT null OR 1
+----
+1
+
+
 
 query B
 SELECT null OR null
@@ -108,6 +177,20 @@ SELECT not true
 
 query B
 SELECT not false
+----
+1
+
+
+
+query B
+SELECT not 1
+----
+0
+
+
+
+query B
+SELECT not 0
 ----
 1
 

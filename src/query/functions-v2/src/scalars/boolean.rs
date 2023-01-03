@@ -15,8 +15,10 @@
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::types::NullableType;
 use common_expression::types::StringType;
+use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::FunctionDomain;
@@ -26,6 +28,15 @@ use common_expression::Value;
 use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    for func_name in ["and", "or", "not", "xor"] {
+        for data_type in ALL_INTEGER_TYPES {
+            registry.register_auto_cast_signatures(func_name, vec![(
+                DataType::Number(data_type.clone()),
+                DataType::Boolean,
+            )]);
+        }
+    }
+
     registry.register_passthrough_nullable_1_arg::<BooleanType, BooleanType, _, _>(
         "not",
         FunctionProperty::default(),
