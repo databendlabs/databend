@@ -192,11 +192,8 @@ impl HiveTable {
         let prewhere_reader =
             self.build_prewhere_reader(plan, chunk_size, prewhere_all_partitions)?;
         let remain_reader = self.build_remain_reader(plan, chunk_size, prewhere_all_partitions)?;
-        let prewhere_filter = self.build_prewhere_filter_executor(
-            ctx.clone(),
-            plan,
-            prewhere_reader.get_output_schema(),
-        )?;
+        let prewhere_filter =
+            self.build_prewhere_filter_executor(plan, prewhere_reader.get_output_schema())?;
 
         let hive_block_filter = self.get_block_filter(ctx.clone(), push_downs)?;
 
@@ -316,7 +313,6 @@ impl HiveTable {
     // Build the prewhere filter executor.
     fn build_prewhere_filter_executor(
         &self,
-        _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         schema: DataSchemaRef,
     ) -> Result<Arc<Option<EvalNode>>> {

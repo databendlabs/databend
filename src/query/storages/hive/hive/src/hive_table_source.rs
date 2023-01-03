@@ -51,20 +51,24 @@ enum State {
     /// IO bound
     ReadMeta(Option<PartInfoPtr>),
 
-    /// Read blocks from data groups (without deserialization)
+    /// Read prewhere blocks from data groups (without deserialization)
     /// IO bound
     ReadPrewhereData(HiveBlocks),
 
+    /// Read remain blocks from data groups (without deserialization)
+    /// IO bound
     ReadRemainData(HiveBlocks, PreWhereData),
 
+    /// do prewhere filter on prewhere data, if datas are filtered, trans to Generated state with emtpy datablocks,
+    /// else trans to ReadRemainData
+    /// CPU bound
     PrewhereFilter(HiveBlocks, DataBlockDeserializer),
 
-    /// Deserialize block from the given data groups
+    /// Deserialize remain block from the given data groups, concat prewhere and remain data blocks
     /// CPU bound
     Deserialize(HiveBlocks, DataBlockDeserializer, PreWhereData),
 
-    /// `(_, _, Some(_))` indicates that a data block is ready, and needs to be consumed
-    /// `(_, _, None)` indicates that there are no more blocks left for the current row group of `HiveBlocks`
+    /// indicates that data blocks are ready, and needs to be consumed
     Generated(HiveBlocks, Vec<DataBlock>),
     Finish,
 }
@@ -279,11 +283,6 @@ impl Processor for HiveTableSource {
             {
                 // 1. consume all generated blocks,
                 if let Some(data_block) = data_blocks.pop() {
-                    // let progress_values = ProgressValues {
-                    // rows: data_block.num_rows(),
-                    // bytes: data_block.memory_size(),
-                    // };
-                    // self.scan_progress.incr(&progress_values);
                     self.output.push_data(Ok(data_block));
                     // 2. if not all consumed, retain generated state
                     self.state = State::Generated(hive_blocks, data_blocks);
