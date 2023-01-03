@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_cache::BytesMeter;
 use common_cache::Cache;
@@ -22,6 +23,7 @@ use common_exception::Result;
 use opendal::Object;
 use parking_lot::RwLock;
 
+use crate::providers::metrics::*;
 use crate::CacheSettings;
 use crate::ObjectCacheProvider;
 
@@ -57,14 +59,29 @@ impl ObjectCacheProvider<Vec<u8>> for MemoryBytesCache {
         let try_get_val = self.get_cache(&key);
         Ok(match try_get_val {
             None => {
+                let now = Instant::now();
+
                 let data = object.range_read(start..end).await?;
                 let v = Arc::new(data);
 
                 self.lru.write().put(key, v.clone());
 
+                // Perf.
+                {
+                    metrics_inc_memory_bytes_misses(1);
+                    metrics_inc_memory_bytes_load_milliseconds(now.elapsed().as_millis() as u64);
+                }
+
                 v
             }
-            Some(v) => v,
+            Some(v) => {
+                // Perf.
+                {
+                    metrics_inc_memory_bytes_hits(1);
+                }
+
+                v
+            }
         })
     }
 
@@ -74,13 +91,34 @@ impl ObjectCacheProvider<Vec<u8>> for MemoryBytesCache {
             self.lru.write().put(key, v.clone());
         }
 
+        let now = Instant::now();
+
         object.write(v.as_slice()).await?;
+
+        // Perf.
+        {
+            metrics_inc_memory_bytes_writes(1);
+            metrics_inc_memory_bytes_write_milliseconds(now.elapsed().as_millis() as u64);
+        }
 
         Ok(())
     }
 
     async fn remove_object(&self, object: &Object) -> Result<()> {
+        let key = object.path();
+
+        let now = Instant::now();
+
+        // Try to remove from the cache.
+        self.lru.write().pop(key);
         object.delete().await?;
+
+        // Perf.
+        {
+            metrics_inc_memory_bytes_removes(1);
+            metrics_inc_memory_bytes_remove_milliseconds(now.elapsed().as_millis() as u64);
+        }
+
         Ok(())
     }
 }
