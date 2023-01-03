@@ -123,16 +123,24 @@ impl Rule for RuleFoldCountAggregate {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {
                 if let Scalar::AggregateFunction(agg_func) = item.scalar.clone() {
-                    let col_set = agg_func.args[0].used_columns();
-                    for index in col_set {
-                        let col_stat = column_stats.get(&index);
-                        if let Some(card) = col_stat {
-                            item.scalar = Scalar::ConstantExpr(ConstantExpr {
-                                value: Literal::UInt64(table_card - card.null_count),
-                                data_type: Box::new(item.scalar.data_type()),
-                            });
-                        } else {
-                            return Ok(());
+                    if agg_func.args.is_empty() {
+                        item.scalar = Scalar::ConstantExpr(ConstantExpr {
+                            value: Literal::UInt64(table_card),
+                            data_type: Box::new(item.scalar.data_type()),
+                        });
+                        return Ok(());
+                    } else {
+                        let col_set = agg_func.args[0].used_columns();
+                        for index in col_set {
+                            let col_stat = column_stats.get(&index);
+                            if let Some(card) = col_stat {
+                                item.scalar = Scalar::ConstantExpr(ConstantExpr {
+                                    value: Literal::UInt64(table_card - card.null_count),
+                                    data_type: Box::new(item.scalar.data_type()),
+                                });
+                            } else {
+                                return Ok(());
+                            }
                         }
                     }
                 }

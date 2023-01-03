@@ -76,8 +76,7 @@ impl Compactor for SortMergeCompactor {
             let mut output = Vec::with_capacity(num_blocks);
             for _ in 0..num_blocks {
                 let end = std::cmp::min(start + self.block_size, num_rows);
-                let block =
-                    DataBlock::take_by_slice_limit(&block, (start, end - start), self.limit);
+                let block = block.slice(start..end);
                 start = end;
                 output.push(block);
             }
