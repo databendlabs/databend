@@ -892,3 +892,25 @@ impl<'a> Display for Expr<'a> {
         Ok(())
     }
 }
+
+pub fn split_conjunctions_expr<'a>(expr: &Expr<'a>) -> Vec<Expr<'a>> {
+    match expr {
+        Expr::BinaryOp {
+            op, left, right, ..
+        } if op == &BinaryOperator::And => {
+            let mut result = split_conjunctions_expr(left);
+            result.extend(split_conjunctions_expr(right));
+            result
+        }
+        _ => vec![expr.clone()],
+    }
+}
+
+pub fn split_equivalent_predicate_expr<'a>(expr: &Expr<'a>) -> Option<(Expr<'a>, Expr<'a>)> {
+    match expr {
+        Expr::BinaryOp {
+            op, left, right, ..
+        } if op == &BinaryOperator::Eq => Some((*left.clone(), *right.clone())),
+        _ => None,
+    }
+}
