@@ -15,12 +15,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataField;
-use common_datavalues::ToDataType;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::evaluator::ChunkOperator;
@@ -75,6 +75,7 @@ enum State {
 pub struct UpdateSource {
     state: State,
     ctx: Arc<dyn TableContext>,
+    scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
@@ -98,9 +99,11 @@ impl UpdateSource {
         remain_reader: Arc<Option<BlockReader>>,
         operators: Vec<ChunkOperator>,
     ) -> Result<ProcessorPtr> {
+        let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(UpdateSource {
             state: State::ReadData(None),
             ctx: ctx.clone(),
+            scan_progress,
             output,
             location_gen: table.meta_location_generator().clone(),
             dal: table.get_operator(),
@@ -181,6 +184,13 @@ impl Processor for UpdateSource {
                         .vector;
                     let filter = DataBlock::cast_to_nonull_boolean(&filter_result)?;
                     if DataBlock::filter_exists(&filter)? {
+                        let col: &BooleanColumn = Series::check_get(&filter)?;
+                        let progress_values = ProgressValues {
+                            rows: col.len() - col.values().unset_bits(),
+                            bytes: 0,
+                        };
+                        self.scan_progress.incr(&progress_values);
+
                         if self.remain_reader.is_none() {
                             self.state = State::MergeRemain {
                                 part,
@@ -199,6 +209,11 @@ impl Processor for UpdateSource {
                         self.state = State::Generated(Mutation::DoNothing);
                     }
                 } else {
+                    let progress_values = ProgressValues {
+                        rows: data_block.num_rows(),
+                        bytes: 0,
+                    };
+                    self.scan_progress.incr(&progress_values);
                     self.state = State::UpdateData(data_block);
                 }
             }
