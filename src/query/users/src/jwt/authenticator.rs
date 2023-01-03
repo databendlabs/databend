@@ -83,25 +83,16 @@ impl JwtAuthenticator {
 
     pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
         let pub_key = self.key_store.get_key(None).await?;
-        match &pub_key {
-            PubKey::RSA256(pk) => match pk.verify_token::<CustomClaims>(token, None) {
-                Ok(c) => match c.subject {
-                    None => Err(ErrorCode::AuthenticateFailure(
-                        "missing field `subject` in jwt",
-                    )),
-                    Some(_) => Ok(c),
-                },
-                Err(err) => Err(ErrorCode::AuthenticateFailure(err.to_string())),
-            },
-            PubKey::ES256(pk) => match pk.verify_token::<CustomClaims>(token, None) {
-                Ok(c) => match c.subject {
-                    None => Err(ErrorCode::AuthenticateFailure(
-                        "missing field `subject` in jwt",
-                    )),
-                    Some(_) => Ok(c),
-                },
-                Err(err) => Err(ErrorCode::AuthenticateFailure(err.to_string())),
-            },
+        let r = match &pub_key {
+            PubKey::RSA256(pk) => pk.verify_token::<CustomClaims>(token, None),
+            PubKey::ES256(pk) => pk.verify_token::<CustomClaims>(token, None),
+        };
+        let c = r.map_err(|err| ErrorCode::AuthenticateFailure(err.to_string()))?;
+        match c.subject {
+            None => Err(ErrorCode::AuthenticateFailure(
+                "missing field `subject` in jwt",
+            )),
+            Some(_) => Ok(c),
         }
     }
 }
