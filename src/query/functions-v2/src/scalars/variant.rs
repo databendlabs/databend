@@ -69,6 +69,8 @@ use common_jsonb::to_str;
 use common_jsonb::to_string;
 use common_jsonb::to_u64;
 use common_jsonb::JsonPath;
+use common_jsonb::Number as JsonbNumber;
+use common_jsonb::Value as JsonbValue;
 
 use super::comparison::ALL_COMP_FUNC_NAMES;
 use super::comparison::ALL_MATCH_FUNC_NAMES;
@@ -134,6 +136,137 @@ pub fn register(registry: &mut FunctionRegistry) {
             Ok(())
         }),
     );
+
+    registry.register_passthrough_nullable_1_arg::<BooleanType, VariantType, _, _>(
+        "parse_json",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<BooleanType, VariantType>(|s, output, _| {
+            let value = if s {
+                JsonbValue::Bool(true)
+            } else {
+                JsonbValue::Bool(false)
+            };
+            value.write_to_vec(&mut output.data);
+            output.commit_row();
+            Ok(())
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<BooleanType, VariantType, _, _>(
+        "try_parse_json",
+        FunctionProperty::default(),
+        |_| {
+            FunctionDomain::Domain(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(())),
+            })
+        },
+        vectorize_with_builder_1_arg::<BooleanType, NullableType<VariantType>>(|s, output, _| {
+            let value = if s {
+                JsonbValue::Bool(true)
+            } else {
+                JsonbValue::Bool(false)
+            };
+            output.validity.push(true);
+            value.write_to_vec(&mut output.builder.data);
+            output.builder.commit_row();
+            Ok(())
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<BooleanType, StringType, _, _>(
+        "check_json",
+        FunctionProperty::default(),
+        |_| {
+            FunctionDomain::Domain(NullableDomain {
+                has_null: true,
+                value: None,
+            })
+        },
+        vectorize_with_builder_1_arg::<BooleanType, NullableType<StringType>>(|_, output, _| {
+            output.push_null();
+            Ok(())
+        }),
+    );
+
+    for src_type in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match src_type {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, VariantType, _, _>(
+                        "parse_json",
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::Full,
+                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, VariantType>(
+                            move |s, output, _| {
+                                let value = if src_type.is_float() {
+                                    let v = num_traits::cast::cast(s).unwrap();
+                                    JsonbValue::Number(JsonbNumber::Float64(v))
+                                } else if src_type.is_signed() {
+                                    let v = num_traits::cast::cast(s).unwrap();
+                                    JsonbValue::Number(JsonbNumber::Int64(v))
+                                } else {
+                                    let v = num_traits::cast::cast(s).unwrap();
+                                    JsonbValue::Number(JsonbNumber::UInt64(v))
+                                };
+                                value.write_to_vec(&mut output.data);
+                                output.commit_row();
+                                Ok(())
+                            },
+                        ),
+                    );
+
+                registry
+                    .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, VariantType, _, _>(
+                        "try_parse_json",
+                        FunctionProperty::default(),
+                        |_| {
+                            FunctionDomain::Domain(NullableDomain {
+                                has_null: false,
+                                value: Some(Box::new(())),
+                            })
+                        },
+                        vectorize_with_builder_1_arg::<
+                            NumberType<NUM_TYPE>,
+                            NullableType<VariantType>,
+                        >(move |s, output, _ctx| {
+                            let value = if src_type.is_float() {
+                                let v = num_traits::cast::cast(s).unwrap();
+                                JsonbValue::Number(JsonbNumber::Float64(v))
+                            } else if src_type.is_signed() {
+                                let v = num_traits::cast::cast(s).unwrap();
+                                JsonbValue::Number(JsonbNumber::Int64(v))
+                            } else {
+                                let v = num_traits::cast::cast(s).unwrap();
+                                JsonbValue::Number(JsonbNumber::UInt64(v))
+                            };
+                            output.validity.push(true);
+                            value.write_to_vec(&mut output.builder.data);
+                            output.builder.commit_row();
+                            Ok(())
+                        }),
+                    );
+
+                registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
+                    "check_json",
+                    FunctionProperty::default(),
+                    |_| {
+                        FunctionDomain::Domain(NullableDomain {
+                            has_null: true,
+                            value: None,
+                        })
+                    },
+                    vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NullableType<StringType>>(
+                        |_, output, _| {
+                            output.push_null();
+                            Ok(())
+                        },
+                    ),
+                );
+            }
+        });
+    }
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<UInt32Type>, _, _>(
         "length",
@@ -666,29 +799,26 @@ pub fn register(registry: &mut FunctionRegistry) {
 fn register_compare_functions(registry: &mut FunctionRegistry) {
     for name in ALL_COMP_FUNC_NAMES {
         registry.register_auto_cast_signatures(name, vec![
-            (DataType::Variant, DataType::Boolean),
-            (DataType::Variant, DataType::Date),
-            (DataType::Variant, DataType::Timestamp),
-            (DataType::Variant, DataType::String),
-            (DataType::Variant, DataType::Number(NumberDataType::UInt8)),
-            (DataType::Variant, DataType::Number(NumberDataType::UInt16)),
-            (DataType::Variant, DataType::Number(NumberDataType::UInt32)),
-            (DataType::Variant, DataType::Number(NumberDataType::UInt64)),
-            (DataType::Variant, DataType::Number(NumberDataType::Int8)),
-            (DataType::Variant, DataType::Number(NumberDataType::Int16)),
-            (DataType::Variant, DataType::Number(NumberDataType::Int32)),
-            (DataType::Variant, DataType::Number(NumberDataType::Int64)),
-            (DataType::Variant, DataType::Number(NumberDataType::Float32)),
-            (DataType::Variant, DataType::Number(NumberDataType::Float64)),
+            (DataType::Boolean, DataType::Variant),
+            (DataType::Date, DataType::Variant),
+            (DataType::Timestamp, DataType::Variant),
+            (DataType::String, DataType::Variant),
+            (DataType::Number(NumberDataType::UInt8), DataType::Variant),
+            (DataType::Number(NumberDataType::UInt16), DataType::Variant),
+            (DataType::Number(NumberDataType::UInt32), DataType::Variant),
+            (DataType::Number(NumberDataType::UInt64), DataType::Variant),
+            (DataType::Number(NumberDataType::Int8), DataType::Variant),
+            (DataType::Number(NumberDataType::Int16), DataType::Variant),
+            (DataType::Number(NumberDataType::Int32), DataType::Variant),
+            (DataType::Number(NumberDataType::Int64), DataType::Variant),
+            (DataType::Number(NumberDataType::Float32), DataType::Variant),
+            (DataType::Number(NumberDataType::Float64), DataType::Variant),
         ]);
     }
 }
 
 fn register_match_functions(registry: &mut FunctionRegistry) {
     for name in ALL_MATCH_FUNC_NAMES {
-        registry.register_auto_cast_signatures(name, vec![
-            (DataType::Variant, DataType::String),
-            (DataType::String, DataType::Variant),
-        ]);
+        registry.register_auto_cast_signatures(name, vec![(DataType::String, DataType::Variant)]);
     }
 }
