@@ -232,7 +232,7 @@ impl JoinHashTable {
                     let mut validity = MutableBitmap::new();
                     validity.extend_constant(input.num_rows(), true);
                     let validity: Bitmap = validity.into();
-                    Self::set_validity(c, &validity)
+                    Self::set_validity(c, validity.len(), &validity)
                 })
                 .collect::<Vec<_>>();
             input = DataBlock::new(nullable_columns, input.num_rows());

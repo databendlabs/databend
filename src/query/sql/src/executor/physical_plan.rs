@@ -216,7 +216,7 @@ impl HashJoin {
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        DataType::Nullable(Box::new(field.data_type().clone())),
+                        field.data_type().wrap_nullable(),
                     ));
                 }
             }
@@ -225,7 +225,7 @@ impl HashJoin {
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        DataType::Nullable(Box::new(field.data_type().clone())),
+                        field.data_type().wrap_nullable(),
                     ));
                 }
                 for field in self.build.output_schema()?.fields() {
@@ -240,13 +240,13 @@ impl HashJoin {
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        DataType::Nullable(Box::new(field.data_type().clone())),
+                        field.data_type().wrap_nullable(),
                     ));
                 }
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        DataType::Nullable(Box::new(field.data_type().clone())),
+                        field.data_type().wrap_nullable(),
                     ));
                 }
             }

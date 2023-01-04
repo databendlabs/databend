@@ -992,7 +992,7 @@ impl<'a> TypeChecker<'a> {
             let box (arg, mut arg_type) = self.resolve(argument, None).await?;
             if let Scalar::SubqueryExpr(subquery) = &arg {
                 if subquery.typ == SubqueryType::Scalar && !arg.data_type().is_nullable() {
-                    arg_type = DataType::Nullable(Box::new(arg_type));
+                    arg_type = arg_type.wrap_nullable();
                 }
             }
             args.push(arg);

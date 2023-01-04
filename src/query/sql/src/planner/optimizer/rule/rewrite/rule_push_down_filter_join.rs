@@ -77,6 +77,7 @@ impl RulePushDownFilterJoin {
     }
 
     #[allow(clippy::only_used_in_recursion)]
+    #[allow(dead_code)]
     fn find_nullable_columns(
         &self,
         predicate: &Scalar,
@@ -148,6 +149,7 @@ impl RulePushDownFilterJoin {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn convert_outer_to_inner_join(&self, s_expr: &SExpr) -> Result<SExpr> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
@@ -284,7 +286,7 @@ impl Rule for RulePushDownFilterJoin {
         // Todo(xudong): find a way to avoid type conflict and then open the rule
         // let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
         // Second, check if can convert mark join to semi join
-        let mut s_expr = self.convert_mark_to_semi_join(&s_expr)?;
+        let s_expr = self.convert_mark_to_semi_join(&s_expr)?;
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
             state.add_result(s_expr);

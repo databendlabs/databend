@@ -338,6 +338,22 @@ impl PhysicalPlanBuilder {
 
                     // Hack to get before group by schema, we should refactor this
                     AggregateMode::Final => {
+                        let input_schema = match input {
+                            PhysicalPlan::AggregatePartial(ref agg) => agg.input.output_schema()?,
+
+                            PhysicalPlan::Exchange(PhysicalExchange {
+                                input: box PhysicalPlan::AggregatePartial(ref agg),
+                                ..
+                            }) => agg.input.output_schema()?,
+
+                            _ => {
+                                return Err(ErrorCode::Internal(format!(
+                                    "invalid input physical plan: {}",
+                                    input.name(),
+                                )));
+                            }
+                        };
+
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
                             if let Scalar::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
@@ -352,7 +368,7 @@ impl PhysicalPlanBuilder {
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
                                         if let Scalar::BoundColumnRef(col) = arg {
-                                            Ok(col.column.index)
+                                            input_schema.index_of(&col.column.index.to_string())
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()

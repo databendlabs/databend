@@ -98,7 +98,9 @@ impl JoinHashTable {
                                 let nullable_columns = probe_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, &validity))
+                                    .map(|c| {
+                                        Self::set_validity(c, probe_block.num_rows(), &validity)
+                                    })
                                     .collect::<Vec<_>>();
                                 probe_block = DataBlock::new(nullable_columns, validity.len());
                             }
@@ -129,7 +131,7 @@ impl JoinHashTable {
             let nullable_columns = probe_block
                 .columns()
                 .iter()
-                .map(|c| Self::set_validity(c, &validity))
+                .map(|c| Self::set_validity(c, probe_block.num_rows(), &validity))
                 .collect::<Vec<_>>();
             probe_block = DataBlock::new(nullable_columns, validity.len());
         }

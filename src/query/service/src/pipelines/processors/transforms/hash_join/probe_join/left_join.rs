@@ -177,7 +177,13 @@ impl JoinHashTable {
                                 build_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, &validity_bitmap))
+                                    .map(|c| {
+                                        Self::set_validity(
+                                            c,
+                                            build_block.num_rows(),
+                                            &validity_bitmap,
+                                        )
+                                    })
                                     .collect::<Vec<_>>(),
                                 validity_bitmap.len(),
                             )
@@ -196,7 +202,7 @@ impl JoinHashTable {
                                     let mut probe_validity = MutableBitmap::new();
                                     probe_validity.extend_constant(num_rows, true);
                                     let probe_validity: Bitmap = probe_validity.into();
-                                    Self::set_validity(c, &probe_validity)
+                                    Self::set_validity(c, num_rows, &probe_validity)
                                 })
                                 .collect::<Vec<_>>();
                             probe_block = DataBlock::new(nullable_probe_columns, num_rows);
@@ -230,7 +236,7 @@ impl JoinHashTable {
                     let mut probe_validity = MutableBitmap::new();
                     probe_validity.extend_constant(probe_block.num_rows(), true);
                     let probe_validity: Bitmap = probe_validity.into();
-                    Self::set_validity(c, &probe_validity)
+                    Self::set_validity(c, probe_block.num_rows(), &probe_validity)
                 })
                 .collect::<Vec<_>>();
             probe_block = DataBlock::new(nullable_probe_columns, probe_block.num_rows());
@@ -283,7 +289,7 @@ impl JoinHashTable {
                 build_block
                     .columns()
                     .iter()
-                    .map(|c| Self::set_validity(c, &validity))
+                    .map(|c| Self::set_validity(c, build_block.num_rows(), &validity))
                     .collect::<Vec<_>>()
             };
         let nullable_build_block = DataBlock::new(nullable_columns, validity.len());

@@ -328,7 +328,7 @@ impl HashJoinState for JoinHashTable {
         let probe_column_len = self.probe_schema.fields().len();
         let probe_columns = input_block.columns()[0..probe_column_len]
             .iter()
-            .map(|c| Self::set_validity(c, &validity))
+            .map(|c| Self::set_validity(c, num_rows, &validity))
             .collect::<Vec<_>>();
         let probe_block = DataBlock::new(probe_columns, num_rows);
         let build_block =
@@ -524,7 +524,7 @@ impl JoinHashTable {
             // probed_block contains probe side and build side.
             let nullable_columns = input_block.columns()[probe_side_len..]
                 .iter()
-                .map(|c| Self::set_validity(c, &validity))
+                .map(|c| Self::set_validity(c, num_rows, &validity))
                 .collect::<Vec<_>>();
 
             let nullable_build_block = DataBlock::new(nullable_columns.clone(), num_rows);
