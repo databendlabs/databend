@@ -39,7 +39,6 @@ use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::PhysicalScalar;
 
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
@@ -367,13 +366,6 @@ impl PipelineBuilder {
             &aggregate.group_by,
             &aggregate.agg_funcs,
         )?;
-
-        if self.ctx.get_cluster().is_empty()
-            && !params.group_columns.is_empty()
-            && self.main_pipeline.output_len() > 1
-        {
-            return efficiently_memory_final_aggregator(params, &mut self.main_pipeline);
-        }
 
         self.main_pipeline.resize(1)?;
         self.main_pipeline.add_transform(|input, output| {

@@ -16,7 +16,6 @@ use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::vec;
 
 use common_base::runtime::ThreadPool;
 use common_catalog::table_context::TableContext;
@@ -138,7 +137,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 }
 
-pub struct BucketAggregator<const HAS_AGG: bool, Method>
+struct BucketAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     area: Area,
