@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
+use common_expression::types::Int64Type;
 use common_expression::Literal;
 use common_functions_v2::aggregates::AggregateCountFunction;
 
