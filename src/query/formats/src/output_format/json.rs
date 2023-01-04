@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
 use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
@@ -23,18 +25,40 @@ use crate::FileFormatOptionsExt;
 pub struct JSONOutputFormat {
     first_block: bool,
     first_row: bool,
+    schema: DataSchemaRef,
     format_settings: FormatSettings,
 }
 
 impl JSONOutputFormat {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: DataSchemaRef, options: &FileFormatOptionsExt) -> Self {
         Self {
             first_block: true,
             first_row: true,
+            schema,
             format_settings: FormatSettings {
                 timezone: options.timezone,
             },
         }
+    }
+
+    fn format_schema(&self) -> common_exception::Result<Vec<u8>> {
+        let fields = self.schema.fields();
+        if fields.is_empty() {
+            return Ok(b"\"meta\":[]".to_vec());
+        }
+        let mut res = b"\"meta\":[".to_vec();
+        for field in fields {
+            res.push(b'{');
+            res.extend_from_slice(b"\"name\":\"");
+            res.extend_from_slice(field.name().as_bytes());
+            res.extend_from_slice(b"\",\"type\":\"");
+            res.extend_from_slice(field.data_type().name().as_bytes());
+            res.extend_from_slice(b"\"}");
+            res.push(b',');
+        }
+        res.pop();
+        res.extend_from_slice(b"]");
+        Ok(res)
     }
 }
 
@@ -59,7 +83,10 @@ impl OutputFormat for JSONOutputFormat {
     fn serialize_block(&mut self, data_block: &DataBlock) -> common_exception::Result<Vec<u8>> {
         let mut res = if self.first_block {
             self.first_block = false;
-            b"{\"data\":[".to_vec()
+            let mut buf = b"{".to_vec();
+            buf.extend_from_slice(self.format_schema()?.as_ref());
+            buf.extend_from_slice(b",\"data\":[".as_ref());
+            buf
         } else {
             vec![]
         };
@@ -105,7 +132,10 @@ impl OutputFormat for JSONOutputFormat {
 
     fn finalize(&mut self) -> common_exception::Result<Vec<u8>> {
         if self.first_row {
-            Ok(b"{\"data\":[]}\n".to_vec())
+            let mut buf = b"{".to_vec();
+            buf.extend_from_slice(self.format_schema()?.as_ref());
+            buf.extend_from_slice(b",\"data\":[]}\n".as_ref());
+            Ok(buf)
         } else {
             Ok(b"]}\n".to_vec())
         }
