@@ -161,12 +161,10 @@ impl FuseTable {
             ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
         })?;
 
-        let all_filtered = match &predicates {
-            Value::Scalar(v) => !v,
-            Value::Column(bitmap) => bitmap.unset_bits() == bitmap.len(),
-        };
-
-        Ok(all_filtered)
+        Ok(match &predicates {
+            Value::Scalar(v) => *v,
+            Value::Column(bitmap) => bitmap.unset_bits() == 0,
+        })
     }
 
     async fn try_add_deletion_source(

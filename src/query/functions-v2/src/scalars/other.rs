@@ -28,6 +28,7 @@ use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::GenericType;
+use common_expression::types::NullType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
@@ -163,6 +164,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             |domain| FunctionDomain::Domain(domain.clone()),
             |val, _| Ok(val.to_owned()),
         );
+
+    registry.register_1_arg_core::<NullType, NullType, _, _>(
+        "to_nullable",
+        FunctionProperty::default(),
+        |domain| FunctionDomain::Domain(domain.clone()),
+        |val, _| Ok(val.to_owned()),
+    );
 
     registry.register_passthrough_nullable_1_arg::<StringType, UInt32Type, _, _>(
         "inet_aton",
