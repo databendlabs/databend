@@ -482,6 +482,5 @@ pub trait HashtableLike {
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>;
 
     fn iter(&self) -> Self::Iterator<'_>;
-
-    fn clear(&mut self);
+    fn iter_mut(&mut self) -> Self::IteratorMut<'_>;
 }

@@ -465,8 +465,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                 return Ok(Event::NeedConsume);
             }
 
-            if !state.output_data_block.is_empty() {
-                let block = state.output_data_block.remove(0);
+            if let Some(block) = state.output_data_block.pop() {
                 state.output_port.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }

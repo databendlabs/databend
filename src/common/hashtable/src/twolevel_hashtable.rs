@@ -159,10 +159,13 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> Hashtable
         TwoLevelHashtableIter::create(inner)
     }
 
-    fn clear(&mut self) {
-        for inner_table in &mut self.tables {
-            inner_table.clear();
+    fn iter_mut(&mut self) -> Self::IteratorMut<'_> {
+        let mut inner = VecDeque::with_capacity(self.tables.len());
+        for table in &mut self.tables {
+            inner.push_back(table.iter_mut());
         }
+
+        TwoLevelHashtableIter::create(inner)
     }
 }
 
