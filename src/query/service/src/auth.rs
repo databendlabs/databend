@@ -41,9 +41,9 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub async fn create(cfg: &Config) -> Result<Arc<AuthMgr>> {
+    pub fn create(cfg: &Config) -> Result<Arc<AuthMgr>> {
         Ok(Arc::new(AuthMgr {
-            jwt_auth: JwtAuthenticator::try_create(cfg.query.jwt_key_file.clone()).await?,
+            jwt_auth: JwtAuthenticator::try_create(cfg.query.jwt_key_file.clone())?,
         }))
     }
 
@@ -57,7 +57,7 @@ impl AuthMgr {
                     .jwt_auth
                     .as_ref()
                     .ok_or_else(|| ErrorCode::AuthenticateFailure("jwt auth not configured."))?;
-                let jwt = jwt_auth.parse_jwt_claims(t.as_str())?;
+                let jwt = jwt_auth.parse_jwt_claims(t.as_str()).await?;
                 let user_name = jwt.subject.ok_or_else(|| {
                     ErrorCode::AuthenticateFailure(
                         "jwt auth not configured correctly, user name is missing.",

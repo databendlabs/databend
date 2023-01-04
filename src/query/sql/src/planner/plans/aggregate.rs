@@ -24,9 +24,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::Statistics;
-use crate::plans::LogicalOperator;
 use crate::plans::Operator;
-use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::ScalarExpr;
@@ -52,37 +50,34 @@ pub struct Aggregate {
     pub from_distinct: bool,
 }
 
+impl Aggregate {
+    pub fn used_columns(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for group_item in self.group_items.iter() {
+            used_columns.insert(group_item.index);
+            used_columns.extend(group_item.scalar.used_columns())
+        }
+        for agg in self.aggregate_functions.iter() {
+            used_columns.insert(agg.index);
+            used_columns.extend(agg.scalar.used_columns())
+        }
+        Ok(used_columns)
+    }
+}
+
 impl Operator for Aggregate {
     fn rel_op(&self) -> RelOp {
         RelOp::Aggregate
     }
 
-    fn is_physical(&self) -> bool {
-        true
-    }
-
-    fn is_logical(&self) -> bool {
-        true
-    }
-
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        Some(self)
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        Some(self)
-    }
-}
-
-impl PhysicalOperator for Aggregate {
-    fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
 
-    fn compute_required_prop_child<'a>(
+    fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr<'a>,
+        rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
@@ -119,10 +114,8 @@ impl PhysicalOperator for Aggregate {
         }
         Ok(required)
     }
-}
 
-impl LogicalOperator for Aggregate {
-    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
@@ -173,18 +166,5 @@ impl LogicalOperator for Aggregate {
                 is_accurate,
             },
         })
-    }
-
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
-        let mut used_columns = ColumnSet::new();
-        for group_item in self.group_items.iter() {
-            used_columns.insert(group_item.index);
-            used_columns.extend(group_item.scalar.used_columns())
-        }
-        for agg in self.aggregate_functions.iter() {
-            used_columns.insert(agg.index);
-            used_columns.extend(agg.scalar.used_columns())
-        }
-        Ok(used_columns)
     }
 }

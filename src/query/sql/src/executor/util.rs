@@ -17,24 +17,7 @@ use common_exception::Result;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::optimizer::SExpr;
-use crate::plans::Operator;
 use crate::IndexType;
-
-/// Check if all plans in an expression are physical plans
-pub fn check_physical(expression: &SExpr) -> bool {
-    if !expression.plan().is_physical() {
-        return false;
-    }
-
-    for child in expression.children() {
-        if !check_physical(child) {
-            return false;
-        }
-    }
-
-    true
-}
 
 /// Format the display name and index of a column into `"{display_name}"_index` format.
 pub fn format_field_name(display_name: &str, index: IndexType) -> String {

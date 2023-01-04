@@ -2,6 +2,8 @@ name: Dev Linux
 
 on:
   pull_request:
+    branches:
+      - main
     paths-ignore:
       - "docs/**"
       - "website/**"

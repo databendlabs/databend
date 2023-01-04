@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::TableStatistics;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
 
@@ -24,13 +26,14 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::ColumnStatSet;
 use crate::optimizer::Datum;
+use crate::optimizer::Distribution;
+use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
+use crate::optimizer::RequiredProperty;
 use crate::optimizer::Statistics as OpStatistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
-use crate::plans::LogicalOperator;
 use crate::plans::Operator;
-use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::SortItem;
@@ -57,7 +60,7 @@ pub struct Statistics {
 }
 
 #[derive(Clone, Debug)]
-pub struct LogicalGet {
+pub struct Scan {
     pub table_index: IndexType,
     pub columns: ColumnSet,
     pub push_down_predicates: Option<Vec<Scalar>>,
@@ -68,7 +71,7 @@ pub struct LogicalGet {
     pub statistics: Statistics,
 }
 
-impl PartialEq for LogicalGet {
+impl PartialEq for Scan {
     fn eq(&self, other: &Self) -> bool {
         self.table_index == other.table_index
             && self.columns == other.columns
@@ -76,9 +79,9 @@ impl PartialEq for LogicalGet {
     }
 }
 
-impl Eq for LogicalGet {}
+impl Eq for Scan {}
 
-impl std::hash::Hash for LogicalGet {
+impl std::hash::Hash for Scan {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.table_index.hash(state);
         for column in self.columns.iter().sorted() {
@@ -88,29 +91,11 @@ impl std::hash::Hash for LogicalGet {
     }
 }
 
-impl Operator for LogicalGet {
+impl Operator for Scan {
     fn rel_op(&self) -> RelOp {
-        RelOp::LogicalGet
+        RelOp::Scan
     }
 
-    fn is_physical(&self) -> bool {
-        false
-    }
-
-    fn is_logical(&self) -> bool {
-        true
-    }
-
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        Some(self)
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        None
-    }
-}
-
-impl LogicalOperator for LogicalGet {
     fn derive_relational_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let mut used_columns = ColumnSet::new();
         if let Some(preds) = &self.push_down_predicates {
@@ -175,7 +160,20 @@ impl LogicalOperator for LogicalGet {
         })
     }
 
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
-        Ok(self.columns.clone())
+    fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Random,
+        })
+    }
+
+    // Won't be invoked at all, since `PhysicalScan` is leaf node
+    fn compute_required_prop_child<'a>(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr<'a>,
+        _child_index: usize,
+        _required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        unreachable!()
     }
 }

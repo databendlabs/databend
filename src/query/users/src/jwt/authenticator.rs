@@ -73,35 +73,26 @@ impl CustomClaims {
 }
 
 impl JwtAuthenticator {
-    pub async fn try_create(jwt_key_file: String) -> Result<Option<Self>> {
+    pub fn try_create(jwt_key_file: String) -> Result<Option<Self>> {
         if jwt_key_file.is_empty() {
             return Ok(None);
         }
-        let key_store = jwk::JwkKeyStore::new(jwt_key_file).await?;
+        let key_store = jwk::JwkKeyStore::new(jwt_key_file);
         Ok(Some(JwtAuthenticator { key_store }))
     }
 
-    pub fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
-        let pub_key = self.key_store.get_key(None)?;
-        match &pub_key {
-            PubKey::RSA256(pk) => match pk.verify_token::<CustomClaims>(token, None) {
-                Ok(c) => match c.subject {
-                    None => Err(ErrorCode::AuthenticateFailure(
-                        "missing field `subject` in jwt",
-                    )),
-                    Some(_) => Ok(c),
-                },
-                Err(err) => Err(ErrorCode::AuthenticateFailure(err.to_string())),
-            },
-            PubKey::ES256(pk) => match pk.verify_token::<CustomClaims>(token, None) {
-                Ok(c) => match c.subject {
-                    None => Err(ErrorCode::AuthenticateFailure(
-                        "missing field `subject` in jwt",
-                    )),
-                    Some(_) => Ok(c),
-                },
-                Err(err) => Err(ErrorCode::AuthenticateFailure(err.to_string())),
-            },
+    pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
+        let pub_key = self.key_store.get_key(None).await?;
+        let r = match &pub_key {
+            PubKey::RSA256(pk) => pk.verify_token::<CustomClaims>(token, None),
+            PubKey::ES256(pk) => pk.verify_token::<CustomClaims>(token, None),
+        };
+        let c = r.map_err(|err| ErrorCode::AuthenticateFailure(err.to_string()))?;
+        match c.subject {
+            None => Err(ErrorCode::AuthenticateFailure(
+                "missing field `subject` in jwt",
+            )),
+            Some(_) => Ok(c),
         }
     }
 }

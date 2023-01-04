@@ -25,6 +25,7 @@ use crate::format_option_checker::get_format_option_checker;
 use crate::output_format::CSVOutputFormat;
 use crate::output_format::CSVWithNamesAndTypesOutputFormat;
 use crate::output_format::CSVWithNamesOutputFormat;
+use crate::output_format::JSONOutputFormat;
 use crate::output_format::NDJSONOutputFormatBase;
 use crate::output_format::OutputFormat;
 use crate::output_format::ParquetOutputFormat;
@@ -186,9 +187,7 @@ impl FileFormatOptionsExt {
                 }
             }
             StageFileFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema, self)),
-            StageFileFormatType::Json => {
-                unreachable!()
-            }
+            StageFileFormatType::Json => Box::new(JSONOutputFormat::create(schema, self)),
             StageFileFormatType::Avro => {
                 unreachable!()
             }
