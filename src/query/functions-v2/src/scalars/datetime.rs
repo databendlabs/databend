@@ -38,6 +38,7 @@ use common_expression::types::timestamp::timestamp_to_string;
 use common_expression::types::timestamp::MICROS_IN_A_MILLI;
 use common_expression::types::timestamp::MICROS_IN_A_SEC;
 use common_expression::types::DateType;
+use common_expression::types::Int32Type;
 use common_expression::types::NullableType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
@@ -544,6 +545,23 @@ macro_rules! impl_register_arith_functions {
                 ),
             );
 
+            registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, TimestampType, _, _>(
+                concat!($op, "_hours"),
+                FunctionProperty::default(),
+                |_, _| FunctionDomain::MayThrow,
+                vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
+                    |ts, delta, builder, _| {
+                        let val = (ts as i64) * 24 * 3600 * MICROS_IN_A_SEC;
+                        builder.push(AddTimesImpl::eval_timestamp(
+                            val,
+                            $signed_wrapper!{delta},
+                            FACTOR_HOUR,
+                        )?);
+                        Ok(())
+                    },
+                ),
+            );
+
             registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
                 concat!($op, "_minutes"),
                 FunctionProperty::default(),
@@ -560,6 +578,23 @@ macro_rules! impl_register_arith_functions {
                 ),
             );
 
+            registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, TimestampType, _, _>(
+                concat!($op, "_minutes"),
+                FunctionProperty::default(),
+                |_, _| FunctionDomain::MayThrow,
+                vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
+                    |ts, delta, builder, _| {
+                        let val = (ts as i64) * 24 * 3600 * MICROS_IN_A_SEC;
+                        builder.push(AddTimesImpl::eval_timestamp(
+                            val,
+                            $signed_wrapper!{delta},
+                            FACTOR_MINUTE,
+                        )?);
+                        Ok(())
+                    },
+                ),
+            );
+
             registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
                 concat!($op, "_seconds"),
                 FunctionProperty::default(),
@@ -568,6 +603,23 @@ macro_rules! impl_register_arith_functions {
                     |ts, delta, builder, _| {
                         builder.push(AddTimesImpl::eval_timestamp(
                             ts,
+                            $signed_wrapper!{delta},
+                            FACTOR_SECOND,
+                        )?);
+                        Ok(())
+                    },
+                ),
+            );
+
+            registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, TimestampType, _, _>(
+                concat!($op, "_seconds"),
+                FunctionProperty::default(),
+                |_, _| FunctionDomain::MayThrow,
+                vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
+                    |ts, delta, builder, _| {
+                        let val = (ts as i64) * 24 * 3600 * MICROS_IN_A_SEC;
+                        builder.push(AddTimesImpl::eval_timestamp(
+                            val,
                             $signed_wrapper!{delta},
                             FACTOR_SECOND,
                         )?);
@@ -789,6 +841,25 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
         |a, b, _| a + b,
     );
 
+    registry.register_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "plus",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm = rhs.max;
+                let rn = rhs.min;
+                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
+                    min: ln.checked_add(rn)?,
+                    max: lm.checked_add(rm)?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::Full)
+        },
+        |a, b, _| a + b,
+    );
+
     registry.register_2_arg::<DateType, Int64Type, DateType, _, _>(
         "plus",
         FunctionProperty::default(),
@@ -809,6 +880,26 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
         |a, b, _| a + (b as i32),
     );
 
+    registry.register_2_arg::<DateType, DateType, Int32Type, _, _>(
+        "plus",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm: i32 = num_traits::cast::cast(rhs.max)?;
+                let rn: i32 = num_traits::cast::cast(rhs.min)?;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
+                    min: ln.checked_add(rn)?,
+                    max: lm.checked_add(rm)?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::Full)
+        },
+        |a, b, _| a + b,
+    );
+
     registry.register_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
         "minus",
         FunctionProperty::default(),
@@ -826,7 +917,27 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
             })()
             .unwrap_or(FunctionDomain::Full)
         },
-        |a, b, _| a + b,
+        |a, b, _| a - b,
+    );
+
+    registry.register_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "minus",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm = rhs.max;
+                let rn = rhs.min;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
+                    min: ln.checked_sub(rm)?,
+                    max: lm.checked_sub(rn)?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::Full)
+        },
+        |a, b, _| a - b,
     );
 
     registry.register_2_arg::<DateType, Int64Type, DateType, _, _>(
@@ -847,6 +958,26 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
             .unwrap_or(FunctionDomain::Full)
         },
         |a, b, _| a - b as i32,
+    );
+
+    registry.register_2_arg::<DateType, DateType, Int32Type, _, _>(
+        "minus",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm: i32 = num_traits::cast::cast(rhs.max)?;
+                let rn: i32 = num_traits::cast::cast(rhs.min)?;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
+                    min: ln.checked_sub(rm)?,
+                    max: lm.checked_sub(rn)?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::Full)
+        },
+        |a, b, _| a - b,
     );
 }
 

@@ -718,7 +718,14 @@ async fn fill_default_value(
         let tokens = tokenize_sql(default_expr)?;
         let backtrace = Backtrace::new();
         let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
-        let (scalar, _) = binder.bind(&ast).await?;
+        let (mut scalar, ty) = binder.bind(&ast).await?;
+        if !field.data_type().eq(&ty) {
+            scalar = Scalar::CastExpr(CastExpr {
+                argument: Box::new(scalar),
+                from_type: Box::new(ty),
+                target_type: Box::new(field.data_type().clone()),
+            })
+        }
         let scalar = builder.build(&scalar)?;
         operators.push(BlockOperator::Map {
             expr: scalar.as_expr()?,

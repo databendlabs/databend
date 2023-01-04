@@ -61,7 +61,6 @@ select id from db1.t1 where a = '2022-03-02T01:12:00+07:00'
 ----
 4
 
-
 query I
 select id from db1.t1 where a = '2022-03-01T00:00:00+00:00'
 ----

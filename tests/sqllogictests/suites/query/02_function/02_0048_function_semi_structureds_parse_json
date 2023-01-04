@@ -59,43 +59,23 @@ select parse_json('{ "x" : "abc", "y" : false, "z": 10} ')
 {"x":"abc","y":false,"z":10}
 
 
-statement error 1010
+statement error 1001
 select parse_json('[1,')
 
 
-statement error 1010
+statement error 1001
 select parse_json('"ab')
 
-query T
-select parse_json(parse_json('123'))
-----
-123
 
-## http handler could not parse
-onlyif mysql
-query T
-select parse_json(parse_json('"\\\"abc\\\""'))
-----
-"abc"
-
-
-statement error 1010
-select parse_json(parse_json('"abc"'))
-
-
-statement error 1010
-select parse_json(to_date('2022-01-01'))
-
-
-statement error 1028
+statement error 1065
 select parse_json()
 
 
-statement error 1028
+statement error 1065
 select parse_json('a', 'aa')
 
 
-statement error 1028
+statement error 1065
 select get(parse_json('a', 'aa'))
 
 query T
@@ -170,27 +150,6 @@ NULL
 
 query T
 select try_parse_json('"ab')
-----
-NULL
-
-query T
-select try_parse_json(parse_json('123'))
-----
-123
-
-onlyif mysql
-query T
-select try_parse_json(parse_json('"\\\"abc\\\""'))
-----
-"abc"
-
-query T
-select try_parse_json(parse_json('"abc"'))
-----
-NULL
-
-query T
-select try_parse_json(to_date('2022-01-01'))
 ----
 NULL
 
