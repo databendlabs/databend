@@ -135,7 +135,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |domain, _| FunctionDomain::Domain(NullableDomain {
             has_null: true,
-            value: domain.value.clone(),
+            value: domain.as_ref().and_then(|domain| domain.value.clone()),
         }),
         vectorize_with_builder_2_arg::<ArrayType<NullableType<GenericType<0>>>, UInt64Type, NullableType<GenericType<0>>>(
             |arr, idx, output, _| {
@@ -157,7 +157,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |domain, _| FunctionDomain::Domain(NullableDomain {
             has_null: true,
-            value: Some(Box::new(domain.clone()))
+            value: domain.as_ref().map(|domain| Box::new(domain.clone()))
         }),
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, UInt64Type, NullableType<GenericType<0>>>(
             |arr, idx, output, _| {
@@ -323,10 +323,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                     "contains",
                     FunctionProperty::default(),
                     |lhs, rhs| {
+                        let has_true = match lhs {
+                            Some(lhs) => (lhs.min..=lhs.max).contains(&rhs.min)
+                                || (lhs.min..=lhs.max).contains(&rhs.max),
+                            None => false,
+                        };
                         FunctionDomain::Domain(BooleanDomain {
                             has_false: true,
-                            has_true: (lhs.min..=lhs.max).contains(&rhs.min)
-                                || (lhs.min..=lhs.max).contains(&rhs.max),
+                            has_true,
                         })
                     },
                     |lhs, rhs, _| eval_contains::<NumberType<NUM_TYPE>>(lhs, rhs)
@@ -384,10 +388,16 @@ pub fn register(registry: &mut FunctionRegistry) {
             "contains",
             FunctionProperty::default(),
             |lhs, rhs| {
+                let has_true = match lhs {
+                    Some(lhs) => {
+                        (lhs.min..=lhs.max).contains(&rhs.min)
+                            || (lhs.min..=lhs.max).contains(&rhs.max)
+                    }
+                    None => false,
+                };
                 FunctionDomain::Domain(BooleanDomain {
                     has_false: true,
-                    has_true: (lhs.min..=lhs.max).contains(&rhs.min)
-                        || (lhs.min..=lhs.max).contains(&rhs.max),
+                    has_true,
                 })
             },
             |lhs, rhs, _| eval_contains::<DateType>(lhs, rhs),
@@ -397,10 +407,14 @@ pub fn register(registry: &mut FunctionRegistry) {
             "contains",
             FunctionProperty::default(),
             |lhs, rhs| {
+                let has_true = match lhs {
+                    Some(lhs) => (lhs.min..=lhs.max).contains(&rhs.min)
+                        || (lhs.min..=lhs.max).contains(&rhs.max),
+                    None => false,
+                };
                 FunctionDomain::Domain(BooleanDomain {
                     has_false: true,
-                    has_true: (lhs.min..=lhs.max).contains(&rhs.min)
-                        || (lhs.min..=lhs.max).contains(&rhs.max),
+                    has_true,
                 })
             },
             |lhs, rhs, _| eval_contains::<TimestampType>(lhs, rhs)
@@ -410,10 +424,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         "contains",
         FunctionProperty::default(),
         |lhs, rhs| {
-            FunctionDomain::Domain(BooleanDomain {
-                has_false:  (lhs.has_false && rhs.has_true) || (lhs.has_true && rhs.has_false),
-                has_true:   (lhs.has_false && rhs.has_false) || (lhs.has_true && rhs.has_true),
-            })
+            match lhs {
+                Some(lhs) => {
+                    FunctionDomain::Domain(BooleanDomain {
+                        has_false:  (lhs.has_false && rhs.has_true) || (lhs.has_true && rhs.has_false),
+                        has_true:   (lhs.has_false && rhs.has_false) || (lhs.has_true && rhs.has_true),
+                    })
+                },
+                None => FunctionDomain::Domain(BooleanDomain {
+                    has_false: false,
+                    has_true: false,
+                }),
+            }
         },
         |lhs, rhs, _| {
             match lhs {

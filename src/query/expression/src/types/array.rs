@@ -37,7 +37,7 @@ impl<T: ValueType> ValueType for ArrayType<T> {
     type Scalar = T::Column;
     type ScalarRef<'a> = T::Column;
     type Column = ArrayColumn<T>;
-    type Domain = T::Domain;
+    type Domain = Option<T::Domain>;
     type ColumnIterator<'a> = ArrayIterator<'a, T>;
     type ColumnBuilder = ArrayColumnBuilder<T>;
 
@@ -67,7 +67,8 @@ impl<T: ValueType> ValueType for ArrayType<T> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
-            Domain::Array(Some(domain)) => Some(T::try_downcast_domain(domain)?),
+            Domain::Array(Some(domain)) => Some(Some(T::try_downcast_domain(domain)?)),
+            Domain::Array(None) => Some(None),
             _ => None,
         }
     }
@@ -87,7 +88,7 @@ impl<T: ValueType> ValueType for ArrayType<T> {
     }
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Array(Some(Box::new(T::upcast_domain(domain))))
+        Domain::Array(domain.map(|domain| Box::new(T::upcast_domain(domain))))
     }
 
     fn column_len<'a>(col: &'a Self::Column) -> usize {
@@ -156,7 +157,7 @@ impl<T: ArgType> ArgType for ArrayType<T> {
     }
 
     fn full_domain() -> Self::Domain {
-        T::full_domain()
+        Some(T::full_domain())
     }
 
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {

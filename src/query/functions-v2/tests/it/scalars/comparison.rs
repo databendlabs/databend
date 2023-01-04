@@ -66,6 +66,9 @@ fn test_eq(file: &mut impl Write) {
     run_ast(file, "true=false", &[]);
     run_ast(file, "false=false", &[]);
     run_ast(file, "true=true", &[]);
+    run_ast(file, "[]=[]", &[]);
+    run_ast(file, "[1, 2]=[1, 2]", &[]);
+    run_ast(file, "[true]=[]", &[]);
     run_ast(file, "today()='2020-01-01'", &[]);
     run_ast(
         file,
@@ -126,6 +129,9 @@ fn test_noteq(file: &mut impl Write) {
     run_ast(file, "true != true", &[]);
     run_ast(file, "true != null", &[]);
     run_ast(file, "true != false", &[]);
+    run_ast(file, "[] != []", &[]);
+    run_ast(file, "['a'] != ['a']", &[]);
+    run_ast(file, "['a'] != ['b']", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)!=to_timestamp(-100)",
@@ -167,6 +173,8 @@ fn test_lt(file: &mut impl Write) {
     run_ast(file, "true < true", &[]);
     run_ast(file, "true < null", &[]);
     run_ast(file, "true < false", &[]);
+    run_ast(file, "[] < []", &[]);
+    run_ast(file, "[1, 2] < [2, 3]", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)<to_timestamp(-100)",
@@ -210,6 +218,8 @@ fn test_lte(file: &mut impl Write) {
     run_ast(file, "true <= true", &[]);
     run_ast(file, "true <= null", &[]);
     run_ast(file, "true <= false", &[]);
+    run_ast(file, "[] <= []", &[]);
+    run_ast(file, "[1, 2] <= [2, 3]", &[]);
     run_ast(file, "parse_json('null') <= parse_json('null')", &[]);
     run_ast(
         file,
@@ -250,6 +260,8 @@ fn test_gt(file: &mut impl Write) {
     run_ast(file, "true > true", &[]);
     run_ast(file, "true > null", &[]);
     run_ast(file, "true > false", &[]);
+    run_ast(file, "[] > []", &[]);
+    run_ast(file, "[1, 2] > [2, 3]", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)>to_timestamp(-100)",
@@ -298,6 +310,8 @@ fn test_gte(file: &mut impl Write) {
     run_ast(file, "true >= true", &[]);
     run_ast(file, "true >= null", &[]);
     run_ast(file, "true >= false", &[]);
+    run_ast(file, "[] >= []", &[]);
+    run_ast(file, "[1, 2] >= [2, 3]", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)>=to_timestamp(-100)",

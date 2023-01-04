@@ -182,9 +182,10 @@ pub fn check_function<Index: ColumnIndex>(
         }
     }
 
-    if let Some(negative) = fn_registry.negtives.get(name) {
-        let neg_expr = check_function(span.clone(), negative, params, args, fn_registry)?;
-        return check_function(span, "not", &[], &[neg_expr], fn_registry);
+    if let Some(original_fn_name) = fn_registry.negtives.get(name) {
+        let original_expr =
+            check_function(span.clone(), original_fn_name, params, args, fn_registry)?;
+        return check_function(span, "not", &[], &[original_expr], fn_registry);
     }
 
     let candidates = fn_registry.search_candidates(name, params, args);

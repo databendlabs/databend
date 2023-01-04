@@ -216,9 +216,9 @@ fn list_all_builtin_functions() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("function_list.txt").unwrap();
 
-    writeln!(file, "Simple functions:").unwrap();
-
     let fn_registry = &BUILTIN_FUNCTIONS;
+
+    writeln!(file, "Simple functions:").unwrap();
     for func in fn_registry
         .funcs
         .iter()
@@ -229,8 +229,25 @@ fn list_all_builtin_functions() {
     }
 
     writeln!(file, "\nFactory functions:").unwrap();
-
     for func_name in fn_registry.factories.keys().sorted() {
         writeln!(file, "{func_name}").unwrap();
+    }
+
+    writeln!(file, "\nFunction aliases (alias to origin):").unwrap();
+    for (alias_name, original_name) in fn_registry
+        .aliases
+        .iter()
+        .sorted_by_key(|(alias_name, _)| alias_name.to_string())
+    {
+        writeln!(file, "{alias_name} -> {original_name}").unwrap();
+    }
+
+    writeln!(file, "\nNegative functions (negative to origin):").unwrap();
+    for (neg_name, original_name) in fn_registry
+        .negtives
+        .iter()
+        .sorted_by_key(|(alias_name, _)| alias_name.to_string())
+    {
+        writeln!(file, "{neg_name} -> not({original_name})").unwrap();
     }
 }

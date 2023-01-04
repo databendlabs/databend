@@ -99,9 +99,9 @@ pub struct FunctionRegistry {
         String,
         Vec<Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static>>,
     >,
-    /// Aliases map from alias function name to concrete function name.
+    /// Aliases map from alias function name to original function name.
     pub aliases: HashMap<String, String>,
-    /// Fuctions that are defined by wrapping a `not()` on their negtives function.
+    /// Negative functions that are defined by wrapping a `not()` on the original function.
     pub negtives: HashMap<String, String>,
 
     /// fn name to cast signatures
@@ -240,9 +240,9 @@ impl FunctionRegistry {
         }
     }
 
-    pub fn register_negative(&mut self, fn_name: &str, neg_fn_name: &str) {
+    pub fn register_negative(&mut self, neg_fn_name: &str, original_fn_name: &str) {
         self.negtives
-            .insert(fn_name.to_string(), neg_fn_name.to_string());
+            .insert(neg_fn_name.to_string(), original_fn_name.to_string());
     }
 
     pub fn register_auto_cast_signatures(&mut self, fn_name: &str, signatures: AutoCastSignature) {
