@@ -160,7 +160,11 @@ impl Column {
                     len: capacity,
                 }
             }
-            Column::Variant(_) => Self::concat_arg_types::<VariantType>(columns),
+            Column::Variant(_) => {
+                let data_capacity = columns.iter().map(|c| c.memory_size() - c.len() * 8).sum();
+                let builder = StringColumnBuilder::with_capacity(capacity, data_capacity);
+                Self::concat_value_types::<VariantType>(builder, columns)
+            }
         }
     }
 
