@@ -27,6 +27,7 @@ pub struct JSONOutputFormat {
     schema: TableSchemaRef,
     first_block: bool,
     first_row: bool,
+    rows: usize,
     format_settings: FormatSettings,
 }
 
@@ -36,6 +37,7 @@ impl JSONOutputFormat {
             schema,
             first_block: true,
             first_row: true,
+            rows: 0,
             format_settings: FormatSettings {
                 timezone: options.timezone,
             },
@@ -116,7 +118,7 @@ impl OutputFormat for JSONOutputFormat {
             self.first_block = false;
             let mut buf = b"{".to_vec();
             buf.extend_from_slice(self.format_schema()?.as_ref());
-            buf.extend_from_slice(b",\"data\":[".as_ref());
+            buf.extend_from_slice(b",\"data\":[");
             buf
         } else {
             vec![]
@@ -128,7 +130,8 @@ impl OutputFormat for JSONOutputFormat {
             .iter()
             .map(|f| f.name().to_string())
             .collect::<Vec<String>>();
-            
+        
+        self.rows += data_block.num_rows();
         let n_col = data_block.num_columns();
         for row in 0..data_block.num_rows() {
             if self.first_row {
@@ -160,13 +163,15 @@ impl OutputFormat for JSONOutputFormat {
     }
 
     fn finalize(&mut self) -> common_exception::Result<Vec<u8>> {
+        let mut buf = b"".to_vec();
         if self.first_row {
-            let mut buf = b"{".to_vec();
+            buf.push(b'{');
             buf.extend_from_slice(self.format_schema()?.as_ref());
-            buf.extend_from_slice(b",\"data\":[]}\n".as_ref());
-            Ok(buf)
-        } else {
-            Ok(b"]}\n".to_vec())
+            buf.extend_from_slice(b",\"data\":[");
         }
+        buf.extend_from_slice(format!("],\"rows\":{}", self.rows).as_bytes());
+        buf.push(b'}');
+        buf.push(b'\n');
+        Ok(buf)
     }
 }
