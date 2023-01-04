@@ -61,8 +61,8 @@ use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ConstantExpr;
-use crate::plans::LogicalGet;
 use crate::plans::Scalar;
+use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BindContext;
 use crate::ColumnEntry;
@@ -476,7 +476,7 @@ impl<'a> Binder {
         let stat = table.table().table_statistics()?;
         Ok((
             SExpr::create_leaf(
-                LogicalGet {
+                Scan {
                     table_index,
                     columns: columns
                         .into_iter()

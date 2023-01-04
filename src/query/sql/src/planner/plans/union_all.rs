@@ -24,9 +24,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::Statistics;
-use crate::plans::LogicalOperator;
 use crate::plans::Operator;
-use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::IndexType;
 
@@ -36,29 +34,22 @@ pub struct UnionAll {
     pub pairs: Vec<(IndexType, IndexType)>,
 }
 
+impl UnionAll {
+    pub fn used_columns(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for (left, right) in &self.pairs {
+            used_columns.insert(*left);
+            used_columns.insert(*right);
+        }
+        Ok(used_columns)
+    }
+}
+
 impl Operator for UnionAll {
     fn rel_op(&self) -> RelOp {
         RelOp::UnionAll
     }
 
-    fn is_physical(&self) -> bool {
-        true
-    }
-
-    fn is_logical(&self) -> bool {
-        true
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        Some(self)
-    }
-
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        Some(self)
-    }
-}
-
-impl LogicalOperator for UnionAll {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
@@ -108,17 +99,6 @@ impl LogicalOperator for UnionAll {
         })
     }
 
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
-        let mut used_columns = ColumnSet::new();
-        for (left, right) in &self.pairs {
-            used_columns.insert(*left);
-            used_columns.insert(*right);
-        }
-        Ok(used_columns)
-    }
-}
-
-impl PhysicalOperator for UnionAll {
     fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
         let left_child = rel_expr.derive_physical_prop_child(0)?;
         Ok(PhysicalProperty {
