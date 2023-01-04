@@ -1,20 +1,16 @@
 ---
-title: Your First Databend Pull Request
+title: Your First PR for Databend
 sidebar_label: First Pull Request
 description:
   You first good Databend pull request
 ---
 
-[Databend](https://github.com/datafuselabs/databend) is an open source project, you can help with ideas, code, or documentation, we appreciate any efforts that help us to make the project better!
-
-This document is a short guide for the people who want to contribute to Databend.
-
-Our goal is to make contributing to the Databend project easy and transparent.
-
-Thank you.
+[Databend](https://github.com/datafuselabs/databend) is an open-source project where everyone can contribute their code and make their creative ideas into a reality. This topic helps new contributors understand how to create a pull request for Databend on GitHub and provides useful considerations for code contributions.
 
 :::tip
-Once the code been merged, your name will be stored in the `system.contributors` table forever.
+**Did You Know?** To show our appreciation, your GitHub username will be added to the table `system.contributors` after your code is successfully merged.
+
+Check it out:
 
 `SELECT * FROM system.contributors`
 :::
