@@ -103,6 +103,6 @@ fn register_casting_rules(registry: &mut FunctionRegistry) {
     }
 
     for name in ALL_MATCH_FUNC_NAMES {
-        registry.register_auto_cast_signatures(name, vec![(DataType::String, DataType::Variant)]);
+        registry.register_auto_cast_signatures(name, vec![(DataType::Variant, DataType::String)]);
     }
 }
