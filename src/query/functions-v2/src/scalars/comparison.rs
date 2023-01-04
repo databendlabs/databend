@@ -48,7 +48,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_like(registry);
 }
 
-pub const ALL_COMP_FUNC_NAMES: [&str; 6] = ["eq", "noteq", "lt", "lte", "gt", "gte"];
+pub const ALL_COMP_FUNC_NAMES: [&str; 7] = ["eq", "noteq", "lt", "lte", "gt", "gte", "contains"];
 
 pub const ALL_MATCH_FUNC_NAMES: [&str; 4] = ["like", "not like", "regexp", "not regexp"];
 

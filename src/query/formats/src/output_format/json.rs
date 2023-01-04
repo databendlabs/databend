@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_io::prelude::FormatSettings;
@@ -63,8 +62,8 @@ fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
 }
 
 impl OutputFormat for JSONOutputFormat {
-    fn serialize_block(&mut self, data_block: &DataBlock) -> common_exception::Result<Vec<u8>> {
-        let mut res = if self.first_block {
+    fn serialize_block(&mut self, _data_block: &DataBlock) -> common_exception::Result<Vec<u8>> {
+        let _res = if self.first_block {
             self.first_block = false;
             b"{\"data\":[".to_vec()
         } else {

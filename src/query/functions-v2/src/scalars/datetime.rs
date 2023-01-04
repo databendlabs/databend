@@ -37,7 +37,6 @@ use common_expression::types::timestamp::string_to_timestamp;
 use common_expression::types::timestamp::timestamp_to_string;
 use common_expression::types::timestamp::MICROS_IN_A_MILLI;
 use common_expression::types::timestamp::MICROS_IN_A_SEC;
-use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberType;
@@ -56,11 +55,7 @@ use common_expression::Value;
 use common_expression::ValueRef;
 use num_traits::AsPrimitive;
 
-use super::comparison::ALL_COMP_FUNC_NAMES;
-
 pub fn register(registry: &mut FunctionRegistry) {
-    register_compare_functions(registry);
-
     // [cast | try_cast](xx AS [date | timestamp])
     // to_[date | timestamp](xx)
     register_cast_functions(registry);
@@ -112,16 +107,6 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
         min: int64_to_timestamp(domain.min.as_()).ok()?,
         max: int64_to_timestamp(domain.max.as_()).ok()?,
     })
-}
-
-fn register_compare_functions(registry: &mut FunctionRegistry) {
-    for name in ALL_COMP_FUNC_NAMES {
-        registry.register_auto_cast_signatures(name, vec![
-            (DataType::String, DataType::Timestamp),
-            (DataType::String, DataType::Date),
-            (DataType::Date, DataType::Timestamp),
-        ]);
-    }
 }
 
 fn register_cast_functions(registry: &mut FunctionRegistry) {
