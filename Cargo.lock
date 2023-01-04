@@ -2183,7 +2183,6 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
- "common-sql",
  "common-storage",
  "common-storages-index",
  "common-storages-table-meta",

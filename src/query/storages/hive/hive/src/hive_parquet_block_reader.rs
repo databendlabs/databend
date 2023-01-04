@@ -25,9 +25,13 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
 use common_base::base::tokio::sync::Semaphore;
+use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_storages_table_meta::caches::LoadParams;
 use futures::AsyncReadExt;
@@ -43,9 +47,9 @@ pub struct HiveBlockReader {
     operator: Operator,
     projection: Vec<usize>,
     arrow_schema: Arc<Schema>,
-    projected_schema: TableSchemaRef,
+    projected_schema: DataSchemaRef,
     // have partition columns
-    output_schema: TableSchemaRef,
+    output_schema: DataSchemaRef,
     hive_partition_filler: Option<HivePartitionFiller>,
     chunk_size: usize,
 }
@@ -66,7 +70,7 @@ impl DataBlockDeserializer {
 
     fn next_block(
         &mut self,
-        schema: &TableSchemaRef,
+        schema: &DataSchema,
         filler: &Option<HivePartitionFiller>,
         part_info: &HivePartInfo,
     ) -> Result<Option<DataBlock>> {
@@ -83,7 +87,7 @@ impl DataBlockDeserializer {
                 self.drained = true;
             }
 
-            let block: DataBlock = DataBlock::from_arrow_chunk(&chunk, schema.into())?;
+            let block: DataBlock = DataBlock::from_arrow_chunk(&chunk, schema)?;
 
             return if let Some(filler) = filler {
                 let num_rows = self.deserializer.num_rows();
@@ -116,7 +120,7 @@ impl HiveBlockReader {
                 )));
             }
         };
-        let output_schema = DataSchemaRef::new(schema.project(&projection));
+        let output_schema = DataSchemaRef::new(DataSchema::from(&schema.project(&projection)));
 
         let (projection, partition_fields) =
             filter_hive_partition_from_partition_keys(schema.clone(), projection, partition_keys);
@@ -126,7 +130,7 @@ impl HiveBlockReader {
             None
         };
 
-        let projected_schema = DataSchemaRef::new(schema.project(&projection));
+        let projected_schema = DataSchemaRef::new(DataSchema::from(&schema.project(&projection)));
         let arrow_schema = schema.to_arrow();
         Ok(Arc::new(HiveBlockReader {
             operator,
@@ -319,10 +323,10 @@ impl HiveBlockReader {
 }
 
 pub fn filter_hive_partition_from_partition_keys(
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     projections: Vec<usize>,
     partition_keys: &Option<Vec<String>>,
-) -> (Vec<usize>, Vec<DataField>) {
+) -> (Vec<usize>, Vec<TableField>) {
     match partition_keys {
         Some(partition_keys) => {
             let mut not_partitions = vec![];

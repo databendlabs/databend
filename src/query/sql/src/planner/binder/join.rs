@@ -523,7 +523,7 @@ impl<'a> JoinConditionResolver<'a> {
                 .await?;
             if !added {
                 let (predicate, _) = scalar_binder.bind(predicate).await?;
-                non_equi_conditions.push(predicate.clone());
+                non_equi_conditions.push(predicate);
             }
         }
         Ok(())
@@ -660,13 +660,13 @@ impl<'a> JoinConditionResolver<'a> {
         match self.join_op {
             JoinOperator::LeftOuter => {
                 if predicate_used_columns.is_subset(&right_columns) {
-                    other_join_conditions.push(predicate.clone());
+                    other_join_conditions.push(predicate);
                     return Ok(true);
                 }
             }
             JoinOperator::RightOuter => {
                 if predicate_used_columns.is_subset(&left_columns) {
-                    other_join_conditions.push(predicate.clone());
+                    other_join_conditions.push(predicate);
                     return Ok(true);
                 }
             }
@@ -674,7 +674,7 @@ impl<'a> JoinConditionResolver<'a> {
                 if predicate_used_columns.is_subset(&left_columns)
                     || predicate_used_columns.is_subset(&right_columns)
                 {
-                    other_join_conditions.push(predicate.clone());
+                    other_join_conditions.push(predicate);
                     return Ok(true);
                 }
             }

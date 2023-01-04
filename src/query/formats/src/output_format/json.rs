@@ -12,23 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::TypeSerializer;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
 
+use crate::field_encoder::FieldEncoderJSON;
 use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
 
 pub struct JSONOutputFormat {
+    schema: TableSchemaRef,
+    field_encoder: FieldEncoderJSON,
     first_block: bool,
     first_row: bool,
     format_settings: FormatSettings,
 }
 
 impl JSONOutputFormat {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: TableSchemaRef, options: &FileFormatOptionsExt) -> Self {
+        let field_encoder = FieldEncoderJSON::create(options);
         Self {
+            schema,
+            field_encoder,
             first_block: true,
             first_row: true,
             format_settings: FormatSettings {
@@ -64,43 +71,51 @@ impl OutputFormat for JSONOutputFormat {
             vec![]
         };
 
-        let mut cols: Vec<Vec<JsonValue>> = vec![];
-        let serializers = data_block.get_serializers()?;
-        for s in serializers {
-            cols.push(s.serialize_json_values(&self.format_settings)?)
-        }
+        todo!("expression");
+        // let mut cols: Vec<Vec<JsonValue>> = vec![];
+        // let serializers = data_block.get_serializers()?;
+        // for s in serializers {
+        //     cols.push(s.serialize_json_values(&self.format_settings)?)
+        // }
 
-        let rows = transpose(cols);
-        let n_col = data_block.schema().fields().len();
-        let names = data_block
-            .schema()
-            .fields()
-            .iter()
-            .map(|f| f.name().to_string())
-            .collect::<Vec<String>>();
-        for r in &rows {
-            if self.first_row {
-                self.first_row = false;
-            } else {
-                res.push(b',');
-            }
-            res.push(b'{');
-            for c in 0..n_col {
-                res.push(b'\"');
-                res.extend_from_slice(names[c].as_bytes());
-                res.push(b'\"');
+        // let rows = transpose(cols);
+        // let n_col = self.schema.fields().len();
+        // let names = self
+        //     .schema
+        //     .fields()
+        //     .iter()
+        //     .map(|f| f.name().to_string())
+        //     .collect::<Vec<String>>();
+        // let columns: Vec<Column> = data_block
+        //     .convert_to_full()
+        //     .columns()
+        //     .iter()
+        //     .map(|column| column.value.clone().into_column().unwrap())
+        //     .collect();
 
-                res.push(b':');
+        // for r in &rows {
+        //     if self.first_row {
+        //         self.first_row = false;
+        //     } else {
+        //         res.push(b',');
+        //     }
+        //     res.push(b'{');
+        //     for c in 0..n_col {
+        //         res.push(b'\"');
+        //         res.extend_from_slice(names[c].as_bytes());
+        //         res.push(b'\"');
 
-                res.extend_from_slice(r[c].to_string().as_bytes());
+        //         res.push(b':');
 
-                if c != n_col - 1 {
-                    res.push(b',');
-                }
-            }
-            res.push(b'}');
-        }
-        Ok(res)
+        //         res.extend_from_slice(r[c].to_string().as_bytes());
+
+        //         if c != n_col - 1 {
+        //             res.push(b',');
+        //         }
+        //     }
+        //     res.push(b'}');
+        // }
+        // Ok(res)
     }
 
     fn finalize(&mut self) -> common_exception::Result<Vec<u8>> {

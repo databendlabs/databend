@@ -31,7 +31,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     for func_name in ["and", "or", "not", "xor"] {
         for data_type in ALL_INTEGER_TYPES {
             registry.register_auto_cast_signatures(func_name, vec![(
-                DataType::Number(data_type.clone()),
+                DataType::Number(*data_type),
                 DataType::Boolean,
             )]);
         }
