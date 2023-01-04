@@ -162,7 +162,16 @@ raw expr       : ignore(100_u8)
 checked expr   : ignore<T0=UInt8><T0>(100_u8)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
+output         : false
+
+
+ast            : ignore(100, 'str')
+raw expr       : ignore(100_u8, "str")
+checked expr   : ignore<T0=Variant><T0, T0>(CAST(100_u8 AS Variant), CAST("str" AS Variant))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
 output         : false
 
 

@@ -101,7 +101,7 @@ pub struct FunctionRegistry {
     >,
     /// Aliases map from alias function name to concrete function name.
     pub aliases: HashMap<String, String>,
-    /// negtives functions
+    /// Fuctions that are defined by wrapping a `not()` on their negtives function.
     pub negtives: HashMap<String, String>,
 
     /// fn name to cast signatures

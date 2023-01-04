@@ -880,6 +880,8 @@ eq(Boolean, Boolean) :: Boolean
 eq(Boolean NULL, Boolean NULL) :: Boolean NULL
 eq(Variant, Variant) :: Boolean
 eq(Variant NULL, Variant NULL) :: Boolean NULL
+eq(Array(T0), Array(T0)) :: Boolean
+eq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 exp(UInt8) :: Float64
 exp(UInt8 NULL) :: Float64 NULL
 exp(UInt16) :: Float64
@@ -952,6 +954,8 @@ gt(Boolean, Boolean) :: Boolean
 gt(Boolean NULL, Boolean NULL) :: Boolean NULL
 gt(Variant, Variant) :: Boolean
 gt(Variant NULL, Variant NULL) :: Boolean NULL
+gt(Array(T0), Array(T0)) :: Boolean
+gt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 gte(String, String) :: Boolean
 gte(String NULL, String NULL) :: Boolean NULL
 gte(Date, Date) :: Boolean
@@ -982,6 +986,8 @@ gte(Boolean, Boolean) :: Boolean
 gte(Boolean NULL, Boolean NULL) :: Boolean NULL
 gte(Variant, Variant) :: Boolean
 gte(Variant NULL, Variant NULL) :: Boolean NULL
+gte(Array(T0), Array(T0)) :: Boolean
+gte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 hex(Int64) :: String
 hex(Int64 NULL) :: String NULL
 hex(String) :: String
@@ -1169,6 +1175,8 @@ lt(Boolean, Boolean) :: Boolean
 lt(Boolean NULL, Boolean NULL) :: Boolean NULL
 lt(Variant, Variant) :: Boolean
 lt(Variant NULL, Variant NULL) :: Boolean NULL
+lt(Array(T0), Array(T0)) :: Boolean
+lt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 lte(String, String) :: Boolean
 lte(String NULL, String NULL) :: Boolean NULL
 lte(Date, Date) :: Boolean
@@ -1199,6 +1207,8 @@ lte(Boolean, Boolean) :: Boolean
 lte(Boolean NULL, Boolean NULL) :: Boolean NULL
 lte(Variant, Variant) :: Boolean
 lte(Variant NULL, Variant NULL) :: Boolean NULL
+lte(Array(T0), Array(T0)) :: Boolean
+lte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 ltrim(String) :: String
 ltrim(String NULL) :: String NULL
 md5(String) :: String
@@ -1863,6 +1873,8 @@ noteq(Boolean, Boolean) :: Boolean
 noteq(Boolean NULL, Boolean NULL) :: Boolean NULL
 noteq(Variant, Variant) :: Boolean
 noteq(Variant NULL, Variant NULL) :: Boolean NULL
+noteq(Array(T0), Array(T0)) :: Boolean
+noteq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 now() :: Timestamp
 object_keys(Variant NULL) :: Variant NULL
 oct(Int64) :: String
@@ -2524,8 +2536,8 @@ to_month(Date) :: UInt8
 to_month(Date NULL) :: UInt8 NULL
 to_month(Timestamp) :: UInt8
 to_month(Timestamp NULL) :: UInt8 NULL
-to_nullable(T0 NULL) :: T0 NULL
 to_nullable(NULL) :: NULL
+to_nullable(T0 NULL) :: T0 NULL
 to_second(Timestamp) :: UInt8
 to_second(Timestamp NULL) :: UInt8 NULL
 to_start_of_day(Timestamp) :: Timestamp

@@ -18,8 +18,10 @@ use std::collections::HashMap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use common_expression::types::boolean::BooleanDomain;
+use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
 use common_expression::types::DateType;
+use common_expression::types::GenericType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
@@ -45,6 +47,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_number_cmp(registry);
     register_boolean_cmp(registry);
     register_variant_cmp(registry);
+    register_array_cmp(registry);
     register_like(registry);
 }
 
@@ -324,6 +327,51 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
                 != Ordering::Greater
         },
     );
+}
+
+fn register_array_cmp(registry: &mut FunctionRegistry) {
+    registry
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+            "eq",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |lhs, rhs, _| lhs == rhs,
+        );
+    registry
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+            "noteq",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |lhs, rhs, _| lhs != rhs,
+        );
+    registry
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+            "gt",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |lhs, rhs, _| lhs > rhs,
+        );
+    registry
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+            "gte",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |lhs, rhs, _| lhs >= rhs,
+        );
+    registry
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+            "lt",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |lhs, rhs, _| lhs < rhs,
+        );
+    registry
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+            "lte",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |lhs, rhs, _| lhs <= rhs,
+        );
 }
 
 fn register_like(registry: &mut FunctionRegistry) {

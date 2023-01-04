@@ -676,6 +676,129 @@ evaluation (internal):
 +--------+-----------------------------------------+
 
 
+ast            : CAST(0 AS BOOLEAN)
+raw expr       : CAST(0_u8 AS Boolean)
+checked expr   : to_boolean<UInt8>(0_u8)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : CAST(1 AS BOOLEAN)
+raw expr       : CAST(1_u8 AS Boolean)
+checked expr   : to_boolean<UInt8>(1_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : CAST(false AS UINT64)
+raw expr       : CAST(false AS UInt64)
+checked expr   : to_uint64<Boolean>(false)
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : CAST(true AS INT64)
+raw expr       : CAST(true AS Int64)
+checked expr   : to_int64<Boolean>(true)
+optimized expr : 1_i64
+output type    : Int64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : CAST(num AS BOOLEAN)
+raw expr       : CAST(#0::Int64 AS Boolean)
+checked expr   : to_boolean<Int64>(#0)
+evaluation:
++--------+----------+---------------+
+|        | num      | Output        |
++--------+----------+---------------+
+| Type   | Int64    | Boolean       |
+| Domain | {-1..=2} | {FALSE, TRUE} |
+| Row 0  | 0        | false         |
+| Row 1  | -1       | true          |
+| Row 2  | 1        | true          |
+| Row 3  | 2        | true          |
++--------+----------+---------------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| num    | Int64([0, -1, 1, 2])  |
+| Output | Boolean([0b____1110]) |
++--------+-----------------------+
+
+
+ast            : CAST(num AS BOOLEAN)
+raw expr       : CAST(#0::UInt64 AS Boolean)
+checked expr   : to_boolean<UInt64>(#0)
+evaluation:
++--------+---------+---------------+
+|        | num     | Output        |
++--------+---------+---------------+
+| Type   | UInt64  | Boolean       |
+| Domain | {0..=2} | {FALSE, TRUE} |
+| Row 0  | 0       | false         |
+| Row 1  | 1       | true          |
+| Row 2  | 2       | true          |
++--------+---------+---------------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| num    | UInt64([0, 1, 2])     |
+| Output | Boolean([0b_____110]) |
++--------+-----------------------+
+
+
+ast            : CAST(bool AS UINT64)
+raw expr       : CAST(#0::Boolean AS UInt64)
+checked expr   : to_uint64<Boolean>(#0)
+evaluation:
++--------+---------------+---------+
+|        | bool          | Output  |
++--------+---------------+---------+
+| Type   | Boolean       | UInt64  |
+| Domain | {FALSE, TRUE} | {0..=1} |
+| Row 0  | false         | 0       |
+| Row 1  | true          | 1       |
++--------+---------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| bool   | Boolean([0b______10]) |
+| Output | UInt64([0, 1])        |
++--------+-----------------------+
+
+
+ast            : CAST(bool AS INT64)
+raw expr       : CAST(#0::Boolean AS Int64)
+checked expr   : to_int64<Boolean>(#0)
+evaluation:
++--------+---------------+---------+
+|        | bool          | Output  |
++--------+---------------+---------+
+| Type   | Boolean       | Int64   |
+| Domain | {FALSE, TRUE} | {0..=1} |
+| Row 0  | false         | 0       |
+| Row 1  | true          | 1       |
++--------+---------------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| bool   | Boolean([0b______10]) |
+| Output | Int64([0, 1])         |
++--------+-----------------------+
+
+
 ast            : CAST(TO_DATE(1) AS TIMESTAMP)
 raw expr       : CAST(TO_DATE(1_u8) AS Timestamp)
 checked expr   : to_timestamp<Date>(to_date<Int64>(CAST(1_u8 AS Int64)))
@@ -1945,6 +2068,129 @@ evaluation (internal):
 | a      | [-354285, -100, 0, 100, 2932896]                                                           |
 | Output | NullableColumn { column: Int64([-354285, -100, 0, 100, 2932896]), validity: [0b___11111] } |
 +--------+--------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(0 AS BOOLEAN)
+raw expr       : TRY_CAST(0_u8 AS Boolean)
+checked expr   : try_to_boolean<UInt8>(0_u8)
+optimized expr : false
+output type    : Boolean NULL
+output domain  : {FALSE}
+output         : false
+
+
+ast            : TRY_CAST(1 AS BOOLEAN)
+raw expr       : TRY_CAST(1_u8 AS Boolean)
+checked expr   : try_to_boolean<UInt8>(1_u8)
+optimized expr : true
+output type    : Boolean NULL
+output domain  : {TRUE}
+output         : true
+
+
+ast            : TRY_CAST(false AS UINT64)
+raw expr       : TRY_CAST(false AS UInt64)
+checked expr   : try_to_uint64<Boolean>(false)
+optimized expr : 0_u64
+output type    : UInt64 NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : TRY_CAST(true AS INT64)
+raw expr       : TRY_CAST(true AS Int64)
+checked expr   : try_to_int64<Boolean>(true)
+optimized expr : 1_i64
+output type    : Int64 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : TRY_CAST(num AS BOOLEAN)
+raw expr       : TRY_CAST(#0::Int64 AS Boolean)
+checked expr   : try_to_boolean<Int64>(#0)
+evaluation:
++--------+----------+---------------+
+|        | num      | Output        |
++--------+----------+---------------+
+| Type   | Int64    | Boolean NULL  |
+| Domain | {-1..=2} | {FALSE, TRUE} |
+| Row 0  | 0        | false         |
+| Row 1  | -1       | true          |
+| Row 2  | 1        | true          |
+| Row 3  | 2        | true          |
++--------+----------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| num    | Int64([0, -1, 1, 2])                                                     |
+| Output | NullableColumn { column: Boolean([0b____1110]), validity: [0b____1111] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(num AS BOOLEAN)
+raw expr       : TRY_CAST(#0::UInt64 AS Boolean)
+checked expr   : try_to_boolean<UInt64>(#0)
+evaluation:
++--------+---------+---------------+
+|        | num     | Output        |
++--------+---------+---------------+
+| Type   | UInt64  | Boolean NULL  |
+| Domain | {0..=2} | {FALSE, TRUE} |
+| Row 0  | 0       | false         |
+| Row 1  | 1       | true          |
+| Row 2  | 2       | true          |
++--------+---------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| num    | UInt64([0, 1, 2])                                                        |
+| Output | NullableColumn { column: Boolean([0b_____110]), validity: [0b_____111] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(bool AS UINT64)
+raw expr       : TRY_CAST(#0::Boolean AS UInt64)
+checked expr   : try_to_uint64<Boolean>(#0)
+evaluation:
++--------+---------------+-------------+
+|        | bool          | Output      |
++--------+---------------+-------------+
+| Type   | Boolean       | UInt64 NULL |
+| Domain | {FALSE, TRUE} | {0..=1}     |
+| Row 0  | false         | 0           |
+| Row 1  | true          | 1           |
++--------+---------------+-------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------+
+| Column | Data                                                              |
++--------+-------------------------------------------------------------------+
+| bool   | Boolean([0b______10])                                             |
+| Output | NullableColumn { column: UInt64([0, 1]), validity: [0b______11] } |
++--------+-------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(bool AS INT64)
+raw expr       : TRY_CAST(#0::Boolean AS Int64)
+checked expr   : try_to_int64<Boolean>(#0)
+evaluation:
++--------+---------------+------------+
+|        | bool          | Output     |
++--------+---------------+------------+
+| Type   | Boolean       | Int64 NULL |
+| Domain | {FALSE, TRUE} | {0..=1}    |
+| Row 0  | false         | 0          |
+| Row 1  | true          | 1          |
++--------+---------------+------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| bool   | Boolean([0b______10])                                            |
+| Output | NullableColumn { column: Int64([0, 1]), validity: [0b______11] } |
++--------+------------------------------------------------------------------+
 
 
 ast            : TRY_CAST(TO_DATE(1) AS TIMESTAMP)

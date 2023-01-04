@@ -189,6 +189,10 @@ pub fn check_function<Index: ColumnIndex>(
 
     let candidates = fn_registry.search_candidates(name, params, args);
 
+    if candidates.is_empty() && !fn_registry.contains(name) {
+        return Err((span, format!("function `{name}` doesn't exist")));
+    }
+
     let additional_rules = fn_registry
         .get_casting_rules(name)
         .cloned()

@@ -478,14 +478,9 @@ impl PartialOrd for Column {
             (Column::Tuple { fields: col1, .. }, Column::Tuple { fields: col2, .. }) => {
                 col1.partial_cmp(col2)
             }
-            (Column::Variant(col1), Column::Variant(col2)) => {
-                col1.iter().partial_cmp_by(col2.iter(), |v1, v2| {
-                    match common_jsonb::compare(v1, v2) {
-                        Ok(ord) => Some(ord),
-                        _ => None,
-                    }
-                })
-            }
+            (Column::Variant(col1), Column::Variant(col2)) => col1
+                .iter()
+                .partial_cmp_by(col2.iter(), |v1, v2| common_jsonb::compare(v1, v2).ok()),
             _ => None,
         }
     }

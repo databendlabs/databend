@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(unused_comparisons)]
+
 use std::io::Write;
 
+use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
@@ -431,7 +434,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
                     "to_boolean",
                     FunctionProperty::default(),
-                    |_| FunctionDomain::Full,
+                    |domain| {
+                        FunctionDomain::Domain(BooleanDomain {
+                            has_false: domain.min <= 0 && domain.max >= 0,
+                            has_true: !(domain.min == 0 && domain.max == 0),
+                        })
+                    },
                     |val, _| val != 0,
                 );
 
@@ -439,7 +447,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "try_to_boolean",
                         FunctionProperty::default(),
-                        |_| FunctionDomain::Full,
+                        |domain| {
+                            FunctionDomain::Domain(NullableDomain {
+                                has_null: false,
+                                value: Some(Box::new(BooleanDomain {
+                                    has_false: domain.min <= 0 && domain.max >= 0,
+                                    has_true: !(domain.min == 0 && domain.max == 0),
+                                })),
+                            })
+                        },
                         vectorize_with_builder_1_arg::<
                             NumberType<NUM_TYPE>,
                             NullableType<BooleanType>,
@@ -454,7 +470,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
                     &name,
                     FunctionProperty::default(),
-                    |_| FunctionDomain::Full,
+                    |domain| {
+                        FunctionDomain::Domain(SimpleDomain {
+                            min: if domain.has_false { 0 } else { 1 },
+                            max: if domain.has_true { 1 } else { 0 },
+                        })
+                    },
                     |val, _| NUM_TYPE::from(val),
                 );
 
@@ -463,7 +484,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
                         &name,
                         FunctionProperty::default(),
-                        |_| FunctionDomain::Full,
+                        |domain| {
+                            FunctionDomain::Domain(NullableDomain {
+                                has_null: false,
+                                value: Some(Box::new(SimpleDomain {
+                                    min: if domain.has_false { 0 } else { 1 },
+                                    max: if domain.has_true { 1 } else { 0 },
+                                })),
+                            })
+                        },
                         vectorize_with_builder_1_arg::<
                             BooleanType,
                             NullableType<NumberType<NUM_TYPE>>,

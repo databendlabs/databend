@@ -77,6 +77,7 @@ fn test_sleep(file: &mut impl Write) {
 fn test_ignore(file: &mut impl Write) {
     run_ast(file, "typeof(ignore(100))", &[]);
     run_ast(file, "ignore(100)", &[]);
+    run_ast(file, "ignore(100, 'str')", &[]);
 }
 
 fn test_assume_not_null(file: &mut impl Write) {

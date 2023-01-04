@@ -670,9 +670,9 @@ pub fn to_bool(value: &[u8]) -> Result<bool, Error> {
     if let Some(v) = as_bool(value) {
         return Ok(v);
     } else if let Some(v) = as_str(value) {
-        if v.to_lowercase() == *"true".to_string() {
+        if &v.to_lowercase() == "true" {
             return Ok(true);
-        } else if v.to_lowercase() == *"false".to_string() {
+        } else if &v.to_lowercase() == "false" {
             return Ok(false);
         }
     }

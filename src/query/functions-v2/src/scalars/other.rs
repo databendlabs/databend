@@ -38,14 +38,13 @@ use common_expression::types::ValueType;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::with_number_mapped_type;
-use common_expression::ColumnBuilder;
 use common_expression::Domain;
 use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
-use common_expression::ScalarRef;
+use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
 use ordered_float::OrderedFloat;
@@ -122,21 +121,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     has_false: true,
                 }))
             }),
-            eval: Box::new(|args, _| {
-                let len = args.iter().find_map(|arg| match arg {
-                    ValueRef::Column(col) => Some(col.len()),
-                    _ => None,
-                });
-                let mut output_builder =
-                    ColumnBuilder::with_capacity(&DataType::Boolean, len.unwrap_or(1));
-                for _ in 0..len.unwrap_or(1) {
-                    output_builder.push(ScalarRef::Boolean(false));
-                }
-                match len {
-                    Some(_) => Ok(Value::Column(output_builder.build())),
-                    None => Ok(Value::Scalar(output_builder.build_scalar())),
-                }
-            }),
+            eval: Box::new(|_, _| Ok(Value::Scalar(Scalar::Boolean(false)))),
         }))
     });
 
@@ -157,6 +142,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
+    registry.register_1_arg_core::<NullType, NullType, _, _>(
+        "to_nullable",
+        FunctionProperty::default(),
+        |domain| FunctionDomain::Domain(domain.clone()),
+        |val, _| Ok(val.to_owned()),
+    );
+
     registry
         .register_1_arg_core::<NullableType<GenericType<0>>, NullableType<GenericType<0>>, _, _>(
             "to_nullable",
@@ -164,13 +156,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             |domain| FunctionDomain::Domain(domain.clone()),
             |val, _| Ok(val.to_owned()),
         );
-
-    registry.register_1_arg_core::<NullType, NullType, _, _>(
-        "to_nullable",
-        FunctionProperty::default(),
-        |domain| FunctionDomain::Domain(domain.clone()),
-        |val, _| Ok(val.to_owned()),
-    );
 
     registry.register_passthrough_nullable_1_arg::<StringType, UInt32Type, _, _>(
         "inet_aton",
