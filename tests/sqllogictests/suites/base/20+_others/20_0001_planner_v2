@@ -1102,7 +1102,7 @@ create table n( a int null, b int null)
 
 
 statement ok
-insert into n select  if (number % 3, null, number), if (number % 2, null, number) from numbers(10)
+insert into n select  if ((number % 3)::boolean, null, number), if ((number % 2)::boolean, null, number) from numbers(10)
 
 
 query IBIB

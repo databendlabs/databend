@@ -419,16 +419,18 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Res
                     if join.join_type == JoinType::Cross {
                         join.join_type = JoinType::Inner;
                     }
-                    if left.data_type().ne(&right.data_type()) {
-                        let left = wrap_cast(left, &join_key_type);
-                        let right = wrap_cast(right, &join_key_type);
-                        join.left_conditions.push(left);
-                        join.right_conditions.push(right);
-                    } else {
-                        join.left_conditions.push(left.clone());
-                        join.right_conditions.push(right.clone());
+                    if join.join_type == JoinType::Inner {
+                        if left.data_type().ne(&right.data_type()) {
+                            let left = wrap_cast(left, &join_key_type);
+                            let right = wrap_cast(right, &join_key_type);
+                            join.left_conditions.push(left);
+                            join.right_conditions.push(right);
+                        } else {
+                            join.left_conditions.push(left.clone());
+                            join.right_conditions.push(right.clone());
+                        }
+                        need_push = true;
                     }
-                    need_push = true;
                 } else {
                     original_predicates.push(predicate);
                 }
