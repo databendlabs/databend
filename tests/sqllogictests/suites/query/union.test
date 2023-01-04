@@ -11,6 +11,9 @@ statement ok
 DROP TABLE IF EXISTS data2015
 
 statement ok
+DROP TABLE IF EXISTS data2016
+
+statement ok
 CREATE TABLE data2013 (name String, value UInt32)
 
 statement ok
