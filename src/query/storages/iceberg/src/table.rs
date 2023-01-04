@@ -31,13 +31,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use futures::StreamExt;
 use iceberg_rs::model::table::TableMetadataV2;
 use opendal::Operator;
 
 use crate::converters::meta_iceberg_to_databend;
 
-/// directory containing metadata files
-const META_DIR: &str = "metadata";
 /// file marking the current version of metadata file
 const META_PTR: &str = "metadata/version_hint.text";
 
@@ -64,21 +63,10 @@ impl IcebergTable {
         table_name: &str,
         tbl_root: Operator,
     ) -> Result<IcebergTable> {
-        // find version_hint.txt, version number can be get from it.
-        let hint = tbl_root.object(META_PTR);
-        let version: u64 = String::from_utf8(hint.read().await.map_err(|e| {
-            ErrorCode::ReadTableDataError(format!("invalid version_hint.text: {:?}", e))
-        })?)
-        .map_err(|e| ErrorCode::ReadTableDataError(format!("invalid version_hint.text: {:?}", e)))?
-        .trim()
-        .parse()
-        .map_err(|e| {
-            ErrorCode::ReadTableDataError(format!("invalid version_hint.text: {:?}", e))
-        })?;
-
+        // detect the latest manifest file
+        let latest_manifest = Self::version_detect(&tbl_root).await?;
         // get table metadata from metadata file
-        // should be in `metadata/v{version}.metadata.json`, stored as json
-        let meta_file_latest = tbl_root.object(&format!("{}/v{}.metadata.json", META_DIR, version));
+        let meta_file_latest = tbl_root.object(&latest_manifest);
         let meta_json = meta_file_latest.read().await.map_err(|e| {
             ErrorCode::ReadTableDataError(format!(
                 "invalid metadata in {}: {:?}",
@@ -112,6 +100,47 @@ impl IcebergTable {
             manifests: metadata,
             info,
         })
+    }
+
+    /// version_detect figures out the manifest list version of the table
+    /// and gives the relative path from table root directory
+    /// to latest metadata json file
+    async fn version_detect(tbl_root: &Operator) -> Result<String> {
+        // try Dremio's way
+        // Dremio has an `version_hint.txt` file
+        // recording the latest snapshot version number
+        // and stores metadata
+        let hint = tbl_root.object(META_PTR);
+        if let Ok(version_hint) = hint.read().await {
+            if let Ok(version_str) = String::from_utf8(version_hint) {
+                if let Ok(version) = version_str.trim().parse::<u64>() {
+                    return Ok(format!("metadata/v{version}.metadata.json"));
+                }
+            }
+        }
+        // try Spark's way
+        // Spark will arange all files with a sequencial number
+        let meta_dir = tbl_root.object("metadata");
+        let files = meta_dir.list().await.map_err(|e| {
+            ErrorCode::ReadTableDataError(format!("Cannot list metadata directory: {:?}", e))
+        })?;
+        files
+            .filter_map(|obj| async {
+                if let Ok(obj) = obj {
+                    if obj.name().ends_with(".metadata.json") {
+                        Some(obj.name().to_string())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<String>>()
+            .await
+            .into_iter()
+            .max()
+            .ok_or_else(|| ErrorCode::ReadTableDataError("Cannot get the latest manifest file"))
     }
 }
 

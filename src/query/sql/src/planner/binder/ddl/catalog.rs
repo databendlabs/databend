@@ -166,44 +166,47 @@ impl<'a> Binder {
                     .ok_or_else(|| ErrorCode::InvalidArgument("expected field: URI"))?;
 
                 // create a uri location
-                let location = if let Some(path) = uri.strip_prefix("fs://") {
-                    UriLocation {
-                        protocol: "fs".to_string(),
-                        name: "".to_string(),
-                        path: path.to_string(),
-                        connection: catalog_options,
-                    }
+                let mut location = if let Some(path) = uri.strip_prefix("fs://") {
+                    UriLocation::new(
+                        "fs".to_string(),
+                        "".to_string(),
+                        path.to_string(),
+                        "".to_string(),
+                        catalog_options,
+                    )
                 } else {
                     let parsed = Url::parse(uri).map_err(|err| {
                         ErrorCode::InvalidArgument(format!("expected valid URI: {:?}", err))
                     })?;
+                    let name = parsed
+                        .host_str()
+                        .map(|hostname| {
+                            if let Some(port) = parsed.port() {
+                                format!("{}:{}", hostname, port)
+                            } else {
+                                hostname.to_string()
+                            }
+                        })
+                        .ok_or_else(|| {
+                            ErrorCode::InvalidArgument("expected valid URI: no hostname section")
+                        })?;
 
-                    UriLocation {
-                        protocol: parsed.scheme().to_string(),
-                        name: parsed
-                            .host_str()
-                            .map(|hostname| {
-                                if let Some(port) = parsed.port() {
-                                    format!("{}:{}", hostname, port)
-                                } else {
-                                    hostname.to_string()
-                                }
-                            })
-                            .ok_or_else(|| {
-                                ErrorCode::InvalidArgument(
-                                    "expected valid URI: no hostname section",
-                                )
-                            })?,
-                        path: if parsed.path().is_empty() {
-                            "/".to_string()
-                        } else {
-                            parsed.path().to_string()
-                        },
-                        connection: catalog_options,
-                    }
+                    let path = if parsed.path().is_empty() {
+                        "/".to_string()
+                    } else {
+                        parsed.path().to_string()
+                    };
+
+                    UriLocation::new(
+                        parsed.scheme().to_string(),
+                        name,
+                        path,
+                        "".to_string(),
+                        catalog_options,
+                    )
                 };
 
-                let (sp, _) = parse_uri_location(&location)?;
+                let (sp, _) = parse_uri_location(&mut location)?;
 
                 let opt = IcebergCatalogOption {
                     storage_params: Box::new(sp),
