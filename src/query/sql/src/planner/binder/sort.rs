@@ -217,6 +217,7 @@ impl<'a> Binder {
     ) -> Result<SExpr> {
         let mut order_by_items = Vec::with_capacity(order_by.items.len());
         let mut scalars = vec![];
+
         for order in order_by.items {
             if from_context.in_grouping {
                 let mut group_checker = GroupingChecker::new(from_context);

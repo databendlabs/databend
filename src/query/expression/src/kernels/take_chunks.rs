@@ -146,16 +146,17 @@ impl DataBlock {
     ) -> BlockEntry {
         assert!(!columns.is_empty());
         let ty = &columns[0].data_type;
-
         let num_rows = limit
             .unwrap_or(usize::MAX)
             .min(slices.iter().map(|(_, _, c)| *c).sum());
+
         let mut builder = ColumnBuilder::with_capacity(ty, num_rows);
         let mut remain = num_rows;
 
         for (index, start, len) in slices {
             let len = (*len).min(remain);
             remain -= len;
+
             let col = &columns[*index];
             match &col.value {
                 Value::Scalar(scalar) => {
@@ -173,20 +174,10 @@ impl DataBlock {
         }
 
         let col = builder.build();
-        // if they are all same scalars, combine it to a single scalar
-        let all_same = col.len() > 0 && col.iter().all(|s| unsafe { s == col.index_unchecked(0) });
-
-        let value = if all_same {
-            let s = unsafe { col.index_unchecked(0) };
-
-            Value::Scalar(s.to_owned())
-        } else {
-            Value::Column(col)
-        };
 
         BlockEntry {
             data_type: ty.clone(),
-            value,
+            value: Value::Column(col),
         }
     }
 }

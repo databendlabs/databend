@@ -85,6 +85,7 @@ impl DataBlock {
 
         let lhs = &blocks[0];
         let rhs = &blocks[1];
+
         let lhs_len = lhs.num_rows();
         let rhs_len = rhs.num_rows();
         if lhs_len == 0 {

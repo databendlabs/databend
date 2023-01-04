@@ -306,10 +306,20 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
     }
 
     pub fn append_column(&mut self, other: &ArrayColumn<T>) {
-        T::append_column(&mut self.builder, &other.values);
+        // the first offset of other column may not be zero
+        let other_start = *other.offsets.first().unwrap() as usize;
+        let other_end = *other.offsets.last().unwrap() as usize;
+        let other_values = T::slice_column(&other.values, other_start..other_end);
+        T::append_column(&mut self.builder, &other_values);
+
         let end = self.offsets.last().cloned().unwrap();
-        self.offsets
-            .extend(other.offsets.iter().skip(1).map(|offset| offset + end));
+        self.offsets.extend(
+            other
+                .offsets
+                .iter()
+                .skip(1)
+                .map(|offset| offset + end - (other_start as u64)),
+        );
     }
 
     pub fn build(self) -> ArrayColumn<T> {
