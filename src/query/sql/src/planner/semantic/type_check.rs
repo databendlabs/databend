@@ -1437,6 +1437,10 @@ impl<'a> TypeChecker<'a> {
             child_scalar = Some(Box::new(scalar));
         }
 
+        if typ.eq(&SubqueryType::Scalar) {
+            data_type = Box::new(data_type.wrap_nullable());
+        }
+
         let subquery_expr = SubqueryExpr {
             subquery: Box::new(s_expr),
             child_expr: child_scalar,

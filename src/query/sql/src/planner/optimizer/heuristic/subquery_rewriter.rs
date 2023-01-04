@@ -256,7 +256,7 @@ impl SubqueryRewriter {
                 if matches!(result, UnnestResult::SimpleJoin) {
                     return Ok((
                         Scalar::ConstantExpr(ConstantExpr {
-                            value: common_expression::Literal::Boolean(true),
+                            value: Literal::Boolean(true),
                             data_type: Box::new(DataType::Boolean),
                         }),
                         s_expr,
@@ -303,16 +303,22 @@ impl SubqueryRewriter {
                     });
                     let zero = Scalar::ConstantExpr(ConstantExpr {
                         value: Literal::Int64(0),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int64)),
+                        data_type: Box::new(
+                            DataType::Number(NumberDataType::Int64).wrap_nullable(),
+                        ),
                     });
                     Scalar::CastExpr(CastExpr {
                         argument: Box::new(Scalar::FunctionCall(FunctionCall {
                             arguments: vec![is_null, column_ref.clone(), zero],
                             func_name: "if".to_string(),
-                            return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                            return_type: Box::new(
+                                DataType::Number(NumberDataType::UInt64).wrap_nullable(),
+                            ),
                         })),
                         from_type: Box::new(column_ref.data_type()),
-                        target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                        target_type: Box::new(
+                            DataType::Number(NumberDataType::UInt64).wrap_nullable(),
+                        ),
                     })
                 } else if subquery.typ == SubqueryType::NotExists {
                     Scalar::FunctionCall(FunctionCall {
