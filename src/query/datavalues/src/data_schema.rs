@@ -37,7 +37,7 @@ pub struct DataSchema {
 
     // map column id to fields index
     #[serde(skip_serializing)]
-    pub(crate) index_of_column_id: HashMap<u32, u32>,
+    pub(crate) index_of_column_id: HashMap<u32, usize>,
 }
 
 impl DataSchema {
@@ -53,7 +53,7 @@ impl DataSchema {
     fn build_members_from_fields(
         fields: Vec<DataField>,
         max_id: Option<u32>,
-    ) -> (u32, HashMap<u32, u32>, Vec<DataField>) {
+    ) -> (u32, HashMap<u32, usize>, Vec<DataField>) {
         let mut max_column_id = 0;
         let mut index_of_column_id = HashMap::new();
         fields.iter().enumerate().for_each(|(i, f)| {
@@ -61,7 +61,7 @@ impl DataSchema {
             if column_id > max_column_id {
                 max_column_id = column_id;
             }
-            index_of_column_id.insert(column_id, i as u32);
+            index_of_column_id.insert(column_id, i);
         });
         (max_id.unwrap_or(max_column_id), index_of_column_id, fields)
     }
@@ -118,11 +118,19 @@ impl DataSchema {
         self.fields[i].column_id().unwrap()
     }
 
+    pub fn is_column_deleted(&self, column_id: u32) -> bool {
+        self.index_of_column_id.contains_key(&column_id)
+    }
+
+    pub fn index_of_column_id(&self, column_id: &u32) -> usize {
+        *(self.index_of_column_id.get(column_id).unwrap())
+    }
+
     pub fn add_column(&mut self, field: &DataField) {
         let mut field = field.clone();
         field.column_id = Some(self.max_column_id);
         self.index_of_column_id
-            .insert(self.max_column_id, self.fields.len() as u32);
+            .insert(self.max_column_id, self.fields.len());
         self.fields.push(field);
         self.max_column_id += 1;
     }
