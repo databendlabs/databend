@@ -13,19 +13,19 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_cache::Cache;
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use opendal::Object;
 use parking_lot::RwLock;
 
-use crate::settings::SerializedType;
+use crate::providers::metrics::*;
 use crate::CacheSettings;
+use crate::CachedObject;
 use crate::ObjectCacheProvider;
 
 type ItemCache<T> = RwLock<LruCache<String, Arc<T>, DefaultHashBuilder, Count>>;
@@ -51,7 +51,7 @@ impl<T> MemoryItemsCache<T> {
 
 #[async_trait::async_trait]
 impl<T> ObjectCacheProvider<T> for MemoryItemsCache<T>
-where T: serde::Serialize + for<'a> serde::Deserialize<'a> + Sync + Send
+where T: CachedObject + Send + Sync
 {
     async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Arc<T>> {
         let key = object.path().to_string();
@@ -59,28 +59,29 @@ where T: serde::Serialize + for<'a> serde::Deserialize<'a> + Sync + Send
 
         Ok(match try_get_val {
             None => {
-                let data = object.range_read(start..end).await?;
-                let v: Arc<T> = match self.settings.memory_items_cache_serialize_type {
-                    SerializedType::Json => {
-                        Arc::new(serde_json::from_slice(&data).map_err_to_code(
-                            ErrorCode::BadBytes,
-                            || "read_object deserialize from json error",
-                        )?)
-                    }
-                    SerializedType::Bincode => {
-                        Arc::new(bincode::deserialize(&data).map_err_to_code(
-                            ErrorCode::BadBytes,
-                            || "read_object deserialize from bincode error",
-                        )?)
-                    }
-                };
+                let now = Instant::now();
 
+                let data = object.range_read(start..end).await?;
+                let v = T::from_bytes(data)?;
                 // Write to cache.
                 self.lru.write().put(key, v.clone());
 
+                // Perf.
+                {
+                    metrics_inc_memory_item_misses(1);
+                    metrics_inc_memory_item_load_milliseconds(now.elapsed().as_millis() as u64);
+                }
+
                 v
             }
-            Some(v) => v,
+            Some(v) => {
+                // Perf.
+                {
+                    metrics_inc_memory_item_hits(1);
+                }
+
+                v
+            }
         })
     }
 
@@ -90,28 +91,37 @@ where T: serde::Serialize + for<'a> serde::Deserialize<'a> + Sync + Send
             self.lru.write().put(key, v.clone());
         }
 
-        let bs = match self.settings.memory_items_cache_serialize_type {
-            SerializedType::Json => serde_json::to_vec(v.as_ref()).map_err_to_code(
-                ErrorCode::BadBytes,
-                || "write_object serialize to json error",
-            )?,
-            SerializedType::Bincode => bincode::serialize(v.as_ref()).map_err_to_code(
-                ErrorCode::BadBytes,
-                || "write_object serialize to bincode error",
-            )?,
-        };
+        let now = Instant::now();
 
-        object.write(bs).await?;
+        let data = v.to_bytes()?;
+
+        object.write(data).await?;
+
+        // Perf.
+        {
+            metrics_inc_memory_item_writes(1);
+            metrics_inc_memory_item_write_milliseconds(now.elapsed().as_millis() as u64);
+        }
+
         Ok(())
     }
 
     async fn remove_object(&self, object: &Object) -> Result<()> {
         let key = object.path();
 
+        let now = Instant::now();
+
         // Try to remove from the cache.
         self.lru.write().pop(key);
 
         object.delete().await?;
+
+        // Perf.
+        {
+            metrics_inc_memory_item_removes(1);
+            metrics_inc_memory_item_remove_milliseconds(now.elapsed().as_millis() as u64);
+        }
+
         Ok(())
     }
 }

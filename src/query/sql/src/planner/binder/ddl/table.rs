@@ -339,14 +339,14 @@ impl<'a> Binder {
 
         let (storage_params, part_prefix) = match uri_location {
             Some(uri) => {
-                let uri = UriLocation {
+                let mut uri = UriLocation {
                     protocol: uri.protocol.clone(),
                     name: uri.name.clone(),
                     path: uri.path.clone(),
                     part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
-                let (sp, _) = parse_uri_location(&uri)?;
+                let (sp, _) = parse_uri_location(&mut uri)?;
 
                 // create a temporary op to check if params is correct
                 DataOperator::try_create(&sp).await?;

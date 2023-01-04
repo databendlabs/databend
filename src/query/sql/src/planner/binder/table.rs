@@ -306,12 +306,12 @@ impl<'a> Binder {
                     None
                 };
 
-                let (mut user_stage_info, path) = match location {
+                let (mut user_stage_info, path) = match location.clone() {
                     FileLocation::Stage(location) => {
                         parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?
                     }
-                    FileLocation::Uri(location) => {
-                        let (storage_params, path) = parse_uri_location(location)?;
+                    FileLocation::Uri(mut l) => {
+                        let (storage_params, path) = parse_uri_location(&mut l)?;
                         if !storage_params.is_secure()
                             && !GlobalConfig::instance().storage.allow_insecure
                         {

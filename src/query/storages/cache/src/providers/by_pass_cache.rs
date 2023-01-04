@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_exception::Result;
 use opendal::Object;
 
+use crate::providers::metrics::*;
 use crate::CacheSettings;
+use crate::CachedObject;
 use crate::ObjectCacheProvider;
 
 // No cache.
@@ -30,19 +33,48 @@ impl ByPassCache {
 }
 
 #[async_trait::async_trait]
-impl ObjectCacheProvider<Vec<u8>> for ByPassCache {
-    async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Arc<Vec<u8>>> {
+impl<T> ObjectCacheProvider<T> for ByPassCache
+where T: CachedObject + Send + Sync + 'static
+{
+    async fn read_object(&self, object: &Object, start: u64, end: u64) -> Result<Arc<T>> {
+        let now = Instant::now();
+
         let data = object.range_read(start..end).await?;
-        Ok(Arc::new(data))
+
+        // Perf.
+        {
+            metrics_inc_bypass_reads(1);
+            metrics_inc_bypass_read_milliseconds(now.elapsed().as_millis() as u64);
+        }
+
+        T::from_bytes(data)
     }
 
-    async fn write_object(&self, object: &Object, v: Arc<Vec<u8>>) -> Result<()> {
-        object.write(v.as_slice()).await?;
+    async fn write_object(&self, object: &Object, v: Arc<T>) -> Result<()> {
+        let now = Instant::now();
+
+        object.write(v.to_bytes()?).await?;
+
+        // Perf.
+        {
+            metrics_inc_bypass_writes(1);
+            metrics_inc_bypass_write_milliseconds(now.elapsed().as_millis() as u64);
+        }
+
         Ok(())
     }
 
     async fn remove_object(&self, object: &Object) -> Result<()> {
+        let now = Instant::now();
+
         object.delete().await?;
+
+        // Perf.
+        {
+            metrics_inc_bypass_removes(1);
+            metrics_inc_bypass_remove_milliseconds(now.elapsed().as_millis() as u64);
+        }
+
         Ok(())
     }
 }
