@@ -43,7 +43,6 @@ use super::Limit;
 use super::Sort;
 use super::TableScan;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
-use crate::executor::util::check_physical;
 use crate::executor::EvalScalar;
 use crate::executor::FragmentKind;
 use crate::executor::PhysicalPlan;

@@ -44,23 +44,24 @@ impl JSONOutputFormat {
     }
 
     fn format_schema(&self) -> common_exception::Result<Vec<u8>> {
-        let fields = self.schema.fields();
-        if fields.is_empty() {
-            return Ok(b"\"meta\":[]".to_vec());
-        }
-        let mut res = b"\"meta\":[".to_vec();
-        for field in fields {
-            res.push(b'{');
-            res.extend_from_slice(b"\"name\":\"");
-            res.extend_from_slice(field.name().as_bytes());
-            res.extend_from_slice(b"\",\"type\":\"");
-            res.extend_from_slice(field.data_type().name().as_bytes());
-            res.extend_from_slice(b"\"}");
-            res.push(b',');
-        }
-        res.pop();
-        res.extend_from_slice(b"]");
-        Ok(res)
+        todo!("expression")
+        // let fields = self.schema.fields();
+        // if fields.is_empty() {
+        //     return Ok(b"\"meta\":[]".to_vec());
+        // }
+        // let mut res = b"\"meta\":[".to_vec();
+        // for field in fields {
+        //     res.push(b'{');
+        //     res.extend_from_slice(b"\"name\":\"");
+        //     res.extend_from_slice(field.name().as_bytes());
+        //     res.extend_from_slice(b"\",\"type\":\"");
+        //     res.extend_from_slice(field.data_type().name().as_bytes());
+        //     res.extend_from_slice(b"\"}");
+        //     res.push(b',');
+        // }
+        // res.pop();
+        // res.extend_from_slice(b"]");
+        // Ok(res)
     }
 }
 
