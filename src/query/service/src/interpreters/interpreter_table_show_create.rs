@@ -74,8 +74,7 @@ impl Interpreter for ShowCreateTableInterpreter {
             for (idx, field) in schema.fields().iter().enumerate() {
                 let default_expr = match field.default_expr() {
                     Some(expr) => {
-                        let expression: PhysicalScalar = serde_json::from_str(expr)?;
-                        format!(" DEFAULT {expression}")
+                        format!(" DEFAULT {expr}")
                     }
                     None => "".to_string(),
                 };
