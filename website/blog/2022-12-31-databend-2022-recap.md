@@ -1,7 +1,7 @@
 ---
 title: 'Databend 2022 Recap'
 date: 2022-12-31
-slug: 2022-12-31-databend-in-2022
+slug: 2022-12-31-databend-2022-recap
 tags: [databend, weekly]
 authors:
 - name: PsiACE
@@ -72,7 +72,7 @@ Furthermore, we also planned and implemented three types of automated testing (T
 
 ### Performance Testing
 
-Performance testing is also essential for us. In 2022, we launched a website (<https://perf.databend.rs/>) to track daily performance changes and spot potential issues. Meanwhile, we actively evaluated Dataabend against [Clickbench](https://benchmark.clickhouse.com/) and some other benchmarks.
+Performance testing is also essential for us. In 2022, we launched a website (<https://perf.databend.rs/>) to track daily performance changes and spot potential issues. Meanwhile, we actively evaluated Databend against [Clickbench](https://benchmark.clickhouse.com/) and some other benchmarks.
 
 ## Ecosystem: Give and Take
 
