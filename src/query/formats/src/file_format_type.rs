@@ -187,7 +187,7 @@ impl FileFormatOptionsExt {
                 }
             }
             StageFileFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema, self)),
-            StageFileFormatType::Json => Box::new(JSONOutputFormat::create(self)),
+            StageFileFormatType::Json => Box::new(JSONOutputFormat::create(schema, self)),
             StageFileFormatType::Avro => {
                 unreachable!()
             }
