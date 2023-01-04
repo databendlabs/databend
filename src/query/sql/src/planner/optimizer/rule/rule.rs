@@ -56,10 +56,6 @@ pub enum RuleID {
     CommuteJoin,
     LeftAssociateJoin,
     RightAssociateJoin,
-
-    // Implementation rules
-    ImplementGet,
-    ImplementHashJoin,
 }
 
 impl Display for RuleID {
@@ -87,9 +83,6 @@ impl Display for RuleID {
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
             RuleID::LeftAssociateJoin => write!(f, "LeftAssociateJoin"),
             RuleID::RightAssociateJoin => write!(f, "RightAssociateJoin"),
-
-            RuleID::ImplementGet => write!(f, "ImplementGet"),
-            RuleID::ImplementHashJoin => write!(f, "ImplementHashJoin"),
         }
     }
 }

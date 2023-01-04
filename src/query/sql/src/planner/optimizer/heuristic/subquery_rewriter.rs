@@ -38,9 +38,9 @@ use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
+use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
-use crate::plans::LogicalJoin;
 use crate::plans::OrExpr;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
@@ -118,7 +118,7 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(plan.into(), input))
             }
 
-            RelOperator::LogicalJoin(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
+            RelOperator::Join(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
                 s_expr.plan().clone(),
                 self.rewrite(s_expr.child(0)?)?,
                 self.rewrite(s_expr.child(1)?)?,
@@ -129,12 +129,9 @@ impl SubqueryRewriter {
                 self.rewrite(s_expr.child(0)?)?,
             )),
 
-            RelOperator::DummyTableScan(_) | RelOperator::LogicalGet(_) => Ok(s_expr.clone()),
+            RelOperator::DummyTableScan(_) | RelOperator::Scan(_) => Ok(s_expr.clone()),
 
-            RelOperator::PhysicalHashJoin(_)
-            | RelOperator::Pattern(_)
-            | RelOperator::Exchange(_)
-            | RelOperator::PhysicalScan(_) => Err(ErrorCode::Internal("Invalid plan type")),
+            _ => Err(ErrorCode::Internal("Invalid plan type")),
         }
     }
 
@@ -339,7 +336,7 @@ impl SubqueryRewriter {
     ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
             SubqueryType::Scalar => {
-                let join_plan = LogicalJoin {
+                let join_plan = Join {
                     left_conditions: vec![],
                     right_conditions: vec![],
                     non_equi_conditions: vec![],
@@ -427,7 +424,7 @@ impl SubqueryRewriter {
                     filter.into(),
                     SExpr::create_unary(agg.into(), subquery_expr),
                 );
-                let cross_join = LogicalJoin {
+                let cross_join = Join {
                     left_conditions: vec![],
                     right_conditions: vec![],
                     non_equi_conditions: vec![],
@@ -486,7 +483,7 @@ impl SubqueryRewriter {
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
                 // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
                 // Note that subquery is the right table, and it'll be the build side.
-                let mark_join = LogicalJoin {
+                let mark_join = Join {
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions,

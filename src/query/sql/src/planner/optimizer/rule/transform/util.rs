@@ -19,10 +19,10 @@ use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
-use crate::plans::LogicalJoin;
+use crate::plans::Join;
 use crate::plans::Scalar;
 
-pub fn get_join_predicates(join: &LogicalJoin) -> Result<Vec<Scalar>> {
+pub fn get_join_predicates(join: &Join) -> Result<Vec<Scalar>> {
     Ok(join
         .left_conditions
         .iter()

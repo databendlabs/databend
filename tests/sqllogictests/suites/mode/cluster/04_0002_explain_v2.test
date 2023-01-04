@@ -33,7 +33,7 @@ Exchange
 ├── exchange type: Merge
 └── Filter
     ├── filters: [or(gt(t1.a (#0), 3_u8), and(gt(t2.a (#2), 5_u8), gt(t1.a (#0), 1_u8)))]
-        └── HashJoin
+    └── HashJoin
         ├── join type: INNER
         ├── build keys: [t2.a (#2)]
         ├── probe keys: [t1.a (#0)]
@@ -94,8 +94,8 @@ explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.
 EvalScalar
 ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 └── Filter
-    ├── filters: [((t1.a (#0) eq t2.a (#2)) AND (t1.a (#0) gt 3_u8)) OR (t1.a (#0) eq t2.a (#2))]
-    └── LogicalJoin: CROSS
+    ├── filters: [((t1.a (#0) eq t2.a (#2)) AND (t1.a (#0) gt 3)) OR (t1.a (#0) eq t2.a (#2))]
+    └── CrossJoin
         ├── equi conditions: []
         ├── non-equi conditions: []
         ├── LogicalGet
@@ -114,7 +114,7 @@ explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1
 ----
 EvalScalar
 ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-└── LogicalJoin: INNER
+└── HashJoin: INNER
     ├── equi conditions: [(t1.a (#0) eq t2.a (#2)) AND (t1.b (#1) eq t2.b (#3))]
     ├── non-equi conditions: []
     ├── Filter

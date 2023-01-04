@@ -18,7 +18,6 @@ use async_recursion::async_recursion;
 use common_ast::ast::split_conjunctions_expr;
 use common_ast::ast::split_equivalent_predicate_expr;
 use common_ast::ast::Expr;
-use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
 use common_catalog::table_context::TableContext;
@@ -38,8 +37,8 @@ use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
+use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::LogicalJoin;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
@@ -57,7 +56,7 @@ impl<'a> Binder {
     pub(super) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
-        join: &Join<'a>,
+        join: &common_ast::ast::Join<'a>,
     ) -> Result<(SExpr, BindContext)> {
         let (left_child, left_context) =
             self.bind_table_reference(bind_context, &join.left).await?;
@@ -194,7 +193,7 @@ impl<'a> Binder {
             other_conditions,
             &mut non_equi_conditions,
         )?;
-        let logical_join = LogicalJoin {
+        let logical_join = Join {
             left_conditions,
             right_conditions,
             non_equi_conditions,

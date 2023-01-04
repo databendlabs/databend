@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::cascades::explore_rules::get_explore_rule_set;
-use crate::optimizer::cascades::implement_rules::get_implement_rule_set;
 use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::OptimizeGroupTask;
 use crate::optimizer::cascades::tasks::Task;
@@ -39,7 +38,6 @@ use crate::IndexType;
 pub struct CascadesOptimizer {
     pub memo: Memo,
     pub explore_rules: RuleSet,
-    pub implement_rules: RuleSet,
 
     pub cost_model: Box<dyn CostModel>,
 
@@ -58,7 +56,6 @@ impl CascadesOptimizer {
         Ok(CascadesOptimizer {
             memo: Memo::create(),
             explore_rules,
-            implement_rules: get_implement_rule_set(),
             cost_model: Box::new(DefaultCostModel),
             best_cost_map: HashMap::new(),
             _ctx: ctx,

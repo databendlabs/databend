@@ -20,10 +20,10 @@ use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::LogicalGet;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::Scan;
 use crate::plans::Sort;
 
 /// Input:  Sort
@@ -51,7 +51,7 @@ impl RulePushDownSortScan {
                 .into(),
                 SExpr::create_leaf(
                     PatternPlan {
-                        plan_type: RelOp::LogicalGet,
+                        plan_type: RelOp::Scan,
                     }
                     .into(),
                 ),
@@ -68,14 +68,14 @@ impl Rule for RulePushDownSortScan {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let sort: Sort = s_expr.plan().clone().try_into()?;
         let child = s_expr.child(0)?;
-        let mut get: LogicalGet = child.plan().clone().try_into()?;
+        let mut get: Scan = child.plan().clone().try_into()?;
         if get.order_by.is_none() {
             get.order_by = Some(sort.items);
         }
         if let Some(limit) = sort.limit {
             get.limit = Some(get.limit.map_or(limit, |c| cmp::max(c, limit)));
         }
-        let get = SExpr::create_leaf(RelOperator::LogicalGet(get));
+        let get = SExpr::create_leaf(RelOperator::Scan(get));
         state.add_result(s_expr.replace_children(vec![get]));
         Ok(())
     }
