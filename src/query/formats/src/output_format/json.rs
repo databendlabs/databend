@@ -81,16 +81,6 @@ fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
 
 impl OutputFormat for JSONOutputFormat {
     fn serialize_block(&mut self, data_block: &DataBlock) -> common_exception::Result<Vec<u8>> {
-        let mut res = if self.first_block {
-            self.first_block = false;
-            let mut buf = b"{".to_vec();
-            buf.extend_from_slice(self.format_schema()?.as_ref());
-            buf.extend_from_slice(b",\"data\":[".as_ref());
-            buf
-        } else {
-            vec![]
-        };
-
         let mut cols: Vec<Vec<JsonValue>> = vec![];
         let serializers = data_block.get_serializers()?;
         for s in serializers {
@@ -105,6 +95,18 @@ impl OutputFormat for JSONOutputFormat {
             .iter()
             .map(|f| f.name().to_string())
             .collect::<Vec<String>>();
+
+        let mut res = if self.first_block {
+            self.first_block = false;
+            let mut buf = b"{".to_vec();
+            buf.extend_from_slice(self.format_schema()?.as_ref());
+            buf.extend_from_slice(format!(",\"rows\":{}", rows.len()).as_bytes());
+            buf.extend_from_slice(b",\"data\":[");
+            buf
+        } else {
+            vec![]
+        };
+
         for r in &rows {
             if self.first_row {
                 self.first_row = false;
@@ -134,7 +136,7 @@ impl OutputFormat for JSONOutputFormat {
         if self.first_row {
             let mut buf = b"{".to_vec();
             buf.extend_from_slice(self.format_schema()?.as_ref());
-            buf.extend_from_slice(b",\"data\":[]}\n".as_ref());
+            buf.extend_from_slice(b",\"rows\":0,\"data\":[]}\n");
             Ok(buf)
         } else {
             Ok(b"]}\n".to_vec())
