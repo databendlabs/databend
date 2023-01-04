@@ -193,7 +193,7 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
     format!(
         "{}({})",
         desc.sig.name,
-        desc.args
+        desc.arg_indices
             .iter()
             .map(|&index| {
                 let column = metadata.read().column(index).clone();

@@ -378,6 +378,7 @@ impl<'a> Binder {
                 new_expr,
             )?;
         }
+
         Ok((new_expr, new_bind_context))
     }
 

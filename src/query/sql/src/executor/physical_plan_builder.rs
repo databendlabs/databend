@@ -286,6 +286,15 @@ impl PhysicalPlanBuilder {
                                             ))
                                         }
                                     }).collect::<Result<_>>()?,
+                                    arg_indices: agg.args.iter().map(|arg| {
+                                        if let Scalar::BoundColumnRef(col) = arg {
+                                            Ok(col.column.index)
+                                        } else {
+                                            Err(ErrorCode::Internal(
+                                                "Aggregate function argument must be a BoundColumnRef".to_string()
+                                            ))
+                                        }
+                                    }).collect::<Result<_>>()?,
                                 })
                             } else {
                                 Err(ErrorCode::Internal("Expected aggregate function".to_string()))
@@ -345,6 +354,15 @@ impl PhysicalPlanBuilder {
                                     },
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
+                                        if let Scalar::BoundColumnRef(col) = arg {
+                                            Ok(col.column.index)
+                                        } else {
+                                            Err(ErrorCode::Internal(
+                                                "Aggregate function argument must be a BoundColumnRef".to_string()
+                                            ))
+                                        }
+                                    }).collect::<Result<_>>()?,
+                                    arg_indices: agg.args.iter().map(|arg| {
                                         if let Scalar::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
                                         } else {
