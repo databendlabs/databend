@@ -32,12 +32,14 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
-use common_expression::TableField;
 use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
@@ -46,8 +48,6 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::processors::sources::sync_source::SyncSource;
 use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
-use common_sql::evaluator::EvalNode;
-use common_sql::evaluator::Evaluator;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storages_index::RangeFilter;
@@ -140,7 +140,7 @@ impl HiveTable {
 
     fn is_prewhere_column_partition_keys(
         &self,
-        schema: Arc<DataSchema>,
+        schema: TableSchemaRef,
         push_downs: &Option<PushDownInfo>,
     ) -> Result<bool> {
         match push_downs {
@@ -194,6 +194,7 @@ impl HiveTable {
             Some(v) => v.output_columns,
         };
         let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
+        let output_schema = Arc::new(DataSchema::from(output_schema));
 
         let prewhere_all_partitions =
             self.is_prewhere_column_partition_keys(self.table_info.schema(), &plan.push_downs)?;
@@ -205,6 +206,13 @@ impl HiveTable {
             self.build_prewhere_filter_executor(plan, prewhere_reader.get_output_schema())?;
 
         let hive_block_filter = self.get_block_filter(ctx.clone(), push_downs)?;
+
+        let mut src_fields = prewhere_reader.get_output_schema().fields().clone();
+        if let Some(reader) = remain_reader.as_ref() {
+            let remain_field = reader.get_output_schema().fields().clone();
+            src_fields.extend_from_slice(&remain_field);
+        }
+        let src_schema = DataSchemaRefExt::create(src_fields);
 
         for index in 0..std::cmp::max(1, max_threads) {
             let output = OutputPort::create();
@@ -219,6 +227,7 @@ impl HiveTable {
                     prewhere_filter.clone(),
                     delay_timer(index),
                     hive_block_filter.clone(),
+                    src_schema.clone(),
                     output_schema.clone(),
                 )?,
             );
@@ -327,14 +336,13 @@ impl HiveTable {
         &self,
         plan: &DataSourcePlan,
         schema: DataSchemaRef,
-    ) -> Result<Arc<Option<EvalNode>>> {
+    ) -> Result<Arc<Option<Expr>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => {
-                    let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
-                    Arc::new(Some(executor))
-                }
+                Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
+                    expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+                })),
             },
         )
     }
