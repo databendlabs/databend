@@ -3,4 +3,4 @@
 ---1 row
 {"meta":[{"name":"c1","type":"Nullable(Int32)"},{"name":"c2","type":"Nullable(String)"}],"data":[{"c1":1,"c2":"a"}]}
 ---2 rows
-{"meta":[{"name":"c1","type":"Nullable(Int32)"},{"name":"c2","type":"Nullable(String)"}],"data":[{"c1":2,"c2":"b"},{"c1":1,"c2":"a"}]}
+{"meta":[{"name":"c1","type":"Nullable(Int32)"},{"name":"c2","type":"Nullable(String)"}],"data":[{"c1":1,"c2":"a"},{"c1":2,"c2":"b"}]}
