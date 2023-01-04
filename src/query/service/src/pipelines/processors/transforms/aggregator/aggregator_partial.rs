@@ -209,14 +209,16 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             group_key_builder.append_value(group_entity.key());
         }
 
-        let schema = &self.params.output_schema;
+        let schema = self.params.output_schema.clone();
         let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
         for mut builder in state_builders {
             columns.push(builder.to_column());
         }
 
         columns.push(group_key_builder.finish());
-        Ok(vec![DataBlock::create(schema.clone(), columns)])
+
+        self.drop_states();
+        Ok(vec![DataBlock::create(schema, columns)])
     }
 }
 
@@ -311,6 +313,8 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
                 }
             }
 
+            self.hash_table.clear();
+            drop(self.area.take());
             self.states_dropped = true;
         }
     }
