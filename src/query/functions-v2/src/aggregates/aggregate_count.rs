@@ -90,10 +90,13 @@ impl AggregateFunction for AggregateCountFunction {
     ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         let nulls = if columns.is_empty() {
-            0
+            validity.map(|v| v.unset_bits()).unwrap_or(0)
         } else {
             match &columns[0] {
-                Column::Nullable(v) => v.validity.unset_bits(),
+                Column::Nullable(c) => validity
+                    .map(|v| v & (&c.validity))
+                    .unwrap_or(c.validity.clone())
+                    .unset_bits(),
                 _ => validity.map(|v| v.unset_bits()).unwrap_or(0),
             }
         };

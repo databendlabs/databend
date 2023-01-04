@@ -151,7 +151,9 @@ impl Display for PhysicalScalar {
 pub struct AggregateFunctionDesc {
     pub sig: AggregateFunctionSignature,
     pub output_column: IndexType,
-    pub args: Vec<IndexType>,
+    pub args: Vec<usize>,
+
+    pub arg_indices: Vec<IndexType>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

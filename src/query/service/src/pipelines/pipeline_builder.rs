@@ -406,12 +406,13 @@ impl PipelineBuilder {
     fn build_sort(&mut self, sort: &Sort) -> Result<()> {
         self.build_pipeline(&sort.input)?;
 
-        let schema = sort.output_schema()?;
+        let input_schema = sort.input.output_schema()?.clone();
+
         let sort_desc = sort
             .order_by
             .iter()
             .map(|desc| {
-                let offset = schema.index_of(&desc.order_by.to_string())?;
+                let offset = input_schema.index_of(&desc.order_by.to_string())?;
                 Ok(SortColumnDescription {
                     offset,
                     asc: desc.asc,
@@ -444,7 +445,7 @@ impl PipelineBuilder {
         // Concat merge in single thread
         try_add_multi_sort_merge(
             &mut self.main_pipeline,
-            schema,
+            input_schema,
             block_size,
             sort.limit,
             sort_desc,

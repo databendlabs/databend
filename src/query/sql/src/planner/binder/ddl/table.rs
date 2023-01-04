@@ -397,7 +397,7 @@ impl<'a> Binder {
                 let (source_schema, source_default_exprs, source_coments) =
                     self.analyze_create_table_schema(source).await?;
                 let init_bind_context = BindContext::new();
-                let (_s_expr, bind_context) = self.bind_query(&init_bind_context, query).await?;
+                let (_, bind_context) = self.bind_query(&init_bind_context, query).await?;
                 let query_fields: Vec<TableField> = bind_context
                     .columns
                     .iter()
@@ -408,11 +408,11 @@ impl<'a> Binder {
                         ))
                     })
                     .collect::<Result<Vec<_>>>()?;
-                let source_fields = source_schema.fields().clone();
-                let source_fields = self.concat_fields(source_fields, query_fields);
-                let schema = TableSchemaRefExt::create(source_fields);
-                Self::validate_create_table_schema(&schema)?;
-                (schema, source_default_exprs, source_coments)
+                if source_schema.fields().len() != query_fields.len() {
+                    return Err(ErrorCode::BadArguments("Number of columns does not match"));
+                }
+                Self::validate_create_table_schema(&source_schema)?;
+                (source_schema, source_default_exprs, source_coments)
             }
             _ => Err(ErrorCode::BadArguments(
                 "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
@@ -1022,23 +1022,6 @@ impl<'a> Binder {
         }
 
         Ok(cluster_keys)
-    }
-
-    fn concat_fields(
-        &self,
-        mut source_fields: Vec<TableField>,
-        query_fields: Vec<TableField>,
-    ) -> Vec<TableField> {
-        let mut name_set = HashSet::new();
-        for field in source_fields.iter() {
-            name_set.insert(field.name().clone());
-        }
-        for query_field in query_fields.iter() {
-            if !name_set.contains(query_field.name()) {
-                source_fields.push(query_field.clone());
-            }
-        }
-        source_fields
     }
 }
 

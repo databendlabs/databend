@@ -102,6 +102,11 @@ fn register_casting_rules(registry: &mut FunctionRegistry) {
         ]);
     }
 
+    registry.register_auto_cast_signatures("eq", vec![
+        (DataType::String, DataType::Number(NumberDataType::Float64)),
+        (DataType::String, DataType::Number(NumberDataType::Int64)),
+    ]);
+
     for name in ALL_MATCH_FUNC_NAMES {
         registry.register_auto_cast_signatures(name, vec![(DataType::Variant, DataType::String)]);
     }

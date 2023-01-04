@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::infer_table_schema;
 use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
@@ -126,13 +125,12 @@ impl CreateTableInterpreterV2 {
         //
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
-        let schema = infer_table_schema(&select_plan.schema())?;
         let insert_plan = Insert {
             catalog: self.plan.catalog.clone(),
             database: self.plan.database.clone(),
             table: self.plan.table.clone(),
             table_id: table.get_id(),
-            schema,
+            schema: self.plan.schema.clone(),
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan),
         };

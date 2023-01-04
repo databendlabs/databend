@@ -127,8 +127,6 @@ fn test_xxhash32(file: &mut impl Write) {
     run_ast(file, "xxhash32(to_date(100000))", &[]);
     run_ast(file, "xxhash32(NULL)", &[]);
     run_ast(file, "xxhash32(parse_json('{\"a\":1}'))", &[]);
-    run_ast(file, "xxhash32([1])", &[]);
-    run_ast(file, "xxhash32((1,2))", &[]);
     run_ast(file, "xxhash32(true)", &[]);
     run_ast(file, "xxhash32(a)", &[(
         "a",

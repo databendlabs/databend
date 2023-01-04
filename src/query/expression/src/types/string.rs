@@ -314,9 +314,10 @@ impl StringColumnBuilder {
     pub fn append_column(&mut self, other: &StringColumn) {
         // the first offset of other column may not be zero
         let other_start = *other.offsets.first().unwrap();
+        let other_last = *other.offsets.last().unwrap();
         let start = self.offsets.last().cloned().unwrap();
         self.data
-            .extend_from_slice(&other.data[(other_start as usize)..]);
+            .extend_from_slice(&other.data[(other_start as usize)..(other_last as usize)]);
         self.offsets.extend(
             other
                 .offsets
