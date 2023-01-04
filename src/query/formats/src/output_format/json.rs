@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
 use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
@@ -55,11 +56,34 @@ fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
     row_table
 }
 
+fn get_schema(data_block: &DataBlock) -> common_exception::Result<Vec<u8>> {
+    let fields = data_block.schema().fields();
+    if fields.is_empty() {
+        return Ok(b"\"meta\":[]".to_vec());
+    }
+    let mut res = b"\"meta\":[".to_vec();
+    for field in fields {
+        res.push(b'{');
+        res.extend_from_slice(b"\"name\":\"");
+        res.extend_from_slice(field.name().as_bytes());
+        res.extend_from_slice(b"\",\"type\":\"");
+        res.extend_from_slice(field.data_type().name().as_bytes());
+        res.extend_from_slice(b"\"}");
+        res.push(b',');
+    }
+    res.pop();
+    res.extend_from_slice(b"]");
+    Ok(res)
+}
+
 impl OutputFormat for JSONOutputFormat {
     fn serialize_block(&mut self, data_block: &DataBlock) -> common_exception::Result<Vec<u8>> {
         let mut res = if self.first_block {
             self.first_block = false;
-            b"{\"data\":[".to_vec()
+            let mut buf = b"{".to_vec();
+            buf.extend_from_slice(get_schema(data_block)?.as_ref());
+            buf.extend_from_slice(b",\"data\":[".as_ref());
+            buf
         } else {
             vec![]
         };
