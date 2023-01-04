@@ -40,6 +40,26 @@ impl JSONOutputFormat {
             },
         }
     }
+
+    fn format_schema(&self) -> common_exception::Result<Vec<u8>> {
+        let fields = self.schema.fields();
+        if fields.is_empty() {
+            return Ok(b"\"meta\":[]".to_vec());
+        }
+        let mut res = b"\"meta\":[".to_vec();
+        for field in fields {
+            res.push(b'{');
+            res.extend_from_slice(b"\"name\":\"");
+            res.extend_from_slice(field.name().as_bytes());
+            res.extend_from_slice(b"\",\"type\":\"");
+            res.extend_from_slice(field.data_type().name().as_bytes());
+            res.extend_from_slice(b"\"}");
+            res.push(b',');
+        }
+        res.pop();
+        res.extend_from_slice(b"]");
+        Ok(res)
+    }
 }
 
 fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
@@ -64,7 +84,7 @@ impl OutputFormat for JSONOutputFormat {
         let mut res = if self.first_block {
             self.first_block = false;
             let mut buf = b"{".to_vec();
-            buf.extend_from_slice(self.get_schema()?.as_ref());
+            buf.extend_from_slice(self.format_schema()?.as_ref());
             buf.extend_from_slice(b",\"data\":[".as_ref());
             buf
         } else {
@@ -113,33 +133,11 @@ impl OutputFormat for JSONOutputFormat {
     fn finalize(&mut self) -> common_exception::Result<Vec<u8>> {
         if self.first_row {
             let mut buf = b"{".to_vec();
-            buf.extend_from_slice(self.get_schema()?.as_ref());
+            buf.extend_from_slice(self.format_schema()?.as_ref());
             buf.extend_from_slice(b",\"data\":[]}\n".as_ref());
             Ok(buf)
         } else {
             Ok(b"]}\n".to_vec())
         }
-    }
-}
-
-impl JSONOutputFormat {
-    fn get_schema(&self) -> common_exception::Result<Vec<u8>> {
-        let fields = self.schema.fields();
-        if fields.is_empty() {
-            return Ok(b"\"meta\":[]".to_vec());
-        }
-        let mut res = b"\"meta\":[".to_vec();
-        for field in fields {
-            res.push(b'{');
-            res.extend_from_slice(b"\"name\":\"");
-            res.extend_from_slice(field.name().as_bytes());
-            res.extend_from_slice(b"\",\"type\":\"");
-            res.extend_from_slice(field.data_type().name().as_bytes());
-            res.extend_from_slice(b"\"}");
-            res.push(b',');
-        }
-        res.pop();
-        res.extend_from_slice(b"]");
-        Ok(res)
     }
 }
