@@ -7,6 +7,10 @@ description:
 
 A `databend-meta` server is configured with a config file in `toml`: `databend-meta --config-file databend-meta.toml`.
 
+:::tip
+You can find [sample configuration files](https://github.com/datafuselabs/databend/tree/main/scripts/ci/deploy/config) on GitHub that set up Databend for various deployment environments. These files were created for internal testing ONLY. Please do NOT modify them for your own purposes. But if you have a similar deployment, it is a good idea to reference them when editing your own configuration files.
+:::
+
 ```toml title="databend-meta.toml"
 
 #
