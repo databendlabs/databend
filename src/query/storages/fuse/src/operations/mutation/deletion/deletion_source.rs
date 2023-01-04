@@ -267,7 +267,7 @@ impl Processor for DeletionSource {
                     &mut block_data,
                     self.table_compression,
                 )?;
-                let col_metas = util::column_metas(&meta_data)?;
+                let col_metas = util::column_metas(&meta_data, &schema)?;
 
                 // new block meta.
                 let new_meta = Arc::new(BlockMeta::new(

@@ -41,7 +41,7 @@ pub fn write_block(
         FuseStorageFormat::Parquet => {
             let result =
                 blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
-            let meta = util::column_metas(&result.1)?;
+            let meta = util::column_metas(&result.1, &schema)?;
             Ok((result.0, meta))
         }
         FuseStorageFormat::Native => {
@@ -67,7 +67,8 @@ pub fn write_block(
                 .enumerate()
                 .map(|(idx, meta)| {
                     (
-                        idx as ColumnId,
+                        // use column id as key instead of index
+                        schema.column_id_of_index(idx),
                         ColumnMeta::new(meta.offset, meta.length, meta.num_values),
                     )
                 })

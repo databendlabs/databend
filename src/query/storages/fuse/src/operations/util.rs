@@ -15,12 +15,16 @@
 use std::collections::HashMap;
 
 use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnMeta;
 
-pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, ColumnMeta>> {
+pub fn column_metas(
+    file_meta: &ThriftFileMetaData,
+    schema: &DataSchemaRef,
+) -> Result<HashMap<ColumnId, ColumnMeta>> {
     // currently we use one group only
     let num_row_groups = file_meta.row_groups.len();
     if num_row_groups != 1 {
@@ -50,7 +54,9 @@ pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, 
                     len: col_len as u64,
                     num_values,
                 };
-                col_metas.insert(idx as u32, res);
+                // use column id as key instead of index
+                let column_id = schema.column_id_of_index(idx);
+                col_metas.insert(column_id, res);
             }
             None => {
                 return Err(ErrorCode::ParquetFileInvalid(format!(
