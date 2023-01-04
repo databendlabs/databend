@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
@@ -223,7 +224,45 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
 
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder>;
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<Option<ErrorCode>>;
+
+    fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>>;
+
+    fn align_flush(state: &mut AligningState<Self>) -> Result<Vec<RowBatch>> {
+        if state.tail_of_last_batch.is_empty() {
+            Ok(vec![])
+        } else {
+            // last row
+            let data = mem::take(&mut state.tail_of_last_batch);
+            let end = data.len();
+            let row_batch = RowBatch {
+                data,
+                row_ends: vec![end],
+                field_ends: vec![],
+                path: state.path.to_string(),
+                batch_id: state.batch_id,
+                offset: state.offset,
+                start_row: Some(state.rows),
+            };
+            tracing::debug!(
+                "align flush batch {}, bytes = {}, start_row = {}",
+                row_batch.batch_id,
+                state.tail_of_last_batch.len(),
+                state.rows
+            );
+            Ok(vec![row_batch])
+        }
+    }
+
+    fn row_batch_maximum_error(error_map: &BTreeMap<ErrorCode, usize>) -> Option<ErrorCode> {
+        if error_map.is_empty() {
+            None
+        } else {
+            // unwrap is safe here cause error_map must have at least 1 element.
+            let e = error_map.iter().max_by_key(|entry| entry.1).unwrap();
+            e.0.clone()
+        }
+    }
 }
 
 pub struct InputFormatTextPipe<T> {

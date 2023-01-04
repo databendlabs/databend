@@ -299,7 +299,6 @@ pub enum OnErrorMode {
     Continue,
     SkipFile,
     SkipFileNum(u64),
-    Abort,
     AbortNum(u64),
 }
 
@@ -313,7 +312,7 @@ impl FromStr for OnErrorMode {
     type Err = String;
     fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
-            "" | "ABORT" => Ok(OnErrorMode::Abort),
+            "" | "ABORT" => Ok(OnErrorMode::AbortNum(1)),
             "CONTINUE" => Ok(OnErrorMode::Continue),
             "SKIP_FILE" => Ok(OnErrorMode::SkipFile),
             v => {
@@ -321,6 +320,9 @@ impl FromStr for OnErrorMode {
                     let num_str = v.replace("ABORT_", "");
                     let nums = num_str.parse::<u64>();
                     match nums {
+                        Ok(n) if n < 1 => Err(format!(
+                            "OnError mode `ABORT_<num>` num must be greater than 0"
+                        )),
                         Ok(n) => Ok(OnErrorMode::AbortNum(n)),
                         Err(_) => Err(format!(
                             "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT | ABORT_<num> }}",

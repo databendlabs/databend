@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::io::Read;
 use std::mem;
@@ -99,11 +100,17 @@ impl InputFormatTextBase for InputFormatCSV {
         Arc::new(FieldDecoderCSV::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<Option<ErrorCode>> {
         let columns = &mut builder.mutable_columns;
         let n_column = columns.len();
         let mut start = 0usize;
+        // for deal with on_error mode
         let mut num_rows = 0usize;
+
+        let mut num_errors = 0usize;
+        let mut error_map: BTreeMap<ErrorCode, usize> = BTreeMap::new();
+
+
         let mut field_end_idx = 0;
         let field_decoder = builder
             .field_decoder
@@ -119,11 +126,24 @@ impl InputFormatTextBase for InputFormatCSV {
                 &builder.ctx.schema,
                 &batch.field_ends[field_end_idx..field_end_idx + n_column],
             ) {
-                if builder.ctx.on_error_mode == OnErrorMode::Continue {
-                    columns.iter_mut().for_each(|c| {
-                        // check if parts of columns inserted data, if so, pop it.
-                        if c.len() > num_rows {
-                            c.pop_data_value().expect("must success");
+                match builder.ctx.on_error_mode {
+                    OnErrorMode::Continue => {
+                        columns.iter_mut().for_each(|c| {
+                            // check if parts of columns inserted data, if so, pop it.
+                            if c.len() > num_rows {
+                                c.pop_data_value().expect("must success");
+                            }
+                        });
+                        start = *end;
+                        field_end_idx += n_column;
+                        error_map.entry(e).and_modify(|n| *n += 1).or_insert(1);
+                        continue;
+                    }
+                    OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
+                    OnErrorMode::AbortNum(n) => {
+                        num_errors += 1;
+                        if num_errors == n {
+                            return Err(e);
                         }
                     });
                     start = *end;
@@ -137,7 +157,7 @@ impl InputFormatTextBase for InputFormatCSV {
             field_end_idx += n_column;
             num_rows += 1;
         }
-        Ok(())
+        Ok(Self::row_batch_maximum_error(&error_map))
     }
 }
 

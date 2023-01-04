@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -127,7 +128,7 @@ impl InputFormatTextBase for InputFormatTSV {
         Arc::new(FieldDecoderTSV::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<Option<ErrorCode>> {
         tracing::debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.split_info.file.path,
@@ -143,7 +144,12 @@ impl InputFormatTextBase for InputFormatTSV {
         let schema = &builder.ctx.schema;
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
+        // for deal with on_error mode
         let mut num_rows = 0usize;
+        let mut num_errors = 0usize;
+        let mut error_map = BTreeMap::new();
+
+        let start_row = batch.start_row;
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             if let Err(e) = Self::read_row(
@@ -153,23 +159,46 @@ impl InputFormatTextBase for InputFormatTSV {
                 columns,
                 schema,
             ) {
-                if builder.ctx.on_error_mode == OnErrorMode::Continue {
-                    columns.iter_mut().for_each(|c| {
-                        // check if parts of columns inserted data, if so, pop it.
-                        if c.len() > num_rows {
-                            c.pop_data_value().expect("must success");
+                match builder.ctx.on_error_mode {
+                    OnErrorMode::Continue => {
+                        columns.iter_mut().for_each(|c| {
+                            // check if parts of columns inserted data, if so, pop it.
+                            if c.len() > num_rows {
+                                c.pop_data_value().expect("must success");
+                            }
+                        });
+                        start = *end;
+                        error_map.entry(e).and_modify(|n| *n += 1).or_insert(1);
+                        continue;
+                    }
+                    OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
+                    OnErrorMode::AbortNum(n) => {
+                        num_errors += 1;
+                        if num_errors == n {
+                            return Err(e);
                         }
                     });
                     start = *end;
                     continue;
                 } else {
                     return Err(batch.error(&e.message(), &builder.ctx, start, i));
+                        columns.iter_mut().for_each(|c| {
+                            // check if parts of columns inserted data, if so, pop it.
+                            if c.len() > num_rows {
+                                c.pop_data_value().expect("must success");
+                            }
+                        });
+                        start = *end;
+                        error_map.entry(e).and_modify(|n| *n += 1).or_insert(1);
+                        continue;
+                    }
+                    _ => return Err(e),
                 }
             }
             start = *end;
             num_rows += 1;
         }
-        Ok(())
+        Ok(Self::row_batch_maximum_error(&error_map))
     }
 }
 

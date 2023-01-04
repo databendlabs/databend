@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
@@ -88,7 +89,7 @@ impl InputFormatTextBase for InputFormatNDJson {
         Arc::new(FieldJsonAstDecoder::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<Option<ErrorCode>> {
         let field_decoder = builder
             .field_decoder
             .as_any()
@@ -97,12 +98,20 @@ impl InputFormatTextBase for InputFormatNDJson {
 
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
+        // for deal with on_error mode
         let mut num_rows = 0usize;
+
+        let mut num_errors = 0usize;
+        let mut error_map = BTreeMap::new();
+
+        let start_row = batch.start_row;
+
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
             let buf = buf.trim();
             if !buf.is_empty() {
                 if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
+
                     if builder.ctx.on_error_mode == OnErrorMode::Continue {
                         columns.iter_mut().for_each(|c| {
                             // check if parts of columns inserted data, if so, pop it.
@@ -114,13 +123,62 @@ impl InputFormatTextBase for InputFormatNDJson {
                         continue;
                     } else {
                         return Err(batch.error(&e.message(), &builder.ctx, start, i));
+
+                    let row_info = if let Some(r) = start_row {
+                        format!("row={},", r + i)
+                    } else {
+                        String::new()
+                    };
+                    let msg = format!(
+                        "fail to parse NDJSON: {},  path={}, offset={}, {}",
+                        &batch.path,
+                        e,
+                        batch.offset + start,
+                        row_info,
+                    );
+                    match builder.ctx.on_error_mode {
+                        OnErrorMode::Continue => {
+                            columns.iter_mut().for_each(|c| {
+                                // check if parts of columns inserted data, if so, pop it.
+                                if c.len() > num_rows {
+                                    c.pop_data_value().expect("must success");
+                                }
+                            });
+                            start = *end;
+                            error_map
+                                .entry(ErrorCode::BadBytes(msg))
+                                .and_modify(|n| *n += 1)
+                                .or_insert(1);
+                            continue;
+                        }
+                        OnErrorMode::AbortNum(n) if n == 1 => return Err(ErrorCode::BadBytes(msg)),
+                        OnErrorMode::AbortNum(n) => {
+                            num_errors += 1;
+                            if num_errors == n {
+                                return Err(ErrorCode::BadBytes(msg));
+                            }
+                            columns.iter_mut().for_each(|c| {
+                                // check if parts of columns inserted data, if so, pop it.
+                                if c.len() > num_rows {
+                                    c.pop_data_value().expect("must success");
+                                }
+                            });
+                            start = *end;
+                            error_map
+                                .entry(ErrorCode::BadBytes(msg))
+                                .and_modify(|n| *n += 1)
+                                .or_insert(1);
+                            continue;
+                        }
+                        _ => return Err(ErrorCode::BadBytes(msg)),
+
                     }
                 }
             }
             start = *end;
             num_rows += 1;
         }
-        Ok(())
+        Ok(Self::row_batch_maximum_error(&error_map))
     }
 }
 
