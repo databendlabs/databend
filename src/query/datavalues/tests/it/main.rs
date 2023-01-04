@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod columns;
+mod data_schema;
 mod types;
 mod variant_value;

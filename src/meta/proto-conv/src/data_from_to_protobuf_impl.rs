@@ -35,12 +35,25 @@ impl FromToProto for dv::DataSchema {
     fn from_pb(p: pb::DataSchema) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
+        let has_max_column_id = p.max_column_id >= p.fields.len() as u32;
         let mut fs = Vec::with_capacity(p.fields.len());
-        for f in p.fields.into_iter() {
+        let mut max_column_id = p.max_column_id;
+        for (i, f) in p.fields.into_iter().enumerate() {
+            let f = if !has_max_column_id {
+                let column_id = i as u32;
+                if column_id > max_column_id {
+                    max_column_id = column_id;
+                }
+                let mut f = f;
+                f.column_id = column_id;
+                f
+            } else {
+                f
+            };
             fs.push(dv::DataField::from_pb(f)?);
         }
 
-        let v = Self::new_from(fs, p.metadata);
+        let v = Self::new_from_with_max_column_id(fs, p.metadata, max_column_id);
         Ok(v)
     }
 
@@ -55,6 +68,7 @@ impl FromToProto for dv::DataSchema {
             min_compatible: MIN_COMPATIBLE_VER,
             fields: fs,
             metadata: self.meta().clone(),
+            max_column_id: self.max_column_id(),
         };
         Ok(p)
     }
@@ -65,11 +79,12 @@ impl FromToProto for dv::DataField {
     fn from_pb(p: pb::DataField) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
-        let v = dv::DataField::new(
+        let v = dv::DataField::new_with_column_id(
             &p.name,
             dv::DataTypeImpl::from_pb(p.data_type.ok_or_else(|| Incompatible {
                 reason: "DataField.data_type can not be None".to_string(),
             })?)?,
+            p.column_id,
         )
         .with_default_expr(p.default_expr);
         Ok(v)
@@ -82,6 +97,7 @@ impl FromToProto for dv::DataField {
             name: self.name().clone(),
             default_expr: self.default_expr().cloned(),
             data_type: Some(self.data_type().to_pb()?),
+            column_id: self.column_id().unwrap_or(0),
         };
         Ok(p)
     }

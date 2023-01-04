@@ -27,6 +27,9 @@ pub struct DataField {
     /// default_expr is serialized representation from PlanExpression
     default_expr: Option<String>,
     data_type: DataTypeImpl,
+
+    #[serde(skip_serializing)]
+    pub(crate) column_id: Option<u32>,
 }
 
 impl DataField {
@@ -35,6 +38,7 @@ impl DataField {
             name: name.to_string(),
             default_expr: None,
             data_type,
+            column_id: None,
         }
     }
 
@@ -44,6 +48,16 @@ impl DataField {
             name: name.to_string(),
             default_expr: None,
             data_type,
+            column_id: None,
+        }
+    }
+
+    pub fn new_with_column_id(name: &str, data_type: DataTypeImpl, column_id: u32) -> Self {
+        DataField {
+            name: name.to_string(),
+            default_expr: None,
+            data_type,
+            column_id: Some(column_id),
         }
     }
 
@@ -51,6 +65,10 @@ impl DataField {
     pub fn with_default_expr(mut self, default_expr: Option<String>) -> Self {
         self.default_expr = default_expr;
         self
+    }
+
+    pub fn column_id(&self) -> Option<u32> {
+        self.column_id
     }
 
     pub fn name(&self) -> &String {

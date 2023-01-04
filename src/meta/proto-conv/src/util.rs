@@ -76,6 +76,10 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     ),
     (22, "2022-12-13: Add: users.proto/FileFormatOptions::quote"),
     (23, "2022-12-28: Add: table.proto/TableMeta::part_prefix"),
+    (
+        24,
+        "2023-01-03: Add: metadata.proto/DataSchema::max_column_id",
+    ),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;

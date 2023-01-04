@@ -28,6 +28,8 @@ message DataSchema {
 
   // Other optional table info
   map<string, string> metadata = 2;
+
+  uint32 max_column_id = 3;
 }
 
 // One field, AKA column
@@ -44,4 +46,6 @@ message DataField {
 
   // Column data type
   DataType data_type = 3;
+
+  uint32 column_id = 4;
 }
