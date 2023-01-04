@@ -55,7 +55,7 @@ impl JSONOutputFormat {
             res.extend_from_slice(b"\"name\":\"");
             res.extend_from_slice(field.name().as_bytes());
             res.extend_from_slice(b"\",\"type\":\"");
-            res.extend_from_slice(field.data_type().to_string().as_bytes());
+            res.extend_from_slice(field.data_type().wrapped_display().as_bytes());
             res.extend_from_slice(b"\"}");
             res.push(b',');
         }
@@ -64,7 +64,6 @@ impl JSONOutputFormat {
         Ok(res)
     }
 }
-
 
 fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
     match s {
@@ -80,8 +79,12 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             NumberScalar::UInt32(v) => JsonValue::Number(v.into()),
             NumberScalar::UInt64(v) => JsonValue::Number(v.into()),
 
-            NumberScalar::Float32(v) => JsonValue::Number(serde_json::Number::from_f64(f32::from(v) as f64).unwrap()),
-            NumberScalar::Float64(v) => JsonValue::Number(serde_json::Number::from_f64(v.into()).unwrap()),
+            NumberScalar::Float32(v) => {
+                JsonValue::Number(serde_json::Number::from_f64(f32::from(v) as f64).unwrap())
+            }
+            NumberScalar::Float64(v) => {
+                JsonValue::Number(serde_json::Number::from_f64(v.into()).unwrap())
+            }
         },
         ScalarRef::Date(v) => {
             let dt = DateConverter::to_date(&v, format.timezone);
@@ -94,7 +97,10 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
         ScalarRef::EmptyArray => JsonValue::Array(vec![]),
         ScalarRef::String(x) => JsonValue::String(String::from_utf8_lossy(x).to_string()),
         ScalarRef::Array(x) => {
-            let vals = x.iter().map(|x| scalar_to_json(x.clone(), format)).collect();
+            let vals = x
+                .iter()
+                .map(|x| scalar_to_json(x.clone(), format))
+                .collect();
             JsonValue::Array(vals)
         }
         ScalarRef::Tuple(x) => {
@@ -130,7 +136,7 @@ impl OutputFormat for JSONOutputFormat {
             .iter()
             .map(|f| f.name().to_string())
             .collect::<Vec<String>>();
-        
+
         self.rows += data_block.num_rows();
         let n_col = data_block.num_columns();
         for row in 0..data_block.num_rows() {

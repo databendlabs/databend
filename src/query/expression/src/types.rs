@@ -242,6 +242,14 @@ impl DataType {
         }
     }
 
+    // Nullable will be displayed as Nullable(T)
+    pub fn wrapped_display(&self) -> String {
+        match self {
+            DataType::Nullable(inner_ty) => format!("Nullable({})", inner_ty.wrapped_display()),
+            _ => format!("{}", self),
+        }
+    }
+
     pub fn sql_name(&self) -> String {
         match self {
             DataType::Number(num_ty) => match num_ty {

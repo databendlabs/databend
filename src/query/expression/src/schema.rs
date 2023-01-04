@@ -602,6 +602,15 @@ impl TableDataType {
         }
     }
 
+    pub fn wrapped_display(&self) -> String {
+        match self {
+            TableDataType::Nullable(inner_ty) => {
+                format!("Nullable({})", inner_ty.wrapped_display())
+            }
+            _ => format!("{}", self),
+        }
+    }
+
     pub fn sql_name(&self) -> String {
         match self {
             TableDataType::Number(num_ty) => match num_ty {
