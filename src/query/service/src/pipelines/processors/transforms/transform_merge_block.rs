@@ -37,8 +37,8 @@ pub struct TransformMergeBlock {
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
+    left_schema: DataSchemaRef,
     right_schema: DataSchemaRef,
-    schema: DataSchemaRef,
     pairs: Vec<(String, String)>,
 
     receiver: Receiver<DataBlock>,
@@ -49,8 +49,8 @@ impl TransformMergeBlock {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        left_schema: DataSchemaRef,
         right_schema: DataSchemaRef,
-        schema: DataSchemaRef,
         pairs: Vec<(String, String)>,
         receiver: Receiver<DataBlock>,
     ) -> Result<ProcessorPtr> {
@@ -60,8 +60,8 @@ impl TransformMergeBlock {
             output,
             input_data: None,
             output_data: None,
+            left_schema,
             right_schema,
-            schema,
             pairs,
             receiver,
             receiver_result: None,
@@ -75,7 +75,9 @@ impl TransformMergeBlock {
             .iter()
             .map(|(left, right)| {
                 if is_left {
-                    Ok(block.get_by_offset(self.schema.index_of(left)?).clone())
+                    Ok(block
+                        .get_by_offset(self.left_schema.index_of(left)?)
+                        .clone())
                 } else {
                     // If block from right, check if block schema matches self scheme(left schema)
                     // If unmatched, covert block columns types or report error
@@ -92,8 +94,8 @@ impl TransformMergeBlock {
         right_name: &str,
         block: &DataBlock,
     ) -> Result<BlockEntry> {
-        let left_filed = self.schema.field_with_name(left_name)?;
-        let left_data_type = left_filed.data_type();
+        let left_field = self.left_schema.field_with_name(left_name)?;
+        let left_data_type = left_field.data_type();
 
         let right_field = self.right_schema.field_with_name(right_name)?;
         let right_data_type = right_field.data_type();
