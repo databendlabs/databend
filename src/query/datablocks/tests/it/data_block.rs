@@ -71,3 +71,44 @@ fn test_data_block_convert() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_data_block_or_field_convert() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", DateType::new_impl()),
+        DataField::new("b", TimestampType::new_impl()),
+        DataField::new("b1", TimestampType::new_impl()),
+    ]);
+
+    let block = DataBlock::create(schema.clone(), vec![
+        Series::from_data(vec![1i32, 2, 3]),
+        Series::from_data(vec![1i64, 2, 3]),
+        Series::from_data(vec![1i64, 2, 3]),
+    ]);
+
+    let chunk: Chunk<ArrayRef> = block.try_into().unwrap();
+
+    let values = vec![
+        Some(DataField::new("c1", DateType::new_impl())),
+        None,
+        Some(DataField::new("c2", DateType::new_impl())),
+        None,
+        None,
+        Some(DataField::new("c3", DateType::new_impl())),
+    ];
+    let new_block: DataBlock = DataBlock::from_chunk_or_field(&schema, &chunk, &values, 3).unwrap();
+    assert_eq!(3, new_block.num_rows());
+    assert_eq!(6, new_block.num_columns());
+
+    let expected_field_names = ["c1", "a", "c2", "b", "b1", "c3"];
+    for (i, field) in new_block.schema().fields().iter().enumerate() {
+        assert_eq!(field.name(), expected_field_names[i]);
+        if let Some(ref field) = values[i] {
+            let column = new_block.column(i);
+            for j in 0..column.len() {
+                assert_eq!(column.get(j), field.data_type().default_value());
+            }
+        }
+    }
+    Ok(())
+}

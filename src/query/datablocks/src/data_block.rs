@@ -297,6 +297,53 @@ impl DataBlock {
         Ok(DataBlock::create(schema.clone(), columns))
     }
 
+    // data_fields contain all the data field that want to return in DataBlock in two cases:
+    // 1. if data_fields[i].is_some(), then DataBlock.column[i] = num_rows * DataField.default_value()
+    // 2. else, DataBlock.column[i] = chuck.columns[i]
+    pub fn from_chunk_or_field<A: AsRef<dyn Array>>(
+        schema: &DataSchemaRef,
+        chuck: &Chunk<A>,
+        data_fields: &[Option<DataField>],
+        num_rows: usize,
+    ) -> Result<DataBlock> {
+        let mut data_block = DataBlock::create(Arc::new(DataSchema::empty()), vec![]);
+
+        let mut chunk_idx: usize = 0;
+        let chunk_columns = chuck.columns();
+
+        let schema_fields = schema.fields();
+        for (_i, field) in data_fields.iter().enumerate() {
+            match field {
+                Some(ref f) => {
+                    let default_value = f.data_type().default_value();
+                    let column = f
+                        .data_type()
+                        .create_constant_column(&default_value, num_rows)?;
+
+                    data_block = data_block.add_column(column, f.clone())?;
+                }
+                None => {
+                    assert!(chunk_idx < chunk_columns.len());
+                    let chunk_column = &chunk_columns[chunk_idx];
+                    let schema_field = &schema_fields[chunk_idx];
+                    assert_eq!(chunk_column.as_ref().len(), num_rows);
+                    chunk_idx += 1;
+                    if schema_field.is_nullable() {
+                        data_block = data_block.add_column(
+                            chunk_column.into_nullable_column(),
+                            schema_field.clone(),
+                        )?;
+                    } else {
+                        data_block = data_block
+                            .add_column(chunk_column.into_column(), schema_field.clone())?;
+                    }
+                }
+            };
+        }
+
+        Ok(data_block)
+    }
+
     pub fn get_serializers(&self) -> Result<Vec<TypeSerializerImpl>> {
         let columns_size = self.num_columns();
 
