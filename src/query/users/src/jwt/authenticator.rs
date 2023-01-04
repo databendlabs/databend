@@ -18,6 +18,8 @@ use jwt_simple::algorithms::ECDSAP256PublicKeyLike;
 use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::algorithms::RS256PublicKey;
 use jwt_simple::algorithms::RSAPublicKeyLike;
+use jwt_simple::common::VerificationOptions;
+use jwt_simple::prelude::Duration;
 use jwt_simple::prelude::JWTClaims;
 use serde::Deserialize;
 use serde::Serialize;
@@ -83,9 +85,13 @@ impl JwtAuthenticator {
 
     pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
         let pub_key = self.key_store.get_key(None).await?;
+        let opt = VerificationOptions {
+            max_validity: Some(Duration::from_hours(6)),
+            ..Default::default()
+        };
         let r = match &pub_key {
-            PubKey::RSA256(pk) => pk.verify_token::<CustomClaims>(token, None),
-            PubKey::ES256(pk) => pk.verify_token::<CustomClaims>(token, None),
+            PubKey::RSA256(pk) => pk.verify_token::<CustomClaims>(token, Some(opt)),
+            PubKey::ES256(pk) => pk.verify_token::<CustomClaims>(token, Some(opt)),
         };
         let c = r.map_err(|err| ErrorCode::AuthenticateFailure(err.to_string()))?;
         match c.subject {
