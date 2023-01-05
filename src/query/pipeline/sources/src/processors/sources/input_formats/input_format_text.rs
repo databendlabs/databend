@@ -228,7 +228,7 @@ pub struct AligningState<T> {
     pub offset: usize,
     pub rows_to_skip: usize,
     pub tail_of_last_batch: Vec<u8>,
-    pub decoder: Option<DecompressDecoder>,
+    pub decompressor: Option<DecompressDecoder>,
 
     // format state
     pub csv_reader: Option<CsvReaderState>,
@@ -331,7 +331,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             ctx: ctx.clone(),
             split_info: split_info.clone(),
             path,
-            decoder,
+            decompressor: decoder,
             rows_to_skip,
             csv_reader,
             xml_reader,
@@ -348,14 +348,14 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
 
     fn align(&mut self, read_batch: Option<Vec<u8>>) -> Result<Vec<RowBatch>> {
         let row_batches = if let Some(data) = read_batch {
-            let buf = if let Some(decoder) = self.decoder.as_mut() {
+            let buf = if let Some(decoder) = self.decompressor.as_mut() {
                 decompress(decoder, &data)?
             } else {
                 data
             };
             T::align(self, &buf)?
         } else {
-            if let Some(decoder) = &self.decoder {
+            if let Some(decoder) = &self.decompressor {
                 let state = decoder.state();
                 if !matches!(state, DecompressState::Done | DecompressState::Reading) {
                     tracing::warn!("decompressor end with state {:?}", state)
