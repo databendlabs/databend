@@ -199,10 +199,8 @@ impl<'a> Evaluator<'a> {
             return Ok(value);
         }
 
-        if !src_type.is_nullable() {
-            if let Some(cast_fn) = check_simple_cast(false, dest_type) {
-                return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
-            }
+        if let Some(cast_fn) = check_simple_cast(src_type, false, dest_type) {
+            return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
         }
 
         match (src_type, dest_type) {
@@ -347,7 +345,8 @@ impl<'a> Evaluator<'a> {
 
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
-        if let Some(cast_fn) = check_simple_cast(true, inner_dest_type) {
+
+        if let Some(cast_fn) = check_simple_cast(src_type, true, inner_dest_type) {
             return self
                 .run_simple_cast(span, src_type, dest_type, value, &cast_fn)
                 .unwrap();
@@ -683,7 +682,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return Some(domain.clone());
         }
 
-        if let Some(cast_fn) = check_simple_cast(false, dest_type) {
+        if let Some(cast_fn) = check_simple_cast(src_type, false, dest_type) {
             return self
                 .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
                 .unwrap();
@@ -763,7 +762,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
-        if let Some(cast_fn) = check_simple_cast(true, inner_dest_type) {
+        if let Some(cast_fn) = check_simple_cast(src_type, true, inner_dest_type) {
             return self
                 .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
                 .unwrap();

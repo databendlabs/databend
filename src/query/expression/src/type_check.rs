@@ -69,7 +69,7 @@ pub fn check<Index: ColumnIndex>(
                 Ok(expr)
             } else {
                 // fast path to eval function for cast
-                if let Some(cast_fn) = check_simple_cast(*is_try, dest_type) {
+                if let Some(cast_fn) = check_simple_cast(expr.data_type(), *is_try, dest_type) {
                     return check_function(span.clone(), &cast_fn, &[], &[expr], fn_registry);
                 }
                 Ok(Expr::Cast {
@@ -170,7 +170,7 @@ pub fn check_function<Index: ColumnIndex>(
     // check if this is to_xxx(xxx) or try_to_xxx(xxx) function, this saves lots registeration
     if args.len() == 1 {
         let is_try_cast = name.starts_with("try_");
-        match check_simple_cast(is_try_cast, args[0].data_type()) {
+        match check_simple_cast(args[0].data_type(), is_try_cast, args[0].data_type()) {
             Some(simple_cast_name) if simple_cast_name == name => {
                 if is_try_cast {
                     return check_function(span, "to_nullable", params, args, fn_registry);
@@ -473,7 +473,15 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
     }
 }
 
-pub fn check_simple_cast(is_try: bool, dest_type: &DataType) -> Option<String> {
+pub fn check_simple_cast(
+    src_type: &DataType,
+    is_try: bool,
+    dest_type: &DataType,
+) -> Option<String> {
+    if src_type.is_nullable_or_null() {
+        return None;
+    }
+
     let function_name = format!("to_{}", dest_type.to_string().to_lowercase());
 
     if is_simple_cast_function(&function_name) {
