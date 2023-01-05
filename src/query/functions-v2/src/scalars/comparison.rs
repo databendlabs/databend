@@ -14,14 +14,12 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
-use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::EmptyArrayType;
 use common_expression::types::GenericType;
@@ -34,15 +32,10 @@ use common_expression::types::VariantType;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::values::Value;
 use common_expression::with_number_mapped_type;
-use common_expression::Column;
 use common_expression::EvalContext;
-use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
-use common_expression::FunctionSignature;
-use common_expression::Scalar;
-use common_expression::ScalarRef;
 use common_expression::ValueRef;
 use regex::bytes::Regex;
 

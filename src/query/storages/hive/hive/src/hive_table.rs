@@ -419,8 +419,12 @@ impl HiveTable {
 
         if !filter_expressions.is_empty() {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
-            let partition_pruner =
-                HivePartitionPruner::create(ctx, filter_expressions, partition_schemas);
+            let partition_pruner = HivePartitionPruner::create(
+                ctx,
+                filter_expressions,
+                partition_schemas,
+                self.table_info.schema(),
+            );
             partition_names = partition_pruner.prune(partition_names)?;
         }
 

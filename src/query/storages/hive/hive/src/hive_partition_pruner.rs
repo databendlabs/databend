@@ -31,6 +31,7 @@ pub struct HivePartitionPruner {
     pub filters: Vec<Expr<String>>,
     // pub partitions: Vec<String>,
     pub partition_schema: Arc<TableSchema>,
+    pub full_schema: Arc<TableSchema>,
 }
 
 impl HivePartitionPruner {
@@ -38,11 +39,13 @@ impl HivePartitionPruner {
         ctx: Arc<dyn TableContext>,
         filters: Vec<Expr<String>>,
         partition_schema: Arc<TableSchema>,
+        full_schema: Arc<TableSchema>,
     ) -> Self {
         HivePartitionPruner {
             ctx,
             filters,
             partition_schema,
+            full_schema,
         }
     }
 
@@ -54,10 +57,11 @@ impl HivePartitionPruner {
                 let kv = singe_value.split('=').collect::<Vec<&str>>();
                 let field = self.partition_schema.fields()[index].clone();
                 let scalar = str_field_to_scalar(kv[1], &field.data_type().into())?;
+                let null_count = u64::from(scalar.is_null());
                 let column_stats = ColumnStatistics {
                     min: scalar.clone(),
                     max: scalar,
-                    null_count: 0,
+                    null_count,
                     in_memory_size: 0,
                     distinct_of_values: None,
                 };
@@ -70,15 +74,22 @@ impl HivePartitionPruner {
     }
 
     pub fn prune(&self, partitions: Vec<String>) -> Result<Vec<String>> {
-        let range_filter = RangeFilter::try_create(
-            self.ctx.clone(),
-            &self.filters,
-            self.partition_schema.clone(),
-        )?;
+        let range_filter =
+            RangeFilter::try_create(self.ctx.clone(), &self.filters, self.full_schema.clone())?;
         let column_stats = self.get_column_stats(&partitions)?;
         let mut filted_partitions = vec![];
         for (idx, stats) in column_stats.into_iter().enumerate() {
-            if range_filter.eval(&stats)? {
+            let block_stats = stats
+                .iter()
+                .map(|(k, v)| {
+                    let partition_col_name = self.partition_schema.field(*k as usize).name();
+                    let index = self.full_schema.index_of(partition_col_name).unwrap();
+
+                    (index as u32, v.clone())
+                })
+                .collect();
+
+            if range_filter.eval(&block_stats)? {
                 filted_partitions.push(partitions[idx].clone());
             }
         }
