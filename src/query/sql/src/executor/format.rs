@@ -15,6 +15,9 @@
 use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ConstantFolder;
+use common_expression::Domain;
+use common_expression::FunctionContext;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
@@ -70,6 +73,7 @@ fn table_scan_to_format_tree(
     if plan.table_index == DUMMY_TABLE_INDEX {
         return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
     }
+    let func_ctx = FunctionContext::default();
     let table = metadata.read().table(plan.table_index).clone();
     let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
     let filters = plan
@@ -80,7 +84,20 @@ fn table_scan_to_format_tree(
             extras
                 .filters
                 .iter()
-                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap().sql_display())
+                .map(|f| {
+                    let expr = f.as_expr(&BUILTIN_FUNCTIONS).unwrap();
+                    let input_domains = expr
+                        .column_refs()
+                        .into_iter()
+                        .map(|(name, ty)| {
+                            let domain = Domain::full(&ty);
+                            (name, domain)
+                        })
+                        .collect();
+                    let folder = ConstantFolder::new(input_domains, func_ctx, &BUILTIN_FUNCTIONS);
+                    let (new_expr, _) = folder.fold(&expr);
+                    new_expr.sql_display()
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         });

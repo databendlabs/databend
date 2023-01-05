@@ -151,7 +151,7 @@ impl<'a> Display for ScalarRef<'a> {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[]"),
-            ScalarRef::Number(val) => write!(f, "{val}"),
+            ScalarRef::Number(val) => write!(f, "{:?}", val),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, chrono_tz::Tz::UTC)),
@@ -399,7 +399,6 @@ impl Display for Literal {
         match self {
             Literal::Null => write!(f, "NULL"),
             Literal::Boolean(val) => write!(f, "{val}"),
-            Literal::UInt64(val) => write!(f, "{val}_u64"),
             Literal::Int8(val) => write!(f, "{val}_i8"),
             Literal::Int16(val) => write!(f, "{val}_i16"),
             Literal::Int32(val) => write!(f, "{val}_i32"),
@@ -407,6 +406,7 @@ impl Display for Literal {
             Literal::UInt8(val) => write!(f, "{val}_u8"),
             Literal::UInt16(val) => write!(f, "{val}_u16"),
             Literal::UInt32(val) => write!(f, "{val}_u32"),
+            Literal::UInt64(val) => write!(f, "{val}_u64"),
             Literal::Float32(val) => write!(f, "{val}_f32"),
             Literal::Float64(val) => write!(f, "{val}_f64"),
             Literal::String(val) => write!(f, "{:?}", String::from_utf8_lossy(val)),

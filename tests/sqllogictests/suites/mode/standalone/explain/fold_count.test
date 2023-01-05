@@ -44,7 +44,7 @@ EvalScalar
                 ├── read bytes: 4028
                 ├── partitions total: 2
                 ├── partitions scanned: 1
-                └── push downs: [filters: [gt(number, CAST(10 AS UInt64))], limit: NONE]
+                └── push downs: [filters: [gt(number, 10_u64)], limit: NONE]
 
 statement ok
 drop table t

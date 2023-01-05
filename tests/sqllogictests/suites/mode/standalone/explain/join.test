@@ -60,7 +60,7 @@ HashJoin
 │       ├── read bytes: 8
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [lt(CAST(1 AS UInt64), number)], limit: NONE]
+│       └── push downs: [filters: [lt(1_u64, number)], limit: NONE]
 └── Filter(Probe)
     ├── filters: [gt(t.number (#0), 1_u8)]
     └── TableScan
@@ -69,7 +69,7 @@ HashJoin
         ├── read bytes: 8
         ├── partitions total: 1
         ├── partitions scanned: 1
-        └── push downs: [filters: [gt(number, CAST(1 AS UInt64))], limit: NONE]
+        └── push downs: [filters: [gt(number, 1_u64)], limit: NONE]
 
 query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number + t1.number = 1
@@ -118,7 +118,7 @@ HashJoin
 │   │       ├── read bytes: 8
 │   │       ├── partitions total: 1
 │   │       ├── partitions scanned: 1
-│   │       └── push downs: [filters: [eq(number, CAST(1 AS UInt64))], limit: NONE]
+│   │       └── push downs: [filters: [eq(number, 1_u64)], limit: NONE]
 │   └── TableScan(Probe)
 │       ├── table: default.system.numbers
 │       ├── read rows: 1
@@ -157,78 +157,77 @@ INSERT INTO twocolumn(x, y) VALUES (44,51), (NULL,52), (42,53), (45,45)
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42
 ----
-HashJoin
-├── join type: INNER
-├── build keys: [b.x (#1)]
-├── probe keys: [a.x (#0)]
-├── filters: []
-├── Filter(Build)
-│   ├── filters: [gt(b.x (#1), 42_u8)]
-│   └── TableScan
-│       ├── table: default.default.twocolumn
-│       ├── read rows: 4
-│       ├── read bytes: 79
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       └── push downs: [filters: [gt(x, CAST(42 AS Int32 NULL))], limit: NONE]
-└── TableScan(Probe)
-    ├── table: default.default.onecolumn
-    ├── read rows: 4
-    ├── read bytes: 37
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
+Filter
+├── filters: [gt(b.x (#1), 42_u8)]
+└── HashJoin
+    ├── join type: LEFT OUTER
+    ├── build keys: [b.x (#1)]
+    ├── probe keys: [a.x (#0)]
+    ├── filters: []
+    ├── TableScan(Build)
+    │   ├── table: default.default.twocolumn
+    │   ├── read rows: 4
+    │   ├── read bytes: 79
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
+    └── TableScan(Probe)
+        ├── table: default.default.onecolumn
+        ├── read rows: 4
+        ├── read bytes: 37
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
 ----
-HashJoin
-├── join type: INNER
-├── build keys: [b.x (#1)]
-├── probe keys: [a.x (#0)]
-├── filters: []
-├── Filter(Build)
-│   ├── filters: [or(gt(b.x (#1), 44_u8), lt(b.x (#1), 43_u8))]
-│   └── TableScan
-│       ├── table: default.default.twocolumn
-│       ├── read rows: 4
-│       ├── read bytes: 79
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       └── push downs: [filters: [or(gt(x, CAST(44 AS Int32 NULL)), lt(x, CAST(43 AS Int32 NULL)))], limit: NONE]
-└── TableScan(Probe)
-    ├── table: default.default.onecolumn
-    ├── read rows: 4
-    ├── read bytes: 37
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
-
+Filter
+├── filters: [or(gt(b.x (#1), 44_u8), lt(b.x (#1), 43_u8))]
+└── HashJoin
+    ├── join type: LEFT OUTER
+    ├── build keys: [b.x (#1)]
+    ├── probe keys: [a.x (#0)]
+    ├── filters: []
+    ├── TableScan(Build)
+    │   ├── table: default.default.twocolumn
+    │   ├── read rows: 4
+    │   ├── read bytes: 79
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
+    └── TableScan(Probe)
+        ├── table: default.default.onecolumn
+        ├── read rows: 4
+        ├── read bytes: 37
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
 ----
-HashJoin
-├── join type: INNER
-├── build keys: [b.x (#1)]
-├── probe keys: [a.x (#0)]
-├── filters: []
-├── Filter(Build)
-│   ├── filters: [gt(b.x (#1), 42_u8), lt(b.x (#1), 45_u8)]
-│   └── TableScan
-│       ├── table: default.default.twocolumn
-│       ├── read rows: 4
-│       ├── read bytes: 79
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       └── push downs: [filters: [gt(x, CAST(42 AS Int32 NULL)), lt(x, CAST(45 AS Int32 NULL))], limit: NONE]
-└── TableScan(Probe)
-    ├── table: default.default.onecolumn
-    ├── read rows: 4
-    ├── read bytes: 37
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
+Filter
+├── filters: [gt(b.x (#1), 42_u8), lt(b.x (#1), 45_u8)]
+└── HashJoin
+    ├── join type: LEFT OUTER
+    ├── build keys: [b.x (#1)]
+    ├── probe keys: [a.x (#0)]
+    ├── filters: []
+    ├── TableScan(Build)
+    │   ├── table: default.default.twocolumn
+    │   ├── read rows: 4
+    │   ├── read bytes: 79
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
+    └── TableScan(Probe)
+        ├── table: default.default.onecolumn
+        ├── read rows: 4
+        ├── read bytes: 37
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
 
 ## the following cases won't be converted to inner join
 
@@ -273,7 +272,7 @@ HashJoin
 │       ├── read bytes: 79
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [gt(x, CAST(42 AS Int32 NULL)), lt(x, CAST(45 AS Int32 NULL))], limit: NONE]
+│       └── push downs: [filters: [gt(x, 42_i32), lt(x, 45_i32)], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4

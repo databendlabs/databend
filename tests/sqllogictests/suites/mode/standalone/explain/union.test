@@ -57,7 +57,7 @@ UnionAll
 │       ├── read bytes: 62
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [gt(a, CAST(1 AS Int32))], limit: NONE]
+│       └── push downs: [filters: [gt(a, 1_i32)], limit: NONE]
 └── Filter
     ├── filters: [gt(a (#2), 1_u8)]
     └── TableScan
@@ -66,7 +66,7 @@ UnionAll
         ├── read bytes: 62
         ├── partitions total: 1
         ├── partitions scanned: 1
-        └── push downs: [filters: [gt(a, CAST(1 AS Int32))], limit: NONE]
+        └── push downs: [filters: [gt(a, 1_i32)], limit: NONE]
 
 query T
 explain select * from v limit 3

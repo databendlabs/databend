@@ -66,7 +66,7 @@ Limit
             ├── group by: [number]
             ├── aggregate functions: []
             └── Filter
-                ├── filters: [eq(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0_i64) AS BIGINT UNSIGNED))]
+                ├── filters: [eq(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0_i64) AS BIGINT UNSIGNED NULL))]
                 └── HashJoin
                     ├── join type: SINGLE
                     ├── build keys: [subquery_2 (#2)]

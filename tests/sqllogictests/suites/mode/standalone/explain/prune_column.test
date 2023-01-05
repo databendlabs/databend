@@ -208,7 +208,7 @@ EvalScalar
                 ├── read bytes: 31
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── push downs: [filters: [eq(b, CAST(2 AS Int32))], limit: NONE]
+                ├── push downs: [filters: [eq(b, 2_i32)], limit: NONE]
                 └── output columns: [1]
 
 statement ok

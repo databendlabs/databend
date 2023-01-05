@@ -2,7 +2,7 @@ query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
 Filter
-├── filters: [eq(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0_i64) AS BIGINT UNSIGNED))]
+├── filters: [eq(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0_i64) AS BIGINT UNSIGNED NULL))]
 └── HashJoin
     ├── join type: SINGLE
     ├── build keys: [subquery_2 (#2)]
@@ -111,7 +111,7 @@ HashJoin
 │                       ├── read bytes: 8
 │                       ├── partitions total: 1
 │                       ├── partitions scanned: 1
-│                       └── push downs: [filters: [eq(number, CAST(0 AS UInt64))], limit: NONE]
+│                       └── push downs: [filters: [eq(number, 0_u64)], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.system.numbers
     ├── read rows: 1
@@ -138,7 +138,7 @@ Filter
     │       ├── read bytes: 8
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       └── push downs: [filters: [eq(number, CAST(0 AS UInt64))], limit: NONE]
+    │       └── push downs: [filters: [eq(number, 0_u64)], limit: NONE]
     └── TableScan(Probe)
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -232,7 +232,7 @@ HashJoin
 │       ├── read bytes: 8
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [eq(number, CAST(0 AS UInt64))], limit: NONE]
+│       └── push downs: [filters: [eq(number, 0_u64)], limit: NONE]
 └── Filter(Probe)
     ├── filters: [lt(t.number (#0), 10_u8)]
     └── TableScan
@@ -241,7 +241,7 @@ HashJoin
         ├── read bytes: 8
         ├── partitions total: 1
         ├── partitions scanned: 1
-        └── push downs: [filters: [lt(number, CAST(10 AS UInt64))], limit: NONE]
+        └── push downs: [filters: [lt(number, 10_u64)], limit: NONE]
 
 query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number)
@@ -293,7 +293,7 @@ query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
 ----
 Filter
-├── filters: [CAST(if(is_not_null(scalar_subquery_3 (#3)), scalar_subquery_3 (#3), 0_i64) AS BIGINT UNSIGNED)]
+├── filters: [CAST(if(is_not_null(scalar_subquery_3 (#3)), scalar_subquery_3 (#3), 0_i64) AS BIGINT UNSIGNED NULL)]
 └── HashJoin
     ├── join type: SINGLE
     ├── build keys: [subquery_2 (#2)]
