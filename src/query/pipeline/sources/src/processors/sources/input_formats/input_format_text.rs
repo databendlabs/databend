@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
@@ -44,6 +44,7 @@ use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
 use crate::processors::sources::input_formats::input_split::split_by_size;
 use crate::processors::sources::input_formats::input_split::FileInfo;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
+use crate::processors::sources::input_formats::InputError;
 
 pub trait AligningStateTextBased: Sync + Sized + Send {
     fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self>;
@@ -254,13 +255,13 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
         }
     }
 
-    fn row_batch_maximum_error(error_map: &BTreeMap<ErrorCode, usize>) -> Option<ErrorCode> {
+    fn row_batch_maximum_error(error_map: &HashMap<u16, InputError>) -> Option<ErrorCode> {
         if error_map.is_empty() {
             None
         } else {
             // unwrap is safe here cause error_map must have at least 1 element.
-            let e = error_map.iter().max_by_key(|entry| entry.1).unwrap();
-            e.0.clone()
+            let (_key, input_error) = error_map.iter().max_by_key(|entry| entry.1.num).unwrap();
+            Some(input_error.err.clone())
         }
     }
 }
@@ -499,7 +500,6 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
         if let Some(b) = batch {
             self.num_rows += b.row_ends.len();
             T::deserialize(self, b)?;
-            self.ctx.on_error_maybe_error = None;
             let mem = self.memory_size();
             tracing::debug!(
                 "chunk builder added new batch: row {} size {}",

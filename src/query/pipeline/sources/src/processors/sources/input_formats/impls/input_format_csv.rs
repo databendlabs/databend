@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::io::Read;
 use std::mem;
@@ -41,6 +41,7 @@ use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 use crate::processors::sources::input_formats::InputContext;
+use crate::processors::sources::input_formats::InputError;
 use crate::processors::sources::input_formats::SplitInfo;
 
 pub struct InputFormatCSV {}
@@ -109,6 +110,7 @@ impl InputFormatTextBase for InputFormatCSV {
 
         let mut num_errors = 0usize;
         let mut error_map: BTreeMap<ErrorCode, usize> = BTreeMap::new();
+        let mut error_map: HashMap<u16, InputError> = HashMap::new();
 
 
         let mut field_end_idx = 0;
@@ -136,7 +138,13 @@ impl InputFormatTextBase for InputFormatCSV {
                         });
                         start = *end;
                         field_end_idx += n_column;
-                        error_map.entry(e).and_modify(|n| *n += 1).or_insert(1);
+                        error_map
+                            .entry(e.code())
+                            .and_modify(|input_error| input_error.num += 1)
+                            .or_insert(InputError {
+                                err: e.clone(),
+                                num: 1,
+                            });
                         continue;
                     }
                     OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
@@ -151,6 +159,24 @@ impl InputFormatTextBase for InputFormatCSV {
                     continue;
                 } else {
                     return Err(batch.error(&e.message(), &builder.ctx, start, i));
+                        columns.iter_mut().for_each(|c| {
+                            // check if parts of columns inserted data, if so, pop it.
+                            if c.len() > num_rows {
+                                c.pop_data_value().expect("must success");
+                            }
+                        });
+                        start = *end;
+                        field_end_idx += n_column;
+                        error_map
+                            .entry(e.code())
+                            .and_modify(|input_error| input_error.num += 1)
+                            .or_insert(InputError {
+                                err: e.clone(),
+                                num: 1,
+                            });
+                        continue;
+                    }
+                    _ => return Err(e),
                 }
             }
             start = *end;

@@ -585,18 +585,14 @@ impl FromToProto for mt::OnErrorMode {
     fn from_pb(p: pb::user_stage_info::OnErrorMode) -> Result<Self, Incompatible>
     where Self: Sized {
         match p.mode {
-            Some(pb::user_stage_info::on_error_mode::Mode::None(_)) => Ok(mt::OnErrorMode::None),
             Some(pb::user_stage_info::on_error_mode::Mode::Continue(_)) => {
                 Ok(mt::OnErrorMode::Continue)
-            }
-            Some(pb::user_stage_info::on_error_mode::Mode::SkipFile(_)) => {
-                Ok(mt::OnErrorMode::SkipFile)
             }
             Some(pb::user_stage_info::on_error_mode::Mode::SkipFileNum(n)) => {
                 Ok(mt::OnErrorMode::SkipFileNum(n))
             }
-            Some(pb::user_stage_info::on_error_mode::Mode::AbortStatement(_)) => {
-                Ok(mt::OnErrorMode::Abort)
+            Some(pb::user_stage_info::on_error_mode::Mode::AbortNum(n)) => {
+                Ok(mt::OnErrorMode::AbortNum(n))
             }
             None => Err(Incompatible {
                 reason: "OnErrorMode.mode cannot be None".to_string(),
@@ -606,26 +602,16 @@ impl FromToProto for mt::OnErrorMode {
 
     fn to_pb(&self) -> Result<pb::user_stage_info::OnErrorMode, Incompatible> {
         match self {
-            mt::OnErrorMode::None => Ok(pb::user_stage_info::OnErrorMode {
-                mode: Some(pb::user_stage_info::on_error_mode::Mode::None(pb::Empty {})),
-            }),
             mt::OnErrorMode::Continue => Ok(pb::user_stage_info::OnErrorMode {
                 mode: Some(pb::user_stage_info::on_error_mode::Mode::Continue(
-                    pb::Empty {},
-                )),
-            }),
-            mt::OnErrorMode::SkipFile => Ok(pb::user_stage_info::OnErrorMode {
-                mode: Some(pb::user_stage_info::on_error_mode::Mode::SkipFile(
                     pb::Empty {},
                 )),
             }),
             mt::OnErrorMode::SkipFileNum(n) => Ok(pb::user_stage_info::OnErrorMode {
                 mode: Some(pb::user_stage_info::on_error_mode::Mode::SkipFileNum(*n)),
             }),
-            mt::OnErrorMode::Abort => Ok(pb::user_stage_info::OnErrorMode {
-                mode: Some(pb::user_stage_info::on_error_mode::Mode::AbortStatement(
-                    pb::Empty {},
-                )),
+            mt::OnErrorMode::AbortNum(n) => Ok(pb::user_stage_info::OnErrorMode {
+                mode: Some(pb::user_stage_info::on_error_mode::Mode::AbortNum(*n)),
             }),
         }
     }

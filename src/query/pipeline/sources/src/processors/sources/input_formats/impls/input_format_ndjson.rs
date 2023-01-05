@@ -13,7 +13,7 @@
 //  limitations under the License.
 
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
@@ -32,6 +32,7 @@ use crate::processors::sources::input_formats::input_format_text::AligningStateR
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
+use crate::processors::sources::input_formats::InputError;
 
 pub struct InputFormatNDJson {}
 
@@ -103,6 +104,7 @@ impl InputFormatTextBase for InputFormatNDJson {
 
         let mut num_errors = 0usize;
         let mut error_map = BTreeMap::new();
+        let mut error_map: HashMap<u16, InputError> = HashMap::new();
 
         let start_row = batch.start_row;
 
@@ -146,9 +148,12 @@ impl InputFormatTextBase for InputFormatNDJson {
                             });
                             start = *end;
                             error_map
-                                .entry(ErrorCode::BadBytes(msg))
-                                .and_modify(|n| *n += 1)
-                                .or_insert(1);
+                                .entry(ErrorCode::BadBytes(msg).code())
+                                .and_modify(|input_error| input_error.num += 1)
+                                .or_insert(InputError {
+                                    err: e.clone(),
+                                    num: 1,
+                                });
                             continue;
                         }
                         OnErrorMode::AbortNum(n) if n == 1 => return Err(ErrorCode::BadBytes(msg)),
@@ -165,9 +170,12 @@ impl InputFormatTextBase for InputFormatNDJson {
                             });
                             start = *end;
                             error_map
-                                .entry(ErrorCode::BadBytes(msg))
-                                .and_modify(|n| *n += 1)
-                                .or_insert(1);
+                                .entry(ErrorCode::BadBytes(msg).code())
+                                .and_modify(|input_error| input_error.num += 1)
+                                .or_insert(InputError {
+                                    err: e.clone(),
+                                    num: 1,
+                                });
                             continue;
                         }
                         _ => return Err(ErrorCode::BadBytes(msg)),

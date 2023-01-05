@@ -462,10 +462,6 @@ impl TableContext for CtxDelegation {
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         todo!()
     }
-
-    fn set_error(&self, err: ErrorCode) {
-        todo!()
-    }
 }
 
 #[derive(Clone)]

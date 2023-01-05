@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -34,6 +34,7 @@ use crate::processors::sources::input_formats::input_format_text::AligningStateR
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
+use crate::processors::sources::input_formats::InputError;
 
 pub struct InputFormatTSV {}
 
@@ -146,8 +147,8 @@ impl InputFormatTextBase for InputFormatTSV {
         let mut start = 0usize;
         // for deal with on_error mode
         let mut num_rows = 0usize;
-        let mut num_errors = 0usize;
-        let mut error_map = BTreeMap::new();
+        let mut num_errors = 0u64;
+        let mut error_map: HashMap<u16, InputError> = HashMap::new();
 
         let start_row = batch.start_row;
         for (i, end) in batch.row_ends.iter().enumerate() {
@@ -168,7 +169,13 @@ impl InputFormatTextBase for InputFormatTSV {
                             }
                         });
                         start = *end;
-                        error_map.entry(e).and_modify(|n| *n += 1).or_insert(1);
+                        error_map
+                            .entry(e.code())
+                            .and_modify(|input_error| input_error.num += 1)
+                            .or_insert(InputError {
+                                err: e.clone(),
+                                num: 1,
+                            });
                         continue;
                     }
                     OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
@@ -189,7 +196,13 @@ impl InputFormatTextBase for InputFormatTSV {
                             }
                         });
                         start = *end;
-                        error_map.entry(e).and_modify(|n| *n += 1).or_insert(1);
+                        error_map
+                            .entry(e.code())
+                            .and_modify(|input_error| input_error.num += 1)
+                            .or_insert(InputError {
+                                err: e.clone(),
+                                num: 1,
+                            });
                         continue;
                     }
                     _ => return Err(e),

@@ -193,11 +193,9 @@ message UserStageInfo {
 
   message OnErrorMode {
     oneof mode {
-      Empty None = 1;
+      uint64 AbortNum = 1;
       Empty Continue = 2;
-      Empty SkipFile = 3;
-      uint64 SkipFileNum = 4;
-      Empty AbortStatement = 5;
+      uint64 SkipFileNum = 3;
     }
   }
 

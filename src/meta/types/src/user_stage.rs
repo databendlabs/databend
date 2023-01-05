@@ -297,14 +297,13 @@ pub struct StageParams {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum OnErrorMode {
     Continue,
-    SkipFile,
     SkipFileNum(u64),
     AbortNum(u64),
 }
 
 impl Default for OnErrorMode {
     fn default() -> Self {
-        Self::Abort
+        Self::AbortNum(1)
     }
 }
 
@@ -314,15 +313,15 @@ impl FromStr for OnErrorMode {
         match s.to_uppercase().as_str() {
             "" | "ABORT" => Ok(OnErrorMode::AbortNum(1)),
             "CONTINUE" => Ok(OnErrorMode::Continue),
-            "SKIP_FILE" => Ok(OnErrorMode::SkipFile),
+            "SKIP_FILE" => Ok(OnErrorMode::SkipFileNum(1)),
             v => {
                 if v.starts_with("ABORT_") {
                     let num_str = v.replace("ABORT_", "");
                     let nums = num_str.parse::<u64>();
                     match nums {
-                        Ok(n) if n < 1 => Err(format!(
-                            "OnError mode `ABORT_<num>` num must be greater than 0"
-                        )),
+                        Ok(n) if n < 1 => {
+                            Err("OnError mode `ABORT_<num>` num must be greater than 0".to_string())
+                        }
                         Ok(n) => Ok(OnErrorMode::AbortNum(n)),
                         Err(_) => Err(format!(
                             "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT | ABORT_<num> }}",
@@ -333,6 +332,10 @@ impl FromStr for OnErrorMode {
                     let num_str = v.replace("SKIP_FILE_", "");
                     let nums = num_str.parse::<u64>();
                     match nums {
+                        Ok(n) if n < 1 => {
+                            Err("OnError mode `SKIP_FILE_<num>` num must be greater than 0"
+                                .to_string())
+                        }
                         Ok(n) => Ok(OnErrorMode::SkipFileNum(n)),
                         Err(_) => Err(format!(
                             "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT | ABORT_<num> }}",
