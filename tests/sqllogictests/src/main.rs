@@ -152,10 +152,12 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
 async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
     // Todo: set validator to process regex
     let args = SqlLogicTestArgs::parse();
-    let mut tasks = vec![];
+    let parallel = args.parallel;
+    let mut tasks = Vec::with_capacity(parallel);
+    let mut idx = 0;
+    let start = Instant::now();
     // Walk each suit dir and read all files in it
     // After get a slt file, set the file name to databend
-    let start = Instant::now();
     for suit in suits {
         // Get a suit and find all slt files in the suit
         let suit = suit.unwrap().path();
@@ -185,17 +187,23 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     .await
                     .unwrap();
             } else {
-                tasks.push(async move { run_file_async(&mut runner, file.unwrap().path()).await })
+                tasks.push(async move { run_file_async(&mut runner, file.unwrap().path()).await });
+                idx += 1;
+                if idx == parallel {
+                    // Run all tasks parallel
+                    run_parallel_async(tasks).await?;
+                    tasks = Vec::with_capacity(parallel);
+                    idx = 0;
+                }
             }
         }
     }
+    let duration = start.elapsed();
+    println!("Run all tests using {} ms", duration.as_millis());
+
     if args.complete {
         return Ok(());
     }
-    // Run all tasks parallel
-    run_parallel_async(tasks).await?;
-    let duration = start.elapsed();
-    println!("Run all tests using {} ms", duration.as_millis());
 
     Ok(())
 }
