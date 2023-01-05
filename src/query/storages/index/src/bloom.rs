@@ -175,18 +175,21 @@ impl BlockFilter {
     /// Otherwise return `Uncertain`.
     #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
     pub fn eval(&self, mut expr: Expr<String>) -> Result<FilterEvalResult> {
-        visit_expr_column_eq_constant(&mut expr, &mut |span, col_name, scalar, ty| {
-            // If the column doesn't contain the constant, we rewrite the expression to `false`.
-            if self.find(col_name, scalar, ty)? == FilterEvalResult::MustFalse {
-                Ok(Some(Expr::Constant {
-                    span,
-                    scalar: Scalar::Boolean(false),
-                    data_type: DataType::Boolean,
-                }))
-            } else {
-                Ok(None)
-            }
-        })?;
+        visit_expr_column_eq_constant(
+            &mut expr,
+            &mut |span, col_name, scalar, ty, return_type| {
+                // If the column doesn't contain the constant, we rewrite the expression to `false`.
+                if self.find(col_name, scalar, ty)? == FilterEvalResult::MustFalse {
+                    Ok(Some(Expr::Constant {
+                        span,
+                        scalar: Scalar::Boolean(false),
+                        data_type: return_type.clone(),
+                    }))
+                } else {
+                    Ok(None)
+                }
+            },
+        )?;
 
         let input_domains = expr
             .column_refs()
@@ -212,7 +215,7 @@ impl BlockFilter {
     /// Find all columns that match the pattern of `col = <constant>` in the expression.
     pub fn find_eq_columns(expr: &Expr<String>) -> Result<Vec<String>> {
         let mut cols = Vec::new();
-        visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, _, _| {
+        visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, _, _, _| {
             cols.push(col_name.to_string());
             Ok(None)
         })?;
@@ -255,7 +258,7 @@ impl BlockFilter {
 
 fn visit_expr_column_eq_constant(
     expr: &mut Expr<String>,
-    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType) -> Result<Option<Expr<String>>>,
+    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
 ) -> Result<()> {
     // Find patterns like `Column = <constant>` or `<constant> = Column`.
     match expr {
@@ -263,6 +266,7 @@ fn visit_expr_column_eq_constant(
             span,
             function,
             args,
+            return_type,
             ..
         } if function.signature.name == "eq" => match args.as_slice() {
             [
@@ -274,7 +278,7 @@ fn visit_expr_column_eq_constant(
                 Expr::ColumnRef { id, data_type, .. },
             ] => {
                 // If the visitor returns a new expression, then replace with the current expression.
-                if let Some(new_expr) = visitor(span.clone(), id, scalar, data_type)? {
+                if let Some(new_expr) = visitor(span.clone(), id, scalar, data_type, return_type)? {
                     *expr = new_expr;
                     return Ok(());
                 }

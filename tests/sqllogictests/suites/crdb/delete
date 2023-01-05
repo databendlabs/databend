@@ -64,7 +64,7 @@
 # statement ok
 # DELETE FROM kv
 
-# statement ok 
+# statement ok
 # SELECT * FROM kv
 
 # statement error 1065
@@ -82,7 +82,7 @@
 # statement ok
 # DELETE FROM unindexed
 
-# statement ok 
+# statement ok
 # SELECT * FROM unindexed
 
 # statement ok
@@ -123,7 +123,7 @@
 # statement ok
 # DELETE FROM unindexed
 
-# statement ok 
+# statement ok
 # SELECT k, v FROM unindexed
 
 # statement ok
@@ -150,7 +150,7 @@
 # statement ok
 # DELETE FROM unindexed WHERE k <=3
 
-# statement ok 
+# statement ok
 # SELECT k, v FROM unindexed
 
 # statement ok
@@ -180,4 +180,3 @@
 
 ## statement error 1105
 ## SELECT x, y, z FROM family
-

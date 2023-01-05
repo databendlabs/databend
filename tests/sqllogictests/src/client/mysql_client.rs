@@ -37,7 +37,7 @@ impl MysqlClient {
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
         if self.debug {
-            println!("Running sq with mysql client: [{}]", sql);
+            println!("Running sql with mysql client: [{}]", sql);
         }
         let rows: Vec<Row> = self.conn.query(sql).await?;
         let types = vec![ColumnType::Any; rows.len()];
