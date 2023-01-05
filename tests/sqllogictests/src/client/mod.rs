@@ -25,6 +25,7 @@ use sqllogictest::DBOutput;
 
 use crate::error::Result;
 
+#[derive(Clone, Copy)]
 pub enum ClientType {
     Mysql,
     Http,
