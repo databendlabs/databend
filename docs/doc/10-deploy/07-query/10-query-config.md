@@ -13,6 +13,10 @@ The configuration file `databend-query.toml` contains settings for configuring t
 
 This topic explains the settings you can find in the configuration file `databend-query.toml`.
 
+:::tip
+You can find [sample configuration files](https://github.com/datafuselabs/databend/tree/main/scripts/ci/deploy/config) on GitHub that set up Databend for various deployment environments. These files were created for internal testing ONLY. Please do NOT modify them for your own purposes. But if you have a similar deployment, it is a good idea to reference them when editing your own configuration files.
+:::
+
 ## 1. Logging Config
 
 ### log.file
