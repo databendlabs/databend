@@ -16,7 +16,6 @@
 mod block_writer;
 mod io;
 mod meta;
-mod misc;
 mod operations;
 mod pruning;
 mod statistics;

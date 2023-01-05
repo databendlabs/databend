@@ -308,7 +308,7 @@ impl TestFixture {
         overwrite: bool,
         commit: bool,
     ) -> Result<()> {
-        let source_schema = Self::default_schema();
+        let source_schema = table.schema();
         let mut build_res = PipelineBuildResult::create();
 
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
@@ -320,7 +320,7 @@ impl TestFixture {
         append2table(
             self.ctx.clone(),
             table.clone(),
-            source_schema,
+            Arc::new(source_schema.into()),
             &mut build_res,
             overwrite,
             commit,
