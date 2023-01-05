@@ -27,7 +27,7 @@ pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
 
     pub(crate) cluster_key_index: Vec<usize>,
-    pub(crate) extra_key_index: Vec<usize>,
+    pub(crate) extra_key_num: usize,
 
     level: i32,
     block_compact_thresholds: BlockCompactThresholds,
@@ -39,7 +39,7 @@ impl ClusterStatsGenerator {
     pub fn new(
         cluster_key_id: u32,
         cluster_key_index: Vec<usize>,
-        extra_key_index: Vec<usize>,
+        extra_key_num: usize,
         level: i32,
         block_compact_thresholds: BlockCompactThresholds,
         operators: Vec<BlockOperator>,
@@ -48,7 +48,7 @@ impl ClusterStatsGenerator {
         Self {
             cluster_key_id,
             cluster_key_index,
-            extra_key_index,
+            extra_key_num,
             level,
             block_compact_thresholds,
             operators,
@@ -73,9 +73,7 @@ impl ClusterStatsGenerator {
         let cluster_stats = self.clusters_statistics(data_block, self.level)?;
         let mut block = data_block.clone();
 
-        for id in self.extra_key_index.iter() {
-            block = block.remove_column(*id)?;
-        }
+        block = block.pop_columns(self.extra_key_num)?;
 
         Ok((cluster_stats, block))
     }
@@ -96,10 +94,6 @@ impl ClusterStatsGenerator {
         }
 
         let mut block = data_block.clone();
-
-        for id in self.extra_key_index.iter() {
-            block = block.remove_column(*id)?;
-        }
 
         if !self.cluster_key_index.is_empty() {
             let indices = vec![0u32, block.num_rows() as u32 - 1];

@@ -297,7 +297,7 @@ impl FuseTable {
 
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
-        let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
+        let mut extra_key_num = 0;
         let mut operators = Vec::with_capacity(cluster_keys.len());
 
         for remote_expr in &cluster_keys {
@@ -313,7 +313,7 @@ impl FuseTable {
                     operators.push(BlockOperator::Map { expr });
 
                     let offset = merged.len() - 1;
-                    extra_key_index.push(offset);
+                    extra_key_num += 1;
                     offset
                 }
             };
@@ -323,7 +323,7 @@ impl FuseTable {
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
-            extra_key_index,
+            extra_key_num,
             0,
             self.get_block_compact_thresholds(),
             operators,

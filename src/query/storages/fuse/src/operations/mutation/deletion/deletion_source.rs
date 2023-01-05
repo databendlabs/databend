@@ -27,6 +27,7 @@ use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_storages_common::blocks_to_parquet;
@@ -112,6 +113,11 @@ impl DeletionSource {
         filter: Arc<RemoteExpr<String>>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
+        let mut srouce_fields = block_reader.schema().fields().clone();
+        if let Some(remain_reader) = remain_reader.as_ref() {
+            srouce_fields.extend_from_slice(remain_reader.schema().fields());
+        }
+        let source_schema = TableSchemaRefExt::create(srouce_fields);
         Ok(ProcessorPtr::create(Box::new(DeletionSource {
             state: State::ReadData(None),
             ctx: ctx.clone(),
@@ -121,7 +127,7 @@ impl DeletionSource {
             block_reader,
             filter,
             remain_reader,
-            source_schema: table.table_info.schema(),
+            source_schema,
             output_schema: table.schema(),
             index: (0, 0),
             cluster_stats_gen: table.cluster_stats_gen(ctx)?,
