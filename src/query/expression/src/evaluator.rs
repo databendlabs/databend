@@ -108,7 +108,7 @@ impl<'a> Evaluator<'a> {
             self.input_columns.num_rows(),
             self.input_columns.get_meta().cloned(),
         );
-        let new_evaluator = Evaluator::new(&new_blocks, self.func_ctx.clone(), self.fn_registry);
+        let new_evaluator = Evaluator::new(&new_blocks, self.func_ctx, self.fn_registry);
         new_evaluator.run(expr)
     }
 
