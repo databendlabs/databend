@@ -116,7 +116,10 @@ fn statistics_to_domain(stat: Option<&ColumnStatistics>, data_type: &DataType) -
     }
     let stat = stat.unwrap();
     if stat.min.is_null() || stat.max.is_null() {
-        return Domain::full(data_type);
+        return Domain::Nullable(NullableDomain {
+            has_null: true,
+            value: None,
+        });
     }
     with_number_mapped_type!(|NUM_TYPE| match data_type {
         DataType::Number(NumberDataType::NUM_TYPE) => {

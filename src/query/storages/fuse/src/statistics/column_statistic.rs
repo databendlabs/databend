@@ -93,29 +93,28 @@ pub fn gen_columns_statistics(
             }
         }
 
-        let _unset_bits = if let Column::Nullable(nullable_col) = col {
-            nullable_col.validity.unset_bits()
-        } else {
-            0
+        let (is_all_null, bitmap) = col.validity();
+        let unset_bits = match (is_all_null, bitmap) {
+            (true, _) => rows,
+            (false, Some(bitmap)) => bitmap.unset_bits(),
+            (false, None) => 0,
         };
 
         // use distinct count calculated by the xor hash function to avoid repetitive operation.
         let distinct_of_values = match (col_idx, &column_distinct_count) {
             (Some(col_idx), Some(ref column_distinct_count)) => {
                 if let Some(value) = column_distinct_count.get(col_idx) {
-                    *value as u64
+                    // value calculated by xor hash function include NULL, need to subtract one.
+                    if unset_bits > 0 {
+                        *value as u64 - 1
+                    } else {
+                        *value as u64
+                    }
                 } else {
                     calc_column_distinct_of_values(col, data_type, rows)?
                 }
             }
             (_, _) => calc_column_distinct_of_values(col, data_type, rows)?,
-        };
-
-        let (is_all_null, bitmap) = col.validity();
-        let unset_bits = match (is_all_null, bitmap) {
-            (true, _) => rows,
-            (false, Some(bitmap)) => bitmap.unset_bits(),
-            (false, None) => 0,
         };
 
         let in_memory_size = col.memory_size() as u64;
