@@ -407,6 +407,7 @@ impl TableSchema {
             return Ok(field.clone());
         }
 
+        let field_name = field.name();
         if let TableDataType::Tuple {
             fields_name,
             fields_type,
@@ -415,7 +416,10 @@ impl TableSchema {
             let fields = fields_name
                 .iter()
                 .zip(fields_type)
-                .map(|(name, ty)| TableField::new(&name.clone(), ty.clone()))
+                .map(|(name, ty)| {
+                    let inner_name = format!("{}:{}", field_name, name.to_lowercase());
+                    TableField::new(&inner_name, ty.clone())
+                })
                 .collect::<Vec<_>>();
             return Self::traverse_paths(&fields, &path[1..]);
         }

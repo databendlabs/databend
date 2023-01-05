@@ -235,7 +235,7 @@ impl DataBlock {
         let mut columns = self.columns.clone();
         let len = columns.len();
 
-        for i in 0..num.min(len) {
+        for _ in 0..num.min(len) {
             columns.pop().unwrap();
         }
 

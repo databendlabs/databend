@@ -162,7 +162,32 @@ impl Metadata {
                 None
             };
 
-            if let TableDataType::Tuple { .. } = field.data_type() {
+            if let TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } = field.data_type()
+            {
+                self.add_base_table_column(
+                    field.name().clone(),
+                    field.data_type().clone(),
+                    table_index,
+                    path_indices,
+                    None,
+                );
+
+                let mut i = fields_type.len();
+                for (inner_field_name, inner_field_type) in
+                    fields_name.iter().rev().zip(fields_type.iter().rev())
+                {
+                    i -= 1;
+                    let mut inner_indices = indices.clone();
+                    inner_indices.push(i);
+                    // create tuple inner field
+                    let inner_name = format!("{}:{}", field.name(), inner_field_name);
+                    let inner_field = TableField::new(&inner_name, inner_field_type.clone());
+                    fields.push_front((inner_indices, inner_field));
+                }
+            } else {
                 self.add_base_table_column(
                     field.name().clone(),
                     field.data_type().clone(),
@@ -171,32 +196,6 @@ impl Metadata {
                     Some(leaf_index),
                 );
                 leaf_index += 1;
-                continue;
-            }
-            self.add_base_table_column(
-                field.name().clone(),
-                field.data_type().clone(),
-                table_index,
-                path_indices,
-                None,
-            );
-
-            if let TableDataType::Tuple {
-                fields_name,
-                fields_type,
-            } = field.data_type()
-            {
-                let mut i = fields_type.len();
-                for (inner_name, inner_type) in
-                    fields_name.iter().rev().zip(fields_type.iter().rev())
-                {
-                    i -= 1;
-                    let mut inner_indices = indices.clone();
-                    inner_indices.push(i);
-
-                    let inner_field = TableField::new(inner_name, inner_type.clone());
-                    fields.push_front((inner_indices, inner_field));
-                }
             }
         }
         table_index
