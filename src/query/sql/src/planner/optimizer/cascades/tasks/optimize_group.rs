@@ -16,27 +16,26 @@ use std::rc::Rc;
 
 use common_exception::Result;
 
-use super::implement_group::ImplementGroupTask;
 use super::optimize_expr::OptimizeExprTask;
 use super::Task;
 use crate::optimizer::cascades::scheduler::Scheduler;
+use crate::optimizer::cascades::tasks::ExploreGroupTask;
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::group::GroupState;
-use crate::plans::Operator;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
 pub enum OptimizeGroupState {
     Init,
-    Implemented,
+    Explored,
     Optimized,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum OptimizeGroupEvent {
-    Implementing,
-    Implemented,
+    Exploring,
+    Explored,
     Optimizing,
     Optimized,
 }
@@ -88,18 +87,18 @@ impl OptimizeGroupTask {
         scheduler: &mut Scheduler,
     ) -> Result<()> {
         let event = match self.state {
-            OptimizeGroupState::Init => self.implement_group(optimizer, scheduler)?,
-            OptimizeGroupState::Implemented => self.optimize_group(optimizer, scheduler)?,
+            OptimizeGroupState::Init => self.explore_group(optimizer, scheduler)?,
+            OptimizeGroupState::Explored => self.optimize_group(optimizer, scheduler)?,
             OptimizeGroupState::Optimized => unreachable!(),
         };
 
         match (self.state, event) {
-            (OptimizeGroupState::Init, OptimizeGroupEvent::Implementing) => {}
-            (OptimizeGroupState::Init, OptimizeGroupEvent::Implemented) => {
-                self.state = OptimizeGroupState::Implemented;
+            (OptimizeGroupState::Init, OptimizeGroupEvent::Exploring) => {}
+            (OptimizeGroupState::Init, OptimizeGroupEvent::Explored) => {
+                self.state = OptimizeGroupState::Explored;
             }
-            (OptimizeGroupState::Implemented, OptimizeGroupEvent::Optimizing) => {}
-            (OptimizeGroupState::Implemented, OptimizeGroupEvent::Optimized) => {
+            (OptimizeGroupState::Explored, OptimizeGroupEvent::Optimizing) => {}
+            (OptimizeGroupState::Explored, OptimizeGroupEvent::Optimized) => {
                 self.state = OptimizeGroupState::Optimized;
             }
             _ => unreachable!(),
@@ -108,18 +107,18 @@ impl OptimizeGroupTask {
         Ok(())
     }
 
-    fn implement_group(
+    fn explore_group(
         &mut self,
         optimizer: &mut CascadesOptimizer,
         scheduler: &mut Scheduler,
     ) -> Result<OptimizeGroupEvent> {
         let group = optimizer.memo.group(self.group_index)?;
-        if !group.state.implemented() {
-            let task = ImplementGroupTask::with_parent(group.group_index, &self.ref_count);
-            scheduler.add_task(Task::ImplementGroup(task));
-            Ok(OptimizeGroupEvent::Implementing)
+        if !group.state.explored() {
+            let task = ExploreGroupTask::with_parent(group.group_index, &self.ref_count);
+            scheduler.add_task(Task::ExploreGroup(task));
+            Ok(OptimizeGroupEvent::Exploring)
         } else {
-            Ok(OptimizeGroupEvent::Implemented)
+            Ok(OptimizeGroupEvent::Explored)
         }
     }
 
@@ -141,11 +140,9 @@ impl OptimizeGroupTask {
         }
 
         for m_expr in group.m_exprs.iter() {
-            if m_expr.plan.is_physical() {
-                let task =
-                    OptimizeExprTask::with_parent(self.group_index, m_expr.index, &self.ref_count);
-                scheduler.add_task(Task::OptimizeExpr(task));
-            }
+            let task =
+                OptimizeExprTask::with_parent(self.group_index, m_expr.index, &self.ref_count);
+            scheduler.add_task(Task::OptimizeExpr(task));
         }
 
         self.last_optimized_expr_index = Some(group.num_exprs());

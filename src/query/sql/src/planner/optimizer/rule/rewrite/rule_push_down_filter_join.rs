@@ -24,8 +24,8 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::AndExpr;
 use crate::plans::Filter;
+use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::LogicalJoin;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -56,7 +56,7 @@ impl RulePushDownFilterJoin {
                 .into(),
                 SExpr::create_binary(
                     PatternPlan {
-                        plan_type: RelOp::LogicalJoin,
+                        plan_type: RelOp::Join,
                     }
                     .into(),
                     SExpr::create_leaf(
@@ -150,7 +150,7 @@ impl RulePushDownFilterJoin {
 
     fn convert_outer_to_inner_join(&self, s_expr: &SExpr) -> Result<SExpr> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut join: LogicalJoin = s_expr.child(0)?.plan().clone().try_into()?;
+        let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
         let origin_join_type = join.join_type.clone();
         if !origin_join_type.is_outer_join() {
             return Ok(s_expr.clone());
@@ -225,7 +225,7 @@ impl RulePushDownFilterJoin {
 
     fn convert_mark_to_semi_join(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut join: LogicalJoin = s_expr.child(0)?.plan().clone().try_into()?;
+        let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
         let has_disjunction = filter
             .predicates
             .iter()
@@ -371,7 +371,7 @@ fn extract_or_predicate(or_expr: &OrExpr, required_columns: &ColumnSet) -> Resul
 
 pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Result<(bool, SExpr)> {
     let join_expr = s_expr.child(0)?;
-    let mut join: LogicalJoin = join_expr.plan().clone().try_into()?;
+    let mut join: Join = join_expr.plan().clone().try_into()?;
 
     let rel_expr = RelExpr::with_s_expr(join_expr);
     let left_prop = rel_expr.derive_relational_prop_child(0)?;

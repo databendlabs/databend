@@ -34,8 +34,6 @@ use crate::optimizer::rule::rewrite::RulePushDownLimitSort;
 use crate::optimizer::rule::rewrite::RulePushDownLimitUnion;
 use crate::optimizer::rule::rewrite::RulePushDownSortScan;
 use crate::optimizer::rule::rewrite::RuleSplitAggregate;
-use crate::optimizer::rule::rule_implement_get::RuleImplementGet;
-use crate::optimizer::rule::rule_implement_hash_join::RuleImplementHashJoin;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
 
@@ -48,8 +46,6 @@ impl RuleFactory {
 
     pub fn create_rule(&self, id: RuleID) -> Result<RulePtr> {
         match id {
-            RuleID::ImplementGet => Ok(Box::new(RuleImplementGet::new())),
-            RuleID::ImplementHashJoin => Ok(Box::new(RuleImplementHashJoin::new())),
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),

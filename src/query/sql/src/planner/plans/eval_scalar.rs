@@ -23,9 +23,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::Statistics;
-use crate::plans::LogicalOperator;
 use crate::plans::Operator;
-use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
@@ -43,29 +41,22 @@ pub struct ScalarItem {
     pub index: IndexType,
 }
 
+impl EvalScalar {
+    pub fn used_columns(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for item in self.items.iter() {
+            used_columns.insert(item.index);
+            used_columns.extend(item.scalar.used_columns());
+        }
+        Ok(used_columns)
+    }
+}
+
 impl Operator for EvalScalar {
     fn rel_op(&self) -> RelOp {
         RelOp::EvalScalar
     }
 
-    fn is_physical(&self) -> bool {
-        true
-    }
-
-    fn is_logical(&self) -> bool {
-        true
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        Some(self)
-    }
-
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        Some(self)
-    }
-}
-
-impl PhysicalOperator for EvalScalar {
     fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
@@ -79,9 +70,7 @@ impl PhysicalOperator for EvalScalar {
     ) -> Result<RequiredProperty> {
         Ok(required.clone())
     }
-}
 
-impl LogicalOperator for EvalScalar {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
@@ -122,14 +111,5 @@ impl LogicalOperator for EvalScalar {
                 is_accurate,
             },
         })
-    }
-
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
-        let mut used_columns = ColumnSet::new();
-        for item in self.items.iter() {
-            used_columns.insert(item.index);
-            used_columns.extend(item.scalar.used_columns());
-        }
-        Ok(used_columns)
     }
 }

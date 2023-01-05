@@ -21,8 +21,8 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::LogicalJoin;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 
@@ -60,13 +60,13 @@ impl RuleRightAssociateJoin {
             //    *  *
             pattern: SExpr::create_binary(
                 PatternPlan {
-                    plan_type: RelOp::LogicalJoin,
+                    plan_type: RelOp::Join,
                 }
                 .into(),
                 SExpr::create_pattern_leaf(),
                 SExpr::create_binary(
                     PatternPlan {
-                        plan_type: RelOp::LogicalJoin,
+                        plan_type: RelOp::Join,
                     }
                     .into(),
                     SExpr::create_pattern_leaf(),
@@ -96,8 +96,8 @@ impl Rule for RuleRightAssociateJoin {
         //  join4 t3
         //  /  \
         // t1  t2
-        let join1: LogicalJoin = s_expr.plan.clone().try_into()?;
-        let join2: LogicalJoin = s_expr.child(1)?.plan.clone().try_into()?;
+        let join1: Join = s_expr.plan.clone().try_into()?;
+        let join2: Join = s_expr.child(1)?.plan.clone().try_into()?;
         let t1 = s_expr.child(0)?;
         let t2 = s_expr.child(1)?.child(0)?;
         let t3 = s_expr.child(1)?.child(1)?;
@@ -114,8 +114,8 @@ impl Rule for RuleRightAssociateJoin {
 
         let predicates = vec![get_join_predicates(&join1)?, get_join_predicates(&join2)?].concat();
 
-        let mut join_3 = LogicalJoin::default();
-        let mut join_4 = LogicalJoin::default();
+        let mut join_3 = Join::default();
+        let mut join_4 = Join::default();
 
         let t1_prop = RelExpr::with_s_expr(t1).derive_relational_prop()?;
         let t2_prop = RelExpr::with_s_expr(t2).derive_relational_prop()?;

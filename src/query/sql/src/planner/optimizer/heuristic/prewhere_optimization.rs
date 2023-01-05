@@ -17,11 +17,11 @@ use common_exception::Result;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
-use crate::plans::LogicalGet;
 use crate::plans::PatternPlan;
 use crate::plans::Prewhere;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
+use crate::plans::Scan;
 use crate::MetadataRef;
 
 pub struct PrewhereOptimizer {
@@ -40,7 +40,7 @@ impl PrewhereOptimizer {
                 .into(),
                 SExpr::create_leaf(
                     PatternPlan {
-                        plan_type: RelOp::LogicalGet,
+                        plan_type: RelOp::Scan,
                     }
                     .into(),
                 ),
@@ -92,7 +92,7 @@ impl PrewhereOptimizer {
         let rel_op = s_expr.plan();
         if s_expr.match_pattern(&self.pattern) {
             let filter: Filter = s_expr.plan().clone().try_into()?;
-            let mut get: LogicalGet = s_expr.child(0)?.plan().clone().try_into()?;
+            let mut get: Scan = s_expr.child(0)?.plan().clone().try_into()?;
             get.push_down_predicates = Some(filter.predicates.clone());
             let metadata = self.metadata.read().clone();
 

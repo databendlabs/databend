@@ -187,7 +187,7 @@ impl FileFormatOptionsExt {
                 }
             }
             StageFileFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema, self)),
-            StageFileFormatType::Json => Box::new(JSONOutputFormat::create(self)),
+            StageFileFormatType::Json => Box::new(JSONOutputFormat::create(schema, self)),
             StageFileFormatType::Avro => {
                 unreachable!()
             }
@@ -212,6 +212,7 @@ impl FileFormatTypeExt for StageFileFormatType {
             StageFileFormatType::Csv => "text/csv; charset=UTF-8",
             StageFileFormatType::Parquet => "application/octet-stream",
             StageFileFormatType::NdJson => "application/x-ndjson; charset=UTF-8",
+            StageFileFormatType::Json => "application/json; charset=UTF-8",
             _ => "text/plain; charset=UTF-8",
         }
         .to_string()

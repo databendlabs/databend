@@ -21,8 +21,8 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
-use crate::plans::LogicalGet;
 use crate::plans::RelOperator;
+use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -47,7 +47,7 @@ impl UnusedColumnPruner {
     /// visit a plan node.
     fn keep_required_columns(&self, expr: &SExpr, mut required: ColumnSet) -> Result<SExpr> {
         match expr.plan() {
-            RelOperator::LogicalGet(p) => {
+            RelOperator::Scan(p) => {
                 // Some table may not have any column,
                 // e.g. `system.sync_crash_me`
                 if p.columns.is_empty() {
@@ -91,7 +91,7 @@ impl UnusedColumnPruner {
                     used.insert(smallest_index);
                 }
 
-                Ok(SExpr::create_leaf(RelOperator::LogicalGet(LogicalGet {
+                Ok(SExpr::create_leaf(RelOperator::Scan(Scan {
                     table_index: p.table_index,
                     columns: used,
                     push_down_predicates: p.push_down_predicates.clone(),
@@ -105,7 +105,7 @@ impl UnusedColumnPruner {
                     prewhere,
                 })))
             }
-            RelOperator::LogicalJoin(p) => {
+            RelOperator::Join(p) => {
                 // Include columns referenced in left conditions
                 let left = p.left_conditions.iter().fold(required.clone(), |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
@@ -120,7 +120,7 @@ impl UnusedColumnPruner {
                 });
 
                 Ok(SExpr::create_binary(
-                    RelOperator::LogicalJoin(p.clone()),
+                    RelOperator::Join(p.clone()),
                     self.keep_required_columns(
                         expr.child(0)?,
                         left.union(&others).cloned().collect(),

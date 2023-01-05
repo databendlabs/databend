@@ -25,9 +25,7 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::Statistics;
 use crate::optimizer::MAX_SELECTIVITY;
-use crate::plans::LogicalOperator;
 use crate::plans::Operator;
-use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
@@ -39,29 +37,21 @@ pub struct Filter {
     pub is_having: bool,
 }
 
+impl Filter {
+    pub fn used_columns(&self) -> Result<ColumnSet> {
+        Ok(self
+            .predicates
+            .iter()
+            .map(|scalar| scalar.used_columns())
+            .fold(ColumnSet::new(), |acc, x| acc.union(&x).cloned().collect()))
+    }
+}
+
 impl Operator for Filter {
     fn rel_op(&self) -> RelOp {
         RelOp::Filter
     }
 
-    fn is_physical(&self) -> bool {
-        true
-    }
-
-    fn is_logical(&self) -> bool {
-        true
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        Some(self)
-    }
-
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        Some(self)
-    }
-}
-
-impl PhysicalOperator for Filter {
     fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
@@ -75,9 +65,7 @@ impl PhysicalOperator for Filter {
     ) -> Result<RequiredProperty> {
         Ok(required.clone())
     }
-}
 
-impl LogicalOperator for Filter {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
         let output_columns = input_prop.output_columns;
@@ -120,13 +108,5 @@ impl LogicalOperator for Filter {
                 is_accurate: false,
             },
         })
-    }
-
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
-        Ok(self
-            .predicates
-            .iter()
-            .map(|scalar| scalar.used_columns())
-            .fold(ColumnSet::new(), |acc, x| acc.union(&x).cloned().collect()))
     }
 }
