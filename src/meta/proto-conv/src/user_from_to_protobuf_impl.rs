@@ -585,8 +585,15 @@ impl FromToProto for mt::OnErrorMode {
     fn from_pb(p: pb::user_stage_info::OnErrorMode) -> Result<Self, Incompatible>
     where Self: Sized {
         match p.mode {
+            Some(pb::user_stage_info::on_error_mode::Mode::None(_))
+            | Some(pb::user_stage_info::on_error_mode::Mode::AbortStatement(_)) => {
+                Ok(mt::OnErrorMode::AbortNum(1))
+            }
             Some(pb::user_stage_info::on_error_mode::Mode::Continue(_)) => {
                 Ok(mt::OnErrorMode::Continue)
+            }
+            Some(pb::user_stage_info::on_error_mode::Mode::SkipFile(_)) => {
+                Ok(mt::OnErrorMode::SkipFileNum(1))
             }
             Some(pb::user_stage_info::on_error_mode::Mode::SkipFileNum(n)) => {
                 Ok(mt::OnErrorMode::SkipFileNum(n))
