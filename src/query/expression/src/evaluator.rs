@@ -37,6 +37,7 @@ use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
+use crate::BlockEntry;
 use crate::ColumnIndex;
 use crate::FunctionContext;
 use crate::FunctionDomain;
@@ -74,6 +75,41 @@ impl<'a> Evaluator<'a> {
                 self.input_columns,
             );
         }
+    }
+
+    /// TODO(sundy/andy): refactor this if we got better idea
+    pub fn run_auto_nullable(&self, expr: &Expr) -> Result<Value<AnyType>> {
+        let column_refs = expr.column_refs();
+
+        let mut columns = self.input_columns.columns().to_vec();
+        for (index, datatype) in column_refs.iter() {
+            let column = &columns[*index];
+            if datatype != &column.data_type && datatype == &column.data_type.wrap_nullable() {
+                let value = self.run(&Expr::Cast {
+                    span: None,
+                    is_try: false,
+                    expr: Box::new(Expr::ColumnRef {
+                        span: None,
+                        id: *index,
+                        data_type: column.data_type.clone(),
+                    }),
+                    dest_type: datatype.clone(),
+                })?;
+
+                columns[*index] = BlockEntry {
+                    data_type: datatype.clone(),
+                    value,
+                };
+            }
+        }
+
+        let new_blocks = DataBlock::new_with_meta(
+            columns,
+            self.input_columns.num_rows(),
+            self.input_columns.get_meta().cloned(),
+        );
+        let new_evaluator = Evaluator::new(&new_blocks, self.func_ctx.clone(), self.fn_registry);
+        new_evaluator.run(expr)
     }
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
