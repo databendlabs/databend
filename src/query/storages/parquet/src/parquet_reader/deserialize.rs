@@ -49,41 +49,61 @@ impl ParquetReader {
 
         let column_leaves = &self.projected_column_leaves.column_leaves;
         let mut cnt_map = Self::build_projection_count_map(column_leaves);
+        let schema = &self.output_schema;
 
+        let mut field_marks = Vec::new();
+        let mut column_in_block_meta = false;
+        let mut need_to_fill_default_values = false;
         for column_leaf in column_leaves {
             let indices = &column_leaf.leaf_ids;
             let mut metas = Vec::with_capacity(indices.len());
             let mut chunks = Vec::with_capacity(indices.len());
             for index in indices {
-                let column_meta = &part.column_metas[index];
-                let cnt = cnt_map.get_mut(index).unwrap();
-                *cnt -= 1;
-                let column_chunk = if cnt > &mut 0 {
-                    chunk_map.get(index).unwrap().clone()
+                let column_id = schema.column_id_of_index(*index);
+
+                if let Some(column_meta) = part.column_metas.get(&column_id) {
+                    let cnt = cnt_map.get_mut(index).unwrap();
+                    *cnt -= 1;
+                    let column_chunk = if cnt > &mut 0 {
+                        chunk_map.get(index).unwrap().clone()
+                    } else {
+                        chunk_map.remove(index).unwrap()
+                    };
+                    let descriptor = &self.projected_column_descriptors[index];
+                    metas.push((column_meta, descriptor));
+                    chunks.push(column_chunk);
+                    column_in_block_meta = true;
                 } else {
-                    chunk_map.remove(index).unwrap()
-                };
-                let descriptor = &self.projected_column_descriptors[index];
-                metas.push((column_meta, descriptor));
-                chunks.push(column_chunk);
+                    break;
+                }
             }
-            let array_iter = if let Some(ref bitmap) = filter {
-                Self::to_array_iter_with_filter(
-                    metas,
-                    chunks,
-                    part.num_rows,
-                    column_leaf.field.clone(),
-                    bitmap.clone(),
-                )?
+            if column_in_block_meta {
+                let array_iter = if let Some(ref bitmap) = filter {
+                    Self::to_array_iter_with_filter(
+                        metas,
+                        chunks,
+                        part.num_rows,
+                        column_leaf.field.clone(),
+                        bitmap.clone(),
+                    )?
+                } else {
+                    Self::to_array_iter(metas, chunks, part.num_rows, column_leaf.field.clone())?
+                };
+                columns_array_iter.push(array_iter);
+                field_marks.push(None);
             } else {
-                Self::to_array_iter(metas, chunks, part.num_rows, column_leaf.field.clone())?
-            };
-            columns_array_iter.push(array_iter);
+                field_marks.push(Some(()));
+                need_to_fill_default_values = true;
+            }
         }
 
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, part.num_rows, None);
 
-        self.try_next_block(&mut deserializer)
+        if need_to_fill_default_values {
+            self.try_next_block_with_fill_values(&mut deserializer, field_marks, part.num_rows)
+        } else {
+            self.try_next_block(&mut deserializer)
+        }
     }
 
     /// The number of columns can be greater than 1 because the it may be a nested type.
@@ -201,7 +221,27 @@ impl ParquetReader {
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.output_schema(), &chunk),
+            Some(Ok(chunk)) => DataBlock::from_chunk(&self.output_schema, &chunk),
+        }
+    }
+
+    fn try_next_block_with_fill_values(
+        &self,
+        deserializer: &mut RowGroupDeserializer,
+        data_fields: Vec<Option<()>>,
+        num_rows: usize,
+    ) -> Result<DataBlock> {
+        match deserializer.next() {
+            None => Err(ErrorCode::Internal(
+                "deserializer from row group: fail to get a chunk",
+            )),
+            Some(Err(cause)) => Err(ErrorCode::from(cause)),
+            Some(Ok(chunk)) => DataBlock::create_with_schema_from_chunk(
+                &self.output_schema,
+                &chunk,
+                &data_fields,
+                num_rows,
+            ),
         }
     }
 

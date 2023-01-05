@@ -25,6 +25,7 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::table::ColumnId;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -51,7 +52,7 @@ impl BlockReader {
         let columns_meta = meta
             .col_metas
             .iter()
-            .map(|(index, meta)| (*index as usize, meta.clone()))
+            .map(|(column_id, meta)| (*column_id, meta.clone()))
             .collect::<HashMap<_, _>>();
 
         // Get the merged IO read result.
@@ -116,7 +117,7 @@ impl BlockReader {
         &self,
         num_rows: usize,
         compression: &Compression,
-        columns_meta: &HashMap<usize, ColumnMeta>,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
         columns_chunks: Vec<(usize, &[u8])>,
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
@@ -124,33 +125,45 @@ impl BlockReader {
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-
+        let schema = &self.projected_schema;
+        let mut field_marks = Vec::new();
+        let mut need_to_fill_default_val = false;
         for column in &columns {
             let field = column.field.clone();
             let indices = &column.leaf_ids;
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
+            let mut column_in_block_meta = false;
             for index in indices {
-                let column_read = <&[u8]>::clone(&chunk_map[index]);
-                let column_meta = &columns_meta[index];
-                let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
-                column_metas.push(column_meta);
-                column_chunks.push(column_read);
-                column_descriptors.push(column_descriptor);
+                let column_id = schema.column_id_of_index(*index);
+                if let Some(column_meta) = columns_meta.get(&column_id) {
+                    let column_read = <&[u8]>::clone(&chunk_map[index]);
+                    let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
+                    column_metas.push(column_meta);
+                    column_chunks.push(column_read);
+                    column_descriptors.push(column_descriptor);
+                    column_in_block_meta = true;
+                }
             }
 
-            columns_array_iter.push(Self::chunks_to_parquet_array_iter(
-                column_metas,
-                column_chunks,
-                num_rows,
-                column_descriptors,
-                field,
-                compression,
-                uncompressed_buffer
-                    .clone()
-                    .unwrap_or_else(|| UncompressedBuffer::new(0)),
-            )?);
+            if column_in_block_meta {
+                columns_array_iter.push(Self::chunks_to_parquet_array_iter(
+                    column_metas,
+                    column_chunks,
+                    num_rows,
+                    column_descriptors,
+                    field,
+                    compression,
+                    uncompressed_buffer
+                        .clone()
+                        .unwrap_or_else(|| UncompressedBuffer::new(0)),
+                )?);
+                field_marks.push(None);
+            } else {
+                field_marks.push(Some(()));
+                need_to_fill_default_val = true;
+            }
         }
 
         let mut arrays = Vec::with_capacity(columns_array_iter.len());
@@ -161,7 +174,16 @@ impl BlockReader {
         }
 
         let chunk = Chunk::try_new(arrays)?;
-        DataBlock::from_chunk(&self.schema(), &chunk)
+        if !need_to_fill_default_val {
+            DataBlock::from_chunk(&self.schema(), &chunk)
+        } else {
+            DataBlock::create_with_schema_from_chunk(
+                &self.projected_schema,
+                &chunk,
+                &field_marks,
+                num_rows,
+            )
+        }
     }
 
     fn chunks_to_parquet_array_iter<'a>(

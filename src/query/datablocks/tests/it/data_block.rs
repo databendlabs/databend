@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::ArrayRef;
 use common_datablocks::DataBlock;
@@ -73,11 +75,14 @@ fn test_data_block_convert() -> Result<()> {
 }
 
 #[test]
-fn test_data_block_or_field_convert() -> Result<()> {
+fn test_data_block_create_with_schema_from_chunk() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DateType::new_impl()),
         DataField::new("b", TimestampType::new_impl()),
         DataField::new("b1", TimestampType::new_impl()),
+        DataField::new("c1", TimestampType::new_impl()),
+        DataField::new("c2", TimestampType::new_impl()),
+        DataField::new("c3", TimestampType::new_impl()),
     ]);
 
     let block = DataBlock::create(schema.clone(), vec![
@@ -88,22 +93,57 @@ fn test_data_block_or_field_convert() -> Result<()> {
 
     let chunk: Chunk<ArrayRef> = block.try_into().unwrap();
 
-    let values = vec![
-        Some(DataField::new("c1", DateType::new_impl())),
-        None,
-        Some(DataField::new("c2", DateType::new_impl())),
-        None,
-        None,
-        Some(DataField::new("c3", DateType::new_impl())),
-    ];
-    let new_block: DataBlock = DataBlock::from_chunk_or_field(&schema, &chunk, &values, 3).unwrap();
+    let marks = vec![Some(()), None, Some(()), None, None, Some(())];
+    let new_block: DataBlock =
+        DataBlock::create_with_schema_from_chunk(&schema, &chunk, &marks, 3).unwrap();
     assert_eq!(3, new_block.num_rows());
     assert_eq!(6, new_block.num_columns());
 
-    let expected_field_names = ["c1", "a", "c2", "b", "b1", "c3"];
+    let expected_field_names = ["a", "b", "b1", "c1", "c2", "c3"];
     for (i, field) in new_block.schema().fields().iter().enumerate() {
         assert_eq!(field.name(), expected_field_names[i]);
-        if let Some(ref field) = values[i] {
+        if marks[i].is_some() {
+            let column = new_block.column(i);
+            for j in 0..column.len() {
+                assert_eq!(column.get(j), field.data_type().default_value());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_data_block_create_with_schema_from_data_block() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new_with_column_id("a", DateType::new_impl(), 0),
+        DataField::new_with_column_id("b", TimestampType::new_impl(), 1),
+        DataField::new_with_column_id("b1", TimestampType::new_impl(), 2),
+        DataField::new_with_column_id("c1", TimestampType::new_impl(), 3),
+        DataField::new_with_column_id("c2", TimestampType::new_impl(), 4),
+        DataField::new_with_column_id("c3", TimestampType::new_impl(), 5),
+    ]);
+
+    let block = DataBlock::create(schema.clone(), vec![
+        Series::from_data(vec![1i32, 2, 3]),
+        Series::from_data(vec![1i64, 2, 3]),
+        Series::from_data(vec![1i64, 2, 3]),
+    ]);
+
+    let data_block_column_ids: HashSet<u32> = vec![0, 2, 5].iter().cloned().collect();
+    let new_block: DataBlock = DataBlock::create_with_schema_from_data_block(
+        &schema,
+        block,
+        data_block_column_ids.clone(),
+        3,
+    )
+    .unwrap();
+    assert_eq!(3, new_block.num_rows());
+    assert_eq!(6, new_block.num_columns());
+
+    let expected_field_names = ["a", "b", "b1", "c1", "c2", "c3"];
+    for (i, field) in new_block.schema().fields().iter().enumerate() {
+        assert_eq!(field.name(), expected_field_names[i]);
+        if !data_block_column_ids.contains(&(i as u32)) {
             let column = new_block.column(i);
             for j in 0..column.len() {
                 assert_eq!(column.get(j), field.data_type().default_value());

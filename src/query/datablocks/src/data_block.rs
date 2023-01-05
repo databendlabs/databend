@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
@@ -300,10 +301,10 @@ impl DataBlock {
     // data_fields contain all the data field that want to return in DataBlock in two cases:
     // 1. if data_fields[i].is_some(), then DataBlock.column[i] = num_rows * DataField.default_value()
     // 2. else, DataBlock.column[i] = chuck.columns[i]
-    pub fn from_chunk_or_field<A: AsRef<dyn Array>>(
+    pub fn create_with_schema_from_chunk<A: AsRef<dyn Array>>(
         schema: &DataSchemaRef,
         chuck: &Chunk<A>,
-        data_fields: &[Option<DataField>],
+        field_marks: &[Option<()>],
         num_rows: usize,
     ) -> Result<DataBlock> {
         let mut data_block = DataBlock::create(Arc::new(DataSchema::empty()), vec![]);
@@ -312,36 +313,59 @@ impl DataBlock {
         let chunk_columns = chuck.columns();
 
         let schema_fields = schema.fields();
-        for (_i, field) in data_fields.iter().enumerate() {
-            match field {
-                Some(ref f) => {
-                    let default_value = f.data_type().default_value();
-                    let column = f
-                        .data_type()
-                        .create_constant_column(&default_value, num_rows)?;
-
-                    data_block = data_block.add_column(column, f.clone())?;
-                }
-                None => {
-                    assert!(chunk_idx < chunk_columns.len());
-                    let chunk_column = &chunk_columns[chunk_idx];
-                    let schema_field = &schema_fields[chunk_idx];
-                    assert_eq!(chunk_column.as_ref().len(), num_rows);
-                    chunk_idx += 1;
-                    if schema_field.is_nullable() {
-                        data_block = data_block.add_column(
-                            chunk_column.into_nullable_column(),
-                            schema_field.clone(),
-                        )?;
-                    } else {
-                        data_block = data_block
-                            .add_column(chunk_column.into_column(), schema_field.clone())?;
-                    }
+        for (i, mark) in field_marks.iter().enumerate() {
+            let field = &schema_fields[i];
+            let column = if mark.is_some() {
+                let default_value = field.data_type().default_value();
+                field
+                    .data_type()
+                    .create_constant_column(&default_value, num_rows)?
+            } else {
+                assert!(chunk_idx < chunk_columns.len());
+                let chunk_column = &chunk_columns[chunk_idx];
+                assert_eq!(chunk_column.as_ref().len(), num_rows);
+                chunk_idx += 1;
+                if field.is_nullable() {
+                    chunk_column.into_nullable_column()
+                } else {
+                    chunk_column.into_column()
                 }
             };
+            data_block = data_block.add_column(column, field.clone())?;
         }
 
         Ok(data_block)
+    }
+
+    pub fn create_with_schema_from_data_block(
+        schema: &DataSchemaRef,
+        data_block: DataBlock,
+        data_block_column_ids: HashSet<u32>,
+        num_rows: usize,
+    ) -> Result<DataBlock> {
+        let mut new_data_block = DataBlock::create(Arc::new(DataSchema::empty()), vec![]);
+
+        let mut chunk_idx: usize = 0;
+        let chunk_columns = data_block.columns();
+
+        let schema_fields = schema.fields();
+        for (_i, field) in schema_fields.iter().enumerate() {
+            let column_id = field.column_id().unwrap();
+            if !data_block_column_ids.contains(&column_id) {
+                let default_value = field.data_type().default_value();
+                let column = field
+                    .data_type()
+                    .create_constant_column(&default_value, num_rows)?;
+
+                new_data_block = new_data_block.add_column(column, field.clone())?;
+            } else {
+                let chunk_column = &chunk_columns[chunk_idx];
+                chunk_idx += 1;
+                new_data_block = new_data_block.add_column(chunk_column.clone(), field.clone())?;
+            }
+        }
+
+        Ok(new_data_block)
     }
 
     pub fn get_serializers(&self) -> Result<Vec<TypeSerializerImpl>> {

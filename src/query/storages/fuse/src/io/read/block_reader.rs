@@ -24,6 +24,7 @@ use common_base::rangemap::RangeMerger;
 use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
+use common_catalog::table::ColumnId;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -268,7 +269,7 @@ impl BlockReader {
         &self,
         settings: &ReadSettings,
         location: &str,
-        columns_meta: &HashMap<usize, ColumnMeta>,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
     ) -> Result<MergeIOReadResult> {
         // Perf
         {
@@ -277,19 +278,21 @@ impl BlockReader {
 
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
+        let schema = &self.projected_schema;
 
         let mut ranges = vec![];
         for index in indices.keys() {
-            let column_meta = &columns_meta[index];
-            ranges.push((
-                *index,
-                column_meta.offset..(column_meta.offset + column_meta.len),
-            ));
-
-            // Perf
-            {
-                metrics_inc_remote_io_seeks(1);
-                metrics_inc_remote_io_read_bytes(column_meta.len);
+            let column_id = schema.column_id_of_index(*index);
+            if let Some(column_meta) = columns_meta.get(&column_id) {
+                ranges.push((
+                    *index,
+                    column_meta.offset..(column_meta.offset + column_meta.len),
+                ));
+                // Perf
+                {
+                    metrics_inc_remote_io_seeks(1);
+                    metrics_inc_remote_io_read_bytes(column_meta.len);
+                }
             }
         }
 
@@ -306,14 +309,17 @@ impl BlockReader {
         let part = FusePartInfo::from_part(&part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
+        let schema = &self.projected_schema;
 
         let mut ranges = vec![];
         for index in indices.keys() {
-            let column_meta = &part.columns_meta[index];
-            ranges.push((
-                *index,
-                column_meta.offset..(column_meta.offset + column_meta.len),
-            ));
+            let column_id = schema.column_id_of_index(*index);
+            if let Some(column_meta) = part.columns_meta.get(&column_id) {
+                ranges.push((
+                    *index,
+                    column_meta.offset..(column_meta.offset + column_meta.len),
+                ));
+            }
         }
 
         let object = self.operator.object(&part.location);

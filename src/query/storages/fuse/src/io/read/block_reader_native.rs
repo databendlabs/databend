@@ -50,22 +50,25 @@ impl BlockReader {
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
+        let schema = &self.projected_schema;
 
         for (index, field) in indices {
-            let column_meta = &part.columns_meta[&index];
-            join_handlers.push(Self::read_native_columns_data(
-                self.operator.object(&part.location),
-                index,
-                column_meta.offset,
-                column_meta.len,
-                column_meta.num_values,
-                field.data_type().clone(),
-            ));
+            let column_id = schema.column_id_of_index(index);
+            if let Some(column_meta) = part.columns_meta.get(&column_id) {
+                join_handlers.push(Self::read_native_columns_data(
+                    self.operator.object(&part.location),
+                    index,
+                    column_meta.offset,
+                    column_meta.len,
+                    column_meta.num_values,
+                    field.data_type().clone(),
+                ));
 
-            // Perf
-            {
-                metrics_inc_remote_io_seeks(1);
-                metrics_inc_remote_io_read_bytes(column_meta.len);
+                // Perf
+                {
+                    metrics_inc_remote_io_seeks(1);
+                    metrics_inc_remote_io_read_bytes(column_meta.len);
+                }
             }
         }
 
@@ -103,26 +106,28 @@ impl BlockReader {
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
         let mut results = Vec::with_capacity(indices.len());
+        let schema = &self.projected_schema;
 
         for (index, field) in indices {
-            let column_meta = &part.columns_meta[&index];
+            let column_id = schema.column_id_of_index(index);
+            if let Some(column_meta) = part.columns_meta.get(&column_id) {
+                let op = self.operator.clone();
 
-            let op = self.operator.clone();
+                let location = part.location.clone();
+                let offset = column_meta.offset;
+                let length = column_meta.len;
 
-            let location = part.location.clone();
-            let offset = column_meta.offset;
-            let length = column_meta.len;
+                let result = Self::sync_read_native_column(
+                    op.object(&location),
+                    index,
+                    offset,
+                    length,
+                    column_meta.num_values,
+                    field.data_type().clone(),
+                );
 
-            let result = Self::sync_read_native_column(
-                op.object(&location),
-                index,
-                offset,
-                length,
-                column_meta.num_values,
-                field.data_type().clone(),
-            );
-
-            results.push(result?);
+                results.push(result?);
+            }
         }
 
         Ok(results)

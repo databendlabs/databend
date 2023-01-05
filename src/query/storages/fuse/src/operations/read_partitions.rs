@@ -299,11 +299,7 @@ impl FuseTable {
 
             // ignore column this block dose not exist
             if let Some(meta) = meta.col_metas.get(column_id) {
-                let index = match schema {
-                    Some(schema) => schema.index_of_column_id(column_id),
-                    None => *column_id as usize,
-                };
-                columns_meta.insert(index, meta.clone());
+                columns_meta.insert(*column_id, meta.clone());
             }
         }
 
@@ -339,7 +335,7 @@ impl FuseTable {
 
                 // ignore column this block dose not exist
                 if let Some(column_meta) = meta.col_metas.get(&column_id) {
-                    columns_meta.insert(*index, column_meta.clone());
+                    columns_meta.insert(column_id, column_meta.clone());
                 }
             }
         }

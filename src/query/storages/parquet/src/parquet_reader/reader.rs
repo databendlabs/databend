@@ -53,7 +53,7 @@ pub struct ParquetReader {
     /// ```
     columns_to_read: HashSet<usize>,
     /// The schema of the [`common_datablocks::DataBlock`] this reader produces.
-    output_schema: DataSchemaRef,
+    pub(crate) output_schema: DataSchemaRef,
     /// The actual schema used to read parquet. It will be converted to [`common_datavalues::DataSchema`] when output [`common_datablocks::DataBlock`].
     ///
     /// The reason of using [`ArrowSchema`] to read parquet is that
@@ -147,13 +147,18 @@ impl ParquetReader {
     /// Read columns data of one row group.
     pub fn sync_read_columns(&self, part: &ParquetRowGroupPart) -> Result<Vec<IndexedChunk>> {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
-
+        let schema = &self.output_schema;
         for index in &self.columns_to_read {
-            let meta = &part.column_metas[index];
-            let op = self.operator.clone();
-            let chunk =
-                Self::sync_read_one_column(op.object(&part.location), meta.offset, meta.length)?;
-            chunks.push((*index, chunk));
+            let column_id = schema.column_id_of_index(*index);
+            if let Some(meta) = part.column_metas.get(&column_id) {
+                let op = self.operator.clone();
+                let chunk = Self::sync_read_one_column(
+                    op.object(&part.location),
+                    meta.offset,
+                    meta.length,
+                )?;
+                chunks.push((*index, chunk));
+            }
         }
 
         Ok(chunks)
