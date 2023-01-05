@@ -138,7 +138,7 @@ fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<TableDataType>
     } else if name.starts_with("ARRAY<") {
         let sub_type = &name["ARRAY<".len()..name.len() - 1];
         let sub_type = try_from_filed_type_name(sub_type)?;
-        Ok(TableDataType::Array(Box::new(sub_type)))
+        Ok(TableDataType::Array(Box::new(sub_type.wrap_nullable())))
     } else {
         let number = match name.as_str() {
             "TINYINT" => Ok(NumberDataType::Int8),

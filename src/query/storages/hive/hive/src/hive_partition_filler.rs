@@ -18,6 +18,7 @@ use common_expression::types::AnyType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::TableField;
+use common_expression::TableSchemaRef;
 use common_expression::Value;
 
 use crate::hive_partition::HivePartInfo;
@@ -25,12 +26,22 @@ use crate::utils::str_field_to_scalar;
 
 #[derive(Debug, Clone)]
 pub struct HivePartitionFiller {
+    schema: TableSchemaRef,
     pub partition_fields: Vec<TableField>,
+    pub projections: Vec<usize>,
 }
 
 impl HivePartitionFiller {
-    pub fn create(partition_fields: Vec<TableField>) -> Self {
-        HivePartitionFiller { partition_fields }
+    pub fn create(
+        schema: TableSchemaRef,
+        partition_fields: Vec<TableField>,
+        projections: Vec<usize>,
+    ) -> Self {
+        HivePartitionFiller {
+            schema,
+            partition_fields,
+            projections,
+        }
     }
 
     fn generate_value(
@@ -75,14 +86,32 @@ impl HivePartitionFiller {
         if num_rows == 0 {
             num_rows = origin_num_rows;
         }
+
+        let mut columns = vec![];
+        let j = 0;
+
         for (i, field) in self.partition_fields.iter().enumerate() {
+            let index = self.schema.index_of(field.name())?;
+            let project_index = self.projections.iter().position(|x| *x == index).unwrap();
+
+            while columns.len() < project_index {
+                columns.push(data_block.columns()[j].clone());
+                j += 1;
+            }
+
             let value = &data_values[i];
             let column = self.generate_value(num_rows, value.clone(), field)?;
-            data_block.add_column(BlockEntry {
+            columns.push(BlockEntry {
                 data_type: field.data_type().into(),
                 value: column,
             });
         }
+
+        while j < data_block.num_columns() {
+            columns.push(data_block.columns()[j].clone());
+            j += 1;
+        }
+
         Ok(data_block)
     }
 }

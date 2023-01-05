@@ -124,6 +124,7 @@ impl HiveBlockReader {
 
         let (projection, partition_fields) =
             filter_hive_partition_from_partition_keys(schema.clone(), projection, partition_keys);
+
         let hive_partition_filler = if !partition_fields.is_empty() {
             Some(HivePartitionFiller::create(partition_fields))
         } else {
