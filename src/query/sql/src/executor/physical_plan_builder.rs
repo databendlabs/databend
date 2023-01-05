@@ -64,7 +64,6 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
-use crate::GROUP_BY_KEY_COLUMN_INDEX;
 
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,
@@ -306,7 +305,7 @@ impl PhysicalPlanBuilder {
                                     group_by: group_items,
                                 };
 
-                                let group_by_key_index = GROUP_BY_KEY_COLUMN_INDEX;
+                                let group_by_key_index = aggregate_partial.output_schema()?.num_fields() - 1;
                                 let group_by_key_data_type =
                                     DataBlock::choose_hash_method_with_types(
                                         &agg.group_items
