@@ -1038,6 +1038,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
     match data_type {
         DataType::Null => Ok(TableDataType::Null),
         DataType::Boolean => Ok(TableDataType::Boolean),
+        DataType::EmptyArray => Ok(TableDataType::EmptyArray),
         DataType::String => Ok(TableDataType::String),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),

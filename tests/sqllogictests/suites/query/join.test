@@ -238,6 +238,13 @@ create table t2(c smallint unsigned null)
 statement ok
 insert into t2 values(1),(2),(null)
 
+query IF
+select TRY_CAST((c + 1) AS Int64 NULL) from t2;
+----
+2
+3
+NULL
+
 
 query IF
 select * from t inner join t1 on t.a = t1.b order by a, b
@@ -496,4 +503,3 @@ drop table t1;
 
 statement ok
 drop table t2;
-

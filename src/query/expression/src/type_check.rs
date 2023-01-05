@@ -478,7 +478,10 @@ pub fn check_simple_cast(
     is_try: bool,
     dest_type: &DataType,
 ) -> Option<String> {
-    if src_type.is_nullable_or_null() {
+    // if is not try cast and the src_type is nullable or null
+    // we should forward to the cast expression
+    // because the "to_xxx" may returns nullable type instead of dest_type
+    if !is_try && src_type.is_nullable_or_null() {
         return None;
     }
 

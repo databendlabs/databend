@@ -1188,7 +1188,7 @@ impl Column {
             Column::Null { .. } => (true, None),
             Column::Nullable(c) => {
                 if c.validity.unset_bits() == c.validity.len() {
-                    (true, None)
+                    (true, Some(&c.validity))
                 } else {
                     (false, Some(&c.validity))
                 }
