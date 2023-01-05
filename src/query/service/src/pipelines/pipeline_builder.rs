@@ -260,7 +260,7 @@ impl PipelineBuilder {
 
         let func_ctx = self.ctx.try_get_function_context()?;
         let predicate = check(&predicate, &BUILTIN_FUNCTIONS)
-            .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
+            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundBlockOperator::create(

@@ -111,7 +111,7 @@ impl HiveBlockReader {
         partition_keys: &Option<Vec<String>>,
         chunk_size: usize,
     ) -> Result<Arc<HiveBlockReader>> {
-        let projection = match projection {
+        let original_projection = match projection {
             Projection::Columns(projection) => projection,
             Projection::InnerColumns(b) => {
                 return Err(ErrorCode::Unimplemented(format!(
@@ -120,13 +120,21 @@ impl HiveBlockReader {
                 )));
             }
         };
-        let output_schema = DataSchemaRef::new(DataSchema::from(&schema.project(&projection)));
+        let output_schema =
+            DataSchemaRef::new(DataSchema::from(&schema.project(&original_projection)));
 
-        let (projection, partition_fields) =
-            filter_hive_partition_from_partition_keys(schema.clone(), projection, partition_keys);
+        let (projection, partition_fields) = filter_hive_partition_from_partition_keys(
+            schema.clone(),
+            original_projection.clone(),
+            partition_keys,
+        );
 
         let hive_partition_filler = if !partition_fields.is_empty() {
-            Some(HivePartitionFiller::create(partition_fields))
+            Some(HivePartitionFiller::create(
+                schema.clone(),
+                partition_fields,
+                original_projection,
+            ))
         } else {
             None
         };

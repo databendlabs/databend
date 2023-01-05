@@ -57,7 +57,7 @@ impl HashFlightScatter {
             args: hash_keys,
         };
         let hash_key = check(&hash_raw, &BUILTIN_FUNCTIONS)
-            .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
+            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
 
         Ok(Box::new(Self {
             func_ctx,
@@ -99,7 +99,7 @@ impl OneHashKeyFlightScatter {
         };
 
         let indices_scalar = check(&mod_raw, &BUILTIN_FUNCTIONS)
-            .map_err(|(_, _e)| ErrorCode::Internal("Invalid expression"))?;
+            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
 
         Ok(Box::new(OneHashKeyFlightScatter {
             scatter_size,

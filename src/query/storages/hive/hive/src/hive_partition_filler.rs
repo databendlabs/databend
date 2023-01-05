@@ -75,7 +75,7 @@ impl HivePartitionFiller {
 
     pub fn fill_data(
         &self,
-        mut data_block: DataBlock,
+        data_block: DataBlock,
         part: &HivePartInfo,
         origin_num_rows: usize,
     ) -> Result<DataBlock> {
@@ -88,7 +88,7 @@ impl HivePartitionFiller {
         }
 
         let mut columns = vec![];
-        let j = 0;
+        let mut j = 0;
 
         for (i, field) in self.partition_fields.iter().enumerate() {
             let index = self.schema.index_of(field.name())?;
@@ -112,6 +112,6 @@ impl HivePartitionFiller {
             j += 1;
         }
 
-        Ok(data_block)
+        Ok(DataBlock::new(columns, data_block.num_rows()))
     }
 }
