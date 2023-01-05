@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_expression::TypeDeserializer;
@@ -385,7 +386,7 @@ pub struct BlockBuilder<T> {
 
 impl<T: InputFormatTextBase> BlockBuilder<T> {
     fn flush(&mut self) -> Result<Vec<DataBlock>> {
-        let columns = self
+        let columns: Vec<Column> = self
             .mutable_columns
             .iter_mut()
             .map(|deserializer| deserializer.finish_to_column())
