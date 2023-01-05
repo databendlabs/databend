@@ -35,7 +35,7 @@ use crate::api::rpc::flight_scatter::FlightScatter;
 #[derive(Clone)]
 pub struct HashFlightScatter {
     func_ctx: FunctionContext,
-    hash_key: Expr,
+    hash_key: Vec<Expr>,
     scatter_size: usize,
 }
 
@@ -50,19 +50,23 @@ impl HashFlightScatter {
         }
         let hash_keys: Vec<RawExpr> = scalars.iter().map(|e| e.as_raw_expr()).collect();
 
-        let hash_raw = RawExpr::FunctionCall {
-            span: None,
-            name: "siphash".to_string(),
-            params: vec![],
-            args: hash_keys,
-        };
-        let hash_key = check(&hash_raw, &BUILTIN_FUNCTIONS)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+        let mut keys: Vec<Expr> = vec![];
+        for hash_key in hash_keys {
+            let hash_raw = RawExpr::FunctionCall {
+                span: None,
+                name: "siphash".to_string(),
+                params: vec![],
+                args: vec![hash_key],
+            };
+            let expr = check(&hash_raw, &BUILTIN_FUNCTIONS)
+                .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+            keys.push(expr);
+        }
 
         Ok(Box::new(Self {
             func_ctx,
-            hash_key,
             scatter_size,
+            hash_key: keys,
         }))
     }
 }
@@ -130,10 +134,21 @@ impl FlightScatter for OneHashKeyFlightScatter {
 impl FlightScatter for HashFlightScatter {
     fn execute(&self, data_block: &DataBlock, num: usize) -> Result<Vec<DataBlock>> {
         let evaluator = Evaluator::new(data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
-
-        let indices = evaluator.run(&self.hash_key).unwrap();
-        let indices = get_hash_values(&indices, num)?;
-
+        let mut indices: Vec<u64> = vec![0; 1];
+        if !self.hash_key.is_empty() {
+            let mut hash = vec![];
+            for expr in &self.hash_key {
+                let indices = evaluator.run(expr).unwrap();
+                let indices = get_hash_values(&indices, num)?;
+                for value in indices {
+                    hash.push(value)
+                }
+            }
+            indices = hash
+                .iter()
+                .map(|c| *c % (self.scatter_size as u64))
+                .collect();
+        }
         let block_meta = data_block.meta()?;
         let data_blocks = DataBlock::scatter(data_block, &indices, self.scatter_size)?;
 
