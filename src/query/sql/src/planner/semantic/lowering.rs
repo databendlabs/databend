@@ -49,12 +49,6 @@ impl Scalar {
                 params: vec![],
                 args: vec![expr.left.as_raw_expr(), expr.right.as_raw_expr()],
             },
-            Scalar::NotExpr(expr) => RawExpr::FunctionCall {
-                span: None,
-                name: "not".to_string(),
-                params: vec![],
-                args: vec![expr.argument.as_raw_expr()],
-            },
             Scalar::ComparisonExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: expr.op.to_func_name(),

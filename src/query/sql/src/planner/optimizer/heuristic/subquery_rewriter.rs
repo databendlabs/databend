@@ -41,7 +41,6 @@ use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
-use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
@@ -172,19 +171,6 @@ impl SubqueryRewriter {
                     OrExpr {
                         left: Box::new(left),
                         right: Box::new(right),
-                        return_type: expr.return_type.clone(),
-                    }
-                    .into(),
-                    s_expr,
-                ))
-            }
-
-            Scalar::NotExpr(expr) => {
-                let (argument, s_expr) =
-                    self.try_rewrite_subquery(&expr.argument, s_expr, false)?;
-                Ok((
-                    NotExpr {
-                        argument: Box::new(argument),
                         return_type: expr.return_type.clone(),
                     }
                     .into(),
@@ -406,7 +392,11 @@ impl SubqueryRewriter {
                 };
 
                 let compare = ComparisonExpr {
-                    op: ComparisonOp::Equal,
+                    op: if subquery.typ == SubqueryType::Exists {
+                        ComparisonOp::Equal
+                    } else {
+                        ComparisonOp::NotEqual
+                    },
                     left: Box::new(
                         BoundColumnRef {
                             column: ColumnBinding {
@@ -429,17 +419,8 @@ impl SubqueryRewriter {
                     ),
                     return_type: Box::new(DataType::Boolean.wrap_nullable()),
                 };
-                let compare = if subquery.typ == SubqueryType::Exists {
-                    compare.into()
-                } else {
-                    NotExpr {
-                        argument: Box::new(compare.into()),
-                        return_type: Box::new(DataType::Boolean.wrap_nullable()),
-                    }
-                    .into()
-                };
                 let filter = Filter {
-                    predicates: vec![compare],
+                    predicates: vec![compare.into()],
                     is_having: false,
                 };
 

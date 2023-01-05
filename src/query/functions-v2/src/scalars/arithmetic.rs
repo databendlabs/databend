@@ -64,6 +64,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                 );
             }
         });
+
+        // TODO: Can be eliminated by optimizer
+        with_number_mapped_type!(|NUM_TYPE| match num_ty {
+            NumberDataType::NUM_TYPE => {
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, _, _>(
+                    "plus",
+                    FunctionProperty::default(),
+                    |lhs| FunctionDomain::Domain(lhs.clone()),
+                    |a, _| a,
+                );
+            }
+        });
     }
 
     for left in ALL_NUMERICS_TYPES {

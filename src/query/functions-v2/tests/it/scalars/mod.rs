@@ -241,4 +241,13 @@ fn list_all_builtin_functions() {
     {
         writeln!(file, "{alias_name} -> {original_name}").unwrap();
     }
+
+    writeln!(file, "\nNegative functions (negative to origin):").unwrap();
+    for (neg_name, original_name) in fn_registry
+        .negtives
+        .iter()
+        .sorted_by_key(|(alias_name, _)| alias_name.to_string())
+    {
+        writeln!(file, "{neg_name} -> not({original_name})").unwrap();
+    }
 }

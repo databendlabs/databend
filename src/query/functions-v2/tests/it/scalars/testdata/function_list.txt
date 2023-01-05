@@ -1818,6 +1818,26 @@ parse_json(Float32 NULL) :: Variant NULL
 parse_json(Float64) :: Variant
 parse_json(Float64 NULL) :: Variant NULL
 pi() :: Float64
+plus(UInt8) :: UInt8
+plus(UInt8 NULL) :: UInt8 NULL
+plus(UInt16) :: UInt16
+plus(UInt16 NULL) :: UInt16 NULL
+plus(UInt32) :: UInt32
+plus(UInt32 NULL) :: UInt32 NULL
+plus(UInt64) :: UInt64
+plus(UInt64 NULL) :: UInt64 NULL
+plus(Int8) :: Int8
+plus(Int8 NULL) :: Int8 NULL
+plus(Int16) :: Int16
+plus(Int16 NULL) :: Int16 NULL
+plus(Int32) :: Int32
+plus(Int32 NULL) :: Int32 NULL
+plus(Int64) :: Int64
+plus(Int64 NULL) :: Int64 NULL
+plus(Float32) :: Float32
+plus(Float32 NULL) :: Float32 NULL
+plus(Float64) :: Float64
+plus(Float64 NULL) :: Float64 NULL
 plus(UInt8, UInt8) :: UInt16
 plus(UInt8 NULL, UInt8 NULL) :: UInt16 NULL
 plus(UInt8, UInt16) :: UInt32
@@ -3165,3 +3185,9 @@ try_ipv4_string_to_num -> try_inet_aton
 try_to_datetime -> try_to_timestamp
 ucase -> upper
 uuid -> gen_random_uuid
+
+Negative functions (negative to origin):
+gte -> not(lt)
+is_null -> not(is_not_null)
+lte -> not(gt)
+noteq -> not(eq)

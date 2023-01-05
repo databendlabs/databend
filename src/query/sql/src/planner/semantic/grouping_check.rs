@@ -24,7 +24,6 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
@@ -84,11 +83,6 @@ impl<'a> GroupingChecker<'a> {
             Scalar::OrExpr(scalar) => Ok(OrExpr {
                 left: Box::new(self.resolve(&scalar.left, span)?),
                 right: Box::new(self.resolve(&scalar.right, span)?),
-                return_type: scalar.return_type.clone(),
-            }
-            .into()),
-            Scalar::NotExpr(scalar) => Ok(NotExpr {
-                argument: Box::new(self.resolve(&scalar.argument, span)?),
                 return_type: scalar.return_type.clone(),
             }
             .into()),
