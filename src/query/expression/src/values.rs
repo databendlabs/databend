@@ -19,6 +19,7 @@ use std::ops::Range;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::compute::cast as arrow_cast;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
@@ -1068,6 +1069,35 @@ impl Column {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
                 })
+            }
+            ArrowDataType::List(f) => {
+                let array_list = arrow_cast::cast(
+                    arrow_col,
+                    &ArrowDataType::LargeList(f.clone()),
+                    arrow_cast::CastOptions {
+                        wrapped: true,
+                        partial: true,
+                    },
+                )
+                .expect("list to large list cast should be ok");
+
+                let values_col = array_list
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
+                    .expect("fail to read from arrow: array should be `ListArray<i64>`");
+
+                let array_type = data_type.as_array().unwrap();
+                let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
+                let offsets = values_col
+                    .offsets()
+                    .buffer()
+                    .iter()
+                    .map(|x| *x as u64)
+                    .collect::<Vec<_>>();
+                Column::Array(Box::new(ArrayColumn {
+                    values,
+                    offsets: offsets.into(),
+                }))
             }
             ArrowDataType::LargeList(_) => {
                 let values_col = arrow_col

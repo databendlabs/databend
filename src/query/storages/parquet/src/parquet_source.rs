@@ -200,7 +200,7 @@ impl ParquetSource {
                         remain_reader.deserialize(rg_part, raw_chunks, None)?
                     }
                     Value::Column(bitmap) => {
-                        if bitmap.unset_bits() != 0 {
+                        if bitmap.unset_bits() == 0 {
                             // don't need filter
                             remain_reader.deserialize(rg_part, raw_chunks, None)?
                         } else {
