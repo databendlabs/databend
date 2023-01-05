@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check;
@@ -134,21 +137,18 @@ impl FlightScatter for OneHashKeyFlightScatter {
 impl FlightScatter for HashFlightScatter {
     fn execute(&self, data_block: &DataBlock, num: usize) -> Result<Vec<DataBlock>> {
         let evaluator = Evaluator::new(data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
-        let mut indices: Vec<u64> = vec![0; 1];
-        if !self.hash_key.is_empty() {
-            let mut hash = vec![];
+        let indices = if !self.hash_key.is_empty() {
+            let mut hash_keys = vec![];
             for expr in &self.hash_key {
                 let indices = evaluator.run_auto_nullable(expr).unwrap();
                 let indices = get_hash_values(&indices, num)?;
-                for value in indices {
-                    hash.push(value)
-                }
+                hash_keys.push(indices)
             }
-            indices = hash
-                .iter()
-                .map(|c| *c % (self.scatter_size as u64))
-                .collect();
-        }
+            self.combine_hash_keys(&hash_keys, num)
+        } else {
+            Ok(vec![0; num])
+        }?;
+
         let block_meta = data_block.meta()?;
         let data_blocks = DataBlock::scatter(data_block, &indices, self.scatter_size)?;
 
@@ -158,6 +158,25 @@ impl FlightScatter for HashFlightScatter {
         }
 
         Ok(res)
+    }
+}
+
+impl HashFlightScatter {
+    pub fn combine_hash_keys(&self, hash_keys: &[Vec<u64>], num_rows: usize) -> Result<Vec<u64>> {
+        if self.hash_key.len() != hash_keys.len() {
+            return Err(ErrorCode::Internal(
+                "Hash keys and hash functions must be the same length.",
+            ));
+        }
+        let mut hash = vec![DefaultHasher::default(); num_rows];
+        for keys in hash_keys.iter() {
+            for (i, value) in keys.iter().enumerate() {
+                hash[i].write_u64(*value);
+            }
+        }
+
+        let m = self.scatter_size as u64;
+        Ok(hash.into_iter().map(|h| h.finish() % m).collect())
     }
 }
 
