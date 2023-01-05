@@ -258,12 +258,14 @@ async fn execute(
 
     match data_stream.next().await {
         None => {
+            let block = DataBlock::empty_with_schema(interpreter.schema());
+            block_sender.send(block, 0).await;
             Executor::stop(&executor, Ok(()), false).await;
-            block_sender.close()
+            block_sender.close();
         }
         Some(Err(err)) => {
             Executor::stop(&executor, Err(err), false).await;
-            block_sender.close()
+            block_sender.close();
         }
         Some(Ok(block)) => {
             let size = block.num_rows();
