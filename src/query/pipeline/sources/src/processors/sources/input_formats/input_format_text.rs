@@ -499,6 +499,7 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
         if let Some(b) = batch {
             self.num_rows += b.row_ends.len();
             T::deserialize(self, b)?;
+            self.ctx.on_error_maybe_error = None;
             let mem = self.memory_size();
             tracing::debug!(
                 "chunk builder added new batch: row {} size {}",

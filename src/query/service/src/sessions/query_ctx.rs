@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::Weak;
 use std::time::SystemTime;
 
@@ -372,6 +373,10 @@ impl TableContext for QueryContext {
     // Get Stage Attachment.
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         self.shared.get_stage_attachment()
+    }
+
+    fn set_error(&self, err: ErrorCode) {
+        self.shared.set_error(err)
     }
 }
 

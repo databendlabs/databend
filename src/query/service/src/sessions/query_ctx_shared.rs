@@ -116,6 +116,10 @@ impl QueryContextShared {
         *guard = Some(err);
     }
 
+    pub fn get_error(&self) -> Arc<Mutex<Option<ErrorCode>>> {
+        self.error.clone()
+    }
+
     pub fn kill(&self, cause: ErrorCode) {
         self.set_error(cause.clone());
         self.aborting.store(true, Ordering::Release);

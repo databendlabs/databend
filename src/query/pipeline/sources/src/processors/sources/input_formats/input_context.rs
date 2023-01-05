@@ -118,6 +118,7 @@ pub struct InputContext {
 
     pub scan_progress: Arc<Progress>,
     pub on_error_mode: OnErrorMode,
+    pub on_error_maybe_error: Option<ErrorCode>,
 }
 
 impl Debug for InputContext {
@@ -180,6 +181,7 @@ impl InputContext {
             block_compact_thresholds,
             format_options: file_format_options,
             on_error_mode,
+            on_error_maybe_error: None,
         })
     }
 
@@ -219,7 +221,8 @@ impl InputContext {
             splits: vec![],
             block_compact_thresholds,
             format_options: file_format_options,
-            on_error_mode: OnErrorMode::None,
+            on_error_mode: OnErrorMode::AbortNum(1),
+            on_error_maybe_error: None,
         })
     }
 
@@ -256,7 +259,8 @@ impl InputContext {
             splits: vec![],
             block_compact_thresholds,
             format_options: file_format_options,
-            on_error_mode: OnErrorMode::None,
+            on_error_mode: OnErrorMode::AbortNum(1),
+            on_error_maybe_error: None,
         })
     }
 

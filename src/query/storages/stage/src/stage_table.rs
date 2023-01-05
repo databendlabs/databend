@@ -216,6 +216,9 @@ impl Table for StageTable {
             compact_threshold,
         )?);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
+        if let Some(e) = input_ctx.on_error_maybe_error.clone() {
+            ctx.set_error(e);
+        }
         Ok(())
     }
 
