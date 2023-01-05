@@ -52,12 +52,6 @@ impl Interpreter for ReclusterTableInterpreter {
         let tenant = ctx.get_tenant();
         let start = SystemTime::now();
 
-        let table = self
-            .ctx
-            .get_catalog(&plan.catalog)?
-            .get_table(tenant.as_str(), &plan.database, &plan.table)
-            .await?;
-
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
             let filter = scalar.as_expr()?.as_remote_expr();
@@ -71,6 +65,12 @@ impl Interpreter for ReclusterTableInterpreter {
         };
 
         loop {
+            let table = self
+                .ctx
+                .get_catalog(&plan.catalog)?
+                .get_table(tenant.as_str(), &plan.database, &plan.table)
+                .await?;
+
             let mut pipeline = Pipeline::create();
             let mutator = table
                 .recluster(ctx.clone(), &mut pipeline, extras.clone())
