@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_datavalues::prelude::*;
+use common_datavalues::DataSchema;
 use common_meta_types::MatchSeq;
 use common_storage::StorageParams;
 use maplit::hashmap;
