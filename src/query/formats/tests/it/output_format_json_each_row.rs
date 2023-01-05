@@ -15,10 +15,10 @@
 use common_exception::Result;
 use common_expression::types::number::Float32Type;
 use common_expression::types::number::Int32Type;
-use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::FromData;
+use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use pretty_assertions::assert_eq;
@@ -59,8 +59,8 @@ fn test_null() -> Result<()> {
             ),
         ],
         vec![
-            NullableType::<Int32Type>::from_data(vec![Some(1i32), None, Some(3)]),
-            NullableType::<Int32Type>::from_data(vec![None, Some(2i32), None]),
+            Int32Type::from_opt_data(vec![Some(1i32), None, Some(3)]),
+            Int32Type::from_opt_data(vec![None, Some(2i32), None]),
         ],
     );
 

@@ -282,7 +282,7 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
         registry.register_function_factory(name, move |_, args_type| {
             let fields_generics = match args_type {
                 [DataType::Tuple(lhs_fields_ty), _] => (0..lhs_fields_ty.len())
-                    .map(|idx| DataType::Generic(idx))
+                    .map(DataType::Generic)
                     .collect::<Vec<_>>(),
                 _ => return None,
             };

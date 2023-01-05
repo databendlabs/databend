@@ -125,7 +125,7 @@ impl HiveBlockReader {
 
         let (projection, partition_fields) = filter_hive_partition_from_partition_keys(
             schema.clone(),
-            original_projection.clone(),
+            original_projection,
             partition_keys,
         );
 
@@ -133,7 +133,6 @@ impl HiveBlockReader {
             Some(HivePartitionFiller::create(
                 schema.clone(),
                 partition_fields,
-                original_projection,
             ))
         } else {
             None

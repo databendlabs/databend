@@ -26,22 +26,12 @@ use crate::utils::str_field_to_scalar;
 
 #[derive(Debug, Clone)]
 pub struct HivePartitionFiller {
-    schema: TableSchemaRef,
     pub partition_fields: Vec<TableField>,
-    pub projections: Vec<usize>,
 }
 
 impl HivePartitionFiller {
-    pub fn create(
-        schema: TableSchemaRef,
-        partition_fields: Vec<TableField>,
-        projections: Vec<usize>,
-    ) -> Self {
-        HivePartitionFiller {
-            schema,
-            partition_fields,
-            projections,
-        }
+    pub fn create(_schema: TableSchemaRef, partition_fields: Vec<TableField>) -> Self {
+        HivePartitionFiller { partition_fields }
     }
 
     fn generate_value(
@@ -87,18 +77,9 @@ impl HivePartitionFiller {
             num_rows = origin_num_rows;
         }
 
-        let mut columns = vec![];
-        let mut j = 0;
+        let mut columns = data_block.columns().to_vec();
 
         for (i, field) in self.partition_fields.iter().enumerate() {
-            let index = self.schema.index_of(field.name())?;
-            let project_index = self.projections.iter().position(|x| *x == index).unwrap();
-
-            while columns.len() < project_index {
-                columns.push(data_block.columns()[j].clone());
-                j += 1;
-            }
-
             let value = &data_values[i];
             let column = self.generate_value(num_rows, value.clone(), field)?;
             columns.push(BlockEntry {
@@ -107,11 +88,6 @@ impl HivePartitionFiller {
             });
         }
 
-        while j < data_block.num_columns() {
-            columns.push(data_block.columns()[j].clone());
-            j += 1;
-        }
-
-        Ok(DataBlock::new(columns, data_block.num_rows()))
+        Ok(DataBlock::new(columns, num_rows))
     }
 }

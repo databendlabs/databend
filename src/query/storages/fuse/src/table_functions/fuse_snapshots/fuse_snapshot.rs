@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::number::UInt64Type;
-use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;

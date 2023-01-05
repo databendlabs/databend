@@ -228,6 +228,7 @@ impl HiveTableSource {
                 remain_reader.get_all_datablocks(rowgroup_deserializer, &hive_blocks.part)?;
             // 2. concat prewhere and remain datablock(may be none)
             assert_eq!(remain_datablocks.len(), prewhere_data.data_blocks.len());
+
             let allblocks = remain_datablocks
                 .iter()
                 .zip(prewhere_data.data_blocks.iter())
@@ -235,8 +236,8 @@ impl HiveTableSource {
                 .map(|((r, p), v)| {
                     // do merge block
                     assert_eq!(r.num_rows(), p.num_rows());
-                    let mut a = r.clone();
-                    for column in p.columns().iter() {
+                    let mut a = p.clone();
+                    for column in r.columns().iter() {
                         a.add_column(column.clone());
                     }
                     let a = DataBlock::filter(a, v).unwrap();

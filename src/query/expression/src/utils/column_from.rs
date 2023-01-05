@@ -134,9 +134,9 @@ mod test {
 
     use crate::types::number::Float32Type;
     use crate::types::number::Int8Type;
-    use crate::types::NullableType;
     use crate::types::TimestampType;
     use crate::FromData;
+    use crate::FromOptData;
 
     #[test]
     fn test() {
@@ -152,8 +152,8 @@ mod test {
         let b = Float32Type::from_data(vec![1.0f32, 2.0, 3.0].into_iter());
         assert!(a == b);
 
-        let a = NullableType::<TimestampType>::from_data(vec![Some(1), None, Some(3)]);
-        let b = NullableType::<TimestampType>::from_data(vec![Some(1), None, Some(3)].into_iter());
+        let a = TimestampType::from_opt_data(vec![Some(1), None, Some(3)]);
+        let b = TimestampType::from_opt_data(vec![Some(1), None, Some(3)]);
         assert!(a == b);
     }
 }
