@@ -75,6 +75,10 @@ pub trait SyncSystemTable: Send + Sync {
             ))]),
         ))
     }
+
+    fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
+        Ok(())
+    }
 }
 
 pub struct SyncOneBlockSystemTable<TTable: SyncSystemTable> {
@@ -140,6 +144,10 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         });
 
         Ok(())
+    }
+
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, _purge: bool) -> Result<()> {
+        self.inner_table.truncate(ctx)
     }
 }
 

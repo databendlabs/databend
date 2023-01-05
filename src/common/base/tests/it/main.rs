@@ -15,6 +15,7 @@
 mod pool;
 mod pool_retry;
 mod progress;
+mod range_merger;
 mod runtime;
 mod runtime_tracker;
 mod stoppable;

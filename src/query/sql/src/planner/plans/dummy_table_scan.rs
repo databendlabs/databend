@@ -17,9 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
-use super::LogicalOperator;
 use super::Operator;
-use super::PhysicalOperator;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelationalProperty;
@@ -28,29 +26,17 @@ use crate::optimizer::Statistics;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DummyTableScan;
 
+impl DummyTableScan {
+    pub fn used_columns(&self) -> Result<ColumnSet> {
+        Ok(ColumnSet::new())
+    }
+}
+
 impl Operator for DummyTableScan {
     fn rel_op(&self) -> super::RelOp {
         super::RelOp::DummyTableScan
     }
 
-    fn is_physical(&self) -> bool {
-        true
-    }
-
-    fn is_logical(&self) -> bool {
-        true
-    }
-
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        Some(self)
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        Some(self)
-    }
-}
-
-impl LogicalOperator for DummyTableScan {
     fn derive_relational_prop<'a>(
         &self,
         _rel_expr: &crate::optimizer::RelExpr<'a>,
@@ -68,12 +54,6 @@ impl LogicalOperator for DummyTableScan {
         })
     }
 
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
-        Ok(ColumnSet::new())
-    }
-}
-
-impl PhysicalOperator for DummyTableScan {
     fn derive_physical_prop<'a>(
         &self,
         _rel_expr: &crate::optimizer::RelExpr<'a>,

@@ -17,7 +17,11 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use common_datablocks::DataBlock;
+use common_datavalues::remove_nullable;
+use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -68,11 +72,43 @@ impl TransformMergeBlock {
                 if is_left {
                     Ok(block.try_column_by_name(left)?.clone())
                 } else {
-                    Ok(block.try_column_by_name(right)?.clone())
+                    // If block from right, check if block schema matches self scheme(left schema)
+                    // If unmatched, covert block columns types or report error
+                    self.check_type(left, right, &block)
                 }
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(DataBlock::create(self.schema.clone(), columns))
+    }
+
+    fn check_type(
+        &self,
+        left_name: &str,
+        right_name: &str,
+        block: &DataBlock,
+    ) -> Result<ColumnRef> {
+        let left_filed = self.schema.field_with_name(left_name)?;
+        let left_data_type = left_filed.data_type();
+
+        let right_field = block.schema().field_with_name(right_name)?;
+        let right_data_type = right_field.data_type();
+
+        if left_data_type == right_data_type {
+            return Ok(block.try_column_by_name(right_name)?.clone());
+        }
+
+        if remove_nullable(left_data_type) == remove_nullable(right_data_type) {
+            let origin_column = block.try_column_by_name(right_name)?;
+            let mut values = Vec::with_capacity(origin_column.len());
+            for idx in 0..origin_column.len() {
+                values.push(origin_column.get(idx))
+            }
+            left_data_type.create_column(&values)
+        } else {
+            Err(ErrorCode::IllegalDataType(
+                "The data type on both sides of the union does not match",
+            ))
+        }
     }
 }
 

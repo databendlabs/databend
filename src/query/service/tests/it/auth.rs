@@ -23,6 +23,7 @@ use common_users::UserApiProvider;
 use databend_query::auth::Credential;
 use databend_query::sessions::TableContext;
 use jwt_simple::prelude::*;
+use p256::EncodedPoint;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 use wiremock::Mock;
@@ -185,7 +186,226 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_ensure_user(EnsureUser {
                 roles: Some(vec![role_name.to_string()]),
             })
-            .with_role("test-auth-role".to_string());
+            .with_role("test-auth-role");
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        let res = auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await;
+        assert!(res.is_ok());
+
+        let roles: Vec<String> = ctx
+            .get_current_session()
+            .get_all_available_roles()
+            .await?
+            .into_iter()
+            .map(|r| r.name)
+            .collect();
+        assert_eq!(roles.len(), 1);
+        assert!(!roles.contains(&"test-auth-role".to_string()));
+    }
+
+    // root auth from localhost
+    {
+        let user_name = "root";
+
+        let claims = Claims::create(Duration::from_hours(2)).with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        let res = auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                hostname: Some("localhost".to_string()),
+            })
+            .await;
+        assert!(res.is_ok());
+    }
+
+    // root auth outside localhost
+    {
+        let claims = Claims::create(Duration::from_hours(2)).with_subject("root".to_string());
+        let token = key_pair.sign(claims)?;
+
+        let res = auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                hostname: Some("10.0.0.1".to_string()),
+            })
+            .await;
+        assert!(res.is_err());
+        assert_eq!(
+            "Code: 2201, displayText = only accept root from localhost, current: 'root'@'%'.",
+            res.err().unwrap().to_string()
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
+    let kid = "test_kid";
+    let key_pair = ES256KeyPair::generate().with_key_id(kid);
+    let encoded_point =
+        EncodedPoint::from_bytes(key_pair.public_key().public_key().to_bytes_uncompressed())
+            .expect("must be valid encode point");
+    let x = encode_config(encoded_point.x().unwrap(), URL_SAFE_NO_PAD);
+    let y = encode_config(encoded_point.y().unwrap(), URL_SAFE_NO_PAD);
+    let j =
+        serde_json::json!({"keys": [ {"kty": "EC", "kid": kid, "x": x, "y": y, } ] }).to_string();
+
+    let server = MockServer::start().await;
+    let json_path = "/jwks.json";
+    // Create a mock on the server.
+    let template = ResponseTemplate::new(200).set_body_raw(j, "application/json");
+    Mock::given(method("GET"))
+        .and(path(json_path))
+        .respond_with(template)
+        .expect(1..)
+        // Mounting the mock on the mock server - it's now effective!
+        .mount(&server)
+        .await;
+    let jwks_url = format!("http://{}{}", server.address(), json_path);
+
+    let mut conf = crate::tests::ConfigBuilder::create().config();
+    conf.query.jwt_key_file = jwks_url.clone();
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    let auth_mgr = ctx.get_auth_manager();
+    let tenant = "test";
+    let user_name = "test";
+
+    // without subject
+    {
+        let claims = Claims::create(Duration::from_hours(2));
+        let token = key_pair.sign(claims)?;
+
+        let res = auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await;
+        assert!(res.is_err());
+        assert_eq!(
+            "Code: 1051, displayText = missing field `subject` in jwt.",
+            res.err().unwrap().to_string()
+        );
+    }
+
+    // without custom claims
+    {
+        let claims = Claims::create(Duration::from_hours(2)).with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        let res = auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await;
+        assert!(res.is_err());
+        assert_eq!(
+            "Code: 2201, displayText = unknown user 'test'@'%'.",
+            res.err().unwrap().to_string()
+        );
+    }
+
+    // with custom claims
+    {
+        let custom_claims = CustomClaims::new();
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        let res = auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await;
+        assert!(res.is_err());
+        assert_eq!(
+            "Code: 2201, displayText = unknown user 'test'@'%'.",
+            res.err().unwrap().to_string()
+        );
+    }
+
+    // with create user
+    {
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser::default());
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await?;
+        let user_info = ctx.get_current_user()?;
+        assert_eq!(user_info.grants.roles().len(), 0);
+    }
+
+    // with create user again
+    {
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
+            roles: Some(vec!["role1".to_string()]),
+        });
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await?;
+        let user_info = ctx.get_current_user()?;
+        assert_eq!(user_info.grants.roles().len(), 0);
+    }
+
+    // with create user and grant roles
+    {
+        let user_name = "test-user2";
+        let role_name = "test-role";
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
+            roles: Some(vec![role_name.to_string()]),
+        });
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        let res = auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token,
+                hostname: None,
+            })
+            .await;
+        assert!(res.is_ok());
+
+        let user_info = UserApiProvider::instance()
+            .get_user(tenant, UserIdentity::new(user_name, "%"))
+            .await?;
+        assert_eq!(user_info.grants.roles().len(), 1);
+        assert_eq!(user_info.grants.roles()[0], role_name.to_string());
+    }
+
+    // with create user and auth role
+    {
+        let user_name = "test-user2";
+        let role_name = "test-role";
+        let custom_claims = CustomClaims::new()
+            .with_ensure_user(EnsureUser {
+                roles: Some(vec![role_name.to_string()]),
+            })
+            .with_role("test-auth-role");
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;

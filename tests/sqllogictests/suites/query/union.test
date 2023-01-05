@@ -139,3 +139,35 @@ ORDER BY age,
 24-30  2
 年轻  2
 非年轻  2
+
+statement ok
+drop table if exists t0
+
+statement ok
+drop table if exists t1
+
+statement ok
+CREATE TABLE t0(c0VARCHAR VARCHAR NOT NULL DEFAULT('EHFUF'))
+
+statement ok
+CREATE TABLE t1(c0BOOLEAN BOOL NOT NULL)
+
+statement ok
+INSERT INTO t0(c0varchar) VALUES (''), ('R6a')
+
+statement ok
+INSERT INTO t1(c0boolean) VALUES (true), (false)
+
+query IT rowsort
+SELECT t1.c0boolean, t0.c0varchar FROM t0 NATURAL LEFT JOIN t1 UNION SELECT t1.c0boolean, t0.c0varchar FROM t0 NATURAL LEFT JOIN t1 where t1.c0boolean
+----
+0 (empty)
+0 R6a
+1 (empty)
+1 R6a
+
+statement ok
+drop table t0
+
+statement ok
+drop table t1

@@ -110,6 +110,7 @@ impl FuseTable {
                     cluster_stats_gen.clone(),
                     block_compact_thresholds,
                     self.storage_format,
+                    self.table_compression,
                     Some(transform_output_port),
                 )
             })?;
@@ -124,6 +125,7 @@ impl FuseTable {
                     cluster_stats_gen.clone(),
                     block_compact_thresholds,
                     self.storage_format,
+                    self.table_compression,
                     None,
                 )
             })?;

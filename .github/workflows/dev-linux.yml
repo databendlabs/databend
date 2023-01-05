@@ -2,6 +2,8 @@ name: Dev Linux
 
 on:
   pull_request:
+    branches:
+      - main
     paths-ignore:
       - "docs/**"
       - "website/**"
@@ -133,6 +135,8 @@ jobs:
           - "query"
           - "ydb"
           - "standalone"
+          - "crdb"
+          - "duckdb"
         handlers:
           - "mysql"
           - "http"
@@ -143,22 +147,6 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
-
-  test_sqllogic_standalone_linux_other:
-    timeout-minutes: 30
-    name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
-    runs-on: [self-hosted, X64, Linux, development]
-    needs: build_gnu
-    strategy:
-      matrix:
-        dirs:
-          - "crdb"
-          - "duckdb"
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/test_sqllogic_standalone_linux
-        with:
-          dirs: ${{ matrix.dirs }}
 
   test_sqllogic_cluster_linux:
     timeout-minutes: 30
@@ -171,6 +159,9 @@ jobs:
           - "base"
           - "query"
           - "cluster"
+          - "ydb"
+          - "duckdb"
+          - "crdb"
         handlers:
           - "mysql"
           - "http"

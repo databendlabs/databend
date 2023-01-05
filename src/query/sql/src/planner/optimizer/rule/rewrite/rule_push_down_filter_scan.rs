@@ -19,9 +19,9 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
-use crate::plans::LogicalGet;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
+use crate::plans::Scan;
 
 pub struct RulePushDownFilterScan {
     id: RuleID,
@@ -42,7 +42,7 @@ impl RulePushDownFilterScan {
                 .into(),
                 SExpr::create_leaf(
                     PatternPlan {
-                        plan_type: RelOp::LogicalGet,
+                        plan_type: RelOp::Scan,
                     }
                     .into(),
                 ),
@@ -58,7 +58,7 @@ impl Rule for RulePushDownFilterScan {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut get: LogicalGet = s_expr.child(0)?.plan().clone().try_into()?;
+        let mut get: Scan = s_expr.child(0)?.plan().clone().try_into()?;
 
         if get.push_down_predicates.is_some() {
             return Ok(());

@@ -12,82 +12,167 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
-use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
-use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
-use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::Projection;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage::ColumnLeaf;
-use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Compression;
-use futures::StreamExt;
-use futures::TryStreamExt;
-use opendal::Object;
-use opendal::Operator;
-use tracing::debug_span;
-use tracing::Instrument;
 
 use crate::fuse_part::FusePartInfo;
+use crate::io::read::decompressor::BuffedBasicDecompressor;
+use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
+use crate::io::UncompressedBuffer;
+use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 
 impl BlockReader {
-    pub fn create(
-        operator: Operator,
-        schema: DataSchemaRef,
-        projection: Projection,
-    ) -> Result<Arc<BlockReader>> {
-        let projected_schema = match projection {
-            Projection::Columns(ref indices) => DataSchemaRef::new(schema.project(indices)),
-            Projection::InnerColumns(ref path_indices) => {
-                DataSchemaRef::new(schema.inner_project(path_indices))
+    /// Read a parquet file and convert to DataBlock.
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub async fn read_parquet_by_meta(
+        &self,
+        settings: &ReadSettings,
+        meta: &BlockMeta,
+    ) -> Result<DataBlock> {
+        //  Build columns meta.
+        let columns_meta = meta
+            .col_metas
+            .iter()
+            .map(|(index, meta)| (*index as usize, meta.clone()))
+            .collect::<HashMap<_, _>>();
+
+        // Get the merged IO read result.
+        let read_res = self
+            .read_columns_data_by_merge_io(settings, &meta.location.0, &columns_meta)
+            .await?;
+
+        // Get the columns chunk.
+        let chunks = read_res
+            .columns_chunks()?
+            .into_iter()
+            .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+            .collect::<Vec<_>>();
+
+        let num_rows = meta.row_count as usize;
+        let columns_chunk = chunks
+            .iter()
+            .map(|(index, chunk)| (*index, chunk.as_slice()))
+            .collect::<Vec<_>>();
+
+        self.deserialize_parquet_chunks_with_buffer(
+            num_rows,
+            &meta.compression,
+            &columns_meta,
+            columns_chunk,
+            None,
+        )
+    }
+
+    /// Deserialize column chunks data from parquet format to DataBlock.
+    pub fn deserialize_parquet_chunks(
+        &self,
+        part: PartInfoPtr,
+        chunks: Vec<(usize, Vec<u8>)>,
+    ) -> Result<DataBlock> {
+        let start = Instant::now();
+
+        let reads = chunks
+            .iter()
+            .map(|(index, chunk)| (*index, chunk.as_slice()))
+            .collect::<Vec<_>>();
+
+        let part = FusePartInfo::from_part(&part)?;
+        let deserialized_res = self.deserialize_parquet_chunks_with_buffer(
+            part.nums_rows,
+            &part.compression,
+            &part.columns_meta,
+            reads,
+            None,
+        );
+
+        // Perf.
+        {
+            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+        }
+
+        deserialized_res
+    }
+
+    /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
+    pub fn deserialize_parquet_chunks_with_buffer(
+        &self,
+        num_rows: usize,
+        compression: &Compression,
+        columns_meta: &HashMap<usize, ColumnMeta>,
+        columns_chunks: Vec<(usize, &[u8])>,
+        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
+    ) -> Result<DataBlock> {
+        let chunk_map: HashMap<usize, &[u8]> = columns_chunks.into_iter().collect();
+        let mut columns_array_iter = Vec::with_capacity(self.projection.len());
+
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+
+        for column in &columns {
+            let field = column.field.clone();
+            let indices = &column.leaf_ids;
+            let mut column_metas = Vec::with_capacity(indices.len());
+            let mut column_chunks = Vec::with_capacity(indices.len());
+            let mut column_descriptors = Vec::with_capacity(indices.len());
+            for index in indices {
+                let column_read = <&[u8]>::clone(&chunk_map[index]);
+                let column_meta = &columns_meta[index];
+                let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
+                column_metas.push(column_meta);
+                column_chunks.push(column_read);
+                column_descriptors.push(column_descriptor);
             }
-        };
 
-        let arrow_schema = schema.to_arrow();
-        let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
-        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
+            columns_array_iter.push(Self::chunks_to_parquet_array_iter(
+                column_metas,
+                column_chunks,
+                num_rows,
+                column_descriptors,
+                field,
+                compression,
+                uncompressed_buffer
+                    .clone()
+                    .unwrap_or_else(|| UncompressedBuffer::new(0)),
+            )?);
+        }
 
-        Ok(Arc::new(BlockReader {
-            operator,
-            projection,
-            projected_schema,
-            parquet_schema_descriptor,
-            column_leaves,
-        }))
+        let mut arrays = Vec::with_capacity(columns_array_iter.len());
+        for mut column_array_iter in columns_array_iter.into_iter() {
+            let array = column_array_iter.next().unwrap()?;
+            arrays.push(array);
+            drop(column_array_iter);
+        }
+
+        let chunk = Chunk::try_new(arrays)?;
+        DataBlock::from_chunk(&self.schema(), &chunk)
     }
 
-    pub fn schema(&self) -> DataSchemaRef {
-        self.projected_schema.clone()
-    }
-
-    fn to_array_iter(
+    fn chunks_to_parquet_array_iter<'a>(
         metas: Vec<&ColumnMeta>,
-        chunks: Vec<Vec<u8>>,
+        chunks: Vec<&'a [u8]>,
         rows: usize,
         column_descriptors: Vec<&ColumnDescriptor>,
         field: Field,
         compression: &Compression,
-    ) -> Result<ArrayIter<'static>> {
+        uncompressed_buffer: Arc<UncompressedBuffer>,
+    ) -> Result<ArrayIter<'a>> {
         let columns = metas
             .iter()
             .zip(chunks.into_iter().zip(column_descriptors.iter()))
@@ -99,13 +184,17 @@ impl BlockReader {
                     descriptor: column_descriptor.descriptor.clone(),
                 };
                 let pages = PageReader::new_with_page_meta(
-                    std::io::Cursor::new(chunk),
+                    chunk,
                     page_meta_data,
                     Arc::new(|_, _| true),
                     vec![],
                     usize::MAX,
                 );
-                Ok(BasicDecompressor::new(pages, vec![]))
+
+                Ok(BuffedBasicDecompressor::new(
+                    pages,
+                    uncompressed_buffer.clone(),
+                ))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -121,230 +210,6 @@ impl BlockReader {
             Some(rows),
             rows,
         )?)
-    }
-
-    // TODO refine these
-
-    #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<DataBlock> {
-        let (num_rows, columns_array_iter) = self.read_columns_with_block_meta(meta).await?;
-        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
-        self.try_next_block(&mut deserializer)
-    }
-    // TODO refine these
-
-    pub async fn read_columns_with_block_meta(
-        &self,
-        meta: &BlockMeta,
-    ) -> Result<(usize, Vec<ArrayIter<'static>>)> {
-        let num_rows = meta.row_count as usize;
-        let num_cols = self.projection.len();
-        let mut column_chunk_futs = Vec::with_capacity(num_cols);
-        let mut columns_meta: HashMap<usize, ColumnMeta> =
-            HashMap::with_capacity(meta.col_metas.len());
-
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-        for (index, _) in indices {
-            let column_meta = &meta.col_metas[&(index as u32)];
-            let column_reader = self.operator.object(&meta.location.0);
-            let fut = async move {
-                let column_chunk = column_reader
-                    .range_read(column_meta.offset..column_meta.offset + column_meta.len)
-                    .await?;
-                Ok::<_, ErrorCode>((index, column_chunk))
-            }
-            .instrument(debug_span!("read_col_chunk"));
-            column_chunk_futs.push(fut);
-
-            columns_meta.insert(
-                index,
-                ColumnMeta::new(column_meta.offset, column_meta.len, column_meta.num_values),
-            );
-        }
-
-        let num_cols = columns_meta.len();
-        let chunks = futures::stream::iter(column_chunk_futs)
-            .buffered(std::cmp::min(10, num_cols))
-            .try_collect::<Vec<_>>()
-            .await?;
-
-        let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
-        let mut cnt_map = Self::build_projection_count_map(&columns);
-        let mut columns_array_iter = Vec::with_capacity(num_cols);
-        for column in &columns {
-            let field = column.field.clone();
-            let indices = &column.leaf_ids;
-            let mut column_metas = Vec::with_capacity(indices.len());
-            let mut column_chunks = Vec::with_capacity(indices.len());
-            let mut column_descriptors = Vec::with_capacity(indices.len());
-            for index in indices {
-                let column_meta = &columns_meta[index];
-                let cnt = cnt_map.get_mut(index).unwrap();
-                *cnt -= 1;
-                let column_chunk = if cnt > &mut 0 {
-                    chunk_map.get(index).unwrap().clone()
-                } else {
-                    chunk_map.remove(index).unwrap()
-                };
-                let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
-                column_metas.push(column_meta);
-                column_chunks.push(column_chunk);
-                column_descriptors.push(column_descriptor);
-            }
-            columns_array_iter.push(Self::to_array_iter(
-                column_metas,
-                column_chunks,
-                num_rows,
-                column_descriptors,
-                field,
-                &meta.compression(),
-            )?);
-        }
-
-        Ok((num_rows, columns_array_iter))
-    }
-
-    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
-        let mut results = Vec::with_capacity(chunks.len());
-        let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        for column in &columns {
-            let indices = &column.leaf_ids;
-
-            for index in indices {
-                if let Some(array) = chunk_map.remove(index) {
-                    results.push(array);
-                    break;
-                }
-            }
-        }
-        let chunk = Chunk::new(results);
-        DataBlock::from_chunk(&self.schema(), &chunk)
-    }
-
-    pub fn deserialize(
-        &self,
-        part: PartInfoPtr,
-        chunks: Vec<(usize, Vec<u8>)>,
-    ) -> Result<DataBlock> {
-        let part = FusePartInfo::from_part(&part)?;
-        let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
-        let mut columns_array_iter = Vec::with_capacity(self.projection.len());
-
-        let num_rows = part.nums_rows;
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let mut cnt_map = Self::build_projection_count_map(&columns);
-        for column in &columns {
-            let field = column.field.clone();
-            let indices = &column.leaf_ids;
-            let mut column_metas = Vec::with_capacity(indices.len());
-            let mut column_chunks = Vec::with_capacity(indices.len());
-            let mut column_descriptors = Vec::with_capacity(indices.len());
-            for index in indices {
-                let column_meta = &part.columns_meta[index];
-                let cnt = cnt_map.get_mut(index).unwrap();
-                *cnt -= 1;
-                let column_chunk = if cnt > &mut 0 {
-                    chunk_map.get(index).unwrap().clone()
-                } else {
-                    chunk_map.remove(index).unwrap()
-                };
-                let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
-                column_metas.push(column_meta);
-                column_chunks.push(column_chunk);
-                column_descriptors.push(column_descriptor);
-            }
-            columns_array_iter.push(Self::to_array_iter(
-                column_metas,
-                column_chunks,
-                num_rows,
-                column_descriptors,
-                field,
-                &part.compression,
-            )?);
-        }
-
-        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
-
-        self.try_next_block(&mut deserializer)
-    }
-
-    pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
-        let part = FusePartInfo::from_part(&part)?;
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-        let mut join_handlers = Vec::with_capacity(indices.len());
-
-        for (index, _) in indices {
-            let column_meta = &part.columns_meta[&index];
-            join_handlers.push(UnlimitedFuture::create(Self::read_column(
-                self.operator.object(&part.location),
-                index,
-                column_meta.offset,
-                column_meta.len,
-            )));
-        }
-
-        futures::future::try_join_all(join_handlers).await
-    }
-
-    pub fn support_blocking_api(&self) -> bool {
-        self.operator.metadata().can_blocking()
-    }
-
-    pub fn sync_read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
-        let part = FusePartInfo::from_part(&part)?;
-
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-        let mut results = Vec::with_capacity(indices.len());
-
-        for (index, _) in indices {
-            let column_meta = &part.columns_meta[&index];
-
-            let op = self.operator.clone();
-
-            let location = part.location.clone();
-            let offset = column_meta.offset;
-            let length = column_meta.len;
-
-            let result = Self::sync_read_column(op.object(&location), index, offset, length);
-            results.push(result?);
-        }
-
-        Ok(results)
-    }
-
-    pub async fn read_column(
-        o: Object,
-        index: usize,
-        offset: u64,
-        length: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.range_read(offset..offset + length).await?;
-
-        Ok((index, chunk))
-    }
-
-    pub fn sync_read_column(
-        o: Object,
-        index: usize,
-        offset: u64,
-        length: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.blocking_range_read(offset..offset + length)?;
-        Ok((index, chunk))
-    }
-
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
-        match deserializer.next() {
-            None => Err(ErrorCode::Internal(
-                "deserializer from row group: fail to get a chunk",
-            )),
-            Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
-        }
     }
 
     fn to_parquet_compression(meta_compression: &Compression) -> Result<ParquetCompression> {
@@ -372,33 +237,7 @@ impl BlockReader {
             Compression::Snappy => Ok(ParquetCompression::Snappy),
             Compression::Zstd => Ok(ParquetCompression::Zstd),
             Compression::Gzip => Ok(ParquetCompression::Gzip),
+            Compression::None => Ok(ParquetCompression::Uncompressed),
         }
-    }
-
-    // Build non duplicate leaf_ids to avoid repeated read column from parquet
-    pub(crate) fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashMap<usize, Field> {
-        let mut indices = HashMap::with_capacity(columns.len());
-        for column in columns {
-            for index in &column.leaf_ids {
-                indices.insert(*index, column.field.clone());
-            }
-        }
-        indices
-    }
-
-    // Build a map to record the count number of each leaf_id
-    fn build_projection_count_map(columns: &Vec<&ColumnLeaf>) -> HashMap<usize, usize> {
-        let mut cnt_map = HashMap::with_capacity(columns.len());
-        for column in columns {
-            for index in &column.leaf_ids {
-                if let Entry::Vacant(e) = cnt_map.entry(*index) {
-                    e.insert(1);
-                } else {
-                    let cnt = cnt_map.get_mut(index).unwrap();
-                    *cnt += 1;
-                }
-            }
-        }
-        cnt_map
     }
 }

@@ -19,9 +19,9 @@ use super::Cost;
 use super::CostModel;
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
-use crate::plans::PhysicalHashJoin;
-use crate::plans::PhysicalScan;
+use crate::plans::Join;
 use crate::plans::RelOperator;
+use crate::plans::Scan;
 
 static COST_FACTOR_COMPUTE_PER_ROW: f64 = 1.0;
 static COST_FACTOR_HASH_TABLE_PER_ROW: f64 = 10.0;
@@ -37,9 +37,9 @@ impl CostModel for DefaultCostModel {
 
 fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     match &m_expr.plan {
-        RelOperator::PhysicalScan(plan) => compute_cost_physical_scan(memo, m_expr, plan),
+        RelOperator::Scan(plan) => compute_cost_scan(memo, m_expr, plan),
         RelOperator::DummyTableScan(_) => Ok(Cost(0.0)),
-        RelOperator::PhysicalHashJoin(plan) => compute_cost_hash_join(memo, m_expr, plan),
+        RelOperator::Join(plan) => compute_cost_join(memo, m_expr, plan),
         RelOperator::UnionAll(_) => compute_cost_union_all(memo, m_expr),
 
         RelOperator::EvalScalar(_)
@@ -52,7 +52,7 @@ fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     }
 }
 
-fn compute_cost_physical_scan(memo: &Memo, m_expr: &MExpr, _plan: &PhysicalScan) -> Result<Cost> {
+fn compute_cost_scan(memo: &Memo, m_expr: &MExpr, _plan: &Scan) -> Result<Cost> {
     // Since we don't have alternations(e.g. index scan) for table scan for now, we just ignore
     // the I/O cost and treat `PhysicalScan` as normal computation.
     let group = memo.group(m_expr.group_index)?;
@@ -61,7 +61,7 @@ fn compute_cost_physical_scan(memo: &Memo, m_expr: &MExpr, _plan: &PhysicalScan)
     Ok(Cost(cost))
 }
 
-fn compute_cost_hash_join(memo: &Memo, m_expr: &MExpr, _plan: &PhysicalHashJoin) -> Result<Cost> {
+fn compute_cost_join(memo: &Memo, m_expr: &MExpr, _plan: &Join) -> Result<Cost> {
     let build_group = m_expr.child_group(memo, 1)?;
     let probe_group = m_expr.child_group(memo, 0)?;
     let build_card = build_group.relational_prop.cardinality;

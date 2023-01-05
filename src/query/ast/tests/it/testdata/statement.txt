@@ -691,10 +691,78 @@ CreateTable(
                 protocol: "s3",
                 name: "testbucket",
                 path: "/admin/data/",
-                connection: {
-                    "aws_key_id": "minioadmin",
-                    "aws_secret_key": "minioadmin",
-                    "endpoint_url": "http://127.0.0.1:9900",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "minioadmin",
+                        "aws_secret_key": "minioadmin",
+                        "endpoint_url": "http://127.0.0.1:9900",
+                    },
+                },
+            },
+        ),
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a int) 's3://testbucket/admin/data/'
+             connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
+             location_prefix = 'db';
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a Int32 NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Ident(27..28),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Ident(29..30),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Ident(32..33),
+                        },
+                        data_type: Int32,
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: Some(
+            UriLocation {
+                protocol: "s3",
+                name: "testbucket",
+                path: "/admin/data/",
+                part_prefix: "db",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "minioadmin",
+                        "aws_secret_key": "minioadmin",
+                        "endpoint_url": "http://127.0.0.1:9900",
+                    },
                 },
             },
         ),
@@ -5681,9 +5749,13 @@ CreateStage(
                 protocol: "s3",
                 name: "load",
                 path: "/files/",
-                connection: {
-                    "aws_key_id": "1a2b3c",
-                    "aws_secret_key": "4x5y6z",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "1a2b3c",
+                        "aws_secret_key": "4x5y6z",
+                    },
                 },
             },
         ),
@@ -6728,7 +6800,11 @@ Copy(
                 protocol: "s3",
                 name: "mybucket",
                 path: "/data.csv",
-                connection: {},
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
             },
         ),
         dst: Table {
@@ -6784,8 +6860,12 @@ Copy(
                 protocol: "s3",
                 name: "mybucket",
                 path: "/data.csv",
-                connection: {
-                    "endpoint_url": "http://127.0.0.1:9900",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "endpoint_url": "http://127.0.0.1:9900",
+                    },
                 },
             },
         ),
@@ -6842,8 +6922,12 @@ Copy(
                 protocol: "s3",
                 name: "mybucket",
                 path: "/data.csv",
-                connection: {
-                    "endpoint_url": "http://127.0.0.1:9900",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "endpoint_url": "http://127.0.0.1:9900",
+                    },
                 },
             },
         ),
@@ -6889,7 +6973,11 @@ Copy(
                 protocol: "https",
                 name: "127.0.0.1:9900",
                 path: "/",
-                connection: {},
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
             },
         ),
         dst: Table {
@@ -6929,7 +7017,11 @@ Copy(
                 protocol: "https",
                 name: "127.0.0.1",
                 path: "/",
-                connection: {},
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
             },
         ),
         dst: Table {
@@ -7037,7 +7129,11 @@ Copy(
                 protocol: "s3",
                 name: "mybucket",
                 path: "/data.csv",
-                connection: {},
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
             },
         ),
         files: [],
@@ -7139,10 +7235,14 @@ Copy(
                 protocol: "s3",
                 name: "mybucket",
                 path: "/data.csv",
-                connection: {
-                    "aws_key_id": "access_key",
-                    "aws_secret_key": "secret_key",
-                    "master_key": "master_key",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "access_key",
+                        "aws_secret_key": "secret_key",
+                        "master_key": "master_key",
+                    },
                 },
             },
         ),
@@ -7349,7 +7449,11 @@ Copy(
                 protocol: "fs",
                 name: "",
                 path: "/path/to/data.csv",
-                connection: {},
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
             },
         ),
         dst: Table {

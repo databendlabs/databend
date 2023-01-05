@@ -26,39 +26,47 @@ query T
 explain select * from t where a > b
 ----
 UnionAll
-├── TableScan
-│   ├── table: default.default.t1
-│   ├── read rows: 0
-│   ├── read bytes: 0
-│   ├── partitions total: 1
-│   ├── partitions scanned: 0
-│   └── push downs: [filters: [(a > b)], limit: NONE]
-└── TableScan
-    ├── table: default.default.t2
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 1
-    ├── partitions scanned: 0
-    └── push downs: [filters: [(a > b)], limit: NONE]
+├── Filter
+│   ├── filters: [>(t.a (#0), t.b (#1))]
+│   └── TableScan
+│       ├── table: default.default.t1
+│       ├── read rows: 0
+│       ├── read bytes: 0
+│       ├── partitions total: 1
+│       ├── partitions scanned: 0
+│       └── push downs: [filters: [(a > b)], limit: NONE]
+└── Filter
+    ├── filters: [>( (#2),  (#3))]
+    └── TableScan
+        ├── table: default.default.t2
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 1
+        ├── partitions scanned: 0
+        └── push downs: [filters: [(a > b)], limit: NONE]
 
 query T
 explain select * from t where a > 1
 ----
 UnionAll
-├── TableScan
-│   ├── table: default.default.t1
-│   ├── read rows: 2
-│   ├── read bytes: 62
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   └── push downs: [filters: [(a > 1)], limit: NONE]
-└── TableScan
-    ├── table: default.default.t2
-    ├── read rows: 2
-    ├── read bytes: 62
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    └── push downs: [filters: [(a > 1)], limit: NONE]
+├── Filter
+│   ├── filters: [>(t.a (#0), 1)]
+│   └── TableScan
+│       ├── table: default.default.t1
+│       ├── read rows: 2
+│       ├── read bytes: 62
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       └── push downs: [filters: [(a > 1)], limit: NONE]
+└── Filter
+    ├── filters: [>( (#2), 1)]
+    └── TableScan
+        ├── table: default.default.t2
+        ├── read rows: 2
+        ├── read bytes: 62
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [(a > 1)], limit: NONE]
 
 query T
 explain select * from t limit 3

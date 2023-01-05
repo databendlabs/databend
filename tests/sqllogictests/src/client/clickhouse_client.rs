@@ -43,6 +43,7 @@ impl ClickhouseHttpClient {
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
+        println!("Running sql with clickhouse client: [{}]", sql);
         // Client will save the following info: use database, settings (session level info)
         // Then send them to server, so even though the session changes, database and settings context is correct
         if let Some(captures) = USE_SQL_RE.captures(sql) {
@@ -62,7 +63,7 @@ impl ClickhouseHttpClient {
         }
 
         let mut query = HashMap::new();
-        query.insert("query", sql);
+        query.insert("query", sql.trim_end_matches(|p| p == ';'));
         query.insert("database", self.database.as_str());
         if !self.settings.is_empty() {
             query.extend(

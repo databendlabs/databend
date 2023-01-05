@@ -24,7 +24,6 @@ use opendal::Operator;
 
 use super::compact_part::CompactPartInfo;
 use crate::io::SegmentsIO;
-use crate::metrics::metrics_set_segments_memory_usage;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::TableContext;
@@ -75,9 +74,6 @@ impl BlockCompactMutator {
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
-
-        // todo: add real metrics
-        metrics_set_segments_memory_usage(0.0);
 
         let number_segments = segments.len();
         let limit = self.compact_params.limit.unwrap_or(number_segments);

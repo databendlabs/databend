@@ -21,15 +21,7 @@ use common_exception::Result;
 use databend_query::api::HttpService;
 use databend_query::servers::Server;
 
-use crate::tests::tls_constants::TEST_CA_CERT;
-use crate::tests::tls_constants::TEST_CN_NAME;
-use crate::tests::tls_constants::TEST_SERVER_CERT;
-use crate::tests::tls_constants::TEST_SERVER_KEY;
-use crate::tests::tls_constants::TEST_TLS_CA_CERT;
-use crate::tests::tls_constants::TEST_TLS_CLIENT_IDENTITY;
-use crate::tests::tls_constants::TEST_TLS_CLIENT_PASSWORD;
-use crate::tests::tls_constants::TEST_TLS_SERVER_CERT;
-use crate::tests::tls_constants::TEST_TLS_SERVER_KEY;
+use crate::tests::tls_constants::*;
 use crate::tests::ConfigBuilder;
 
 // need to support local_addr, but axum_server do not have local_addr callback
@@ -107,8 +99,9 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 
     // get identity
     let mut buf = Vec::new();
-    File::open(TEST_TLS_CLIENT_IDENTITY)?.read_to_end(&mut buf)?;
-    let pkcs12 = reqwest::Identity::from_pkcs12_der(&buf, TEST_TLS_CLIENT_PASSWORD).unwrap();
+    File::open(TEST_TLS_CLIENT_KEY)?.read_to_end(&mut buf)?;
+    File::open(TEST_TLS_CLIENT_CERT)?.read_to_end(&mut buf)?;
+    let pkcs12 = reqwest::Identity::from_pem(&buf).unwrap();
     let mut buf = Vec::new();
     File::open(TEST_TLS_CA_CERT)?.read_to_end(&mut buf)?;
     let cert = reqwest::Certificate::from_pem(&buf).unwrap();

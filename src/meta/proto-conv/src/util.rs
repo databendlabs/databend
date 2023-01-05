@@ -75,6 +75,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         "2022-11-24: Add: users.proto/FileFormatOptions::nan_display",
     ),
     (22, "2022-12-13: Add: users.proto/FileFormatOptions::quote"),
+    (23, "2022-12-28: Add: table.proto/TableMeta::part_prefix"),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;

@@ -12,9 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::plans::LogicalOperator;
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
+
+use crate::optimizer::PhysicalProperty;
+use crate::optimizer::RelExpr;
+use crate::optimizer::RelationalProperty;
+use crate::optimizer::RequiredProperty;
 use crate::plans::Operator;
-use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -27,23 +34,35 @@ impl Operator for PatternPlan {
         self.plan_type.clone()
     }
 
-    fn is_physical(&self) -> bool {
-        false
-    }
-
-    fn is_logical(&self) -> bool {
-        false
-    }
-
     fn is_pattern(&self) -> bool {
         true
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        None
+    fn derive_relational_prop(
+        &self,
+        _rel_expr: &RelExpr,
+    ) -> common_exception::Result<RelationalProperty> {
+        Err(ErrorCode::Internal(
+            "Cannot derive relational property for pattern plan",
+        ))
     }
 
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        None
+    fn derive_physical_prop(
+        &self,
+        _rel_expr: &RelExpr,
+    ) -> common_exception::Result<PhysicalProperty> {
+        Err(ErrorCode::Internal(
+            "Cannot derive physical property for pattern plan",
+        ))
+    }
+
+    fn compute_required_prop_child(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _child_index: usize,
+        _required: &RequiredProperty,
+    ) -> common_exception::Result<RequiredProperty> {
+        unreachable!()
     }
 }

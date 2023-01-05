@@ -23,7 +23,7 @@ use common_config::Config;
 use common_config::GlobalConfig;
 use common_sql::planner::binder::parse_uri_location;
 use common_storage::StorageFsConfig;
-use common_storage::StorageFtpConfig;
+// use common_storage::StorageFtpConfig;
 use common_storage::StorageGcsConfig;
 use common_storage::StorageHttpConfig;
 use common_storage::StorageIpfsConfig;
@@ -47,15 +47,16 @@ fn test_parse_uri_location() -> Result<()> {
     let cases = vec![
         (
             "secure scheme by default",
-            UriLocation {
-                protocol: "ipfs".to_string(),
-                name: "too-naive".to_string(),
-                path: "/".to_string(),
-                connection: vec![("endpoint_url", "ipfs.filebase.io")]
+            UriLocation::new(
+                "ipfs".to_string(),
+                "too-naive".to_string(),
+                "/".to_string(),
+                "".to_string(),
+                vec![("endpoint_url", "ipfs.filebase.io")]
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect(),
-            },
+                    .collect::<BTreeMap<String, String>>(),
+            ),
             (
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: "https://ipfs.filebase.io".to_string(),
@@ -66,11 +67,12 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "oss location",
-            UriLocation {
-                protocol: "oss".to_string(),
-                name: "zhen".to_string(),
-                path: "/highest/".to_string(),
-                connection: vec![
+            UriLocation::new(
+                "oss".to_string(),
+                "zhen".to_string(),
+                "/highest/".to_string(),
+                "".to_string(),
+                vec![
                     ("endpoint_url", "https://oss-cn-litang.example.com"),
                     ("access_key_id", "dzin"),
                     ("access_key_secret", "p=ear1"),
@@ -78,7 +80,7 @@ fn test_parse_uri_location() -> Result<()> {
                 .into_iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect::<BTreeMap<String, String>>(),
-            },
+            ),
             (
                 StorageParams::Oss(StorageOssConfig {
                     endpoint_url: "https://oss-cn-litang.example.com".to_string(),
@@ -90,35 +92,36 @@ fn test_parse_uri_location() -> Result<()> {
                 "/".to_string(),
             ),
         ),
-        (
-            "ftps location",
-            UriLocation {
-                protocol: "ftps".to_string(),
-                name: "too-simple:1926".to_string(),
-                path: "/".to_string(),
-                connection: vec![("username", "user"), ("password", "pwd")]
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<String, String>>(),
-            },
-            (
-                StorageParams::Ftp(StorageFtpConfig {
-                    endpoint: "ftps://too-simple:1926".to_string(),
-                    root: "/".to_string(),
-                    username: "user".to_string(),
-                    password: "pwd".to_string(),
-                }),
-                "/".to_string(),
-            ),
-        ),
+        // (
+        //     "ftps location",
+        //     UriLocation {
+        //         protocol: "ftps".to_string(),
+        //         name: "too-simple:1926".to_string(),
+        //         path: "/".to_string(),
+        //         connection: vec![("username", "user"), ("password", "pwd")]
+        //             .into_iter()
+        //             .map(|(k, v)| (k.to_string(), v.to_string()))
+        //             .collect::<BTreeMap<String, String>>(),
+        //     },
+        //     (
+        //         StorageParams::Ftp(StorageFtpConfig {
+        //             endpoint: "ftps://too-simple:1926".to_string(),
+        //             root: "/".to_string(),
+        //             username: "user".to_string(),
+        //             password: "pwd".to_string(),
+        //         }),
+        //         "/".to_string(),
+        //     ),
+        // ),
         (
             "ipfs-default-endpoint",
-            UriLocation {
-                protocol: "ipfs".to_string(),
-                name: "too-simple".to_string(),
-                path: "/".to_string(),
-                connection: BTreeMap::new(),
-            },
+            UriLocation::new(
+                "ipfs".to_string(),
+                "too-simple".to_string(),
+                "/".to_string(),
+                "".to_string(),
+                BTreeMap::new(),
+            ),
             (
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
@@ -129,15 +132,16 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "ipfs-change-endpoint",
-            UriLocation {
-                protocol: "ipfs".to_string(),
-                name: "too-naive".to_string(),
-                path: "/".to_string(),
-                connection: vec![("endpoint_url", "https://ipfs.filebase.io")]
+            UriLocation::new(
+                "ipfs".to_string(),
+                "too-naive".to_string(),
+                "/".to_string(),
+                "".to_string(),
+                vec![("endpoint_url", "https://ipfs.filebase.io")]
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect(),
-            },
+                    .collect::<BTreeMap<String, String>>(),
+            ),
             (
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: "https://ipfs.filebase.io".to_string(),
@@ -148,19 +152,20 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "s3_with_access_key_id",
-            UriLocation {
-                protocol: "s3".to_string(),
-                name: "test".to_string(),
-                path: "/tmp/".to_string(),
-                connection: vec![
+            UriLocation::new(
+                "s3".to_string(),
+                "test".to_string(),
+                "/tmp/".to_string(),
+                "".to_string(),
+                vec![
                     ("access_key_id", "access_key_id"),
                     ("secret_access_key", "secret_access_key"),
                     ("session_token", "session_token"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-            },
+                .collect::<BTreeMap<String, String>>(),
+            ),
             (
                 StorageParams::S3(StorageS3Config {
                     endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
@@ -181,19 +186,20 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "s3_with_aws_key_id",
-            UriLocation {
-                protocol: "s3".to_string(),
-                name: "test".to_string(),
-                path: "/tmp/".to_string(),
-                connection: vec![
+            UriLocation::new(
+                "s3".to_string(),
+                "test".to_string(),
+                "/tmp/".to_string(),
+                "".to_string(),
+                vec![
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
                     ("session_token", "security_token"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-            },
+                .collect::<BTreeMap<String, String>>(),
+            ),
             (
                 StorageParams::S3(StorageS3Config {
                     endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
@@ -214,19 +220,20 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "s3_with_aws_token",
-            UriLocation {
-                protocol: "s3".to_string(),
-                name: "test".to_string(),
-                path: "/tmp/".to_string(),
-                connection: vec![
+            UriLocation::new(
+                "s3".to_string(),
+                "test".to_string(),
+                "/tmp/".to_string(),
+                "".to_string(),
+                vec![
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
                     ("aws_token", "security_token"),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-            },
+                .collect::<BTreeMap<String, String>>(),
+            ),
             (
                 StorageParams::S3(StorageS3Config {
                     endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
@@ -247,15 +254,16 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "s3_with_role_arn",
-            UriLocation {
-                protocol: "s3".to_string(),
-                name: "test".to_string(),
-                path: "/tmp/".to_string(),
-                connection: vec![("role_arn", "aws::iam::xxxx")]
+            UriLocation::new(
+                "s3".to_string(),
+                "test".to_string(),
+                "/tmp/".to_string(),
+                "".to_string(),
+                vec![("role_arn", "aws::iam::xxxx")]
                     .iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect(),
-            },
+                    .collect::<BTreeMap<String, String>>(),
+            ),
             (
                 StorageParams::S3(StorageS3Config {
                     endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
@@ -276,12 +284,13 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "fs",
-            UriLocation {
-                protocol: "fs".to_string(),
-                name: "".to_string(),
-                path: "/tmp/".to_string(),
-                connection: BTreeMap::default(),
-            },
+            UriLocation::new(
+                "fs".to_string(),
+                "".to_string(),
+                "/tmp/".to_string(),
+                "".to_string(),
+                BTreeMap::default(),
+            ),
             (
                 StorageParams::Fs(StorageFsConfig {
                     root: "/tmp/".to_string(),
@@ -291,15 +300,16 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "gcs_with_credential",
-            UriLocation {
-                protocol: "gcs".to_string(),
-                name: "example".to_string(),
-                path: "/tmp/".to_string(),
-                connection: vec![("credential", "gcs.credential")]
+            UriLocation::new(
+                "gcs".to_string(),
+                "example".to_string(),
+                "/tmp/".to_string(),
+                "".to_string(),
+                vec![("credential", "gcs.credential")]
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect(),
-            },
+                    .collect::<BTreeMap<String, String>>(),
+            ),
             (
                 StorageParams::Gcs(StorageGcsConfig {
                     endpoint_url: STORAGE_GCS_DEFAULT_ENDPOINT.to_string(),
@@ -312,12 +322,13 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "http_without_glob",
-            UriLocation {
-                protocol: "https".to_string(),
-                name: "example.com".to_string(),
-                path: "/tmp.csv".to_string(),
-                connection: BTreeMap::default(),
-            },
+            UriLocation::new(
+                "https".to_string(),
+                "example.com".to_string(),
+                "/tmp.csv".to_string(),
+                "".to_string(),
+                BTreeMap::default(),
+            ),
             (
                 StorageParams::Http(StorageHttpConfig {
                     endpoint_url: "https://example.com".to_string(),
@@ -328,12 +339,13 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "http_with_set_glob",
-            UriLocation {
-                protocol: "https".to_string(),
-                name: "example.com".to_string(),
-                path: "/tmp-{a,b,c}.csv".to_string(),
-                connection: BTreeMap::default(),
-            },
+            UriLocation::new(
+                "https".to_string(),
+                "example.com".to_string(),
+                "/tmp-{a,b,c}.csv".to_string(),
+                "".to_string(),
+                BTreeMap::default(),
+            ),
             (
                 StorageParams::Http(StorageHttpConfig {
                     endpoint_url: "https://example.com".to_string(),
@@ -347,12 +359,13 @@ fn test_parse_uri_location() -> Result<()> {
         ),
         (
             "http_with_range_glob",
-            UriLocation {
-                protocol: "https".to_string(),
-                name: "example.com".to_string(),
-                path: "/tmp-[11-15].csv".to_string(),
-                connection: BTreeMap::default(),
-            },
+            UriLocation::new(
+                "https".to_string(),
+                "example.com".to_string(),
+                "/tmp-[11-15].csv".to_string(),
+                "".to_string(),
+                BTreeMap::default(),
+            ),
             (
                 StorageParams::Http(StorageHttpConfig {
                     endpoint_url: "https://example.com".to_string(),
@@ -372,8 +385,8 @@ fn test_parse_uri_location() -> Result<()> {
         ),
     ];
 
-    for (name, input, expected) in cases {
-        let actual = parse_uri_location(&input)?;
+    for (name, mut input, expected) in cases {
+        let actual = parse_uri_location(&mut input)?;
         assert_eq!(expected, actual, "{}", name);
     }
 

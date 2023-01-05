@@ -27,25 +27,28 @@ TableScan
 query T
 explain select * from t_nullable_prune where a is not null
 ----
-TableScan
-├── table: default.default.t_nullable_prune
-├── read rows: 3
-├── read bytes: 37
-├── partitions total: 2
-├── partitions scanned: 1
-└── push downs: [filters: [is_not_null(a)], limit: NONE]
+Filter
+├── filters: [is_not_null(t_nullable_prune.a (#0))]
+└── TableScan
+    ├── table: default.default.t_nullable_prune
+    ├── read rows: 3
+    ├── read bytes: 37
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    └── push downs: [filters: [is_not_null(a)], limit: NONE]
 
 query T
 explain select * from t_nullable_prune where a is null
 ----
-TableScan
-├── table: default.default.t_nullable_prune
-├── read rows: 3
-├── read bytes: 25
-├── partitions total: 2
-├── partitions scanned: 1
-└── push downs: [filters: [not(is_not_null(a))], limit: NONE]
+Filter
+├── filters: [not(is_not_null(t_nullable_prune.a (#0)))]
+└── TableScan
+    ├── table: default.default.t_nullable_prune
+    ├── read rows: 3
+    ├── read bytes: 25
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    └── push downs: [filters: [not(is_not_null(a))], limit: NONE]
 
 statement ok
 DROP TABLE default.default.t_nullable_prune
-

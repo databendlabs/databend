@@ -423,10 +423,8 @@ struct Server {
 
 impl Server {
     pub async fn new(config: &Config) -> Result<Self> {
-        let session_middleware = HTTPSessionMiddleware::create(
-            HttpHandlerKind::Clickhouse,
-            AuthMgr::create(config).await?,
-        );
+        let session_middleware =
+            HTTPSessionMiddleware::create(HttpHandlerKind::Clickhouse, AuthMgr::create(config)?);
         let endpoint = Route::new()
             .nest("/", clickhouse_router())
             .with(session_middleware);

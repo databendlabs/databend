@@ -55,10 +55,12 @@ use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::TableSnapshotStatistics;
 use common_storages_table_meta::meta::Versioned;
 use common_storages_table_meta::table::table_storage_prefix;
+use common_storages_table_meta::table::TableCompression;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use common_storages_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use common_storages_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use opendal::layers::CacheLayer;
 use opendal::Operator;
 use uuid::Uuid;
@@ -66,7 +68,6 @@ use uuid::Uuid;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
-use crate::operations::ReadDataKind;
 use crate::pipelines::Pipeline;
 use crate::NavigationPoint;
 use crate::Table;
@@ -84,6 +85,7 @@ pub struct FuseTable {
 
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) storage_format: FuseStorageFormat,
+    pub(crate) table_compression: TableCompression,
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
@@ -129,13 +131,25 @@ impl FuseTable {
             .cloned()
             .unwrap_or_default();
 
+        let table_compression = table_info
+            .options()
+            .get(OPT_KEY_TABLE_COMPRESSION)
+            .cloned()
+            .unwrap_or_default();
+
+        let part_prefix = table_info.meta.part_prefix.clone();
+
+        let meta_location_generator =
+            TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
+
         Ok(Box::new(FuseTable {
             table_info,
-            meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
+            meta_location_generator,
             cluster_key_meta,
             operator,
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
+            table_compression: table_compression.as_str().try_into()?,
         }))
     }
 
@@ -286,10 +300,6 @@ impl Table for FuseTable {
         vec![]
     }
 
-    fn support_prewhere(&self) -> bool {
-        true
-    }
-
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -403,7 +413,7 @@ impl Table for FuseTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_read_data(ctx, plan, pipeline, ReadDataKind::BlockDataAdjustIORequests)
+        self.do_read_data(ctx, plan, pipeline)
     }
 
     fn append_data(

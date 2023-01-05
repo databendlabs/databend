@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod local;
+
 use std::env;
 
 use common_base::runtime::Runtime;
@@ -55,7 +57,7 @@ fn main() {
 async fn main_entrypoint() -> Result<()> {
     let conf: Config = Config::load()?;
 
-    if run_cmd(&conf) {
+    if run_cmd(&conf).await? {
         return Ok(());
     }
 
@@ -217,8 +219,8 @@ async fn main_entrypoint() -> Result<()> {
             format!("connected to endpoints {:#?}", conf.meta.endpoints)
         }
     );
-    println!(
-        "Memory: {}",
+    println!("Memory:");
+    println!("    limit: {}", {
         if conf.query.max_memory_limit_enabled {
             format!(
                 "Memory: server memory limit to {} (bytes)",
@@ -227,7 +229,13 @@ async fn main_entrypoint() -> Result<()> {
         } else {
             "unlimited".to_string()
         }
-    );
+    });
+    println!("    allocator config: {}", {
+        use tikv_jemalloc_ctl::config;
+        config::malloc_conf::mib()
+            .and_then(|mib| mib.read().map(|v| v.to_owned()))
+            .unwrap_or_else(|e| format!("N/A: failed to read jemalloc config, {}", e))
+    });
     println!("Cluster: {}", {
         let cluster = ClusterDiscovery::instance().discover(&conf).await?;
         let nodes = cluster.nodes.len();
@@ -298,15 +306,19 @@ async fn main_entrypoint() -> Result<()> {
     Ok(())
 }
 
-fn run_cmd(conf: &Config) -> bool {
+async fn run_cmd(conf: &Config) -> Result<bool> {
     if conf.cmd.is_empty() {
-        return false;
+        return Ok(false);
     }
 
     match conf.cmd.as_str() {
         "ver" => {
             println!("version: {}", *QUERY_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
+        }
+        "local" => {
+            println!("exec local query: {}", conf.local.sql);
+            local::query_local(conf).await?
         }
         _ => {
             eprintln!("Invalid cmd: {}", conf.cmd);
@@ -316,7 +328,7 @@ fn run_cmd(conf: &Config) -> bool {
         }
     }
 
-    true
+    Ok(true)
 }
 
 #[cfg(not(target_os = "macos"))]

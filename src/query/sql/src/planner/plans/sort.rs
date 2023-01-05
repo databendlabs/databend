@@ -17,15 +17,12 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
-use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::plans::LogicalOperator;
 use crate::plans::Operator;
-use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::IndexType;
 
@@ -47,24 +44,6 @@ impl Operator for Sort {
         RelOp::Sort
     }
 
-    fn is_physical(&self) -> bool {
-        true
-    }
-
-    fn is_logical(&self) -> bool {
-        true
-    }
-
-    fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
-        Some(self)
-    }
-
-    fn as_logical(&self) -> Option<&dyn LogicalOperator> {
-        Some(self)
-    }
-}
-
-impl PhysicalOperator for Sort {
     fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
@@ -80,18 +59,8 @@ impl PhysicalOperator for Sort {
         required.distribution = Distribution::Serial;
         Ok(required)
     }
-}
 
-impl LogicalOperator for Sort {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         rel_expr.derive_relational_prop_child(0)
-    }
-
-    fn used_columns<'a>(&self) -> Result<ColumnSet> {
-        let mut used_columns = ColumnSet::new();
-        for item in &self.items {
-            used_columns.insert(item.index);
-        }
-        Ok(used_columns)
     }
 }

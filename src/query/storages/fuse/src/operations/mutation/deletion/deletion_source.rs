@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_to_parquet;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
 use common_datavalues::ColumnRef;
@@ -27,15 +26,19 @@ use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::evaluator::EvalNode;
+use common_storages_common::blocks_to_parquet;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
+use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
 
 use super::deletion_meta::Deletion;
 use super::deletion_meta::DeletionSourceMeta;
 use super::deletion_part::DeletionPartInfo;
+use crate::fuse_part::FusePartInfo;
 use crate::io::write_data;
 use crate::io::BlockReader;
+use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
@@ -93,6 +96,7 @@ pub struct DeletionSource {
     index: BlockIndex,
     cluster_stats_gen: ClusterStatsGenerator,
     origin_stats: Option<ClusterStatistics>,
+    table_compression: TableCompression,
 }
 
 impl DeletionSource {
@@ -117,6 +121,7 @@ impl DeletionSource {
             index: (0, 0),
             cluster_stats_gen: table.cluster_stats_gen(ctx)?,
             origin_stats: None,
+            table_compression: table.table_compression,
         })))
     }
 }
@@ -179,7 +184,9 @@ impl Processor for DeletionSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, chunks) => {
-                let data_block = self.block_reader.deserialize(part.clone(), chunks)?;
+                let data_block = self
+                    .block_reader
+                    .deserialize_parquet_chunks(part.clone(), chunks)?;
                 let filter_result = self
                     .filter
                     .eval(&self.ctx.try_get_function_context()?, &data_block)?
@@ -219,7 +226,7 @@ impl Processor for DeletionSource {
                 let merged = if chunks.is_empty() {
                     data_block
                 } else if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let remain_block = remain_reader.deserialize(part, chunks)?;
+                    let remain_block = remain_reader.deserialize_parquet_chunks(part, chunks)?;
                     let remain_block = DataBlock::filter_block(remain_block, &filter)?;
                     for (col, field) in remain_block
                         .columns()
@@ -254,8 +261,12 @@ impl Processor for DeletionSource {
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
-                let (file_size, meta_data) =
-                    serialize_to_parquet(vec![block], &schema, &mut block_data)?;
+                let (file_size, meta_data) = blocks_to_parquet(
+                    &schema,
+                    vec![block],
+                    &mut block_data,
+                    self.table_compression,
+                )?;
                 let col_metas = util::column_metas(&meta_data)?;
 
                 // new block meta.
@@ -269,6 +280,7 @@ impl Processor for DeletionSource {
                     block_location.clone(),
                     Some(bloom_index_state.location.clone()),
                     bloom_index_state.size,
+                    self.table_compression.into(),
                 ));
 
                 self.state = State::Serialized(
@@ -294,11 +306,27 @@ impl Processor for DeletionSource {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {
+                let settings = ReadSettings::from_ctx(&self.ctx)?;
                 let deletion_part = DeletionPartInfo::from_part(&part)?;
                 self.index = deletion_part.index;
                 self.origin_stats = deletion_part.cluster_stats.clone();
                 let part = deletion_part.inner_part.clone();
-                let chunks = self.block_reader.read_columns_data(part.clone()).await?;
+                let fuse_part = FusePartInfo::from_part(&part)?;
+
+                let read_res = self
+                    .block_reader
+                    .read_columns_data_by_merge_io(
+                        &settings,
+                        &fuse_part.location,
+                        &fuse_part.columns_meta,
+                    )
+                    .await?;
+                let chunks = read_res
+                    .columns_chunks()?
+                    .into_iter()
+                    .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+                    .collect::<Vec<_>>();
+
                 self.state = State::FilterData(part, chunks);
             }
             State::ReadRemain {
@@ -307,7 +335,22 @@ impl Processor for DeletionSource {
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let chunks = remain_reader.read_columns_data(part.clone()).await?;
+                    let fuse_part = FusePartInfo::from_part(&part)?;
+
+                    let settings = ReadSettings::from_ctx(&self.ctx)?;
+                    let read_res = remain_reader
+                        .read_columns_data_by_merge_io(
+                            &settings,
+                            &fuse_part.location,
+                            &fuse_part.columns_meta,
+                        )
+                        .await?;
+                    let chunks = read_res
+                        .columns_chunks()?
+                        .into_iter()
+                        .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+                        .collect::<Vec<_>>();
+
                     self.state = State::MergeRemain {
                         part,
                         chunks,

@@ -1,0 +1,6 @@
+---empty
+{"meta":[{"name":"c1","type":"Nullable(Int32)"},{"name":"c2","type":"Nullable(String)"}],"data":[],"rows":0}
+---1 row
+{"meta":[{"name":"c1","type":"Nullable(Int32)"},{"name":"c2","type":"Nullable(String)"}],"data":[{"c1":1,"c2":"a"}],"rows":1}
+---2 rows
+{"meta":[{"name":"c1","type":"Nullable(Int32)"},{"name":"c2","type":"Nullable(String)"}],"data":[{"c1":1,"c2":"a"},{"c1":2,"c2":"b"}],"rows":2}

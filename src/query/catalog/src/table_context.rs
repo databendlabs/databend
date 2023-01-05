@@ -76,6 +76,7 @@ pub trait TableContext: Send + Sync {
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
     fn try_get_part(&self) -> Option<PartInfoPtr>;
+    fn try_get_parts(&self, num: usize) -> Vec<PartInfoPtr>;
     // Update the context partition pool from the pipeline builder.
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn attach_query_str(&self, kind: String, query: &str);

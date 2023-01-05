@@ -1,0 +1,64 @@
+statement ok
+drop table if exists t_string_like
+
+statement ok
+CREATE TABLE t_string_like(URL TEXT NOT NULL)
+
+statement ok
+insert into t_string_like values('Arrow'), (''), ('Nicolas')
+
+query B
+select count(*)=1 from t_string_like where URL like 'Arrow'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like '%Arrow'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like '%rrow'
+----
+1
+
+query B
+select count(*)=0 from t_string_like where URL like '%rro'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like 'Arr%'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like 'Arrow%'
+----
+1
+
+query B
+select count(*)=0 from t_string_like where URL like 'rrow%'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like '%Arrow%'
+----
+1
+
+query B
+select count(*)=1 from t_string_like where URL like '%rro%'
+----
+1
+
+query B
+select count(*)=0 from t_string_like where URL like '%not_exist%'
+----
+1
+
+
+query B
+select count(*)=1 from t_string_like where URL like '%%'
+----
+1

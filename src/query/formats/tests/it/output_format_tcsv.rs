@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_formats::FileFormatOptionsExt;
+use common_meta_types::FileFormatOptions;
 use common_settings::Settings;
 use pretty_assertions::assert_eq;
 
 use crate::get_output_format_clickhouse;
-use crate::get_output_format_clickhouse_with_setting;
 use crate::output_format_utils::get_simple_block;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
@@ -57,14 +60,14 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
 
     {
         let settings = Settings::default_test_settings()?;
-        settings.set_settings(
-            "format_record_delimiter".to_string(),
-            "\r\n".to_string(),
-            false,
-        )?;
-        settings.set_settings("format_field_delimiter".to_string(), "$".to_string(), false)?;
-
-        let mut formatter = get_output_format_clickhouse_with_setting("csv", schema, &settings)?;
+        let mut options = BTreeMap::<String, String>::new();
+        options.insert("type".to_string(), "csv".to_string());
+        options.insert("field_delimiter".to_string(), "$".to_string());
+        options.insert("record_delimiter".to_string(), "\r\n".to_string());
+        let options = FileFormatOptions::from_map(&options)?;
+        let mut options =
+            FileFormatOptionsExt::create_from_file_format_options(options, &settings)?;
+        let mut formatter = options.get_output_format(schema)?;
         let buffer = formatter.serialize_block(&block)?;
 
         let csv_block = String::from_utf8(buffer)?;
@@ -115,18 +118,13 @@ fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
     let schema = block.schema().clone();
 
     let settings = Settings::default_test_settings()?;
-    settings.set_settings(
-        "format_record_delimiter".to_string(),
-        "\r\n".to_string(),
-        false,
-    )?;
-    settings.set_settings(
-        "format_field_delimiter".to_string(),
-        "\x01".to_string(),
-        false,
-    )?;
-
-    let mut formatter = get_output_format_clickhouse_with_setting("csv", schema, &settings)?;
+    let mut options = BTreeMap::<String, String>::new();
+    options.insert("type".to_string(), "csv".to_string());
+    options.insert("field_delimiter".to_string(), "\x01".to_string());
+    options.insert("record_delimiter".to_string(), "\r\n".to_string());
+    let options = FileFormatOptions::from_map(&options)?;
+    let mut options = FileFormatOptionsExt::create_from_file_format_options(options, &settings)?;
+    let mut formatter = options.get_output_format(schema)?;
     let buffer = formatter.serialize_block(&block)?;
 
     let csv_block = String::from_utf8(buffer)?;

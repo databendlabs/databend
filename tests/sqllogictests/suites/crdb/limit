@@ -1,3 +1,5 @@
+control sortmode rowsort
+
 query I
 SELECT number FROM numbers(100) ORDER BY number LIMIT 5
 ----
@@ -78,46 +80,46 @@ SELECT k, v FROM t ORDER BY k OFFSET 5
 query II
 SELECT k, v FROM t ORDER BY v LIMIT 5 OFFSET 1
 ----
-4 -16
-2 -4
 1 1
+2 -4
 3 9
+4 -16
 5 25
 
 query II
 SELECT k, v FROM t ORDER BY v DESC LIMIT 5 OFFSET 1
 ----
-3 9
 1 1
 2 -4
+3 9
 4 -16
 6 -36
 
 query I
 SELECT sum(w) FROM t GROUP BY k, v ORDER BY v DESC LIMIT 10
 ----
-125
-27
 1
+125
+216
+27
 8
 94
-216
 
 query I
 SELECT k FROM (SELECT k, v FROM t ORDER BY v LIMIT 4)
 ----
-6
-4
-2
 1
+2
+4
+6
 
 query I
 SELECT k FROM (SELECT k, v, w FROM t ORDER BY v LIMIT 4)
 ----
-6
-4
-2
 1
+2
+4
+6
 
 query II
 SELECT k, v FROM t ORDER BY k LIMIT 6
@@ -155,7 +157,7 @@ SELECT * FROM (select * from numbers(10) a LIMIT 5) OFFSET 3
 3
 4
 
-statement ok 
+statement ok
 SELECT * FROM (select * from numbers(10) a LIMIT 5) OFFSET 6
 
 statement ok
@@ -168,7 +170,7 @@ statement ok
 INSERT INTO t_47283 VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)
 
 ## This should return no results if it does, we incorrectly removed the hard
-statement ok 
+statement ok
 SELECT * FROM (SELECT * FROM t_47283 ORDER BY k LIMIT 4) WHERE a > 5 LIMIT 1
 
 ## order by expr | limit expr is not support
@@ -192,7 +194,6 @@ SELECT * FROM t65171 WHERE x = 1 OR x = 2 ORDER BY y LIMIT 2
 query III
 SELECT * FROM t ORDER BY v, w LIMIT 3
 ----
-6 -36 216
-4 -16 94
 2 -4 8
-
+4 -16 94
+6 -36 216

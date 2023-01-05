@@ -122,8 +122,7 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 
 ## Roadmap
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
-- [Roadmap v0.8](https://github.com/datafuselabs/databend/issues/4591)
-- [Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
+- [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
 
 ## License
 

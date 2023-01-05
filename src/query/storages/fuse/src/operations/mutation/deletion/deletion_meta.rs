@@ -30,7 +30,7 @@ pub enum Deletion {
     Deleted,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DeletionSourceMeta {
     pub index: BlockIndex,
     pub op: Deletion,
@@ -40,6 +40,14 @@ pub struct DeletionSourceMeta {
 impl BlockMetaInfo for DeletionSourceMeta {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
@@ -52,7 +60,7 @@ impl BlockMetaInfo for DeletionSourceMeta {
 
 impl DeletionSourceMeta {
     pub fn create(index: BlockIndex, op: Deletion) -> BlockMetaInfoPtr {
-        Arc::new(Box::new(DeletionSourceMeta { index, op }))
+        Box::new(DeletionSourceMeta { index, op })
     }
 
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&DeletionSourceMeta> {

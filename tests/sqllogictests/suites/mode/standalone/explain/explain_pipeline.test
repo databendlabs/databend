@@ -17,7 +17,8 @@ explain pipeline select a from t1 ignore_result
 ----
 EmptySink × 16 processors
   CompoundChunkOperator(Project->Rename) × 16 processors
-    FuseEngineSource × 16 processors
+    DeserializeDataTransform × 16 processors
+      SyncReadParquetDataSource × 16 processors
 
 
 statement ok

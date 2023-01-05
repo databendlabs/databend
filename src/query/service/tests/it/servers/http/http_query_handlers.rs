@@ -63,15 +63,7 @@ use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 
-use crate::tests::tls_constants::TEST_CA_CERT;
-use crate::tests::tls_constants::TEST_CN_NAME;
-use crate::tests::tls_constants::TEST_SERVER_CERT;
-use crate::tests::tls_constants::TEST_SERVER_KEY;
-use crate::tests::tls_constants::TEST_TLS_CA_CERT;
-use crate::tests::tls_constants::TEST_TLS_CLIENT_IDENTITY;
-use crate::tests::tls_constants::TEST_TLS_CLIENT_PASSWORD;
-use crate::tests::tls_constants::TEST_TLS_SERVER_CERT;
-use crate::tests::tls_constants::TEST_TLS_SERVER_KEY;
+use crate::tests::tls_constants::*;
 use crate::tests::ConfigBuilder;
 use crate::tests::TestGlobalServices;
 
@@ -468,7 +460,7 @@ async fn test_result_timeout() -> Result<()> {
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config).await?);
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config)?);
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
@@ -492,7 +484,7 @@ async fn test_system_tables() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config).await?);
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config)?);
     let ep = Route::new()
         .nest("/v1/query", query_route())
         .with(session_middleware);
@@ -574,7 +566,7 @@ async fn test_query_log() -> Result<()> {
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config).await?);
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config)?);
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
@@ -629,7 +621,7 @@ async fn test_query_log() -> Result<()> {
     );
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config).await?);
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config)?);
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
@@ -710,7 +702,7 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 pub async fn create_endpoint() -> Result<EndpointType> {
     let config = ConfigBuilder::create().build();
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config).await?);
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config)?);
 
     Ok(Route::new()
         .nest("/v1/query", query_route())
@@ -793,7 +785,7 @@ async fn test_auth_jwt() -> Result<()> {
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config).await?);
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config)?);
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
@@ -922,7 +914,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config).await?);
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config)?);
     let ep = Route::new()
         .nest("/v1/query", query_route())
         .with(session_middleware);
@@ -1040,8 +1032,9 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 
     // get identity
     let mut buf = Vec::new();
-    File::open(TEST_TLS_CLIENT_IDENTITY)?.read_to_end(&mut buf)?;
-    let pkcs12 = reqwest::Identity::from_pkcs12_der(&buf, TEST_TLS_CLIENT_PASSWORD).unwrap();
+    File::open(TEST_TLS_CLIENT_KEY)?.read_to_end(&mut buf)?;
+    File::open(TEST_TLS_CLIENT_CERT)?.read_to_end(&mut buf)?;
+    let pkcs12 = reqwest::Identity::from_pem(&buf).unwrap();
     let mut buf = Vec::new();
     File::open(TEST_TLS_CA_CERT)?.read_to_end(&mut buf)?;
     let cert = reqwest::Certificate::from_pem(&buf).unwrap();
@@ -1237,7 +1230,7 @@ async fn test_auth_configured_user() -> Result<()> {
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config).await?);
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config)?);
 
     let ep = Route::new()
         .nest("/v1/query", query_route())

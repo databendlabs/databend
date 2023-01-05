@@ -20,6 +20,9 @@ use common_datavalues::DataValue;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_sql::plans::Join;
+use common_sql::plans::Scan;
+use common_sql::plans::Statistics;
 use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::planner::Metadata;
@@ -27,8 +30,6 @@ use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::Filter;
 use databend_query::sql::plans::FunctionCall;
-use databend_query::sql::plans::PhysicalHashJoin;
-use databend_query::sql::plans::PhysicalScan;
 use databend_query::sql::ColumnBinding;
 use databend_query::sql::Visibility;
 use databend_query::storages::Table;
@@ -90,8 +91,8 @@ fn test_format() {
     );
 
     let s_expr = SExpr::create_binary(
-        PhysicalHashJoin {
-            build_keys: vec![
+        Join {
+            right_conditions: vec![
                 FunctionCall {
                     func_name: "plus".to_string(),
                     arg_types: vec![],
@@ -117,7 +118,7 @@ fn test_format() {
                 }
                 .into(),
             ],
-            probe_keys: vec![
+            left_conditions: vec![
                 BoundColumnRef {
                     column: ColumnBinding {
                         database_name: None,
@@ -149,25 +150,35 @@ fn test_format() {
             }
             .into(),
             SExpr::create_leaf(
-                PhysicalScan {
+                Scan {
                     table_index: tab1,
                     columns: Default::default(),
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
                     prewhere: None,
+                    statistics: Statistics {
+                        statistics: None,
+                        col_stats: Default::default(),
+                        is_accurate: false,
+                    },
                 }
                 .into(),
             ),
         ),
         SExpr::create_leaf(
-            PhysicalScan {
+            Scan {
                 table_index: tab1,
                 columns: Default::default(),
                 push_down_predicates: None,
                 limit: None,
                 order_by: None,
                 prewhere: None,
+                statistics: Statistics {
+                    statistics: None,
+                    col_stats: Default::default(),
+                    is_accurate: false,
+                },
             }
             .into(),
         ),
@@ -177,9 +188,9 @@ fn test_format() {
 
     let tree = s_expr.to_format_tree(&metadata_ref);
     let result = tree.format_indent().unwrap();
-    let expect = "HashJoin: INNER\n    build keys: [plus(col1 (#0), 123)]\n    probe keys: [col2 (#1)]\n    other filters: []\n    Filter\n        filters: [true]\n        PhysicalScan\n            table: catalog.database.table\n            filters: []\n            order by: []\n            limit: NONE\n    PhysicalScan\n        table: catalog.database.table\n        filters: []\n        order by: []\n        limit: NONE\n";
+    let expect = "HashJoin: INNER\n    equi conditions: [col2 (#1) = plus(col1 (#0), 123)]\n    non-equi conditions: []\n    Filter\n        filters: [true]\n        LogicalGet\n            table: catalog.database.table\n            filters: []\n            order by: []\n            limit: NONE\n    LogicalGet\n        table: catalog.database.table\n        filters: []\n        order by: []\n        limit: NONE\n";
     assert_eq!(result.as_str(), expect);
     let pretty_result = tree.format_pretty().unwrap();
-    let pretty_expect = "HashJoin: INNER\n├── build keys: [plus(col1 (#0), 123)]\n├── probe keys: [col2 (#1)]\n├── other filters: []\n├── Filter\n│   ├── filters: [true]\n│   └── PhysicalScan\n│       ├── table: catalog.database.table\n│       ├── filters: []\n│       ├── order by: []\n│       └── limit: NONE\n└── PhysicalScan\n    ├── table: catalog.database.table\n    ├── filters: []\n    ├── order by: []\n    └── limit: NONE\n";
+    let pretty_expect = "HashJoin: INNER\n├── equi conditions: [col2 (#1) = plus(col1 (#0), 123)]\n├── non-equi conditions: []\n├── Filter\n│   ├── filters: [true]\n│   └── LogicalGet\n│       ├── table: catalog.database.table\n│       ├── filters: []\n│       ├── order by: []\n│       └── limit: NONE\n└── LogicalGet\n    ├── table: catalog.database.table\n    ├── filters: []\n    ├── order by: []\n    └── limit: NONE\n";
     assert_eq!(pretty_result.as_str(), pretty_expect);
 }

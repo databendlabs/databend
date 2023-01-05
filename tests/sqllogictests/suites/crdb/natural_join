@@ -1,3 +1,5 @@
+control sortmode rowsort
+
 statement ok
 drop table if exists t1
 
@@ -107,7 +109,7 @@ statement ok
 INSERT INTO t44798_1(c0) VALUES(0), (2), (4)
 
 query I
-SELECT * FROM t44798_0 NATURAL JOIN t44798_1
+SELECT * FROM t44798_0 NATURAL JOIN t44798_1 order by c0
 ----
 0
 2
@@ -134,4 +136,3 @@ query II
 SELECT *, true FROM (SELECT l FROM l WHERE l NOT IN (SELECT r FROM r))
 ----
 2 1
-

@@ -27,21 +27,18 @@ mod read_partitions;
 mod recluster;
 mod truncate;
 
-mod fuse_native_source;
-mod fuse_parquet_source;
 mod fuse_source;
+mod read;
 mod revert;
 pub mod util;
 
 pub use compact::CompactOptions;
 pub use fuse_sink::BloomIndexState;
 pub use fuse_sink::FuseTableSink;
-pub use fuse_source::FuseTableSource;
 pub use mutation::ReclusterMutator;
 pub use mutation::SegmentCompactMutator;
 pub use mutation::SegmentCompactionState;
 pub use mutation::SegmentCompactor;
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;
-pub use read_data::ReadDataKind;
 pub use util::column_metas;

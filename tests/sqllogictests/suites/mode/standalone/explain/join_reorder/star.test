@@ -225,4 +225,3 @@ HashJoin
 
 statement ok
 drop database join_reorder
-

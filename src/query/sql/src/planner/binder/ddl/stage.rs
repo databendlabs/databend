@@ -87,14 +87,21 @@ impl<'a> Binder {
                 }
             }
             Some(uri) => {
-                let uri = UriLocation {
+                let mut uri = UriLocation {
                     protocol: uri.protocol.clone(),
                     name: uri.name.clone(),
                     path: uri.path.clone(),
+                    part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
 
-                let (stage_storage, path) = parse_uri_location(&uri)?;
+                let (stage_storage, path) = parse_uri_location(&mut uri)?;
+
+                if !path.ends_with('/') {
+                    return Err(ErrorCode::SyntaxException(
+                        "URL's path must ends with `/` when do CREATE STAGE",
+                    ));
+                }
 
                 UserStageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
             }

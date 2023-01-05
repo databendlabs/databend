@@ -2,6 +2,8 @@ name: Dev MacOS
 
 on:
   pull_request:
+    branches:
+      - main
     paths-ignore:
       - "docs/**"
       - "website/**"
@@ -51,6 +53,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_macos
+        env:
+          SQLALCHEMY_SILENCE_UBER_WARNING: "1"
 
   # https://github.com/datafuselabs/databend/issues/6614
   # test_sqllogic_standalone_macos:

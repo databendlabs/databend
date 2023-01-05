@@ -48,7 +48,7 @@ impl TryFrom<AppendOperationLogEntry> for DataBlock {
         Ok(DataBlock::create_with_meta(
             DataSchemaRef::default(),
             vec![],
-            Some(Arc::new(Box::new(value))),
+            Some(Box::new(value)),
         ))
     }
 }
@@ -77,6 +77,14 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
 impl BlockMetaInfo for AppendOperationLogEntry {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
