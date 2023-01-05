@@ -3142,9 +3142,12 @@ array
 char
 concat
 concat_ws
+eq
 get
+gt
 if
 ignore
+lt
 multi_if
 point_in_ellipses
 regexp_instr

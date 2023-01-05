@@ -14,12 +14,16 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use common_expression::types::boolean::BooleanDomain;
+use common_expression::types::AnyType;
+use common_expression::types::ArgType;
 use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::EmptyArrayType;
 use common_expression::types::GenericType;
@@ -32,10 +36,14 @@ use common_expression::types::VariantType;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::values::Value;
 use common_expression::with_number_mapped_type;
+use common_expression::Column;
 use common_expression::EvalContext;
+use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use common_expression::FunctionSignature;
+use common_expression::ScalarRef;
 use common_expression::ValueRef;
 use regex::bytes::Regex;
 
@@ -53,6 +61,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_boolean_cmp(registry);
     register_variant_cmp(registry);
     register_array_cmp(registry);
+    register_tuple_cmp(registry);
     register_like(registry);
 }
 
@@ -258,6 +267,112 @@ fn register_array_cmp(registry: &mut FunctionRegistry) {
             |_, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs < rhs,
         );
+}
+
+fn register_tuple_cmp(registry: &mut FunctionRegistry) {
+    fn register_tuple_cmp_op(
+        registry: &mut FunctionRegistry,
+        name: &str,
+        default_result: bool,
+        // Compare the fields of each row from left to right, break on the first `Some()` result.
+        // If all fields are `None`, return `default_result`.
+        cmp_op: impl Fn(ScalarRef, ScalarRef) -> Option<bool> + 'static + Send + Sync + Copy,
+    ) {
+        let name_cloned = name.to_string();
+        registry.register_function_factory(name, move |_, args_type| {
+            let fields_generics = match args_type {
+                [DataType::Tuple(lhs_fields_ty), _] => (0..lhs_fields_ty.len())
+                    .map(|idx| DataType::Generic(idx))
+                    .collect::<Vec<_>>(),
+                _ => return None,
+            };
+            Some(Arc::new(Function {
+                signature: FunctionSignature {
+                    name: name_cloned.clone(),
+                    args_type: vec![
+                        DataType::Tuple(fields_generics.clone()),
+                        DataType::Tuple(fields_generics),
+                    ],
+                    return_type: DataType::Boolean,
+                    property: FunctionProperty::default(),
+                },
+                calc_domain: Box::new(move |_| FunctionDomain::Full),
+                eval: Box::new(move |args, _| {
+                    let len = args.iter().find_map(|arg| match arg {
+                        ValueRef::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
+
+                    let lhs_fields: Vec<ValueRef<AnyType>> = match &args[0] {
+                        ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
+                            fields.iter().cloned().map(ValueRef::Scalar).collect()
+                        }
+                        ValueRef::Column(Column::Tuple { fields, .. }) => {
+                            fields.iter().cloned().map(ValueRef::Column).collect()
+                        }
+                        _ => unreachable!(),
+                    };
+                    let rhs_fields: Vec<ValueRef<AnyType>> = match &args[1] {
+                        ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
+                            fields.iter().cloned().map(ValueRef::Scalar).collect()
+                        }
+                        ValueRef::Column(Column::Tuple { fields, .. }) => {
+                            fields.iter().cloned().map(ValueRef::Column).collect()
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    let size = len.unwrap_or(1);
+                    let mut builder = BooleanType::create_builder(size, &[]);
+
+                    'outer: for row in 0..size {
+                        for (lhs_field, rhs_field) in lhs_fields.iter().zip(&rhs_fields) {
+                            let lhs = lhs_field.index(row).unwrap();
+                            let rhs = rhs_field.index(row).unwrap();
+                            if let Some(result) = cmp_op(lhs, rhs) {
+                                builder.push(result);
+                                continue 'outer;
+                            }
+                        }
+                        builder.push(default_result);
+                    }
+
+                    match len {
+                        Some(_) => {
+                            let col =
+                                BooleanType::upcast_column(BooleanType::build_column(builder));
+                            Ok(Value::Column(col))
+                        }
+                        _ => Ok(Value::Scalar(BooleanType::upcast_scalar(
+                            BooleanType::build_scalar(builder),
+                        ))),
+                    }
+                }),
+            }))
+        });
+    }
+
+    register_tuple_cmp_op(registry, "eq", true, |lhs, rhs| {
+        if lhs != rhs { Some(false) } else { None }
+    });
+    register_tuple_cmp_op(registry, "lt", false, |lhs, rhs| {
+        if lhs < rhs {
+            Some(true)
+        } else if lhs > rhs {
+            Some(false)
+        } else {
+            None
+        }
+    });
+    register_tuple_cmp_op(registry, "gt", false, |lhs, rhs| {
+        if lhs > rhs {
+            Some(true)
+        } else if lhs < rhs {
+            Some(false)
+        } else {
+            None
+        }
+    });
 }
 
 fn register_like(registry: &mut FunctionRegistry) {

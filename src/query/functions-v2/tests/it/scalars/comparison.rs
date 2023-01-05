@@ -69,6 +69,9 @@ fn test_eq(file: &mut impl Write) {
     run_ast(file, "[]=[]", &[]);
     run_ast(file, "[1, 2]=[1, 2]", &[]);
     run_ast(file, "[true]=[]", &[]);
+    run_ast(file, "(1, 'a') = (1,)", &[]);
+    run_ast(file, "(1, 'a') = (1, 'a')", &[]);
+    run_ast(file, "(1, 'a') = (1, 'b')", &[]);
     run_ast(file, "today()='2020-01-01'", &[]);
     run_ast(
         file,
@@ -175,6 +178,9 @@ fn test_lt(file: &mut impl Write) {
     run_ast(file, "true < false", &[]);
     run_ast(file, "[] < []", &[]);
     run_ast(file, "[1, 2] < [2, 3]", &[]);
+    run_ast(file, "(1, 'b') < (1, 'a')", &[]);
+    run_ast(file, "(1, 'a') < (1, 'b')", &[]);
+    run_ast(file, "(1, 'a') < (2, 'a')", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)<to_timestamp(-100)",
@@ -262,6 +268,9 @@ fn test_gt(file: &mut impl Write) {
     run_ast(file, "true > false", &[]);
     run_ast(file, "[] > []", &[]);
     run_ast(file, "[1, 2] > [2, 3]", &[]);
+    run_ast(file, "(1, 'b') > (1, 'a')", &[]);
+    run_ast(file, "(1, 'a') > (1, 'b')", &[]);
+    run_ast(file, "(1, 'a') > (2, 'a')", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)>to_timestamp(-100)",

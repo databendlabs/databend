@@ -97,6 +97,69 @@ output domain  : {FALSE, TRUE}
 output         : false
 
 
+error: 
+  --> SQL:1:10
+  |
+1 | (1, 'a') = (1,)
+  |          ^ no overload satisfies `eq((UInt8, String), (UInt8,))`
+
+has tried possible overloads:
+  eq(String, String) :: Boolean                                 : unable to unify `(UInt8, String)` with `String`
+  eq(String NULL, String NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `String`
+  eq(Date, Date) :: Boolean                                     : unable to unify `(UInt8, String)` with `Date`
+  eq(Date NULL, Date NULL) :: Boolean NULL                      : unable to unify `(UInt8, String)` with `Date`
+  eq(Timestamp, Timestamp) :: Boolean                           : unable to unify `(UInt8, String)` with `Timestamp`
+  eq(Timestamp NULL, Timestamp NULL) :: Boolean NULL            : unable to unify `(UInt8, String)` with `Timestamp`
+  eq(UInt8, UInt8) :: Boolean                                   : unable to unify `(UInt8, String)` with `UInt8`
+  eq(UInt8 NULL, UInt8 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `UInt8`
+  eq(UInt16, UInt16) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt16`
+  eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt16`
+  eq(UInt32, UInt32) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt32`
+  eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt32`
+  eq(UInt64, UInt64) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt64`
+  eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt64`
+  eq(Int8, Int8) :: Boolean                                     : unable to unify `(UInt8, String)` with `Int8`
+  eq(Int8 NULL, Int8 NULL) :: Boolean NULL                      : unable to unify `(UInt8, String)` with `Int8`
+  eq(Int16, Int16) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int16`
+  eq(Int16 NULL, Int16 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int16`
+  eq(Int32, Int32) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int32`
+  eq(Int32 NULL, Int32 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int32`
+  eq(Int64, Int64) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int64`
+  eq(Int64 NULL, Int64 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int64`
+  eq(Float32, Float32) :: Boolean                               : unable to unify `(UInt8, String)` with `Float32`
+  eq(Float32 NULL, Float32 NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Float32`
+  eq(Float64, Float64) :: Boolean                               : unable to unify `(UInt8, String)` with `Float64`
+  eq(Float64 NULL, Float64 NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Float64`
+  eq(Boolean, Boolean) :: Boolean                               : unable to unify `(UInt8, String)` with `Boolean`
+  eq(Boolean NULL, Boolean NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Boolean`
+  eq(Variant, Variant) :: Boolean                               : unable to unify `(UInt8, String)` with `Variant`
+  eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Variant`
+  eq(Array(Nothing), Array(Nothing)) :: Boolean                 : unable to unify `(UInt8, String)` with `Array(Nothing)`
+  eq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL  : unable to unify `(UInt8, String)` with `Array(Nothing)`
+  eq(Array(T0), Array(T0)) :: Boolean                           : unable to unify `(UInt8, String)` with `Array(T0)`
+  eq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL            : unable to unify `(UInt8, String)` with `Array(T0)`
+  eq((T0, T1), (T0, T1)) :: Boolean                             : unable to unify `(UInt8,)` with `(T0, T1)`
+
+
+
+ast            : (1, 'a') = (1, 'a')
+raw expr       : eq(tuple(1_u8, "a"), tuple(1_u8, "a"))
+checked expr   : eq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : (1, 'a') = (1, 'b')
+raw expr       : eq(tuple(1_u8, "a"), tuple(1_u8, "b"))
+checked expr   : eq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : false
+
+
 ast            : today()='2020-01-01'
 raw expr       : eq(today(), "2020-01-01")
 checked expr   : eq<Date, Date>(today<>(), CAST("2020-01-01" AS Date))
@@ -437,6 +500,33 @@ output domain  : {FALSE, TRUE}
 output         : true
 
 
+ast            : (1, 'b') < (1, 'a')
+raw expr       : lt(tuple(1_u8, "b"), tuple(1_u8, "a"))
+checked expr   : lt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : false
+
+
+ast            : (1, 'a') < (1, 'b')
+raw expr       : lt(tuple(1_u8, "a"), tuple(1_u8, "b"))
+checked expr   : lt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : (1, 'a') < (2, 'a')
+raw expr       : lt(tuple(1_u8, "a"), tuple(2_u8, "a"))
+checked expr   : lt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
 ast            : to_timestamp(-315360000000000)<to_timestamp(-100)
 raw expr       : lt(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
 checked expr   : lt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
@@ -720,6 +810,33 @@ output         : false
 ast            : [1, 2] > [2, 3]
 raw expr       : gt(array(1_u8, 2_u8), array(2_u8, 3_u8))
 checked expr   : gt<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : false
+
+
+ast            : (1, 'b') > (1, 'a')
+raw expr       : gt(tuple(1_u8, "b"), tuple(1_u8, "a"))
+checked expr   : gt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : (1, 'a') > (1, 'b')
+raw expr       : gt(tuple(1_u8, "a"), tuple(1_u8, "b"))
+checked expr   : gt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : false
+
+
+ast            : (1, 'a') > (2, 'a')
+raw expr       : gt(tuple(1_u8, "a"), tuple(2_u8, "a"))
+checked expr   : gt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE, TRUE}

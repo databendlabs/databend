@@ -156,71 +156,47 @@ impl FunctionRegistry {
         args: &[Expr<Index>],
     ) -> Vec<(FunctionID, Arc<Function>)> {
         let name = name.to_lowercase();
-        let name = self
-            .aliases
-            .get(name.as_str())
-            .map(String::as_str)
-            .unwrap_or(name.as_str());
 
-        if params.is_empty() {
-            let builtin_funcs = self
-                .funcs
-                .get(name)
-                .map(|funcs| {
-                    funcs
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(id, func)| {
-                            if func.signature.name == name
-                                && func.signature.args_type.len() == args.len()
-                            {
-                                Some((
-                                    FunctionID::Builtin {
-                                        name: name.to_string(),
-                                        id,
-                                    },
-                                    func.clone(),
-                                ))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
+        let mut candidates = Vec::new();
 
-            if !builtin_funcs.is_empty() {
-                return builtin_funcs;
-            }
+        if let Some(funcs) = self.funcs.get(&name) {
+            candidates.extend(funcs.iter().enumerate().filter_map(|(id, func)| {
+                if func.signature.name == name && func.signature.args_type.len() == args.len() {
+                    Some((
+                        FunctionID::Builtin {
+                            name: name.to_string(),
+                            id,
+                        },
+                        func.clone(),
+                    ))
+                } else {
+                    None
+                }
+            }));
         }
 
-        let args_type = args
-            .iter()
-            .map(Expr::data_type)
-            .cloned()
-            .collect::<Vec<_>>();
-        self.factories
-            .get(name)
-            .map(|factories| {
-                factories
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(id, factory)| {
-                        factory(params, &args_type).map(|func| {
-                            (
-                                FunctionID::Factory {
-                                    name: name.to_string(),
-                                    id,
-                                    params: params.to_vec(),
-                                    args_type: args_type.clone(),
-                                },
-                                func,
-                            )
-                        })
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default()
+        if let Some(factories) = self.factories.get(&name) {
+            let args_type = args
+                .iter()
+                .map(Expr::data_type)
+                .cloned()
+                .collect::<Vec<_>>();
+            candidates.extend(factories.iter().enumerate().filter_map(|(id, factory)| {
+                factory(params, &args_type).map(|func| {
+                    (
+                        FunctionID::Factory {
+                            name: name.to_string(),
+                            id,
+                            params: params.to_vec(),
+                            args_type: args_type.clone(),
+                        },
+                        func,
+                    )
+                })
+            }));
+        }
+
+        candidates
     }
 
     pub fn register_function_factory(

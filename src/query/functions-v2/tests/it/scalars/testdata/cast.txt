@@ -1503,11 +1503,11 @@ evaluation (internal):
 
 ast            : TRY_CAST(NULL AS VARIANT)
 raw expr       : TRY_CAST(NULL AS Variant)
-checked expr   : TRY_CAST(NULL AS Variant NULL)
-optimized expr : NULL
+checked expr   : try_to_variant<T0=NULL><T0>(NULL)
+optimized expr : 0x2000000000000000
 output type    : Variant NULL
-output domain  : {NULL}
-output         : NULL
+output domain  : Undefined
+output         : null
 
 
 ast            : TRY_CAST(0 AS VARIANT)
@@ -1647,24 +1647,24 @@ output         : {"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}
 
 ast            : TRY_CAST(a AS VARIANT)
 raw expr       : TRY_CAST(#0::String NULL AS Variant)
-checked expr   : TRY_CAST(#0 AS Variant NULL)
+checked expr   : try_to_variant<T0=String NULL><T0>(#0)
 evaluation:
-+--------+------------------------+--------------------+
-|        | a                      | Output             |
-+--------+------------------------+--------------------+
-| Type   | String NULL            | Variant NULL       |
-| Domain | {"a"..="def"} ∪ {NULL} | Undefined ∪ {NULL} |
-| Row 0  | "a"                    | "a"                |
-| Row 1  | NULL                   | "bc"               |
-| Row 2  | "def"                  | "def"              |
-+--------+------------------------+--------------------+
++--------+------------------------+--------------+
+|        | a                      | Output       |
++--------+------------------------+--------------+
+| Type   | String NULL            | Variant NULL |
+| Domain | {"a"..="def"} ∪ {NULL} | Undefined    |
+| Row 0  | "a"                    | "a"          |
+| Row 1  | NULL                   | null         |
+| Row 2  | "def"                  | "def"        |
++--------+------------------------+--------------+
 evaluation (internal):
-+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                                              |
-+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| a      | NullableColumn { column: StringColumn { data: 0x616263646566, offsets: [0, 1, 3, 6] }, validity: [0b_____101] }                                                   |
-| Output | NullableColumn { column: StringColumn { data: 0x200000001000000161200000001000000262632000000010000003646566, offsets: [0, 9, 19, 30] }, validity: [0b_____111] } |
-+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                          |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x616263646566, offsets: [0, 1, 3, 6] }, validity: [0b_____101] }                                               |
+| Output | NullableColumn { column: StringColumn { data: 0x20000000100000016120000000000000002000000010000003646566, offsets: [0, 9, 17, 28] }, validity: [0b_____111] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : TRY_CAST(-30610224000000001 AS TIMESTAMP)

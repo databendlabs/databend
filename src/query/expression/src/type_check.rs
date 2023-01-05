@@ -187,6 +187,9 @@ pub fn check_function<Index: ColumnIndex>(
             check_function(span.clone(), original_fn_name, params, args, fn_registry)?;
         return check_function(span, "not", &[], &[original_expr], fn_registry);
     }
+    if let Some(original_fn_name) = fn_registry.aliases.get(name) {
+        return check_function(span.clone(), original_fn_name, params, args, fn_registry);
+    }
 
     let candidates = fn_registry.search_candidates(name, params, args);
 
@@ -298,6 +301,13 @@ impl Subsitution {
                 .ok_or_else(|| (None, (format!("unbound generic type `T{idx}`")))),
             DataType::Nullable(box ty) => Ok(DataType::Nullable(Box::new(self.apply(ty)?))),
             DataType::Array(box ty) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
+            DataType::Tuple(fields_ty) => {
+                let fields_ty = fields_ty
+                    .into_iter()
+                    .map(|field_ty| self.apply(field_ty))
+                    .collect::<Result<_>>()?;
+                Ok(DataType::Tuple(fields_ty))
+            }
             ty => Ok(ty),
         }
     }
