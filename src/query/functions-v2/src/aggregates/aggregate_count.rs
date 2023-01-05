@@ -95,7 +95,7 @@ impl AggregateFunction for AggregateCountFunction {
             match &columns[0] {
                 Column::Nullable(c) => validity
                     .map(|v| v & (&c.validity))
-                    .unwrap_or(c.validity.clone())
+                    .unwrap_or_else(|| c.validity.clone())
                     .unset_bits(),
                 _ => validity.map(|v| v.unset_bits()).unwrap_or(0),
             }

@@ -145,7 +145,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg_core::<NullType, NullType, _, _>(
         "to_nullable",
         FunctionProperty::default(),
-        |domain| FunctionDomain::Domain(domain.clone()),
+        |_| FunctionDomain::Domain(()),
         |val, _| Ok(val.to_owned()),
     );
 
