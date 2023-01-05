@@ -22,7 +22,7 @@ checked expr   : tuple<UInt8, UInt8, String>(1_u8, 2_u8, "a")
 optimized expr : (1_u8, 2_u8, "a")
 output type    : (UInt8, UInt8, String)
 output domain  : ({1..=1}, {2..=2}, {"a"..="a"})
-output         : (1, 2, "a")
+output         : (1_u8, 2_u8, "a")
 
 
 ast            : (1, 2, ('a', 'b'))
@@ -31,7 +31,7 @@ checked expr   : tuple<UInt8, UInt8, (String, String)>(1_u8, 2_u8, tuple<String,
 optimized expr : (1_u8, 2_u8, ("a", "b"))
 output type    : (UInt8, UInt8, (String, String))
 output domain  : ({1..=1}, {2..=2}, ({"a"..="a"}, {"b"..="b"}))
-output         : (1, 2, ("a", "b"))
+output         : (1_u8, 2_u8, ("a", "b"))
 
 
 ast            : (s, s)
@@ -96,7 +96,7 @@ checked expr   : get<(UInt8, String)>(tuple<UInt8, String>(1_u8, "a"))
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
-output         : 1
+output         : 1_u8
 
 
 ast            : (1, 'a').2
