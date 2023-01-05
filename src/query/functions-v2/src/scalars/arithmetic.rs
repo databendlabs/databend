@@ -40,6 +40,7 @@ use num_traits::AsPrimitive;
 
 use super::arithmetic_modulo::vectorize_modulo;
 
+#[allow(clippy::absurd_extreme_comparisons)]
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
     registry.register_aliases("minus", &["subtract", "neg", "negate"]);

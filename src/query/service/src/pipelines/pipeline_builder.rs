@@ -406,7 +406,7 @@ impl PipelineBuilder {
     fn build_sort(&mut self, sort: &Sort) -> Result<()> {
         self.build_pipeline(&sort.input)?;
 
-        let input_schema = sort.input.output_schema()?.clone();
+        let input_schema = sort.input.output_schema()?;
 
         let sort_desc = sort
             .order_by
