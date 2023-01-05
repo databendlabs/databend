@@ -4,6 +4,9 @@ select 'Hello, world!'
 Hello, world!
 
 statement ok
+drop database if exists db
+
+statement ok
 create database db
 
 statement ok
@@ -31,4 +34,4 @@ statement error column doesn't exist
 select db.t1.a from db.t as t1
 
 statement ok
-drop database db
+drop database if exists db

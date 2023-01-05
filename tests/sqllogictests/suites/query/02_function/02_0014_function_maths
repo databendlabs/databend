@@ -23,20 +23,6 @@ SELECT abs(-10086)
 10086
 
 
-statement error 1065
-SELECT abs('-233.0')
-
-
-statement error 1065
-SELECT abs('blah')
-
-
-statement error 1065
-SELECT abs(TRUE)
-
-
-statement error 1049
-select abs(-9223372036854775808)
 
 query T
 SELECT abs(NULL)
@@ -56,6 +42,9 @@ SELECT abs(value) + abs(-1) FROM math_sample_numbers
 2
 3
 4
+
+statement ok
+DROP TABLE math_sample_numbers
 
 statement ok
 drop table if exists math_log_numbers
@@ -316,6 +305,18 @@ SELECT pow('a', 2)
 statement error 1065
 SELECT pow(2, 'a')
 
-statement ok
-DROP TABLE math_sample_numbers
 
+statement error 1065
+SELECT abs('-233.0')
+
+
+statement error 1065
+SELECT abs('blah')
+
+
+statement error 1065
+SELECT abs(TRUE)
+
+
+statement error 1049
+select abs(-9223372036854775808)

@@ -26,8 +26,6 @@ SELECT b FROM nullable_test WHERE a is Null ORDER BY c
 ----
 2
 
-statement error 1065
-SELECT assume_not_null(null)
 
 query III
 SELECT assume_not_null(a), assume_not_null(b), assume_not_null(c) from nullable_test ORDER BY c
@@ -35,6 +33,9 @@ SELECT assume_not_null(a), assume_not_null(b), assume_not_null(c) from nullable_
 1 0 1
 0 2 2
 3 3 3
+
+statement error 1065
+SELECT assume_not_null(null)
 
 query IT
 SELECT to_nullable(3), to_nullable(4)
