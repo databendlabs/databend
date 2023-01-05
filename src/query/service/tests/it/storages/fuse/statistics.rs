@@ -247,8 +247,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     });
 
     let block_compactor = BlockCompactThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
-    let stats_gen =
-        ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor, vec![], vec![]);
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], 0, 0, block_compactor, vec![], vec![]);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -277,7 +276,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     let operators = vec![BlockOperator::Map { expr }];
 
     let stats_gen =
-        ClusterStatsGenerator::new(0, vec![1], vec![], 0, block_compactor, operators, vec![]);
+        ClusterStatsGenerator::new(0, vec![1], 0, 0, block_compactor, operators, vec![]);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -285,8 +284,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert_eq!(vec![Scalar::Number(NumberScalar::Int64(4))], stats.max);
 
     // different cluster_key_id.
-    let stats_gen =
-        ClusterStatsGenerator::new(1, vec![0], vec![], 0, block_compactor, vec![], vec![]);
+    let stats_gen = ClusterStatsGenerator::new(1, vec![0], 0, 0, block_compactor, vec![], vec![]);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin)?;
     assert!(stats.is_none());
 

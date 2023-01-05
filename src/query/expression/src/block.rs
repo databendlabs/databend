@@ -231,10 +231,13 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn remove_column(self, offset: usize) -> Result<Self> {
+    pub fn pop_columns(self, num: usize) -> Result<Self> {
         let mut columns = self.columns.clone();
+        let len = columns.len();
 
-        columns.remove(offset);
+        for i in 0..num.min(len) {
+            columns.pop().unwrap();
+        }
 
         Ok(Self {
             columns,
