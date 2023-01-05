@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_base::base::StopHandle;
 use common_base::base::Stoppable;
+use common_base::mem_allocator::GlobalAllocator;
 use common_exception::ErrorCode;
 use common_grpc::RpcClientConf;
 use common_meta_sled_store::init_sled_db;
@@ -38,6 +39,9 @@ use tracing::info;
 mod kvapi;
 
 pub use kvapi::KvApiCommand;
+
+#[global_allocator]
+pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
 const CMD_KVAPI_PREFIX: &str = "kvapi::";
 
