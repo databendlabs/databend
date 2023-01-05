@@ -1,14 +1,13 @@
 query T
 SHOW CATALOGS;
-
 ----
 default
 
+
 statement ok
-CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(URL='fs://path/to/iceberg');
+CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(URI='fs://path/to/iceberg');
 
 query T
 SHOW CATALOGS LIKE 'ctl';
 ----
 ctl
-
