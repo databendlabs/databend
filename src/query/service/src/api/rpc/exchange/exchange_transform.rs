@@ -210,7 +210,7 @@ impl Processor for ExchangeTransform {
         if let Some(data_block) = self.input_data.take() {
             let scatter = &self.shuffle_exchange_params.shuffle_scatter;
 
-            let scatted_blocks = scatter.execute(&data_block, 0)?;
+            let scatted_blocks = scatter.execute(&data_block)?;
 
             let mut output_data = OutputData {
                 data_block: None,
