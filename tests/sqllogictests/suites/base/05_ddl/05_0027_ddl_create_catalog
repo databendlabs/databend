@@ -1,4 +1,4 @@
-statement ok
+query T
 SHOW CATALOGS;
 
 ----
@@ -7,9 +7,8 @@ default
 statement ok
 CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(URL='fs://path/to/iceberg');
 
-statement ok
+query T
 SHOW CATALOGS LIKE 'ctl';
-
 ----
 ctl
 
