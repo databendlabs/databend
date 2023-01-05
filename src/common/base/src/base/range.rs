@@ -37,26 +37,16 @@ pub enum Intersection {
 impl Intersection {
     /// Test if there is any intersection
     pub fn is_any(&self) -> bool {
-        match self {
-            Intersection::Bellow => false,
-            Intersection::Above => false,
-            _ => true,
-        }
+        !matches!(self, Intersection::Bellow | Intersection::Above)
     }
     /// Test if the range is fully within the other
     pub fn is_within(&self) -> bool {
-        match self {
-            Intersection::Within | Intersection::Same => true,
-            _ => false,
-        }
+        matches!(self, Intersection::Within | Intersection::Same)
     }
 
     /// Test if the range is fully over the other
     pub fn is_over(&self) -> bool {
-        match self {
-            Intersection::Over | Intersection::Same => true,
-            _ => false,
-        }
+        matches!(self, Intersection::Over | Intersection::Same)
     }
 }
 
