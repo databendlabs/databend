@@ -22,6 +22,7 @@ use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::DataBlock;
 use common_expression::FromData;
+use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -142,14 +143,14 @@ impl<'a> FuseSnapshot<'a> {
             StringType::from_data(snapshot_ids),
             StringType::from_data(snapshot_locations),
             UInt64Type::from_data(format_versions),
-            NullableType::<StringType>::from_data(prev_snapshot_ids),
+            StringType::from_opt_data(prev_snapshot_ids),
             UInt64Type::from_data(segment_count),
             UInt64Type::from_data(block_count),
             UInt64Type::from_data(row_count),
             UInt64Type::from_data(uncompressed),
             UInt64Type::from_data(compressed),
             UInt64Type::from_data(index_size),
-            NullableType::<TimestampType>::from_data(timestamps),
+            TimestampType::from_opt_data(timestamps),
         ]))
     }
 

@@ -20,11 +20,11 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::number::UInt64Type;
-use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
+use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
@@ -178,10 +178,10 @@ where TablesTable<T>: HistoryAware
             StringType::from_data(cluster_bys),
             StringType::from_data(created_ons),
             StringType::from_data(dropped_ons),
-            NullableType::<UInt64Type>::from_data(num_rows),
-            NullableType::<UInt64Type>::from_data(data_size),
-            NullableType::<UInt64Type>::from_data(data_compressed_size),
-            NullableType::<UInt64Type>::from_data(index_size),
+            UInt64Type::from_opt_data(num_rows),
+            UInt64Type::from_opt_data(data_size),
+            UInt64Type::from_opt_data(data_compressed_size),
+            UInt64Type::from_opt_data(index_size),
         ]))
     }
 }

@@ -22,11 +22,11 @@ use common_exception::Result;
 use common_expression::types::number::Int64Type;
 use common_expression::types::number::UInt32Type;
 use common_expression::types::number::UInt64Type;
-use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
+use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -111,7 +111,7 @@ impl SyncSystemTable for ProcessesTable {
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(processes_id),
             StringType::from_data(processes_type),
-            NullableType::<StringType>::from_data(processes_host),
+            StringType::from_opt_data(processes_host),
             StringType::from_data(processes_user),
             StringType::from_data(processes_state),
             StringType::from_data(processes_database),
@@ -121,7 +121,7 @@ impl SyncSystemTable for ProcessesTable {
             UInt64Type::from_data(processes_data_write_bytes),
             UInt64Type::from_data(processes_scan_progress_read_rows),
             UInt64Type::from_data(processes_scan_progress_read_bytes),
-            NullableType::<UInt32Type>::from_data(processes_mysql_connection_id),
+            UInt32Type::from_opt_data(processes_mysql_connection_id),
             UInt64Type::from_data(processes_time),
             StringType::from_data(processes_status),
         ]))

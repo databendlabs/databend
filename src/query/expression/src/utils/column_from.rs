@@ -31,21 +31,76 @@ pub trait FromData<D, Phantom: ?Sized> {
     }
 }
 
-impl<T, S> FromData<Vec<S>, [S; 0]> for T
-where for<'a> T: ArgType<Scalar = S>
-{
-    fn from_data(d: Vec<S>) -> Column {
-        T::upcast_column(T::column_from_vec(d, &[]))
-    }
+pub trait FromOptData<D, Phantom: ?Sized> {
+    fn from_opt_data(_: D) -> Column;
 }
 
-impl<T, S, D: Iterator<Item = S>> FromData<D, [S; 1]> for T
-where T: ArgType<Scalar = S>
-{
-    fn from_data(d: D) -> Column {
-        T::upcast_column(T::column_from_iter(d, &[]))
-    }
+macro_rules! for_common_scalar_values {
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { Int8Type },
+            { Int16Type },
+            { Int32Type },
+            { Int64Type },
+            { UInt8Type },
+            { UInt16Type },
+            { UInt32Type },
+            { UInt64Type },
+            { Float32Type },
+            { Float64Type },
+            { BooleanType },
+            { StringType },
+            { DateType },
+            { TimestampType },
+            { VariantType }
+        }
+    };
 }
+
+macro_rules! impl_from_iterator {
+    ([], $( { $T: ident} ),*) => {
+        $(
+            impl<D: Iterator<Item = <$T as ValueType>::Scalar>> FromData<D, i8> for $T
+            {
+                fn from_data(d: D) -> Column {
+                    $T::upcast_column($T::column_from_iter(d, &[]))
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! impl_from_data {
+    ([], $( { $T: ident} ),*) => {
+        $(
+            impl FromData<Vec<<$T as ValueType>::Scalar>, i16> for $T
+            {
+                fn from_data(d: Vec<<$T as ValueType>::Scalar>) -> Column {
+                    $T::upcast_column($T::column_from_vec(d, &[]))
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! impl_from_opt_data {
+    ([], $( { $T: ident} ),*) => {
+        $(
+            impl FromOptData<Vec<Option<<$T as ValueType>::Scalar>>, i8> for $T
+            {
+                fn from_opt_data(d: Vec<Option<<$T as ValueType>::Scalar>>) -> Column {
+                    type NT = NullableType::<$T>;
+                    NT::upcast_column(NT::column_from_vec(d, &[]))
+                }
+            }
+        )*
+    };
+}
+
+for_common_scalar_values! { impl_from_iterator }
+for_common_scalar_values! { impl_from_data }
+for_common_scalar_values! { impl_from_opt_data }
 
 impl<'a, D: AsRef<[&'a str]>> FromData<D, [Vec<u8>; 2]> for StringType {
     fn from_data(d: D) -> Column {

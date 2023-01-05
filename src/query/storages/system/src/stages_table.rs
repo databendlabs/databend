@@ -19,11 +19,11 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::number::UInt64Type;
-use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
+use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -91,8 +91,8 @@ impl AsyncSystemTable for StagesTable {
             StringType::from_data(stage_params),
             StringType::from_data(copy_options),
             StringType::from_data(file_format_options),
-            NullableType::<UInt64Type>::from_data(number_of_files),
-            NullableType::<StringType>::from_data(creator),
+            UInt64Type::from_opt_data(number_of_files),
+            StringType::from_opt_data(creator),
             StringType::from_data(comment),
         ]))
     }
