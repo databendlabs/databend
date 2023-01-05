@@ -282,6 +282,12 @@ pub enum AlterTableAction<'a> {
     RenameTable {
         new_table: Identifier<'a>,
     },
+    AddColumn {
+        column: ColumnDefinition<'a>,
+    },
+    DropColumn {
+        column: Identifier<'a>,
+    },
     AlterTableClusterKey {
         cluster_by: Vec<Expr<'a>>,
     },
@@ -300,6 +306,12 @@ impl Display for AlterTableAction<'_> {
         match self {
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")
+            }
+            AlterTableAction::AddColumn { column } => {
+                write!(f, "ADD COLUMN {column}")
+            }
+            AlterTableAction::DropColumn { column } => {
+                write!(f, "DROP COLUMN {column}")
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 write!(f, "CLUSTER BY ")?;

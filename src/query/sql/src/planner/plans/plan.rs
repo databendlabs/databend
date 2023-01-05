@@ -36,6 +36,7 @@ use crate::plans::share::RevokeShareObjectPlan;
 use crate::plans::share::ShowGrantTenantsOfSharePlan;
 use crate::plans::share::ShowObjectGrantPrivilegesPlan;
 use crate::plans::share::ShowSharesPlan;
+use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
@@ -57,6 +58,7 @@ use crate::plans::DropDatabasePlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropTableClusterKeyPlan;
+use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
@@ -137,6 +139,8 @@ pub enum Plan {
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),
+    AddTableColumn(Box<AddTableColumnPlan>),
+    DropTableColumn(Box<DropTableColumnPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable(Box<ReclusterTablePlan>),
@@ -244,6 +248,8 @@ impl Display for Plan {
             Plan::DropTable(_) => write!(f, "DropTable"),
             Plan::UndropTable(_) => write!(f, "UndropTable"),
             Plan::RenameTable(_) => write!(f, "RenameTable"),
+            Plan::AddTableColumn(_) => write!(f, "AddTableColumn"),
+            Plan::DropTableColumn(_) => write!(f, "DropTableColumn"),
             Plan::AlterTableClusterKey(_) => write!(f, "AlterTableClusterKey"),
             Plan::DropTableClusterKey(_) => write!(f, "DropTableClusterKey"),
             Plan::ReclusterTable(_) => write!(f, "ReclusterTable"),
@@ -326,6 +332,8 @@ impl Plan {
             Plan::DropTable(plan) => plan.schema(),
             Plan::UndropTable(plan) => plan.schema(),
             Plan::RenameTable(plan) => plan.schema(),
+            Plan::AddTableColumn(plan) => plan.schema(),
+            Plan::DropTableColumn(plan) => plan.schema(),
             Plan::AlterTableClusterKey(plan) => plan.schema(),
             Plan::DropTableClusterKey(plan) => plan.schema(),
             Plan::ReclusterTable(plan) => plan.schema(),

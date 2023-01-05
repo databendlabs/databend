@@ -99,6 +99,8 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::RenameTable(_) => {}
+            Plan::AddTableColumn(_) => {}
+            Plan::DropTableColumn(_) => {}
             Plan::AlterTableClusterKey(plan) => {
                 session
                     .validate_privilege(

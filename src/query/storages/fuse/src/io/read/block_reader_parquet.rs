@@ -144,6 +144,9 @@ impl BlockReader {
                     column_chunks.push(column_read);
                     column_descriptors.push(column_descriptor);
                     column_in_block_meta = true;
+                } else {
+                    column_in_block_meta = false;
+                    break;
                 }
             }
 
@@ -174,6 +177,7 @@ impl BlockReader {
         }
 
         let chunk = Chunk::try_new(arrays)?;
+
         if !need_to_fill_default_val {
             DataBlock::from_chunk(&self.schema(), &chunk)
         } else {

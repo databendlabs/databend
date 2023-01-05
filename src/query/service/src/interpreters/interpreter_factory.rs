@@ -141,6 +141,12 @@ impl InterpreterFactory {
                 ctx,
                 *rename_table.clone(),
             )?)),
+            Plan::AddTableColumn(add_table_column) => Ok(Arc::new(
+                AddTableColumnInterpreter::try_create(ctx, *add_table_column.clone())?,
+            )),
+            Plan::DropTableColumn(drop_table_column) => Ok(Arc::new(
+                DropTableColumnInterpreter::try_create(ctx, *drop_table_column.clone())?,
+            )),
             Plan::AlterTableClusterKey(alter_table_cluster_key) => Ok(Arc::new(
                 AlterTableClusterKeyInterpreter::try_create(ctx, *alter_table_cluster_key.clone())?,
             )),

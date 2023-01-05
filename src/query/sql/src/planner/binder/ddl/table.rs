@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
+use common_ast::ast::ColumnDefinition;
 use common_ast::ast::CompactTarget;
 use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
@@ -71,12 +72,14 @@ use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::IdentifierNormalizer;
+use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CastExpr;
 use crate::plans::CreateTablePlanV2;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
+use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::OptimizeTableAction;
@@ -590,6 +593,27 @@ impl<'a> Binder {
                     entities,
                 })))
             }
+            AlterTableAction::AddColumn { column } => {
+                let (schema, field_default_exprs, field_comments) = self
+                    .analyze_create_table_schema_by_columns(&[column.clone()])
+                    .await?;
+                Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
+                    catalog,
+                    database,
+                    table,
+                    schema,
+                    field_default_exprs,
+                    field_comments,
+                })))
+            }
+            AlterTableAction::DropColumn { column } => {
+                Ok(Plan::DropTableColumn(Box::new(DropTableColumnPlan {
+                    catalog,
+                    database,
+                    table,
+                    column: column.to_string(),
+                })))
+            }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 let schema = self
                     .ctx
@@ -858,51 +882,61 @@ impl<'a> Binder {
         })))
     }
 
+    async fn analyze_create_table_schema_by_columns(
+        &self,
+        columns: &[ColumnDefinition<'a>],
+    ) -> Result<(DataSchemaRef, Vec<Option<Scalar>>, Vec<String>)> {
+        let bind_context = BindContext::new();
+        let mut scalar_binder = ScalarBinder::new(
+            &bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+        );
+        let mut fields = Vec::with_capacity(columns.len());
+        let mut fields_default_expr = Vec::with_capacity(columns.len());
+        let mut fields_comments = Vec::with_capacity(columns.len());
+        for column in columns.iter() {
+            let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
+            let data_type = TypeFactory::instance().get(column.data_type.to_string())?;
+
+            fields.push(DataField::new(&name, data_type.clone()));
+            fields_default_expr.push({
+                if let Some(default_expr) = &column.default_expr {
+                    let (mut expr, expr_type) = scalar_binder.bind(default_expr).await?;
+                    if compare_coercion(&data_type, &expr_type).is_err() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "column {name} is of type {} but default expression is of type {}",
+                            data_type, expr_type
+                        )));
+                    }
+                    if !expr_type.eq(&data_type) {
+                        expr = Scalar::CastExpr(CastExpr {
+                            argument: Box::new(expr),
+                            from_type: Box::new(expr_type),
+                            target_type: Box::new(data_type),
+                        })
+                    }
+                    Some(expr)
+                } else {
+                    None
+                }
+            });
+            fields_comments.push(column.comment.clone().unwrap_or_default());
+        }
+        let schema = DataSchemaRefExt::create(fields);
+        Self::validate_create_table_schema(&schema)?;
+        Ok((schema, fields_default_expr, fields_comments))
+    }
+
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource<'a>,
     ) -> Result<(DataSchemaRef, Vec<Option<Scalar>>, Vec<String>)> {
-        let bind_context = BindContext::new();
         match source {
             CreateTableSource::Columns(columns) => {
-                let mut scalar_binder = ScalarBinder::new(
-                    &bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                );
-                let mut fields = Vec::with_capacity(columns.len());
-                let mut fields_default_expr = Vec::with_capacity(columns.len());
-                let mut fields_comments = Vec::with_capacity(columns.len());
-                for column in columns.iter() {
-                    let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-                    let data_type = TypeFactory::instance().get(column.data_type.to_string())?;
-
-                    fields.push(DataField::new(&name, data_type.clone()));
-                    fields_default_expr.push({
-                        if let Some(default_expr) = &column.default_expr {
-                            let (mut expr, expr_type) = scalar_binder.bind(default_expr).await?;
-                            if compare_coercion(&data_type, &expr_type).is_err() {
-                                return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
-                            }
-                            if !expr_type.eq(&data_type) {
-                                expr = Scalar::CastExpr(CastExpr {
-                                    argument: Box::new(expr),
-                                    from_type: Box::new(expr_type),
-                                    target_type: Box::new(data_type),
-                                })
-                            }
-                            Some(expr)
-                        } else {
-                            None
-                        }
-                    });
-                    fields_comments.push(column.comment.clone().unwrap_or_default());
-                }
-                let schema = DataSchemaRefExt::create(fields);
-                Self::validate_create_table_schema(&schema)?;
-                Ok((schema, fields_default_expr, fields_comments))
+                self.analyze_create_table_schema_by_columns(columns).await
             }
             CreateTableSource::Like {
                 catalog,

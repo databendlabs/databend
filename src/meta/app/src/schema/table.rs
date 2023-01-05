@@ -22,7 +22,9 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
+use common_exception::Result;
 use common_meta_types::MatchSeq;
 use common_storage::StorageParams;
 use maplit::hashmap;
@@ -222,6 +224,24 @@ pub struct TableMeta {
     // if used in CreateTableReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
     pub statistics: TableStatistics,
+}
+
+impl TableMeta {
+    pub fn add_columns(&mut self, fields: &Vec<DataField>, field_comments: &Vec<String>) {
+        let mut new_schema = self.schema.as_ref().to_owned();
+        new_schema.add_columns(fields);
+        self.schema = Arc::new(new_schema);
+        field_comments.iter().for_each(|c| {
+            self.field_comments.push(c.to_owned());
+        });
+    }
+
+    pub fn drop_column(&mut self, column: &String) -> Result<()> {
+        let mut new_schema = self.schema.as_ref().to_owned();
+        new_schema.drop_column(column)?;
+        self.schema = Arc::new(new_schema);
+        Ok(())
+    }
 }
 
 impl TableInfo {

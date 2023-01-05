@@ -32,11 +32,8 @@ use crate::TypeDeserializerImpl;
 pub struct DataSchema {
     pub(crate) fields: Vec<DataField>,
     pub(crate) metadata: BTreeMap<String, String>,
-
     pub(crate) max_column_id: u32,
-
     // map column id to fields index
-    #[serde(skip_serializing)]
     pub(crate) index_of_column_id: HashMap<u32, usize>,
 }
 
@@ -56,14 +53,28 @@ impl DataSchema {
     ) -> (u32, HashMap<u32, usize>, Vec<DataField>) {
         let mut max_column_id = 0;
         let mut index_of_column_id = HashMap::new();
+        let mut new_fields = Vec::with_capacity(fields.len());
         fields.iter().enumerate().for_each(|(i, f)| {
-            let column_id = f.column_id().unwrap_or(i as u32);
-            if column_id > max_column_id {
-                max_column_id = column_id;
-            }
-            index_of_column_id.insert(column_id, i);
+            let field = if max_id.is_none() {
+                let column_id = i as u32;
+                if column_id > max_column_id {
+                    max_column_id = column_id;
+                }
+                index_of_column_id.insert(column_id, i);
+                let mut field = f.clone();
+                field.column_id = Some(column_id);
+                field
+            } else {
+                index_of_column_id.insert(f.column_id().unwrap(), i);
+                f.clone()
+            };
+            new_fields.push(field);
         });
-        (max_id.unwrap_or(max_column_id), index_of_column_id, fields)
+        (
+            max_id.unwrap_or(max_column_id + 1),
+            index_of_column_id,
+            new_fields,
+        )
     }
 
     pub fn new(fields: Vec<DataField>) -> Self {
@@ -126,13 +137,15 @@ impl DataSchema {
         *(self.index_of_column_id.get(column_id).unwrap())
     }
 
-    pub fn add_column(&mut self, field: &DataField) {
-        let mut field = field.clone();
-        field.column_id = Some(self.max_column_id);
-        self.index_of_column_id
-            .insert(self.max_column_id, self.fields.len());
-        self.fields.push(field);
-        self.max_column_id += 1;
+    pub fn add_columns(&mut self, field: &[DataField]) {
+        field.iter().for_each(|field| {
+            let mut field = field.clone();
+            field.column_id = Some(self.max_column_id);
+            self.max_column_id += 1;
+            self.index_of_column_id
+                .insert(self.max_column_id, self.fields.len());
+            self.fields.push(field);
+        });
     }
 
     pub fn drop_column(&mut self, column: &str) -> Result<()> {
@@ -232,7 +245,7 @@ impl DataSchema {
             .iter()
             .map(|idx| self.fields()[*idx].clone())
             .collect();
-        Self::new_from(fields, self.meta().clone())
+        Self::new_from_with_max_column_id(fields, self.meta().clone(), self.max_column_id)
     }
 
     /// project with inner columns by path.
@@ -242,7 +255,7 @@ impl DataSchema {
             .iter()
             .map(|path| Self::traverse_paths(self.fields(), path).unwrap())
             .collect();
-        Self::new_from(fields, self.meta().clone())
+        Self::new_from_with_max_column_id(fields, self.meta().clone(), self.max_column_id)
     }
 
     fn traverse_paths(fields: &[DataField], path: &[usize]) -> Result<DataField> {
@@ -286,7 +299,7 @@ impl DataSchema {
     /// project will do column pruning.
     #[must_use]
     pub fn project_by_fields(&self, fields: Vec<DataField>) -> Self {
-        Self::new_from(fields, self.meta().clone())
+        Self::new_from_with_max_column_id(fields, self.meta().clone(), self.max_column_id)
     }
 
     pub fn to_arrow(&self) -> ArrowSchema {

@@ -154,6 +154,12 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc {
         AlterTableAction::RenameTable { new_table } => RcDoc::line()
             .append(RcDoc::text("RENAME TO "))
             .append(RcDoc::text(new_table.to_string())),
+        AlterTableAction::AddColumn { column } => RcDoc::line()
+            .append(RcDoc::text("ADD COLUMN "))
+            .append(RcDoc::text(column.to_string())),
+        AlterTableAction::DropColumn { column } => RcDoc::line()
+            .append(RcDoc::text("DROP COLUMN "))
+            .append(RcDoc::text(column.to_string())),
         AlterTableAction::AlterTableClusterKey { cluster_by } => RcDoc::line()
             .append(RcDoc::text("CLUSTER BY "))
             .append(parenthenized(

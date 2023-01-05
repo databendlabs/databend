@@ -74,6 +74,7 @@ impl ParquetReader {
                     chunks.push(column_chunk);
                     column_in_block_meta = true;
                 } else {
+                    column_in_block_meta = false;
                     break;
                 }
             }

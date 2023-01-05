@@ -736,9 +736,11 @@ async fn exprs_to_datavalue<'a>(
 ) -> Result<Vec<DataValue>> {
     let schema_fields_len = schema.fields().len();
     if exprs.len() != schema_fields_len {
-        return Err(ErrorCode::TableSchemaMismatch(
-            "Table columns count is not match, expect {schema_fields_len}, input: {exprs.len()}",
-        ));
+        return Err(ErrorCode::TableSchemaMismatch(format!(
+            "Table columns count is not match, expect {}, input: {}",
+            schema_fields_len,
+            exprs.len()
+        )));
     }
     let mut operators = Vec::with_capacity(schema_fields_len);
     for (i, expr) in exprs.iter().enumerate() {

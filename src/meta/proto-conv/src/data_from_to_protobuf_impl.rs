@@ -53,7 +53,7 @@ impl FromToProto for dv::DataSchema {
             fs.push(dv::DataField::from_pb(f)?);
         }
 
-        let v = Self::new_from_with_max_column_id(fs, p.metadata, max_column_id);
+        let v = Self::new_from_with_max_column_id(fs, p.metadata, max_column_id + 1);
         Ok(v)
     }
 

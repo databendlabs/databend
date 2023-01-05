@@ -19,6 +19,21 @@ use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 #[test]
+fn test_schema_new_from_field() -> Result<()> {
+    let field1 = DataField::new_nullable("a", u64::to_data_type());
+    let field2 = DataField::new_nullable("b", u64::to_data_type());
+    let field3 = DataField::new_nullable("c", u64::to_data_type());
+
+    let schema = DataSchema::new(vec![field1, field2, field3]);
+    assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    assert_eq!(schema.column_id_of("b").unwrap(), 1);
+    assert_eq!(schema.column_id_of("c").unwrap(), 2);
+    assert_eq!(schema.max_column_id(), 3);
+
+    Ok(())
+}
+
+#[test]
 fn test_schema_modify_field() -> Result<()> {
     let field1 = DataField::new_with_column_id("a", u64::to_data_type(), 0);
     let field2 = DataField::new_with_column_id("b", u64::to_data_type(), 1);
@@ -29,15 +44,14 @@ fn test_schema_modify_field() -> Result<()> {
 
     assert_eq!(schema.fields().to_owned(), vec![field1.clone()]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    assert_eq!(schema.max_column_id(), 1);
 
     // add column b
-    schema.add_column(&field2);
-    assert_eq!(schema.fields().to_owned(), vec![
-        field1.clone(),
-        field2.clone(),
-    ]);
+    schema.add_columns(&[field2.clone()]);
+    assert_eq!(schema.fields().to_owned(), vec![field1.clone(), field2,]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.column_id_of("b").unwrap(), 1);
+    assert_eq!(schema.max_column_id(), 2);
 
     // drop column b
     schema.drop_column("b")?;
@@ -45,10 +59,11 @@ fn test_schema_modify_field() -> Result<()> {
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
 
     // add column c
-    schema.add_column(&field3);
+    schema.add_columns(&[field3.clone()]);
     assert_eq!(schema.fields().to_owned(), vec![field1, field3]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.column_id_of("c").unwrap(), 2);
+    assert_eq!(schema.max_column_id(), 3);
 
     Ok(())
 }

@@ -298,9 +298,8 @@ impl DataBlock {
         Ok(DataBlock::create(schema.clone(), columns))
     }
 
-    // data_fields contain all the data field that want to return in DataBlock in two cases:
-    // 1. if data_fields[i].is_some(), then DataBlock.column[i] = num_rows * DataField.default_value()
-    // 2. else, DataBlock.column[i] = chuck.columns[i]
+    // If field_marks[i].is_some(), then DataBlock.column[i] = num_rows * DataField.default_value().
+    // Else, DataBlock.column[i] = chuck.columns[i]
     pub fn create_with_schema_from_chunk<A: AsRef<dyn Array>>(
         schema: &DataSchemaRef,
         chuck: &Chunk<A>,
@@ -308,11 +307,10 @@ impl DataBlock {
         num_rows: usize,
     ) -> Result<DataBlock> {
         let mut data_block = DataBlock::create(Arc::new(DataSchema::empty()), vec![]);
-
         let mut chunk_idx: usize = 0;
         let chunk_columns = chuck.columns();
-
         let schema_fields = schema.fields();
+
         for (i, mark) in field_marks.iter().enumerate() {
             let field = &schema_fields[i];
             let column = if mark.is_some() {
@@ -344,12 +342,11 @@ impl DataBlock {
         num_rows: usize,
     ) -> Result<DataBlock> {
         let mut new_data_block = DataBlock::create(Arc::new(DataSchema::empty()), vec![]);
-
-        let mut chunk_idx: usize = 0;
-        let chunk_columns = data_block.columns();
-
+        let mut data_block_columns_idx: usize = 0;
+        let data_block_columns = data_block.columns();
         let schema_fields = schema.fields();
-        for (_i, field) in schema_fields.iter().enumerate() {
+
+        for field in schema_fields {
             let column_id = field.column_id().unwrap();
             if !data_block_column_ids.contains(&column_id) {
                 let default_value = field.data_type().default_value();
@@ -359,8 +356,8 @@ impl DataBlock {
 
                 new_data_block = new_data_block.add_column(column, field.clone())?;
             } else {
-                let chunk_column = &chunk_columns[chunk_idx];
-                chunk_idx += 1;
+                let chunk_column = &data_block_columns[data_block_columns_idx];
+                data_block_columns_idx += 1;
                 new_data_block = new_data_block.add_column(chunk_column.clone(), field.clone())?;
             }
         }

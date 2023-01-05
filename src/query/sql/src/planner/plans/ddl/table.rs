@@ -163,6 +163,38 @@ impl RenameTablePlan {
     }
 }
 
+// Table add column
+#[derive(Clone, Debug, PartialEq)]
+pub struct AddTableColumnPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub schema: DataSchemaRef,
+    pub field_default_exprs: Vec<Option<Scalar>>,
+    pub field_comments: Vec<String>,
+}
+
+impl<'a> AddTableColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+// Table drop column
+#[derive(Clone, Debug, PartialEq)]
+pub struct DropTableColumnPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub column: String,
+}
+
+impl<'a> DropTableColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 /// Show.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowCreateTablePlan {

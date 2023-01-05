@@ -311,6 +311,8 @@ pub enum TokenKind {
     CHAR,
     #[token("CHARACTER", ignore(ascii_case))]
     CHARACTER,
+    #[token("COLUMN", ignore(ascii_case))]
+    COLUMN,
     #[token("COPY_OPTIONS", ignore(ascii_case))]
     COPY_OPTIONS,
     #[token("COPY", ignore(ascii_case))]

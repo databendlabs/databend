@@ -1309,6 +1309,16 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
+            AlterTableAction::AddColumn { column } => {
+                let action_name = format!("Action Add column {}", column);
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
+            AlterTableAction::DropColumn { column } => {
+                let action_name = format!("Action Drop column {}", column);
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 let mut cluster_by_children = Vec::with_capacity(cluster_by.len());
                 for cluster_by_expr in cluster_by.iter() {
