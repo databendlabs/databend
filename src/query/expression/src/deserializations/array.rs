@@ -28,21 +28,20 @@ use crate::TypeDeserializerImpl;
 
 pub struct ArrayDeserializer {
     pub inner: Box<TypeDeserializerImpl>,
-    pub offsets: Vec<u64>,
+    offsets: Vec<u64>,
 }
 
 impl ArrayDeserializer {
     pub fn with_capacity(capacity: usize, inner_ty: &DataType) -> Self {
+        let mut offsets = Vec::with_capacity(capacity + 1);
+        offsets.push(0);
         Self {
             inner: Box::new(inner_ty.create_deserializer(capacity)),
-            offsets: Vec::with_capacity(capacity),
+            offsets,
         }
     }
 
     pub fn add_offset(&mut self, size: usize) {
-        if self.offsets.is_empty() {
-            self.offsets.push(0);
-        }
         self.offsets
             .push(*self.offsets.last().unwrap() + size as u64);
     }

@@ -21,6 +21,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast as arrow_cast;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
@@ -1031,14 +1032,30 @@ impl Column {
                 })
             }
 
-            ArrowType::Timestamp(_, _) => Column::Timestamp(
-                arrow_col
+            ArrowType::Timestamp(uint, _) => {
+                let values = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Int64Array>()
                     .expect("fail to read from arrow: array should be `Int64Array`")
-                    .values()
-                    .clone(),
-            ),
+                    .values();
+                let convert = match uint {
+                    TimeUnit::Second => (1_000_000, 1),
+                    TimeUnit::Millisecond => (1_000, 1),
+                    TimeUnit::Microsecond => (1, 1),
+                    TimeUnit::Nanosecond => (1, 1_000),
+                };
+
+                let values = if convert.0 == 1 && convert.1 == 1 {
+                    values.clone()
+                } else {
+                    let values = values
+                        .iter()
+                        .map(|x| x * convert.0 / convert.1)
+                        .collect::<Vec<_>>();
+                    values.into()
+                };
+                Column::Timestamp(values)
+            }
             ArrowDataType::Date32 => Column::Date(
                 arrow_col
                     .as_any()

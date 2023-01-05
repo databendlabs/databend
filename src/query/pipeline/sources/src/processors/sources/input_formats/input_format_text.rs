@@ -397,7 +397,11 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             .create_deserializers(self.ctx.block_compact_thresholds.min_rows_per_block);
         self.num_rows = 0;
 
-        Ok(vec![DataBlock::new_from_columns(columns)])
+        if columns.is_empty() || columns[0].len() == 0 {
+            Ok(vec![])
+        } else {
+            Ok(vec![DataBlock::new_from_columns(columns)])
+        }
     }
 
     fn memory_size(&self) -> usize {
