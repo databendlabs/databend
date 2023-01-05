@@ -38,6 +38,7 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
@@ -100,6 +101,11 @@ impl<'a> AggregateRewriter<'a> {
             Scalar::OrExpr(scalar) => Ok(OrExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
+                return_type: scalar.return_type.clone(),
+            }
+            .into()),
+            Scalar::NotExpr(scalar) => Ok(NotExpr {
+                argument: Box::new(self.visit(&scalar.argument)?),
                 return_type: scalar.return_type.clone(),
             }
             .into()),

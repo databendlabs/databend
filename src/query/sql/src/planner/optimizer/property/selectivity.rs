@@ -68,6 +68,11 @@ impl<'a> SelectivityEstimator<'a> {
                 return f64::min(left_selectivity, right_selectivity);
             }
 
+            Scalar::NotExpr(not_expr) => {
+                let arg_selectivity = self.compute_selectivity(&not_expr.argument);
+                return 1.0 - arg_selectivity;
+            }
+
             Scalar::ComparisonExpr(comp_expr) => {
                 return self.compute_selectivity_comparison_expr(comp_expr);
             }
@@ -107,10 +112,6 @@ impl<'a> SelectivityEstimator<'a> {
                     // the column is in a uniform distribution.
                     return 1.0 / col_hist.num_distinct_values();
                 }
-                ComparisonOp::NotEqual => {
-                    // For not equal predicate, we treat it as opposite of equal predicate.
-                    return 1.0 - 1.0 / col_hist.num_distinct_values();
-                }
                 ComparisonOp::GT => {
                     // For greater than predicate, we use the number of values
                     // that are greater than the constant value to estimate the
@@ -136,38 +137,6 @@ impl<'a> SelectivityEstimator<'a> {
                     for bucket in col_hist.buckets_iter() {
                         if let Ok(ord) = bucket.upper_bound().compare(&const_datum) {
                             if ord == Ordering::Less {
-                                num_greater += bucket.num_values();
-                            } else {
-                                break;
-                            }
-                        } else {
-                            return DEFAULT_SELECTIVITY;
-                        }
-                    }
-                    return num_greater / col_hist.num_values();
-                }
-                ComparisonOp::GTE => {
-                    // Greater than or equal to predicate is similar to greater than predicate.
-                    let mut num_greater = 0.0;
-                    for bucket in col_hist.buckets_iter() {
-                        if let Ok(ord) = bucket.upper_bound().compare(&const_datum) {
-                            if ord == Ordering::Less || ord == Ordering::Equal {
-                                num_greater += bucket.num_values();
-                            } else {
-                                break;
-                            }
-                        } else {
-                            return DEFAULT_SELECTIVITY;
-                        }
-                    }
-                    return 1.0 - num_greater / col_hist.num_values();
-                }
-                ComparisonOp::LTE => {
-                    // Less than or equal to predicate is similar to less than predicate.
-                    let mut num_greater = 0.0;
-                    for bucket in col_hist.buckets_iter() {
-                        if let Ok(ord) = bucket.upper_bound().compare(&const_datum) {
-                            if ord == Ordering::Less || ord == Ordering::Equal {
                                 num_greater += bucket.num_values();
                             } else {
                                 break;

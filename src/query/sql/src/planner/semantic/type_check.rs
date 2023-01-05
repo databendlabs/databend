@@ -67,6 +67,7 @@ use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::SubqueryExpr;
@@ -153,6 +154,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve(
         &mut self,
         expr: &Expr<'_>,
+        // TODO(andylokandy): remove me
         required_type: Option<DataType>,
     ) -> Result<Box<(Scalar, DataType)>> {
         let box (scalar, data_type): Box<(Scalar, DataType)> = match expr {
@@ -197,23 +199,8 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_function(span, "is_not_null", args, required_type)
                         .await?
                 } else {
-                    self.resolve_function(
-                        span,
-                        "not",
-                        &[&Expr::FunctionCall {
-                            span,
-                            distinct: false,
-                            name: Identifier {
-                                name: "is_not_null".to_string(),
-                                quote: None,
-                                span: span[0].clone(),
-                            },
-                            args: vec![(args[0]).clone()],
-                            params: vec![],
-                        }],
-                        None,
-                    )
-                    .await?
+                    self.resolve_function(span, "is_null", args, required_type)
+                        .await?
                 }
             }
 
@@ -302,10 +289,10 @@ impl<'a> TypeChecker<'a> {
                     };
                     let args = vec![&array_expr, expr.as_ref()];
                     if *not {
-                        self.resolve_function(
+                        self.resolve_unary_op(
                             span,
-                            "not",
-                            &[&Expr::FunctionCall {
+                            &UnaryOperator::Not,
+                            &Expr::FunctionCall {
                                 span,
                                 distinct: false,
                                 name: Identifier {
@@ -315,7 +302,7 @@ impl<'a> TypeChecker<'a> {
                                 },
                                 args: args.iter().copied().cloned().collect(),
                                 params: vec![],
-                            }],
+                            },
                             None,
                         )
                         .await?
@@ -371,10 +358,22 @@ impl<'a> TypeChecker<'a> {
                     // Rewrite `expr BETWEEN low AND high`
                     // into `expr >= low AND expr <= high`
                     let box (ge_func, _left_type) = self
-                        .resolve_function(span, "gte", &[expr.as_ref(), low.as_ref()], None)
+                        .resolve_binary_op(
+                            span,
+                            &BinaryOperator::Gte,
+                            expr.as_ref(),
+                            low.as_ref(),
+                            None,
+                        )
                         .await?;
                     let box (le_func, _right_type) = self
-                        .resolve_function(span, "lte", &[expr.as_ref(), high.as_ref()], None)
+                        .resolve_binary_op(
+                            span,
+                            &BinaryOperator::Lte,
+                            expr.as_ref(),
+                            high.as_ref(),
+                            None,
+                        )
                         .await?;
 
                     // Type check
@@ -470,15 +469,15 @@ impl<'a> TypeChecker<'a> {
                                     modifier: Some(SubqueryModifier::Any),
                                     subquery: (*subquery).clone(),
                                 };
-                                self.resolve_function(
+                                self.resolve_unary_op(
                                     span,
-                                    "not",
-                                    &[&Expr::BinaryOp {
+                                    &UnaryOperator::Not,
+                                    &Expr::BinaryOp {
                                         span,
                                         op: contrary_op,
                                         left: (*left).clone(),
                                         right: Box::new(rewritten_subquery),
-                                    }],
+                                    },
                                     None,
                                 )
                                 .await?
@@ -621,7 +620,7 @@ impl<'a> TypeChecker<'a> {
                 let func_name = name.name.to_lowercase();
                 let func_name = func_name.as_str();
                 if !is_builtin_function(func_name)
-                    && !Self::is_rewritable_scalar_function(func_name)
+                    && !Self::all_rewritable_scalar_function().contains(&func_name)
                 {
                     return self.resolve_udf(span, func_name, args).await;
                 }
@@ -752,15 +751,15 @@ impl<'a> TypeChecker<'a> {
                 // Not in subquery will be transformed to not(Expr = Any(...))
                 if *not {
                     return self
-                        .resolve_function(
+                        .resolve_unary_op(
                             span,
-                            "not",
-                            &[&Expr::InSubquery {
+                            &UnaryOperator::Not,
+                            &Expr::InSubquery {
                                 subquery: subquery.clone(),
                                 not: false,
                                 expr: expr.clone(),
                                 span,
-                            }],
+                            },
                             required_type,
                         )
                         .await;
@@ -1088,30 +1087,31 @@ impl<'a> TypeChecker<'a> {
         required_type: Option<DataType>,
     ) -> Result<Box<(Scalar, DataType)>> {
         match op {
-            BinaryOperator::NotLike | BinaryOperator::NotRegexp | BinaryOperator::NotRLike => {
+            BinaryOperator::NotEq
+            | BinaryOperator::Lte
+            | BinaryOperator::Gte
+            | BinaryOperator::NotLike
+            | BinaryOperator::NotRegexp
+            | BinaryOperator::NotRLike => {
                 let positive_op = match op {
+                    BinaryOperator::NotEq => BinaryOperator::Eq,
+                    BinaryOperator::Lte => BinaryOperator::Gt,
+                    BinaryOperator::Gte => BinaryOperator::Lt,
                     BinaryOperator::NotLike => BinaryOperator::Like,
                     BinaryOperator::NotRegexp => BinaryOperator::Regexp,
                     BinaryOperator::NotRLike => BinaryOperator::RLike,
                     _ => unreachable!(),
                 };
-                let ret = self
+                let (argument, data_type) = *self
                     .resolve_binary_op(span, &positive_op, left, right, required_type)
                     .await?;
-                let return_type = Box::new(ret.1.clone());
-                let scalar = Scalar::FunctionCall(FunctionCall {
-                    arguments: vec![ret.0.clone()],
-                    func_name: "not".to_string(),
-                    return_type,
+                let scalar = Scalar::NotExpr(NotExpr {
+                    argument: Box::new(argument),
+                    return_type: Box::new(data_type.clone()),
                 });
-                Ok(Box::new((scalar, ret.1.clone())))
+                Ok(Box::new((scalar, data_type)))
             }
-            BinaryOperator::Gt
-            | BinaryOperator::Lt
-            | BinaryOperator::Gte
-            | BinaryOperator::Lte
-            | BinaryOperator::Eq
-            | BinaryOperator::NotEq => {
+            BinaryOperator::Gt | BinaryOperator::Lt | BinaryOperator::Eq => {
                 let op = ComparisonOp::try_from(op)?;
                 let box (left, _) = self.resolve(left, None).await?;
                 let box (right, _) = self.resolve(right, None).await?;
@@ -1224,13 +1224,32 @@ impl<'a> TypeChecker<'a> {
             }
 
             UnaryOperator::Minus => {
-                self.resolve_function(span, "negate", &[child], required_type)
+                self.resolve_function(span, "minus", &[child], required_type)
                     .await
             }
 
             UnaryOperator::Not => {
-                self.resolve_function(span, "not", &[child], required_type)
-                    .await
+                let (argument, _) = *self.resolve(child, required_type).await?;
+
+                // Type check
+                let raw_expr = RawExpr::FunctionCall {
+                    span: None,
+                    name: "not".to_string(),
+                    params: vec![],
+                    args: vec![argument.as_raw_expr()],
+                };
+                let registry = &BUILTIN_FUNCTIONS;
+                let expr = type_check::check(&raw_expr, registry)
+                    .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
+
+                Ok(Box::new((
+                    NotExpr {
+                        argument: Box::new(argument),
+                        return_type: Box::new(expr.data_type().clone()),
+                    }
+                    .into(),
+                    expr.data_type().clone(),
+                )))
             }
         }
     }
@@ -1457,24 +1476,23 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
-    fn is_rewritable_scalar_function(func_name: &str) -> bool {
-        matches!(
-            func_name.to_lowercase().as_str(),
-            "database"
-                | "currentdatabase"
-                | "current_database"
-                | "version"
-                | "user"
-                | "currentuser"
-                | "current_user"
-                | "current_role"
-                | "connection_id"
-                | "timezone"
-                | "nullif"
-                | "ifnull"
-                | "is_null"
-                | "coalesce"
-        )
+    pub fn all_rewritable_scalar_function() -> &'static [&'static str] {
+        &[
+            "database",
+            "currentdatabase",
+            "current_database",
+            "version",
+            "user",
+            "currentuser",
+            "current_user",
+            "current_role",
+            "connection_id",
+            "timezone",
+            "nullif",
+            "ifnull",
+            "is_null",
+            "coalesce",
+        ]
     }
 
     #[async_recursion::async_recursion]
@@ -1484,7 +1502,7 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         args: &[&Expr<'_>],
     ) -> Option<Result<Box<(Scalar, DataType)>>> {
-        match (func_name.to_lowercase().as_str(), &args) {
+        match (func_name.to_lowercase().as_str(), args) {
             ("database" | "currentdatabase" | "current_database", &[]) => Some(
                 self.resolve(
                     &Expr::Literal {
@@ -1566,8 +1584,8 @@ impl<'a> TypeChecker<'a> {
                             &Expr::BinaryOp {
                                 span,
                                 op: BinaryOperator::Eq,
-                                left: Box::new((*arg_x).clone()),
-                                right: Box::new((*arg_y).clone()),
+                                left: Box::new(arg_x.clone()),
+                                right: Box::new(arg_y.clone()),
                             },
                             &Expr::Literal {
                                 span,
@@ -1589,7 +1607,7 @@ impl<'a> TypeChecker<'a> {
                         &[
                             &Expr::IsNull {
                                 span,
-                                expr: Box::new((*arg_x).clone()),
+                                expr: Box::new(arg_x.clone()),
                                 not: false,
                             },
                             arg_y,
@@ -1600,17 +1618,28 @@ impl<'a> TypeChecker<'a> {
                     .await,
                 )
             }
-            ("is_null", &[arg_x]) => Some(
-                self.resolve(
-                    &Expr::IsNull {
+            ("is_null", &[arg_x]) => {
+                // Rewrite is_null(x) to not(is_not_null(x))
+                Some(
+                    self.resolve_unary_op(
                         span,
-                        expr: Box::new((*arg_x).clone()),
-                        not: false,
-                    },
-                    None,
+                        &UnaryOperator::Not,
+                        &Expr::FunctionCall {
+                            span,
+                            distinct: false,
+                            name: Identifier {
+                                name: "is_not_null".to_string(),
+                                quote: None,
+                                span: span[0].clone(),
+                            },
+                            args: vec![arg_x.clone()],
+                            params: vec![],
+                        },
+                        None,
+                    )
+                    .await,
                 )
-                .await,
-            ),
+            }
             ("coalesce", args) => {
                 // coalesce(arg0, arg1, ..., argN) is essentially
                 // multi_if(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)

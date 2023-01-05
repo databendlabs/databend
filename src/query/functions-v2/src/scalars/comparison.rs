@@ -50,10 +50,6 @@ use regex::bytes::Regex;
 use crate::scalars::string_multi_args::regexp;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_negative("noteq", "eq");
-    registry.register_negative("gte", "lt");
-    registry.register_negative("lte", "gt");
-
     register_string_cmp(registry);
     register_date_cmp(registry);
     register_timestamp_cmp(registry);
@@ -356,21 +352,17 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
         if lhs != rhs { Some(false) } else { None }
     });
     register_tuple_cmp_op(registry, "lt", false, |lhs, rhs| {
-        if lhs < rhs {
-            Some(true)
-        } else if lhs > rhs {
-            Some(false)
-        } else {
-            None
+        match lhs.partial_cmp(&rhs) {
+            Some(Ordering::Less) => Some(true),
+            Some(Ordering::Greater) => Some(false),
+            _ => None,
         }
     });
     register_tuple_cmp_op(registry, "gt", false, |lhs, rhs| {
-        if lhs > rhs {
-            Some(true)
-        } else if lhs < rhs {
-            Some(false)
-        } else {
-            None
+        match lhs.partial_cmp(&rhs) {
+            Some(Ordering::Greater) => Some(true),
+            Some(Ordering::Less) => Some(false),
+            _ => None,
         }
     });
 }

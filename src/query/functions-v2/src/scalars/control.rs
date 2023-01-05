@@ -35,8 +35,6 @@ use common_expression::Value;
 use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_negative("is_null", "is_not_null");
-
     // special case for multi_if to have better performance in fixed size loop
     registry.register_function_factory("if", |_, args_type| {
         if args_type.len() != 3 {

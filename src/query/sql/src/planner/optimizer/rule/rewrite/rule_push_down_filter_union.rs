@@ -27,6 +27,7 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -156,6 +157,10 @@ fn replace_column_binding(
         Scalar::OrExpr(expr) => Ok(Scalar::OrExpr(OrExpr {
             left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
             right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
+            return_type: expr.return_type,
+        })),
+        Scalar::NotExpr(expr) => Ok(Scalar::NotExpr(NotExpr {
+            argument: Box::new(replace_column_binding(index_pairs, *expr.argument)?),
             return_type: expr.return_type,
         })),
         Scalar::ComparisonExpr(expr) => Ok(Scalar::ComparisonExpr(ComparisonExpr {
