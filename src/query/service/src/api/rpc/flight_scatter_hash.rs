@@ -30,7 +30,7 @@ use common_expression::FunctionContext;
 use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Value;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::PhysicalScalar;
 
 use crate::api::rpc::flight_scatter::FlightScatter;

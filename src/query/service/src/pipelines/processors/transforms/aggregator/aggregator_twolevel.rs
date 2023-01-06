@@ -23,7 +23,7 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
 use common_expression::Value;
-use common_functions_v2::aggregates::StateAddr;
+use common_functions::aggregates::StateAddr;
 use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;

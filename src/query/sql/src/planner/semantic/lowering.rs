@@ -16,7 +16,7 @@ use common_exception::Result;
 use common_expression::type_check;
 use common_expression::Expr;
 use common_expression::RawExpr;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::plans::Scalar;
 use crate::ScalarExpr;

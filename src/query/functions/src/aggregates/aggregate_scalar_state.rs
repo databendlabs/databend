@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,141 +16,223 @@ use std::cmp::Ordering;
 use std::marker::PhantomData;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_io::prelude::*;
+use common_expression::types::DataType;
+use common_expression::types::ValueType;
+use common_expression::ColumnBuilder;
+use common_io::prelude::deserialize_from_slice;
+use common_io::prelude::serialize_into_buf;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub trait ScalarStateFunc<S: Scalar>: Send + Sync + 'static {
-    fn new() -> Self;
-    fn add(&mut self, value: S::RefType<'_>);
-    fn add_batch(&mut self, column: &ColumnRef, validity: Option<&Bitmap>) -> Result<()>;
-
-    fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
-    fn merge_result(&mut self, column: &mut dyn MutableColumn) -> Result<()>;
+// These types can downcast their builders successfully.
+// TODO(@b41sh):  Variant => VariantType can't be used because it will use Scalar::String to compare
+// Maybe we could use ValueType::compare() to compare them.
+#[macro_export]
+macro_rules! with_simple_no_number_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                String => StringType,
+                Boolean => BooleanType,
+                Timestamp => TimestampType,
+                Null => NullType,
+                EmptyArray => EmptyArrayType,
+                Date => DateType,
+            ],
+            $($tail)*
+        }
+    }
 }
 
-pub trait ChangeIf<S: Scalar>: Send + Sync + 'static {
-    fn change_if(l: S::RefType<'_>, r: S::RefType<'_>) -> bool;
+pub const TYPE_ANY: u8 = 0;
+pub const TYPE_MIN: u8 = 1;
+pub const TYPE_MAX: u8 = 2;
+
+#[macro_export]
+macro_rules! with_compare_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                TYPE_ANY => CmpAny,
+                TYPE_MIN => CmpMin,
+                TYPE_MAX => CmpMax,
+            ],
+            $($tail)*
+        }
+    }
+}
+
+pub trait ChangeIf<T: ValueType>: Send + Sync + 'static {
+    fn change_if(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool;
 }
 
 #[derive(Default)]
-pub struct CmpMin {}
+pub struct CmpMin;
 
-impl<S> ChangeIf<S> for CmpMin
+impl<T> ChangeIf<T> for CmpMin
 where
-    S: Scalar,
-    for<'a> S::RefType<'a>: PartialOrd,
+    T: ValueType,
+    for<'a> T::ScalarRef<'a>: PartialOrd,
 {
     #[inline]
-    fn change_if<'a>(l: S::RefType<'_>, r: S::RefType<'_>) -> bool {
-        let l = S::upcast_gat(l);
-        let r = S::upcast_gat(r);
+    fn change_if<'a>(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool {
+        let l = T::upcast_gat(l);
+        let r = T::upcast_gat(r);
         l.partial_cmp(&r).unwrap_or(Ordering::Equal) == Ordering::Greater
     }
 }
 
 #[derive(Default)]
-pub struct CmpMax {}
+pub struct CmpMax;
 
-impl<S> ChangeIf<S> for CmpMax
+impl<T> ChangeIf<T> for CmpMax
 where
-    S: Scalar,
-    for<'a> S::RefType<'a>: PartialOrd,
+    T: ValueType,
+    for<'a> T::ScalarRef<'a>: PartialOrd,
 {
     #[inline]
-    fn change_if<'a>(l: S::RefType<'_>, r: S::RefType<'_>) -> bool {
-        let l = S::upcast_gat(l);
-        let r = S::upcast_gat(r);
-
-        l.partial_cmp(&r).unwrap_or(Ordering::Equal) == Ordering::Less
+    fn change_if<'a>(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool {
+        let l = T::upcast_gat(l);
+        let r = T::upcast_gat(r);
+        l.partial_cmp(&r).unwrap_or(Ordering::Equal) == std::cmp::Ordering::Less
     }
 }
 
 #[derive(Default)]
-pub struct CmpAny {}
+pub struct CmpAny;
 
-impl<S> ChangeIf<S> for CmpAny
-where
-    S: Scalar,
-    for<'a> S::RefType<'a>: PartialOrd,
-{
+impl<T: ValueType> ChangeIf<T> for CmpAny {
     #[inline]
-    fn change_if<'a>(_l: S::RefType<'_>, _r: S::RefType<'_>) -> bool {
+    fn change_if(_: T::ScalarRef<'_>, _: T::ScalarRef<'_>) -> bool {
         false
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
-pub struct ScalarState<S: Scalar, C> {
-    #[serde(bound(deserialize = "S: DeserializeOwned"))]
-    pub value: Option<S>,
+pub trait ScalarStateFunc<T: ValueType>: Send + Sync + 'static {
+    fn new() -> Self;
+    fn add(&mut self, other: T::ScalarRef<'_>);
+    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
+    fn merge(&mut self, rhs: &Self) -> Result<()>;
+    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ScalarState<T, C>
+where
+    T: ValueType,
+    T::Scalar: Serialize + DeserializeOwned,
+{
+    #[serde(bound(deserialize = "T::Scalar: DeserializeOwned"))]
+    pub value: Option<T::Scalar>,
     #[serde(skip)]
     _c: PhantomData<C>,
 }
 
-impl<S, C> ScalarStateFunc<S> for ScalarState<S, C>
+impl<T, C> Default for ScalarState<T, C>
 where
-    S: Scalar + Send + Sync + Serialize + DeserializeOwned,
-    C: ChangeIf<S> + Default,
+    T: ValueType,
+    T::Scalar: Serialize + DeserializeOwned,
+{
+    fn default() -> Self {
+        Self {
+            value: None,
+            _c: PhantomData,
+        }
+    }
+}
+
+impl<T, C> ScalarStateFunc<T> for ScalarState<T, C>
+where
+    T: ValueType,
+    T::Scalar: Serialize + DeserializeOwned + Send + Sync,
+    C: ChangeIf<T> + Default,
 {
     fn new() -> Self {
         Self::default()
     }
-    fn add(&mut self, other: S::RefType<'_>) {
+
+    fn add(&mut self, other: T::ScalarRef<'_>) {
         match &self.value {
-            Some(a) => {
-                if C::change_if(a.as_scalar_ref(), other) {
-                    self.value = Some(other.to_owned_scalar());
+            Some(v) => {
+                if C::change_if(T::to_scalar_ref(v), other.clone()) {
+                    self.value = Some(T::to_owned_scalar(other));
                 }
             }
-            _ => self.value = Some(other.to_owned_scalar()),
+            None => {
+                self.value = Some(T::to_owned_scalar(other));
+            }
         }
     }
 
-    fn add_batch(&mut self, column: &ColumnRef, validity: Option<&Bitmap>) -> Result<()> {
-        let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(column) };
-        if let Some(bit) = validity {
-            if bit.unset_bits() == column.len() {
+    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()> {
+        let column_len = T::column_len(column);
+        if column_len == 0 {
+            return Ok(());
+        }
+
+        let column_iter = T::iter_column(column);
+
+        if let Some(validity) = validity {
+            if validity.unset_bits() == column_len {
                 return Ok(());
             }
-            let mut v = S::default();
-            let mut has_v = false;
 
-            for (data, valid) in col.scalar_iter().zip(bit.iter()) {
+            // V::ScalarRef dosen't dervie Default, so take the first value as default.
+            let mut v = unsafe { T::index_column_unchecked(column, 0) };
+            let mut has_v = validity.get_bit(0);
+
+            for (data, valid) in column_iter.skip(1).zip(validity.iter().skip(1)) {
                 if !valid {
                     continue;
                 }
                 if !has_v {
                     has_v = true;
-                    v = data.to_owned_scalar();
-                } else if C::change_if(v.as_scalar_ref(), data) {
-                    v = data.to_owned_scalar();
+                    v = data.clone();
+                } else if C::change_if(v.clone(), data.clone()) {
+                    v = data.clone();
                 }
             }
 
             if has_v {
-                self.add(v.as_scalar_ref());
+                self.add(v);
             }
         } else {
-            let v = col
-                .scalar_iter()
-                .reduce(|a, b| if !C::change_if(a, b) { a } else { b });
-
+            let v = column_iter.reduce(|l, r| {
+                if !C::change_if(l.clone(), r.clone()) {
+                    l
+                } else {
+                    r
+                }
+            });
             if let Some(v) = v {
                 self.add(v);
             }
-        };
+        }
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        if let Some(value) = &rhs.value {
-            self.add(value.as_scalar_ref());
+        if let Some(v) = &rhs.value {
+            self.add(T::to_scalar_ref(v));
+        }
+        Ok(())
+    }
+
+    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+        if let Some(v) = &self.value {
+            if let Some(inner) = T::try_downcast_builder(builder) {
+                T::push_item(inner, T::to_scalar_ref(v));
+            } else {
+                builder.push(T::upcast_scalar(v.clone()).as_ref());
+            }
+        } else if let Some(inner) = T::try_downcast_builder(builder) {
+            T::push_default(inner);
+        } else {
+            builder.push_default();
         }
         Ok(())
     }
@@ -163,66 +245,13 @@ where
         self.value = deserialize_from_slice(reader)?;
         Ok(())
     }
-
-    fn merge_result(&mut self, column: &mut dyn MutableColumn) -> Result<()> {
-        let builder: &mut <<S as Scalar>::ColumnType as ScalarColumn>::Builder =
-            Series::check_get_mutable_column(column)?;
-
-        if let Some(val) = &self.value {
-            builder.push(val.as_scalar_ref());
-        } else {
-            builder.push(S::default().as_scalar_ref());
-        }
-        Ok(())
-    }
 }
 
-#[derive(Serialize, Deserialize, Default)]
-pub struct VariantState<C> {
-    pub state: ScalarState<VariantValue, C>,
-}
-
-impl<C> ScalarStateFunc<VariantValue> for VariantState<C>
-where C: ChangeIf<VariantValue> + Default
-{
-    fn new() -> Self {
-        Self {
-            state: ScalarState::new(),
-        }
-    }
-
-    fn add(&mut self, other: &'_ VariantValue) {
-        self.state.add(other)
-    }
-
-    fn add_batch(&mut self, column: &ColumnRef, validity: Option<&Bitmap>) -> Result<()> {
-        self.state.add_batch(column, validity)
-    }
-
-    fn merge(&mut self, rhs: &Self) -> Result<()> {
-        if let Some(value) = &rhs.state.value {
-            self.state.add(value.as_scalar_ref());
-        }
-        Ok(())
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        if let Some(val) = &self.state.value {
-            writer.put_slice(val.as_ref().to_string().as_bytes());
-        }
-        Ok(())
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        if !reader.is_empty() {
-            let str_val = std::str::from_utf8(reader).unwrap();
-            let val: serde_json::Value = serde_json::from_str(str_val)?;
-            self.state.value = Some(val.into());
-        }
-        Ok(())
-    }
-
-    fn merge_result(&mut self, column: &mut dyn MutableColumn) -> Result<()> {
-        self.state.merge_result(column)
+pub fn need_manual_drop_state(data_type: &DataType) -> bool {
+    match data_type {
+        DataType::String | DataType::Variant => true,
+        DataType::Nullable(t) | DataType::Array(t) | DataType::Map(t) => need_manual_drop_state(t),
+        DataType::Tuple(ts) => ts.iter().any(need_manual_drop_state),
+        _ => false,
     }
 }

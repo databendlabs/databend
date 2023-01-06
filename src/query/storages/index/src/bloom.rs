@@ -31,7 +31,7 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;

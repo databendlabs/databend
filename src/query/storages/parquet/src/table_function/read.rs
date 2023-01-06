@@ -24,7 +24,7 @@ use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::Expr;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use common_storages_pruner::RangePrunerCreator;
 

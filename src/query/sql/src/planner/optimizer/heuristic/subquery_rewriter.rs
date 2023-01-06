@@ -21,7 +21,7 @@ use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Literal;
-use common_functions_v2::aggregates::AggregateCountFunction;
+use common_functions::aggregates::AggregateCountFunction;
 
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;

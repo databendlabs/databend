@@ -1315,27 +1315,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-datablocks"
-version = "0.1.0"
-dependencies = [
- "ahash 0.8.2",
- "comfy-table",
- "common-arrow",
- "common-datavalues",
- "common-exception",
- "common-io",
- "futures",
- "parking_lot 0.12.1",
- "pin-project-lite",
- "pretty_assertions",
- "primitive-types",
- "regex",
- "serde",
- "serde_json",
- "typetag",
-]
-
-[[package]]
 name = "common-datavalues"
 version = "0.1.0"
 dependencies = [
@@ -1387,7 +1366,6 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
- "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-io",
@@ -1440,57 +1418,6 @@ dependencies = [
 
 [[package]]
 name = "common-functions"
-version = "0.1.0"
-dependencies = [
- "base64 0.13.1",
- "blake3",
- "bstr 1.1.0",
- "bumpalo",
- "bytes",
- "chrono",
- "chrono-tz",
- "common-arrow",
- "common-base",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-hashtable",
- "common-io",
- "common-jsonb",
- "crc32fast",
- "dyn-clone",
- "float-cmp",
- "geo-types",
- "h3ron",
- "hex",
- "itertools",
- "md-5",
- "memchr",
- "naive-cityhash",
- "num",
- "num-format",
- "num-traits",
- "once_cell",
- "ordered-float 3.4.0",
- "pretty_assertions",
- "pulldown-cmark",
- "rand 0.8.5",
- "regex",
- "rust-embed",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "simdutf8",
- "siphasher",
- "streaming_algorithms",
- "strength_reduce",
- "twox-hash",
- "uuid",
-]
-
-[[package]]
-name = "common-functions-v2"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.1",
@@ -1623,7 +1550,7 @@ dependencies = [
  "async-trait",
  "common-base",
  "common-exception",
- "common-functions-v2",
+ "common-functions",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-store",
@@ -2004,7 +1931,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-formats",
- "common-functions-v2",
+ "common-functions",
  "common-grpc",
  "common-hive-meta-store",
  "common-http",
@@ -2137,7 +2064,7 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-expression",
- "common-functions-v2",
+ "common-functions",
  "common-jsonb",
  "common-meta-app",
  "common-meta-types",
@@ -2176,7 +2103,7 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-expression",
- "common-functions-v2",
+ "common-functions",
  "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",
@@ -2203,7 +2130,7 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-expression",
- "common-functions-v2",
+ "common-functions",
  "common-storages-table-meta",
  "criterion",
  "itertools",
@@ -2341,7 +2268,7 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-expression",
- "common-functions-v2",
+ "common-functions",
  "common-meta-app",
  "common-pipeline-core",
  "common-storage",
@@ -2470,7 +2397,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-formats",
- "common-functions-v2",
+ "common-functions",
  "common-jsonb",
  "common-meta-app",
  "common-meta-types",
@@ -3101,7 +3028,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-formats",
- "common-functions-v2",
+ "common-functions",
  "common-grpc",
  "common-hashtable",
  "common-hive-meta-store",
@@ -7024,40 +6951,6 @@ dependencies = [
  "heapless",
  "num-traits",
  "smallvec",
-]
-
-[[package]]
-name = "rust-embed"
-version = "6.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "283ffe2f866869428c92e0d61c2f35dfb4355293cdfdc48f49e895c15f1333d1"
-dependencies = [
- "rust-embed-impl",
- "rust-embed-utils",
- "walkdir",
-]
-
-[[package]]
-name = "rust-embed-impl"
-version = "6.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31ab23d42d71fb9be1b643fe6765d292c5e14d46912d13f3ae2815ca048ea04d"
-dependencies = [
- "proc-macro2",
- "quote",
- "rust-embed-utils",
- "syn",
- "walkdir",
-]
-
-[[package]]
-name = "rust-embed-utils"
-version = "7.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1669d81dfabd1b5f8e2856b8bbe146c6192b0ba22162edc738ac0a5de18f054"
-dependencies = [
- "sha2",
- "walkdir",
 ]
 
 [[package]]

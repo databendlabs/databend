@@ -40,7 +40,7 @@ use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;

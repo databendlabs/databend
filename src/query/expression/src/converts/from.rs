@@ -16,17 +16,16 @@ use common_datavalues::remove_nullable;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use itertools::Itertools;
 
 use crate::types::number::NumberScalar;
 use crate::types::AnyType;
-use crate::types::DataType;
+
 use crate::types::NumberDataType;
 use crate::with_number_type;
-use crate::BlockEntry;
+
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::DataBlock;
+
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
@@ -175,18 +174,4 @@ pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<
     let arrow_column = column.as_arrow_array(logical_type.clone());
     let new_column = Column::from_arrow(arrow_column.as_ref(), &datatype);
     Value::Column(new_column)
-}
-
-pub fn from_block(datablock: &common_datablocks::DataBlock) -> DataBlock {
-    let columns = datablock
-        .columns()
-        .iter()
-        .zip(datablock.schema().fields().iter())
-        .map(|(c, f)| BlockEntry {
-            data_type: DataType::from(&from_type(f.data_type())),
-            value: convert_column(c, f.data_type()),
-        })
-        .collect_vec();
-
-    DataBlock::new(columns, datablock.num_rows())
 }

@@ -21,7 +21,7 @@ use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
-use common_functions_v2::aggregates::eval_aggr;
+use common_functions::aggregates::eval_aggr;
 use common_storages_index::MinMaxIndex;
 use common_storages_index::SupportedType;
 use common_storages_table_meta::meta::ColumnStatistics;
