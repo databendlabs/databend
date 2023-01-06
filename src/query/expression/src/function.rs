@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -101,8 +102,6 @@ pub struct FunctionRegistry {
     >,
     /// Aliases map from alias function name to original function name.
     pub aliases: HashMap<String, String>,
-    /// Negative functions that are defined by wrapping a `not()` on the original function.
-    pub negtives: HashMap<String, String>,
 
     /// fn name to cast signatures
     pub auto_cast_signatures: HashMap<String, AutoCastSignature>,
@@ -118,7 +117,7 @@ impl FunctionRegistry {
             .keys()
             .chain(self.factories.keys())
             .chain(self.aliases.keys())
-            .chain(self.negtives.keys())
+            .unique()
             .cloned()
             .collect()
     }
@@ -127,7 +126,6 @@ impl FunctionRegistry {
         self.funcs.contains_key(func_name)
             || self.factories.contains_key(func_name)
             || self.aliases.contains_key(func_name)
-            || self.negtives.contains_key(func_name)
     }
 
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {
@@ -214,11 +212,6 @@ impl FunctionRegistry {
         for alias in aliases {
             self.aliases.insert(alias.to_string(), fn_name.to_string());
         }
-    }
-
-    pub fn register_negative(&mut self, neg_fn_name: &str, original_fn_name: &str) {
-        self.negtives
-            .insert(neg_fn_name.to_string(), original_fn_name.to_string());
     }
 
     pub fn register_auto_cast_signatures(&mut self, fn_name: &str, signatures: AutoCastSignature) {
