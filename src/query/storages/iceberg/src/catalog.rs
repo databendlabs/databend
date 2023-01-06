@@ -57,6 +57,7 @@ use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
 use opendal::layers::SubdirLayer;
+use opendal::ObjectMode;
 
 use crate::database::IcebergDatabase;
 
@@ -116,11 +117,18 @@ impl IcebergCatalog {
         let mut dbs = vec![];
         let mut ls = root.list().await?;
         while let Some(dir) = ls.try_next().await? {
+            if dir.mode().await? != ObjectMode::DIR {
+                continue;
+            }
+            let db_name = dir.name().strip_suffix('/').unwrap_or_default();
+            if db_name.is_empty() {
+                // skip empty named directory
+                // but I can hardly imagine an empty named folder.
+                continue;
+            }
             let db_root = self.operator.operator().layer(SubdirLayer::new(dir.name()));
             let db: Arc<dyn Database> = Arc::new(IcebergDatabase::create_database_from_read(
-                &self.name,
-                dir.name(),
-                db_root,
+                &self.name, db_name, db_root,
             ));
             dbs.push(db);
         }

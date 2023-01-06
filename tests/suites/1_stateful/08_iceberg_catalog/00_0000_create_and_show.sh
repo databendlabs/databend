@@ -10,9 +10,10 @@ cat <<EOF | $MYSQL_CLIENT_CONNECT
 CREATE CATALOG iceberg_ctl
 TYPE=ICEBERG
 CONNECTION=(
-    URI="s3a://testbucket/iceberg_ctl"
-    AWS_KEY_ID=minioadmin
-    AWS_SECRET_KEY=minioadmin
+    URL='s3://testbucket/iceberg_data/iceberg_ctl/'
+    AWS_KEY_ID='minioadmin'
+    AWS_SECRET_KEY='minioadmin'
+    ENDPOINT_URL='${STORAGE_S3_ENDPOINT_URL}'
 );
 EOF
 

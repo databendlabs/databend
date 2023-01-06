@@ -148,7 +148,7 @@ impl<'a> Binder {
                 CatalogOption::Hive(address.to_string())
             }
             CatalogType::Iceberg => {
-                let catalog_options = options.clone();
+                let mut catalog_options = options.clone();
 
                 // getting other options to create this catalog
                 let flatten = matches!(
@@ -162,8 +162,8 @@ impl<'a> Binder {
 
                 // the uri should in the same schema as in stages
                 let uri = catalog_options
-                    .get("uri")
-                    .ok_or_else(|| ErrorCode::InvalidArgument("expected field: URI"))?;
+                    .remove("url") // has to be removed, or UriLocation will complain about unknown field.
+                    .ok_or_else(|| ErrorCode::InvalidArgument("expected field: URL"))?;
 
                 // create a uri location
                 let mut location = if let Some(path) = uri.strip_prefix("fs://") {
@@ -175,8 +175,8 @@ impl<'a> Binder {
                         catalog_options,
                     )
                 } else {
-                    let parsed = Url::parse(uri).map_err(|err| {
-                        ErrorCode::InvalidArgument(format!("expected valid URI: {:?}", err))
+                    let parsed = Url::parse(&uri).map_err(|err| {
+                        ErrorCode::InvalidArgument(format!("expected valid URL: {:?}", err))
                     })?;
                     let name = parsed
                         .host_str()

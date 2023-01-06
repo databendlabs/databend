@@ -3,11 +3,11 @@ This iceberg data was created from `Spark3` in minio bucket.
 The minio bucket url:
 
 ```
-s3a://testbucket/
+s3://testbucket/
 ```
 
 Please move the `iceberg_data` directory to the bucket root,
-the iceberg table data _ relies on absolute path URIs _ like `s3a://testbucket/iceberg_data/iceberg_ctl/iceberg_tbl/...`,
+the iceberg table data _ relies on absolute path URIs _ like `s3://testbucket/iceberg_data/iceberg_ctl/iceberg_tbl/...`,
 any changes to it may cause the table to be unreadable.
 
 ## Reproduction of table data
@@ -93,7 +93,7 @@ services:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
       - AWS_REGION=us-east-1
-      - CATALOG_WAREHOUSE=s3a://testbucket/iceberg_data/
+      - CATALOG_WAREHOUSE=s3://testbucket/iceberg_data/
       - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
       - CATALOG_S3_ENDPOINT=http://minio:9000
   minio:
