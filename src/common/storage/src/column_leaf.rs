@@ -51,6 +51,16 @@ impl ColumnLeaves {
                 }
                 ColumnLeaf::new(field.clone(), child_leaf_ids, Some(child_column_leaves))
             }
+            ArrowType::List(inner_field)
+            | ArrowType::LargeList(inner_field)
+            | ArrowType::FixedSizeList(inner_field, _) => {
+                let mut child_column_leaves = Vec::with_capacity(1);
+                let mut child_leaf_ids = Vec::with_capacity(1);
+                let child_column_leaf = Self::traverse_fields_dfs(inner_field, leaf_id);
+                child_leaf_ids.extend(child_column_leaf.leaf_ids.clone());
+                child_column_leaves.push(child_column_leaf);
+                ColumnLeaf::new(field.clone(), child_leaf_ids, Some(child_column_leaves))
+            }
             _ => {
                 let column_leaf = ColumnLeaf::new(field.clone(), vec![*leaf_id], None);
                 *leaf_id += 1;

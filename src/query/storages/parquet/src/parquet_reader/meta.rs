@@ -18,6 +18,8 @@ use std::fs::File;
 
 use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::FileMetaData;
@@ -31,6 +33,23 @@ use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
 use crate::ParquetReader;
+
+fn lower_field_name(field: &mut ArrowField) {
+    field.name = field.name.to_lowercase();
+    match &mut field.data_type {
+        ArrowDataType::List(f)
+        | ArrowDataType::LargeList(f)
+        | ArrowDataType::FixedSizeList(f, _) => {
+            lower_field_name(f.as_mut());
+        }
+        ArrowDataType::Struct(ref mut fields) => {
+            for f in fields {
+                lower_field_name(f);
+            }
+        }
+        _ => {}
+    }
+}
 
 impl ParquetReader {
     pub fn read_meta(location: &str) -> Result<FileMetaData> {
@@ -49,7 +68,7 @@ impl ParquetReader {
     pub fn infer_schema(meta: &FileMetaData) -> Result<ArrowSchema> {
         let mut arrow_schema = pread::infer_schema(meta)?;
         arrow_schema.fields.iter_mut().for_each(|f| {
-            f.name = f.name.to_lowercase();
+            lower_field_name(f);
         });
         Ok(arrow_schema)
     }
