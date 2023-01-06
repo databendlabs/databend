@@ -78,13 +78,13 @@ impl<'a> Evaluator<'a> {
     }
 
     /// TODO(sundy/andy): refactor this if we got better idea
-    pub fn run_auto_nullable(&self, expr: &Expr) -> Result<Value<AnyType>> {
+    pub fn run_auto_type(&self, expr: &Expr) -> Result<Value<AnyType>> {
         let column_refs = expr.column_refs();
 
         let mut columns = self.input_columns.columns().to_vec();
         for (index, datatype) in column_refs.iter() {
             let column = &columns[*index];
-            if datatype != &column.data_type && datatype == &column.data_type.wrap_nullable() {
+            if datatype != &column.data_type {
                 let value = self.run(&Expr::Cast {
                     span: None,
                     is_try: false,
