@@ -292,6 +292,7 @@ impl<'a> TypeChecker<'a> {
                         self.resolve_function(
                             span,
                             "not",
+                            vec![],
                             &[&Expr::FunctionCall {
                                 span,
                                 distinct: false,
@@ -474,6 +475,7 @@ impl<'a> TypeChecker<'a> {
                                 self.resolve_function(
                                     span,
                                     "not",
+                                    vec![],
                                     &[&Expr::BinaryOp {
                                         span,
                                         op: contrary_op,
@@ -766,6 +768,7 @@ impl<'a> TypeChecker<'a> {
                         .resolve_function(
                             span,
                             "not",
+                            vec![],
                             &[&Expr::InSubquery {
                                 subquery: subquery.clone(),
                                 not: false,
@@ -1108,6 +1111,7 @@ impl<'a> TypeChecker<'a> {
                     .await?;
                 let return_type = Box::new(data_type.clone());
                 let scalar = Scalar::FunctionCall(FunctionCall {
+                    params: vec![],
                     arguments: vec![positive],
                     func_name: "not".to_string(),
                     return_type,
