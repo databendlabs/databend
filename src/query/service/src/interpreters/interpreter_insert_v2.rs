@@ -765,9 +765,11 @@ async fn exprs_to_scalar<'a>(
 ) -> Result<Vec<DataScalar>> {
     let schema_fields_len = schema.fields().len();
     if exprs.len() != schema_fields_len {
-        return Err(ErrorCode::TableSchemaMismatch(
-            "Table columns count is not match, expect {schema_fields_len}, input: {exprs.len()}",
-        ));
+        return Err(ErrorCode::TableSchemaMismatch(format!(
+            "Table columns count is not match, expect {schema_fields_len}, input: {}, expr: {:?}",
+            exprs.len(),
+            exprs
+        )));
     }
     let mut operators = Vec::with_capacity(schema_fields_len);
     let mut scalar_binder = ScalarBinder::new(
