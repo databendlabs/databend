@@ -36,7 +36,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationSinkMeta;
-use crate::operations::mutation::MutationSourceMeta;
+use crate::operations::mutation::MutationTransformMeta;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -228,7 +228,7 @@ impl Processor for MutationTransform {
                     .get_meta()
                     .cloned()
                     .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
-                let meta = MutationSourceMeta::from_meta(&input_meta)?;
+                let meta = MutationTransformMeta::from_meta(&input_meta)?;
                 match &meta.op {
                     Mutation::Replaced(block_meta) => {
                         self.input_metas

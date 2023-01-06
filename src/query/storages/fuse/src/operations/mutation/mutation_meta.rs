@@ -20,27 +20,21 @@ use common_datablocks::BlockMetaInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
 
 use crate::operations::mutation::AbortOperation;
 use crate::pruning::BlockIndex;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum Mutation {
-    DoNothing,
-    Replaced(Arc<BlockMeta>),
-    Deleted,
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct MutationSourceMeta {
+pub struct SerializeDataMeta {
     pub index: BlockIndex,
-    pub op: Mutation,
+    pub cluster_stats: Option<ClusterStatistics>,
 }
 
-#[typetag::serde(name = "mutation_source_meta")]
-impl BlockMetaInfo for MutationSourceMeta {
+#[typetag::serde(name = "serialize_data_meta")]
+impl BlockMetaInfo for SerializeDataMeta {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -54,23 +48,76 @@ impl BlockMetaInfo for MutationSourceMeta {
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<MutationSourceMeta>() {
+        match info.as_any().downcast_ref::<SerializeDataMeta>() {
             None => false,
             Some(other) => self == other,
         }
     }
 }
 
-impl MutationSourceMeta {
-    pub fn create(index: BlockIndex, op: Mutation) -> BlockMetaInfoPtr {
-        Box::new(MutationSourceMeta { index, op })
+impl SerializeDataMeta {
+    pub fn create(index: BlockIndex, cluster_stats: Option<ClusterStatistics>) -> BlockMetaInfoPtr {
+        Box::new(SerializeDataMeta {
+            index,
+            cluster_stats,
+        })
     }
 
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationSourceMeta> {
-        match info.as_any().downcast_ref::<MutationSourceMeta>() {
+    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&SerializeDataMeta> {
+        match info.as_any().downcast_ref::<SerializeDataMeta>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to MutationSourceMeta.",
+                "Cannot downcast from BlockMetaInfo to  SerializeDataMeta.",
+            )),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum Mutation {
+    DoNothing,
+    Replaced(Arc<BlockMeta>),
+    Deleted,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct MutationTransformMeta {
+    pub index: BlockIndex,
+    pub op: Mutation,
+}
+
+#[typetag::serde(name = "mutation_source_meta")]
+impl BlockMetaInfo for MutationTransformMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match info.as_any().downcast_ref::<MutationTransformMeta>() {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+}
+
+impl MutationTransformMeta {
+    pub fn create(index: BlockIndex, op: Mutation) -> BlockMetaInfoPtr {
+        Box::new(MutationTransformMeta { index, op })
+    }
+
+    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationTransformMeta> {
+        match info.as_any().downcast_ref::<MutationTransformMeta>() {
+            Some(part_ref) => Ok(part_ref),
+            None => Err(ErrorCode::Internal(
+                "Cannot downcast from BlockMetaInfo to MutationTransformMeta.",
             )),
         }
     }

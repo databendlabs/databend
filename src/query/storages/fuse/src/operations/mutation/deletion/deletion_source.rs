@@ -40,7 +40,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::DataChunks;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationPartInfo;
-use crate::operations::mutation::MutationSourceMeta;
+use crate::operations::mutation::MutationTransformMeta;
 use crate::operations::mutation::SerializeState;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
@@ -199,8 +199,7 @@ impl Processor for DeletionSource {
                         // none of the rows should be removed.
                         self.state = State::Generated(Mutation::DoNothing);
                     } else if self.remain_reader.is_none() {
-                        let block = data_block.resort(self.output_schema.clone())?;
-                        self.state = State::NeedSerialize(block);
+                        self.state = State::NeedSerialize(data_block);
                     } else {
                         self.state = State::ReadRemain {
                             part,
@@ -287,7 +286,7 @@ impl Processor for DeletionSource {
                 );
             }
             State::Generated(op) => {
-                let meta = MutationSourceMeta::create(self.index, op);
+                let meta = MutationTransformMeta::create(self.index, op);
                 let new_part = self.ctx.try_get_part();
                 self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
             }

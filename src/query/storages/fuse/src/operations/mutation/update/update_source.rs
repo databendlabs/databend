@@ -38,7 +38,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::DataChunks;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationPartInfo;
-use crate::operations::mutation::MutationSourceMeta;
+use crate::operations::mutation::MutationTransformMeta;
 use crate::operations::mutation::SerializeState;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
@@ -294,7 +294,7 @@ impl Processor for UpdateSource {
                 );
             }
             State::Generated(op) => {
-                let meta = MutationSourceMeta::create(self.index, op);
+                let meta = MutationTransformMeta::create(self.index, op);
                 let new_part = self.ctx.try_get_part();
                 self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
             }
