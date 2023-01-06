@@ -108,7 +108,6 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
             Some(builder) => {
                 builder.put_slice(v);
                 builder.commit_row();
-                return;
             }
             None => self.data.push(v),
         }
