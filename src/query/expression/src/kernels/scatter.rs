@@ -189,23 +189,24 @@ impl Column {
                     .collect()
             }
             Column::Tuple { fields, .. } => {
-                let mut fields_vs: Vec<Vec<Column>> = fields
+                let fields_vs: Vec<Vec<Column>> = fields
                     .iter()
                     .map(|c| c.scatter(data_type, indices, scatter_size))
                     .collect();
 
-                (0..scatter_size)
-                    .map(|index| {
-                        let fields: Vec<Column> = fields_vs
-                            .iter_mut()
-                            .map(|field| field.remove(index))
-                            .collect();
-                        Column::Tuple {
-                            len: fields.first().map_or(0, |f| f.len()),
-                            fields,
-                        }
-                    })
-                    .collect()
+                let mut res = Vec::with_capacity(scatter_size);
+
+                for s in 0..scatter_size {
+                    let mut fields = Vec::with_capacity(fields.len());
+                    for col in &fields_vs {
+                        fields.push(col[s].clone());
+                    }
+                    res.push(Column::Tuple {
+                        len: fields.first().map_or(0, |f| f.len()),
+                        fields,
+                    });
+                }
+                res
             }
             Column::Variant(column) => Self::scatter_scalars::<VariantType, _>(
                 column,
