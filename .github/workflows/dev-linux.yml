@@ -133,8 +133,8 @@ jobs:
         dirs:
           - "base"
           - "query"
-          - "ydb"
           - "standalone"
+          - "ydb"
           - "crdb"
           - "duckdb"
         handlers:
@@ -158,8 +158,8 @@ jobs:
           - "query"
           - "cluster"
           - "ydb"
-          - "duckdb"
           - "crdb"
+          - "duckdb"
         handlers:
           - "mysql,http,clickhouse"
     steps:
