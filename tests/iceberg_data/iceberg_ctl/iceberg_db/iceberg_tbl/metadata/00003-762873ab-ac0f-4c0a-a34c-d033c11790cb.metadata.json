@@ -1,8 +1,8 @@
 {
   "format-version" : 1,
-  "table-uuid" : "a687ce5c-3d2f-4d41-be77-ff9995ee6feb",
-  "location" : "s3a://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl",
-  "last-updated-ms" : 1672809845433,
+  "table-uuid" : "bf530b84-8e0a-4949-b2c4-b50f02a1334f",
+  "location" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl",
+  "last-updated-ms" : 1672980955217,
   "last-column-id" : 3,
   "schema" : {
     "type" : "struct",
@@ -74,19 +74,19 @@
   "properties" : {
     "owner" : "root"
   },
-  "current-snapshot-id" : 4403651551213990466,
+  "current-snapshot-id" : 402819370943546960,
   "refs" : {
     "main" : {
-      "snapshot-id" : 4403651551213990466,
+      "snapshot-id" : 402819370943546960,
       "type" : "branch"
     }
   },
   "snapshots" : [ {
-    "snapshot-id" : 512305032239754144,
-    "timestamp-ms" : 1672809778299,
+    "snapshot-id" : 8380191719297762539,
+    "timestamp-ms" : 1672980884490,
     "summary" : {
       "operation" : "append",
-      "spark.app.id" : "local-1672809673189",
+      "spark.app.id" : "local-1672980515314",
       "added-data-files" : "3",
       "added-records" : "3",
       "added-files-size" : "1857",
@@ -98,15 +98,15 @@
       "total-position-deletes" : "0",
       "total-equality-deletes" : "0"
     },
-    "manifest-list" : "s3a://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/snap-512305032239754144-1-980b853b-64fc-4b40-8e9e-973bcb7ddc84.avro",
+    "manifest-list" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/snap-8380191719297762539-1-b51968b3-8837-4c13-a9ec-74d71bac3565.avro",
     "schema-id" : 0
   }, {
-    "snapshot-id" : 4403651551213990466,
-    "parent-snapshot-id" : 512305032239754144,
-    "timestamp-ms" : 1672809800506,
+    "snapshot-id" : 402819370943546960,
+    "parent-snapshot-id" : 8380191719297762539,
+    "timestamp-ms" : 1672980908243,
     "summary" : {
       "operation" : "append",
-      "spark.app.id" : "local-1672809673189",
+      "spark.app.id" : "local-1672980515314",
       "added-data-files" : "3",
       "added-records" : "3",
       "added-files-size" : "1857",
@@ -118,25 +118,25 @@
       "total-position-deletes" : "0",
       "total-equality-deletes" : "0"
     },
-    "manifest-list" : "s3a://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/snap-4403651551213990466-1-4cf7394b-f451-4b6a-a860-ca4f131d0a5a.avro",
+    "manifest-list" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/snap-402819370943546960-1-cb85d90a-3e9f-44ae-90da-2391c97d9b9c.avro",
     "schema-id" : 0
   } ],
   "statistics" : [ ],
   "snapshot-log" : [ {
-    "timestamp-ms" : 1672809778299,
-    "snapshot-id" : 512305032239754144
+    "timestamp-ms" : 1672980884490,
+    "snapshot-id" : 8380191719297762539
   }, {
-    "timestamp-ms" : 1672809800506,
-    "snapshot-id" : 4403651551213990466
+    "timestamp-ms" : 1672980908243,
+    "snapshot-id" : 402819370943546960
   } ],
   "metadata-log" : [ {
-    "timestamp-ms" : 1672809734155,
-    "metadata-file" : "s3a://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/00000-cfa81304-db61-47c2-b5ed-adb8b28ac23a.metadata.json"
+    "timestamp-ms" : 1672980637554,
+    "metadata-file" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/00000-74d4bfd7-0dee-46ab-85c5-ef90df8b2c20.metadata.json"
   }, {
-    "timestamp-ms" : 1672809778299,
-    "metadata-file" : "s3a://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/00001-6490d180-8e65-4b4f-aba8-34ea954ff9c6.metadata.json"
+    "timestamp-ms" : 1672980884490,
+    "metadata-file" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/00001-e40071cb-570f-4f62-a206-072677f67865.metadata.json"
   }, {
-    "timestamp-ms" : 1672809800506,
-    "metadata-file" : "s3a://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/00002-24b85561-c14c-49aa-9a27-5dc7ae0df00c.metadata.json"
+    "timestamp-ms" : 1672980908243,
+    "metadata-file" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/00002-0e3f3480-280c-49c2-8f18-67061f464330.metadata.json"
   } ]
 }
