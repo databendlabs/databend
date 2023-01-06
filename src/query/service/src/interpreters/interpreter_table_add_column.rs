@@ -84,7 +84,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 };
                 fields.push(field)
             }
-            new_table_meta.add_columns(&fields, &self.plan.field_comments);
+            new_table_meta.add_columns(&fields, &self.plan.field_comments)?;
 
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;

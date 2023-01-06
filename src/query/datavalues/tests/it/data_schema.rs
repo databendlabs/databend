@@ -44,7 +44,7 @@ fn test_schema_modify_field() -> Result<()> {
     assert_eq!(schema.max_column_id(), 0);
 
     // add column b
-    schema.add_columns(&[field2.clone()]);
+    schema.add_columns(&[field2.clone()])?;
     assert_eq!(schema.fields().to_owned(), vec![field1.clone(), field2,]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.column_id_of("b").unwrap(), 1);

@@ -137,19 +137,32 @@ impl DataSchema {
         *(self.index_of_column_id.get(column_id).unwrap())
     }
 
-    pub fn add_columns(&mut self, field: &[DataField]) {
-        field.iter().for_each(|field| {
+    pub fn add_columns(&mut self, fields: &[DataField]) -> Result<()> {
+        for field in fields {
+            if self.index_of(field.name()).is_ok() {
+                return Err(ErrorCode::AddColumnExistError(format!(
+                    "add column {} already exist",
+                    field.name(),
+                )));
+            }
             let mut field = field.clone();
             self.max_column_id += 1;
             field.column_id = Some(self.max_column_id);
             self.index_of_column_id
                 .insert(self.max_column_id, self.fields.len());
             self.fields.push(field);
-        });
+        }
+        Ok(())
     }
 
     pub fn drop_column(&mut self, column: &str) -> Result<()> {
         let i = self.index_of(column)?;
+        if self.fields.len() == 1 {
+            return Err(ErrorCode::DropColumnEmptyError(
+                "cannot drop table column to empty",
+            ));
+        }
+
         let field = &self.fields[i];
         if let Some(column_id) = field.column_id() {
             self.index_of_column_id.remove(&column_id);
