@@ -30,6 +30,7 @@ use common_arrow::parquet::read::PageReader;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_storage::ColumnLeaf;
 
 use super::filter::FilterState;
@@ -46,11 +47,15 @@ impl ParquetReader {
     ) -> Result<DataBlock> {
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projected_arrow_schema.fields.len());
+        let mut nested_columns_array_iter =
+            Vec::with_capacity(self.projected_arrow_schema.fields.len());
+        let mut normal_fields = Vec::with_capacity(self.projected_arrow_schema.fields.len());
+        let mut nested_fields = Vec::with_capacity(self.projected_arrow_schema.fields.len());
 
         let column_leaves = &self.projected_column_leaves.column_leaves;
         let mut cnt_map = Self::build_projection_count_map(column_leaves);
 
-        for column_leaf in column_leaves {
+        for (idx, column_leaf) in column_leaves.iter().enumerate() {
             let indices = &column_leaf.leaf_ids;
             let mut metas = Vec::with_capacity(indices.len());
             let mut chunks = Vec::with_capacity(indices.len());
@@ -67,23 +72,64 @@ impl ParquetReader {
                 metas.push((column_meta, descriptor));
                 chunks.push(column_chunk);
             }
-            let array_iter = if let Some(ref bitmap) = filter {
-                Self::to_array_iter_with_filter(
+            if let Some(ref bitmap) = filter {
+                // Filter push down for nested type is not supported now.
+                // If the array is nested type, do not push down filter to it.
+                if chunks.len() > 1 {
+                    nested_columns_array_iter.push(Self::to_array_iter(
+                        metas,
+                        chunks,
+                        part.num_rows,
+                        column_leaf.field.clone(),
+                    )?);
+                    nested_fields.push(self.output_schema.field(idx).clone());
+                } else {
+                    columns_array_iter.push(Self::to_array_iter_with_filter(
+                        metas,
+                        chunks,
+                        part.num_rows,
+                        column_leaf.field.clone(),
+                        bitmap.clone(),
+                    )?);
+                    normal_fields.push(self.output_schema.field(idx).clone());
+                }
+            } else {
+                columns_array_iter.push(Self::to_array_iter(
                     metas,
                     chunks,
                     part.num_rows,
                     column_leaf.field.clone(),
-                    bitmap.clone(),
-                )?
-            } else {
-                Self::to_array_iter(metas, chunks, part.num_rows, column_leaf.field.clone())?
-            };
-            columns_array_iter.push(array_iter);
+                )?)
+            }
         }
 
-        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, part.num_rows, None);
+        if nested_fields.is_empty() {
+            let mut deserializer =
+                RowGroupDeserializer::new(columns_array_iter, part.num_rows, None);
+            return self.full_deserialize(&mut deserializer);
+        }
 
-        self.try_next_block(&mut deserializer)
+        let bitmap = filter.unwrap();
+        let normal_block = try_next_block(
+            &DataSchema::new(normal_fields.clone()),
+            &mut RowGroupDeserializer::new(columns_array_iter, part.num_rows, None),
+        )?;
+        let nested_block = try_next_block(
+            &DataSchema::new(nested_fields.clone()),
+            &mut RowGroupDeserializer::new(nested_columns_array_iter, part.num_rows, None),
+        )?;
+        // need to filter nested block
+        let nested_block = DataBlock::filter_with_bitmap(nested_block, &bitmap)?;
+
+        // Construct the final output
+        let mut final_columns = Vec::with_capacity(self.output_schema.fields().len());
+        final_columns.extend_from_slice(normal_block.columns());
+        final_columns.extend_from_slice(nested_block.columns());
+        let final_block = DataBlock::new(final_columns, bitmap.len() - bitmap.unset_bits());
+
+        normal_fields.extend_from_slice(&nested_fields);
+        let src_schema = DataSchema::new(normal_fields);
+        final_block.resort(&src_schema, &self.output_schema)
     }
 
     /// The number of columns can be greater than 1 because the it may be a nested type.
@@ -195,14 +241,8 @@ impl ParquetReader {
         )?)
     }
 
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
-        match deserializer.next() {
-            None => Err(ErrorCode::Internal(
-                "deserializer from row group: fail to get a chunk",
-            )),
-            Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_arrow_chunk(&chunk, self.output_schema()),
-        }
+    fn full_deserialize(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
+        try_next_block(&self.output_schema, deserializer)
     }
 
     // Build a map to record the count number of each leaf_id
@@ -219,5 +259,18 @@ impl ParquetReader {
             }
         }
         cnt_map
+    }
+}
+
+fn try_next_block(
+    schema: &DataSchema,
+    deserializer: &mut RowGroupDeserializer,
+) -> Result<DataBlock> {
+    match deserializer.next() {
+        None => Err(ErrorCode::Internal(
+            "deserializer from row group: fail to get a chunk",
+        )),
+        Some(Err(cause)) => Err(ErrorCode::from(cause)),
+        Some(Ok(chunk)) => DataBlock::from_arrow_chunk(&chunk, schema),
     }
 }

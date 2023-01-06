@@ -81,7 +81,7 @@ impl ParquetReader {
             let column_stats = pread::statistics::deserialize(field, rgs)?;
             stats_of_row_groups.insert(
                 *index,
-                BatchStatistics::from_statistics(column_stats, &data_type),
+                BatchStatistics::from_statistics(column_stats, &data_type)?,
             );
         }
 
@@ -119,28 +119,41 @@ impl BatchStatistics {
         }
     }
 
-    pub fn from_statistics(stats: pread::statistics::Statistics, data_type: &DataType) -> Self {
+    pub fn from_statistics(
+        stats: pread::statistics::Statistics,
+        data_type: &DataType,
+    ) -> Result<Self> {
         let null_count = stats
             .null_count
             .as_any()
             .downcast_ref::<UInt64Array>()
-            .unwrap()
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "null_count should be UInt64Array, but is {:?}",
+                    stats.null_count.data_type()
+                ))
+            })?
             .values()
             .clone();
         let distinct_count = stats
             .distinct_count
             .as_any()
             .downcast_ref::<UInt64Array>()
-            .unwrap()
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "distinct_count should be UInt64Array, but is {:?}",
+                    stats.distinct_count.data_type()
+                ))
+            })?
             .values()
             .clone();
         let min_values = Column::from_arrow(&*stats.min_value, data_type);
         let max_values = Column::from_arrow(&*stats.max_value, data_type);
-        Self {
+        Ok(Self {
             null_count,
             distinct_count,
             min_values,
             max_values,
-        }
+        })
     }
 }

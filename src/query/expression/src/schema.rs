@@ -215,46 +215,6 @@ impl DataSchema {
         Self::new_from(fields, self.meta().clone())
     }
 
-    /// project with inner columns by path.
-    // pub fn inner_project(&self, path_indices: &BTreeMap<usize, Vec<usize>>) -> Self {
-    //     let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
-    //     let fields = paths
-    //         .iter()
-    //         .map(|path| Self::traverse_paths(self.fields(), path).unwrap())
-    //         .collect();
-    //     Self::new_from(fields, self.meta().clone())
-    // }
-    //
-    // fn traverse_paths(fields: &[DataField], path: &[usize]) -> Result<DataField> {
-    //     if path.is_empty() {
-    //         return Err(ErrorCode::BadArguments(
-    //             "path should not be empty".to_string(),
-    //         ));
-    //     }
-    //     let field = &fields[path[0]];
-    //     if path.len() == 1 {
-    //         return Ok(field.clone());
-    //     }
-    //
-    //     if let TableDataType::Tuple {
-    //         fields_name,
-    //         fields_type,
-    //     } = &field.data_type()
-    //     {
-    //         let fields = fields_name
-    //             .iter()
-    //             .zip(fields_type)
-    //             .map(|(name, ty)| DataField::new(&name.clone(), ty.clone()))
-    //             .collect::<Vec<DataField>>();
-    //         return Self::traverse_paths(&fields, &path[1..]);
-    //     }
-    //     let valid_fields: Vec<String> = fields.iter().map(|f| f.name().clone()).collect();
-    //     Err(ErrorCode::BadArguments(format!(
-    //         "Unable to get field paths. Valid fields: {:?}",
-    //         valid_fields
-    //     )))
-    // }
-
     /// project will do column pruning.
     #[must_use]
     pub fn project_by_fields(&self, fields: Vec<DataField>) -> Self {

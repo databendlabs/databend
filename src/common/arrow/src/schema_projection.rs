@@ -44,7 +44,17 @@ fn traverse_paths(fields: &[Field], path: &[usize]) -> Field {
         return field.clone();
     }
     if let DataType::Struct(inner_fields) = field.data_type() {
-        return traverse_paths(inner_fields, &path[1..]);
+        let fields = inner_fields
+            .iter()
+            .map(|inner| {
+                let inner_name = format!("{}:{}", field.name, inner.name.to_lowercase());
+                Field {
+                    name: inner_name,
+                    ..inner.clone()
+                }
+            })
+            .collect::<Vec<_>>();
+        return traverse_paths(&fields, &path[1..]);
     }
     unreachable!("Unable to get field paths. Fields: {:?}", fields);
 }
