@@ -13,23 +13,11 @@
 // limitations under the License.
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_datavalues::Column as DvColumn;
-use common_datavalues::ColumnRef;
-use common_datavalues::ConstColumn;
 use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
-use common_datavalues::IntoColumn;
-use ordered_float::OrderedFloat;
 
-use crate::types::AnyType;
-use crate::types::DataType;
-use crate::Column;
-use crate::ColumnBuilder;
-use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
-use crate::Value;
 
 pub fn to_type(datatype: &TableDataType) -> DataTypeImpl {
     let f = TableField::new("tmp", datatype.clone());

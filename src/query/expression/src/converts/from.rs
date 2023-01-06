@@ -13,21 +13,17 @@
 // limitations under the License.
 
 use common_datavalues::remove_nullable;
-use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 
 use crate::types::number::NumberScalar;
-use crate::types::AnyType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
-use crate::Column;
 use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
-use crate::Value;
 
 pub fn can_convert(datatype: &DataTypeImpl) -> bool {
     !matches!(
