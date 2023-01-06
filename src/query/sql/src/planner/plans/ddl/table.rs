@@ -174,7 +174,7 @@ pub struct AddTableColumnPlan {
     pub field_comments: Vec<String>,
 }
 
-impl<'a> AddTableColumnPlan {
+impl AddTableColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
@@ -189,7 +189,7 @@ pub struct DropTableColumnPlan {
     pub column: String,
 }
 
-impl<'a> DropTableColumnPlan {
+impl DropTableColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
