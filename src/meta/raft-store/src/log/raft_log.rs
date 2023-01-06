@@ -26,8 +26,8 @@ use openraft::raft::Entry;
 use tracing::info;
 
 use crate::config::RaftConfig;
-use crate::sled_key_spaces::LogMeta;
-use crate::sled_key_spaces::Logs;
+use crate::key_spaces::LogMeta;
+use crate::key_spaces::Logs;
 use crate::state_machine::LogMetaKey;
 use crate::state_machine::LogMetaValue;
 
