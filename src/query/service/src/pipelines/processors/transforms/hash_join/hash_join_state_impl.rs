@@ -433,7 +433,6 @@ impl HashJoinState for JoinHashTable {
         }
         let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
         let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
-        tracing::info!("unmatched_build_block: {:?}", unmatched_build_block);
         Ok(vec![unmatched_build_block])
     }
 
