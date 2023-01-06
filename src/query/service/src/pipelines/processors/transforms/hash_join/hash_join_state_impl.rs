@@ -347,12 +347,12 @@ impl HashJoinState for JoinHashTable {
 
     fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let mut row_state = self.row_state_for_right_join()?;
+        let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
+        let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
         // Fast path for right anti join with non-equi conditions
         if self.hash_join_desc.other_predicate.is_none()
             && self.hash_join_desc.join_type == JoinType::RightAnti
         {
-            let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
-            let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
             return Ok(vec![unmatched_build_block]);
         }
 
@@ -360,6 +360,9 @@ impl HashJoinState for JoinHashTable {
         let input_block = DataBlock::concat(&[blocks, &[rest_block]].concat())?;
 
         if input_block.is_empty() {
+            if JoinType::RightAnti == self.hash_join_desc.join_type {
+                return Ok(vec![unmatched_build_block]);
+            }
             return Ok(vec![]);
         }
 
@@ -430,6 +433,7 @@ impl HashJoinState for JoinHashTable {
         }
         let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
         let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
+        tracing::info!("unmatched_build_block: {:?}", unmatched_build_block);
         Ok(vec![unmatched_build_block])
     }
 
