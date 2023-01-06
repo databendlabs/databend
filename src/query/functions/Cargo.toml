@@ -36,6 +36,7 @@ hex = "0.4.3"
 itertools = "0.10.5"
 match-template = "0.0.1"
 md-5 = "0.10.5"
+memchr = { version = "2", default-features = false }
 naive-cityhash = "0.2.0"
 num-traits = "0.2.15"
 once_cell = "1.15.0"

@@ -1446,6 +1446,7 @@ dependencies = [
  "itertools",
  "match-template",
  "md-5",
+ "memchr",
  "naive-cityhash",
  "num-traits",
  "once_cell",

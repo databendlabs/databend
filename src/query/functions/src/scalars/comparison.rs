@@ -45,6 +45,7 @@ use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::ScalarRef;
 use common_expression::ValueRef;
+use memchr::memmem;
 use regex::bytes::Regex;
 
 use crate::scalars::string_multi_args::regexp;
@@ -560,6 +561,15 @@ fn register_like(registry: &mut FunctionRegistry) {
                     let ends_with = &pat[1..];
                     Ok(str.ends_with(ends_with))
                 }
+
+                PatternType::SurroundByPercent => {
+                    if pat.len() > 2 {
+                        Ok(memmem::find(str, &pat[1..pat.len() - 1]).is_some())
+                    } else {
+                        Ok(str.is_empty())
+                    }
+                }
+
                 PatternType::PatternStr => Ok(like(str, pat)),
             }
         }),
@@ -691,6 +701,8 @@ pub enum PatternType {
     StartOfPercent,
     // e.g. 'Arro%'
     EndOfPercent,
+    // e.g. '%Arrow%'
+    SurroundByPercent,
 }
 
 #[inline]
@@ -732,8 +744,12 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
         match pattern[index] {
             b'_' => return PatternType::PatternStr,
             b'%' => {
-                if index == len - 1 && !start_percent {
-                    return PatternType::EndOfPercent;
+                if index == len - 1 {
+                    return if !start_percent {
+                        PatternType::EndOfPercent
+                    } else {
+                        PatternType::SurroundByPercent
+                    };
                 }
                 return PatternType::PatternStr;
             }
