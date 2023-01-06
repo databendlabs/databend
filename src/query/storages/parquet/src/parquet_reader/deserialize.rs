@@ -27,9 +27,9 @@ use common_arrow::parquet::page::CompressedPage;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_storage::ColumnLeaf;
 
 use super::filter::FilterState;
@@ -201,7 +201,7 @@ impl ParquetReader {
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.output_schema(), &chunk),
+            Some(Ok(chunk)) => DataBlock::from_arrow_chunk(&chunk, self.output_schema()),
         }
     }
 

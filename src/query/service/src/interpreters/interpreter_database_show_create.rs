@@ -15,9 +15,13 @@
 use std::fmt::Write;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_sql::plans::ShowCreateDatabasePlan;
 
 use crate::interpreters::Interpreter;
@@ -70,9 +74,18 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             }
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(vec![name.as_bytes()]),
-            Series::from_data(vec![info.into_bytes()]),
-        ])])
+        PipelineBuildResult::from_blocks(vec![DataBlock::new(
+            vec![
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(info.as_bytes().to_vec())),
+                },
+            ],
+            1,
+        )])
     }
 }

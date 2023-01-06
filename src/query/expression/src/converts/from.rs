@@ -12,52 +12,70 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
 use common_datavalues::remove_nullable;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use itertools::Itertools;
 
 use crate::types::number::NumberScalar;
 use crate::types::AnyType;
-use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
-use crate::Chunk;
-use crate::ChunkEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Scalar;
+use crate::TableDataType;
+use crate::TableField;
+use crate::TableSchema;
 use crate::Value;
 
 pub fn can_convert(datatype: &DataTypeImpl) -> bool {
     !matches!(
         datatype,
-        DataTypeImpl::Date(_) | DataTypeImpl::VariantArray(_) | DataTypeImpl::VariantObject(_)
+        DataTypeImpl::VariantArray(_) | DataTypeImpl::VariantObject(_)
     )
 }
 
-pub fn from_type(datatype: &DataTypeImpl) -> DataType {
+pub fn from_type(datatype: &DataTypeImpl) -> TableDataType {
     with_number_type!(|TYPE| match datatype {
-        DataTypeImpl::TYPE(_) => DataType::Number(NumberDataType::TYPE),
+        DataTypeImpl::TYPE(_) => TableDataType::Number(NumberDataType::TYPE),
 
-        DataTypeImpl::Null(_) => DataType::Null,
-        DataTypeImpl::Nullable(v) => DataType::Nullable(Box::new(from_type(v.inner_type()))),
-        DataTypeImpl::Boolean(_) => DataType::Boolean,
-        DataTypeImpl::Timestamp(_) => DataType::Timestamp,
-        DataTypeImpl::Date(_) => DataType::Date,
-        DataTypeImpl::String(_) => DataType::String,
-        DataTypeImpl::Struct(ty) => {
-            let inners = ty.types().iter().map(from_type).collect();
-            DataType::Tuple(inners)
+        DataTypeImpl::Null(_) => TableDataType::Null,
+        DataTypeImpl::Nullable(v) => TableDataType::Nullable(Box::new(from_type(v.inner_type()))),
+        DataTypeImpl::Boolean(_) => TableDataType::Boolean,
+        DataTypeImpl::Timestamp(_) => TableDataType::Timestamp,
+        DataTypeImpl::Date(_) => TableDataType::Date,
+        DataTypeImpl::String(_) => TableDataType::String,
+        DataTypeImpl::Struct(fields) => {
+            let fields_name = fields.names().clone().unwrap_or_else(|| {
+                (0..fields.types().len())
+                    .map(|i| format!("{}", i + 1))
+                    .collect()
+            });
+            let fields_type = fields.types().iter().map(from_type).collect();
+            TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            }
         }
-        DataTypeImpl::Array(ty) => DataType::Array(Box::new(from_type(ty.inner_type()))),
+        DataTypeImpl::Array(ty) => TableDataType::Array(Box::new(from_type(ty.inner_type()))),
         DataTypeImpl::Variant(_)
         | DataTypeImpl::VariantArray(_)
-        | DataTypeImpl::VariantObject(_) => DataType::Variant,
-        DataTypeImpl::Interval(_) => unimplemented!(),
+        | DataTypeImpl::VariantObject(_) => TableDataType::Variant,
+        DataTypeImpl::Interval(_) => unreachable!("Interval is not deprecated"),
     })
+}
+
+pub fn from_schema(schema: &common_datavalues::DataSchema) -> TableSchema {
+    let fields = schema
+        .fields()
+        .iter()
+        .map(|f| {
+            let ty = from_type(f.data_type());
+            TableField::new(f.name(), ty).with_default_expr(f.default_expr().cloned())
+        })
+        .collect();
+    TableSchema::new_from(fields, schema.meta().clone())
 }
 
 pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
@@ -100,6 +118,14 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
         DataTypeImpl::Timestamp(_) => Scalar::Timestamp(datavalue.as_i64().unwrap()),
         DataTypeImpl::Date(_) => Scalar::Date(datavalue.as_i64().unwrap() as i32),
         DataTypeImpl::String(_) => Scalar::String(datavalue.as_string().unwrap()),
+        DataTypeImpl::Variant(_) => match datavalue {
+            DataValue::String(x) => Scalar::Variant(x.clone()),
+            DataValue::Variant(x) => {
+                let v: Vec<u8> = serde_json::to_vec(x).unwrap();
+                Scalar::Variant(v)
+            }
+            _ => unreachable!(),
+        },
         DataTypeImpl::Struct(types) => {
             let values = match datavalue {
                 DataValue::Struct(x) => x,
@@ -121,7 +147,7 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
             };
 
             let new_type = from_type(ty.inner_type());
-            let mut builder = ColumnBuilder::with_capacity(&new_type, values.len());
+            let mut builder = ColumnBuilder::with_capacity(&(&new_type).into(), values.len());
 
             for value in values.iter() {
                 let scalar = from_scalar(value, ty.inner_type());
@@ -129,17 +155,6 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
             }
             let col = builder.build();
             Scalar::Array(col)
-        }
-
-        DataTypeImpl::Variant(_)
-        | DataTypeImpl::VariantArray(_)
-        | DataTypeImpl::VariantObject(_) => {
-            let value = match datavalue {
-                DataValue::Variant(x) => x,
-                _ => unreachable!(),
-            };
-            let v: Vec<u8> = serde_json::to_vec(value).unwrap();
-            Scalar::Variant(v)
         }
         _ => unreachable!(),
     }
@@ -151,23 +166,9 @@ pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<
         let scalar = from_scalar(&value, logical_type);
         return Value::Scalar(scalar);
     }
-
+    let datatype = from_type(logical_type);
+    let datatype = (&datatype).into();
     let arrow_column = column.as_arrow_array(logical_type.clone());
-    let new_column = Column::from_arrow(arrow_column.as_ref());
+    let new_column = Column::from_arrow(arrow_column.as_ref(), &datatype);
     Value::Column(new_column)
-}
-
-pub fn from_block(datablock: &DataBlock) -> Chunk<String> {
-    let columns = datablock
-        .columns()
-        .iter()
-        .zip(datablock.schema().fields().iter())
-        .map(|(c, f)| ChunkEntry {
-            id: f.name().clone(),
-            data_type: from_type(f.data_type()),
-            value: convert_column(c, f.data_type()),
-        })
-        .collect_vec();
-
-    Chunk::new(columns, datablock.num_rows())
 }

@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_datablocks::DataBlock;
+use common_expression::DataBlock;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnStatistics;

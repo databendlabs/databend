@@ -21,11 +21,11 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::DataSchema;
+use common_expression::Expr;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
-use common_sql::evaluator::EvalNode;
-use common_sql::evaluator::Evaluator;
 use common_storages_pruner::RangePrunerCreator;
 
 use super::ParquetTable;
@@ -53,20 +53,19 @@ impl ParquetTable {
         }
     }
 
-    // Build the prewhere filter executor.
-    fn build_prewhere_filter_executor(
+    // Build the prewhere filter expression.
+    fn build_prewhere_filter_expr(
         &self,
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-        schema: DataSchemaRef,
-    ) -> Result<Arc<Option<EvalNode>>> {
+        schema: &DataSchema,
+    ) -> Result<Arc<Option<Expr>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => {
-                    let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
-                    Arc::new(Some(executor))
-                }
+                Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
+                    expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+                })),
             },
         )
     }
@@ -126,8 +125,15 @@ impl ParquetTable {
             let mut partitions = Vec::with_capacity(locations.len());
 
             // build row group pruner.
-            let filter_expr = push_downs.as_ref().map(|extra| extra.filters.as_slice());
-            let row_group_pruner = RangePrunerCreator::try_create(&ctx_ref, filter_expr, &schema)?;
+            let filter_exprs = push_downs.as_ref().map(|extra| {
+                extra
+                    .filters
+                    .iter()
+                    .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                    .collect::<Vec<_>>()
+            });
+            let row_group_pruner =
+                RangePrunerCreator::try_create(&ctx_ref, filter_exprs.as_deref(), &schema)?;
 
             for location in &locations {
                 let file_meta = ParquetReader::read_meta(location)?;
@@ -141,13 +147,12 @@ impl ParquetTable {
                     &file_meta.row_groups,
                     &columns_to_read,
                 ) {
-                    for (idx, (stats, rg)) in row_group_stats
+                    for (idx, (stats, _rg)) in row_group_stats
                         .iter()
                         .zip(file_meta.row_groups.iter())
                         .enumerate()
                     {
-                        row_group_pruned[idx] =
-                            !row_group_pruner.should_keep(stats, rg.num_rows() as u64);
+                        row_group_pruned[idx] = !row_group_pruner.should_keep(stats);
                     }
                 }
 
@@ -186,14 +191,13 @@ impl ParquetTable {
             }
             Some(v) => v.output_columns,
         };
-        let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
+        let output_schema = Arc::new(DataSchema::from(
+            &output_projection.project_schema(&plan.source_info.schema()),
+        ));
 
         let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter = self.build_prewhere_filter_executor(
-            ctx.clone(),
-            plan,
-            prewhere_reader.output_schema(),
-        )?;
+        let prewhere_filter =
+            self.build_prewhere_filter_expr(ctx.clone(), plan, prewhere_reader.output_schema())?;
         let remain_reader = self.build_remain_reader(plan)?;
 
         // Add source pipe.

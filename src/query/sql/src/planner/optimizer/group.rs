@@ -24,20 +24,12 @@ use crate::IndexType;
 pub enum GroupState {
     Init,
     Explored,
-    Implemented,
     Optimized,
 }
 
 impl GroupState {
     pub fn explored(&self) -> bool {
-        matches!(
-            self,
-            GroupState::Explored | GroupState::Implemented | GroupState::Optimized
-        )
-    }
-
-    pub fn implemented(&self) -> bool {
-        matches!(self, GroupState::Implemented | GroupState::Optimized)
+        matches!(self, GroupState::Explored | GroupState::Optimized)
     }
 
     pub fn optimized(&self) -> bool {

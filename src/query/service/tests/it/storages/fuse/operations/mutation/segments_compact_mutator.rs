@@ -18,10 +18,15 @@ use common_base::base::tokio;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_mutator::TableMutator;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::NumberColumn;
+use common_expression::types::number::NumberScalar;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::SendableDataBlockStream;
+use common_expression::Value;
 use common_storage::DataOperator;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentInfoReader;
@@ -37,6 +42,7 @@ use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
@@ -204,7 +210,14 @@ async fn append_rows(ctx: Arc<QueryContext>, n: usize) -> Result<()> {
 
 async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
     let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
-    blocks[0].column(0).get_u64(0)
+    match &blocks[0].get_by_offset(0).value {
+        Value::Scalar(Scalar::Number(NumberScalar::UInt64(s))) => Ok(*s),
+        Value::Column(Column::Number(NumberColumn::UInt64(c))) => Ok(c[0]),
+        _ => Err(ErrorCode::BadDataValueType(format!(
+            "Expected UInt64, but got {:?}",
+            blocks[0].get_by_offset(0).value
+        ))),
+    }
 }
 
 async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {
@@ -661,7 +674,7 @@ impl CompactSegmentTestFixture {
         let mut locations = vec![];
         let mut collected_blocks = vec![];
         for num_blocks in block_num_of_segments {
-            let blocks = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
+            let (schema, blocks) = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
             let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
                 let block = block?;
@@ -670,7 +683,7 @@ impl CompactSegmentTestFixture {
                 let mut block_statistics =
                     BlockStatistics::from(&block, "".to_owned(), None, None)?;
                 let block_meta = block_writer
-                    .write(FuseStorageFormat::Parquet, block, col_stats, None)
+                    .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
                     .await?;
                 block_statistics.block_file_location = block_meta.location.0.clone();
 
@@ -708,7 +721,14 @@ impl CompactSegmentTestFixture {
     ) -> Result<()> {
         // traverse the paths of new segments  in reversed order
         for (idx, x) in new_segment_paths.iter().rev().enumerate() {
-            let seg = segment_reader.read(x, None, SegmentInfo::VERSION).await?;
+            let load_params = LoadParams {
+                location: x.to_string(),
+                len_hint: None,
+                ver: SegmentInfo::VERSION,
+                schema: Some(TestFixture::default_table_schema()),
+            };
+
+            let seg = segment_reader.read(&load_params).await?;
             assert_eq!(
                 seg.blocks.len(),
                 expected_num_blocks[idx],
@@ -779,7 +799,14 @@ impl CompactCase {
         // 4. input blocks should be there and in the original order
         // for location in r.segments_locations.iter().rev() {
         for location in r.segments_locations.iter() {
-            let segment = segment_reader.read(&location.0, None, location.1).await?;
+            let load_params = LoadParams {
+                location: location.0.clone(),
+                len_hint: None,
+                ver: location.1,
+                schema: Some(TestFixture::default_table_schema()),
+            };
+
+            let segment = segment_reader.read(&load_params).await?;
             merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary)?;
             block_num_of_output_segments.push(segment.blocks.len());
 

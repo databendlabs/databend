@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::Expr;
-use common_datavalues::DataType;
+use common_ast::ast::Literal;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -31,7 +31,7 @@ impl<'a> Binder {
         limit: Option<&Expr<'a>>,
         offset: &Option<Expr<'a>>,
     ) -> Result<SExpr> {
-        let type_checker = TypeChecker::new(
+        let _type_checker = TypeChecker::new(
             bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
@@ -40,30 +40,18 @@ impl<'a> Binder {
         );
 
         let limit_cnt = match limit {
-            Some(Expr::Literal { span: _, lit: x }) => {
-                let box (value, data_type) = type_checker.resolve_literal(x, None)?;
-                if !data_type.data_type_id().is_integer() {
-                    return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
-                }
-                Some(value.as_u64()? as usize)
-            }
-            Some(_) => {
-                return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
-            }
+            Some(limit) => Some(
+                Self::bind_limit_argument(limit)
+                    .ok_or_else(|| ErrorCode::SemanticError("Invalid LIMIT expression"))?
+                    as usize,
+            ),
             None => None,
         };
 
         let offset_cnt = if let Some(offset) = offset {
-            if let Expr::Literal { lit: x, .. } = offset {
-                let box (value, data_type) = type_checker.resolve_literal(x, None)?;
-                if !data_type.data_type_id().is_integer() {
-                    return Err(ErrorCode::IllegalDataType("Unsupported offset type"));
-                }
-                value.as_u64()? as usize
-            } else {
-                // TODO: try fold constant expression like `1+1`
-                return Err(ErrorCode::SemanticError("Invalid OFFSET expression"));
-            }
+            Self::bind_limit_argument(offset)
+                .ok_or_else(|| ErrorCode::SemanticError("Invalid OFFSET expression"))?
+                as usize
         } else {
             0
         };
@@ -74,5 +62,18 @@ impl<'a> Binder {
         };
         let new_expr = SExpr::create_unary(limit_plan.into(), child);
         Ok(new_expr)
+    }
+
+    /// So far, we only support integer literal as limit argument.
+    /// So we will try to extract the integer value from the AST directly.
+    /// In the future it's possible to treat the argument as an expression.
+    fn bind_limit_argument(expr: &Expr) -> Option<u64> {
+        match expr {
+            Expr::Literal {
+                lit: Literal::Integer(value),
+                ..
+            } => Some(*value),
+            _ => None,
+        }
     }
 }

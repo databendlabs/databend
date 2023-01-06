@@ -15,23 +15,12 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_datavalues::type_primitive::Float32Type;
-use common_datavalues::type_primitive::Float64Type;
-use common_datavalues::type_primitive::Int16Type;
-use common_datavalues::type_primitive::Int32Type;
-use common_datavalues::type_primitive::Int64Type;
-use common_datavalues::type_primitive::Int8Type;
-use common_datavalues::type_string::StringType;
-use common_datavalues::ArrayType;
-use common_datavalues::BooleanType;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DateType;
-use common_datavalues::NullableType;
-use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::NumberDataType;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_hive_meta_store as hms;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
@@ -125,56 +114,52 @@ pub fn try_into_table_info(
     Ok(table_info)
 }
 
-fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<DataSchema> {
+fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<TableSchema> {
     let mut fields = Vec::new();
     for field in hive_fields {
         let name = field.name.unwrap_or_default();
         let type_name = field.type_.unwrap_or_default();
-        let data_type = NullableType::new_impl(try_from_filed_type_name(type_name)?);
-        let field = DataField::new(&name, data_type);
+
+        let table_type = try_from_filed_type_name(type_name)?;
+        let table_type = table_type.wrap_nullable();
+        let field = TableField::new(&name, table_type);
         fields.push(field);
     }
-    Ok(DataSchema::new(fields))
+    Ok(TableSchema::new(fields))
 }
 
-fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<DataTypeImpl> {
+fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<TableDataType> {
     let name = type_name.as_ref().to_uppercase();
     // TODO more mappings goes here
     // https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Types
-
     // Hive string data type could be varchar(n), where n is the maximum number of characters
     if name.starts_with("VARCHAR") {
-        Ok(DataTypeImpl::String(StringType::default()))
+        Ok(TableDataType::String)
     } else if name.starts_with("ARRAY<") {
         let sub_type = &name["ARRAY<".len()..name.len() - 1];
         let sub_type = try_from_filed_type_name(sub_type)?;
-        Ok(DataTypeImpl::Array(ArrayType::create(
-            NullableType::new_impl(sub_type),
-        )))
+        Ok(TableDataType::Array(Box::new(sub_type.wrap_nullable())))
     } else {
-        match name.as_str() {
-            "TINYINT" => Ok(DataTypeImpl::Int8(Int8Type::default())),
-            "SMALLINT" => Ok(DataTypeImpl::Int16(Int16Type::default())),
-            "INT" => Ok(DataTypeImpl::Int32(Int32Type::default())),
-            "BIGINT" => Ok(DataTypeImpl::Int64(Int64Type::default())),
-
-            "BINARY" | "STRING" => Ok(DataTypeImpl::String(StringType::default())),
-            // boolean
-            "BOOLEAN" => Ok(DataTypeImpl::Boolean(BooleanType::default())),
-
+        let number = match name.as_str() {
+            "TINYINT" => Ok(NumberDataType::Int8),
+            "SMALLINT" => Ok(NumberDataType::Int16),
+            "INT" => Ok(NumberDataType::Int32),
+            "BIGINT" => Ok(NumberDataType::Int64),
             //"DECIMAL", "NUMERIC" type not supported
-            "FLOAT" => Ok(DataTypeImpl::Float32(Float32Type::default())),
-            "DOUBLE" => Ok(DataTypeImpl::Float64(Float64Type::default())),
-            "DOUBLE PRECISION" => Ok(DataTypeImpl::Float64(Float64Type::default())),
+            "FLOAT" => Ok(NumberDataType::Float32),
+            "DOUBLE" | "DOUBLE PRECISION" => Ok(NumberDataType::Float64),
 
+            "BINARY" | "STRING" => return Ok(TableDataType::String),
+            // boolean
+            "BOOLEAN" => return Ok(TableDataType::Boolean),
             // timestamp
-            "TIMESTAMP" => Ok(TimestampType::new_impl()),
-            "DATE" => Ok(DataTypeImpl::Date(DateType::default())),
-
+            "TIMESTAMP" => return Ok(TableDataType::Timestamp),
+            "DATE" => return Ok(TableDataType::Date),
             _ => Err(ErrorCode::IllegalDataType(format!(
-                "unknown hive data type [{}]",
+                "Unsupported data type: {}",
                 name
             ))),
-        }
+        }?;
+        Ok(TableDataType::Number(number))
     }
 }

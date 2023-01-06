@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::ToDataType;
-use common_datavalues::Vu8;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::PrincipalIdentity;
@@ -110,7 +110,7 @@ pub struct ShowGrantsPlan {
 
 impl ShowGrantsPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("Grants", Vu8::to_data_type())])
+        DataSchemaRefExt::create(vec![DataField::new("Grants", DataType::String)])
     }
 }
 
@@ -144,10 +144,10 @@ pub struct ShowRolesPlan {}
 impl ShowRolesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("inherited_roles", u64::to_data_type()),
-            DataField::new("is_current", bool::to_data_type()),
-            DataField::new("is_default", bool::to_data_type()),
+            DataField::new("name", DataType::String),
+            DataField::new("inherited_roles", DataType::Number(NumberDataType::UInt64)),
+            DataField::new("is_current", DataType::Boolean),
+            DataField::new("is_default", DataType::Boolean),
         ])
     }
 }

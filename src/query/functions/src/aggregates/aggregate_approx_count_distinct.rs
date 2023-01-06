@@ -14,141 +14,136 @@
 
 use std::alloc::Layout;
 use std::fmt;
+use std::hash::Hash;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::types::DateType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
+use common_expression::types::StringType;
+use common_expression::types::TimestampType;
+use common_expression::types::ValueType;
+use common_expression::with_number_mapped_type;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_io::prelude::*;
 use streaming_algorithms::HyperLogLog;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 
 /// Use Hyperloglog to estimate distinct of values
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct AggregateApproxCountDistinctState {
-    hll: HyperLogLog<DataValue>,
+pub struct AggregateApproxCountDistinctState<S> {
+    hll: HyperLogLog<S>,
 }
 
 /// S: ScalarType
 #[derive(Clone)]
-pub struct AggregateApproxCountDistinctFunction {
+pub struct AggregateApproxCountDistinctFunction<T> {
     display_name: String,
+    _t: PhantomData<T>,
 }
 
-impl AggregateApproxCountDistinctFunction {
+impl<T: ValueType + Send + Sync> AggregateApproxCountDistinctFunction<T>
+where for<'a> T::ScalarRef<'a>: Hash
+{
     pub fn try_create(
         display_name: &str,
-        _params: Vec<DataValue>,
-        arguments: Vec<DataField>,
-    ) -> Result<Arc<dyn AggregateFunction>> {
-        assert_unary_arguments(display_name, arguments.len())?;
-        Ok(Arc::new(AggregateApproxCountDistinctFunction {
+        _arguments: Vec<DataType>,
+    ) -> Result<AggregateFunctionRef> {
+        Ok(Arc::new(Self {
             display_name: display_name.to_string(),
+            _t: PhantomData,
         }))
-    }
-
-    pub fn desc() -> AggregateFunctionDescription {
-        let features = super::aggregate_function_factory::AggregateFunctionFeatures {
-            returns_default_when_only_null: true,
-            ..Default::default()
-        };
-        AggregateFunctionDescription::creator_with_features(Box::new(Self::try_create), features)
     }
 }
 
-impl AggregateFunction for AggregateApproxCountDistinctFunction {
+impl<T: ValueType + Send + Sync> AggregateFunction for AggregateApproxCountDistinctFunction<T>
+where for<'a> T::ScalarRef<'a>: Hash
+{
     fn name(&self) -> &str {
         "AggregateApproxCountDistinctFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
-        Ok(u64::to_data_type())
+    fn return_type(&self) -> Result<DataType> {
+        Ok(DataType::Number(NumberDataType::UInt64))
     }
 
     fn init_state(&self, place: StateAddr) {
         place.write(|| AggregateApproxCountDistinctState {
-            hll: HyperLogLog::new(0.04),
+            hll: HyperLogLog::<T::ScalarRef<'_>>::new(0.04),
         });
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateApproxCountDistinctState>()
+        Layout::new::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>()
     }
 
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[ColumnRef],
+        columns: &[Column],
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState>();
-        let column = &columns[0];
+        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
+        let column = T::try_downcast_column(&columns[0]).unwrap();
 
-        let (_, bm) = column.validity();
-        let bitmap = combine_validities(bm, validity);
-        let nulls = match bitmap {
-            Some(ref b) => b.unset_bits(),
-            None => 0,
-        };
-        if column.len() == nulls {
-            return Ok(());
-        }
-
-        // This is a hot path, to_values will alloc more memory(Vec::with_capacity).
-        if let Some(bitmap) = bitmap {
-            for i in 0..column.len() {
-                let value = &column.get(i);
-                if bitmap.get_bit(i) {
-                    state.hll.push(value);
-                }
-            }
+        if let Some(validity) = validity {
+            T::iter_column(&column)
+                .zip(validity.iter())
+                .for_each(|(t, b)| {
+                    if b {
+                        state.hll.push(&t);
+                    }
+                });
         } else {
-            for i in 0..column.len() {
-                let value = &column.get(i);
-                state.hll.push(value);
-            }
+            T::iter_column(&column).for_each(|t| {
+                state.hll.push(&t);
+            });
         }
-
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], _row: usize) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState>();
-        for column in columns {
-            (0..column.len()).for_each(|i| state.hll.push(&column.get(i)));
-        }
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
+        let column = T::try_downcast_column(&columns[0]).unwrap();
+        state.hll.push(&T::index_column(&column, row).unwrap());
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState>();
-        serialize_into_buf(writer, state)
+        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
+        serialize_into_buf(writer, &state.hll)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState>();
-        *state = deserialize_from_slice(reader)?;
+        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
+        state.hll = deserialize_from_slice(reader)?;
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState>();
-        let rhs = rhs.get::<AggregateApproxCountDistinctState>();
+        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
+        let rhs = rhs.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
         state.hll.union(&rhs.hll);
 
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
-        let builder: &mut MutablePrimitiveColumn<u64> = Series::check_get_mutable_column(array)?;
-        let state = place.get::<AggregateApproxCountDistinctState>();
-        builder.append_value(state.hll.len() as u64);
-
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
+        let builder = NumberType::<u64>::try_downcast_builder(builder).unwrap();
+        builder.push(state.hll.len() as u64);
         Ok(())
     }
 
@@ -157,22 +152,50 @@ impl AggregateFunction for AggregateApproxCountDistinctFunction {
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
-        let state = place.get::<AggregateApproxCountDistinctState>();
+        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
         std::ptr::drop_in_place(state);
-    }
-
-    fn get_own_null_adaptor(
-        &self,
-        _nested_function: super::AggregateFunctionRef,
-        _params: Vec<DataValue>,
-        _arguments: Vec<DataField>,
-    ) -> Result<Option<super::AggregateFunctionRef>> {
-        let f = self.clone();
-        Ok(Some(Arc::new(f)))
     }
 }
 
-impl fmt::Display for AggregateApproxCountDistinctFunction {
+pub fn try_create_aggregate_approx_count_distinct_function(
+    display_name: &str,
+    _params: Vec<Scalar>,
+    arguments: Vec<DataType>,
+) -> Result<Arc<dyn AggregateFunction>> {
+    assert_unary_arguments(display_name, arguments.len())?;
+
+    with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
+        DataType::Number(NumberDataType::NUM_TYPE) => {
+            AggregateApproxCountDistinctFunction::<NumberType<NUM_TYPE>>::try_create(
+                display_name,
+                arguments,
+            )
+        }
+        DataType::String =>
+            AggregateApproxCountDistinctFunction::<StringType>::try_create(display_name, arguments,),
+        DataType::Date =>
+            AggregateApproxCountDistinctFunction::<DateType>::try_create(display_name, arguments,),
+        DataType::Timestamp => AggregateApproxCountDistinctFunction::<TimestampType>::try_create(
+            display_name,
+            arguments,
+        ),
+        _ => AggregateApproxCountDistinctFunction::<AnyType>::try_create(display_name, arguments,),
+    })
+}
+
+pub fn aggregate_approx_count_distinct_function_desc() -> AggregateFunctionDescription {
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        returns_default_when_only_null: true,
+        ..Default::default()
+    };
+
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_approx_count_distinct_function),
+        features,
+    )
+}
+
+impl<T> fmt::Display for AggregateApproxCountDistinctFunction<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }

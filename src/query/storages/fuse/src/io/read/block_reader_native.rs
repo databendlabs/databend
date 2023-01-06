@@ -21,8 +21,8 @@ use common_arrow::arrow::chunk::Chunk;
 use common_arrow::native::read::reader::PaReader;
 use common_arrow::native::read::PaReadBuf;
 use common_catalog::plan::PartInfoPtr;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
 use opendal::Object;
 
 use crate::fuse_part::FusePartInfo;
@@ -157,6 +157,6 @@ impl BlockReader {
             }
         }
         let chunk = Chunk::new(results);
-        DataBlock::from_chunk(&self.schema(), &chunk)
+        DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
     }
 }

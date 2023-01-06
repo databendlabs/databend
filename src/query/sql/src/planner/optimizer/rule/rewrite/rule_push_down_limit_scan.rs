@@ -21,10 +21,10 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Limit;
-use crate::plans::LogicalGet;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::Scan;
 
 /// Input:  Limit
 ///           \
@@ -51,7 +51,7 @@ impl RulePushDownLimitScan {
                 .into(),
                 SExpr::create_leaf(
                     PatternPlan {
-                        plan_type: RelOp::LogicalGet,
+                        plan_type: RelOp::Scan,
                     }
                     .into(),
                 ),
@@ -69,10 +69,10 @@ impl Rule for RulePushDownLimitScan {
         let limit: Limit = s_expr.plan().clone().try_into()?;
         if let Some(mut count) = limit.limit {
             let child = s_expr.child(0)?;
-            let mut get: LogicalGet = child.plan().clone().try_into()?;
+            let mut get: Scan = child.plan().clone().try_into()?;
             count += limit.offset;
             get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
-            let get = SExpr::create_leaf(RelOperator::LogicalGet(get));
+            let get = SExpr::create_leaf(RelOperator::Scan(get));
             state.add_result(s_expr.replace_children(vec![get]));
         }
         Ok(())

@@ -15,11 +15,12 @@
 use std::sync::Arc;
 
 use bstr::ByteSlice;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
 use common_io::prelude::FormatSettings;
@@ -40,16 +41,22 @@ pub fn block_to_json_value(
     if block.is_empty() {
         return Ok(vec![]);
     }
-    let rows_size = block.column(0).len();
+    let rows_size = block.num_rows();
+    let columns: Vec<Column> = block
+        .convert_to_full()
+        .columns()
+        .iter()
+        .map(|column| column.value.clone().into_column().unwrap())
+        .collect();
+
     let mut res = Vec::new();
-    let serializers = block.get_serializers()?;
     let encoder = FieldEncoderValues::create_for_http_handler(format.timezone);
     let mut buf = vec![];
     for row_index in 0..rows_size {
         let mut row: Vec<JsonValue> = Vec::with_capacity(block.num_columns());
-        for serializer in serializers.iter() {
+        for column in &columns {
             buf.clear();
-            encoder.write_field(serializer, row_index, &mut buf, true);
+            encoder.write_field(column, row_index, &mut buf, true);
             row.push(serde_json::to_value(
                 buf.to_str()
                     .map_err(|e| ErrorCode::BadBytes(format!("{}", e)))?,
@@ -68,10 +75,10 @@ impl JsonBlock {
         }
     }
 
-    pub fn new(block: &DataBlock, format: &FormatSettings) -> Result<Self> {
+    pub fn new(schema: DataSchemaRef, block: &DataBlock, format: &FormatSettings) -> Result<Self> {
         Ok(JsonBlock {
             data: block_to_json_value(block, format)?,
-            schema: block.schema().clone(),
+            schema,
         })
     }
 

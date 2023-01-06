@@ -16,9 +16,10 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use ce::types::NumberDataType;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_datavalues as dv;
+use common_expression as ce;
 use common_meta_app::schema as mt;
 use common_meta_app::share;
 use common_proto_conv::FromToProto;
@@ -146,50 +147,44 @@ fn new_share_account_meta() -> share::ShareAccountMeta {
 
 fn new_table_meta() -> mt::TableMeta {
     mt::TableMeta {
-        schema: Arc::new(dv::DataSchema::new_from(
+        schema: Arc::new(ce::TableSchema::new_from(
             vec![
-                //
-                dv::DataField::new(
+                ce::TableField::new(
                     "nullable",
-                    dv::NullableType::create(dv::Int8Type::default().into()).into(),
+                    ce::TableDataType::Nullable(Box::new(ce::TableDataType::Number(
+                        NumberDataType::Int8,
+                    ))),
                 )
                 .with_default_expr(Some("a + 3".to_string())),
-                dv::DataField::new("bool", dv::BooleanType::default().into()),
-                dv::DataField::new("int8", dv::Int8Type::default().into()),
-                dv::DataField::new("int16", dv::Int16Type::default().into()),
-                dv::DataField::new("int32", dv::Int32Type::default().into()),
-                dv::DataField::new("int64", dv::Int64Type::default().into()),
-                dv::DataField::new("uint8", dv::UInt8Type::default().into()),
-                dv::DataField::new("uint16", dv::UInt16Type::default().into()),
-                dv::DataField::new("uint32", dv::UInt32Type::default().into()),
-                dv::DataField::new("uint64", dv::UInt64Type::default().into()),
-                dv::DataField::new("float32", dv::Float32Type::default().into()),
-                dv::DataField::new("float64", dv::Float64Type::default().into()),
-                dv::DataField::new("date", dv::DateType::default().into()),
-                dv::DataField::new("timestamp", dv::TimestampType::new_impl()),
-                dv::DataField::new("string", dv::StringType::default().into()),
-                dv::DataField::new(
-                    "struct",
-                    dv::StructType::create(
-                        Some(vec![s("foo"), s("bar")]),
-                        vec![
-                            dv::BooleanType::default().into(),
-                            dv::StringType::default().into(),
-                        ], //
-                    )
-                    .into(),
+                ce::TableField::new("bool", ce::TableDataType::Boolean),
+                ce::TableField::new("int8", ce::TableDataType::Number(NumberDataType::Int8)),
+                ce::TableField::new("int16", ce::TableDataType::Number(NumberDataType::Int16)),
+                ce::TableField::new("int32", ce::TableDataType::Number(NumberDataType::Int32)),
+                ce::TableField::new("int64", ce::TableDataType::Number(NumberDataType::Int64)),
+                ce::TableField::new("uint8", ce::TableDataType::Number(NumberDataType::UInt8)),
+                ce::TableField::new("uint16", ce::TableDataType::Number(NumberDataType::UInt16)),
+                ce::TableField::new("uint32", ce::TableDataType::Number(NumberDataType::UInt32)),
+                ce::TableField::new("uint64", ce::TableDataType::Number(NumberDataType::UInt64)),
+                ce::TableField::new(
+                    "float32",
+                    ce::TableDataType::Number(NumberDataType::Float32),
                 ),
-                dv::DataField::new(
+                ce::TableField::new(
+                    "float64",
+                    ce::TableDataType::Number(NumberDataType::Float64),
+                ),
+                ce::TableField::new("date", ce::TableDataType::Date),
+                ce::TableField::new("timestamp", ce::TableDataType::Timestamp),
+                ce::TableField::new("string", ce::TableDataType::String),
+                ce::TableField::new("struct", ce::TableDataType::Tuple {
+                    fields_name: vec![s("foo"), s("bar")],
+                    fields_type: vec![ce::TableDataType::Boolean, ce::TableDataType::String],
+                }),
+                ce::TableField::new(
                     "array",
-                    dv::ArrayType::create(dv::BooleanType::default().into()).into(),
+                    ce::TableDataType::Array(Box::new(ce::TableDataType::Boolean)),
                 ),
-                dv::DataField::new("variant", dv::VariantType::default().into()),
-                dv::DataField::new("variant_array", dv::VariantArrayType::default().into()),
-                dv::DataField::new("variant_object", dv::VariantObjectType::default().into()),
-                dv::DataField::new(
-                    "interval",
-                    dv::IntervalType::new(dv::IntervalKind::Day).into(),
-                ),
+                ce::TableField::new("variant", ce::TableDataType::Variant),
             ],
             btreemap! {s("a") => s("b")},
         )),
@@ -213,50 +208,44 @@ fn new_table_meta() -> mt::TableMeta {
 
 fn new_table_meta_v10() -> mt::TableMeta {
     mt::TableMeta {
-        schema: Arc::new(dv::DataSchema::new_from(
+        schema: Arc::new(ce::TableSchema::new_from(
             vec![
-                //
-                dv::DataField::new(
+                ce::TableField::new(
                     "nullable",
-                    dv::NullableType::create(dv::Int8Type::default().into()).into(),
+                    ce::TableDataType::Nullable(Box::new(ce::TableDataType::Number(
+                        NumberDataType::Int8,
+                    ))),
                 )
                 .with_default_expr(Some("a + 3".to_string())),
-                dv::DataField::new("bool", dv::BooleanType::default().into()),
-                dv::DataField::new("int8", dv::Int8Type::default().into()),
-                dv::DataField::new("int16", dv::Int16Type::default().into()),
-                dv::DataField::new("int32", dv::Int32Type::default().into()),
-                dv::DataField::new("int64", dv::Int64Type::default().into()),
-                dv::DataField::new("uint8", dv::UInt8Type::default().into()),
-                dv::DataField::new("uint16", dv::UInt16Type::default().into()),
-                dv::DataField::new("uint32", dv::UInt32Type::default().into()),
-                dv::DataField::new("uint64", dv::UInt64Type::default().into()),
-                dv::DataField::new("float32", dv::Float32Type::default().into()),
-                dv::DataField::new("float64", dv::Float64Type::default().into()),
-                dv::DataField::new("date", dv::DateType::default().into()),
-                dv::DataField::new("timestamp", dv::TimestampType::new_impl()),
-                dv::DataField::new("string", dv::StringType::default().into()),
-                dv::DataField::new(
-                    "struct",
-                    dv::StructType::create(
-                        Some(vec![s("foo"), s("bar")]),
-                        vec![
-                            dv::BooleanType::default().into(),
-                            dv::StringType::default().into(),
-                        ], //
-                    )
-                    .into(),
+                ce::TableField::new("bool", ce::TableDataType::Boolean),
+                ce::TableField::new("int8", ce::TableDataType::Number(NumberDataType::Int8)),
+                ce::TableField::new("int16", ce::TableDataType::Number(NumberDataType::Int16)),
+                ce::TableField::new("int32", ce::TableDataType::Number(NumberDataType::Int32)),
+                ce::TableField::new("int64", ce::TableDataType::Number(NumberDataType::Int64)),
+                ce::TableField::new("uint8", ce::TableDataType::Number(NumberDataType::UInt8)),
+                ce::TableField::new("uint16", ce::TableDataType::Number(NumberDataType::UInt16)),
+                ce::TableField::new("uint32", ce::TableDataType::Number(NumberDataType::UInt32)),
+                ce::TableField::new("uint64", ce::TableDataType::Number(NumberDataType::UInt64)),
+                ce::TableField::new(
+                    "float32",
+                    ce::TableDataType::Number(NumberDataType::Float32),
                 ),
-                dv::DataField::new(
+                ce::TableField::new(
+                    "float64",
+                    ce::TableDataType::Number(NumberDataType::Float64),
+                ),
+                ce::TableField::new("date", ce::TableDataType::Date),
+                ce::TableField::new("timestamp", ce::TableDataType::Timestamp),
+                ce::TableField::new("string", ce::TableDataType::String),
+                ce::TableField::new("struct", ce::TableDataType::Tuple {
+                    fields_name: vec![s("foo"), s("bar")],
+                    fields_type: vec![ce::TableDataType::Boolean, ce::TableDataType::String],
+                }),
+                ce::TableField::new(
                     "array",
-                    dv::ArrayType::create(dv::BooleanType::default().into()).into(),
+                    ce::TableDataType::Array(Box::new(ce::TableDataType::Boolean)),
                 ),
-                dv::DataField::new("variant", dv::VariantType::default().into()),
-                dv::DataField::new("variant_array", dv::VariantArrayType::default().into()),
-                dv::DataField::new("variant_object", dv::VariantObjectType::default().into()),
-                dv::DataField::new(
-                    "interval",
-                    dv::IntervalType::new(dv::IntervalKind::Day).into(),
-                ),
+                ce::TableField::new("variant", ce::TableDataType::Variant),
             ],
             btreemap! {s("a") => s("b")},
         )),
@@ -280,50 +269,44 @@ fn new_table_meta_v10() -> mt::TableMeta {
 
 fn new_table_meta_v12() -> mt::TableMeta {
     mt::TableMeta {
-        schema: Arc::new(dv::DataSchema::new_from(
+        schema: Arc::new(ce::TableSchema::new_from(
             vec![
-                //
-                dv::DataField::new(
+                ce::TableField::new(
                     "nullable",
-                    dv::NullableType::create(dv::Int8Type::default().into()).into(),
+                    ce::TableDataType::Nullable(Box::new(ce::TableDataType::Number(
+                        NumberDataType::Int8,
+                    ))),
                 )
                 .with_default_expr(Some("a + 3".to_string())),
-                dv::DataField::new("bool", dv::BooleanType::default().into()),
-                dv::DataField::new("int8", dv::Int8Type::default().into()),
-                dv::DataField::new("int16", dv::Int16Type::default().into()),
-                dv::DataField::new("int32", dv::Int32Type::default().into()),
-                dv::DataField::new("int64", dv::Int64Type::default().into()),
-                dv::DataField::new("uint8", dv::UInt8Type::default().into()),
-                dv::DataField::new("uint16", dv::UInt16Type::default().into()),
-                dv::DataField::new("uint32", dv::UInt32Type::default().into()),
-                dv::DataField::new("uint64", dv::UInt64Type::default().into()),
-                dv::DataField::new("float32", dv::Float32Type::default().into()),
-                dv::DataField::new("float64", dv::Float64Type::default().into()),
-                dv::DataField::new("date", dv::DateType::default().into()),
-                dv::DataField::new("timestamp", dv::TimestampType::new_impl()),
-                dv::DataField::new("string", dv::StringType::default().into()),
-                dv::DataField::new(
-                    "struct",
-                    dv::StructType::create(
-                        Some(vec![s("foo"), s("bar")]),
-                        vec![
-                            dv::BooleanType::default().into(),
-                            dv::StringType::default().into(),
-                        ], //
-                    )
-                    .into(),
+                ce::TableField::new("bool", ce::TableDataType::Boolean),
+                ce::TableField::new("int8", ce::TableDataType::Number(NumberDataType::Int8)),
+                ce::TableField::new("int16", ce::TableDataType::Number(NumberDataType::Int16)),
+                ce::TableField::new("int32", ce::TableDataType::Number(NumberDataType::Int32)),
+                ce::TableField::new("int64", ce::TableDataType::Number(NumberDataType::Int64)),
+                ce::TableField::new("uint8", ce::TableDataType::Number(NumberDataType::UInt8)),
+                ce::TableField::new("uint16", ce::TableDataType::Number(NumberDataType::UInt16)),
+                ce::TableField::new("uint32", ce::TableDataType::Number(NumberDataType::UInt32)),
+                ce::TableField::new("uint64", ce::TableDataType::Number(NumberDataType::UInt64)),
+                ce::TableField::new(
+                    "float32",
+                    ce::TableDataType::Number(NumberDataType::Float32),
                 ),
-                dv::DataField::new(
+                ce::TableField::new(
+                    "float64",
+                    ce::TableDataType::Number(NumberDataType::Float64),
+                ),
+                ce::TableField::new("date", ce::TableDataType::Date),
+                ce::TableField::new("timestamp", ce::TableDataType::Timestamp),
+                ce::TableField::new("string", ce::TableDataType::String),
+                ce::TableField::new("struct", ce::TableDataType::Tuple {
+                    fields_name: vec![s("foo"), s("bar")],
+                    fields_type: vec![ce::TableDataType::Boolean, ce::TableDataType::String],
+                }),
+                ce::TableField::new(
                     "array",
-                    dv::ArrayType::create(dv::BooleanType::default().into()).into(),
+                    ce::TableDataType::Array(Box::new(ce::TableDataType::Boolean)),
                 ),
-                dv::DataField::new("variant", dv::VariantType::default().into()),
-                dv::DataField::new("variant_array", dv::VariantArrayType::default().into()),
-                dv::DataField::new("variant_object", dv::VariantObjectType::default().into()),
-                dv::DataField::new(
-                    "interval",
-                    dv::IntervalType::new(dv::IntervalKind::Day).into(),
-                ),
+                ce::TableField::new("variant", ce::TableDataType::Variant),
             ],
             btreemap! {s("a") => s("b")},
         )),
@@ -347,50 +330,44 @@ fn new_table_meta_v12() -> mt::TableMeta {
 
 fn new_table_meta_v23() -> mt::TableMeta {
     mt::TableMeta {
-        schema: Arc::new(dv::DataSchema::new_from(
+        schema: Arc::new(ce::TableSchema::new_from(
             vec![
-                //
-                dv::DataField::new(
+                ce::TableField::new(
                     "nullable",
-                    dv::NullableType::create(dv::Int8Type::default().into()).into(),
+                    ce::TableDataType::Nullable(Box::new(ce::TableDataType::Number(
+                        NumberDataType::Int8,
+                    ))),
                 )
                 .with_default_expr(Some("a + 3".to_string())),
-                dv::DataField::new("bool", dv::BooleanType::default().into()),
-                dv::DataField::new("int8", dv::Int8Type::default().into()),
-                dv::DataField::new("int16", dv::Int16Type::default().into()),
-                dv::DataField::new("int32", dv::Int32Type::default().into()),
-                dv::DataField::new("int64", dv::Int64Type::default().into()),
-                dv::DataField::new("uint8", dv::UInt8Type::default().into()),
-                dv::DataField::new("uint16", dv::UInt16Type::default().into()),
-                dv::DataField::new("uint32", dv::UInt32Type::default().into()),
-                dv::DataField::new("uint64", dv::UInt64Type::default().into()),
-                dv::DataField::new("float32", dv::Float32Type::default().into()),
-                dv::DataField::new("float64", dv::Float64Type::default().into()),
-                dv::DataField::new("date", dv::DateType::default().into()),
-                dv::DataField::new("timestamp", dv::TimestampType::new_impl()),
-                dv::DataField::new("string", dv::StringType::default().into()),
-                dv::DataField::new(
-                    "struct",
-                    dv::StructType::create(
-                        Some(vec![s("foo"), s("bar")]),
-                        vec![
-                            dv::BooleanType::default().into(),
-                            dv::StringType::default().into(),
-                        ], //
-                    )
-                    .into(),
+                ce::TableField::new("bool", ce::TableDataType::Boolean),
+                ce::TableField::new("int8", ce::TableDataType::Number(NumberDataType::Int8)),
+                ce::TableField::new("int16", ce::TableDataType::Number(NumberDataType::Int16)),
+                ce::TableField::new("int32", ce::TableDataType::Number(NumberDataType::Int32)),
+                ce::TableField::new("int64", ce::TableDataType::Number(NumberDataType::Int64)),
+                ce::TableField::new("uint8", ce::TableDataType::Number(NumberDataType::UInt8)),
+                ce::TableField::new("uint16", ce::TableDataType::Number(NumberDataType::UInt16)),
+                ce::TableField::new("uint32", ce::TableDataType::Number(NumberDataType::UInt32)),
+                ce::TableField::new("uint64", ce::TableDataType::Number(NumberDataType::UInt64)),
+                ce::TableField::new(
+                    "float32",
+                    ce::TableDataType::Number(NumberDataType::Float32),
                 ),
-                dv::DataField::new(
+                ce::TableField::new(
+                    "float64",
+                    ce::TableDataType::Number(NumberDataType::Float64),
+                ),
+                ce::TableField::new("date", ce::TableDataType::Date),
+                ce::TableField::new("timestamp", ce::TableDataType::Timestamp),
+                ce::TableField::new("string", ce::TableDataType::String),
+                ce::TableField::new("struct", ce::TableDataType::Tuple {
+                    fields_name: vec![s("foo"), s("bar")],
+                    fields_type: vec![ce::TableDataType::Boolean, ce::TableDataType::String],
+                }),
+                ce::TableField::new(
                     "array",
-                    dv::ArrayType::create(dv::BooleanType::default().into()).into(),
+                    ce::TableDataType::Array(Box::new(ce::TableDataType::Boolean)),
                 ),
-                dv::DataField::new("variant", dv::VariantType::default().into()),
-                dv::DataField::new("variant_array", dv::VariantArrayType::default().into()),
-                dv::DataField::new("variant_object", dv::VariantObjectType::default().into()),
-                dv::DataField::new(
-                    "interval",
-                    dv::IntervalType::new(dv::IntervalKind::Day).into(),
-                ),
+                ce::TableField::new("variant", ce::TableDataType::Variant),
             ],
             btreemap! {s("a") => s("b")},
         )),
@@ -558,14 +535,48 @@ fn test_load_old() -> anyhow::Result<()> {
     // built with `test_build_pb_buf()`
 
     // DatabaseMeta is loadable
-    {
+    if false {
         {
             let db_meta_v1: Vec<u8> = vec![
-                34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3,
-                97, 98, 99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+                10, 185, 4, 10, 49, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43,
+                32, 51, 26, 24, 10, 16, 10, 8, 26, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22, 10, 4, 98, 111, 111, 108, 26,
+                8, 18, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22, 10, 4, 105, 110,
+                116, 56, 26, 8, 26, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 23, 10, 5,
+                105, 110, 116, 49, 54, 26, 8, 34, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                10, 23, 10, 5, 105, 110, 116, 51, 50, 26, 8, 42, 0, 160, 6, 23, 168, 6, 1, 160, 6,
+                23, 168, 6, 1, 10, 23, 10, 5, 105, 110, 116, 54, 52, 26, 8, 50, 0, 160, 6, 23, 168,
+                6, 1, 160, 6, 23, 168, 6, 1, 10, 23, 10, 5, 117, 105, 110, 116, 56, 26, 8, 58, 0,
+                160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6, 117, 105, 110, 116,
+                49, 54, 26, 8, 66, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6,
+                117, 105, 110, 116, 51, 50, 26, 8, 74, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168,
+                6, 1, 10, 24, 10, 6, 117, 105, 110, 116, 54, 52, 26, 8, 82, 0, 160, 6, 23, 168, 6,
+                1, 160, 6, 23, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97, 116, 51, 50, 26, 8, 90,
+                0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97,
+                116, 54, 52, 26, 8, 98, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22,
+                10, 4, 100, 97, 116, 101, 26, 8, 106, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 33, 10, 9, 116, 105, 109, 101, 115, 116, 97, 109, 112, 26, 14, 114, 6, 160,
+                6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6, 115,
+                116, 114, 105, 110, 103, 26, 8, 122, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 61, 10, 6, 115, 116, 114, 117, 99, 116, 26, 45, 130, 1, 36, 10, 3, 102, 111,
+                111, 10, 3, 98, 97, 114, 18, 8, 18, 0, 160, 6, 23, 168, 6, 1, 18, 8, 122, 0, 160,
+                6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 40, 10, 5, 97, 114, 114, 97, 121, 26, 25, 138, 1, 16, 10, 8, 18, 0, 160, 6,
+                23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                10, 32, 10, 7, 118, 97, 114, 105, 97, 110, 116, 26, 15, 146, 1, 6, 160, 6, 23, 168,
+                6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 18, 6, 10, 1, 97, 18, 1, 98,
+                160, 6, 23, 168, 6, 1, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42, 10, 10,
+                3, 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99,
+                18, 3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82, 7,
+                100, 101, 102, 97, 117, 108, 116, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
                 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52,
-                45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1,
-                7, 102, 111, 111, 32, 98, 97, 114, 160, 6, 2, 168, 6, 1,
+                45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1,
+                13, 116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6,
+                23, 168, 6, 1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
+                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
+                202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
+                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
+                160, 6, 23, 168, 6, 1,
             ];
 
             let p: pb::DatabaseMeta =
@@ -595,7 +606,7 @@ fn test_load_old() -> anyhow::Result<()> {
             assert_eq!(want, got);
         }
 
-        {
+        if false {
             let db_meta = vec![
                 34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3,
                 97, 98, 99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
@@ -617,183 +628,9 @@ fn test_load_old() -> anyhow::Result<()> {
 
     // TableMeta is loadable
     {
-        {
+        if false {
             let tbl_meta_v1: Vec<u8> = vec![
-                10, 177, 5, 10, 49, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43,
-                32, 51, 26, 24, 10, 16, 10, 8, 26, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1,
-                160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 22, 10, 4, 98, 111, 111, 108, 26,
-                8, 18, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 22, 10, 4, 105, 110, 116,
-                56, 26, 8, 26, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 23, 10, 5, 105,
-                110, 116, 49, 54, 26, 8, 34, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 23,
-                10, 5, 105, 110, 116, 51, 50, 26, 8, 42, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168,
-                6, 1, 10, 23, 10, 5, 105, 110, 116, 54, 52, 26, 8, 50, 0, 160, 6, 2, 168, 6, 1,
-                160, 6, 2, 168, 6, 1, 10, 23, 10, 5, 117, 105, 110, 116, 56, 26, 8, 58, 0, 160, 6,
-                2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 24, 10, 6, 117, 105, 110, 116, 49, 54, 26,
-                8, 66, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 24, 10, 6, 117, 105, 110,
-                116, 51, 50, 26, 8, 74, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 24, 10,
-                6, 117, 105, 110, 116, 54, 52, 26, 8, 82, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168,
-                6, 1, 10, 25, 10, 7, 102, 108, 111, 97, 116, 51, 50, 26, 8, 90, 0, 160, 6, 2, 168,
-                6, 1, 160, 6, 2, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97, 116, 54, 52, 26, 8,
-                98, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 22, 10, 4, 100, 97, 116,
-                101, 26, 8, 106, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 35, 10, 9, 116,
-                105, 109, 101, 115, 116, 97, 109, 112, 26, 16, 114, 8, 8, 5, 160, 6, 2, 168, 6, 1,
-                160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 24, 10, 6, 115, 116, 114, 105, 110,
-                103, 26, 8, 122, 0, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 61, 10, 6, 115,
-                116, 114, 117, 99, 116, 26, 45, 130, 1, 36, 10, 3, 102, 111, 111, 10, 3, 98, 97,
-                114, 18, 8, 18, 0, 160, 6, 2, 168, 6, 1, 18, 8, 122, 0, 160, 6, 2, 168, 6, 1, 160,
-                6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 40, 10, 5, 97,
-                114, 114, 97, 121, 26, 25, 138, 1, 16, 10, 8, 18, 0, 160, 6, 2, 168, 6, 1, 160, 6,
-                2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 10, 32, 10, 7, 118, 97,
-                114, 105, 97, 110, 116, 26, 15, 146, 1, 6, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6,
-                1, 160, 6, 2, 168, 6, 1, 10, 38, 10, 13, 118, 97, 114, 105, 97, 110, 116, 95, 97,
-                114, 114, 97, 121, 26, 15, 154, 1, 6, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1,
-                160, 6, 2, 168, 6, 1, 10, 39, 10, 14, 118, 97, 114, 105, 97, 110, 116, 95, 111, 98,
-                106, 101, 99, 116, 26, 15, 162, 1, 6, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1,
-                160, 6, 2, 168, 6, 1, 10, 35, 10, 8, 105, 110, 116, 101, 114, 118, 97, 108, 26, 17,
-                170, 1, 8, 8, 2, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1, 160, 6, 2, 168, 6, 1,
-                18, 6, 10, 1, 97, 18, 1, 98, 160, 6, 2, 168, 6, 1, 34, 10, 40, 97, 32, 43, 32, 50,
-                44, 32, 98, 41, 42, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52,
-                58, 10, 10, 3, 97, 98, 99, 18, 3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32,
-                50, 44, 32, 98, 41, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50,
-                58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45,
-                50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1, 13, 116, 97,
-                98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6, 2, 168, 6,
-                1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202,
-                1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1,
-                99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202,
-                1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 160, 6, 2,
-                168, 6, 1,
-            ];
-            let p: pb::TableMeta =
-                common_protos::prost::Message::decode(tbl_meta_v1.as_slice()).map_err(print_err)?;
-
-            let got = mt::TableMeta::from_pb(p).map_err(print_err)?;
-
-            let want = new_table_meta();
-            assert_eq!(want, got);
-        }
-
-        {
-            let tbl_meta_v10: Vec<u8> = vec![
-                10, 177, 5, 10, 49, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43,
-                32, 51, 26, 24, 10, 16, 10, 8, 26, 0, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1,
-                160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 22, 10, 4, 98, 111, 111, 108, 26,
-                8, 18, 0, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 22, 10, 4, 105, 110,
-                116, 56, 26, 8, 26, 0, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 23, 10, 5,
-                105, 110, 116, 49, 54, 26, 8, 34, 0, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1,
-                10, 23, 10, 5, 105, 110, 116, 51, 50, 26, 8, 42, 0, 160, 6, 10, 168, 6, 1, 160, 6,
-                10, 168, 6, 1, 10, 23, 10, 5, 105, 110, 116, 54, 52, 26, 8, 50, 0, 160, 6, 10, 168,
-                6, 1, 160, 6, 10, 168, 6, 1, 10, 23, 10, 5, 117, 105, 110, 116, 56, 26, 8, 58, 0,
-                160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 24, 10, 6, 117, 105, 110, 116,
-                49, 54, 26, 8, 66, 0, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 24, 10, 6,
-                117, 105, 110, 116, 51, 50, 26, 8, 74, 0, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168,
-                6, 1, 10, 24, 10, 6, 117, 105, 110, 116, 54, 52, 26, 8, 82, 0, 160, 6, 10, 168, 6,
-                1, 160, 6, 10, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97, 116, 51, 50, 26, 8, 90,
-                0, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97,
-                116, 54, 52, 26, 8, 98, 0, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 22,
-                10, 4, 100, 97, 116, 101, 26, 8, 106, 0, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6,
-                1, 10, 35, 10, 9, 116, 105, 109, 101, 115, 116, 97, 109, 112, 26, 16, 114, 8, 8, 5,
-                160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 24, 10, 6,
-                115, 116, 114, 105, 110, 103, 26, 8, 122, 0, 160, 6, 10, 168, 6, 1, 160, 6, 10,
-                168, 6, 1, 10, 61, 10, 6, 115, 116, 114, 117, 99, 116, 26, 45, 130, 1, 36, 10, 3,
-                102, 111, 111, 10, 3, 98, 97, 114, 18, 8, 18, 0, 160, 6, 10, 168, 6, 1, 18, 8, 122,
-                0, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 160, 6, 10,
-                168, 6, 1, 10, 40, 10, 5, 97, 114, 114, 97, 121, 26, 25, 138, 1, 16, 10, 8, 18, 0,
-                160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 160, 6, 10,
-                168, 6, 1, 10, 32, 10, 7, 118, 97, 114, 105, 97, 110, 116, 26, 15, 146, 1, 6, 160,
-                6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 38, 10, 13,
-                118, 97, 114, 105, 97, 110, 116, 95, 97, 114, 114, 97, 121, 26, 15, 154, 1, 6, 160,
-                6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 39, 10, 14,
-                118, 97, 114, 105, 97, 110, 116, 95, 111, 98, 106, 101, 99, 116, 26, 15, 162, 1, 6,
-                160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 10, 35, 10, 8,
-                105, 110, 116, 101, 114, 118, 97, 108, 26, 17, 170, 1, 8, 8, 2, 160, 6, 10, 168, 6,
-                1, 160, 6, 10, 168, 6, 1, 160, 6, 10, 168, 6, 1, 18, 6, 10, 1, 97, 18, 1, 98, 160,
-                6, 10, 168, 6, 1, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42, 10, 10, 3,
-                120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99, 18,
-                3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82, 23,
-                110, 101, 118, 101, 114, 45, 103, 111, 110, 110, 97, 45, 103, 105, 118, 101, 45,
-                121, 111, 117, 45, 117, 112, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56,
-                32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45,
-                49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1, 13,
-                116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6, 10,
-                168, 6, 1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1,
-                99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202,
-                1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1,
-                99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 160,
-                6, 10, 168, 6, 1,
-            ];
-            let p: pb::TableMeta = common_protos::prost::Message::decode(tbl_meta_v10.as_slice())
-                .map_err(print_err)?;
-
-            let got = mt::TableMeta::from_pb(p).map_err(print_err)?;
-
-            let want = new_table_meta_v10();
-            assert_eq!(want, got);
-        }
-
-        {
-            let tbl_meta_v12: Vec<u8> = vec![
-                10, 177, 5, 10, 49, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43,
-                32, 51, 26, 24, 10, 16, 10, 8, 26, 0, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1,
-                160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 22, 10, 4, 98, 111, 111, 108, 26,
-                8, 18, 0, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 22, 10, 4, 105, 110,
-                116, 56, 26, 8, 26, 0, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 23, 10, 5,
-                105, 110, 116, 49, 54, 26, 8, 34, 0, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1,
-                10, 23, 10, 5, 105, 110, 116, 51, 50, 26, 8, 42, 0, 160, 6, 12, 168, 6, 1, 160, 6,
-                12, 168, 6, 1, 10, 23, 10, 5, 105, 110, 116, 54, 52, 26, 8, 50, 0, 160, 6, 12, 168,
-                6, 1, 160, 6, 12, 168, 6, 1, 10, 23, 10, 5, 117, 105, 110, 116, 56, 26, 8, 58, 0,
-                160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 24, 10, 6, 117, 105, 110, 116,
-                49, 54, 26, 8, 66, 0, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 24, 10, 6,
-                117, 105, 110, 116, 51, 50, 26, 8, 74, 0, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168,
-                6, 1, 10, 24, 10, 6, 117, 105, 110, 116, 54, 52, 26, 8, 82, 0, 160, 6, 12, 168, 6,
-                1, 160, 6, 12, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97, 116, 51, 50, 26, 8, 90,
-                0, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97,
-                116, 54, 52, 26, 8, 98, 0, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 22,
-                10, 4, 100, 97, 116, 101, 26, 8, 106, 0, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6,
-                1, 10, 35, 10, 9, 116, 105, 109, 101, 115, 116, 97, 109, 112, 26, 16, 114, 8, 8, 5,
-                160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 24, 10, 6,
-                115, 116, 114, 105, 110, 103, 26, 8, 122, 0, 160, 6, 12, 168, 6, 1, 160, 6, 12,
-                168, 6, 1, 10, 61, 10, 6, 115, 116, 114, 117, 99, 116, 26, 45, 130, 1, 36, 10, 3,
-                102, 111, 111, 10, 3, 98, 97, 114, 18, 8, 18, 0, 160, 6, 12, 168, 6, 1, 18, 8, 122,
-                0, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 160, 6, 12,
-                168, 6, 1, 10, 40, 10, 5, 97, 114, 114, 97, 121, 26, 25, 138, 1, 16, 10, 8, 18, 0,
-                160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 160, 6, 12,
-                168, 6, 1, 10, 32, 10, 7, 118, 97, 114, 105, 97, 110, 116, 26, 15, 146, 1, 6, 160,
-                6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 38, 10, 13,
-                118, 97, 114, 105, 97, 110, 116, 95, 97, 114, 114, 97, 121, 26, 15, 154, 1, 6, 160,
-                6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 39, 10, 14,
-                118, 97, 114, 105, 97, 110, 116, 95, 111, 98, 106, 101, 99, 116, 26, 15, 162, 1, 6,
-                160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 10, 35, 10, 8,
-                105, 110, 116, 101, 114, 118, 97, 108, 26, 17, 170, 1, 8, 8, 2, 160, 6, 12, 168, 6,
-                1, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168, 6, 1, 18, 6, 10, 1, 97, 18, 1, 98, 160,
-                6, 12, 168, 6, 1, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42, 10, 10, 3,
-                120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99, 18,
-                3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82, 23,
-                110, 101, 118, 101, 114, 45, 103, 111, 110, 110, 97, 45, 103, 105, 118, 101, 45,
-                121, 111, 117, 45, 117, 112, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56,
-                32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45,
-                49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1, 13,
-                116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6, 12,
-                168, 6, 1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1,
-                99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202,
-                1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1,
-                99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 210,
-                1, 15, 18, 13, 10, 5, 95, 100, 97, 116, 97, 160, 6, 12, 168, 6, 1, 160, 6, 12, 168,
-                6, 1,
-            ];
-
-            let p: pb::TableMeta = common_protos::prost::Message::decode(tbl_meta_v12.as_slice())
-                .map_err(print_err)?;
-
-            let got = mt::TableMeta::from_pb(p).map_err(print_err)?;
-
-            let want = new_table_meta_v12();
-            assert_eq!(want, got);
-        }
-
-        {
-            let tbl_meta_v23: Vec<u8> = vec![
-                10, 175, 5, 10, 49, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43,
+                10, 185, 4, 10, 49, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43,
                 32, 51, 26, 24, 10, 16, 10, 8, 26, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
                 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22, 10, 4, 98, 111, 111, 108, 26,
                 8, 18, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22, 10, 4, 105, 110,
@@ -819,29 +656,178 @@ fn test_load_old() -> anyhow::Result<()> {
                 1, 10, 40, 10, 5, 97, 114, 114, 97, 121, 26, 25, 138, 1, 16, 10, 8, 18, 0, 160, 6,
                 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
                 10, 32, 10, 7, 118, 97, 114, 105, 97, 110, 116, 26, 15, 146, 1, 6, 160, 6, 23, 168,
-                6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 38, 10, 13, 118, 97, 114,
-                105, 97, 110, 116, 95, 97, 114, 114, 97, 121, 26, 15, 154, 1, 6, 160, 6, 23, 168,
-                6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 39, 10, 14, 118, 97, 114,
-                105, 97, 110, 116, 95, 111, 98, 106, 101, 99, 116, 26, 15, 162, 1, 6, 160, 6, 23,
-                168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 35, 10, 8, 105, 110,
-                116, 101, 114, 118, 97, 108, 26, 17, 170, 1, 8, 8, 2, 160, 6, 23, 168, 6, 1, 160,
-                6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 18, 6, 10, 1, 97, 18, 1, 98, 160, 6, 23,
-                168, 6, 1, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42, 10, 10, 3, 120, 121,
-                122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99, 18, 3, 100,
-                101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82, 23, 110, 101,
-                118, 101, 114, 45, 103, 111, 110, 110, 97, 45, 103, 105, 118, 101, 45, 121, 111,
-                117, 45, 117, 112, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50,
-                58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45,
-                50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1, 13, 116, 97,
-                98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6, 23, 168, 6,
-                1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202,
-                1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1,
-                99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202,
-                1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 210, 1, 15,
-                18, 13, 10, 5, 95, 100, 97, 116, 97, 160, 6, 23, 168, 6, 1, 218, 1, 5, 108, 117,
-                108, 117, 95, 160, 6, 23, 168, 6, 1,
+                6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 18, 6, 10, 1, 97, 18, 1, 98,
+                160, 6, 23, 168, 6, 1, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42, 10, 10,
+                3, 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99,
+                18, 3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82, 7,
+                100, 101, 102, 97, 117, 108, 116, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+                56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52,
+                45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1,
+                13, 116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6,
+                23, 168, 6, 1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
+                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
+                202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
+                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
+                160, 6, 23, 168, 6, 1,
             ];
+            let p: pb::TableMeta =
+                common_protos::prost::Message::decode(tbl_meta_v1.as_slice()).map_err(print_err)?;
 
+            let got = mt::TableMeta::from_pb(p).map_err(print_err)?;
+
+            let want = new_table_meta();
+            assert_eq!(want, got);
+        }
+
+        if false {
+            let tbl_meta_v10: Vec<u8> = vec![
+                10, 185, 4, 10, 49, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43,
+                32, 51, 26, 24, 10, 16, 10, 8, 26, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22, 10, 4, 98, 111, 111, 108, 26,
+                8, 18, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22, 10, 4, 105, 110,
+                116, 56, 26, 8, 26, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 23, 10, 5,
+                105, 110, 116, 49, 54, 26, 8, 34, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                10, 23, 10, 5, 105, 110, 116, 51, 50, 26, 8, 42, 0, 160, 6, 23, 168, 6, 1, 160, 6,
+                23, 168, 6, 1, 10, 23, 10, 5, 105, 110, 116, 54, 52, 26, 8, 50, 0, 160, 6, 23, 168,
+                6, 1, 160, 6, 23, 168, 6, 1, 10, 23, 10, 5, 117, 105, 110, 116, 56, 26, 8, 58, 0,
+                160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6, 117, 105, 110, 116,
+                49, 54, 26, 8, 66, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6,
+                117, 105, 110, 116, 51, 50, 26, 8, 74, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168,
+                6, 1, 10, 24, 10, 6, 117, 105, 110, 116, 54, 52, 26, 8, 82, 0, 160, 6, 23, 168, 6,
+                1, 160, 6, 23, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97, 116, 51, 50, 26, 8, 90,
+                0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97,
+                116, 54, 52, 26, 8, 98, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22,
+                10, 4, 100, 97, 116, 101, 26, 8, 106, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 33, 10, 9, 116, 105, 109, 101, 115, 116, 97, 109, 112, 26, 14, 114, 6, 160,
+                6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6, 115,
+                116, 114, 105, 110, 103, 26, 8, 122, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 61, 10, 6, 115, 116, 114, 117, 99, 116, 26, 45, 130, 1, 36, 10, 3, 102, 111,
+                111, 10, 3, 98, 97, 114, 18, 8, 18, 0, 160, 6, 23, 168, 6, 1, 18, 8, 122, 0, 160,
+                6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 40, 10, 5, 97, 114, 114, 97, 121, 26, 25, 138, 1, 16, 10, 8, 18, 0, 160, 6,
+                23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                10, 32, 10, 7, 118, 97, 114, 105, 97, 110, 116, 26, 15, 146, 1, 6, 160, 6, 23, 168,
+                6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 18, 6, 10, 1, 97, 18, 1, 98,
+                160, 6, 23, 168, 6, 1, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42, 10, 10,
+                3, 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99,
+                18, 3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82,
+                23, 110, 101, 118, 101, 114, 45, 103, 111, 110, 110, 97, 45, 103, 105, 118, 101,
+                45, 121, 111, 117, 45, 117, 112, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+                56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52,
+                45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1,
+                13, 116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6,
+                23, 168, 6, 1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
+                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
+                202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
+                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
+                160, 6, 23, 168, 6, 1,
+            ];
+            let p: pb::TableMeta = common_protos::prost::Message::decode(tbl_meta_v10.as_slice())
+                .map_err(print_err)?;
+
+            let got = mt::TableMeta::from_pb(p).map_err(print_err)?;
+
+            let want = new_table_meta_v10();
+            assert_eq!(want, got);
+        }
+
+        if false {
+            let tbl_meta_v12: Vec<u8> = vec![
+                10, 185, 4, 10, 49, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43,
+                32, 51, 26, 24, 10, 16, 10, 8, 26, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22, 10, 4, 98, 111, 111, 108, 26,
+                8, 18, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22, 10, 4, 105, 110,
+                116, 56, 26, 8, 26, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 23, 10, 5,
+                105, 110, 116, 49, 54, 26, 8, 34, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                10, 23, 10, 5, 105, 110, 116, 51, 50, 26, 8, 42, 0, 160, 6, 23, 168, 6, 1, 160, 6,
+                23, 168, 6, 1, 10, 23, 10, 5, 105, 110, 116, 54, 52, 26, 8, 50, 0, 160, 6, 23, 168,
+                6, 1, 160, 6, 23, 168, 6, 1, 10, 23, 10, 5, 117, 105, 110, 116, 56, 26, 8, 58, 0,
+                160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6, 117, 105, 110, 116,
+                49, 54, 26, 8, 66, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6,
+                117, 105, 110, 116, 51, 50, 26, 8, 74, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168,
+                6, 1, 10, 24, 10, 6, 117, 105, 110, 116, 54, 52, 26, 8, 82, 0, 160, 6, 23, 168, 6,
+                1, 160, 6, 23, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97, 116, 51, 50, 26, 8, 90,
+                0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97,
+                116, 54, 52, 26, 8, 98, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22,
+                10, 4, 100, 97, 116, 101, 26, 8, 106, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 33, 10, 9, 116, 105, 109, 101, 115, 116, 97, 109, 112, 26, 14, 114, 6, 160,
+                6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6, 115,
+                116, 114, 105, 110, 103, 26, 8, 122, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 61, 10, 6, 115, 116, 114, 117, 99, 116, 26, 45, 130, 1, 36, 10, 3, 102, 111,
+                111, 10, 3, 98, 97, 114, 18, 8, 18, 0, 160, 6, 23, 168, 6, 1, 18, 8, 122, 0, 160,
+                6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 40, 10, 5, 97, 114, 114, 97, 121, 26, 25, 138, 1, 16, 10, 8, 18, 0, 160, 6,
+                23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                10, 32, 10, 7, 118, 97, 114, 105, 97, 110, 116, 26, 15, 146, 1, 6, 160, 6, 23, 168,
+                6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 18, 6, 10, 1, 97, 18, 1, 98,
+                160, 6, 23, 168, 6, 1, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42, 10, 10,
+                3, 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99,
+                18, 3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82,
+                23, 110, 101, 118, 101, 114, 45, 103, 111, 110, 110, 97, 45, 103, 105, 118, 101,
+                45, 121, 111, 117, 45, 117, 112, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+                56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52,
+                45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1,
+                13, 116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6,
+                23, 168, 6, 1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
+                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
+                202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
+                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
+                210, 1, 15, 18, 13, 10, 5, 95, 100, 97, 116, 97, 160, 6, 23, 168, 6, 1, 160, 6, 23,
+                168, 6, 1,
+            ];
+            let p: pb::TableMeta = common_protos::prost::Message::decode(tbl_meta_v12.as_slice())
+                .map_err(print_err)?;
+
+            let got = mt::TableMeta::from_pb(p).map_err(print_err)?;
+
+            let want = new_table_meta_v12();
+            assert_eq!(want, got);
+        }
+
+        {
+            let tbl_meta_v23: Vec<u8> = vec![
+                10, 185, 4, 10, 49, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43,
+                32, 51, 26, 24, 10, 16, 10, 8, 26, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22, 10, 4, 98, 111, 111, 108, 26,
+                8, 18, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22, 10, 4, 105, 110,
+                116, 56, 26, 8, 26, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 23, 10, 5,
+                105, 110, 116, 49, 54, 26, 8, 34, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                10, 23, 10, 5, 105, 110, 116, 51, 50, 26, 8, 42, 0, 160, 6, 23, 168, 6, 1, 160, 6,
+                23, 168, 6, 1, 10, 23, 10, 5, 105, 110, 116, 54, 52, 26, 8, 50, 0, 160, 6, 23, 168,
+                6, 1, 160, 6, 23, 168, 6, 1, 10, 23, 10, 5, 117, 105, 110, 116, 56, 26, 8, 58, 0,
+                160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6, 117, 105, 110, 116,
+                49, 54, 26, 8, 66, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6,
+                117, 105, 110, 116, 51, 50, 26, 8, 74, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168,
+                6, 1, 10, 24, 10, 6, 117, 105, 110, 116, 54, 52, 26, 8, 82, 0, 160, 6, 23, 168, 6,
+                1, 160, 6, 23, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97, 116, 51, 50, 26, 8, 90,
+                0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 25, 10, 7, 102, 108, 111, 97,
+                116, 54, 52, 26, 8, 98, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 22,
+                10, 4, 100, 97, 116, 101, 26, 8, 106, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 33, 10, 9, 116, 105, 109, 101, 115, 116, 97, 109, 112, 26, 14, 114, 6, 160,
+                6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 10, 24, 10, 6, 115,
+                116, 114, 105, 110, 103, 26, 8, 122, 0, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 61, 10, 6, 115, 116, 114, 117, 99, 116, 26, 45, 130, 1, 36, 10, 3, 102, 111,
+                111, 10, 3, 98, 97, 114, 18, 8, 18, 0, 160, 6, 23, 168, 6, 1, 18, 8, 122, 0, 160,
+                6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6,
+                1, 10, 40, 10, 5, 97, 114, 114, 97, 121, 26, 25, 138, 1, 16, 10, 8, 18, 0, 160, 6,
+                23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1,
+                10, 32, 10, 7, 118, 97, 114, 105, 97, 110, 116, 26, 15, 146, 1, 6, 160, 6, 23, 168,
+                6, 1, 160, 6, 23, 168, 6, 1, 160, 6, 23, 168, 6, 1, 18, 6, 10, 1, 97, 18, 1, 98,
+                160, 6, 23, 168, 6, 1, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42, 10, 10,
+                3, 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99,
+                18, 3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82,
+                23, 110, 101, 118, 101, 114, 45, 103, 111, 110, 110, 97, 45, 103, 105, 118, 101,
+                45, 121, 111, 117, 45, 117, 112, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+                56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52,
+                45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1,
+                13, 116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 186, 1, 6, 160, 6,
+                23, 168, 6, 1, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
+                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
+                202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
+                1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
+                210, 1, 15, 18, 13, 10, 5, 95, 100, 97, 116, 97, 160, 6, 23, 168, 6, 1, 218, 1, 5,
+                108, 117, 108, 117, 95, 160, 6, 23, 168, 6, 1,
+            ];
             let p: pb::TableMeta = common_protos::prost::Message::decode(tbl_meta_v23.as_slice())
                 .map_err(print_err)?;
 

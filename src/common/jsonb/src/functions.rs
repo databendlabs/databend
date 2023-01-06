@@ -138,7 +138,7 @@ pub fn array_length(value: &[u8]) -> Option<usize> {
 pub fn get_by_name_ignore_case(value: &[u8], name: &str) -> Option<Vec<u8>> {
     if !is_jsonb(value) {
         let json_value = decode_value(value).unwrap();
-        return json_value.get_by_name_ignore_case(name).map(to_vec);
+        return json_value.get_by_name_ignore_case(name).map(Value::to_vec);
     }
 
     let header = read_u32(value, 0).unwrap();
@@ -209,7 +209,7 @@ pub fn get_by_name_ignore_case(value: &[u8], name: &str) -> Option<Vec<u8>> {
 pub fn get_by_path<'a>(value: &'a [u8], paths: Vec<JsonPath<'a>>) -> Option<Vec<u8>> {
     if !is_jsonb(value) {
         let json_value = decode_value(value).unwrap();
-        return json_value.get_by_path(&paths).map(to_vec);
+        return json_value.get_by_path(&paths).map(Value::to_vec);
     }
 
     let mut offset = 0;
@@ -315,7 +315,7 @@ pub fn get_by_path<'a>(value: &'a [u8], paths: Vec<JsonPath<'a>>) -> Option<Vec<
 pub fn object_keys(value: &[u8]) -> Option<Vec<u8>> {
     if !is_jsonb(value) {
         let json_value = decode_value(value).unwrap();
-        return json_value.object_keys().map(|val| to_vec(&val));
+        return json_value.object_keys().map(|val| val.to_vec());
     }
 
     let header = read_u32(value, 0).unwrap();
@@ -358,11 +358,11 @@ pub fn object_keys(value: &[u8]) -> Option<Vec<u8>> {
 pub fn compare(left: &[u8], right: &[u8]) -> Result<Ordering, Error> {
     if !is_jsonb(left) {
         let lval = decode_value(left).unwrap();
-        let lbuf = to_vec(&lval);
+        let lbuf = lval.to_vec();
         return compare(&lbuf, right);
     } else if !is_jsonb(right) {
         let rval = decode_value(right).unwrap();
-        let rbuf = to_vec(&rval);
+        let rbuf = rval.to_vec();
         return compare(left, &rbuf);
     }
 
@@ -665,6 +665,20 @@ pub fn as_bool(value: &[u8]) -> Option<bool> {
     }
 }
 
+/// Cast `JSONB` value to Boolean
+pub fn to_bool(value: &[u8]) -> Result<bool, Error> {
+    if let Some(v) = as_bool(value) {
+        return Ok(v);
+    } else if let Some(v) = as_str(value) {
+        if &v.to_lowercase() == "true" {
+            return Ok(true);
+        } else if &v.to_lowercase() == "false" {
+            return Ok(false);
+        }
+    }
+    Err(Error::InvalidCast)
+}
+
 /// Returns true if the `JSONB` is a Number. Returns false otherwise.
 pub fn is_number(value: &[u8]) -> bool {
     as_number(value).is_some()
@@ -699,6 +713,24 @@ pub fn is_i64(value: &[u8]) -> bool {
     as_i64(value).is_some()
 }
 
+/// Cast `JSONB` value to i64
+pub fn to_i64(value: &[u8]) -> Result<i64, Error> {
+    if let Some(v) = as_i64(value) {
+        return Ok(v);
+    } else if let Some(v) = as_bool(value) {
+        if v {
+            return Ok(1_i64);
+        } else {
+            return Ok(0_i64);
+        }
+    } else if let Some(v) = as_str(value) {
+        if let Ok(v) = v.parse::<i64>() {
+            return Ok(v);
+        }
+    }
+    Err(Error::InvalidCast)
+}
+
 /// If the `JSONB` is a Number, represent it as i64 if possible. Returns None otherwise.
 pub fn as_i64(value: &[u8]) -> Option<i64> {
     match as_number(value) {
@@ -720,6 +752,24 @@ pub fn as_u64(value: &[u8]) -> Option<u64> {
     }
 }
 
+/// Cast `JSONB` value to u64
+pub fn to_u64(value: &[u8]) -> Result<u64, Error> {
+    if let Some(v) = as_u64(value) {
+        return Ok(v);
+    } else if let Some(v) = as_bool(value) {
+        if v {
+            return Ok(1_u64);
+        } else {
+            return Ok(0_u64);
+        }
+    } else if let Some(v) = as_str(value) {
+        if let Ok(v) = v.parse::<u64>() {
+            return Ok(v);
+        }
+    }
+    Err(Error::InvalidCast)
+}
+
 /// Returns true if the `JSONB` is a f64 Number. Returns false otherwise.
 pub fn is_f64(value: &[u8]) -> bool {
     as_f64(value).is_some()
@@ -731,6 +781,24 @@ pub fn as_f64(value: &[u8]) -> Option<f64> {
         Some(num) => num.as_f64(),
         None => None,
     }
+}
+
+/// Cast `JSONB` value to f64
+pub fn to_f64(value: &[u8]) -> Result<f64, Error> {
+    if let Some(v) = as_f64(value) {
+        return Ok(v);
+    } else if let Some(v) = as_bool(value) {
+        if v {
+            return Ok(1_f64);
+        } else {
+            return Ok(0_f64);
+        }
+    } else if let Some(v) = as_str(value) {
+        if let Ok(v) = v.parse::<f64>() {
+            return Ok(v);
+        }
+    }
+    Err(Error::InvalidCast)
 }
 
 /// Returns true if the `JSONB` is a String. Returns false otherwise.
@@ -765,6 +833,16 @@ pub fn as_str(value: &[u8]) -> Option<Cow<'_, str>> {
         }
         _ => None,
     }
+}
+
+/// Cast `JSONB` value to String
+pub fn to_str(value: &[u8]) -> Result<String, Error> {
+    if is_null(value) {
+        return Err(Error::InvalidCast);
+    } else if let Some(v) = as_str(value) {
+        return Ok(v.to_string());
+    }
+    Ok(to_string(value))
 }
 
 /// Returns true if the `JSONB` is An Array. Returns false otherwise.
@@ -996,12 +1074,6 @@ fn is_jsonb(value: &[u8]) -> bool {
         }
     }
     false
-}
-
-fn to_vec(value: &Value<'_>) -> Vec<u8> {
-    let mut buf = Vec::new();
-    value.to_vec(&mut buf);
-    buf
 }
 
 fn read_char(buf: &[u8], idx: &mut usize) -> Result<u8, Error> {

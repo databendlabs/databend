@@ -16,9 +16,9 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -105,7 +105,7 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
 
 #[async_trait::async_trait]
 impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> String {
         T::name()
     }
 

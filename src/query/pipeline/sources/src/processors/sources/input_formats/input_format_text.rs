@@ -16,12 +16,13 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
+use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_types::StageFileFormatType;
@@ -120,7 +121,7 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
         InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
     }
 
-    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<DataSchemaRef> {
+    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<TableSchemaRef> {
         Err(ErrorCode::Unimplemented(
             "infer_schema is not implemented for this format yet.",
         ))
@@ -385,17 +386,23 @@ pub struct BlockBuilder<T> {
 
 impl<T: InputFormatTextBase> BlockBuilder<T> {
     fn flush(&mut self) -> Result<Vec<DataBlock>> {
-        let mut columns = Vec::with_capacity(self.mutable_columns.len());
-        for deserializer in &mut self.mutable_columns {
-            columns.push(deserializer.finish_to_column());
-        }
+        let columns: Vec<Column> = self
+            .mutable_columns
+            .iter_mut()
+            .map(|deserializer| deserializer.finish_to_column())
+            .collect();
+
         self.mutable_columns = self
             .ctx
             .schema
             .create_deserializers(self.ctx.block_compact_thresholds.min_rows_per_block);
         self.num_rows = 0;
 
-        Ok(vec![DataBlock::create(self.ctx.schema.clone(), columns)])
+        if columns.is_empty() || columns[0].len() == 0 {
+            Ok(vec![])
+        } else {
+            Ok(vec![DataBlock::new_from_columns(columns)])
+        }
     }
 
     fn memory_size(&self) -> usize {
@@ -411,12 +418,13 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
             .schema
             .create_deserializers(ctx.block_compact_thresholds.min_rows_per_block);
         let field_decoder = T::create_field_decoder(&ctx.format_options);
+
         BlockBuilder {
             ctx,
             mutable_columns: columns,
             num_rows: 0,
-            phantom: Default::default(),
             field_decoder,
+            phantom: PhantomData,
         }
     }
 
@@ -426,7 +434,7 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
             T::deserialize(self, b)?;
             let mem = self.memory_size();
             tracing::debug!(
-                "block builder added new batch: row {} size {}",
+                "chunk builder added new batch: row {} size {}",
                 self.num_rows,
                 mem
             );

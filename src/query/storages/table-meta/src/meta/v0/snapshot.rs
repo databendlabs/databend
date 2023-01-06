@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataSchema;
+use common_datavalues as dv;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::statistics::Statistics;
 use crate::meta::SnapshotId;
-use crate::meta::Statistics;
 
 pub type Location = String;
 
@@ -26,7 +26,7 @@ pub struct TableSnapshot {
     pub snapshot_id: SnapshotId,
     pub prev_snapshot_id: Option<SnapshotId>,
     /// For each snapshot, we keep a schema for it (in case of schema evolution)
-    pub schema: DataSchema,
+    pub schema: dv::DataSchema,
     /// Summary Statistics
     pub summary: Statistics,
     /// Pointers to SegmentInfos (may be of different format)

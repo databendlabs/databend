@@ -40,8 +40,8 @@ SELECT try_cast('abc' AS INT UNSIGNED);
 
 SELECT typeof(try_cast('abc' AS INT UNSIGNED));
 +-----------------------------------+
-| typeof(try_cast('abc' as UInt32)) |
+| typeof(try_cast('abc' as uint32)) |
 +-----------------------------------+
-| INT UNSIGNED                      |
+| INT UNSIGNED NULL                 |
 +-----------------------------------+
 ```

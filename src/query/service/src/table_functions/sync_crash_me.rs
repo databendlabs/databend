@@ -25,9 +25,11 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -57,10 +59,13 @@ impl SyncCrashMeTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut panic_message = None;
-        if let Some(args) = &table_args {
+        if let Some(args) = table_args {
             if args.len() == 1 {
-                let arg = &args[0];
-                panic_message = Some(String::from_utf8(arg.as_string()?)?);
+                let arg = args[0].clone();
+                panic_message =
+                    Some(String::from_utf8(arg.into_string().map_err(|_| {
+                        ErrorCode::BadArguments("Expected string argument.")
+                    })?)?);
             }
         }
 
@@ -69,7 +74,7 @@ impl SyncCrashMeTable {
             desc: format!("'{}'.'{}'", database_name, "async_crash_me"),
             name: String::from("async_crash_me"),
             meta: TableMeta {
-                schema: Arc::new(DataSchema::empty()),
+                schema: Arc::new(TableSchema::empty()),
                 engine: String::from("async_crash_me"),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.
@@ -110,8 +115,10 @@ impl Table for SyncCrashMeTable {
         Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))
     }
 
-    fn table_args(&self) -> Option<Vec<DataValue>> {
-        Some(vec![DataValue::UInt64(0)])
+    fn table_args(&self) -> Option<Vec<Scalar>> {
+        self.panic_message
+            .clone()
+            .map(|s| vec![Scalar::String(s.as_bytes().to_vec())])
     }
 
     fn read_data(

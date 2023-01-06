@@ -14,8 +14,8 @@
 
 use std::any::Any;
 
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::BlockMetaInfoPtr;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AggregateInfo {

@@ -12,40 +12,47 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
-use common_datavalues::DataValue;
 use common_exception::Result;
-use common_functions::scalars::FunctionContext;
-use common_sql::evaluator::ChunkOperator;
+use common_expression::types::DataType;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::FunctionContext;
+use common_expression::ScalarRef;
+use common_sql::evaluator::BlockOperator;
 use common_storages_table_meta::meta::ClusterStatistics;
 
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
-    cluster_key_index: Vec<usize>,
-    extra_key_index: Vec<usize>,
+
+    pub(crate) cluster_key_index: Vec<usize>,
+    pub(crate) extra_key_num: usize,
+
     level: i32,
     block_compact_thresholds: BlockCompactThresholds,
-    operators: Vec<ChunkOperator>,
+    operators: Vec<BlockOperator>,
+    pub(crate) out_fields: Vec<DataField>,
 }
 
 impl ClusterStatsGenerator {
     pub fn new(
         cluster_key_id: u32,
         cluster_key_index: Vec<usize>,
-        extra_key_index: Vec<usize>,
+        extra_key_num: usize,
         level: i32,
         block_compact_thresholds: BlockCompactThresholds,
-        operators: Vec<ChunkOperator>,
+        operators: Vec<BlockOperator>,
+        out_fields: Vec<DataField>,
     ) -> Self {
         Self {
             cluster_key_id,
             cluster_key_index,
-            extra_key_index,
+            extra_key_num,
             level,
             block_compact_thresholds,
             operators,
+            out_fields,
         }
     }
 
@@ -66,9 +73,7 @@ impl ClusterStatsGenerator {
         let cluster_stats = self.clusters_statistics(data_block, self.level)?;
         let mut block = data_block.clone();
 
-        for id in self.extra_key_index.iter() {
-            block = block.remove_column_index(*id)?;
-        }
+        block = block.pop_columns(self.extra_key_num)?;
 
         Ok((cluster_stats, block))
     }
@@ -92,7 +97,7 @@ impl ClusterStatsGenerator {
 
         if !self.cluster_key_index.is_empty() {
             let indices = vec![0u32, block.num_rows() as u32 - 1];
-            block = DataBlock::block_take_by_indices(&block, &indices)?;
+            block = block.take(&indices)?;
         }
 
         let func_ctx = FunctionContext::default();
@@ -117,25 +122,27 @@ impl ClusterStatsGenerator {
         let mut max = Vec::with_capacity(self.cluster_key_index.len());
 
         for key in self.cluster_key_index.iter() {
-            let col = data_block.column(*key);
-
-            let mut left = col.get_checked(0)?;
+            let val = data_block.get_by_offset(*key);
+            let val_ref = val.value.as_ref();
+            let mut left = unsafe { val_ref.index_unchecked(0) };
             // To avoid high cardinality, for the string column,
             // cluster statistics uses only the first 5 bytes.
-            if let DataValue::String(v) = &left {
+            if val.data_type == DataType::String {
+                let v = left.into_string().unwrap();
                 let l = v.len();
                 let e = if l < 5 { l } else { 5 };
-                left = DataValue::from(&v[0..e]);
+                left = ScalarRef::String(&v[0..e]);
             }
-            min.push(left);
+            min.push(left.to_owned());
 
-            let mut right = col.get_checked(col.len() - 1)?;
-            if let DataValue::String(v) = &right {
+            let mut right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
+            if val.data_type == DataType::String {
+                let v = right.into_string().unwrap();
                 let l = v.len();
                 let e = if l < 5 { l } else { 5 };
-                right = DataValue::from(&v[0..e]);
+                right = ScalarRef::String(&v[0..e]);
             }
-            max.push(right);
+            max.push(right.to_owned());
         }
 
         let level = if min == max

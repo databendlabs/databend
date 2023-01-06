@@ -16,22 +16,25 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Notify;
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethod;
-use common_datablocks::HashMethodFixedKeys;
-use common_datablocks::HashMethodKind;
-use common_datablocks::HashMethodSerializer;
-use common_datavalues::combine_validities_2;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataTypeImpl;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::arrow::combine_validities_2;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::Evaluator;
+use common_expression::HashMethod;
+use common_expression::HashMethodFixedKeys;
+use common_expression::HashMethodKind;
+use common_expression::HashMethodSerializer;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::UnsizedHashMap;
 use common_sql::executor::PhysicalScalar;
+use common_sql::plans::JoinType;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -44,7 +47,6 @@ use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::planner::plans::JoinType;
 
 pub struct SerializerHashTable {
     pub(crate) hash_table: UnsizedHashMap<[u8], Vec<RowPtr>>,
@@ -90,8 +92,10 @@ impl JoinHashTable {
         probe_schema: DataSchemaRef,
         hash_join_desc: HashJoinDesc,
     ) -> Result<Arc<JoinHashTable>> {
-        let hash_key_types: Vec<DataTypeImpl> =
-            build_keys.iter().map(|expr| expr.data_type()).collect();
+        let hash_key_types = build_keys
+            .iter()
+            .map(|expr| expr.data_type())
+            .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
         Ok(match method {
             HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
@@ -216,21 +220,53 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         let func_ctx = self.ctx.try_get_function_context()?;
+        let mut input = (*input).clone();
+        if matches!(
+            self.hash_join_desc.join_type,
+            JoinType::Right | JoinType::Full
+        ) {
+            let nullable_columns = input
+                .columns()
+                .iter()
+                .map(|c| {
+                    let mut validity = MutableBitmap::new();
+                    validity.extend_constant(input.num_rows(), true);
+                    let validity: Bitmap = validity.into();
+                    Self::set_validity(c, validity.len(), &validity)
+                })
+                .collect::<Vec<_>>();
+            input = DataBlock::new(nullable_columns, input.num_rows());
+        }
+        let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+
         let probe_keys = self
             .hash_join_desc
             .probe_keys
             .iter()
-            .map(|expr| Ok(expr.eval(&func_ctx, input)?.vector().clone()))
-            .collect::<Result<Vec<ColumnRef>>>()?;
+            .map(|expr| {
+                let return_type = expr.data_type();
+                Ok((
+                    evaluator
+                        .run(expr)
+                        .map_err(|(_, e)| {
+                            ErrorCode::Internal(format!("Invalid expression: {}", e))
+                        })?
+                        .convert_to_full_column(return_type, input.num_rows()),
+                    return_type.clone(),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         if self.hash_join_desc.join_type == JoinType::RightMark {
             probe_state.markers = Some(Self::init_markers(&probe_keys, input.num_rows()));
         }
-        let probe_keys = probe_keys.iter().collect::<Vec<&ColumnRef>>();
 
-        if probe_keys.iter().any(|c| c.is_nullable() || c.is_null()) {
+        if probe_keys
+            .iter()
+            .any(|(_, ty)| ty.is_nullable() || ty.is_null())
+        {
             let mut valids = None;
-            for col in probe_keys.iter() {
+            for (col, _) in probe_keys.iter() {
                 let (is_all_null, tmp_valids) = col.validity();
                 if is_all_null {
                     let mut m = MutableBitmap::with_capacity(input.num_rows());
@@ -251,56 +287,56 @@ impl JoinHashTable {
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
 
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
             HashTable::KeyU8HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
             HashTable::KeyU16HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
             HashTable::KeyU32HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
             HashTable::KeyU64HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
             HashTable::KeyU128HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
             HashTable::KeyU256HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
             HashTable::KeyU512HashTable(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, input)
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
         }
     }

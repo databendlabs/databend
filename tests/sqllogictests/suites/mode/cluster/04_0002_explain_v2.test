@@ -16,15 +16,15 @@ explain select t1.a from t1 where a > 0;
 Exchange
 ├── exchange type: Merge
 └── Filter
-   ├── filters: [>(t1.a (#0), 0)]
-   └── TableScan
-       ├── table: default.default.t1
-       ├── read rows: 0
-       ├── read bytes: 0
-       ├── partitions total: 0
-       ├── partitions scanned: 0
-       ├── push downs: [filters: [(a > 0)], limit: NONE]
-       └── output columns: [0]
+    ├── filters: [gt(t1.a (#0), 0_u8)]
+    └── TableScan
+        ├── table: default.default.t1
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [gt(a, 0_i32)], limit: NONE]
+        └── output columns: [0]
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
@@ -32,7 +32,7 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 Exchange
 ├── exchange type: Merge
 └── Filter
-    ├── filters: [or(>(t1.a (#0), 3), and(>(t2.a (#2), 5), >(t1.a (#0), 1)))]
+    ├── filters: [or(gt(t1.a (#0), 3_u8), and(gt(t2.a (#2), 5_u8), gt(t1.a (#0), 1_u8)))]
     └── HashJoin
         ├── join type: INNER
         ├── build keys: [t2.a (#2)]
@@ -50,14 +50,14 @@ Exchange
         └── Exchange(Probe)
             ├── exchange type: Hash(t1.a (#0))
             └── Filter
-                ├── filters: [or(>(t1.a (#0), 3), >(t1.a (#0), 1))]
+                ├── filters: [or(gt(t1.a (#0), 3_u8), gt(t1.a (#0), 1_u8))]
                 └── TableScan
                     ├── table: default.default.t1
                     ├── read rows: 0
                     ├── read bytes: 0
                     ├── partitions total: 0
                     ├── partitions scanned: 0
-                    └── push downs: [filters: [((a > 3) or (a > 1))], limit: NONE]
+                    └── push downs: [filters: [or(gt(a, 3_i32), gt(a, 1_i32))], limit: NONE]
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
@@ -94,8 +94,8 @@ explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.
 EvalScalar
 ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 └── Filter
-    ├── filters: [((t1.a (#0) = t2.a (#2)) AND (t1.a (#0) > 3)) OR (t1.a (#0) = t2.a (#2))]
-    └── LogicalJoin: CROSS
+    ├── filters: [((t1.a (#0) eq t2.a (#2)) AND (t1.a (#0) gt 3_u8)) OR (t1.a (#0) eq t2.a (#2))]
+    └── CrossJoin
         ├── equi conditions: []
         ├── non-equi conditions: []
         ├── LogicalGet
@@ -114,11 +114,11 @@ explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1
 ----
 EvalScalar
 ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-└── LogicalJoin: INNER
-    ├── equi conditions: [(t1.a (#0) = t2.a (#2)) AND (t1.b (#1) = t2.b (#3))]
+└── HashJoin: INNER
+    ├── equi conditions: [(t1.a (#0) eq t2.a (#2)) AND (t1.b (#1) eq t2.b (#3))]
     ├── non-equi conditions: []
     ├── Filter
-    │   ├── filters: [t1.a (#0) > 2]
+    │   ├── filters: [t1.a (#0) gt 2_u8]
     │   └── LogicalGet
     │       ├── table: default.default.t1
     │       ├── filters: []
@@ -164,7 +164,7 @@ Limit
 ├── offset: 0
 └── Sort
     ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
-    └── Exchange                
+    └── Exchange
         ├── exchange type: Merge
         └── Limit
             ├── limit: 10
@@ -172,7 +172,7 @@ Limit
             └── Sort
                 ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
                 └── EvalScalar
-                    ├── expressions: [+(t1.a (#0), 1), +(t1.b (#1), 1), +(t2.a (#2), 1)]
+                    ├── expressions: [plus(t1.a (#0), 1_u8), plus(t1.b (#1), 1_u8), plus(t2.a (#2), 1_u8)]
                     └── HashJoin
                         ├── join type: INNER
                         ├── build keys: [t2.a (#2)]
@@ -273,11 +273,11 @@ Limit
                 ├── sort keys: [number ASC NULLS LAST]
                 └── HashJoin
                     ├── join type: RIGHT OUTER
-                    ├── build keys: [y.a (#1)]
-                    ├── probe keys: [x.a (#0)]
+                    ├── build keys: [CAST(y.a (#1) AS BIGINT UNSIGNED NULL)]
+                    ├── probe keys: [CAST(x.a (#0) AS BIGINT UNSIGNED NULL)]
                     ├── filters: []
                     ├── Exchange(Build)
-                    │   ├── exchange type: Hash(y.a (#1))
+                    │   ├── exchange type: Hash(CAST(y.a (#1) AS BIGINT UNSIGNED NULL))
                     │   └── TableScan
                     │       ├── table: default.system.numbers
                     │       ├── read rows: 5
@@ -286,7 +286,7 @@ Limit
                     │       ├── partitions scanned: 1
                     │       └── push downs: [filters: [], limit: NONE]
                     └── Exchange(Probe)
-                        ├── exchange type: Hash(x.a (#0))
+                        ├── exchange type: Hash(CAST(x.a (#0) AS BIGINT UNSIGNED NULL))
                         └── TableScan
                             ├── table: default.system.numbers
                             ├── read rows: 10

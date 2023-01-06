@@ -22,17 +22,18 @@ use crate::types::DataType;
 use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 
 pub struct NullableDeserializer {
     pub validity: MutableBitmap,
-    pub inner: Box<dyn TypeDeserializer>,
+    pub inner: Box<TypeDeserializerImpl>,
 }
 
 impl NullableDeserializer {
     pub fn with_capacity(capacity: usize, inner_ty: &DataType) -> Self {
         Self {
             validity: MutableBitmap::new(),
-            inner: inner_ty.create_deserializer(capacity),
+            inner: Box::new(inner_ty.create_deserializer(capacity)),
         }
     }
 }
@@ -40,6 +41,10 @@ impl NullableDeserializer {
 impl TypeDeserializer for NullableDeserializer {
     fn memory_size(&self) -> usize {
         self.inner.memory_size() + self.validity.as_slice().len()
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
     }
 
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
@@ -103,7 +108,7 @@ impl TypeDeserializer for NullableDeserializer {
 
     fn pop_data_value(&mut self) -> Result<()> {
         match self.validity.pop() {
-            Some(_) => Ok(()),
+            Some(_) => self.inner.pop_data_value(),
             None => Err(ErrorCode::from(
                 "Nullable column is empty when pop data value",
             )),

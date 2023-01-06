@@ -142,9 +142,12 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
             client = Client::Clickhouse(ClickhouseHttpClient::create()?);
         }
     }
-    let enable_sandbox = SqlLogicTestArgs::parse().enable_sandbox;
-    if enable_sandbox {
+    let args = SqlLogicTestArgs::parse();
+    if args.enable_sandbox {
         client.create_sandbox().await?;
+    }
+    if args.debug {
+        client.enable_debug();
     }
     Ok(Databend::create(client))
 }
@@ -153,9 +156,9 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
     // Todo: set validator to process regex
     let args = SqlLogicTestArgs::parse();
     let mut tasks = vec![];
+    let start = Instant::now();
     // Walk each suit dir and read all files in it
     // After get a slt file, set the file name to databend
-    let start = Instant::now();
     for suit in suits {
         // Get a suit and find all slt files in the suit
         let suit = suit.unwrap().path();
@@ -176,16 +179,15 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     continue;
                 }
             }
-            // For each file, create new client to run.
-            let mut runner = Runner::new(create_databend(&client_type).await?);
             if args.complete {
                 let col_separator = " ";
                 let validator = default_validator;
+                let mut runner = Runner::new(create_databend(&client_type).await?);
                 update_test_file(file.unwrap().path(), &mut runner, col_separator, validator)
                     .await
                     .unwrap();
             } else {
-                tasks.push(async move { run_file_async(&mut runner, file.unwrap().path()).await })
+                tasks.push(async move { run_file_async(&client_type, file.unwrap().path()).await });
             }
         }
     }
@@ -204,7 +206,7 @@ async fn run_parallel_async(
     tasks: Vec<impl Future<Output = std::result::Result<Vec<TestError>, TestError>>>,
 ) -> Result<()> {
     let args = SqlLogicTestArgs::parse();
-    let jobs = tasks.len().min(args.parallel);
+    let jobs = tasks.len().clamp(1, args.parallel);
     let tasks = stream::iter(tasks).buffer_unordered(jobs);
     let no_fail_fast = args.no_fail_fast;
     if !no_fail_fast {
@@ -224,12 +226,13 @@ async fn run_parallel_async(
 }
 
 async fn run_file_async(
-    runner: &mut Runner<Databend>,
+    client_type: &ClientType,
     filename: impl AsRef<Path>,
 ) -> std::result::Result<Vec<TestError>, TestError> {
     let mut error_records = vec![];
     let no_fail_fast = SqlLogicTestArgs::parse().no_fail_fast;
     let records = parse_file(filename).unwrap();
+    let mut runner = Runner::new(create_databend(client_type).await.unwrap());
     for record in records.into_iter() {
         if let Record::Halt { .. } = record {
             break;

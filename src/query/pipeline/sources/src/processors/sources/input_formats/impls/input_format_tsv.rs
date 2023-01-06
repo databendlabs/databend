@@ -15,10 +15,11 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
+use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderTSV;
@@ -41,8 +42,8 @@ impl InputFormatTSV {
         field_delimiter: u8,
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
-        deserializers: &mut Vec<common_datavalues::TypeDeserializerImpl>,
-        schema: &DataSchemaRef,
+        deserializers: &mut Vec<TypeDeserializerImpl>,
+        schema: &TableSchemaRef,
         path: &str,
         batch_id: usize,
         offset: usize,
@@ -194,7 +195,7 @@ impl InputFormatTextBase for InputFormatTSV {
 }
 
 pub fn format_column_error(
-    schema: &DataSchemaRef,
+    schema: &TableSchemaRef,
     column_index: usize,
     col_data: &[u8],
     msg: &str,

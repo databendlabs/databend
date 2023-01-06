@@ -44,7 +44,7 @@ select * from t1 order by id asc
 15 {"k":"v"}
 
 statement ok
-CREATE TABLE IF NOT EXISTS t2(id Int null, arr Array null) Engine = Fuse
+CREATE TABLE IF NOT EXISTS t2(id Int null, arr Json null) Engine = Fuse
 
 statement ok
 INSERT INTO t2 SELECT 1, parse_json('[1,2,3,["a","b","c"],{"k":"v"}]')
@@ -80,10 +80,7 @@ select arr[4][0] from t2
 NULL
 
 statement ok
-CREATE TABLE IF NOT EXISTS t3(id Int null, obj Object null) Engine = Fuse
-
-statement error 1010
-INSERT INTO t3 SELECT 1, parse_json('["a","b","c"]')
+CREATE TABLE IF NOT EXISTS t3(id Int null, obj Json null) Engine = Fuse
 
 statement ok
 INSERT INTO t3 SELECT 1, parse_json('{"a": 1,"b":{"k": 2},"c": [10,11,12]}')
@@ -183,10 +180,7 @@ select * from t4 order by id asc
 15 {"k":"v"}
 
 statement ok
-CREATE TABLE IF NOT EXISTS t5(id Int null, m Map null) Engine = Fuse
-
-statement error 1010
-INSERT INTO t5 SELECT 1, parse_json('["a","b","c"]')
+CREATE TABLE IF NOT EXISTS t5(id Int null, m Json null) Engine = Fuse
 
 statement ok
 INSERT INTO t5 SELECT 1, parse_json('{"a": 2,"b":{"k": 2},"c": [10,11,12]}')

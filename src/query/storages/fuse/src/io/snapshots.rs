@@ -25,6 +25,7 @@ use common_base::runtime::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SnapshotId;
 use common_storages_table_meta::meta::TableSnapshot;
@@ -77,7 +78,13 @@ impl SnapshotsIO {
         data_accessor: Operator,
     ) -> Result<Arc<TableSnapshot>> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
-        reader.read(snapshot_location, None, format_version).await
+        let load_params = LoadParams {
+            location: snapshot_location,
+            len_hint: None,
+            ver: format_version,
+            schema: None,
+        };
+        reader.read(&load_params).await
     }
 
     #[tracing::instrument(level = "debug", skip_all)]

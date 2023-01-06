@@ -26,10 +26,15 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -52,7 +57,8 @@ pub struct TracingTable {
 
 impl TracingTable {
     pub fn create(table_id: u64) -> Self {
-        let schema = DataSchemaRefExt::create(vec![DataField::new("entry", Vu8::to_data_type())]);
+        let schema =
+            TableSchemaRefExt::create(vec![TableField::new("entry", TableDataType::String)]);
 
         let table_info = TableInfo {
             desc: "'system'.'tracing'".to_string(),
@@ -117,7 +123,6 @@ impl Table for TracingTable {
         let output = OutputPort::create();
         let log_files = Self::log_files()?;
         debug!("listed log files: {:?}", log_files);
-        let schema = self.table_info.schema();
         let max_block_size = settings.get_max_block_size()? as usize;
 
         pipeline.add_pipe(Pipe::SimplePipe {
@@ -128,7 +133,6 @@ impl Table for TracingTable {
                 output,
                 max_block_size,
                 log_files,
-                schema,
             )?],
         });
 
@@ -138,7 +142,6 @@ impl Table for TracingTable {
 
 struct TracingSource {
     rows_pre_block: usize,
-    schema: DataSchemaRef,
     tracing_files: VecDeque<String>,
     data_blocks: VecDeque<DataBlock>,
 }
@@ -149,10 +152,8 @@ impl TracingSource {
         output: Arc<OutputPort>,
         rows: usize,
         log_files: VecDeque<String>,
-        schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, TracingSource {
-            schema,
             rows_pre_block: rows,
             tracing_files: log_files,
             data_blocks: Default::default(),
@@ -177,26 +178,20 @@ impl SyncSource for TracingSource {
                 let max_rows = self.rows_pre_block;
                 let buffer = BufReader::new(File::open(file_name.clone())?);
 
-                let mut entry_column = MutableStringColumn::with_capacity(max_rows);
-
+                let mut entry_column = ColumnBuilder::with_capacity(&DataType::String, max_rows);
                 for (index, line) in buffer.lines().enumerate() {
                     if index != 0 && index % max_rows == 0 {
                         self.data_blocks
-                            .push_back(DataBlock::create(self.schema.clone(), vec![Arc::new(
-                                entry_column.finish(),
-                            )]));
+                            .push_back(DataBlock::new_from_columns(vec![entry_column.build()]));
 
-                        entry_column = MutableStringColumn::with_capacity(max_rows);
+                        entry_column = ColumnBuilder::with_capacity(&DataType::String, max_rows);
                     }
-
-                    entry_column.push(line.unwrap().as_bytes());
+                    entry_column.push(Scalar::String(line.unwrap().as_bytes().to_vec()).as_ref());
                 }
 
-                if !entry_column.is_empty() {
+                if entry_column.len() > 0 {
                     self.data_blocks
-                        .push_back(DataBlock::create(self.schema.clone(), vec![Arc::new(
-                            entry_column.finish(),
-                        )]));
+                        .push_back(DataBlock::new_from_columns(vec![entry_column.build()]));
                 }
             }
         }

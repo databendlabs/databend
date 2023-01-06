@@ -15,25 +15,30 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::Function;
-use common_functions::scalars::FunctionContext;
-use common_functions::scalars::FunctionFactory;
+use common_expression::type_check::check;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::AnyType;
+use common_expression::types::NullableType;
+use common_expression::types::NumberType;
+use common_expression::types::ValueType;
+use common_expression::DataBlock;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::FunctionContext;
+use common_expression::Literal;
+use common_expression::RawExpr;
+use common_expression::Value;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::PhysicalScalar;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
-use crate::sql::evaluator::EvalNode;
-use crate::sql::evaluator::Evaluator;
-use crate::sql::evaluator::TypedVector;
 
 #[derive(Clone)]
 pub struct HashFlightScatter {
     func_ctx: FunctionContext,
-    hash_keys: Vec<EvalNode>,
-    hash_functions: Vec<Box<dyn Function>>,
+    hash_key: Vec<Expr>,
     scatter_size: usize,
 }
 
@@ -46,70 +51,26 @@ impl HashFlightScatter {
         if scalars.len() == 1 {
             return OneHashKeyFlightScatter::try_create(func_ctx, &scalars[0], scatter_size);
         }
-        let hash_keys = scalars
-            .iter()
-            .map(Evaluator::eval_physical_scalar)
-            .collect::<Result<Vec<_>>>()?;
-        let hash_functions = scalars
-            .iter()
-            .map(|k| FunctionFactory::instance().get("sipHash", &[&k.data_type()]))
-            .collect::<Result<Vec<_>>>()?;
+        let hash_keys: Vec<RawExpr> = scalars.iter().map(|e| e.as_raw_expr()).collect();
+
+        let mut keys: Vec<Expr> = vec![];
+        for hash_key in hash_keys {
+            let hash_raw = RawExpr::FunctionCall {
+                span: None,
+                name: "siphash".to_string(),
+                params: vec![],
+                args: vec![hash_key],
+            };
+            let expr = check(&hash_raw, &BUILTIN_FUNCTIONS)
+                .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+            keys.push(expr);
+        }
 
         Ok(Box::new(Self {
             func_ctx,
-            hash_keys,
-            hash_functions,
             scatter_size,
+            hash_key: keys,
         }))
-    }
-
-    pub fn combine_hash_keys(
-        &self,
-        hash_keys: &[TypedVector],
-        num_rows: usize,
-    ) -> Result<Vec<u64>> {
-        if self.hash_functions.len() != hash_keys.len() {
-            return Err(ErrorCode::Internal(
-                "Hash keys and hash functions must be the same length.",
-            ));
-        }
-        let mut hash = vec![DefaultHasher::default(); num_rows];
-        for (key, func) in hash_keys.iter().zip(self.hash_functions.iter()) {
-            let column = func.eval(
-                self.func_ctx.clone(),
-                &[ColumnWithField::new(
-                    key.vector().clone(),
-                    DataField::new("dummy", key.logical_type()),
-                )],
-                num_rows,
-            )?;
-            let hash_values = Self::get_hash_values(&column)?;
-            for (i, value) in hash_values.iter().enumerate() {
-                hash[i].write_u64(*value);
-            }
-        }
-
-        Ok(hash.into_iter().map(|h| h.finish()).collect())
-    }
-
-    fn get_hash_values(column: &ColumnRef) -> Result<Vec<u64>> {
-        if let Ok(column) = Series::check_get::<PrimitiveColumn<u64>>(column) {
-            Ok(column.values().to_vec())
-        } else if let Ok(column) = Series::check_get::<NullableColumn>(column) {
-            let null_map = column.ensure_validity();
-            let mut values = Self::get_hash_values(column.inner())?;
-            for (i, v) in values.iter_mut().enumerate() {
-                if null_map.get_bit(i) {
-                    // Set hash value of NULL to 0
-                    *v = 0;
-                }
-            }
-            Ok(values)
-        } else if let Ok(column) = Series::check_get::<ConstColumn>(column) {
-            Self::get_hash_values(&column.convert_full_column())
-        } else {
-            Err(ErrorCode::Internal("Hash keys must be of type u64."))
-        }
     }
 }
 
@@ -117,7 +78,7 @@ impl HashFlightScatter {
 struct OneHashKeyFlightScatter {
     scatter_size: usize,
     func_ctx: FunctionContext,
-    indices_scalar: EvalNode,
+    indices_scalar: Expr,
 }
 
 impl OneHashKeyFlightScatter {
@@ -126,64 +87,43 @@ impl OneHashKeyFlightScatter {
         scalar: &PhysicalScalar,
         scatter_size: usize,
     ) -> Result<Box<dyn FlightScatter>> {
-        let hash_key = Evaluator::eval_physical_scalar(scalar)?;
-
-        let mut sip_hash = EvalNode::Function {
+        let hash_key = scalar.as_raw_expr();
+        let hash_raw = RawExpr::FunctionCall {
+            span: None,
+            name: "siphash".to_string(),
+            params: vec![],
             args: vec![hash_key],
-            func: FunctionFactory::instance().get("sipHash", &[&scalar.data_type()])?,
+        };
+        let size_raw = RawExpr::Literal {
+            span: None,
+            lit: Literal::UInt64(scatter_size as u64),
+        };
+        let mod_raw = RawExpr::FunctionCall {
+            span: None,
+            name: "modulo".to_string(),
+            params: vec![],
+            args: vec![hash_raw, size_raw],
         };
 
-        if scalar.data_type().is_nullable() {
-            sip_hash = EvalNode::Function {
-                args: vec![sip_hash],
-                func: FunctionFactory::instance().get("ASSUME_NOT_NULL", &[
-                    &NullableType::new_impl(DataTypeImpl::UInt64(UInt64Type::new())),
-                ])?,
-            };
-        }
+        let indices_scalar = check(&mod_raw, &BUILTIN_FUNCTIONS)
+            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
 
         Ok(Box::new(OneHashKeyFlightScatter {
             scatter_size,
             func_ctx,
-            indices_scalar: EvalNode::Function {
-                args: vec![sip_hash, EvalNode::Constant {
-                    value: DataValue::UInt64(scatter_size as u64),
-                    data_type: DataTypeImpl::UInt64(UInt64Type::new()),
-                }],
-                func: FunctionFactory::instance().get("modulo", &[
-                    &DataTypeImpl::UInt64(UInt64Type::new()),
-                    &DataTypeImpl::UInt64(UInt64Type::new()),
-                ])?,
-            },
+            indices_scalar,
         }))
-    }
-
-    fn get_hash_values(column: &ColumnRef) -> Result<Vec<usize>> {
-        if let Ok(column) = Series::check_get::<PrimitiveColumn<u64>>(column) {
-            Ok(column.iter().map(|c| *c as usize).collect())
-        } else if let Ok(column) = Series::check_get::<NullableColumn>(column) {
-            let null_map = column.ensure_validity();
-            let mut values = Self::get_hash_values(column.inner())?;
-            for (i, v) in values.iter_mut().enumerate() {
-                if null_map.get_bit(i) {
-                    // Set hash value of NULL to 0
-                    *v = 0;
-                }
-            }
-            Ok(values)
-        } else if let Ok(column) = Series::check_get::<ConstColumn>(column) {
-            Self::get_hash_values(&column.convert_full_column())
-        } else {
-            Err(ErrorCode::Internal("Hash keys must be of type u64."))
-        }
     }
 }
 
 impl FlightScatter for OneHashKeyFlightScatter {
-    fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
-        let indices = self.indices_scalar.eval(&self.func_ctx, data_block)?;
-        let indices = Self::get_hash_values(indices.vector())?;
-        let data_blocks = DataBlock::scatter_block(data_block, &indices, self.scatter_size)?;
+    fn execute(&self, data_block: &DataBlock) -> Result<Vec<DataBlock>> {
+        let evaluator = Evaluator::new(data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
+        let num = data_block.num_rows();
+
+        let indices = evaluator.run_auto_type(&self.indices_scalar).unwrap();
+        let indices = get_hash_values(&indices, num)?;
+        let data_blocks = DataBlock::scatter(data_block, &indices, self.scatter_size)?;
 
         let block_meta = data_block.meta()?;
         let mut res = Vec::with_capacity(data_blocks.len());
@@ -196,20 +136,23 @@ impl FlightScatter for OneHashKeyFlightScatter {
 }
 
 impl FlightScatter for HashFlightScatter {
-    fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
-        let hash_keys = self
-            .hash_keys
-            .iter()
-            .map(|eval| eval.eval(&self.func_ctx, data_block))
-            .collect::<Result<Vec<_>>>()?;
-        let hash = self.combine_hash_keys(&hash_keys, data_block.num_rows())?;
-        let indices: Vec<usize> = hash
-            .iter()
-            .map(|c| (*c as usize) % self.scatter_size)
-            .collect();
+    fn execute(&self, data_block: &DataBlock) -> Result<Vec<DataBlock>> {
+        let evaluator = Evaluator::new(data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
+        let num = data_block.num_rows();
+        let indices = if !self.hash_key.is_empty() {
+            let mut hash_keys = vec![];
+            for expr in &self.hash_key {
+                let indices = evaluator.run_auto_type(expr).unwrap();
+                let indices = get_hash_values(&indices, num)?;
+                hash_keys.push(indices)
+            }
+            self.combine_hash_keys(&hash_keys, num)
+        } else {
+            Ok(vec![0; num])
+        }?;
 
         let block_meta = data_block.meta()?;
-        let data_blocks = DataBlock::scatter_block(data_block, &indices, self.scatter_size)?;
+        let data_blocks = DataBlock::scatter(data_block, &indices, self.scatter_size)?;
 
         let mut res = Vec::with_capacity(data_blocks.len());
         for data_block in data_blocks {
@@ -217,5 +160,49 @@ impl FlightScatter for HashFlightScatter {
         }
 
         Ok(res)
+    }
+}
+
+impl HashFlightScatter {
+    pub fn combine_hash_keys(&self, hash_keys: &[Vec<u64>], num_rows: usize) -> Result<Vec<u64>> {
+        if self.hash_key.len() != hash_keys.len() {
+            return Err(ErrorCode::Internal(
+                "Hash keys and hash functions must be the same length.",
+            ));
+        }
+        let mut hash = vec![DefaultHasher::default(); num_rows];
+        for keys in hash_keys.iter() {
+            for (i, value) in keys.iter().enumerate() {
+                hash[i].write_u64(*value);
+            }
+        }
+
+        let m = self.scatter_size as u64;
+        Ok(hash.into_iter().map(|h| h.finish() % m).collect())
+    }
+}
+
+fn get_hash_values(column: &Value<AnyType>, rows: usize) -> Result<Vec<u64>> {
+    match column {
+        Value::Scalar(c) => match c {
+            common_expression::Scalar::Null => Ok(vec![0; rows]),
+            common_expression::Scalar::Number(NumberScalar::UInt64(x)) => Ok(vec![*x; rows]),
+            _ => unreachable!(),
+        },
+        Value::Column(c) => {
+            if let Some(column) = NumberType::<u64>::try_downcast_column(c) {
+                Ok(column.iter().copied().collect())
+            } else if let Some(column) = NullableType::<NumberType<u64>>::try_downcast_column(c) {
+                let null_map = column.validity;
+                Ok(column
+                    .column
+                    .iter()
+                    .zip(null_map.iter())
+                    .map(|(x, b)| if b { *x } else { 0 })
+                    .collect())
+            } else {
+                unreachable!()
+            }
+        }
     }
 }

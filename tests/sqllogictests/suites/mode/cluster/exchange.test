@@ -92,7 +92,7 @@ Exchange
     │       ├── Exchange(Build)
     │       │   ├── exchange type: Hash(t.a (#0))
     │       │   └── EvalScalar
-    │       │       ├── expressions: [+(numbers.number (#0), 1)]
+    │       │       ├── expressions: [plus(numbers.number (#0), 1_u8)]
     │       │       └── TableScan
     │       │           ├── table: default.system.numbers
     │       │           ├── read rows: 1
@@ -157,4 +157,3 @@ Exchange
             ├── partitions total: 1
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: NONE]
-

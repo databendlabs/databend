@@ -13,9 +13,9 @@ common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-cache = { path = "../../../common/cache" }
 common-config = { path = "../../config" }
-common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }

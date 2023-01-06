@@ -13,9 +13,9 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::*;
@@ -32,11 +32,11 @@ async fn test_fuse_block_table() -> Result<()> {
 
     {
         let expected = vec![
-            "+-------+",
-            "| count |",
-            "+-------+",
-            "| 0     |",
-            "+-------+",
+            "+----------+",
+            "| Column 0 |",
+            "+----------+",
+            "| 0_u64    |",
+            "+----------+",
         ];
         let qry = format!(
             "select count(1) as count from fuse_block('{}', '{}')",
@@ -57,11 +57,11 @@ async fn test_fuse_block_table() -> Result<()> {
         let qry = format!("insert into {}.{} values(7, (8, 9))", db, tbl);
         execute_query(ctx.clone(), qry.as_str()).await?;
         let expected = vec![
-            "+-------+",
-            "| count |",
-            "+-------+",
-            "| 2     |",
-            "+-------+",
+            "+----------+",
+            "| Column 0 |",
+            "+----------+",
+            "| 2_u64    |",
+            "+----------+",
         ];
 
         let qry = format!(

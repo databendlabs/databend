@@ -34,46 +34,40 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
-use crate::Chunk;
-use crate::ChunkEntry;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::ColumnIndex;
+use crate::DataBlock;
+use crate::TypeDeserializer;
 use crate::Value;
 
-impl<Index: ColumnIndex> Chunk<Index> {
-    pub fn concat(chunks: &[Chunk<Index>]) -> Result<Chunk<Index>> {
-        if chunks.is_empty() {
-            return Err(ErrorCode::EmptyData("Can't concat empty chunks"));
+impl DataBlock {
+    pub fn concat(blocks: &[DataBlock]) -> Result<DataBlock> {
+        if blocks.is_empty() {
+            return Err(ErrorCode::EmptyData("Can't concat empty blocks"));
         }
 
-        if chunks.len() == 1 {
-            return Ok(chunks[0].clone());
+        if blocks.len() == 1 {
+            return Ok(blocks[0].clone());
         }
 
-        let concat_columns = (0..chunks[0].num_columns())
+        let concat_columns = (0..blocks[0].num_columns())
             .map(|i| {
                 debug_assert!(
-                    chunks
+                    blocks
                         .iter()
-                        .map(|chunk| &chunk.get_by_offset(i).id)
-                        .all_equal()
-                );
-                debug_assert!(
-                    chunks
-                        .iter()
-                        .map(|chunk| &chunk.get_by_offset(i).data_type)
+                        .map(|block| &block.get_by_offset(i).data_type)
                         .all_equal()
                 );
 
-                let columns = chunks
+                let columns = blocks
                     .iter()
-                    .map(|chunk| {
-                        let entry = &chunk.get_by_offset(i);
+                    .map(|block| {
+                        let entry = &block.get_by_offset(i);
                         match &entry.value {
                             Value::Scalar(s) => ColumnBuilder::repeat(
                                 &s.as_ref(),
-                                chunk.num_rows(),
+                                block.num_rows(),
                                 &entry.data_type,
                             )
                             .build(),
@@ -82,17 +76,16 @@ impl<Index: ColumnIndex> Chunk<Index> {
                     })
                     .collect::<Vec<_>>();
 
-                ChunkEntry {
-                    id: chunks[0].get_by_offset(i).id.clone(),
-                    data_type: chunks[0].get_by_offset(i).data_type.clone(),
+                BlockEntry {
+                    data_type: blocks[0].get_by_offset(i).data_type.clone(),
                     value: Value::Column(Column::concat(&columns)),
                 }
             })
             .collect();
 
-        let num_rows = chunks.iter().map(|c| c.num_rows()).sum();
+        let num_rows = blocks.iter().map(|c| c.num_rows()).sum();
 
-        Ok(Chunk::new(concat_columns, num_rows))
+        Ok(DataBlock::new(concat_columns, num_rows))
     }
 }
 
@@ -126,8 +119,15 @@ impl Column {
                 Self::concat_value_types::<DateType>(builder, columns)
             }
             Column::Array(col) => {
-                let mut builder = ArrayColumnBuilder::<AnyType>::from_column(col.slice(0..0));
-                builder.reserve(capacity);
+                let mut offsets = Vec::with_capacity(capacity + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    col.values
+                        .data_type()
+                        .create_deserializer(capacity)
+                        .finish_to_column(),
+                );
+                let builder = ArrayColumnBuilder { builder, offsets };
                 Self::concat_value_types::<ArrayType<AnyType>>(builder, columns)
             }
             Column::Nullable(_) => {
@@ -160,7 +160,11 @@ impl Column {
                     len: capacity,
                 }
             }
-            Column::Variant(_) => Self::concat_arg_types::<VariantType>(columns),
+            Column::Variant(_) => {
+                let data_capacity = columns.iter().map(|c| c.memory_size() - c.len() * 8).sum();
+                let builder = StringColumnBuilder::with_capacity(capacity, data_capacity);
+                Self::concat_value_types::<VariantType>(builder, columns)
+            }
         }
     }
 

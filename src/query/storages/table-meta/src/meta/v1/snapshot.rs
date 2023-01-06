@@ -17,15 +17,15 @@ use std::ops::Add;
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::uuid::Uuid;
-use common_datavalues::DataSchema;
+use common_datavalues as dv;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::super::v0::statistics::Statistics;
 use crate::meta::statistics::FormatVersion;
 use crate::meta::ClusterKey;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
-use crate::meta::Statistics;
 use crate::meta::Versioned;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -44,7 +44,7 @@ pub struct TableSnapshot {
     pub prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
 
     /// For each snapshot, we keep a schema for it (in case of schema evolution)
-    pub schema: DataSchema,
+    pub schema: dv::DataSchema,
 
     /// Summary Statistics
     pub summary: Statistics,
@@ -66,7 +66,7 @@ impl TableSnapshot {
         snapshot_id: SnapshotId,
         prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
-        schema: DataSchema,
+        schema: dv::DataSchema,
         summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
@@ -165,6 +165,7 @@ impl From<&TableSnapshot> for TableSnapshotLite {
 }
 
 mod util {
+    use chrono::DateTime;
     use chrono::Datelike;
     use chrono::TimeZone;
     use chrono::Timelike;

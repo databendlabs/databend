@@ -136,7 +136,7 @@ fn replace_column_binding(
                 let new_column = ColumnBinding {
                     database_name: None,
                     table_name: None,
-                    column_name: "".to_string(),
+                    column_name: column.column.column_name.clone(),
                     index: *index_pairs.get(&index).unwrap(),
                     data_type: column.column.data_type,
                     visibility: Visibility::Visible,
@@ -183,7 +183,6 @@ fn replace_column_binding(
                 .map(|arg| replace_column_binding(index_pairs, arg))
                 .collect::<Result<Vec<_>>>()?,
             func_name: expr.func_name,
-            arg_types: expr.arg_types,
             return_type: expr.return_type,
         })),
         Scalar::CastExpr(expr) => Ok(Scalar::CastExpr(CastExpr {

@@ -12,14 +12,17 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_catalog::plan::Expression;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_sql::executor::ExpressionOp;
+use common_expression::type_check::check_function;
+use common_expression::ConstantFolder;
+use common_expression::Domain;
+use common_expression::Expr;
+use common_expression::FunctionContext;
+use common_expression::TableSchemaRef;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_storages_index::BlockFilter;
 use common_storages_table_meta::meta::Location;
 use opendal::Operator;
@@ -39,22 +42,22 @@ struct FilterPruner {
     index_columns: Vec<String>,
 
     /// the expression that would be evaluate
-    filter_expression: Expression,
+    filter_expression: Expr<String>,
 
     /// the data accessor
     dal: Operator,
 
     /// the schema of data being indexed
-    data_schema: DataSchemaRef,
+    data_schema: TableSchemaRef,
 }
 
 impl FilterPruner {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         index_columns: Vec<String>,
-        filter_expression: Expression,
+        filter_expression: Expr<String>,
         dal: Operator,
-        data_schema: DataSchemaRef,
+        data_schema: TableSchemaRef,
     ) -> Self {
         Self {
             ctx,
@@ -103,24 +106,48 @@ impl Pruner for FilterPruner {
 /// otherwise, a [Filter] backed pruner will be return
 pub fn new_filter_pruner(
     ctx: &Arc<dyn TableContext>,
-    filter_exprs: Option<&[Expression]>,
-    schema: &DataSchemaRef,
+    filter_exprs: Option<&[Expr<String>]>,
+    schema: &TableSchemaRef,
     dal: Operator,
 ) -> Result<Option<Arc<dyn Pruner + Send + Sync>>> {
     if let Some(exprs) = filter_exprs {
         if exprs.is_empty() {
             return Ok(None);
         }
-        // check if there were applicable filter conditions
-        let expr = exprs
+
+        // Check if there were applicable filter conditions.
+        let expr: Expr<String> = exprs
             .iter()
-            .fold(None, |acc: Option<Expression>, item| match acc {
-                Some(acc) => Some(acc.and(item).unwrap()),
-                None => Some(item.clone()),
+            .cloned()
+            .reduce(|lhs, rhs| {
+                check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
             })
             .unwrap();
 
-        let point_query_cols = columns_of_eq_expressions(&expr)?;
+        let input_domains = expr
+            .column_refs()
+            .into_iter()
+            .map(|(name, ty)| {
+                let domain = Domain::full(&ty);
+                (name, domain)
+            })
+            .collect();
+
+        let folder = ConstantFolder::new(
+            input_domains,
+            FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        );
+        let (optimized_expr, _) = folder.fold(&expr);
+        let point_query_cols = BlockFilter::find_eq_columns(&optimized_expr)?;
+
+        tracing::debug!(
+            "Bloom filter expr {:?}, optimized {:?}, point_query_cols: {:?}",
+            expr.sql_display(),
+            optimized_expr.sql_display(),
+            point_query_cols
+        );
+
         if !point_query_cols.is_empty() {
             // convert to filter column names
             let filter_block_cols = point_query_cols
@@ -131,7 +158,7 @@ pub fn new_filter_pruner(
             return Ok(Some(Arc::new(FilterPruner::new(
                 ctx.clone(),
                 filter_block_cols,
-                expr,
+                optimized_expr,
                 dal,
                 schema.clone(),
             ))));
@@ -143,17 +170,16 @@ pub fn new_filter_pruner(
 }
 
 mod util {
-    use common_catalog::plan::ExpressionVisitor;
-    use common_catalog::plan::Recursion;
     use common_exception::ErrorCode;
+    use common_storages_index::FilterEvalResult;
 
     use super::*;
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn should_keep_by_filter(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
-        schema: &DataSchemaRef,
-        filter_expr: &Expression,
+        schema: &TableSchemaRef,
+        filter_expr: &Expr<String>,
         filter_col_names: &[String],
         index_location: &Location,
         index_length: u64,
@@ -164,9 +190,14 @@ mod util {
             .await;
 
         match maybe_filter {
-            // figure it out
-            Ok(filter) => BlockFilter::from_filter_block(schema.clone(), filter.into_data())?
-                .maybe_true(filter_expr),
+            Ok(filter) => Ok(BlockFilter::from_filter_block(
+                ctx.try_get_function_context()?,
+                schema.clone(),
+                filter.filter_schema,
+                filter.filter_block,
+            )?
+            .eval(filter_expr.clone())?
+                != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
                 // In case that the index is no longer supported, just return ture to indicate
                 // that the block being pruned should be kept. (Although the caller of this method
@@ -175,43 +206,5 @@ mod util {
             }
             Err(e) => Err(e),
         }
-    }
-
-    struct PointQueryVisitor {
-        // indices of columns which used by point query kept here
-        columns: HashSet<String>,
-    }
-
-    impl ExpressionVisitor for PointQueryVisitor {
-        fn pre_visit(mut self, expr: &Expression) -> Result<Recursion<Self>> {
-            // 1. only binary op "=" is considered, which is NOT enough
-            // 2. should combine this logic with Filter
-            match expr {
-                Expression::Function { name, args, .. }
-                    if name.as_str() == "=" && args.len() == 2 =>
-                {
-                    match (&args[0], &args[1]) {
-                        (Expression::IndexedVariable { name, .. }, Expression::Constant { .. })
-                        | (Expression::Constant { .. }, Expression::IndexedVariable { name, .. }) =>
-                        {
-                            self.columns.insert(name.clone());
-                            Ok(Recursion::Stop(self))
-                        }
-                        _ => Ok(Recursion::Continue(self)),
-                    }
-                }
-                _ => Ok(Recursion::Continue(self)),
-            }
-        }
-    }
-
-    pub fn columns_of_eq_expressions(filter_expr: &Expression) -> Result<Vec<String>> {
-        let visitor = PointQueryVisitor {
-            columns: HashSet::new(),
-        };
-
-        filter_expr
-            .accept(visitor)
-            .map(|r| r.columns.into_iter().collect())
     }
 }

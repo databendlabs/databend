@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -125,13 +124,6 @@ impl DataType for IntervalType {
 
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Int64
-    }
-
-    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Interval".to_string());
-        mp.insert(ARROW_EXTENSION_META.to_string(), self.kind.to_string());
-        Some(mp)
     }
 
     fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {

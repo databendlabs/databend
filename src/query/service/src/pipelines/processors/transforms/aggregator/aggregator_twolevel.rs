@@ -14,14 +14,15 @@
 
 use std::time::Instant;
 
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethod;
-use common_datavalues::ColumnRef;
-use common_datavalues::MutableColumn;
-use common_datavalues::MutableStringColumn;
-use common_datavalues::ScalarColumnBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::HashMethod;
+use common_expression::Value;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -125,8 +126,8 @@ where
             let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
 
             // Builders.
-            let mut state_builders: Vec<MutableStringColumn> = (0..aggr_len)
-                .map(|_| MutableStringColumn::with_capacity(capacity * 4))
+            let mut state_builders: Vec<StringColumnBuilder> = (0..aggr_len)
+                .map(|_| StringColumnBuilder::with_capacity(capacity, capacity * 4))
                 .collect();
 
             let mut group_key_builder = agg.method.keys_column_builder(capacity);
@@ -136,25 +137,35 @@ where
 
                 for (idx, func) in funcs.iter().enumerate() {
                     let arg_place = place.next(offsets_aggregate_states[idx]);
-                    func.serialize(arg_place, state_builders[idx].values_mut())?;
+                    func.serialize(arg_place, &mut state_builders[idx].data)?;
                     state_builders[idx].commit_row();
                 }
 
                 group_key_builder.append_value(group_entity.key());
             }
 
-            let schema = &agg.params.output_schema;
-            let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
-
-            for mut builder in state_builders {
-                columns.push(builder.to_column());
+            let mut columns = Vec::with_capacity(state_builders.len() + 1);
+            let mut num_rows = 0;
+            for builder in state_builders.into_iter() {
+                let col = builder.build();
+                num_rows = col.len();
+                columns.push(BlockEntry {
+                    value: Value::Column(Column::String(col)),
+                    data_type: DataType::String,
+                });
             }
 
-            columns.push(group_key_builder.finish());
+            let col = group_key_builder.finish();
+            let group_key_type = col.data_type();
 
-            data_blocks.push(DataBlock::create_with_meta(
-                agg.params.output_schema.clone(),
+            columns.push(BlockEntry {
+                value: Value::Column(col),
+                data_type: group_key_type,
+            });
+
+            data_blocks.push(DataBlock::new_with_meta(
                 columns,
+                num_rows,
                 Some(AggregateInfo::create(bucket)),
             ));
         }
@@ -215,7 +226,7 @@ where
     }
 
     fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
-        let mut data_blocks = Vec::with_capacity(256);
+        let mut chunks = Vec::with_capacity(256);
         for (bucket, iterator) in agg.hash_table.two_level_iter() {
             let (capacity, _) = iterator.size_hint();
             let mut keys_column_builder = agg.method.keys_column_builder(capacity);
@@ -224,17 +235,22 @@ where
                 keys_column_builder.append_value(group_entity.key());
             }
 
-            let columns = keys_column_builder.finish();
+            let column = keys_column_builder.finish();
+            let num_rows = column.len();
+            let column = BlockEntry {
+                data_type: column.data_type(),
+                value: Value::Column(column),
+            };
 
-            data_blocks.push(DataBlock::create_with_meta(
-                agg.params.output_schema.clone(),
-                vec![columns],
+            chunks.push(DataBlock::new_with_meta(
+                vec![column],
+                num_rows,
                 Some(AggregateInfo::create(bucket)),
             ));
         }
 
         agg.drop_states();
-        Ok(data_blocks)
+        Ok(chunks)
     }
 }
 

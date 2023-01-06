@@ -21,11 +21,14 @@ use common_base::base::convert_number_size;
 use common_base::base::tokio::io::AsyncWrite;
 use common_base::runtime::TrySpawn;
 use common_config::DATABEND_COMMIT_VERSION;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::SendableDataBlockStream;
+use common_sql::plans::Plan;
+use common_sql::Planner;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
@@ -53,8 +56,6 @@ use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::sql::plans::Plan;
-use crate::sql::Planner;
 use crate::stream::DataBlockStream;
 
 fn has_result_set_by_plan(plan: &Plan) -> bool {
@@ -306,7 +307,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
     // Check the query is a federated or driver setup command.
     // Here we fake some values for the command which Databend not supported.
-    fn federated_server_command_check(&self, query: &str) -> Option<DataBlock> {
+    fn federated_server_command_check(&self, query: &str) -> Option<(DataSchemaRef, DataBlock)> {
         // INSERT don't need MySQL federated check
         if query.len() > 6 && query[..6].eq_ignore_ascii_case("INSERT") {
             return None;
@@ -318,15 +319,14 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<QueryResult> {
         match self.federated_server_command_check(query) {
-            Some(data_block) => {
+            Some((schema, data_block)) => {
                 info!("Federated query: {}", query);
                 if data_block.num_rows() > 0 {
                     info!("Federated response: {:?}", data_block);
                 }
                 let has_result = data_block.num_rows() > 0;
-                let schema = data_block.schema().clone();
                 Ok(QueryResult::create(
-                    DataBlockStream::create(schema.clone(), None, vec![data_block]).boxed(),
+                    DataBlockStream::create(None, vec![data_block]).boxed(),
                     None,
                     has_result,
                     schema,

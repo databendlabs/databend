@@ -15,6 +15,10 @@
 use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ConstantFolder;
+use common_expression::Domain;
+use common_expression::FunctionContext;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -31,7 +35,6 @@ use super::Sort;
 use super::TableScan;
 use super::UnionAll;
 use crate::executor::FragmentKind;
-use crate::planner::IndexType;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 use crate::ColumnEntry;
@@ -70,6 +73,7 @@ fn table_scan_to_format_tree(
     if plan.table_index == DUMMY_TABLE_INDEX {
         return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
     }
+    let func_ctx = FunctionContext::default();
     let table = metadata.read().table(plan.table_index).clone();
     let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
     let filters = plan
@@ -80,7 +84,20 @@ fn table_scan_to_format_tree(
             extras
                 .filters
                 .iter()
-                .map(|f| f.column_name())
+                .map(|f| {
+                    let expr = f.as_expr(&BUILTIN_FUNCTIONS).unwrap();
+                    let input_domains = expr
+                        .column_refs()
+                        .into_iter()
+                        .map(|(name, ty)| {
+                            let domain = Domain::full(&ty);
+                            (name, domain)
+                        })
+                        .collect();
+                    let folder = ConstantFolder::new(input_domains, func_ctx, &BUILTIN_FUNCTIONS);
+                    let (new_expr, _) = folder.fold(&expr);
+                    new_expr.sql_display()
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -215,8 +232,7 @@ fn aggregate_partial_to_format_tree(
         .group_by
         .iter()
         .map(|column| {
-            let index = column.parse::<IndexType>()?;
-            let column = metadata.read().column(index).clone();
+            let column = metadata.read().column(*column).clone();
             let name = match column {
                 ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
                 ColumnEntry::DerivedColumn { alias, .. } => alias,
@@ -250,8 +266,7 @@ fn aggregate_final_to_format_tree(
         .group_by
         .iter()
         .map(|column| {
-            let index = column.parse::<IndexType>()?;
-            let column = metadata.read().column(index).clone();
+            let column = metadata.read().column(*column).clone();
             let name = match column {
                 ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
                 ColumnEntry::DerivedColumn { alias, .. } => alias,
@@ -282,7 +297,7 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
         .order_by
         .iter()
         .map(|sort_key| {
-            let index = sort_key.order_by.parse::<IndexType>()?;
+            let index = sort_key.order_by;
             let column = metadata.read().column(index).clone();
             Ok(format!(
                 "{} {} {}",

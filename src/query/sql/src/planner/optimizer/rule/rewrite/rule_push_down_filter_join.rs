@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::type_coercion::compare_coercion;
 use common_exception::Result;
+use common_expression::type_check::common_super_type;
 
-use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::planner::binder::wrap_cast;
 use crate::plans::AndExpr;
 use crate::plans::Filter;
+use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::LogicalJoin;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -56,7 +56,7 @@ impl RulePushDownFilterJoin {
                 .into(),
                 SExpr::create_binary(
                     PatternPlan {
-                        plan_type: RelOp::LogicalJoin,
+                        plan_type: RelOp::Join,
                     }
                     .into(),
                     SExpr::create_leaf(
@@ -77,6 +77,7 @@ impl RulePushDownFilterJoin {
     }
 
     #[allow(clippy::only_used_in_recursion)]
+    #[allow(dead_code)]
     fn find_nullable_columns(
         &self,
         predicate: &Scalar,
@@ -148,9 +149,10 @@ impl RulePushDownFilterJoin {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn convert_outer_to_inner_join(&self, s_expr: &SExpr) -> Result<SExpr> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut join: LogicalJoin = s_expr.child(0)?.plan().clone().try_into()?;
+        let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
         let origin_join_type = join.join_type.clone();
         if !origin_join_type.is_outer_join() {
             return Ok(s_expr.clone());
@@ -225,7 +227,7 @@ impl RulePushDownFilterJoin {
 
     fn convert_mark_to_semi_join(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut join: LogicalJoin = s_expr.child(0)?.plan().clone().try_into()?;
+        let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
         let has_disjunction = filter
             .predicates
             .iter()
@@ -281,9 +283,10 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
+        // Todo(xudong): find a way to avoid type conflict and then open the rule
+        // let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
         // Second, check if can convert mark join to semi join
-        s_expr = self.convert_mark_to_semi_join(&s_expr)?;
+        let s_expr = self.convert_mark_to_semi_join(s_expr)?;
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
@@ -371,7 +374,7 @@ fn extract_or_predicate(or_expr: &OrExpr, required_columns: &ColumnSet) -> Resul
 
 pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Result<(bool, SExpr)> {
     let join_expr = s_expr.child(0)?;
-    let mut join: LogicalJoin = join_expr.plan().clone().try_into()?;
+    let mut join: Join = join_expr.plan().clone().try_into()?;
 
     let rel_expr = RelExpr::with_s_expr(join_expr);
     let left_prop = rel_expr.derive_relational_prop_child(0)?;
@@ -407,25 +410,27 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Res
             JoinPredicate::Both { left, right } => {
                 let left_type = left.data_type();
                 let right_type = right.data_type();
-                let join_key_type = compare_coercion(&left_type, &right_type);
+                let join_key_type = common_super_type(left_type, right_type);
 
                 // We have to check if left_type and right_type can be coerced to
                 // a super type. If the coercion is failed, we cannot push the
                 // predicate into join.
-                if let Ok(join_key_type) = join_key_type {
+                if let Some(join_key_type) = join_key_type {
                     if join.join_type == JoinType::Cross {
                         join.join_type = JoinType::Inner;
                     }
-                    if left.data_type().ne(&right.data_type()) {
-                        let left = wrap_cast(left.clone(), &join_key_type);
-                        let right = wrap_cast(right.clone(), &join_key_type);
-                        join.left_conditions.push(left);
-                        join.right_conditions.push(right);
-                    } else {
-                        join.left_conditions.push(left.clone());
-                        join.right_conditions.push(right.clone());
+                    if join.join_type == JoinType::Inner {
+                        if left.data_type().ne(&right.data_type()) {
+                            let left = wrap_cast(left, &join_key_type);
+                            let right = wrap_cast(right, &join_key_type);
+                            join.left_conditions.push(left);
+                            join.right_conditions.push(right);
+                        } else {
+                            join.left_conditions.push(left.clone());
+                            join.right_conditions.push(right.clone());
+                        }
+                        need_push = true;
                     }
-                    need_push = true;
                 } else {
                     original_predicates.push(predicate);
                 }

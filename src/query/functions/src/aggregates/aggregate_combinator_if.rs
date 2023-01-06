@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,14 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::DataType;
+use common_expression::types::ValueType;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
@@ -39,8 +44,8 @@ pub struct AggregateIfCombinator {
 impl AggregateIfCombinator {
     pub fn try_create(
         nested_name: &str,
-        params: Vec<DataValue>,
-        arguments: Vec<DataField>,
+        params: Vec<Scalar>,
+        arguments: Vec<DataType>,
         nested_creator: &AggregateFunctionCreator,
     ) -> Result<AggregateFunctionRef> {
         let name = format!("IfCombinator({})", nested_name);
@@ -53,14 +58,12 @@ impl AggregateIfCombinator {
             )));
         }
 
-        match arguments[argument_len - 1].data_type().data_type_id() {
-            TypeID::Boolean => {}
-            other => {
-                return Err(ErrorCode::BadArguments(format!(
-                    "The type of the last argument for {} must be boolean type, but got {:?}",
-                    name, other
-                )));
-            }
+        if !matches!(&arguments[argument_len - 1], DataType::Boolean) {
+            return Err(ErrorCode::BadArguments(format!(
+                "The type of the last argument for {} must be boolean type, but got {:?}",
+                name,
+                &arguments[argument_len - 1]
+            )));
         }
 
         let nested_arguments = &arguments[0..argument_len - 1];
@@ -84,7 +87,7 @@ impl AggregateFunction for AggregateIfCombinator {
         &self.name
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
+    fn return_type(&self) -> Result<DataType> {
         self.nested.return_type()
     }
 
@@ -99,20 +102,21 @@ impl AggregateFunction for AggregateIfCombinator {
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[ColumnRef],
+        columns: &[Column],
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        if columns.is_empty() {
-            return Ok(());
-        };
+        let predicate: Bitmap =
+            BooleanType::try_downcast_column(&columns[self.argument_len - 1]).unwrap();
 
-        let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
-        let bitmap = combine_validities(validity, Some(predicate.values()));
+        let bitmap = match validity {
+            Some(validity) => validity & (&predicate),
+            None => predicate,
+        };
         self.nested.accumulate(
             place,
             &columns[0..self.argument_len - 1],
-            bitmap.as_ref(),
+            Some(&bitmap),
             input_rows,
         )
     }
@@ -121,23 +125,24 @@ impl AggregateFunction for AggregateIfCombinator {
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[ColumnRef],
+        columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
-
-        let (columns, row_size) = self.filter_column(&columns[0..self.argument_len - 1], predicate);
-        let new_places = Self::filter_place(places, predicate);
+        let predicate: Bitmap =
+            BooleanType::try_downcast_column(&columns[self.argument_len - 1]).unwrap();
+        let (columns, row_size) =
+            self.filter_column(&columns[0..self.argument_len - 1], &predicate);
+        let new_places = Self::filter_place(places, &predicate);
 
         let new_places_slice = new_places.as_slice();
         self.nested
             .accumulate_keys(new_places_slice, offset, &columns, row_size)
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let predicate: &BooleanColumn =
-            unsafe { Series::static_cast(&columns[self.argument_len - 1]) };
-        if predicate.values().get_bit(row) {
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+        let predicate: Bitmap =
+            BooleanType::try_downcast_column(&columns[self.argument_len - 1]).unwrap();
+        if predicate.get_bit(row) {
             self.nested
                 .accumulate_row(place, &columns[0..self.argument_len - 1], row)?;
         }
@@ -156,8 +161,8 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.merge(place, rhs)
     }
 
-    fn merge_result(&self, place: StateAddr, column: &mut dyn MutableColumn) -> Result<()> {
-        self.nested.merge_result(place, column)
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+        self.nested.merge_result(place, builder)
     }
 
     fn need_manual_drop_state(&self) -> bool {
@@ -168,10 +173,10 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.drop_state(place);
     }
 
-    fn get_if_condition(&self, columns: &[ColumnRef]) -> Option<Bitmap> {
-        let predicate: &BooleanColumn =
-            unsafe { Series::static_cast(&columns[self.argument_len - 1]) };
-        Some(predicate.values().clone())
+    fn get_if_condition(&self, columns: &[Column]) -> Option<Bitmap> {
+        let predicate: Bitmap =
+            BooleanType::try_downcast_column(&columns[self.argument_len - 1]).unwrap();
+        Some(predicate)
     }
 }
 
@@ -183,27 +188,22 @@ impl fmt::Display for AggregateIfCombinator {
 
 impl AggregateIfCombinator {
     #[inline]
-    fn filter_column(
-        &self,
-        columns: &[ColumnRef],
-        predicate: &BooleanColumn,
-    ) -> (Vec<ColumnRef>, usize) {
+    fn filter_column(&self, columns: &[Column], predicate: &Bitmap) -> (Vec<Column>, usize) {
         let columns = columns
             .iter()
             .map(|c| c.filter(predicate))
             .collect::<Vec<_>>();
 
-        let rows = predicate.len() - predicate.values().unset_bits();
+        let rows = predicate.len() - predicate.unset_bits();
 
         (columns, rows)
     }
 
-    fn filter_place(places: &[StateAddr], predicate: &BooleanColumn) -> StateAddrs {
-        if predicate.values().unset_bits() == 0 {
+    fn filter_place(places: &[StateAddr], predicate: &Bitmap) -> StateAddrs {
+        if predicate.unset_bits() == 0 {
             return places.to_vec();
         }
         let it = predicate
-            .values()
             .iter()
             .zip(places.iter())
             .filter(|(v, _)| *v)

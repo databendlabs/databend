@@ -17,17 +17,19 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_catalog::table::NavigationPoint;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::ToDataType;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
 use common_storage::StorageParams;
 
 use crate::plans::Plan;
-use crate::plans::Scalar;
 
 pub type TableOptions = BTreeMap<String, String>;
 
@@ -39,12 +41,12 @@ pub struct CreateTablePlanV2 {
     pub database: String,
     pub table: String,
 
-    pub schema: DataSchemaRef,
+    pub schema: TableSchemaRef,
     pub engine: Engine,
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: TableOptions,
-    pub field_default_exprs: Vec<Option<Scalar>>,
+    pub field_default_exprs: Vec<Option<String>>,
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
@@ -52,7 +54,7 @@ pub struct CreateTablePlanV2 {
 
 impl CreateTablePlanV2 {
     pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+        DataSchemaRefExt::create(vec![])
     }
 }
 
@@ -227,7 +229,6 @@ impl From<UndropTablePlan> for UndropTableReq {
 }
 
 /// Exists table.
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExistsTablePlan {
     pub catalog: String,
@@ -239,7 +240,7 @@ impl ExistsTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![DataField::new(
             "result",
-            u8::to_data_type(),
+            DataType::Number(NumberDataType::UInt8),
         )]))
     }
 }

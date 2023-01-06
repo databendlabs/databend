@@ -24,6 +24,7 @@ use crate::error::Result;
 #[derive(Debug)]
 pub struct MysqlClient {
     pub conn: Conn,
+    pub debug: bool,
 }
 
 impl MysqlClient {
@@ -31,11 +32,13 @@ impl MysqlClient {
         let url = "mysql://root:@127.0.0.1:3307/default";
         let pool = Pool::new(url);
         let conn = pool.get_conn().await?;
-        Ok(MysqlClient { conn })
+        Ok(MysqlClient { conn, debug: false })
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
-        println!("Running sq with mysql client: [{}]", sql);
+        if self.debug {
+            println!("Running sql with mysql client: [{}]", sql);
+        }
         let rows: Vec<Row> = self.conn.query(sql).await?;
         let types = vec![ColumnType::Any; rows.len()];
         let mut parsed_rows = Vec::with_capacity(rows.len());

@@ -14,9 +14,22 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_catalog::table::Table;
 use common_exception::Result;
+use common_expression::types::number::NumberColumnBuilder;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::BlockEntry;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
+use common_expression::Value;
 use common_storages_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 
@@ -73,62 +86,106 @@ impl<'a> FuseBlock<'a> {
             }
         }
 
-        Ok(DataBlock::empty_with_schema(Self::schema()))
+        Ok(DataBlock::empty_with_schema(Arc::new(
+            Self::schema().into(),
+        )))
     }
 
     async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
         let len = snapshot.summary.block_count as usize;
-        let snapshot_id = vec![snapshot.snapshot_id.simple().to_string().into_bytes()];
-        let timestamp = vec![snapshot.timestamp.map(|dt| (dt.timestamp_micros()))];
-        let mut block_location: Vec<Vec<u8>> = Vec::with_capacity(len);
-        let mut block_size: Vec<u64> = Vec::with_capacity(len);
-        let mut file_size: Vec<u64> = Vec::with_capacity(len);
-        let mut row_count: Vec<u64> = Vec::with_capacity(len);
-        let mut bloom_filter_location: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
-        let mut bloom_filter_size: Vec<u64> = Vec::with_capacity(len);
+        let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
+        let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
+        let mut block_location = StringColumnBuilder::with_capacity(len, len);
+        let mut block_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut file_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut row_count = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut bloom_filter_location = StringColumnBuilder::with_capacity(len, len);
+        let mut bloom_filter_size =
+            NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
 
-        let segments_io = SegmentsIO::create(self.ctx.clone(), self.table.operator.clone());
+        let segments_io = SegmentsIO::create(
+            self.ctx.clone(),
+            self.table.operator.clone(),
+            self.table.schema(),
+        );
         let segments = segments_io.read_segments(&snapshot.segments).await?;
         for segment in segments {
             let segment = segment?;
             segment.blocks.iter().for_each(|block| {
                 let block = block.as_ref();
-                block_location.push(block.location.0.clone().into_bytes());
-                block_size.push(block.block_size);
-                file_size.push(block.file_size);
-                row_count.push(block.row_count);
-                bloom_filter_location.push(
+                block_location.put_slice(block.location.0.as_bytes());
+                block_location.commit_row();
+                block_size.push(NumberScalar::UInt64(block.block_size));
+                file_size.push(NumberScalar::UInt64(block.file_size));
+                row_count.push(NumberScalar::UInt64(block.row_count));
+                bloom_filter_location.put_slice(
                     block
                         .bloom_filter_index_location
                         .as_ref()
-                        .map(|(s, _)| s.to_owned().into_bytes()),
+                        .unwrap()
+                        .0
+                        .as_bytes(),
                 );
-                bloom_filter_size.push(block.bloom_filter_index_size);
+                bloom_filter_location.commit_row();
+                bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
             });
         }
 
-        Ok(DataBlock::create(FuseBlock::schema(), vec![
-            Arc::new(ConstColumn::new(Series::from_data(snapshot_id), len)),
-            Arc::new(ConstColumn::new(Series::from_data(timestamp), len)),
-            Series::from_data(block_location),
-            Series::from_data(block_size),
-            Series::from_data(file_size),
-            Series::from_data(row_count),
-            Series::from_data(bloom_filter_location),
-            Series::from_data(bloom_filter_size),
-        ]))
+        Ok(DataBlock::new(
+            vec![
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(snapshot_id.to_vec())),
+                },
+                BlockEntry {
+                    data_type: DataType::Nullable(Box::new(DataType::Timestamp)),
+                    value: Value::Scalar(Scalar::Timestamp(timestamp)),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::String(block_location.build())),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::Number(block_size.build())),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::Number(file_size.build())),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::Number(row_count.build())),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::String(bloom_filter_location.build())),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                    value: Value::Column(Column::Number(bloom_filter_size.build())),
+                },
+            ],
+            len,
+        ))
     }
 
-    pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("snapshot_id", Vu8::to_data_type()),
-            DataField::new_nullable("timestamp", TimestampType::new_impl()),
-            DataField::new("block_location", Vu8::to_data_type()),
-            DataField::new("block_size", u64::to_data_type()),
-            DataField::new("file_size", u64::to_data_type()),
-            DataField::new("row_count", u64::to_data_type()),
-            DataField::new_nullable("bloom_filter_location", Vu8::to_data_type()),
-            DataField::new("bloom_filter_size", u64::to_data_type()),
+    pub fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("snapshot_id", TableDataType::String),
+            TableField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
+            TableField::new("block_location", TableDataType::String),
+            TableField::new("block_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("file_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "bloom_filter_location",
+                TableDataType::String.wrap_nullable(),
+            ),
+            TableField::new(
+                "bloom_filter_size",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
         ])
     }
 }

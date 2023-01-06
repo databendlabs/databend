@@ -17,11 +17,12 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::BooleanViewer;
-use common_datavalues::ScalarViewer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::NullableType;
+use common_expression::types::ValueType;
+use common_expression::DataBlock;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -47,7 +48,7 @@ impl JoinHashTable {
         let mut block_size = JOIN_MAX_BLOCK_SIZE;
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
-        let probe_column = input.column(0);
+        let probe_column = input.get_by_offset(0).value.as_column().unwrap();
         // Check if there is any null in the probe column.
         if matches!(probe_column.validity().1, Some(x) if x.unset_bits() > 0) {
             let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
@@ -106,14 +107,14 @@ impl JoinHashTable {
 
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
-        let probe_column = input.column(0);
+        let probe_column = input.get_by_offset(0).value.as_column().unwrap();
         // Check if there is any null in the probe column.
         if matches!(probe_column.validity().1, Some(x) if x.unset_bits() > 0) {
             let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
             *has_null = true;
         }
 
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let _func_ctx = self.ctx.try_get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
 
         let mut row_ptrs = self.row_ptrs.write();
@@ -154,23 +155,25 @@ impl JoinHashTable {
                             build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                             probe_indexes.extend(repeat(i as u32).take(addition));
 
-                            let probe_block =
-                                DataBlock::block_take_by_indices(input, &probe_indexes)?;
+                            let probe_block = DataBlock::take(input, &probe_indexes)?;
                             let build_block = self.row_space.gather(&build_indexes)?;
                             let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-                            let type_vector = other_predicate.eval(&func_ctx, &merged_block)?;
-                            let filter_column = type_vector.vector();
-                            let filter_viewer = BooleanViewer::try_create(filter_column)?;
+                            let filter =
+                                self.get_nullable_filter_column(&merged_block, other_predicate)?;
+                            let filter_viewer =
+                                NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
+                            let validity = &filter_viewer.validity;
+                            let data = &filter_viewer.column;
 
                             for (idx, build_index) in build_indexes.iter().enumerate() {
                                 let self_row_ptr =
                                     row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
-                                if !filter_viewer.valid_at(idx) {
+                                if !validity.get_bit(idx) {
                                     if self_row_ptr.marker == Some(MarkerKind::False) {
                                         self_row_ptr.marker = Some(MarkerKind::Null);
                                     }
-                                } else if filter_viewer.value_at(idx) {
+                                } else if data.get_bit(idx) {
                                     self_row_ptr.marker = Some(MarkerKind::True);
                                 }
                             }
@@ -186,21 +189,22 @@ impl JoinHashTable {
             }
         }
 
-        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
+        let probe_block = DataBlock::take(input, &probe_indexes)?;
         let build_block = self.row_space.gather(&build_indexes)?;
         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-        let type_vector = other_predicate.eval(&func_ctx, &merged_block)?;
-        let filter_column = type_vector.vector();
-        let filter_viewer = BooleanViewer::try_create(filter_column)?;
+        let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;
+        let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
+        let validity = &filter_viewer.validity;
+        let data = &filter_viewer.column;
 
         for (idx, build_index) in build_indexes.iter().enumerate() {
             let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
-            if !filter_viewer.valid_at(idx) {
+            if !validity.get_bit(idx) {
                 if self_row_ptr.marker == Some(MarkerKind::False) {
                     self_row_ptr.marker = Some(MarkerKind::Null);
                 }
-            } else if filter_viewer.value_at(idx) {
+            } else if data.get_bit(idx) {
                 self_row_ptr.marker = Some(MarkerKind::True);
             }
         }

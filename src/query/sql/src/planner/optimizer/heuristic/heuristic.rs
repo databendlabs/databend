@@ -20,7 +20,6 @@ use once_cell::sync::Lazy;
 
 use super::prune_unused_columns::UnusedColumnPruner;
 use crate::optimizer::heuristic::decorrelate::decorrelate_subquery;
-use crate::optimizer::heuristic::implement::HeuristicImplementor;
 use crate::optimizer::heuristic::prewhere_optimization::PrewhereOptimizer;
 use crate::optimizer::heuristic::RuleList;
 use crate::optimizer::rule::TransformResult;
@@ -40,6 +39,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::MergeEvalScalar,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownLimitUnion,
+        RuleID::RulePushDownLimitExpression,
         RuleID::PushDownLimitSort,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
@@ -56,7 +56,6 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
 /// implement the logical plans with default implementation rules.
 pub struct HeuristicOptimizer {
     rules: RuleList,
-    implementor: HeuristicImplementor,
 
     _ctx: Arc<dyn TableContext>,
     bind_context: Box<BindContext>,
@@ -72,7 +71,6 @@ impl HeuristicOptimizer {
     ) -> Self {
         HeuristicOptimizer {
             rules,
-            implementor: HeuristicImplementor::new(),
 
             _ctx: ctx,
             bind_context,
@@ -110,25 +108,6 @@ impl HeuristicOptimizer {
         let optimized_expr = s_expr.replace_children(optimized_children);
         let result = self.apply_transform_rules(&optimized_expr, &self.rules)?;
 
-        Ok(result)
-    }
-
-    #[allow(dead_code)]
-    fn implement_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut implemented_children = Vec::with_capacity(s_expr.arity());
-        for expr in s_expr.children() {
-            implemented_children.push(self.implement_expression(expr)?);
-        }
-        let implemented_expr =
-            SExpr::create(s_expr.plan().clone(), implemented_children, None, None);
-        // Implement expression with Implementor
-        let mut state = TransformResult::new();
-        self.implementor.implement(&implemented_expr, &mut state)?;
-        let result = if !state.results().is_empty() {
-            state.results()[0].clone()
-        } else {
-            implemented_expr
-        };
         Ok(result)
     }
 

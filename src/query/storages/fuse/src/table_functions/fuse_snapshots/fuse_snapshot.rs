@@ -14,9 +14,18 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
+use common_expression::types::TimestampType;
+use common_expression::DataBlock;
+use common_expression::FromData;
+use common_expression::FromOptData;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
 use common_storages_table_meta::meta::TableSnapshotLite;
 
 use crate::io::ListSnapshotLiteOption;
@@ -82,7 +91,9 @@ impl<'a> FuseSnapshot<'a> {
 
             return self.to_block(&meta_location_generator, &snapshot_lite, snapshot_version);
         }
-        Ok(DataBlock::empty_with_schema(FuseSnapshot::schema()))
+        Ok(DataBlock::empty_with_schema(Arc::new(
+            FuseSnapshot::schema().into(),
+        )))
     }
 
     fn to_block(
@@ -127,34 +138,49 @@ impl<'a> FuseSnapshot<'a> {
             current_snapshot_version = ver;
         }
 
-        Ok(DataBlock::create(FuseSnapshot::schema(), vec![
-            Series::from_data(snapshot_ids),
-            Series::from_data(snapshot_locations),
-            Series::from_data(format_versions),
-            Series::from_data(prev_snapshot_ids),
-            Series::from_data(segment_count),
-            Series::from_data(block_count),
-            Series::from_data(row_count),
-            Series::from_data(uncompressed),
-            Series::from_data(compressed),
-            Series::from_data(index_size),
-            Series::from_data(timestamps),
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(snapshot_ids),
+            StringType::from_data(snapshot_locations),
+            UInt64Type::from_data(format_versions),
+            StringType::from_opt_data(prev_snapshot_ids),
+            UInt64Type::from_data(segment_count),
+            UInt64Type::from_data(block_count),
+            UInt64Type::from_data(row_count),
+            UInt64Type::from_data(uncompressed),
+            UInt64Type::from_data(compressed),
+            UInt64Type::from_data(index_size),
+            TimestampType::from_opt_data(timestamps),
         ]))
     }
 
-    pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("snapshot_id", Vu8::to_data_type()),
-            DataField::new("snapshot_location", Vu8::to_data_type()),
-            DataField::new("format_version", u64::to_data_type()),
-            DataField::new_nullable("previous_snapshot_id", Vu8::to_data_type()),
-            DataField::new("segment_count", u64::to_data_type()),
-            DataField::new("block_count", u64::to_data_type()),
-            DataField::new("row_count", u64::to_data_type()),
-            DataField::new("bytes_uncompressed", u64::to_data_type()),
-            DataField::new("bytes_compressed", u64::to_data_type()),
-            DataField::new("index_size", u64::to_data_type()),
-            DataField::new_nullable("timestamp", TimestampType::new_impl()),
+    pub fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("snapshot_id", TableDataType::String),
+            TableField::new("snapshot_location", TableDataType::String),
+            TableField::new(
+                "format_version",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "previous_snapshot_id",
+                TableDataType::String.wrap_nullable(),
+            ),
+            TableField::new(
+                "segment_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "bytes_uncompressed",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_compressed",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new("index_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
         ])
     }
 }

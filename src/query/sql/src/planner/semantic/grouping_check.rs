@@ -102,7 +102,6 @@ impl<'a> GroupingChecker<'a> {
                 Ok(FunctionCall {
                     arguments: args,
                     func_name: func.func_name.clone(),
-                    arg_types: func.arg_types.clone(),
                     return_type: func.return_type.clone(),
                 }
                 .into())

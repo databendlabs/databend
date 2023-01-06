@@ -41,6 +41,7 @@ pub enum RuleID {
     PushDownFilterScan,
     PushDownLimitUnion,
     PushDownLimitOuterJoin,
+    RulePushDownLimitExpression,
     PushDownLimitSort,
     PushDownLimitScan,
     PushDownSortScan,
@@ -55,10 +56,6 @@ pub enum RuleID {
     CommuteJoin,
     LeftAssociateJoin,
     RightAssociateJoin,
-
-    // Implementation rules
-    ImplementGet,
-    ImplementHashJoin,
 }
 
 impl Display for RuleID {
@@ -70,6 +67,7 @@ impl Display for RuleID {
             RuleID::PushDownFilterScan => write!(f, "PushDownFilterScan"),
             RuleID::PushDownLimitUnion => write!(f, "PushDownLimitUnion"),
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
+            RuleID::RulePushDownLimitExpression => write!(f, "PushDownLimitExpression"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
@@ -85,9 +83,6 @@ impl Display for RuleID {
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
             RuleID::LeftAssociateJoin => write!(f, "LeftAssociateJoin"),
             RuleID::RightAssociateJoin => write!(f, "RightAssociateJoin"),
-
-            RuleID::ImplementGet => write!(f, "ImplementGet"),
-            RuleID::ImplementHashJoin => write!(f, "ImplementHashJoin"),
         }
     }
 }

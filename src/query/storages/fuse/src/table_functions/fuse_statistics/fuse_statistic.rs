@@ -14,9 +14,14 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::DataBlock;
+use common_expression::FromData;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshotStatistics;
 
@@ -42,7 +47,9 @@ impl<'a> FuseStatistic<'a> {
                 .await?;
             return self.to_block(&snapshot.summary, &table_statistics);
         }
-        Ok(DataBlock::empty_with_schema(FuseStatistic::schema()))
+        Ok(DataBlock::empty_with_schema(Arc::new(
+            FuseStatistic::schema().into(),
+        )))
     }
 
     fn to_block(
@@ -59,15 +66,15 @@ impl<'a> FuseStatistic<'a> {
             col_ndvs.push(ndvs.into_bytes());
         };
 
-        Ok(DataBlock::create(FuseStatistic::schema(), vec![
-            Series::from_data(col_ndvs),
-        ]))
+        Ok(DataBlock::new_from_columns(vec![StringType::from_data(
+            col_ndvs,
+        )]))
     }
 
-    pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![DataField::new(
+    pub fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![TableField::new(
             "column_distinct_values",
-            Vu8::to_data_type(),
+            TableDataType::String,
         )])
     }
 }

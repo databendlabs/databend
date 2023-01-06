@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::compute::merge_sort::MergeSlice;
 use itertools::Itertools;
 
 use crate::types::array::ArrayColumnBuilder;
@@ -29,36 +30,34 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
-use crate::Chunk;
-use crate::ChunkEntry;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::ColumnIndex;
+use crate::DataBlock;
 use crate::Scalar;
+use crate::TypeDeserializer;
 use crate::Value;
 
-// Chunk idx, row idx in the chunk, times
-pub type ChunkRowIndex = (usize, usize, usize);
+// Chunk idx, row idx in the block, times
+pub type BlockRowIndex = (usize, usize, usize);
 
-impl<Index: ColumnIndex> Chunk<Index> {
-    pub fn take_chunks(chunks: &[Chunk<Index>], indices: &[ChunkRowIndex]) -> Self {
-        debug_assert!(!chunks.is_empty());
-        debug_assert!(chunks[0].num_columns() > 0);
+impl DataBlock {
+    pub fn take_blocks(blocks: &[DataBlock], indices: &[BlockRowIndex]) -> Self {
+        debug_assert!(!blocks.is_empty());
+        debug_assert!(blocks[0].num_columns() > 0);
 
         let result_size = indices.iter().map(|(_, _, c)| *c).sum();
 
-        let result_columns = (0..chunks[0].num_columns())
+        let result_columns = (0..blocks[0].num_columns())
             .map(|index| {
-                let columns = chunks
+                let columns = blocks
                     .iter()
-                    .map(|chunk| (chunk.get_by_offset(index), chunk.num_rows()))
+                    .map(|block| (block.get_by_offset(index), block.num_rows()))
                     .collect_vec();
 
-                let id = columns[0].0.id.clone();
                 let ty = columns[0].0.data_type.clone();
                 if ty.is_null() {
-                    return ChunkEntry {
-                        id,
+                    return BlockEntry {
                         data_type: ty,
                         value: Value::Scalar(Scalar::Null),
                     };
@@ -87,15 +86,99 @@ impl<Index: ColumnIndex> Chunk<Index> {
                 let column =
                     Column::take_column_indices(&full_columns, ty.clone(), indices, result_size);
 
-                ChunkEntry {
-                    id,
+                BlockEntry {
                     data_type: ty,
                     value: Value::Column(column),
                 }
             })
             .collect();
 
-        Chunk::new(result_columns, result_size)
+        DataBlock::new(result_columns, result_size)
+    }
+
+    pub fn take_by_slice_limit(
+        block: &DataBlock,
+        slice: (usize, usize),
+        limit: Option<usize>,
+    ) -> Self {
+        let columns = block
+            .columns()
+            .iter()
+            .map(|entry| {
+                Self::take_column_by_slices_limit(&[entry.clone()], &[(0, slice.0, slice.1)], limit)
+            })
+            .collect::<Vec<_>>();
+
+        let num_rows = block.num_rows().min(slice.1.min(limit.unwrap_or(slice.1)));
+        DataBlock::new(columns, num_rows)
+    }
+
+    pub fn take_by_slices_limit_from_blocks(
+        blocks: &[DataBlock],
+        slices: &[MergeSlice],
+        limit: Option<usize>,
+    ) -> Self {
+        debug_assert!(!blocks.is_empty());
+        let total_num_rows: usize = blocks.iter().map(|c| c.num_rows()).sum();
+        let result_size: usize = slices.iter().map(|(_, _, c)| *c).sum();
+        let result_size = total_num_rows.min(result_size.min(limit.unwrap_or(result_size)));
+
+        let mut result_columns = Vec::with_capacity(blocks[0].num_columns());
+
+        for index in 0..blocks[0].num_columns() {
+            let cols = blocks
+                .iter()
+                .map(|c| c.get_by_offset(index).clone())
+                .collect::<Vec<_>>();
+
+            let merged_col = Self::take_column_by_slices_limit(&cols, slices, limit);
+
+            result_columns.push(merged_col);
+        }
+
+        DataBlock::new(result_columns, result_size)
+    }
+
+    pub fn take_column_by_slices_limit(
+        columns: &[BlockEntry],
+        slices: &[MergeSlice],
+        limit: Option<usize>,
+    ) -> BlockEntry {
+        assert!(!columns.is_empty());
+        let ty = &columns[0].data_type;
+        let num_rows = limit
+            .unwrap_or(usize::MAX)
+            .min(slices.iter().map(|(_, _, c)| *c).sum());
+
+        let mut builder = ColumnBuilder::with_capacity(ty, num_rows);
+        let mut remain = num_rows;
+
+        for (index, start, len) in slices {
+            let len = (*len).min(remain);
+            remain -= len;
+
+            let col = &columns[*index];
+            match &col.value {
+                Value::Scalar(scalar) => {
+                    let other = ColumnBuilder::repeat(&scalar.as_ref(), len, &col.data_type);
+                    builder.append_column(&other.build());
+                }
+                Value::Column(c) => {
+                    let c = c.slice(*start..(*start + len));
+                    builder.append_column(&c);
+                }
+            }
+            if remain == 0 {
+                break;
+            }
+        }
+
+        let col = builder.build();
+
+        BlockEntry {
+            data_type: ty.clone(),
+            value: Value::Column(col),
+        }
     }
 }
 
@@ -103,7 +186,7 @@ impl Column {
     pub fn take_column_indices(
         columns: &[Column],
         datatype: DataType,
-        indices: &[ChunkRowIndex],
+        indices: &[BlockRowIndex],
         result_size: usize,
     ) -> Column {
         match &columns[0] {
@@ -112,30 +195,37 @@ impl Column {
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(_) => {
                     let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
-                    Self::take_chunk_value_types::<NumberType<NUM_TYPE>>(columns, builder, indices)
+                    Self::take_block_value_types::<NumberType<NUM_TYPE>>(columns, builder, indices)
                 }
             }),
             Column::Boolean(_) => {
                 let builder = BooleanType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<BooleanType>(columns, builder, indices)
+                Self::take_block_value_types::<BooleanType>(columns, builder, indices)
             }
             Column::String(_) => {
                 let builder = StringType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<StringType>(columns, builder, indices)
+                Self::take_block_value_types::<StringType>(columns, builder, indices)
             }
             Column::Timestamp(_) => {
                 let builder = TimestampType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<TimestampType>(columns, builder, indices)
+                Self::take_block_value_types::<TimestampType>(columns, builder, indices)
             }
             Column::Date(_) => {
                 let builder = DateType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<DateType>(columns, builder, indices)
+                Self::take_block_value_types::<DateType>(columns, builder, indices)
             }
             Column::Array(column) => {
-                let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
-                builder.reserve(result_size);
-
-                Self::take_chunk_value_types::<ArrayType<AnyType>>(columns, builder, indices)
+                let mut offsets = Vec::with_capacity(result_size + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    column
+                        .values
+                        .data_type()
+                        .create_deserializer(result_size)
+                        .finish_to_column(),
+                );
+                let builder = ArrayColumnBuilder { builder, offsets };
+                Self::take_block_value_types::<ArrayType<AnyType>>(columns, builder, indices)
             }
             Column::Nullable(_) => {
                 let inner_ty = datatype.as_nullable().unwrap();
@@ -203,19 +293,19 @@ impl Column {
             }
             Column::Variant(_) => {
                 let builder = VariantType::create_builder(result_size, &[]);
-                Self::take_chunk_value_types::<VariantType>(columns, builder, indices)
+                Self::take_block_value_types::<VariantType>(columns, builder, indices)
             }
         }
     }
 
-    fn take_chunk_value_types<T: ValueType>(
+    fn take_block_value_types<T: ValueType>(
         columns: &[Column],
         mut builder: T::ColumnBuilder,
-        indices: &[ChunkRowIndex],
+        indices: &[BlockRowIndex],
     ) -> Column {
         unsafe {
-            for &(chunk_index, row, times) in indices {
-                let col = T::try_downcast_column(&columns[chunk_index]).unwrap();
+            for &(block_index, row, times) in indices {
+                let col = T::try_downcast_column(&columns[block_index]).unwrap();
                 for _ in 0..times {
                     T::push_item(&mut builder, T::index_column_unchecked(&col, row))
                 }

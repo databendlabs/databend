@@ -14,9 +14,9 @@
 
 use std::iter::TrustedLen;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_hashtable::HashtableLike;
 
 use super::JoinHashTable;

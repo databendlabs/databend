@@ -20,10 +20,11 @@ use std::sync::Mutex;
 
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
-use common_datablocks::BlockCompactThresholds;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataSchema;
+use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_meta_types::FileFormatOptions;
@@ -104,7 +105,7 @@ impl InputSource {
 
 pub struct InputContext {
     pub plan: InputPlan,
-    pub schema: DataSchemaRef,
+    pub schema: TableSchemaRef,
     pub source: InputSource,
     pub format: Arc<dyn InputFormat>,
     pub splits: Vec<Arc<SplitInfo>>,
@@ -151,7 +152,7 @@ impl InputContext {
     pub fn try_create_from_copy(
         operator: Operator,
         settings: Arc<Settings>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         stage_info: UserStageInfo,
         splits: Vec<Arc<SplitInfo>>,
         scan_progress: Arc<Progress>,
@@ -189,7 +190,7 @@ impl InputContext {
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         block_compact_thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
@@ -229,7 +230,7 @@ impl InputContext {
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
         file_format_options: FileFormatOptions,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
         block_compact_thresholds: BlockCompactThresholds,
@@ -268,6 +269,10 @@ impl InputContext {
 
     pub fn num_prefetch_per_split(&self) -> usize {
         1
+    }
+
+    pub fn data_schema(&self) -> DataSchema {
+        (&self.schema.clone()).into()
     }
 
     pub fn get_compression_alg(&self, path: &str) -> Result<Option<CompressAlgorithm>> {

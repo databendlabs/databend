@@ -14,12 +14,16 @@
 
 use std::sync::Arc;
 
-use common_datavalues::BooleanType;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataValue;
+use common_expression::types::DataType;
+use common_expression::Literal;
+use common_expression::TableDataType;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_sql::plans::Join;
+use common_sql::plans::Scan;
+use common_sql::plans::Statistics;
 use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::planner::Metadata;
@@ -27,8 +31,6 @@ use databend_query::sql::plans::BoundColumnRef;
 use databend_query::sql::plans::ConstantExpr;
 use databend_query::sql::plans::Filter;
 use databend_query::sql::plans::FunctionCall;
-use databend_query::sql::plans::PhysicalHashJoin;
-use databend_query::sql::plans::PhysicalScan;
 use databend_query::sql::ColumnBinding;
 use databend_query::sql::Visibility;
 use databend_query::storages::Table;
@@ -46,7 +48,7 @@ impl DummyTable {
                 desc: "".to_string(),
                 name: table_name,
                 meta: TableMeta {
-                    schema: DataSchemaRefExt::create(vec![]),
+                    schema: TableSchemaRefExt::create(vec![]),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -76,25 +78,24 @@ fn test_format() {
     );
     let col1 = metadata.add_base_table_column(
         "col1".to_string(),
-        BooleanType::new_impl(),
+        TableDataType::Boolean,
         tab1,
         None,
         None,
     );
     let col2 = metadata.add_base_table_column(
         "col2".to_string(),
-        BooleanType::new_impl(),
+        TableDataType::Boolean,
         tab1,
         None,
         None,
     );
 
     let s_expr = SExpr::create_binary(
-        PhysicalHashJoin {
-            build_keys: vec![
+        Join {
+            right_conditions: vec![
                 FunctionCall {
                     func_name: "plus".to_string(),
-                    arg_types: vec![],
                     arguments: vec![
                         BoundColumnRef {
                             column: ColumnBinding {
@@ -102,29 +103,29 @@ fn test_format() {
                                 table_name: None,
                                 column_name: "col1".to_string(),
                                 index: col1,
-                                data_type: Box::new(BooleanType::new_impl()),
+                                data_type: Box::new(DataType::Boolean),
                                 visibility: Visibility::Visible,
                             },
                         }
                         .into(),
                         ConstantExpr {
-                            value: DataValue::UInt64(123),
-                            data_type: Box::new(BooleanType::new_impl()),
+                            value: Literal::UInt64(123u64),
+                            data_type: Box::new(DataType::Boolean),
                         }
                         .into(),
                     ],
-                    return_type: Box::new(BooleanType::new_impl()),
+                    return_type: Box::new(DataType::Boolean),
                 }
                 .into(),
             ],
-            probe_keys: vec![
+            left_conditions: vec![
                 BoundColumnRef {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
                         column_name: "col2".to_string(),
                         index: col2,
-                        data_type: Box::new(BooleanType::new_impl()),
+                        data_type: Box::new(DataType::Boolean),
                         visibility: Visibility::Visible,
                     },
                 }
@@ -140,8 +141,8 @@ fn test_format() {
             Filter {
                 predicates: vec![
                     ConstantExpr {
-                        value: DataValue::Boolean(true),
-                        data_type: Box::new(BooleanType::new_impl()),
+                        value: Literal::Boolean(true),
+                        data_type: Box::new(DataType::Boolean),
                     }
                     .into(),
                 ],
@@ -149,25 +150,35 @@ fn test_format() {
             }
             .into(),
             SExpr::create_leaf(
-                PhysicalScan {
+                Scan {
                     table_index: tab1,
                     columns: Default::default(),
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
                     prewhere: None,
+                    statistics: Statistics {
+                        statistics: None,
+                        col_stats: Default::default(),
+                        is_accurate: false,
+                    },
                 }
                 .into(),
             ),
         ),
         SExpr::create_leaf(
-            PhysicalScan {
+            Scan {
                 table_index: tab1,
                 columns: Default::default(),
                 push_down_predicates: None,
                 limit: None,
                 order_by: None,
                 prewhere: None,
+                statistics: Statistics {
+                    statistics: None,
+                    col_stats: Default::default(),
+                    is_accurate: false,
+                },
             }
             .into(),
         ),
@@ -177,9 +188,9 @@ fn test_format() {
 
     let tree = s_expr.to_format_tree(&metadata_ref);
     let result = tree.format_indent().unwrap();
-    let expect = "HashJoin: INNER\n    build keys: [plus(col1 (#0), 123)]\n    probe keys: [col2 (#1)]\n    other filters: []\n    Filter\n        filters: [true]\n        PhysicalScan\n            table: catalog.database.table\n            filters: []\n            order by: []\n            limit: NONE\n    PhysicalScan\n        table: catalog.database.table\n        filters: []\n        order by: []\n        limit: NONE\n";
+    let expect = "HashJoin: INNER\n    equi conditions: [col2 (#1) eq plus(col1 (#0), 123_u64)]\n    non-equi conditions: []\n    Filter\n        filters: [true]\n        LogicalGet\n            table: catalog.database.table\n            filters: []\n            order by: []\n            limit: NONE\n    LogicalGet\n        table: catalog.database.table\n        filters: []\n        order by: []\n        limit: NONE\n";
     assert_eq!(result.as_str(), expect);
     let pretty_result = tree.format_pretty().unwrap();
-    let pretty_expect = "HashJoin: INNER\n├── build keys: [plus(col1 (#0), 123)]\n├── probe keys: [col2 (#1)]\n├── other filters: []\n├── Filter\n│   ├── filters: [true]\n│   └── PhysicalScan\n│       ├── table: catalog.database.table\n│       ├── filters: []\n│       ├── order by: []\n│       └── limit: NONE\n└── PhysicalScan\n    ├── table: catalog.database.table\n    ├── filters: []\n    ├── order by: []\n    └── limit: NONE\n";
+    let pretty_expect = "HashJoin: INNER\n├── equi conditions: [col2 (#1) eq plus(col1 (#0), 123_u64)]\n├── non-equi conditions: []\n├── Filter\n│   ├── filters: [true]\n│   └── LogicalGet\n│       ├── table: catalog.database.table\n│       ├── filters: []\n│       ├── order by: []\n│       └── limit: NONE\n└── LogicalGet\n    ├── table: catalog.database.table\n    ├── filters: []\n    ├── order by: []\n    └── limit: NONE\n";
     assert_eq!(pretty_result.as_str(), pretty_expect);
 }

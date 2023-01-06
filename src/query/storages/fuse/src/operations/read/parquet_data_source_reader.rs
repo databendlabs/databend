@@ -18,8 +18,8 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -124,6 +124,7 @@ impl Processor for ReadParquetDataSource<false> {
 
         if let Some((part, data)) = self.output_data.take() {
             let output = DataBlock::empty_with_meta(DataSourceMeta::create(part, data));
+
             self.output.push_data(Ok(output));
             // return Ok(Event::NeedConsume);
         }

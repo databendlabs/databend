@@ -25,6 +25,7 @@ use sqllogictest::DBOutput;
 
 use crate::error::Result;
 
+#[derive(Clone, Copy)]
 pub enum ClientType {
     Mysql,
     Http,
@@ -43,6 +44,14 @@ impl Client {
             Client::Mysql(client) => client.query(sql).await,
             Client::Http(client) => client.query(sql).await,
             Client::Clickhouse(client) => client.query(sql).await,
+        }
+    }
+
+    pub fn enable_debug(&mut self) {
+        match self {
+            Client::Mysql(client) => client.debug = true,
+            Client::Http(client) => client.debug = true,
+            Client::Clickhouse(client) => client.debug = true,
         }
     }
 

@@ -18,14 +18,18 @@ use common_base::base::mask_string;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use itertools::Itertools;
-use serde_json::Value;
+use serde_json::Value as JsonValue;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -43,7 +47,6 @@ impl SyncSystemTable for ConfigsTable {
 
     fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let config = GlobalConfig::instance().as_ref().clone().into_outer();
-
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut groups: Vec<String> = vec![];
@@ -102,26 +105,27 @@ impl SyncSystemTable for ConfigsTable {
             storage_config_value,
         );
 
-        let names: Vec<&str> = names.iter().map(|x| x.as_str()).collect();
-        let values: Vec<&str> = values.iter().map(|x| x.as_str()).collect();
-        let groups: Vec<&str> = groups.iter().map(|x| x.as_str()).collect();
-        let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(groups),
-            Series::from_data(names),
-            Series::from_data(values),
-            Series::from_data(descs),
+        let names: Vec<Vec<u8>> = names.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let values: Vec<Vec<u8>> = values.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let groups: Vec<Vec<u8>> = groups.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let descs: Vec<Vec<u8>> = descs.iter().map(|x| x.as_bytes().to_vec()).collect();
+
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(groups),
+            StringType::from_data(names),
+            StringType::from_data(values),
+            StringType::from_data(descs),
         ]))
     }
 }
 
 impl ConfigsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("group", Vu8::to_data_type()),
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("value", Vu8::to_data_type()),
-            DataField::new("description", Vu8::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("group", TableDataType::String),
+            TableField::new("name", TableDataType::String),
+            TableField::new("value", TableDataType::String),
+            TableField::new("description", TableDataType::String),
         ]);
 
         let table_info = TableInfo {
@@ -145,7 +149,7 @@ impl ConfigsTable {
         groups: &mut Vec<String>,
         descs: &mut Vec<String>,
         group: String,
-        config_value: Value,
+        config_value: JsonValue,
     ) {
         ConfigsTable::extract_config_with_name_prefix(
             names,
@@ -164,12 +168,12 @@ impl ConfigsTable {
         groups: &mut Vec<String>,
         descs: &mut Vec<String>,
         group: String,
-        config_value: Value,
+        config_value: JsonValue,
         name_prefix: Option<String>,
     ) {
         for (k, v) in config_value.as_object().unwrap().into_iter() {
             match v {
-                Value::String(s) => ConfigsTable::push_config(
+                JsonValue::String(s) => ConfigsTable::push_config(
                     names,
                     values,
                     groups,
@@ -180,7 +184,7 @@ impl ConfigsTable {
                     "".to_string(),
                     name_prefix.clone(),
                 ),
-                Value::Number(n) => ConfigsTable::push_config(
+                JsonValue::Number(n) => ConfigsTable::push_config(
                     names,
                     values,
                     groups,
@@ -191,7 +195,7 @@ impl ConfigsTable {
                     "".to_string(),
                     name_prefix.clone(),
                 ),
-                Value::Bool(b) => ConfigsTable::push_config(
+                JsonValue::Bool(b) => ConfigsTable::push_config(
                     names,
                     values,
                     groups,
@@ -202,7 +206,7 @@ impl ConfigsTable {
                     "".to_string(),
                     name_prefix.clone(),
                 ),
-                Value::Array(v) => ConfigsTable::push_config(
+                JsonValue::Array(v) => ConfigsTable::push_config(
                     names,
                     values,
                     groups,
@@ -213,7 +217,7 @@ impl ConfigsTable {
                     "".to_string(),
                     name_prefix.clone(),
                 ),
-                Value::Object(_) => ConfigsTable::extract_config_with_name_prefix(
+                JsonValue::Object(_) => ConfigsTable::extract_config_with_name_prefix(
                     names,
                     values,
                     groups,
@@ -226,7 +230,7 @@ impl ConfigsTable {
                         Some(k.to_string())
                     },
                 ),
-                Value::Null => ConfigsTable::push_config(
+                JsonValue::Null => ConfigsTable::push_config(
                     names,
                     values,
                     groups,

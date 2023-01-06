@@ -29,10 +29,10 @@ use common_catalog::table::Table;
 use common_catalog::table_context::ProcessInfo;
 use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionContext;
+use common_expression::DataBlock;
+use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
@@ -126,14 +126,14 @@ async fn test_fuse_occ_retry() -> Result<()> {
         .await?;
 
     let expected = vec![
-        "+----+----------+", //
-        "| id | t        |", //
-        "+----+----------+", //
-        "| 1  | (2, 3)   |", //
-        "| 5  | (10, 15) |", //
-        "+----+----------+", //
+        "+----------+------------------+",
+        "| Column 0 | Column 1         |",
+        "+----------+------------------+",
+        "| 1_i32    | (2_i32, 3_i32)   |",
+        "| 5_i32    | (10_i32, 15_i32) |",
+        "+----------+------------------+",
     ];
-    common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
+    common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
 
     Ok(())
 }

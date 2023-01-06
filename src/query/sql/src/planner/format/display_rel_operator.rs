@@ -15,8 +15,7 @@
 use std::fmt::Display;
 
 use common_ast::ast::FormatTreeNode;
-use common_datavalues::format_data_type_sql;
-use common_functions::scalars::FunctionFactory;
+use common_expression::types::DataType;
 use itertools::Itertools;
 
 use crate::optimizer::SExpr;
@@ -28,18 +27,15 @@ use crate::plans::ComparisonOp;
 use crate::plans::EvalScalar;
 use crate::plans::Exchange;
 use crate::plans::Filter;
+use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
-use crate::plans::LogicalGet;
-use crate::plans::LogicalJoin;
-use crate::plans::PhysicalHashJoin;
-use crate::plans::PhysicalScan;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
+use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::ColumnEntry;
 use crate::MetadataRef;
-use crate::ScalarExpr;
 
 #[derive(Clone)]
 pub enum FormatContext {
@@ -69,10 +65,8 @@ impl Display for FormatContext {
                 metadata,
                 rel_operator,
             } => match rel_operator.as_ref() {
-                RelOperator::LogicalGet(_) => write!(f, "LogicalGet"),
-                RelOperator::LogicalJoin(op) => format_logical_join(f, metadata, op),
-                RelOperator::PhysicalScan(_) => write!(f, "PhysicalScan"),
-                RelOperator::PhysicalHashJoin(op) => format_hash_join(f, metadata, op),
+                RelOperator::Scan(_) => write!(f, "LogicalGet"),
+                RelOperator::Join(op) => format_join(f, metadata, op),
                 RelOperator::EvalScalar(_) => write!(f, "EvalScalar"),
                 RelOperator::Filter(_) => write!(f, "Filter"),
                 RelOperator::Aggregate(op) => format_aggregate(f, metadata, op),
@@ -136,25 +130,17 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &Scalar) -> String {
             format!(
                 "CAST({} AS {})",
                 format_scalar(_metadata, &cast.argument),
-                format_data_type_sql(&cast.target_type)
+                cast.target_type
             )
         }
         Scalar::SubqueryExpr(_) => "SUBQUERY".to_string(),
     }
 }
 
-pub fn format_logical_join(
+pub fn format_join(
     f: &mut std::fmt::Formatter<'_>,
     _metadata: &MetadataRef,
-    op: &LogicalJoin,
-) -> std::fmt::Result {
-    write!(f, "LogicalJoin: {}", op.join_type)
-}
-
-pub fn format_hash_join(
-    f: &mut std::fmt::Formatter<'_>,
-    _metadata: &MetadataRef,
-    op: &PhysicalHashJoin,
+    op: &Join,
 ) -> std::fmt::Result {
     match op.join_type {
         JoinType::Cross => {
@@ -207,12 +193,8 @@ fn to_format_tree(
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {
     match &rel_operator {
-        RelOperator::PhysicalScan(op) => physical_scan_to_format_tree(op, metadata, children),
-        RelOperator::LogicalJoin(op) => logical_join_to_format_tree(op, metadata, children),
-        RelOperator::PhysicalHashJoin(op) => {
-            physical_hash_join_to_format_tree(op, metadata, children)
-        }
-        RelOperator::LogicalGet(op) => logical_get_to_format_tree(op, metadata, children),
+        RelOperator::Join(op) => logical_join_to_format_tree(op, metadata, children),
+        RelOperator::Scan(op) => logical_get_to_format_tree(op, metadata, children),
         RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(op, metadata, children),
         RelOperator::Filter(op) => filter_to_format_tree(op, metadata, children),
         RelOperator::Aggregate(op) => aggregate_to_format_tree(op, metadata, children),
@@ -230,8 +212,9 @@ fn to_format_tree(
     }
 }
 
-fn physical_scan_to_format_tree(
-    op: &PhysicalScan,
+#[allow(unused)]
+fn scan_to_format_tree(
+    op: &Scan,
     metadata: MetadataRef,
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {
@@ -292,7 +275,7 @@ fn physical_scan_to_format_tree(
 }
 
 fn logical_get_to_format_tree(
-    op: &LogicalGet,
+    op: &Scan,
     metadata: MetadataRef,
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {
@@ -353,7 +336,7 @@ fn logical_get_to_format_tree(
 }
 
 pub fn logical_join_to_format_tree(
-    op: &LogicalJoin,
+    op: &Join,
     metadata: MetadataRef,
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {
@@ -362,14 +345,11 @@ pub fn logical_join_to_format_tree(
         .iter()
         .zip(op.right_conditions.iter())
         .map(|(left, right)| {
-            let func = FunctionFactory::instance()
-                .get("=", &[&left.data_type(), &right.data_type()])
-                .unwrap();
             ComparisonExpr {
                 op: ComparisonOp::Equal,
                 left: Box::new(left.clone()),
                 right: Box::new(right.clone()),
-                return_type: Box::new(func.return_type()),
+                return_type: Box::new(DataType::Boolean),
             }
             .into()
         })
@@ -382,13 +362,10 @@ pub fn logical_join_to_format_tree(
 
     let equi_conditions = if !preds.is_empty() {
         let pred = preds.iter().skip(1).fold(preds[0].clone(), |prev, next| {
-            let func = FunctionFactory::instance()
-                .get("and", &[&prev.data_type(), &next.data_type()])
-                .unwrap();
             Scalar::AndExpr(AndExpr {
                 left: Box::new(prev),
                 right: Box::new(next.clone()),
-                return_type: Box::new(func.return_type()),
+                return_type: Box::new(DataType::Boolean),
             })
         });
         format_scalar(&metadata, &pred)
@@ -418,19 +395,20 @@ pub fn logical_join_to_format_tree(
     )
 }
 
-fn physical_hash_join_to_format_tree(
-    op: &PhysicalHashJoin,
+#[allow(unused)]
+fn join_to_format_tree(
+    op: &Join,
     metadata: MetadataRef,
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {
     let build_keys = op
-        .build_keys
+        .right_conditions
         .iter()
         .map(|scalar| format_scalar(&metadata, scalar))
         .collect::<Vec<String>>()
         .join(", ");
     let probe_keys = op
-        .probe_keys
+        .left_conditions
         .iter()
         .map(|scalar| format_scalar(&metadata, scalar))
         .collect::<Vec<String>>()

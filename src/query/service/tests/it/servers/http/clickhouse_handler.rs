@@ -153,7 +153,7 @@ async fn test_output_formats() -> PoemResult<()> {
         ("TSVWithNames", "a\tb\n0\ta\n1\tb\n"),
         (
             "TSVWithNamesAndTypes",
-            "a\tb\nInt32\tNullable(String)\n0\ta\n1\tb\n",
+            "a\tb\nInt32\tString NULL\n0\ta\n1\tb\n",
         ),
     ];
 

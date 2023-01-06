@@ -16,36 +16,36 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use common_catalog::plan::Expression;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchema;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
-use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Expr;
+use common_expression::TableSchema;
 use common_storages_index::range_filter::RangeFilter;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
-use crate::hive_table::HIVE_DEFAULT_PARTITION;
+use crate::utils::str_field_to_scalar;
 
 pub struct HivePartitionPruner {
     pub ctx: Arc<dyn TableContext>,
-    pub filters: Vec<Expression>,
+    pub filters: Vec<Expr<String>>,
     // pub partitions: Vec<String>,
-    pub partition_schema: Arc<DataSchema>,
+    pub partition_schema: Arc<TableSchema>,
+    pub full_schema: Arc<TableSchema>,
 }
 
 impl HivePartitionPruner {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        filters: Vec<Expression>,
-        partition_schema: Arc<DataSchema>,
+        filters: Vec<Expr<String>>,
+        partition_schema: Arc<TableSchema>,
+        full_schema: Arc<TableSchema>,
     ) -> Self {
         HivePartitionPruner {
             ctx,
             filters,
             partition_schema,
+            full_schema,
         }
     }
 
@@ -56,43 +56,11 @@ impl HivePartitionPruner {
             for (index, singe_value) in partition.split('/').enumerate() {
                 let kv = singe_value.split('=').collect::<Vec<&str>>();
                 let field = self.partition_schema.fields()[index].clone();
-                let t = match field.data_type() {
-                    DataTypeImpl::Nullable(v) => v.inner_type(),
-                    _ => field.data_type(),
-                };
-
-                let mut null_count = 0;
-                let v = match t {
-                    DataTypeImpl::String(_) => {
-                        if kv[1] == HIVE_DEFAULT_PARTITION {
-                            null_count = 1;
-                            DataValue::Null
-                        } else {
-                            DataValue::String(kv[1].as_bytes().to_vec())
-                        }
-                    }
-                    DataTypeImpl::Int8(_)
-                    | DataTypeImpl::Int16(_)
-                    | DataTypeImpl::Int32(_)
-                    | DataTypeImpl::Int64(_) => DataValue::Int64(kv[1].parse::<i64>().unwrap()),
-                    DataTypeImpl::UInt8(_)
-                    | DataTypeImpl::UInt16(_)
-                    | DataTypeImpl::UInt32(_)
-                    | DataTypeImpl::UInt64(_) => DataValue::UInt64(kv[1].parse::<u64>().unwrap()),
-                    DataTypeImpl::Float32(_) | DataTypeImpl::Float64(_) => {
-                        DataValue::Float64(kv[1].parse::<f64>().unwrap())
-                    }
-                    _ => {
-                        return Err(ErrorCode::Unimplemented(format!(
-                            "unsupported partition type, {:?}",
-                            field
-                        )));
-                    }
-                };
-
+                let scalar = str_field_to_scalar(kv[1], &field.data_type().into())?;
+                let null_count = u64::from(scalar.is_null());
                 let column_stats = ColumnStatistics {
-                    min: v.clone(),
-                    max: v,
+                    min: scalar.clone(),
+                    max: scalar,
                     null_count,
                     in_memory_size: 0,
                     distinct_of_values: None,
@@ -106,15 +74,22 @@ impl HivePartitionPruner {
     }
 
     pub fn prune(&self, partitions: Vec<String>) -> Result<Vec<String>> {
-        let range_filter = RangeFilter::try_create(
-            self.ctx.clone(),
-            &self.filters,
-            self.partition_schema.clone(),
-        )?;
+        let range_filter =
+            RangeFilter::try_create(self.ctx.clone(), &self.filters, self.full_schema.clone())?;
         let column_stats = self.get_column_stats(&partitions)?;
         let mut filted_partitions = vec![];
         for (idx, stats) in column_stats.into_iter().enumerate() {
-            if range_filter.eval(&stats, 1)? {
+            let block_stats = stats
+                .iter()
+                .map(|(k, v)| {
+                    let partition_col_name = self.partition_schema.field(*k as usize).name();
+                    let index = self.full_schema.index_of(partition_col_name).unwrap();
+
+                    (index as u32, v.clone())
+                })
+                .collect();
+
+            if range_filter.eval(&block_stats)? {
                 filted_partitions.push(partitions[idx].clone());
             }
         }

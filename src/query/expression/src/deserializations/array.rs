@@ -19,26 +19,34 @@ use common_io::prelude::FormatSettings;
 
 use crate::types::array::ArrayColumn;
 use crate::types::AnyType;
+use crate::types::DataType;
 use crate::types::ValueType;
 use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 
 pub struct ArrayDeserializer {
-    pub inner: Box<dyn TypeDeserializer>,
-    pub offsets: Vec<u64>,
+    pub inner: Box<TypeDeserializerImpl>,
+    offsets: Vec<u64>,
 }
 
 impl ArrayDeserializer {
-    fn add_offset(&mut self, size: usize) {
-        if self.offsets.is_empty() {
-            self.offsets.push(0);
+    pub fn with_capacity(capacity: usize, inner_ty: &DataType) -> Self {
+        let mut offsets = Vec::with_capacity(capacity + 1);
+        offsets.push(0);
+        Self {
+            inner: Box::new(inner_ty.create_deserializer(capacity)),
+            offsets,
         }
+    }
+
+    pub fn add_offset(&mut self, size: usize) {
         self.offsets
             .push(*self.offsets.last().unwrap() + size as u64);
     }
 
-    fn pop_offset(&mut self) -> Result<usize> {
+    pub fn pop_offset(&mut self) -> Result<usize> {
         if self.offsets.len() <= 1 {
             return Err(ErrorCode::BadDataValueType("Array is empty".to_string()));
         }
@@ -50,6 +58,10 @@ impl ArrayDeserializer {
 impl TypeDeserializer for ArrayDeserializer {
     fn memory_size(&self) -> usize {
         self.inner.memory_size() + self.offsets.len() * std::mem::size_of::<u64>()
+    }
+
+    fn len(&self) -> usize {
+        self.offsets.len() - 1
     }
 
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {

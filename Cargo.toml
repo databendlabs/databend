@@ -28,14 +28,12 @@ members = [
     "src/query/codegen",
     "src/query/config",
     "src/query/catalog",
-    "src/query/datablocks",
     "src/query/sharing",
     "src/query/sharing-endpoint",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
     "src/query/functions",
-    "src/query/functions-v2",
     "src/query/management",
     "src/query/pipeline/core",
     "src/query/pipeline/sinks",
@@ -125,6 +123,7 @@ codegen-units = 1       # Reduce number of codegen units to increase optimizatio
 arrow2 = { codegen-units = 4 }
 common-functions = { codegen-units = 16 }
 databend-query = { codegen-units = 4 }
+databend-binaries = { codegen-units = 4 }
 
 [profile.bench]
 debug = true

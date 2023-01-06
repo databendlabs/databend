@@ -20,6 +20,7 @@ use super::rewrite::RuleNormalizeDisjunctiveFilter;
 use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
+use super::rewrite::RulePushDownLimitExpression;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
@@ -34,8 +35,6 @@ use crate::optimizer::rule::rewrite::RulePushDownLimitSort;
 use crate::optimizer::rule::rewrite::RulePushDownLimitUnion;
 use crate::optimizer::rule::rewrite::RulePushDownSortScan;
 use crate::optimizer::rule::rewrite::RuleSplitAggregate;
-use crate::optimizer::rule::rule_implement_get::RuleImplementGet;
-use crate::optimizer::rule::rule_implement_hash_join::RuleImplementHashJoin;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
 
@@ -48,8 +47,6 @@ impl RuleFactory {
 
     pub fn create_rule(&self, id: RuleID) -> Result<RulePtr> {
         match id {
-            RuleID::ImplementGet => Ok(Box::new(RuleImplementGet::new())),
-            RuleID::ImplementHashJoin => Ok(Box::new(RuleImplementHashJoin::new())),
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
@@ -59,6 +56,7 @@ impl RuleFactory {
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
+            RuleID::RulePushDownLimitExpression => Ok(Box::new(RulePushDownLimitExpression::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),

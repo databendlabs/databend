@@ -23,13 +23,15 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::runtime::Runtime;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_storages_pruner::LimiterPruner;
 use common_storages_pruner::LimiterPrunerCreator;
 use common_storages_pruner::RangePruner;
 use common_storages_pruner::RangePrunerCreator;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -62,7 +64,7 @@ impl BlockPruner {
     pub async fn prune(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         segment_locs: Vec<Location>,
     ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
@@ -70,7 +72,13 @@ impl BlockPruner {
             return Ok(vec![]);
         };
 
-        let filter_expressions = push_down.as_ref().map(|extra| extra.filters.as_slice());
+        let filter_exprs = push_down.as_ref().map(|extra| {
+            extra
+                .filters
+                .iter()
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .collect::<Vec<_>>()
+        });
 
         // 1. prepare pruners
 
@@ -85,12 +93,12 @@ impl BlockPruner {
 
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
-        let range_pruner = RangePrunerCreator::try_create(ctx, filter_expressions, &schema)?;
+        let range_pruner = RangePrunerCreator::try_create(ctx, filter_exprs.as_deref(), &schema)?;
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
         let filter_pruner =
-            pruner::new_filter_pruner(ctx, filter_expressions, &schema, dal.clone())?;
+            pruner::new_filter_pruner(ctx, filter_exprs.as_deref(), &schema, dal.clone())?;
 
         // 2. constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -126,6 +134,7 @@ impl BlockPruner {
         // 4. kick off
         // 4.1 generates the iterator of segment pruning tasks.
         let mut segments = segment_locs.into_iter().enumerate();
+
         let tasks = std::iter::from_fn(|| {
             // pruning tasks are executed concurrently, check if limit exceeded before proceeding
             if pruning_ctx.limiter.exceeded() {
@@ -134,9 +143,18 @@ impl BlockPruner {
                 segments.next().map(|(segment_idx, segment_location)| {
                     let dal = dal.clone();
                     let pruning_ctx = pruning_ctx.clone();
+                    let task_schema = schema.clone();
+
                     move |permit| async move {
-                        Self::prune_segment(permit, dal, pruning_ctx, segment_idx, segment_location)
-                            .await
+                        Self::prune_segment(
+                            permit,
+                            dal,
+                            pruning_ctx,
+                            segment_idx,
+                            segment_location,
+                            task_schema.clone(),
+                        )
+                        .await
                     }
                 })
             }
@@ -174,20 +192,30 @@ impl BlockPruner {
         pruning_ctx: Arc<PruningContext>,
         segment_idx: usize,
         segment_location: Location,
+        schema: TableSchemaRef,
     ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
         let segment_reader = MetaReaders::segment_info_reader(dal.clone());
 
         let (path, ver) = segment_location;
-        let segment_info = segment_reader.read(path, None, ver).await?;
+
+        // Keep in mind that segment_info_read must need a schema
+        let load_params = LoadParams {
+            location: path,
+            len_hint: None,
+            ver,
+            schema: Some(schema.clone()),
+        };
+
+        let segment_info = segment_reader.read(&load_params).await?;
 
         // IO job of reading segment done, release the permit, allows more concurrent pruners
         // Note that it is required to explicitly release this permit before pruning blocks, to avoid deadlock.
         drop(permit);
 
-        let result = if pruning_ctx.range_pruner.should_keep(
-            &segment_info.summary.col_stats,
-            segment_info.summary.row_count,
-        ) {
+        let result = if pruning_ctx
+            .range_pruner
+            .should_keep(&segment_info.summary.col_stats)
+        {
             if let Some(filter_pruner) = &pruning_ctx.filter_pruner {
                 Self::prune_blocks(&pruning_ctx, filter_pruner, segment_idx, &segment_info).await?
             } else {
@@ -222,10 +250,7 @@ impl BlockPruner {
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
             blocks.next().map(|(block_idx, block_meta)| {
                 let row_count = block_meta.row_count;
-                if pruning_ctx
-                    .range_pruner
-                    .should_keep(&block_meta.col_stats, row_count)
-                {
+                if pruning_ctx.range_pruner.should_keep(&block_meta.col_stats) {
                     // not pruned by block zone map index,
                     let ctx = pruning_ctx.clone();
                     let filter_pruner = filter_pruner.clone();
@@ -295,9 +320,7 @@ impl BlockPruner {
                 break;
             }
             let row_count = block_meta.row_count;
-            if pruning_ctx
-                .range_pruner
-                .should_keep(&block_meta.col_stats, row_count)
+            if pruning_ctx.range_pruner.should_keep(&block_meta.col_stats)
                 && pruning_ctx.limiter.within_limit(row_count)
             {
                 result.push(((segment_idx, block_idx), block_meta.clone()))

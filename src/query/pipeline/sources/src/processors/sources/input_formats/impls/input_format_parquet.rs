@@ -23,7 +23,7 @@ use std::mem;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::chunk::Chunk;
+use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::infer_schema;
 use common_arrow::arrow::io::parquet::read::read_columns;
@@ -34,13 +34,12 @@ use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
-use common_datablocks::DataBlock;
-use common_datavalues::remove_nullable;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
@@ -124,12 +123,12 @@ impl InputFormat for InputFormatParquet {
         Ok(infos)
     }
 
-    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<DataSchemaRef> {
+    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {
         let obj = op.object(path);
         let mut reader = obj.seekable_reader(..);
         let file_meta = read_metadata_async(&mut reader).await?;
         let arrow_schema = infer_schema(&file_meta)?;
-        Ok(Arc::new(DataSchema::from(arrow_schema)))
+        Ok(Arc::new(TableSchema::from(&arrow_schema)))
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
@@ -187,6 +186,7 @@ impl serde::Serialize for SplitMeta {
         unimplemented!()
     }
 }
+
 impl<'a> serde::Deserialize<'a> for SplitMeta {
     fn deserialize<D: Deserializer<'a>>(_deserializer: D) -> Result<Self, D::Error> {
         unimplemented!()
@@ -263,7 +263,7 @@ impl RowGroupInMemory {
         })
     }
 
-    fn get_arrow_chunk(&mut self) -> Result<Chunk<Box<dyn Array>>> {
+    fn get_arrow_chunk(&mut self) -> Result<ArrowChunk<Box<dyn Array>>> {
         let mut column_chunks = vec![];
         let field_arrays = mem::take(&mut self.field_arrays);
         for (f, datas) in field_arrays.into_iter().enumerate() {
@@ -333,7 +333,7 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
     fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<DataBlock>> {
         if let Some(rg) = batch.as_mut() {
             let chunk = rg.get_arrow_chunk()?;
-            let block = DataBlock::from_chunk(&self.ctx.schema, &chunk)?;
+            let block = DataBlock::from_arrow_chunk(&chunk, &self.ctx.data_schema())?;
 
             let block_total_rows = block.num_rows();
             let num_rows_per_block = self.ctx.block_compact_thresholds.max_rows_per_block;
@@ -341,9 +341,9 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
                 .step_by(num_rows_per_block)
                 .map(|idx| {
                     if idx + num_rows_per_block < block_total_rows {
-                        block.slice(idx, num_rows_per_block)
+                        block.slice(idx..idx + num_rows_per_block)
                     } else {
-                        block.slice(idx, block_total_rows - idx)
+                        block.slice(idx..block_total_rows)
                     }
                 })
                 .collect();
@@ -413,7 +413,7 @@ impl AligningStateTrait for AligningState {
     }
 }
 
-fn get_used_fields(fields: &Vec<Field>, schema: &DataSchemaRef) -> Result<Vec<Field>> {
+fn get_used_fields(fields: &Vec<Field>, schema: &TableSchemaRef) -> Result<Vec<Field>> {
     let mut read_fields = Vec::with_capacity(fields.len());
     for f in schema.fields().iter() {
         if let Some(m) = fields
@@ -421,8 +421,8 @@ fn get_used_fields(fields: &Vec<Field>, schema: &DataSchemaRef) -> Result<Vec<Fi
             .filter(|c| c.name.eq_ignore_ascii_case(f.name()))
             .last()
         {
-            let tf = DataField::from(m);
-            if remove_nullable(tf.data_type()) != remove_nullable(f.data_type()) {
+            let tf = TableField::from(m);
+            if tf.data_type().remove_nullable() != f.data_type().remove_nullable() {
                 let pair = (f, m);
                 let diff = pair.make_diff("expected_field", "infer_field");
                 // TODO(xuanwo): return a more accurate error code here.

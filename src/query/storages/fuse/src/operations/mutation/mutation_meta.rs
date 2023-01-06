@@ -15,12 +15,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::BlockMetaInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
 
@@ -169,7 +169,11 @@ impl MutationSinkMeta {
         match info.as_any().downcast_ref::<MutationSinkMeta>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
+<<<<<<< HEAD
                 "Cannot downcast from BlockMetaInfo to MutationSinkMeta.",
+=======
+                "Cannot downcast from ChunkMetaInfo to MutationMeta.",
+>>>>>>> upstream/main
             )),
         }
     }

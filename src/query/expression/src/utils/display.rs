@@ -23,7 +23,7 @@ use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
-use crate::chunk::Chunk;
+use crate::block::DataBlock;
 use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
@@ -45,23 +45,25 @@ use crate::types::timestamp::timestamp_to_string;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::ValueType;
+use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::with_number_type;
 use crate::Column;
 use crate::ColumnIndex;
+use crate::TableDataType;
 
 const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
 
-impl<Index: ColumnIndex> Debug for Chunk<Index> {
+impl Debug for DataBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
 
         table.set_header(vec!["Column ID", "Type", "Column Data"]);
 
-        for (i, entry) in self.columns().enumerate() {
+        for (i, entry) in self.columns().iter().enumerate() {
             table.add_row(vec![
                 i.to_string(),
                 entry.data_type.to_string(),
@@ -73,7 +75,7 @@ impl<Index: ColumnIndex> Debug for Chunk<Index> {
     }
 }
 
-impl<Index: ColumnIndex> Display for Chunk<Index> {
+impl Display for DataBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
@@ -83,6 +85,7 @@ impl<Index: ColumnIndex> Display for Chunk<Index> {
         for index in 0..self.num_rows() {
             let row: Vec<_> = self
                 .columns()
+                .iter()
                 .map(|entry| entry.value.as_ref().index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
@@ -148,7 +151,7 @@ impl<'a> Display for ScalarRef<'a> {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[]"),
-            ScalarRef::Number(val) => write!(f, "{val}"),
+            ScalarRef::Number(val) => write!(f, "{:?}", val),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, chrono_tz::Tz::UTC)),
@@ -171,6 +174,49 @@ impl<'a> Display for ScalarRef<'a> {
                 let value = common_jsonb::to_string(s);
                 write!(f, "{value}")
             }
+        }
+    }
+}
+
+impl Display for Scalar {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Scalar::Null => write!(f, "NULL"),
+            Scalar::EmptyArray => write!(f, "[]"),
+            Scalar::Number(n) => write!(f, "{}", n),
+            Scalar::Boolean(b) => write!(f, "{}", b),
+            Scalar::String(s) => match std::str::from_utf8(s) {
+                Ok(v) => write!(f, "{}", v),
+                Err(_e) => {
+                    for c in s {
+                        write!(f, "{:02x}", c)?;
+                    }
+                    Ok(())
+                }
+            },
+            Scalar::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, chrono_tz::Tz::UTC)),
+            Scalar::Date(d) => write!(f, "{}", date_to_string(*d as i64, chrono_tz::Tz::UTC)),
+            Scalar::Array(v) => {
+                write!(
+                    f,
+                    "[{}]",
+                    v.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Scalar::Tuple(v) => {
+                write!(
+                    f,
+                    "({})",
+                    v.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Scalar::Variant(v) => write!(f, "{}", common_jsonb::to_string(v)),
         }
     }
 }
@@ -301,11 +347,14 @@ impl Debug for StringColumn {
     }
 }
 
-impl Display for RawExpr {
+impl<Index: ColumnIndex> Display for RawExpr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RawExpr::Literal { lit, .. } => write!(f, "{lit}"),
-            RawExpr::ColumnRef { id, data_type, .. } => write!(f, "ColumnRef({id})::{data_type}"),
+            RawExpr::ColumnRef { id, data_type, .. } => {
+                id.sql_display_fmt(f)?;
+                write!(f, "::{data_type}")
+            }
             RawExpr::Cast {
                 is_try,
                 expr,
@@ -350,7 +399,6 @@ impl Display for Literal {
         match self {
             Literal::Null => write!(f, "NULL"),
             Literal::Boolean(val) => write!(f, "{val}"),
-            Literal::UInt64(val) => write!(f, "{val}_u64"),
             Literal::Int8(val) => write!(f, "{val}_i8"),
             Literal::Int16(val) => write!(f, "{val}_i16"),
             Literal::Int32(val) => write!(f, "{val}_i32"),
@@ -358,6 +406,7 @@ impl Display for Literal {
             Literal::UInt8(val) => write!(f, "{val}_u8"),
             Literal::UInt16(val) => write!(f, "{val}_u16"),
             Literal::UInt32(val) => write!(f, "{val}_u32"),
+            Literal::UInt64(val) => write!(f, "{val}_u64"),
             Literal::Float32(val) => write!(f, "{val}_f32"),
             Literal::Float64(val) => write!(f, "{val}_f64"),
             Literal::String(val) => write!(f, "{:?}", String::from_utf8_lossy(val)),
@@ -379,21 +428,54 @@ impl Display for DataType {
             DataType::Array(inner) => write!(f, "Array({inner})"),
             DataType::Map(inner) => write!(f, "Map({inner})"),
             DataType::Tuple(tys) => {
-                if tys.len() == 1 {
-                    write!(f, "({},)", tys[0])
-                } else {
-                    write!(f, "(")?;
-                    for (i, ty) in tys.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{ty}")?;
+                write!(f, "(")?;
+                for (i, ty) in tys.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
                     }
-                    write!(f, ")")
+                    write!(f, "{ty}")?;
                 }
+                if tys.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
             }
             DataType::Variant => write!(f, "Variant"),
             DataType::Generic(index) => write!(f, "T{index}"),
+        }
+    }
+}
+
+impl Display for TableDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match &self {
+            TableDataType::Boolean => write!(f, "Boolean"),
+            TableDataType::String => write!(f, "String"),
+            TableDataType::Number(num) => write!(f, "{num}"),
+            TableDataType::Timestamp => write!(f, "Timestamp"),
+            TableDataType::Date => write!(f, "Date"),
+            TableDataType::Null => write!(f, "NULL"),
+            TableDataType::Nullable(inner) => write!(f, "{inner} NULL"),
+            TableDataType::EmptyArray => write!(f, "Array(Nothing)"),
+            TableDataType::Array(inner) => write!(f, "Array({inner})"),
+            TableDataType::Map(inner) => write!(f, "Map({inner})"),
+            TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                write!(f, "(")?;
+                for (i, (name, ty)) in fields_name.iter().zip(fields_type).enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{name} {ty}")?;
+                }
+                if fields_name.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
+            }
+            TableDataType::Variant => write!(f, "Variant"),
         }
     }
 }
@@ -415,11 +497,11 @@ impl Display for NumberDataType {
     }
 }
 
-impl Display for Expr {
+impl<Index: ColumnIndex> Display for Expr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::Constant { scalar, .. } => write!(f, "{:?}", scalar.as_ref()),
-            Expr::ColumnRef { id, .. } => write!(f, "ColumnRef({id})"),
+            Expr::ColumnRef { id, .. } => id.sql_display_fmt(f),
             Expr::Cast {
                 is_try,
                 expr,
@@ -509,8 +591,8 @@ impl Display for FunctionSignature {
 impl Display for FunctionProperty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut properties = Vec::new();
-        if self.commutative {
-            properties.push("commutative");
+        if self.non_deterministic {
+            properties.push("non_deterministic");
         }
         if !properties.is_empty() {
             write!(f, "{{{}}}", properties.join(", "))?;

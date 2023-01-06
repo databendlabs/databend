@@ -174,6 +174,10 @@ copyOptions ::=
 | FORCE        | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped. | Optional |
 | ON_ERROR     | Provides options to handle a file containing errors. Select `continue` to skip the file and continue, or `abort` (default) to abort the load operation. | Optional |
 
+:::note
+The parameter ON_ERROR currently does not work for parquet files.
+:::
+
 ## Examples
 
 ### Loading Data from an Internal Stage

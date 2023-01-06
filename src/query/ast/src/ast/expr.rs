@@ -334,6 +334,22 @@ impl BinaryOperator {
             ))),
         }
     }
+
+    pub fn to_func_name(&self) -> String {
+        match self {
+            BinaryOperator::StringConcat => "concat".to_string(),
+            BinaryOperator::NotLike => "NOT LIKE".to_string(),
+            BinaryOperator::NotRegexp => "NOT REGEXP".to_string(),
+            BinaryOperator::NotRLike => "NOT RLIKE".to_string(),
+            BinaryOperator::BitwiseOr => "bit_or".to_string(),
+            BinaryOperator::BitwiseAnd => "bit_and".to_string(),
+            BinaryOperator::BitwiseXor => "bit_xor".to_string(),
+            _ => {
+                let name = format!("{:?}", self);
+                name.to_lowercase()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -874,5 +890,27 @@ impl<'a> Display for Expr<'a> {
         }
 
         Ok(())
+    }
+}
+
+pub fn split_conjunctions_expr<'a>(expr: &Expr<'a>) -> Vec<Expr<'a>> {
+    match expr {
+        Expr::BinaryOp {
+            op, left, right, ..
+        } if op == &BinaryOperator::And => {
+            let mut result = split_conjunctions_expr(left);
+            result.extend(split_conjunctions_expr(right));
+            result
+        }
+        _ => vec![expr.clone()],
+    }
+}
+
+pub fn split_equivalent_predicate_expr<'a>(expr: &Expr<'a>) -> Option<(Expr<'a>, Expr<'a>)> {
+    match expr {
+        Expr::BinaryOp {
+            op, left, right, ..
+        } if op == &BinaryOperator::Eq => Some((*left.clone(), *right.clone())),
+        _ => None,
     }
 }
