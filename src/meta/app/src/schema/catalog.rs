@@ -18,6 +18,7 @@ use std::fmt::Display;
 use chrono::DateTime;
 use chrono::Utc;
 
+// foo
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CatalogType {
     Default = 1,
