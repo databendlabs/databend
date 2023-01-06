@@ -28,6 +28,7 @@ mod hive_partition_pruner;
 mod hive_table;
 mod hive_table_options;
 mod hive_table_source;
+mod utils;
 
 pub use hive_block_filter::HiveBlockFilter;
 pub use hive_blocks::HiveBlocks;

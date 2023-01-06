@@ -16,8 +16,8 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
 use futures::Stream;
 
 use crate::pipelines::executor::PipelinePullingExecutor;

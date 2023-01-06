@@ -73,6 +73,7 @@ pub enum Error {
     InvalidUtf8,
     InvalidEOF,
     InvalidToken,
+    InvalidCast,
 
     InvalidJsonb,
     InvalidJsonbHeader,

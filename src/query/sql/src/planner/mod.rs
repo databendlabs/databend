@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod expression_parser;
 mod format;
 mod metadata;
 #[allow(clippy::module_inception)]
@@ -20,8 +19,10 @@ mod planner;
 mod semantic;
 
 pub mod binder;
+mod expression_parser;
 pub mod optimizer;
 pub mod plans;
+mod udf_validator;
 
 pub use binder::BindContext;
 pub use binder::Binder;
@@ -29,7 +30,8 @@ pub use binder::ColumnBinding;
 pub use binder::ScalarBinder;
 pub use binder::SelectBuilder;
 pub use binder::Visibility;
-pub use expression_parser::ExpressionParser;
+pub use expression_parser::parse_exprs;
+pub use expression_parser::parse_to_remote_string_exprs;
 pub use metadata::*;
 pub use planner::Planner;
 pub use plans::ScalarExpr;

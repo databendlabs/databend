@@ -20,9 +20,9 @@ use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow::io::flight::serialize_batch;
 use common_arrow::arrow::io::ipc::IpcSchema;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -210,7 +210,7 @@ impl Processor for ExchangeTransform {
         if let Some(data_block) = self.input_data.take() {
             let scatter = &self.shuffle_exchange_params.shuffle_scatter;
 
-            let scatted_blocks = scatter.execute(&data_block, 0)?;
+            let scatted_blocks = scatter.execute(&data_block)?;
 
             let mut output_data = OutputData {
                 data_block: None,
@@ -340,7 +340,7 @@ impl ExchangeTransform {
         self.output_data = Some(OutputData {
             serialized_blocks: vec![],
             has_serialized_blocks: false,
-            data_block: Some(DataBlock::from_chunk(schema, &batch)?.add_meta(meta)?),
+            data_block: Some(DataBlock::from_arrow_chunk(&batch, schema)?.add_meta(meta)?),
         });
 
         Ok(())

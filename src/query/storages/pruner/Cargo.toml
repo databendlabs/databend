@@ -13,8 +13,8 @@ test = false
 
 [dependencies]
 common-catalog = { path = "../../../common/../query/catalog" }
-common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
 common-storages-index = { path = "../index" }
 common-storages-table-meta = { path = "../table-meta" }
 

@@ -45,4 +45,3 @@ drop table tab64784
 
 statement ok
 drop table tab4
-

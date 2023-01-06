@@ -217,6 +217,7 @@ impl<'a> Binder {
     ) -> Result<SExpr> {
         let mut order_by_items = Vec::with_capacity(order_by.items.len());
         let mut scalars = vec![];
+
         for order in order_by.items {
             if from_context.in_grouping {
                 let mut group_checker = GroupingChecker::new(from_context);
@@ -425,7 +426,6 @@ impl<'a> Binder {
                 Scalar::FunctionCall(FunctionCall {
                     arguments,
                     func_name,
-                    arg_types,
                     return_type,
                 }) => {
                     let arguments = arguments
@@ -435,7 +435,6 @@ impl<'a> Binder {
                     Ok(Scalar::FunctionCall(FunctionCall {
                         arguments,
                         func_name: func_name.clone(),
-                        arg_types: arg_types.clone(),
                         return_type: return_type.clone(),
                     }))
                 }

@@ -17,9 +17,13 @@ use std::sync::Arc;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -54,8 +58,7 @@ impl AsyncSystemTable for ColumnsTable {
             tables.push(table_name.into_bytes());
             databases.push(database_name.into_bytes());
 
-            let non_null_type = remove_nullable(field.data_type());
-            let data_type = format_data_type_sql(&non_null_type);
+            let data_type = field.data_type().sql_name();
             data_types.push(data_type.into_bytes());
 
             let mut default_kind = "".to_string();
@@ -75,30 +78,30 @@ impl AsyncSystemTable for ColumnsTable {
             comments.push("".to_string().into_bytes());
         }
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(databases),
-            Series::from_data(tables),
-            Series::from_data(data_types),
-            Series::from_data(default_kinds),
-            Series::from_data(default_exprs),
-            Series::from_data(is_nullables),
-            Series::from_data(comments),
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            StringType::from_data(databases),
+            StringType::from_data(tables),
+            StringType::from_data(data_types),
+            StringType::from_data(default_kinds),
+            StringType::from_data(default_exprs),
+            StringType::from_data(is_nullables),
+            StringType::from_data(comments),
         ]))
     }
 }
 
 impl ColumnsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("database", Vu8::to_data_type()),
-            DataField::new("table", Vu8::to_data_type()),
-            DataField::new("type", Vu8::to_data_type()),
-            DataField::new("default_kind", Vu8::to_data_type()),
-            DataField::new("default_expression", Vu8::to_data_type()),
-            DataField::new("is_nullable", Vu8::to_data_type()),
-            DataField::new("comment", Vu8::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("name", TableDataType::String),
+            TableField::new("database", TableDataType::String),
+            TableField::new("table", TableDataType::String),
+            TableField::new("type", TableDataType::String),
+            TableField::new("default_kind", TableDataType::String),
+            TableField::new("default_expression", TableDataType::String),
+            TableField::new("is_nullable", TableDataType::String),
+            TableField::new("comment", TableDataType::String),
         ]);
 
         let table_info = TableInfo {
@@ -119,12 +122,12 @@ impl ColumnsTable {
     async fn dump_table_columns(
         &self,
         ctx: Arc<dyn TableContext>,
-    ) -> Result<Vec<(String, String, DataField)>> {
+    ) -> Result<Vec<(String, String, TableField)>> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
 
-        let mut rows: Vec<(String, String, DataField)> = vec![];
+        let mut rows: Vec<(String, String, TableField)> = vec![];
         for database in databases {
             for table in catalog
                 .list_tables(tenant.as_str(), database.name())

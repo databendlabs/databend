@@ -20,18 +20,17 @@ use std::sync::Arc;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
-use common_datablocks::BlockMetaInfoPtr;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_expression::BlockMetaInfoPtr;
+use common_expression::DataBlock;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 // PrecommitBlock only use block.meta for data transfer.
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Clone, Debug)]
 pub struct PrecommitBlock(pub DataBlock);
 
 impl PrecommitBlock {
@@ -61,9 +60,9 @@ impl PrecommitBlock {
             || "precommit block deserialize error when exchange",
         )?;
 
-        Ok(PrecommitBlock(DataBlock::create_with_meta(
-            DataSchemaRef::default(),
+        Ok(PrecommitBlock(DataBlock::new_with_meta(
             vec![],
+            0,
             block_meta,
         )))
     }

@@ -15,7 +15,11 @@
 use std::collections::HashMap;
 
 use common_base::base::uuid::Uuid;
-use common_datavalues::DataValue;
+use common_expression::converts::from_scalar;
+use common_expression::converts::to_type;
+use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
 
 pub type ColumnId = u32;
 pub type FormatVersion = u64;
@@ -27,12 +31,9 @@ pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
-    pub min: DataValue,
-    pub max: DataValue,
-    // A non-backward compatible change has been introduced by [PR#6067](https://github.com/datafuselabs/databend/pull/6067/files#diff-20030750809780d6492d2fe215a8eb80294aa6a8a5af2cf1bebe17eb740cae35)
-    // , please also see [issue#6556](https://github.com/datafuselabs/databend/issues/6556)
-    // therefore, we alias `null_count` with `unset_bits`, to make subsequent versions backward compatible again
-    #[serde(alias = "unset_bits")]
+    pub min: Scalar,
+    pub max: Scalar,
+
     pub null_count: u64,
     pub in_memory_size: u64,
     pub distinct_of_values: Option<u64>,
@@ -40,34 +41,86 @@ pub struct ColumnStatistics {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ClusterStatistics {
-    #[serde(default = "default_cluster_key_id")]
     pub cluster_key_id: u32,
-    pub min: Vec<DataValue>,
-    pub max: Vec<DataValue>,
-    // The number of times the data in that block has been clustered. New blocks has zero level.
-    #[serde(default = "default_level")]
+    pub min: Vec<Scalar>,
+    pub max: Vec<Scalar>,
     pub level: i32,
-}
-
-fn default_cluster_key_id() -> u32 {
-    0
-}
-
-fn default_level() -> i32 {
-    0
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct Statistics {
     pub row_count: u64,
     pub block_count: u64,
-    #[serde(default)]
     pub perfect_block_count: u64,
 
     pub uncompressed_byte_size: u64,
     pub compressed_byte_size: u64,
-    #[serde(default)]
     pub index_size: u64,
 
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
+}
+
+// conversions from old meta data
+// ----------------------------------------------------------------
+// ----------------------------------------------------------------
+impl ColumnStatistics {
+    pub fn from_v0(
+        v0: &crate::meta::v0::statistics::ColumnStatistics,
+        data_type: &TableDataType,
+    ) -> Self {
+        let old_type = to_type(data_type);
+
+        Self {
+            min: from_scalar(&v0.min, &old_type),
+            max: from_scalar(&v0.max, &old_type),
+            null_count: v0.null_count,
+            in_memory_size: v0.in_memory_size,
+            distinct_of_values: None,
+        }
+    }
+}
+
+impl ClusterStatistics {
+    pub fn from_v0(
+        v0: crate::meta::v0::statistics::ClusterStatistics,
+        data_type: &TableDataType,
+    ) -> Self {
+        let old_type = to_type(data_type);
+        Self {
+            cluster_key_id: v0.cluster_key_id,
+            min: v0
+                .min
+                .into_iter()
+                .map(|s| from_scalar(&s, &old_type))
+                .collect(),
+            max: v0
+                .max
+                .into_iter()
+                .map(|s| from_scalar(&s, &old_type))
+                .collect(),
+            level: v0.level,
+        }
+    }
+}
+
+impl Statistics {
+    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
+        let col_stats = v0
+            .col_stats
+            .into_iter()
+            .map(|(k, v)| {
+                let t = fields[k as usize].data_type();
+                (k, ColumnStatistics::from_v0(&v, t))
+            })
+            .collect();
+        Self {
+            row_count: v0.row_count,
+            block_count: v0.block_count,
+            perfect_block_count: v0.perfect_block_count,
+            uncompressed_byte_size: v0.uncompressed_byte_size,
+            compressed_byte_size: v0.compressed_byte_size,
+            index_size: v0.index_size,
+            col_stats,
+        }
+    }
 }

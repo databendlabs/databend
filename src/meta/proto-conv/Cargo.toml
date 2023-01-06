@@ -12,6 +12,7 @@ test = false
 
 [dependencies]
 common-datavalues = { path = "../../query/datavalues" }
+common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../app" }
 common-meta-types = { path = "../types" }
 common-protos = { path = "../protos" }

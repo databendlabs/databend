@@ -16,12 +16,15 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::Vu8;
 use common_exception::Result;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -51,18 +54,22 @@ impl AsyncSystemTable for RolesTable {
             .iter()
             .map(|x| x.grants.roles().len() as u64)
             .collect();
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(inherited_roles),
+
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            UInt64Type::from_data(inherited_roles),
         ]))
     }
 }
 
 impl RolesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("inherited_roles", u64::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("name", TableDataType::String),
+            TableField::new(
+                "inherited_roles",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
         ]);
 
         let table_info = TableInfo {

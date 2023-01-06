@@ -18,14 +18,12 @@ use std::io::Write;
 use comfy_table::Table;
 use common_ast::DisplayError;
 use common_expression::type_check;
-use common_expression::types::DataType;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ConstantFolder;
+use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
@@ -41,18 +39,21 @@ mod datetime;
 mod geo;
 mod hash;
 mod math;
+mod other;
 pub(crate) mod parser;
+mod regexp;
 mod string;
 mod tuple;
 mod variant;
 
-pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Column)]) {
+pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
+    let text = text.as_ref();
     let result = try {
         let raw_expr = parser::parse_raw_expr(
             text,
             &columns
                 .iter()
-                .map(|(name, ty, _)| (*name, ty.clone()))
+                .map(|(name, c)| (*name, c.data_type()))
                 .collect::<Vec<_>>(),
         );
 
@@ -60,38 +61,36 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
 
         let input_domains = columns
             .iter()
-            .map(|(_, _, col)| col.domain())
+            .map(|(_, col)| col.domain())
             .enumerate()
             .collect::<HashMap<_, _>>();
 
-        let fn_ctx = FunctionContext { tz: chrono_tz::UTC };
+        let func_ctx = FunctionContext { tz: chrono_tz::UTC };
 
         let constant_folder =
-            ConstantFolder::new(input_domains.clone(), fn_ctx, &BUILTIN_FUNCTIONS);
+            ConstantFolder::new(input_domains.clone(), func_ctx, &BUILTIN_FUNCTIONS);
         let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
-        let remote_expr = RemoteExpr::from_expr(optimized_expr);
-        let optimized_expr = remote_expr.into_expr(&BUILTIN_FUNCTIONS).unwrap();
+        let remote_expr = optimized_expr.as_remote_expr();
+        let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS).unwrap();
 
-        let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
-        let chunk = Chunk::new(
+        let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(0);
+        let block = DataBlock::new(
             columns
                 .iter()
-                .enumerate()
-                .map(|(id, (_, ty, col))| ChunkEntry {
-                    id,
-                    data_type: ty.clone(),
+                .map(|(_, col)| BlockEntry {
+                    data_type: col.data_type(),
                     value: Value::Column(col.clone()),
                 })
                 .collect::<Vec<_>>(),
             num_rows,
         );
 
-        columns.iter().for_each(|(_, _, col)| {
+        columns.iter().for_each(|(_, col)| {
             test_arrow_conversion(col);
         });
 
-        let evaluator = Evaluator::new(&chunk, fn_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {
@@ -155,12 +154,12 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                     table.load_preset("||--+-++|    ++++++");
 
                     let mut header = vec!["".to_string()];
-                    header.extend(columns.iter().map(|(name, _, _)| name.to_string()));
+                    header.extend(columns.iter().map(|(name, _)| name.to_string()));
                     header.push("Output".to_string());
                     table.set_header(header);
 
                     let mut type_row = vec!["Type".to_string()];
-                    type_row.extend(columns.iter().map(|(_, ty, _)| ty.to_string()));
+                    type_row.extend(columns.iter().map(|(_, c)| c.data_type().to_string()));
                     type_row.push(expr.data_type().to_string());
                     table.add_row(type_row);
 
@@ -171,7 +170,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
 
                     for i in 0..output_col.len() {
                         let mut row = vec![format!("Row {i}")];
-                        for (_, _, col) in columns.iter() {
+                        for (_, col) in columns.iter() {
                             let value = col.index(i).unwrap();
                             row.push(format!("{}", value));
                         }
@@ -186,7 +185,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
 
                     table.set_header(["Column", "Data"]);
 
-                    for (name, _, col) in columns.iter() {
+                    for (name, col) in columns.iter() {
                         table.add_row(&[name.to_string(), format!("{col:?}")]);
                     }
 
@@ -208,7 +207,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
 
 fn test_arrow_conversion(col: &Column) {
     let arrow_col = col.as_arrow();
-    let new_col = Column::from_arrow(&*arrow_col);
+    let new_col = Column::from_arrow(&*arrow_col, &col.data_type());
     assert_eq!(col, &new_col, "arrow conversion went wrong");
 }
 
@@ -217,9 +216,9 @@ fn list_all_builtin_functions() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("function_list.txt").unwrap();
 
-    writeln!(file, "Simple functions:").unwrap();
-
     let fn_registry = &BUILTIN_FUNCTIONS;
+
+    writeln!(file, "Simple functions:").unwrap();
     for func in fn_registry
         .funcs
         .iter()
@@ -230,8 +229,25 @@ fn list_all_builtin_functions() {
     }
 
     writeln!(file, "\nFactory functions:").unwrap();
-
     for func_name in fn_registry.factories.keys().sorted() {
         writeln!(file, "{func_name}").unwrap();
+    }
+
+    writeln!(file, "\nFunction aliases (alias to origin):").unwrap();
+    for (alias_name, original_name) in fn_registry
+        .aliases
+        .iter()
+        .sorted_by_key(|(alias_name, _)| alias_name.to_string())
+    {
+        writeln!(file, "{alias_name} -> {original_name}").unwrap();
+    }
+
+    writeln!(file, "\nNegative functions (negative to origin):").unwrap();
+    for (neg_name, original_name) in fn_registry
+        .negtives
+        .iter()
+        .sorted_by_key(|(alias_name, _)| alias_name.to_string())
+    {
+        writeln!(file, "{neg_name} -> not({original_name})").unwrap();
     }
 }

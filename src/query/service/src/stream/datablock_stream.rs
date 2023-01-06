@@ -15,26 +15,19 @@
 use std::task::Context;
 use std::task::Poll;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::DataBlock;
 
 pub struct DataBlockStream {
     current: usize,
-    schema: DataSchemaRef,
     data: Vec<DataBlock>,
     projects: Option<Vec<usize>>,
 }
 
 impl DataBlockStream {
-    pub fn create(
-        schema: DataSchemaRef,
-        projects: Option<Vec<usize>>,
-        data: Vec<DataBlock>,
-    ) -> Self {
+    pub fn create(projects: Option<Vec<usize>>, data: Vec<DataBlock>) -> Self {
         DataBlockStream {
             current: 0,
-            schema,
             data,
             projects,
         }
@@ -53,9 +46,9 @@ impl futures::Stream for DataBlockStream {
             let block = &self.data[self.current - 1];
 
             Some(Ok(match &self.projects {
-                Some(v) => DataBlock::create(
-                    self.schema.clone(),
-                    v.iter().map(|x| block.column(*x).clone()).collect(),
+                Some(v) => DataBlock::new(
+                    v.iter().map(|x| block.get_by_offset(*x).clone()).collect(),
+                    block.num_rows(),
                 ),
                 None => block.clone(),
             }))

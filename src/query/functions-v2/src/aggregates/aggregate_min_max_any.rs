@@ -180,8 +180,13 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
     argument_types: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, argument_types.len())?;
-    let data_type = argument_types[0].clone();
+    let mut data_type = argument_types[0].clone();
     let need_drop = need_manual_drop_state(&data_type);
+
+    // null use dummy func, it's already covered in `AggregateNullResultFunction`
+    if data_type.is_null() {
+        data_type = DataType::String;
+    }
 
     with_compare_mapped_type!(|CMP| match CMP_TYPE {
         CMP => {

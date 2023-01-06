@@ -21,9 +21,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::runtime::Thread;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 use tracing::warn;

@@ -2,7 +2,7 @@ query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
 Filter
-├── filters: [=(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED))]
+├── filters: [eq(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0_i64) AS BIGINT UNSIGNED NULL))]
 └── HashJoin
     ├── join type: SINGLE
     ├── build keys: [subquery_2 (#2)]
@@ -22,14 +22,14 @@ Filter
     │               ├── probe keys: []
     │               ├── filters: []
     │               ├── Filter(Build)
-    │               │   ├── filters: [=(subquery_2 (#2), t2.number (#2))]
+    │               │   ├── filters: [eq(subquery_2 (#2), t2.number (#2))]
     │               │   └── TableScan
     │               │       ├── table: default.system.numbers
     │               │       ├── read rows: 1
     │               │       ├── read bytes: 8
     │               │       ├── partitions total: 1
     │               │       ├── partitions scanned: 1
-    │               │       └── push downs: [filters: [(number = number)], limit: NONE]
+    │               │       └── push downs: [filters: [eq(subquery_2, number)], limit: NONE]
     │               └── TableScan(Probe)
     │                   ├── table: default.system.numbers
     │                   ├── read rows: 1
@@ -61,21 +61,21 @@ query T
 explain select t.number from numbers(1) as t where exists (select t1.number from numbers(1) as t1 where t.number = t1.number) or t.number > 1
 ----
 Filter
-├── filters: [or(2 (#2), >(t.number (#0), 1))]
+├── filters: [or(2 (#2), gt(t.number (#0), 1_u8))]
 └── HashJoin
     ├── join type: RIGHT MARK
     ├── build keys: [subquery_1 (#1)]
     ├── probe keys: [subquery_0 (#0)]
     ├── filters: []
     ├── Filter(Build)
-    │   ├── filters: [=(subquery_1 (#1), t1.number (#1))]
+    │   ├── filters: [eq(subquery_1 (#1), t1.number (#1))]
     │   └── TableScan
     │       ├── table: default.system.numbers
     │       ├── read rows: 1
     │       ├── read bytes: 8
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       └── push downs: [filters: [(number = number)], limit: NONE]
+    │       └── push downs: [filters: [eq(subquery_1, number)], limit: NONE]
     └── TableScan(Probe)
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -93,7 +93,7 @@ HashJoin
 ├── probe keys: []
 ├── filters: []
 ├── Filter(Build)
-│   ├── filters: [=(count(*) (#2), 1)]
+│   ├── filters: [eq(count(*) (#2), 1_u64)]
 │   └── AggregateFinal
 │       ├── group by: []
 │       ├── aggregate functions: [count()]
@@ -104,14 +104,14 @@ HashJoin
 │               ├── limit: 1
 │               ├── offset: 0
 │               └── Filter
-│                   ├── filters: [=(numbers.number (#1), 0)]
+│                   ├── filters: [eq(numbers.number (#1), 0_u8)]
 │                   └── TableScan
 │                       ├── table: default.system.numbers
 │                       ├── read rows: 1
 │                       ├── read bytes: 8
 │                       ├── partitions total: 1
 │                       ├── partitions scanned: 1
-│                       └── push downs: [filters: [(number = 0)], limit: NONE]
+│                       └── push downs: [filters: [eq(number, 0_u64)], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.system.numbers
     ├── read rows: 1
@@ -124,21 +124,21 @@ query T
 explain select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
 ----
 Filter
-├── filters: [=(t.number (#0), scalar_subquery_1 (#1))]
+├── filters: [eq(t.number (#0), scalar_subquery_1 (#1))]
 └── HashJoin
     ├── join type: SINGLE
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
     ├── Filter(Build)
-    │   ├── filters: [=(numbers.number (#1), 0)]
+    │   ├── filters: [eq(numbers.number (#1), 0_u8)]
     │   └── TableScan
     │       ├── table: default.system.numbers
     │       ├── read rows: 1
     │       ├── read bytes: 8
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       └── push downs: [filters: [(number = 0)], limit: NONE]
+    │       └── push downs: [filters: [eq(number, 0_u64)], limit: NONE]
     └── TableScan(Probe)
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -225,23 +225,23 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── filters: []
 ├── Filter(Build)
-│   ├── filters: [=(numbers.number (#1), 0)]
+│   ├── filters: [eq(numbers.number (#1), 0_u8)]
 │   └── TableScan
 │       ├── table: default.system.numbers
 │       ├── read rows: 1
 │       ├── read bytes: 8
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [(number = 0)], limit: NONE]
+│       └── push downs: [filters: [eq(number, 0_u64)], limit: NONE]
 └── Filter(Probe)
-    ├── filters: [<(t.number (#0), 10)]
+    ├── filters: [lt(t.number (#0), 10_u8)]
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
         ├── partitions scanned: 1
-        └── push downs: [filters: [(number < 10)], limit: NONE]
+        └── push downs: [filters: [lt(number, 10_u64)], limit: NONE]
 
 query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number)
@@ -250,7 +250,7 @@ HashJoin
 ├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [t.number (#0)]
-├── filters: [<(t.number (#0), numbers.number (#1))]
+├── filters: [lt(t.number (#0), numbers.number (#1))]
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
 │   ├── read rows: 1
@@ -293,14 +293,14 @@ query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
 ----
 Filter
-├── filters: [CAST(if(is_not_null(scalar_subquery_3 (#3)), scalar_subquery_3 (#3), 0) AS BIGINT UNSIGNED)]
+├── filters: [CAST(if(is_not_null(scalar_subquery_3 (#3)), scalar_subquery_3 (#3), 0_i64) AS BIGINT UNSIGNED NULL)]
 └── HashJoin
     ├── join type: SINGLE
     ├── build keys: [subquery_2 (#2)]
     ├── probe keys: [subquery_0 (#0)]
     ├── filters: []
     ├── EvalScalar(Build)
-    │   ├── expressions: [=(COUNT(*) (#4), 1)]
+    │   ├── expressions: [eq(COUNT(*) (#4), 1_u8)]
     │   └── AggregateFinal
     │       ├── group by: [number]
     │       ├── aggregate functions: [count()]
@@ -308,14 +308,14 @@ Filter
     │           ├── group by: [number]
     │           ├── aggregate functions: [count()]
     │           └── Filter
-    │               ├── filters: [=(subquery_2 (#2), numbers.number (#2))]
+    │               ├── filters: [eq(subquery_2 (#2), numbers.number (#2))]
     │               └── TableScan
     │                   ├── table: default.system.numbers
     │                   ├── read rows: 1
     │                   ├── read bytes: 8
     │                   ├── partitions total: 1
     │                   ├── partitions scanned: 1
-    │                   └── push downs: [filters: [(number = number)], limit: NONE]
+    │                   └── push downs: [filters: [eq(subquery_2, number)], limit: NONE]
     └── HashJoin(Probe)
         ├── join type: INNER
         ├── build keys: [t1.number (#1)]
@@ -343,7 +343,7 @@ HashJoin
 ├── join type: LEFT ANTI
 ├── build keys: []
 ├── probe keys: []
-├── filters: [<(t.number (#0), t1.number (#2))]
+├── filters: [lt(t.number (#0), t1.number (#2))]
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
 │   ├── read rows: 1
@@ -355,7 +355,7 @@ HashJoin
     ├── join type: LEFT SEMI
     ├── build keys: []
     ├── probe keys: []
-    ├── filters: [>(t.number (#0), t1.number (#1))]
+    ├── filters: [gt(t.number (#0), t1.number (#1))]
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
     │   ├── read rows: 1

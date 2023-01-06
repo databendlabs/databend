@@ -30,6 +30,8 @@ chrono-tz = { workspace = true }
 crc32fast = "1.3.2"
 criterion = "0.4"
 ctor = "0.1.26"
+geo-types = "0.7.7"
+h3ron = "0.15.1"
 hex = "0.4.3"
 itertools = "0.10.5"
 match-template = "0.0.1"

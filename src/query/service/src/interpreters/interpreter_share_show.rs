@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataSchemaRef;
-use common_datavalues::prelude::Series;
-use common_datavalues::SeriesFrom;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::FromData;
 use common_meta_api::ShareApi;
 use common_meta_app::share::ShowSharesReq;
 use common_users::UserApiProvider;
@@ -61,44 +61,47 @@ impl Interpreter for ShowSharesInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let mut names: Vec<String> = vec![];
-        let mut kinds: Vec<String> = vec![];
-        let mut created_ons: Vec<String> = vec![];
-        let mut database_names: Vec<String> = vec![];
-        let mut from: Vec<String> = vec![];
-        let mut to: Vec<String> = vec![];
-        let mut comments: Vec<String> = vec![];
+        let mut names: Vec<Vec<u8>> = vec![];
+        let mut kinds: Vec<Vec<u8>> = vec![];
+        let mut created_ons: Vec<Vec<u8>> = vec![];
+        let mut database_names: Vec<Vec<u8>> = vec![];
+        let mut from: Vec<Vec<u8>> = vec![];
+        let mut to: Vec<Vec<u8>> = vec![];
+        let mut comments: Vec<Vec<u8>> = vec![];
         for entry in resp.inbound_accounts {
-            names.push(entry.share_name.share_name.clone());
-            kinds.push("INBOUND".to_string());
-            created_ons.push(entry.create_on.to_string());
-            database_names.push(entry.database_name.unwrap_or_default());
-            from.push(entry.share_name.tenant.clone());
-            to.push(tenant.clone());
-            comments.push(entry.comment.unwrap_or_default());
+            names.push(entry.share_name.share_name.clone().as_bytes().to_vec());
+            kinds.push("INBOUND".to_string().as_bytes().to_vec());
+            created_ons.push(entry.create_on.to_string().as_bytes().to_vec());
+            database_names.push(entry.database_name.unwrap_or_default().as_bytes().to_vec());
+            from.push(entry.share_name.tenant.clone().as_bytes().to_vec());
+            to.push(tenant.clone().as_bytes().to_vec());
+            comments.push(entry.comment.unwrap_or_default().as_bytes().to_vec());
         }
+
         for entry in resp.outbound_accounts {
-            names.push(entry.share_name.share_name.clone());
-            kinds.push("OUTBOUND".to_string());
-            created_ons.push(entry.create_on.to_string());
-            database_names.push(entry.database_name.unwrap_or_default());
-            from.push(entry.share_name.tenant.clone());
+            names.push(entry.share_name.share_name.clone().as_bytes().to_vec());
+            kinds.push("OUTBOUND".to_string().as_bytes().to_vec());
+            created_ons.push(entry.create_on.to_string().as_bytes().to_vec());
+            database_names.push(entry.database_name.unwrap_or_default().as_bytes().to_vec());
+            from.push(entry.share_name.tenant.clone().as_bytes().to_vec());
             to.push(
                 entry
                     .accounts
-                    .map_or("".to_string(), |accounts| accounts.join(",")),
+                    .map_or("".to_string().as_bytes().to_vec(), |accounts| {
+                        accounts.join(",").as_bytes().to_vec()
+                    }),
             );
-            comments.push(entry.comment.unwrap_or_default());
+            comments.push(entry.comment.unwrap_or_default().as_bytes().to_vec());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(created_ons),
-            Series::from_data(kinds),
-            Series::from_data(names),
-            Series::from_data(database_names),
-            Series::from_data(from),
-            Series::from_data(to),
-            Series::from_data(comments),
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(created_ons),
+            StringType::from_data(kinds),
+            StringType::from_data(names),
+            StringType::from_data(database_names),
+            StringType::from_data(from),
+            StringType::from_data(to),
+            StringType::from_data(comments),
         ])])
     }
 }

@@ -15,6 +15,7 @@
 use std::marker::PhantomData;
 
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::SegmentInfoVersion;
 use common_storages_table_meta::meta::SnapshotVersion;
@@ -27,16 +28,17 @@ use serde_json::from_slice;
 
 #[async_trait::async_trait]
 pub trait VersionedReader<T> {
-    async fn read<R>(&self, read: R) -> Result<T>
+    async fn read<R>(&self, read: R, _schema: Option<TableSchemaRef>) -> Result<T>
     where R: AsyncRead + Unpin + Send;
 }
 
 #[async_trait::async_trait]
 impl VersionedReader<TableSnapshot> for SnapshotVersion {
-    async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
+    async fn read<R>(&self, reader: R, _schema: Option<TableSchemaRef>) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V1(v) => load_by_version(reader, v).await?,
+            SnapshotVersion::V2(v) => load_by_version(reader, v).await?,
+            SnapshotVersion::V1(v) => load_by_version(reader, v).await?.into(),
             SnapshotVersion::V0(v) => load_by_version(reader, v).await?.into(),
         };
         Ok(r)
@@ -45,8 +47,14 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
 
 #[async_trait::async_trait]
 impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion {
-    async fn read<R>(&self, reader: R) -> Result<TableSnapshotStatistics>
-    where R: AsyncRead + Unpin + Send {
+    async fn read<R>(
+        &self,
+        reader: R,
+        _schema: Option<TableSchemaRef>,
+    ) -> Result<TableSnapshotStatistics>
+    where
+        R: AsyncRead + Unpin + Send,
+    {
         let r = match self {
             TableSnapshotStatisticsVersion::V0(v) => load_by_version(reader, v).await?,
         };
@@ -56,11 +64,20 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
 
 #[async_trait::async_trait]
 impl VersionedReader<SegmentInfo> for SegmentInfoVersion {
-    async fn read<R>(&self, reader: R) -> Result<SegmentInfo>
+    async fn read<R>(&self, reader: R, schema: Option<TableSchemaRef>) -> Result<SegmentInfo>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SegmentInfoVersion::V1(v) => load_by_version(reader, v).await?,
-            SegmentInfoVersion::V0(v) => load_by_version(reader, v).await?.into(),
+            SegmentInfoVersion::V2(v) => load_by_version(reader, v).await?,
+            SegmentInfoVersion::V1(v) => {
+                let data = load_by_version(reader, v).await?;
+                let fields = schema.unwrap().leaf_fields();
+                SegmentInfo::from_v1(data, &fields)
+            }
+            SegmentInfoVersion::V0(v) => {
+                let data = load_by_version(reader, v).await?;
+                let fields = schema.unwrap().leaf_fields();
+                SegmentInfo::from_v0(data, &fields)
+            }
         };
         Ok(r)
     }

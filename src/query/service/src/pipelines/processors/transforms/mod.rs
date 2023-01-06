@@ -13,19 +13,18 @@
 // limitations under the License.
 
 mod aggregator;
+pub mod group_by;
 pub(crate) mod hash_join;
-mod transform_addon;
 mod transform_aggregator;
 mod transform_cast_schema;
 mod transform_create_sets;
 mod transform_dummy;
 mod transform_hash_join;
+mod transform_left_join;
 mod transform_limit;
 mod transform_mark_join;
-
-pub mod group_by;
-mod transform_left_join;
 mod transform_merge_block;
+mod transform_resort_addon;
 mod transform_right_join;
 mod transform_right_semi_anti_join;
 
@@ -42,7 +41,6 @@ pub use hash_join::HashJoinState;
 pub use hash_join::HashTable;
 pub use hash_join::JoinHashTable;
 pub use hash_join::SerializerHashTable;
-pub use transform_addon::TransformAddOn;
 pub use transform_aggregator::TransformAggregator;
 pub use transform_block_compact::BlockCompactor;
 pub use transform_block_compact::TransformBlockCompact;
@@ -60,6 +58,7 @@ pub use transform_limit::TransformLimit;
 pub use transform_mark_join::MarkJoinCompactor;
 pub use transform_mark_join::TransformMarkJoin;
 pub use transform_merge_block::TransformMergeBlock;
+pub use transform_resort_addon::TransformResortAddOn;
 pub use transform_right_join::RightJoinCompactor;
 pub use transform_right_join::TransformRightJoin;
 pub use transform_right_semi_anti_join::RightSemiAntiJoinCompactor;

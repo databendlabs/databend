@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod grouping_check;
+mod lowering;
 mod name_resolution;
 mod type_check;
 

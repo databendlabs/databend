@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::assert_blocks_eq;
 use common_exception::Result;
+use common_expression::block_debug::assert_blocks_eq;
 use databend_query::servers::MySQLFederated;
 
 #[test]
@@ -34,7 +34,7 @@ fn test_mysql_federated() -> Result<()> {
         assert!(result.is_some());
 
         if let Some(block) = result {
-            assert!(!block.is_empty())
+            assert!(!block.1.is_empty())
         }
 
         let query = "select versiona";
@@ -48,13 +48,13 @@ fn test_mysql_federated() -> Result<()> {
         let result = federated.check(query);
         assert!(result.is_some());
 
-        if let Some(block) = result {
+        if let Some((_, block)) = result {
             let expect = vec![
-                "+-----------------+------------------------+",
-                "| @@tx_isolation  | @@session.tx_isolation |",
-                "+-----------------+------------------------+",
-                "| REPEATABLE-READ | REPEATABLE-READ        |",
-                "+-----------------+------------------------+",
+                "+-------------------+-------------------+",
+                "| Column 0          | Column 1          |",
+                "+-------------------+-------------------+",
+                "| \"REPEATABLE-READ\" | \"REPEATABLE-READ\" |",
+                "+-------------------+-------------------+",
             ];
 
             assert_blocks_eq(expect, &[block]);
@@ -67,13 +67,13 @@ fn test_mysql_federated() -> Result<()> {
         let result = federated.check(query);
         assert!(result.is_some());
 
-        if let Some(block) = result {
+        if let Some((_, block)) = result {
             let expect = vec![
-                "+--------------------------+----------------------+--------------------------+-----------------------+----------------------+------------------+----------------------+--------------+---------------------+---------+------------------------+--------------------+-------------------+--------------------+----------+------------------+-----------+-----------------------+---------------+",
-                "| auto_increment_increment | character_set_client | character_set_connection | character_set_results | character_set_server | collation_server | collation_connection | init_connect | interactive_timeout | license | lower_case_table_names | max_allowed_packet | net_write_timeout | performance_schema | sql_mode | system_time_zone | time_zone | transaction_isolation | wait_timeout; |",
-                "+--------------------------+----------------------+--------------------------+-----------------------+----------------------+------------------+----------------------+--------------+---------------------+---------+------------------------+--------------------+-------------------+--------------------+----------+------------------+-----------+-----------------------+---------------+",
-                "| 0                        | 0                    | 0                        | 0                     | 0                    | 0                | 0                    | 0            | 31536000            | 0       | 0                      | 134217728          | 31536000          | 0                  | 0        | UTC              | UTC       | REPEATABLE-READ       | 31536000      |",
-                "+--------------------------+----------------------+--------------------------+-----------------------+----------------------+------------------+----------------------+--------------+---------------------+---------+------------------------+--------------------+-------------------+--------------------+----------+------------------+-----------+-----------------------+---------------+",
+                "+----------+----------+----------+----------+----------+----------+----------+----------+------------+----------+-----------+-------------+------------+-----------+-----------+-----------+-----------+-------------------+------------+",
+                "| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5 | Column 6 | Column 7 | Column 8   | Column 9 | Column 10 | Column 11   | Column 12  | Column 13 | Column 14 | Column 15 | Column 16 | Column 17         | Column 18  |",
+                "+----------+----------+----------+----------+----------+----------+----------+----------+------------+----------+-----------+-------------+------------+-----------+-----------+-----------+-----------+-------------------+------------+",
+                "| \"0\"      | \"0\"      | \"0\"      | \"0\"      | \"0\"      | \"0\"      | \"0\"      | \"0\"      | \"31536000\" | \"0\"      | \"0\"       | \"134217728\" | \"31536000\" | \"0\"       | \"0\"       | \"UTC\"     | \"UTC\"     | \"REPEATABLE-READ\" | \"31536000\" |",
+                "+----------+----------+----------+----------+----------+----------+----------+----------+------------+----------+-----------+-------------+------------+-----------+-----------+-----------+-----------+-------------------+------------+",
             ];
 
             assert_blocks_eq(expect, &[block]);

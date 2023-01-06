@@ -16,9 +16,13 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -67,33 +71,33 @@ impl SyncSystemTable for SettingsTable {
             types.push(typename.to_string());
         }
 
-        let names: Vec<&[u8]> = names.iter().map(|x| x.as_bytes()).collect();
-        let values: Vec<&[u8]> = values.iter().map(|x| x.as_bytes()).collect();
-        let defaults: Vec<&[u8]> = defaults.iter().map(|x| x.as_bytes()).collect();
-        let levels: Vec<&[u8]> = levels.iter().map(|x| x.as_bytes()).collect();
-        let descs: Vec<&[u8]> = descs.iter().map(|x| x.as_bytes()).collect();
-        let types: Vec<&[u8]> = types.iter().map(|x| x.as_bytes()).collect();
+        let names: Vec<Vec<u8>> = names.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let values: Vec<Vec<u8>> = values.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let defaults: Vec<Vec<u8>> = defaults.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let levels: Vec<Vec<u8>> = levels.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let descs: Vec<Vec<u8>> = descs.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let types: Vec<Vec<u8>> = types.iter().map(|x| x.as_bytes().to_vec()).collect();
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(values),
-            Series::from_data(defaults),
-            Series::from_data(levels),
-            Series::from_data(descs),
-            Series::from_data(types),
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            StringType::from_data(values),
+            StringType::from_data(defaults),
+            StringType::from_data(levels),
+            StringType::from_data(descs),
+            StringType::from_data(types),
         ]))
     }
 }
 
 impl SettingsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("value", Vu8::to_data_type()),
-            DataField::new("default", Vu8::to_data_type()),
-            DataField::new("level", Vu8::to_data_type()),
-            DataField::new("description", Vu8::to_data_type()),
-            DataField::new("type", Vu8::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("name", TableDataType::String),
+            TableField::new("value", TableDataType::String),
+            TableField::new("default", TableDataType::String),
+            TableField::new("level", TableDataType::String),
+            TableField::new("description", TableDataType::String),
+            TableField::new("type", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

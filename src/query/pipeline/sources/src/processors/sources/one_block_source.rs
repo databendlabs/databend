@@ -15,8 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -39,7 +39,7 @@ impl OneBlockSource {
 #[async_trait::async_trait]
 impl Processor for OneBlockSource {
     fn name(&self) -> String {
-        "BlockSource".to_string()
+        "OncBlockSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

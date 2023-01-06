@@ -35,6 +35,89 @@ use common_expression::Value;
 use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_negative("is_null", "is_not_null");
+
+    // special case for multi_if to have better performance in fixed size loop
+    registry.register_function_factory("if", |_, args_type| {
+        if args_type.len() != 3 {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "if".to_string(),
+                args_type: vec![
+                    DataType::Nullable(Box::new(DataType::Boolean)),
+                    DataType::Generic(0),
+                    DataType::Generic(0),
+                ],
+                return_type: DataType::Generic(0),
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|args_domain| {
+                let (has_true, has_null_or_false) = match &args_domain[0] {
+                    Domain::Nullable(NullableDomain {
+                        has_null,
+                        value:
+                            Some(box Domain::Boolean(BooleanDomain {
+                                has_true,
+                                has_false,
+                            })),
+                    }) => (*has_true, *has_null || *has_false),
+                    Domain::Nullable(NullableDomain { value: None, .. }) => (false, true),
+                    _ => unreachable!(),
+                };
+
+                let domain = match (has_true, has_null_or_false) {
+                    (true, false) => {
+                        return FunctionDomain::Domain(args_domain[1].clone());
+                    }
+                    (false, true) => None,
+                    (true, true) => Some(args_domain[1].clone()),
+                    _ => unreachable!(),
+                };
+
+                FunctionDomain::Domain(match domain {
+                    Some(domain) => domain.merge(args_domain.last().unwrap()),
+                    None => args_domain.last().unwrap().clone(),
+                })
+            }),
+            eval: Box::new(|args, ctx| {
+                let len = args.iter().find_map(|arg| match arg {
+                    ValueRef::Column(col) => Some(col.len()),
+                    _ => None,
+                });
+
+                let mut output_builder =
+                    ColumnBuilder::with_capacity(&ctx.generics[0], len.unwrap_or(1));
+
+                for row_idx in 0..(len.unwrap_or(1)) {
+                    let flag = match &args[0] {
+                        ValueRef::Scalar(ScalarRef::Null) => false,
+                        ValueRef::Scalar(ScalarRef::Boolean(cond)) => *cond,
+                        ValueRef::Column(Column::Nullable(box NullableColumn {
+                            column: Column::Boolean(cond_col),
+                            validity,
+                        })) => validity.get_bit(row_idx) && cond_col.get_bit(row_idx),
+                        _ => unreachable!(),
+                    };
+                    let result_idx = if flag { 1 } else { 2 };
+                    match &args[result_idx] {
+                        ValueRef::Scalar(scalar) => {
+                            output_builder.push(scalar.clone());
+                        }
+                        ValueRef::Column(col) => {
+                            output_builder.push(col.index(row_idx).unwrap());
+                        }
+                    }
+                }
+                match len {
+                    Some(_) => Ok(Value::Column(output_builder.build())),
+                    None => Ok(Value::Scalar(output_builder.build_scalar())),
+                }
+            }),
+        }))
+    });
+
     registry.register_function_factory("multi_if", |_, args_type| {
         if args_type.len() < 3 || args_type.len() % 2 == 0 {
             return None;
@@ -147,6 +230,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         }))
     });
+
     registry.register_1_arg_core::<NullType, BooleanType, _, _>(
         "is_not_null",
         FunctionProperty::default(),

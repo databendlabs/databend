@@ -15,10 +15,15 @@ use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::StringType;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::FromData;
 use common_sql::MetadataRef;
 
 use crate::interpreters::Interpreter;
@@ -105,8 +110,8 @@ impl Interpreter for ExplainInterpreter {
             | ExplainKind::Syntax(display_string)
             | ExplainKind::Memo(display_string) => {
                 let line_splitted_result: Vec<&str> = display_string.lines().collect();
-                let column = Series::from_data(line_splitted_result);
-                vec![DataBlock::create(self.schema.clone(), vec![column])]
+                let column = StringType::from_data(line_splitted_result);
+                vec![DataBlock::new_from_columns(vec![column])]
             }
         };
 
@@ -116,7 +121,7 @@ impl Interpreter for ExplainInterpreter {
 
 impl ExplainInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
-        let data_field = DataField::new("explain", DataTypeImpl::String(StringType::default()));
+        let data_field = DataField::new("explain", DataType::String);
         let schema = DataSchemaRefExt::create(vec![data_field]);
         Ok(ExplainInterpreter {
             ctx,
@@ -129,10 +134,8 @@ impl ExplainInterpreter {
     pub fn explain_plan(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
         let result = plan.format_indent()?;
         let line_splitted_result: Vec<&str> = result.lines().collect();
-        let formatted_plan = Series::from_data(line_splitted_result);
-        Ok(vec![DataBlock::create(self.schema.clone(), vec![
-            formatted_plan,
-        ])])
+        let formatted_plan = StringType::from_data(line_splitted_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
     pub fn explain_physical_plan(
@@ -142,10 +145,8 @@ impl ExplainInterpreter {
     ) -> Result<Vec<DataBlock>> {
         let result = plan.format(metadata.clone())?;
         let line_splitted_result: Vec<&str> = result.lines().collect();
-        let formatted_plan = Series::from_data(line_splitted_result);
-        Ok(vec![DataBlock::create(self.schema.clone(), vec![
-            formatted_plan,
-        ])])
+        let formatted_plan = StringType::from_data(line_splitted_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
     pub async fn explain_pipeline(
@@ -158,26 +159,22 @@ impl ExplainInterpreter {
         let plan = builder.build(&s_expr).await?;
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
-        let mut blocks = vec![];
+        let mut blocks = Vec::with_capacity(1 + build_res.sources_pipelines.len());
         // Format root pipeline
-        blocks.push(DataBlock::create(self.schema.clone(), vec![
-            Series::from_data(
-                format!("{}", build_res.main_pipeline.display_indent())
-                    .lines()
-                    .map(|s| s.as_bytes())
-                    .collect::<Vec<_>>(),
-            ),
-        ]));
+        let line_splitted_result = format!("{}", build_res.main_pipeline.display_indent())
+            .lines()
+            .map(|s| s.as_bytes().to_vec())
+            .collect::<Vec<_>>();
+        let column = StringType::from_data(line_splitted_result);
+        blocks.push(DataBlock::new_from_columns(vec![column]));
         // Format child pipelines
         for pipeline in build_res.sources_pipelines.iter() {
-            blocks.push(DataBlock::create(self.schema.clone(), vec![
-                Series::from_data(
-                    format!("\n{}", pipeline.display_indent())
-                        .lines()
-                        .map(|s| s.as_bytes())
-                        .collect::<Vec<_>>(),
-                ),
-            ]));
+            let line_splitted_result = format!("\n{}", pipeline.display_indent())
+                .lines()
+                .map(|s| s.as_bytes().to_vec())
+                .collect::<Vec<_>>();
+            let column = StringType::from_data(line_splitted_result);
+            blocks.push(DataBlock::new_from_columns(vec![column]));
         }
         Ok(blocks)
     }
@@ -198,14 +195,11 @@ impl ExplainInterpreter {
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
         let display_string = fragments_actions.display_indent().to_string();
-        let formatted_fragments = Series::from_data(
-            display_string
-                .lines()
-                .map(|s| s.as_bytes())
-                .collect::<Vec<_>>(),
-        );
-        Ok(vec![DataBlock::create(self.schema.clone(), vec![
-            formatted_fragments,
-        ])])
+        let line_splitted_result = display_string
+            .lines()
+            .map(|s| s.as_bytes().to_vec())
+            .collect::<Vec<_>>();
+        let formatted_plan = StringType::from_data(line_splitted_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 }

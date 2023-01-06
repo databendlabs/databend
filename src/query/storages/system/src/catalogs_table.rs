@@ -17,14 +17,13 @@ use std::sync::Arc;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::Series;
-use common_datavalues::SeriesFrom;
-use common_datavalues::ToDataType;
-use common_datavalues::Vu8;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -47,17 +46,22 @@ impl AsyncSystemTable for CatalogsTable {
     async fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let cm = CatalogManager::instance();
 
-        let catalog_names: Vec<String> = cm.catalogs.iter().map(|x| x.key().clone()).collect();
+        let catalog_names: Vec<Vec<u8>> = cm
+            .catalogs
+            .iter()
+            .map(|x| x.key().as_bytes().to_vec())
+            .collect();
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(catalog_names),
-        ]))
+        Ok(DataBlock::new_from_columns(vec![StringType::from_data(
+            catalog_names,
+        )]))
     }
 }
 
 impl CatalogsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new("name", Vu8::to_data_type())]);
+        let schema =
+            TableSchemaRefExt::create(vec![TableField::new("name", TableDataType::String)]);
 
         let table_info = TableInfo {
             desc: "'system'.'catalogs'".to_string(),

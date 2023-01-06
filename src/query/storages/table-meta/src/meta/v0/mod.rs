@@ -15,6 +15,8 @@
 mod segment;
 mod snapshot;
 
+pub(crate) mod common;
+pub mod statistics;
 pub use segment::BlockMeta;
 pub use segment::ColumnMeta;
 pub use segment::SegmentInfo;

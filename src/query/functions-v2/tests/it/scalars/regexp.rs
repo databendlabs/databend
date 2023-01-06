@@ -14,10 +14,9 @@
 
 use std::io::Write;
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::Column;
-use common_expression::utils::ColumnFrom;
+use common_expression::types::number::Int64Type;
+use common_expression::types::StringType;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -25,7 +24,7 @@ use super::run_ast;
 #[test]
 fn test_string() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
-    let file = &mut mint.new_goldenfile("regexp.txt").unwrap();
+    let regexp_file = &mut mint.new_goldenfile("regexp.txt").unwrap();
 
     test_regexp_instr(regexp_file);
     test_regexp_like(regexp_file);
@@ -48,94 +47,50 @@ fn test_regexp_instr(file: &mut impl Write) {
     let two_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec!["dog cat dog", "aa aaa aaaa aa aaa aaaa", ""]),
+            StringType::from_data(vec!["dog cat dog", "aa aaa aaaa aa aaa aaaa", ""]),
         ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["dog", "a{2}", ""]),
-        ),
+        ("pat", StringType::from_data(vec!["dog", "a{2}", ""])),
     ];
     run_ast(file, "regexp_instr(source, pat)", two_columns);
 
     let three_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec!["dog cat dog", "aa aaa aaaa aa aaa aaaa", ""]),
+            StringType::from_data(vec!["dog cat dog", "aa aaa aaaa aa aaa aaaa", ""]),
         ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["dog", "a{2}", ""]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 1]),
-        ),
+        ("pat", StringType::from_data(vec!["dog", "a{2}", ""])),
+        ("pos", Int64Type::from_data(vec![1_i64, 2, 1])),
     ];
     run_ast(file, "regexp_instr(source, pat, pos)", three_columns);
 
     let four_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 "dog cat dog",
                 "aa aaa aaaa aa aaa aaaa",
                 "aa aa aa aaaa aaaa aaaa",
             ]),
         ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["dog", "a{2}", "a{4}"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 1, 9]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![2_i64, 3, 2]),
-        ),
+        ("pat", StringType::from_data(vec!["dog", "a{2}", "a{4}"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 1, 9])),
+        ("occur", Int64Type::from_data(vec![2_i64, 3, 2])),
     ];
     run_ast(file, "regexp_instr(source, pat, pos, occur)", four_columns);
 
     let five_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 "dog cat dog",
                 "aa aaa aaaa aa aaa aaaa",
                 "aa aa aa aaaa aaaa aaaa",
             ]),
         ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["dog", "a{2}", "a{4}"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 1]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![2_i64, 2, 2]),
-        ),
-        (
-            "ro",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 1, 1]),
-        ),
+        ("pat", StringType::from_data(vec!["dog", "a{2}", "a{4}"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 2, 1])),
+        ("occur", Int64Type::from_data(vec![2_i64, 2, 2])),
+        ("ro", Int64Type::from_data(vec![0_i64, 1, 1])),
     ];
     run_ast(
         file,
@@ -146,38 +101,17 @@ fn test_regexp_instr(file: &mut impl Write) {
     let six_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 "dog cat dog",
                 "aa aaa aaaa aa aaa aaaa",
                 "aa aa aa aaaa aaaa aaaa",
             ]),
         ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["dog", "A{2}", "A{4}"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 1]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![2_i64, 2, 2]),
-        ),
-        (
-            "ro",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 1, 1]),
-        ),
-        (
-            "mt",
-            DataType::String,
-            Column::from_data(vec!["i", "c", "i"]),
-        ),
+        ("pat", StringType::from_data(vec!["dog", "A{2}", "A{4}"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 2, 1])),
+        ("occur", Int64Type::from_data(vec![2_i64, 2, 2])),
+        ("ro", Int64Type::from_data(vec![0_i64, 1, 1])),
+        ("mt", StringType::from_data(vec!["i", "c", "i"])),
     ];
     run_ast(
         file,
@@ -188,8 +122,7 @@ fn test_regexp_instr(file: &mut impl Write) {
     let nullable_five_columns = &[
         (
             "source",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(
+            StringType::from_data_with_validity(
                 &[
                     "dog cat dog",
                     "aa aaa aaaa aa aaa aaaa",
@@ -201,26 +134,13 @@ fn test_regexp_instr(file: &mut impl Write) {
         ),
         (
             "pat",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["dog", "", "", "A{4}"], vec![
+            StringType::from_data_with_validity(&["dog", "", "", "A{4}"], vec![
                 true, false, false, true,
             ]),
         ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 1, 1]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![2_i64, 2, 2, 1]),
-        ),
-        (
-            "ro",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 1, 1, 1]),
-        ),
+        ("pos", Int64Type::from_data(vec![1_i64, 2, 1, 1])),
+        ("occur", Int64Type::from_data(vec![2_i64, 2, 2, 1])),
+        ("ro", Int64Type::from_data(vec![0_i64, 1, 1, 1])),
     ];
     run_ast(
         file,
@@ -231,8 +151,7 @@ fn test_regexp_instr(file: &mut impl Write) {
     let nullable_six_columns = &[
         (
             "source",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(
+            StringType::from_data_with_validity(
                 &[
                     "dog cat dog",
                     "aa aaa aaaa aa aaa aaaa",
@@ -244,31 +163,14 @@ fn test_regexp_instr(file: &mut impl Write) {
         ),
         (
             "pat",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["dog", "", "", "A{4}"], vec![
+            StringType::from_data_with_validity(&["dog", "", "", "A{4}"], vec![
                 true, false, false, true,
             ]),
         ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 1, 1]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![2_i64, 2, 2, 1]),
-        ),
-        (
-            "ro",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 1, 1, 1]),
-        ),
-        (
-            "mt",
-            DataType::String,
-            Column::from_data(vec!["i", "c", "i", "i"]),
-        ),
+        ("pos", Int64Type::from_data(vec![1_i64, 2, 1, 1])),
+        ("occur", Int64Type::from_data(vec![2_i64, 2, 2, 1])),
+        ("ro", Int64Type::from_data(vec![0_i64, 1, 1, 1])),
+        ("mt", StringType::from_data(vec!["i", "c", "i", "i"])),
     ];
     run_ast(
         file,
@@ -279,8 +181,7 @@ fn test_regexp_instr(file: &mut impl Write) {
     let multi_byte_five_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 "周 周周 周周周 周周周周",
                 "周 周周 周周周 周周周周",
                 "周 周周 周周周 周周周周",
@@ -289,24 +190,11 @@ fn test_regexp_instr(file: &mut impl Write) {
         ),
         (
             "pat",
-            DataType::String,
-            Column::from_data(vec!["周+", "周+", "周+", "周+"]),
+            StringType::from_data(vec!["周+", "周+", "周+", "周+"]),
         ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 3, 5]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![2_i64, 2, 3, 1]),
-        ),
-        (
-            "ro",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 1, 1, 1]),
-        ),
+        ("pos", Int64Type::from_data(vec![1_i64, 2, 3, 5])),
+        ("occur", Int64Type::from_data(vec![2_i64, 2, 3, 1])),
+        ("ro", Int64Type::from_data(vec![0_i64, 1, 1, 1])),
     ];
     run_ast(
         file,
@@ -315,27 +203,11 @@ fn test_regexp_instr(file: &mut impl Write) {
     );
 
     let pos_error_five_columns = &[
-        (
-            "source",
-            DataType::String,
-            Column::from_data(vec!["dog cat dog"]),
-        ),
-        ("pat", DataType::String, Column::from_data(vec!["dog"])),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64]),
-        ),
-        (
-            "ro",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64]),
-        ),
+        ("source", StringType::from_data(vec!["dog cat dog"])),
+        ("pat", StringType::from_data(vec!["dog"])),
+        ("pos", Int64Type::from_data(vec![0_i64])),
+        ("occur", Int64Type::from_data(vec![1_i64])),
+        ("ro", Int64Type::from_data(vec![0_i64])),
     ];
     run_ast(
         file,
@@ -346,33 +218,16 @@ fn test_regexp_instr(file: &mut impl Write) {
     let return_option_error_five_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 "dog cat dog",
                 "aa aaa aaaa aa aaa aaaa",
                 "aa aaa aaaa aa aaa aaaa",
             ]),
         ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["dog", "A{2}", "A{4}"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![2_i64, 2, 2]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 1]),
-        ),
-        (
-            "ro",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 2, 1]),
-        ),
+        ("pat", StringType::from_data(vec!["dog", "A{2}", "A{4}"])),
+        ("pos", Int64Type::from_data(vec![2_i64, 2, 2])),
+        ("occur", Int64Type::from_data(vec![1_i64, 2, 1])),
+        ("ro", Int64Type::from_data(vec![0_i64, 2, 1])),
     ];
     run_ast(
         file,
@@ -383,38 +238,17 @@ fn test_regexp_instr(file: &mut impl Write) {
     let match_type_error_six_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 "dog cat dog",
                 "aa aaa aaaa aa aaa aaaa",
                 "aa aaa aaaa aa aaa aaaa",
             ]),
         ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["dog", "A{2}", "A{4}"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 1]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![2_i64, 2, 1]),
-        ),
-        (
-            "ro",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 1, 1]),
-        ),
-        (
-            "mt",
-            DataType::String,
-            Column::from_data(vec!["i", "c", "-i"]),
-        ),
+        ("pat", StringType::from_data(vec!["dog", "A{2}", "A{4}"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 2, 1])),
+        ("occur", Int64Type::from_data(vec![2_i64, 2, 1])),
+        ("ro", Int64Type::from_data(vec![0_i64, 1, 1])),
+        ("mt", StringType::from_data(vec!["i", "c", "-i"])),
     ];
     run_ast(
         file,
@@ -434,13 +268,11 @@ fn test_regexp_like(file: &mut impl Write) {
     let two_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec!["abc", "abd", "Abe", "new*\n*line", "fo\nfo", ""]),
+            StringType::from_data(vec!["abc", "abd", "Abe", "new*\n*line", "fo\nfo", ""]),
         ),
         (
             "pat",
-            DataType::String,
-            Column::from_data(vec!["^a", "Ab", "abe", "new\\*.\\*line", "^fo$", ""]),
+            StringType::from_data(vec!["^a", "Ab", "abe", "new\\*.\\*line", "^fo$", ""]),
         ),
     ];
     run_ast(file, "regexp_like(source, pat)", two_columns);
@@ -448,18 +280,15 @@ fn test_regexp_like(file: &mut impl Write) {
     let three_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec!["abc", "abd", "Abe", "new*\n*line", "fo\nfo", ""]),
+            StringType::from_data(vec!["abc", "abd", "Abe", "new*\n*line", "fo\nfo", ""]),
         ),
         (
             "pat",
-            DataType::String,
-            Column::from_data(vec!["^a", "Ab", "abe", "new\\*.\\*line", "^fo$", ""]),
+            StringType::from_data(vec!["^a", "Ab", "abe", "new\\*.\\*line", "^fo$", ""]),
         ),
         (
             "mt",
-            DataType::String,
-            Column::from_data(vec!["", "c", "i", "n", "m", "c"]),
+            StringType::from_data(vec!["", "c", "i", "n", "m", "c"]),
         ),
     ];
     run_ast(file, "regexp_like(source, pat, mt)", three_columns);
@@ -467,44 +296,33 @@ fn test_regexp_like(file: &mut impl Write) {
     let nullable_three_columns = &[
         (
             "source",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["abc", "abc", "", "abc"], vec![
+            StringType::from_data_with_validity(&["abc", "abc", "", "abc"], vec![
                 true, true, false, true,
             ]),
         ),
         (
             "pat",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["abc", "", "", "abc"], vec![
+            StringType::from_data_with_validity(&["abc", "", "", "abc"], vec![
                 true, false, false, true,
             ]),
         ),
         (
             "mt",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["", "i", "i", ""], vec![true, true, true, false]),
+            StringType::from_data_with_validity(&["", "i", "i", ""], vec![true, true, true, false]),
         ),
     ];
     run_ast(file, "regexp_like(source, pat, mt)", nullable_three_columns);
 
     let pat_type_error_two_columns = &[
-        (
-            "source",
-            DataType::String,
-            Column::from_data(vec!["abc", "abd"]),
-        ),
-        (
-            "pat",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![2, 3]),
-        ),
+        ("source", StringType::from_data(vec!["abc", "abd"])),
+        ("pat", Int64Type::from_data(vec![2, 3])),
     ];
     run_ast(file, "regexp_like(source, pat)", pat_type_error_two_columns);
 
     let match_type_error_three_columns = &[
-        ("source", DataType::String, Column::from_data(vec!["abc"])),
-        ("pat", DataType::String, Column::from_data(vec!["abc"])),
-        ("mt", DataType::String, Column::from_data(vec!["x"])),
+        ("source", StringType::from_data(vec!["abc"])),
+        ("pat", StringType::from_data(vec!["abc"])),
+        ("mt", StringType::from_data(vec!["x"])),
     ];
     run_ast(
         file,
@@ -513,9 +331,9 @@ fn test_regexp_like(file: &mut impl Write) {
     );
 
     let match_type_error2_three_columns = &[
-        ("source", DataType::String, Column::from_data(vec!["abc"])),
-        ("pat", DataType::String, Column::from_data(vec!["abc"])),
-        ("mt", DataType::String, Column::from_data(vec!["u"])),
+        ("source", StringType::from_data(vec!["abc"])),
+        ("pat", StringType::from_data(vec!["abc"])),
+        ("mt", StringType::from_data(vec!["u"])),
     ];
     run_ast(
         file,
@@ -524,17 +342,9 @@ fn test_regexp_like(file: &mut impl Write) {
     );
 
     let match_type_join_error_three_columns = &[
-        (
-            "source",
-            DataType::String,
-            Column::from_data(vec!["Abc-", "Abc-"]),
-        ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["abc-", "abc"]),
-        ),
-        ("mt", DataType::String, Column::from_data(vec!["i", "-i"])),
+        ("source", StringType::from_data(vec!["Abc-", "Abc-"])),
+        ("pat", StringType::from_data(vec!["abc-", "abc"])),
+        ("mt", StringType::from_data(vec!["i", "-i"])),
     ];
     run_ast(
         file,
@@ -543,17 +353,9 @@ fn test_regexp_like(file: &mut impl Write) {
     );
 
     let match_type_join_error2_three_columns = &[
-        (
-            "source",
-            DataType::String,
-            Column::from_data(vec!["Abc--", "Abc--"]),
-        ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["abc--", "abc-"]),
-        ),
-        ("mt", DataType::String, Column::from_data(vec!["", "-"])),
+        ("source", StringType::from_data(vec!["Abc--", "Abc--"])),
+        ("pat", StringType::from_data(vec!["abc--", "abc-"])),
+        ("mt", StringType::from_data(vec!["", "-"])),
     ];
     run_ast(
         file,
@@ -576,27 +378,17 @@ fn test_regexp_replace(file: &mut impl Write) {
     let three_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec!["a b c", "a b c", "a b c", ""]),
+            StringType::from_data(vec!["a b c", "a b c", "a b c", ""]),
         ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["b", "x", "", "b"]),
-        ),
-        (
-            "repl",
-            DataType::String,
-            Column::from_data(vec!["X", "X", "X", "X"]),
-        ),
+        ("pat", StringType::from_data(vec!["b", "x", "", "b"])),
+        ("repl", StringType::from_data(vec!["X", "X", "X", "X"])),
     ];
     run_ast(file, "regexp_replace(source, pat, repl)", three_columns);
 
     let four_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 "abc def ghi",
                 "abc def ghi",
                 "abc def ghi",
@@ -605,27 +397,17 @@ fn test_regexp_replace(file: &mut impl Write) {
         ),
         (
             "pat",
-            DataType::String,
-            Column::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+", "[a-z]+"]),
+            StringType::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+", "[a-z]+"]),
         ),
-        (
-            "repl",
-            DataType::String,
-            Column::from_data(vec!["X", "X", "X", "X"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 4, 8, 12]),
-        ),
+        ("repl", StringType::from_data(vec!["X", "X", "X", "X"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 4, 8, 12])),
     ];
     run_ast(file, "regexp_replace(source, pat, repl, pos)", four_columns);
 
     let five_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 "abc def ghi",
                 "abc def ghi",
                 "abc def ghi",
@@ -634,24 +416,11 @@ fn test_regexp_replace(file: &mut impl Write) {
         ),
         (
             "pat",
-            DataType::String,
-            Column::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+", "[a-z]+"]),
+            StringType::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+", "[a-z]+"]),
         ),
-        (
-            "repl",
-            DataType::String,
-            Column::from_data(vec!["X", "X", "X", "X"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 1, 4, 4]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 1, 2, 3]),
-        ),
+        ("repl", StringType::from_data(vec!["X", "X", "X", "X"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 1, 4, 4])),
+        ("occur", Int64Type::from_data(vec![0_i64, 1, 2, 3])),
     ];
     run_ast(
         file,
@@ -662,34 +431,16 @@ fn test_regexp_replace(file: &mut impl Write) {
     let six_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec!["abc def ghi", "abc DEF ghi", "abc DEF ghi"]),
+            StringType::from_data(vec!["abc def ghi", "abc DEF ghi", "abc DEF ghi"]),
         ),
         (
             "pat",
-            DataType::String,
-            Column::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+"]),
+            StringType::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+"]),
         ),
-        (
-            "repl",
-            DataType::String,
-            Column::from_data(vec!["X", "X", "X"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 1, 4]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 2, 1]),
-        ),
-        (
-            "mt",
-            DataType::String,
-            Column::from_data(vec!["", "c", "i"]),
-        ),
+        ("repl", StringType::from_data(vec!["X", "X", "X"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 1, 4])),
+        ("occur", Int64Type::from_data(vec![0_i64, 2, 1])),
+        ("mt", StringType::from_data(vec!["", "c", "i"])),
     ];
     run_ast(
         file,
@@ -700,34 +451,20 @@ fn test_regexp_replace(file: &mut impl Write) {
     let nullable_five_columns = &[
         (
             "source",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(
+            StringType::from_data_with_validity(
                 &["abc def ghi", "abc DEF ghi", "", "abc DEF ghi"],
                 vec![true, true, false, true],
             ),
         ),
         (
             "pat",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["[a-z]+", "", "", "[a-z]+"], vec![
+            StringType::from_data_with_validity(&["[a-z]+", "", "", "[a-z]+"], vec![
                 true, false, false, true,
             ]),
         ),
-        (
-            "repl",
-            DataType::String,
-            Column::from_data(vec!["X", "X", "X", "X"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 1, 4, 4]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 2, 1, 1]),
-        ),
+        ("repl", StringType::from_data(vec!["X", "X", "X", "X"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 1, 4, 4])),
+        ("occur", Int64Type::from_data(vec![0_i64, 2, 1, 1])),
     ];
     run_ast(
         file,
@@ -738,39 +475,21 @@ fn test_regexp_replace(file: &mut impl Write) {
     let nullable_six_columns = &[
         (
             "source",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(
+            StringType::from_data_with_validity(
                 &["abc def ghi", "abc DEF ghi", "", "abc DEF ghi"],
                 vec![true, true, false, true],
             ),
         ),
         (
             "pat",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["[a-z]+", "", "", "[a-z]+"], vec![
+            StringType::from_data_with_validity(&["[a-z]+", "", "", "[a-z]+"], vec![
                 true, false, false, true,
             ]),
         ),
-        (
-            "repl",
-            DataType::String,
-            Column::from_data(vec!["X", "X", "X", "X"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 1, 4, 4]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 2, 1, 1]),
-        ),
-        (
-            "mt",
-            DataType::String,
-            Column::from_data(vec!["", "c", "i", "i"]),
-        ),
+        ("repl", StringType::from_data(vec!["X", "X", "X", "X"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 1, 4, 4])),
+        ("occur", Int64Type::from_data(vec![0_i64, 2, 1, 1])),
+        ("mt", StringType::from_data(vec!["", "c", "i", "i"])),
     ];
     run_ast(
         file,
@@ -781,8 +500,7 @@ fn test_regexp_replace(file: &mut impl Write) {
     let multi_byte_five_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 "周 周周 周周周 周周周周",
                 "周 周周 周周周 周周周周",
                 "周 周周 周周周 周周周周",
@@ -791,24 +509,11 @@ fn test_regexp_replace(file: &mut impl Write) {
         ),
         (
             "pat",
-            DataType::String,
-            Column::from_data(vec!["周+", "周+", "周+", "周+"]),
+            StringType::from_data(vec!["周+", "周+", "周+", "周+"]),
         ),
-        (
-            "repl",
-            DataType::String,
-            Column::from_data(vec!["唐", "唐", "唐", "唐"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 3, 5]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64, 1, 3, 1]),
-        ),
+        ("repl", StringType::from_data(vec!["唐", "唐", "唐", "唐"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 2, 3, 5])),
+        ("occur", Int64Type::from_data(vec![0_i64, 1, 3, 1])),
     ];
     run_ast(
         file,
@@ -817,14 +522,10 @@ fn test_regexp_replace(file: &mut impl Write) {
     );
 
     let position_error_four_columns = &[
-        ("source", DataType::String, Column::from_data(vec!["abc"])),
-        ("pat", DataType::String, Column::from_data(vec!["b"])),
-        ("repl", DataType::String, Column::from_data(vec!["X"])),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64]),
-        ),
+        ("source", StringType::from_data(vec!["abc"])),
+        ("pat", StringType::from_data(vec!["b"])),
+        ("repl", StringType::from_data(vec!["X"])),
+        ("pos", Int64Type::from_data(vec![0_i64])),
     ];
     run_ast(
         file,
@@ -833,19 +534,11 @@ fn test_regexp_replace(file: &mut impl Write) {
     );
 
     let occurrence_error_five_columns = &[
-        ("source", DataType::String, Column::from_data(vec!["a b c"])),
-        ("pat", DataType::String, Column::from_data(vec!["b"])),
-        ("repl", DataType::String, Column::from_data(vec!["X"])),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![-1_i64]),
-        ),
+        ("source", StringType::from_data(vec!["a b c"])),
+        ("pat", StringType::from_data(vec!["b"])),
+        ("repl", StringType::from_data(vec!["X"])),
+        ("pos", Int64Type::from_data(vec![1_i64])),
+        ("occur", Int64Type::from_data(vec![-1_i64])),
     ];
     run_ast(
         file,
@@ -854,20 +547,12 @@ fn test_regexp_replace(file: &mut impl Write) {
     );
 
     let match_type_error_six_columns = &[
-        ("source", DataType::String, Column::from_data(vec!["a b c"])),
-        ("pat", DataType::String, Column::from_data(vec!["b"])),
-        ("repl", DataType::String, Column::from_data(vec!["X"])),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64]),
-        ),
-        ("mt", DataType::String, Column::from_data(vec!["-c"])),
+        ("source", StringType::from_data(vec!["a b c"])),
+        ("pat", StringType::from_data(vec!["b"])),
+        ("repl", StringType::from_data(vec!["X"])),
+        ("pos", Int64Type::from_data(vec![1_i64])),
+        ("occur", Int64Type::from_data(vec![0_i64])),
+        ("mt", StringType::from_data(vec!["-c"])),
     ];
     run_ast(
         file,
@@ -887,86 +572,51 @@ fn test_regexp_substr(file: &mut impl Write) {
     let two_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec!["abc def ghi", "abc def ghi", ""]),
+            StringType::from_data(vec!["abc def ghi", "abc def ghi", ""]),
         ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["[a-z]+", "xxx", ""]),
-        ),
+        ("pat", StringType::from_data(vec!["[a-z]+", "xxx", ""])),
     ];
     run_ast(file, "regexp_substr(source, pat)", two_columns);
 
     let three_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec!["abc def ghi", "abc def ghi", "abc def ghi"]),
+            StringType::from_data(vec!["abc def ghi", "abc def ghi", "abc def ghi"]),
         ),
         (
             "pat",
-            DataType::String,
-            Column::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+"]),
+            StringType::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+"]),
         ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 4, 12]),
-        ),
+        ("pos", Int64Type::from_data(vec![1_i64, 4, 12])),
     ];
     run_ast(file, "regexp_substr(source, pat, pos)", three_columns);
 
     let four_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec!["abc def ghi", "abc def ghi", "abc def ghi"]),
+            StringType::from_data(vec!["abc def ghi", "abc def ghi", "abc def ghi"]),
         ),
         (
             "pat",
-            DataType::String,
-            Column::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+"]),
+            StringType::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+"]),
         ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 4, 12]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![3_i64, 2, 3]),
-        ),
+        ("pos", Int64Type::from_data(vec![1_i64, 4, 12])),
+        ("occur", Int64Type::from_data(vec![3_i64, 2, 3])),
     ];
     run_ast(file, "regexp_substr(source, pat, pos, occur)", four_columns);
 
     let five_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec!["ABC def ghi", "abc def GHI", "abc DEF ghi"]),
+            StringType::from_data(vec!["ABC def ghi", "abc def GHI", "abc DEF ghi"]),
         ),
         (
             "pat",
-            DataType::String,
-            Column::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+"]),
+            StringType::from_data(vec!["[a-z]+", "[a-z]+", "[a-z]+"]),
         ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 4, 12]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![3_i64, 2, 3]),
-        ),
-        (
-            "mt",
-            DataType::String,
-            Column::from_data(vec!["c", "i", "i"]),
-        ),
+        ("pos", Int64Type::from_data(vec![1_i64, 4, 12])),
+        ("occur", Int64Type::from_data(vec![3_i64, 2, 3])),
+        ("mt", StringType::from_data(vec!["c", "i", "i"])),
     ];
     run_ast(
         file,
@@ -977,34 +627,20 @@ fn test_regexp_substr(file: &mut impl Write) {
     let nullable_five_columns = &[
         (
             "source",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(
+            StringType::from_data_with_validity(
                 &["abc def ghi", "abc DEF ghi", "", "abc DEF ghi"],
                 vec![true, true, false, true],
             ),
         ),
         (
             "pat",
-            DataType::Nullable(Box::new(DataType::String)),
-            Column::from_data_with_validity(&["[a-z]+", "", "", "[a-z]+"], vec![
+            StringType::from_data_with_validity(&["[a-z]+", "", "", "[a-z]+"], vec![
                 true, false, false, true,
             ]),
         ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 1, 4, 4]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 1, 1]),
-        ),
-        (
-            "mt",
-            DataType::String,
-            Column::from_data(vec!["", "c", "i", "i"]),
-        ),
+        ("pos", Int64Type::from_data(vec![1_i64, 1, 4, 4])),
+        ("occur", Int64Type::from_data(vec![1_i64, 2, 1, 1])),
+        ("mt", StringType::from_data(vec!["", "c", "i", "i"])),
     ];
     run_ast(
         file,
@@ -1015,28 +651,15 @@ fn test_regexp_substr(file: &mut impl Write) {
     let multi_byte_four_columns = &[
         (
             "source",
-            DataType::String,
-            Column::from_data(vec![
+            StringType::from_data(vec![
                 "周 周周 周周周 周周周周",
                 "周 周周 周周周 周周周周",
                 "周 周周 周周周 周周周周",
             ]),
         ),
-        (
-            "pat",
-            DataType::String,
-            Column::from_data(vec!["周+", "周+", "周+"]),
-        ),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 14]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64, 2, 1]),
-        ),
+        ("pat", StringType::from_data(vec!["周+", "周+", "周+"])),
+        ("pos", Int64Type::from_data(vec![1_i64, 2, 14])),
+        ("occur", Int64Type::from_data(vec![1_i64, 2, 1])),
     ];
     run_ast(
         file,
@@ -1045,19 +668,11 @@ fn test_regexp_substr(file: &mut impl Write) {
     );
 
     let match_type_error_five_columns = &[
-        ("source", DataType::String, Column::from_data(vec!["a b c"])),
-        ("pat", DataType::String, Column::from_data(vec!["b"])),
-        (
-            "pos",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1_i64]),
-        ),
-        (
-            "occur",
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![0_i64]),
-        ),
-        ("mt", DataType::String, Column::from_data(vec!["-c"])),
+        ("source", StringType::from_data(vec!["a b c"])),
+        ("pat", StringType::from_data(vec!["b"])),
+        ("pos", Int64Type::from_data(vec![1_i64])),
+        ("occur", Int64Type::from_data(vec![0_i64])),
+        ("mt", StringType::from_data(vec!["-c"])),
     ];
     run_ast(
         file,

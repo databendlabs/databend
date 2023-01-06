@@ -26,11 +26,14 @@ use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::plan::Projection;
-use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_storages_table_meta::caches::LoadParams;
 use futures::AsyncReadExt;
 use opendal::Object;
 use opendal::Operator;
@@ -67,7 +70,7 @@ impl DataBlockDeserializer {
 
     fn next_block(
         &mut self,
-        schema: &DataSchemaRef,
+        schema: &DataSchema,
         filler: &Option<HivePartitionFiller>,
         part_info: &HivePartInfo,
     ) -> Result<Option<DataBlock>> {
@@ -84,7 +87,7 @@ impl DataBlockDeserializer {
                 self.drained = true;
             }
 
-            let block: DataBlock = DataBlock::from_chunk(schema, &chunk)?;
+            let block: DataBlock = DataBlock::from_arrow_chunk(&chunk, schema)?;
 
             return if let Some(filler) = filler {
                 let num_rows = self.deserializer.num_rows();
@@ -103,12 +106,12 @@ impl DataBlockDeserializer {
 impl HiveBlockReader {
     pub fn create(
         operator: Operator,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         projection: Projection,
         partition_keys: &Option<Vec<String>>,
         chunk_size: usize,
     ) -> Result<Arc<HiveBlockReader>> {
-        let projection = match projection {
+        let original_projection = match projection {
             Projection::Columns(projection) => projection,
             Projection::InnerColumns(b) => {
                 return Err(ErrorCode::Unimplemented(format!(
@@ -117,17 +120,25 @@ impl HiveBlockReader {
                 )));
             }
         };
-        let output_schema = DataSchemaRef::new(schema.project(&projection));
+        let output_schema =
+            DataSchemaRef::new(DataSchema::from(&schema.project(&original_projection)));
 
-        let (projection, partition_fields) =
-            filter_hive_partition_from_partition_keys(schema.clone(), projection, partition_keys);
+        let (projection, partition_fields) = filter_hive_partition_from_partition_keys(
+            schema.clone(),
+            original_projection,
+            partition_keys,
+        );
+
         let hive_partition_filler = if !partition_fields.is_empty() {
-            Some(HivePartitionFiller::create(partition_fields))
+            Some(HivePartitionFiller::create(
+                schema.clone(),
+                partition_fields,
+            ))
         } else {
             None
         };
 
-        let projected_schema = DataSchemaRef::new(schema.project(&projection));
+        let projected_schema = DataSchemaRef::new(DataSchema::from(&schema.project(&projection)));
         let arrow_schema = schema.to_arrow();
         Ok(Arc::new(HiveBlockReader {
             operator,
@@ -223,7 +234,15 @@ impl HiveBlockReader {
         filesize: u64,
     ) -> Result<Arc<FileMetaData>> {
         let reader = MetaDataReader::meta_data_reader(dal);
-        reader.read(filename, Some(filesize), 0).await
+
+        let load_params = LoadParams {
+            location: filename.to_owned(),
+            len_hint: Some(filesize),
+            ver: 0,
+            schema: None,
+        };
+
+        reader.read(&load_params).await
     }
 
     pub async fn read_columns_data(
@@ -312,10 +331,10 @@ impl HiveBlockReader {
 }
 
 pub fn filter_hive_partition_from_partition_keys(
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     projections: Vec<usize>,
     partition_keys: &Option<Vec<String>>,
-) -> (Vec<usize>, Vec<DataField>) {
+) -> (Vec<usize>, Vec<TableField>) {
     match partition_keys {
         Some(partition_keys) => {
             let mut not_partitions = vec![];

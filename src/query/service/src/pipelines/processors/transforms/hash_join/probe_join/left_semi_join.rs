@@ -17,11 +17,9 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_datablocks::DataBlock;
-use common_datavalues::BooleanColumn;
-use common_datavalues::Column;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -108,10 +106,7 @@ impl JoinHashTable {
                 _ => {}
             }
         }
-        Ok(vec![DataBlock::block_take_by_indices(
-            input,
-            &probe_indexes,
-        )?])
+        Ok(vec![DataBlock::take(input, &probe_indexes)?])
     }
 
     fn left_semi_anti_join_with_other_conjunct<
@@ -131,7 +126,7 @@ impl JoinHashTable {
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        // The semi join will return multiple data blocks of similar size
+        // The semi join will return multiple data chunks of similar size
         let mut probed_blocks = vec![];
         let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
@@ -188,7 +183,7 @@ impl JoinHashTable {
                         build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                         probe_indexes.extend(repeat(i as u32).take(addition));
 
-                        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
+                        let probe_block = DataBlock::take(input, &probe_indexes)?;
                         let build_block = self.row_space.gather(&build_indexes)?;
                         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
@@ -205,8 +200,8 @@ impl JoinHashTable {
                             self.fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
                         }
 
-                        let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-                        let probed_data_block = DataBlock::filter_block(probe_block, &predicate)?;
+                        let probed_data_block =
+                            DataBlock::filter_with_bitmap(probe_block, &bm.into())?;
 
                         if !probed_data_block.is_empty() {
                             probed_blocks.push(probed_data_block);
@@ -228,7 +223,7 @@ impl JoinHashTable {
             ));
         }
 
-        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
+        let probe_block = DataBlock::take(input, &probe_indexes)?;
         let build_block = self.row_space.gather(&build_indexes)?;
         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
@@ -245,11 +240,10 @@ impl JoinHashTable {
             self.fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
         }
 
-        let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-        let probed_data_block = DataBlock::filter_block(probe_block, &predicate)?;
+        let probed_data_chunk = DataBlock::filter_with_bitmap(probe_block, &bm.into())?;
 
-        if !probed_data_block.is_empty() {
-            probed_blocks.push(probed_data_block);
+        if !probed_data_chunk.is_empty() {
+            probed_blocks.push(probed_data_chunk);
         }
 
         Ok(probed_blocks)

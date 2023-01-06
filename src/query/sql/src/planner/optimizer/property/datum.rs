@@ -15,9 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
+use common_expression::Literal;
+use common_expression::Scalar;
 use ordered_float::OrderedFloat;
 
 pub type F64 = OrderedFloat<f64>;
@@ -33,13 +35,24 @@ pub enum Datum {
 }
 
 impl Datum {
-    pub fn from_data_value(data_value: &DataValue) -> Option<Self> {
+    pub fn from_data_value(data_value: &Scalar) -> Option<Self> {
         match data_value {
-            DataValue::Boolean(v) => Some(Datum::Bool(*v)),
-            DataValue::Int64(v) => Some(Datum::Int(*v)),
-            DataValue::UInt64(v) => Some(Datum::UInt(*v)),
-            DataValue::Float64(v) => Some(Datum::Float(F64::from(*v))),
-            DataValue::String(v) => Some(Datum::Bytes(v.clone())),
+            Scalar::Boolean(v) => Some(Datum::Bool(*v)),
+            Scalar::Number(NumberScalar::Int64(v)) => Some(Datum::Int(*v)),
+            Scalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(*v)),
+            Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(*v)),
+            Scalar::String(v) => Some(Datum::Bytes(v.clone())),
+            _ => None,
+        }
+    }
+
+    pub fn from_literal(data_value: &Literal) -> Option<Self> {
+        match data_value {
+            Literal::Boolean(v) => Some(Datum::Bool(*v)),
+            Literal::Int64(v) => Some(Datum::Int(*v)),
+            Literal::UInt64(v) => Some(Datum::UInt(*v)),
+            Literal::Float64(v) => Some(Datum::Float(*v)),
+            Literal::String(v) => Some(Datum::Bytes(v.clone())),
             _ => None,
         }
     }

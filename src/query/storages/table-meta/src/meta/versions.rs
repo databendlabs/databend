@@ -14,12 +14,13 @@
 
 use std::marker::PhantomData;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
+use common_expression::DataBlock;
 
+use super::v2;
 use crate::meta::v0;
 use crate::meta::v1;
-use crate::meta::v1::BlockFilter;
+use crate::meta::v2::BlockFilter;
 
 // Here versions of meta are tagged with numeric values
 //
@@ -42,18 +43,22 @@ where Self: Sized
 
 impl Versioned<0> for v0::SegmentInfo {}
 impl Versioned<1> for v1::SegmentInfo {}
+impl Versioned<2> for v2::SegmentInfo {}
 
 pub enum SegmentInfoVersion {
     V0(PhantomData<v0::SegmentInfo>),
     V1(PhantomData<v1::SegmentInfo>),
+    V2(PhantomData<v2::SegmentInfo>),
 }
 
 impl Versioned<0> for v0::TableSnapshot {}
 impl Versioned<1> for v1::TableSnapshot {}
+impl Versioned<2> for v2::TableSnapshot {}
 
 pub enum SnapshotVersion {
     V0(PhantomData<v0::TableSnapshot>),
     V1(PhantomData<v1::TableSnapshot>),
+    V2(PhantomData<v2::TableSnapshot>),
 }
 
 impl SnapshotVersion {
@@ -61,6 +66,7 @@ impl SnapshotVersion {
         match self {
             SnapshotVersion::V0(a) => Self::ver(a),
             SnapshotVersion::V1(a) => Self::ver(a),
+            SnapshotVersion::V2(a) => Self::ver(a),
         }
     }
 
@@ -87,12 +93,20 @@ impl TableSnapshotStatisticsVersion {
     }
 }
 
-impl Versioned<0> for DataBlock {}
+impl Versioned<2> for DataBlock {}
 
-impl Versioned<2> for BlockFilter {}
+pub struct V0Block {}
+pub struct V2Block {}
+
+impl Versioned<0> for V0Block {}
+impl Versioned<2> for V2Block {}
+
+impl Versioned<3> for BlockFilter {}
 
 pub enum BlockBloomFilterIndexVersion {
-    V2(PhantomData<v1::BlockFilter>),
+    V0(PhantomData<V0Block>),
+    V2(PhantomData<V2Block>),
+    V3(PhantomData<v2::BlockFilter>),
 }
 
 mod converters {
@@ -109,6 +123,7 @@ mod converters {
                     ver_eq::<_, 0>(PhantomData),
                 )),
                 1 => Ok(SegmentInfoVersion::V1(ver_eq::<_, 1>(PhantomData))),
+                2 => Ok(SegmentInfoVersion::V2(ver_eq::<_, 2>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
                     "unknown segment version {value}, versions supported: 0, 1"
                 ))),
@@ -122,6 +137,7 @@ mod converters {
             match value {
                 0 => Ok(SnapshotVersion::V0(ver_eq::<_, 0>(PhantomData))),
                 1 => Ok(SnapshotVersion::V1(ver_eq::<_, 1>(PhantomData))),
+                2 => Ok(SnapshotVersion::V2(ver_eq::<_, 2>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
                     "unknown snapshot segment version {value}, versions supported: 0, 1"
                 ))),
@@ -147,10 +163,10 @@ mod converters {
         type Error = ErrorCode;
         fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
-                1 => Err(ErrorCode::DeprecatedIndexFormat(
+                1 | 2 => Err(ErrorCode::DeprecatedIndexFormat(
                     "v1 bloom filter index is deprecated",
                 )),
-                2 => Ok(BlockBloomFilterIndexVersion::V2(ver_eq::<_, 2>(
+                3 => Ok(BlockBloomFilterIndexVersion::V3(ver_eq::<_, 3>(
                     PhantomData,
                 ))),
                 _ => Err(ErrorCode::Internal(format!(

@@ -34,11 +34,11 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::StageAttachment;
 use common_config::DATABEND_COMMIT_VERSION;
-use common_datablocks::DataBlock;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionContext;
+use common_expression::DataBlock;
+use common_expression::FunctionContext;
+use common_expression::Scalar;
 use common_io::prelude::FormatSettings;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::RoleInfo;
@@ -92,7 +92,7 @@ impl QueryContext {
         &self,
         catalog_name: &str,
         table_info: &TableInfo,
-        table_args: Option<Vec<DataValue>>,
+        table_args: Option<Vec<Scalar>>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog(catalog_name)?;
         if table_args.is_none() {
@@ -111,7 +111,7 @@ impl QueryContext {
         &self,
         _catalog: &str,
         table_info: &StageTableInfo,
-        _table_args: Option<Vec<DataValue>>,
+        _table_args: Option<Vec<Scalar>>,
     ) -> Result<Arc<dyn Table>> {
         StageTable::try_create(table_info.clone())
     }

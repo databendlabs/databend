@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_arrow::arrow::io::ipc::write::default_ipc_fields;
 use common_arrow::arrow::io::ipc::write::WriteOptions;
 use common_arrow::arrow::io::ipc::IpcField;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 

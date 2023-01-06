@@ -15,9 +15,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;

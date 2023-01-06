@@ -15,6 +15,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
+use common_base::base::Intersect;
 use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableDomain;
@@ -135,7 +136,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |domain, _| FunctionDomain::Domain(NullableDomain {
             has_null: true,
-            value: domain.value.clone(),
+            value: domain.as_ref().and_then(|domain| domain.value.clone()),
         }),
         vectorize_with_builder_2_arg::<ArrayType<NullableType<GenericType<0>>>, UInt64Type, NullableType<GenericType<0>>>(
             |arr, idx, output, _| {
@@ -157,7 +158,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |domain, _| FunctionDomain::Domain(NullableDomain {
             has_null: true,
-            value: Some(Box::new(domain.clone()))
+            value: domain.as_ref().map(|domain| Box::new(domain.clone()))
         }),
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, UInt64Type, NullableType<GenericType<0>>>(
             |arr, idx, output, _| {
@@ -323,10 +324,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                     "contains",
                     FunctionProperty::default(),
                     |lhs, rhs| {
+                        let has_true = match lhs {
+                            Some(lhs) => (lhs.min..=lhs.max).is_overlap(&(rhs.min..=rhs.max)),
+                            None => false,
+                        };
                         FunctionDomain::Domain(BooleanDomain {
                             has_false: true,
-                            has_true: (lhs.min..=lhs.max).contains(&rhs.min)
-                                || (lhs.min..=lhs.max).contains(&rhs.max),
+                            has_true,
                         })
                     },
                     |lhs, rhs, _| eval_contains::<NumberType<NUM_TYPE>>(lhs, rhs)
@@ -334,77 +338,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
     }
-
-    registry
-        .register_passthrough_nullable_2_arg::<ArrayType<DateType>, DateType, BooleanType, _, _>(
-            "contains",
-            FunctionProperty::default(),
-            |lhs, rhs| {
-                FunctionDomain::Domain(BooleanDomain {
-                    has_false: true,
-                    has_true: (lhs.min..=lhs.max).contains(&rhs.min)
-                        || (lhs.min..=lhs.max).contains(&rhs.max),
-                })
-            },
-            |lhs, rhs, _| eval_contains::<DateType>(lhs, rhs),
-        );
-
-    registry.register_passthrough_nullable_2_arg::<ArrayType<TimestampType>, TimestampType, BooleanType, _, _>(
-            "contains",
-            FunctionProperty::default(),
-            |lhs, rhs| {
-                FunctionDomain::Domain(BooleanDomain {
-                    has_false: true,
-                    has_true: (lhs.min..=lhs.max).contains(&rhs.min)
-                        || (lhs.min..=lhs.max).contains(&rhs.max),
-                })
-            },
-            |lhs, rhs, _| eval_contains::<TimestampType>(lhs, rhs)
-    );
-
-    registry.register_passthrough_nullable_2_arg::<ArrayType<BooleanType>, BooleanType, BooleanType, _, _>(
-        "contains",
-        FunctionProperty::default(),
-        |lhs, rhs| {
-            FunctionDomain::Domain(BooleanDomain {
-                has_false:  (lhs.has_false && rhs.has_true) || (lhs.has_true && rhs.has_false),
-                has_true:   (lhs.has_false && rhs.has_false) || (lhs.has_true && rhs.has_true),
-            })
-        },
-        |lhs, rhs, _| {
-            match lhs {
-                ValueRef::Scalar(array) => {
-                    let mut set = StackHashSet::<_, 128>::with_capacity(BooleanType::column_len(&array));
-                    for val in array.iter() {
-                        let _ = set.set_insert(val as u8);
-                    }
-                    match rhs {
-                        ValueRef::Scalar(val) =>  {
-                            Ok(Value::Scalar(set.contains( &(val as u8))))
-                        },
-                        ValueRef::Column(col) => {
-                            let result = BooleanType::column_from_iter(BooleanType::iter_column(&col).map(|val| {
-                                set.contains(&(val as u8))
-                            }), &[]);
-                            Ok(Value::Column(result))
-                        }
-                    }
-                },
-                ValueRef::Column(array_column) => {
-                    let result = match rhs {
-                        ValueRef::Scalar(c) =>  BooleanType::column_from_iter(array_column
-                            .iter()
-                            .map(|array| BooleanType::iter_column(&array).contains(&c)), &[]),
-                        ValueRef::Column(col) =>  BooleanType::column_from_iter(array_column
-                            .iter()
-                            .zip(BooleanType::iter_column(&col))
-                            .map(|(array, c)| BooleanType::iter_column(&array).contains(&c)), &[]),
-                    };
-                    Ok(Value::Column(result))
-                }
-            }
-        }
-    );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<StringType>, StringType, BooleanType, _, _>(
         "contains",
@@ -443,6 +376,91 @@ pub fn register(registry: &mut FunctionRegistry) {
                             .iter()
                             .zip(StringType::iter_column(&col))
                             .map(|(array, c)| StringType::iter_column(&array).contains(&c)), &[]),
+                    };
+                    Ok(Value::Column(result))
+                }
+            }
+        }
+    );
+
+    registry
+        .register_passthrough_nullable_2_arg::<ArrayType<DateType>, DateType, BooleanType, _, _>(
+            "contains",
+            FunctionProperty::default(),
+            |lhs, rhs| {
+                let has_true = match lhs {
+                    Some(lhs) => (lhs.min..=lhs.max).is_overlap(&(rhs.min..=rhs.max)),
+                    None => false,
+                };
+                FunctionDomain::Domain(BooleanDomain {
+                    has_false: true,
+                    has_true,
+                })
+            },
+            |lhs, rhs, _| eval_contains::<DateType>(lhs, rhs),
+        );
+
+    registry.register_passthrough_nullable_2_arg::<ArrayType<TimestampType>, TimestampType, BooleanType, _, _>(
+            "contains",
+            FunctionProperty::default(),
+            |lhs, rhs| {
+                let has_true = match lhs {
+                    Some(lhs) => (lhs.min..=lhs.max).is_overlap(&(rhs.min..=rhs.max)),
+                    None => false,
+                };
+                FunctionDomain::Domain(BooleanDomain {
+                    has_false: true,
+                    has_true,
+                })
+            },
+            |lhs, rhs, _| eval_contains::<TimestampType>(lhs, rhs)
+    );
+
+    registry.register_passthrough_nullable_2_arg::<ArrayType<BooleanType>, BooleanType, BooleanType, _, _>(
+        "contains",
+        FunctionProperty::default(),
+        |lhs, rhs| {
+            match lhs {
+                Some(lhs) => {
+                    FunctionDomain::Domain(BooleanDomain {
+                        has_false:  (lhs.has_false && rhs.has_true) || (lhs.has_true && rhs.has_false),
+                        has_true:   (lhs.has_false && rhs.has_false) || (lhs.has_true && rhs.has_true),
+                    })
+                },
+                None => FunctionDomain::Domain(BooleanDomain {
+                    has_false: false,
+                    has_true: false,
+                }),
+            }
+        },
+        |lhs, rhs, _| {
+            match lhs {
+                ValueRef::Scalar(array) => {
+                    let mut set = StackHashSet::<_, 128>::with_capacity(BooleanType::column_len(&array));
+                    for val in array.iter() {
+                        let _ = set.set_insert(val as u8);
+                    }
+                    match rhs {
+                        ValueRef::Scalar(val) =>  {
+                            Ok(Value::Scalar(set.contains( &(val as u8))))
+                        },
+                        ValueRef::Column(col) => {
+                            let result = BooleanType::column_from_iter(BooleanType::iter_column(&col).map(|val| {
+                                set.contains(&(val as u8))
+                            }), &[]);
+                            Ok(Value::Column(result))
+                        }
+                    }
+                },
+                ValueRef::Column(array_column) => {
+                    let result = match rhs {
+                        ValueRef::Scalar(c) =>  BooleanType::column_from_iter(array_column
+                            .iter()
+                            .map(|array| BooleanType::iter_column(&array).contains(&c)), &[]),
+                        ValueRef::Column(col) =>  BooleanType::column_from_iter(array_column
+                            .iter()
+                            .zip(BooleanType::iter_column(&col))
+                            .map(|(array, c)| BooleanType::iter_column(&array).contains(&c)), &[]),
                     };
                     Ok(Value::Column(result))
                 }

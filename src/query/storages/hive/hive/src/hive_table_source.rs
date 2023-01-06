@@ -22,17 +22,20 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::Column;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionContext;
+use common_expression::types::AnyType;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::FunctionContext;
+use common_expression::Value;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_sql::evaluator::EvalNode;
 use opendal::Operator;
 
 use crate::hive_parquet_block_reader::DataBlockDeserializer;
@@ -43,7 +46,7 @@ use crate::HivePartInfo;
 
 struct PreWhereData {
     data_blocks: Vec<DataBlock>,
-    valids: Vec<Arc<dyn Column>>,
+    valids: Vec<Value<AnyType>>,
 }
 
 enum State {
@@ -80,10 +83,14 @@ pub struct HiveTableSource {
     scan_progress: Arc<Progress>,
     prewhere_block_reader: Arc<HiveBlockReader>,
     remain_reader: Arc<Option<HiveBlockReader>>,
-    prewhere_filter: Arc<Option<EvalNode>>,
+    prewhere_filter: Arc<Option<Expr>>,
     output: Arc<OutputPort>,
     delay: usize,
     hive_block_filter: Arc<HiveBlockFilter>,
+
+    /// The schema before output. Some fields might be removed when outputing.
+    source_schema: DataSchemaRef,
+    /// The final output schema
     output_schema: DataSchemaRef,
 }
 
@@ -95,9 +102,10 @@ impl HiveTableSource {
         output: Arc<OutputPort>,
         prewhere_block_reader: Arc<HiveBlockReader>,
         remain_reader: Arc<Option<HiveBlockReader>>,
-        prewhere_filter: Arc<Option<EvalNode>>,
+        prewhere_filter: Arc<Option<Expr>>,
         delay: usize,
         hive_block_filter: Arc<HiveBlockFilter>,
+        source_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -112,6 +120,7 @@ impl HiveTableSource {
             scan_progress,
             state: State::ReadMeta(None),
             delay,
+            source_schema,
             output_schema,
         })))
     }
@@ -129,18 +138,20 @@ impl HiveTableSource {
 
     fn exec_prewhere_filter(
         &self,
-        filter: &EvalNode,
+        filter: &Expr,
         data_blocks: &Vec<DataBlock>,
-    ) -> Result<(bool, Vec<Arc<dyn Column>>)> {
+    ) -> Result<(bool, Vec<Value<AnyType>>)> {
         let mut valids = vec![];
         let mut exists = false;
         for datablock in data_blocks {
-            let res = filter.eval(&FunctionContext::default(), datablock)?.vector;
-            let filter = DataBlock::cast_to_nonull_boolean(&res).unwrap();
-            assert_eq!(datablock.num_rows(), filter.len());
-            valids.push(filter.clone());
+            let evaluator =
+                Evaluator::new(datablock, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+            let res = evaluator.run(filter).map_err(|(_, e)| {
+                ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
+            })?;
+            valids.push(res.clone());
             // shortcut, if predicates is const boolean (or can be cast to boolean)
-            match DataBlock::filter_exists(&filter)? {
+            match DataBlock::filter_exists(&res)? {
                 true => {
                     exists = true;
                 }
@@ -185,7 +196,7 @@ impl HiveTableSource {
                 let prewhere_datablocks = prewhere_datablocks
                     .into_iter()
                     .zip(valids.iter())
-                    .map(|(datablock, valid)| DataBlock::filter_block(datablock, valid).unwrap())
+                    .map(|(datablock, valid)| DataBlock::filter(datablock, valid).unwrap())
                     .filter(|x| !x.is_empty())
                     .collect();
 
@@ -217,6 +228,7 @@ impl HiveTableSource {
                 remain_reader.get_all_datablocks(rowgroup_deserializer, &hive_blocks.part)?;
             // 2. concat prewhere and remain datablock(may be none)
             assert_eq!(remain_datablocks.len(), prewhere_data.data_blocks.len());
+
             let allblocks = remain_datablocks
                 .iter()
                 .zip(prewhere_data.data_blocks.iter())
@@ -224,12 +236,12 @@ impl HiveTableSource {
                 .map(|((r, p), v)| {
                     // do merge block
                     assert_eq!(r.num_rows(), p.num_rows());
-                    let mut a = r.clone();
-                    for (column, field) in p.columns().iter().zip(p.schema().fields()) {
-                        a = a.add_column(column.clone(), field.clone()).unwrap();
+                    let mut a = p.clone();
+                    for column in r.columns().iter() {
+                        a.add_column(column.clone());
                     }
-                    let a = DataBlock::filter_block(a, v).unwrap();
-                    a.resort(self.output_schema.clone()).unwrap()
+                    let a = DataBlock::filter(a, v).unwrap();
+                    a.resort(&self.source_schema, &self.output_schema).unwrap()
                 })
                 .filter(|x| !x.is_empty())
                 .collect::<Vec<_>>();

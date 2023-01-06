@@ -16,12 +16,11 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::SendableDataBlockStream;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::SendableDataBlockStream;
 
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -66,11 +65,7 @@ pub trait Interpreter: Sync + Send {
             InterpreterMetrics::record_query_finished(&ctx, None);
             log_query_finished(&ctx, None);
 
-            return Ok(Box::pin(DataBlockStream::create(
-                self.schema(),
-                None,
-                vec![],
-            )));
+            return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
         let query_ctx = ctx.clone();
@@ -97,11 +92,7 @@ pub trait Interpreter: Sync + Send {
 
             ctx.set_executor(Arc::downgrade(&complete_executor.get_inner()));
             complete_executor.execute()?;
-            return Ok(Box::pin(DataBlockStream::create(
-                Arc::new(DataSchema::new(vec![])),
-                None,
-                vec![],
-            )));
+            return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;

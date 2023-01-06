@@ -12,81 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_arrow::arrow::bitmap::Bitmap;
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
-use common_datavalues::ConstColumn;
-use common_datavalues::DataField;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::NullableColumn;
-use common_datavalues::Series;
-use common_datavalues::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::AnyType;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::Value;
 
 use crate::hive_partition::HivePartInfo;
-use crate::hive_table::HIVE_DEFAULT_PARTITION;
+use crate::utils::str_field_to_scalar;
 
 #[derive(Debug, Clone)]
 pub struct HivePartitionFiller {
-    pub partition_fields: Vec<DataField>,
-}
-
-macro_rules! generate_primitive_column {
-    ($T:ty, $num_rows:expr, $value:expr) => {{
-        let column = Series::from_data(vec![$value.parse::<$T>().unwrap()]);
-        Ok(Arc::new(ConstColumn::new(column, $num_rows)))
-    }};
-}
-
-fn generate_string_column(num_rows: usize, value: String) -> Result<ColumnRef> {
-    let validity = if value == HIVE_DEFAULT_PARTITION {
-        Some(Bitmap::from(vec![false]))
-    } else {
-        None
-    };
-    let column = Series::from_data(vec![value]);
-
-    Ok(Arc::new(ConstColumn::new(
-        NullableColumn::wrap_inner(column, validity),
-        num_rows,
-    )))
+    pub partition_fields: Vec<TableField>,
 }
 
 impl HivePartitionFiller {
-    pub fn create(partition_fields: Vec<DataField>) -> Self {
+    pub fn create(_schema: TableSchemaRef, partition_fields: Vec<TableField>) -> Self {
         HivePartitionFiller { partition_fields }
     }
 
-    fn generate_column(
+    fn generate_value(
         &self,
-        num_rows: usize,
+        _num_rows: usize,
         value: String,
-        field: &DataField,
-    ) -> Result<ColumnRef> {
-        let t = match field.data_type() {
-            DataTypeImpl::Nullable(v) => v.inner_type(),
-            _ => field.data_type(),
-        };
-        match t {
-            DataTypeImpl::String(_) => generate_string_column(num_rows, value),
-            DataTypeImpl::Int8(_) => generate_primitive_column!(i8, num_rows, value),
-            DataTypeImpl::Int16(_) => generate_primitive_column!(i16, num_rows, value),
-            DataTypeImpl::Int32(_) => generate_primitive_column!(i32, num_rows, value),
-            DataTypeImpl::Int64(_) => generate_primitive_column!(i64, num_rows, value),
-            DataTypeImpl::UInt8(_) => generate_primitive_column!(u8, num_rows, value),
-            DataTypeImpl::UInt16(_) => generate_primitive_column!(u16, num_rows, value),
-            DataTypeImpl::UInt32(_) => generate_primitive_column!(u32, num_rows, value),
-            DataTypeImpl::UInt64(_) => generate_primitive_column!(u64, num_rows, value),
-            DataTypeImpl::Float32(_) => generate_primitive_column!(f32, num_rows, value),
-            DataTypeImpl::Float64(_) => generate_primitive_column!(f64, num_rows, value),
-            _ => Err(ErrorCode::Unimplemented(format!(
-                "generate column failed, {:?}",
-                field
-            ))),
-        }
+        field: &TableField,
+    ) -> Result<Value<AnyType>> {
+        let value = str_field_to_scalar(&value, &field.data_type().into())?;
+        Ok(Value::Scalar(value))
     }
 
     fn extract_partition_values(&self, hive_part: &HivePartInfo) -> Result<Vec<String>> {
@@ -110,7 +65,7 @@ impl HivePartitionFiller {
 
     pub fn fill_data(
         &self,
-        mut data_block: DataBlock,
+        data_block: DataBlock,
         part: &HivePartInfo,
         origin_num_rows: usize,
     ) -> Result<DataBlock> {
@@ -121,11 +76,18 @@ impl HivePartitionFiller {
         if num_rows == 0 {
             num_rows = origin_num_rows;
         }
+
+        let mut columns = data_block.columns().to_vec();
+
         for (i, field) in self.partition_fields.iter().enumerate() {
             let value = &data_values[i];
-            let column = self.generate_column(num_rows, value.clone(), field)?;
-            data_block = data_block.add_column(column, field.clone())?;
+            let column = self.generate_value(num_rows, value.clone(), field)?;
+            columns.push(BlockEntry {
+                data_type: field.data_type().into(),
+                value: column,
+            });
         }
-        Ok(data_block)
+
+        Ok(DataBlock::new(columns, num_rows))
     }
 }

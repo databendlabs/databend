@@ -14,10 +14,9 @@
 
 use std::io::Write;
 
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::utils::ColumnFrom;
+use common_expression::types::number::*;
 use common_expression::Column;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -28,35 +27,17 @@ fn test_arithmetic() {
     let file = &mut mint.new_goldenfile("arithmetic.txt").unwrap();
 
     let columns = &[
-        (
-            "a",
-            DataType::Number(NumberDataType::Int8),
-            Column::from_data(vec![1i8, 2, 3]),
-        ),
+        ("a", Int8Type::from_data(vec![1i8, 2, 3])),
         (
             "a2",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            Column::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
+            UInt8Type::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
         ),
-        (
-            "b",
-            DataType::Number(NumberDataType::Int16),
-            Column::from_data(vec![2i16, 4, 6]),
-        ),
-        (
-            "c",
-            DataType::Number(NumberDataType::UInt32),
-            Column::from_data(vec![10u32, 20, 30]),
-        ),
-        (
-            "d",
-            DataType::Number(NumberDataType::Float64),
-            Column::from_data(vec![10f64, -20f64, 30f64]),
-        ),
+        ("b", Int16Type::from_data(vec![2i16, 4, 6])),
+        ("c", UInt32Type::from_data(vec![10u32, 20, 30])),
+        ("d", Float64Type::from_data(vec![10f64, -20f64, 30f64])),
         (
             "d2",
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            Column::from_data_with_validity(vec![1u8, 0, 3], vec![true, false, true]),
+            UInt8Type::from_data_with_validity(vec![1u8, 0, 3], vec![true, false, true]),
         ),
     ];
     test_add(file, columns);
@@ -65,9 +46,10 @@ fn test_arithmetic() {
     test_div(file, columns);
     test_intdiv(file, columns);
     test_modulo(file, columns);
+    test_to_string(file, columns);
 }
 
-fn test_add(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+fn test_add(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a + b", columns);
     run_ast(file, "a2 + 10", columns);
     run_ast(file, "a2 + c", columns);
@@ -76,7 +58,7 @@ fn test_add(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "+d", columns);
 }
 
-fn test_minus(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+fn test_minus(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a - b", columns);
     run_ast(file, "a2 - 10", columns);
     run_ast(file, "a2 - c", columns);
@@ -85,7 +67,7 @@ fn test_minus(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "-c", columns);
 }
 
-fn test_mul(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+fn test_mul(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a  * b", columns);
     run_ast(file, "a2 * 10", columns);
     run_ast(file, "a2 * c", columns);
@@ -93,7 +75,7 @@ fn test_mul(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "c * d", columns);
 }
 
-fn test_div(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+fn test_div(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a / b", columns);
     run_ast(file, "a2 / 10", columns);
     run_ast(file, "a2 / c", columns);
@@ -103,7 +85,7 @@ fn test_div(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "2.0 / 0", columns);
 }
 
-fn test_intdiv(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+fn test_intdiv(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a  div b", columns);
     run_ast(file, "a2 div 10", columns);
     run_ast(file, "a2 div c", columns);
@@ -113,7 +95,7 @@ fn test_intdiv(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "c div 0", columns);
 }
 
-fn test_modulo(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
+fn test_modulo(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "(a + 3)  % b", columns);
     run_ast(file, "a2 % 4", columns);
     run_ast(file, "(a2 + 4) % c", columns);
@@ -121,4 +103,13 @@ fn test_modulo(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "c % (d - 3)", columns);
     run_ast(file, "c % 0", columns);
     run_ast(file, "c % d2", columns);
+}
+
+fn test_to_string(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "to_string(a)", columns);
+    run_ast(file, "to_string(a2)", columns);
+    run_ast(file, "to_string(b)", columns);
+    run_ast(file, "to_string(c)", columns);
+    run_ast(file, "to_string(d)", columns);
+    run_ast(file, "to_string(d2)", columns);
 }

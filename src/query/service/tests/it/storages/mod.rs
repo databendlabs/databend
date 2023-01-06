@@ -13,8 +13,6 @@
 // limitations under the License.
 
 mod fuse;
-mod index;
-mod memory;
 mod null;
 mod statistics;
 mod system;

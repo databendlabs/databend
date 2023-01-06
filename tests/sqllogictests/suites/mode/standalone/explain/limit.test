@@ -66,7 +66,7 @@ Limit
             ├── group by: [number]
             ├── aggregate functions: []
             └── Filter
-                ├── filters: [=(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED))]
+                ├── filters: [eq(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0_i64) AS BIGINT UNSIGNED NULL))]
                 └── HashJoin
                     ├── join type: SINGLE
                     ├── build keys: [subquery_2 (#2)]
@@ -86,14 +86,14 @@ Limit
                     │               ├── probe keys: []
                     │               ├── filters: []
                     │               ├── Filter(Build)
-                    │               │   ├── filters: [=(subquery_2 (#2), t2.number (#2))]
+                    │               │   ├── filters: [eq(subquery_2 (#2), t2.number (#2))]
                     │               │   └── TableScan
                     │               │       ├── table: default.system.numbers
                     │               │       ├── read rows: 1
                     │               │       ├── read bytes: 8
                     │               │       ├── partitions total: 1
                     │               │       ├── partitions scanned: 1
-                    │               │       └── push downs: [filters: [(number = number)], limit: NONE]
+                    │               │       └── push downs: [filters: [eq(subquery_2, number)], limit: NONE]
                     │               └── TableScan(Probe)
                     │                   ├── table: default.system.numbers
                     │                   ├── read rows: 1

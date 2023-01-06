@@ -17,9 +17,13 @@ use std::sync::Arc;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -45,22 +49,22 @@ impl AsyncSystemTable for EnginesTable {
         let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());
         let mut engine_comment = Vec::with_capacity(table_engine_descriptors.len());
         for descriptor in &table_engine_descriptors {
-            engine_name.push(descriptor.engine_name.clone());
-            engine_comment.push(descriptor.comment.clone());
+            engine_name.push(descriptor.engine_name.as_bytes().to_vec());
+            engine_comment.push(descriptor.comment.as_bytes().to_vec());
         }
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(engine_name),
-            Series::from_data(engine_comment),
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(engine_name),
+            StringType::from_data(engine_comment),
         ]))
     }
 }
 
 impl EnginesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Engine", Vu8::to_data_type()),
-            DataField::new("Comment", Vu8::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("Engine", TableDataType::String),
+            TableField::new("Comment", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

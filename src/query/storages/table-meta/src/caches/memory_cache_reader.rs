@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
 
+use super::cache::LoadParams;
 use crate::caches::cache_metrics::*;
 use crate::caches::LabeledItemCache;
 use crate::caches::Loader;
@@ -46,21 +47,16 @@ where L: Loader<T>
     }
 
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
-    pub async fn read(
-        &self,
-        path: impl AsRef<str>,
-        len_hint: Option<u64>,
-        version: u64,
-    ) -> Result<Arc<T>> {
+    pub async fn read(&self, params: &LoadParams) -> Result<Arc<T>> {
         match &self.cache {
-            None => self.load(path.as_ref(), len_hint, version).await,
+            None => self.load(params).await,
             Some(labeled_cache) => {
                 // Perf.
                 {
                     metrics_inc_memory_cache_access_count(1);
                 }
 
-                match self.get_by_cache(path.as_ref(), labeled_cache) {
+                match self.get_by_cache(params.location.as_ref(), labeled_cache) {
                     Some(item) => {
                         // Perf.
                         {
@@ -72,7 +68,7 @@ where L: Loader<T>
                     None => {
                         let start = Instant::now();
 
-                        let item = self.load(path.as_ref(), len_hint, version).await?;
+                        let item = self.load(params).await?;
 
                         // Perf.
                         {
@@ -83,7 +79,7 @@ where L: Loader<T>
                         }
 
                         let mut cache_guard = labeled_cache.write();
-                        cache_guard.put(path.as_ref().to_owned(), item.clone());
+                        cache_guard.put(params.location.clone(), item.clone());
                         Ok(item)
                     }
                 }
@@ -99,8 +95,8 @@ where L: Loader<T>
         cache.write().get(key).cloned()
     }
 
-    async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
-        let val = self.dal.load(loc, len_hint, version).await?;
+    async fn load(&self, params: &LoadParams) -> Result<Arc<T>> {
+        let val = self.dal.load(params).await?;
         let item = Arc::new(val);
         Ok(item)
     }
@@ -109,20 +105,18 @@ where L: Loader<T>
 /// Loader for parquet FileMetaData
 #[async_trait::async_trait]
 impl Loader<FileMetaData> for Operator {
-    async fn load(
-        &self,
-        key: &str,
-        length_hint: Option<u64>,
-        _version: u64,
-    ) -> Result<FileMetaData> {
-        let object = self.object(key);
-        let mut reader = if let Some(len) = length_hint {
+    async fn load(&self, params: &LoadParams) -> Result<FileMetaData> {
+        let object = self.object(&params.location);
+        let mut reader = if let Some(len) = params.len_hint {
             object.seekable_reader(..len)
         } else {
             object.seekable_reader(..)
         };
         read_metadata_async(&mut reader).await.map_err(|err| {
-            ErrorCode::Internal(format!("read file meta failed, {}, {:?}", key, err))
+            ErrorCode::Internal(format!(
+                "read file meta failed, {}, {:?}",
+                params.location, err
+            ))
         })
     }
 }

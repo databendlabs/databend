@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
+use common_expression::DataSchemaRef;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;

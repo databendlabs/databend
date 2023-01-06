@@ -14,11 +14,12 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::executor::PhysicalScalar;
+use common_expression::types::StringType;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::FromData;
 use common_sql::plans::DescribeTablePlan;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
@@ -68,45 +69,44 @@ impl Interpreter for DescribeTableInterpreter {
                 ));
             }
         } else {
-            table.schema()
+            Arc::new((&table.schema()).into())
         };
 
-        let mut names: Vec<String> = vec![];
-        let mut types: Vec<String> = vec![];
-        let mut nulls: Vec<String> = vec![];
-        let mut default_exprs: Vec<String> = vec![];
-        let mut extras: Vec<String> = vec![];
+        let mut names: Vec<Vec<u8>> = vec![];
+        let mut types: Vec<Vec<u8>> = vec![];
+        let mut nulls: Vec<Vec<u8>> = vec![];
+        let mut default_exprs: Vec<Vec<u8>> = vec![];
+        let mut extras: Vec<Vec<u8>> = vec![];
 
         for field in schema.fields().iter() {
-            names.push(field.name().to_string());
+            names.push(field.name().to_string().as_bytes().to_vec());
 
-            let non_null_type = remove_nullable(field.data_type());
-            types.push(format_data_type_sql(&non_null_type));
+            let non_null_type = field.data_type().remove_nullable();
+            types.push(non_null_type.sql_name().as_bytes().to_vec());
             nulls.push(if field.is_nullable() {
-                "YES".to_string()
+                "YES".to_string().as_bytes().to_vec()
             } else {
-                "NO".to_string()
+                "NO".to_string().as_bytes().to_vec()
             });
             match field.default_expr() {
                 Some(expr) => {
-                    let expression: PhysicalScalar = serde_json::from_str(expr)?;
-                    default_exprs.push(format!("{expression}"));
+                    default_exprs.push(expr.as_bytes().to_vec());
                 }
 
                 None => {
                     let value = field.data_type().default_value();
-                    default_exprs.push(value.to_string());
+                    default_exprs.push(value.to_string().as_bytes().to_vec());
                 }
             }
-            extras.push("".to_string());
+            extras.push("".to_string().as_bytes().to_vec());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(types),
-            Series::from_data(nulls),
-            Series::from_data(default_exprs),
-            Series::from_data(extras),
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            StringType::from_data(types),
+            StringType::from_data(nulls),
+            StringType::from_data(default_exprs),
+            StringType::from_data(extras),
         ])])
     }
 }

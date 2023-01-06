@@ -13,7 +13,11 @@
 // limitations under the License.
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -25,11 +29,11 @@ pub struct ListPlan {
 
 impl ListPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        let name = DataField::new("name", Vu8::to_data_type());
-        let size = DataField::new("size", u64::to_data_type());
-        let md5 = DataField::new_nullable("md5", Vu8::to_data_type());
-        let last_modified = DataField::new("last_modified", Vu8::to_data_type());
-        let creator = DataField::new_nullable("creator", Vu8::to_data_type());
+        let name = DataField::new("name", DataType::String);
+        let size = DataField::new("size", DataType::Number(NumberDataType::UInt64));
+        let md5 = DataField::new("md5", DataType::Nullable(Box::new(DataType::String)));
+        let last_modified = DataField::new("last_modified", DataType::String);
+        let creator = DataField::new("creator", DataType::Nullable(Box::new(DataType::String)));
 
         Arc::new(DataSchema::new(vec![
             name,

@@ -14,22 +14,22 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::Expression;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::Expr;
+use common_expression::TableSchemaRef;
 use common_storages_index::RangeFilter;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
 pub trait RangePruner {
     // returns ture, if target should NOT be pruned (false positive allowed)
-    fn should_keep(&self, input: &StatisticsOfColumns, row_count: u64) -> bool;
+    fn should_keep(&self, input: &StatisticsOfColumns) -> bool;
 }
 
 struct KeepTrue;
 
 impl RangePruner for KeepTrue {
-    fn should_keep(&self, _input: &StatisticsOfColumns, _row_count: u64) -> bool {
+    fn should_keep(&self, _input: &StatisticsOfColumns) -> bool {
         true
     }
 }
@@ -37,14 +37,14 @@ impl RangePruner for KeepTrue {
 struct KeepFalse;
 
 impl RangePruner for KeepFalse {
-    fn should_keep(&self, _input: &StatisticsOfColumns, _row_count: u64) -> bool {
+    fn should_keep(&self, _input: &StatisticsOfColumns) -> bool {
         false
     }
 }
 
 impl RangePruner for RangeFilter {
-    fn should_keep(&self, stats: &StatisticsOfColumns, row_count: u64) -> bool {
-        match self.eval(stats, row_count) {
+    fn should_keep(&self, stats: &StatisticsOfColumns) -> bool {
+        match self.eval(stats) {
             Ok(r) => r,
             Err(e) => {
                 // swallow exceptions intentionally, corrupted index should not prevent execution
@@ -63,8 +63,8 @@ impl RangePrunerCreator {
     /// Note: the schema should be the schema of the table, not the schema of the input.
     pub fn try_create<'a>(
         ctx: &Arc<dyn TableContext>,
-        filter_expr: Option<&'a [Expression]>,
-        schema: &'a DataSchemaRef,
+        filter_expr: Option<&'a [Expr<String>]>,
+        schema: &'a TableSchemaRef,
     ) -> Result<Arc<dyn RangePruner + Send + Sync>> {
         Ok(match filter_expr {
             Some(exprs) if !exprs.is_empty() => {
@@ -72,7 +72,7 @@ impl RangePrunerCreator {
                 match range_filter.try_eval_const() {
                     Ok(v) => {
                         if v {
-                            Arc::new(KeepTrue)
+                            Arc::new(range_filter)
                         } else {
                             Arc::new(KeepFalse)
                         }

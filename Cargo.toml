@@ -124,7 +124,9 @@ codegen-units = 1       # Reduce number of codegen units to increase optimizatio
 [profile.release.package]
 arrow2 = { codegen-units = 4 }
 common-functions = { codegen-units = 16 }
+common-functions-v2 = { codegen-units = 16 }
 databend-query = { codegen-units = 4 }
+databend-binaries = { codegen-units = 4 }
 
 [profile.bench]
 debug = true

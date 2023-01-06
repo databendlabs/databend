@@ -14,9 +14,17 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_catalog::table::Table;
 use common_exception::Result;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
+use common_expression::DataBlock;
+use common_expression::FromData;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
 use common_storages_table_meta::meta::Location;
 use futures_util::TryStreamExt;
 
@@ -65,7 +73,9 @@ impl<'a> FuseSegment<'a> {
             }
         }
 
-        Ok(DataBlock::empty_with_schema(Self::schema()))
+        Ok(DataBlock::empty_with_schema(Arc::new(
+            Self::schema().into(),
+        )))
     }
 
     async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
@@ -77,7 +87,11 @@ impl<'a> FuseSegment<'a> {
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut file_location: Vec<Vec<u8>> = Vec::with_capacity(len);
 
-        let segments_io = SegmentsIO::create(self.ctx.clone(), self.table.operator.clone());
+        let segments_io = SegmentsIO::create(
+            self.ctx.clone(),
+            self.table.operator.clone(),
+            self.table.schema(),
+        );
         let segments = segments_io.read_segments(segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone()?;
@@ -88,25 +102,33 @@ impl<'a> FuseSegment<'a> {
             uncompressed.push(segment.summary.uncompressed_byte_size);
             file_location.push(segment_locations[idx].0.clone().into_bytes());
         }
-
-        Ok(DataBlock::create(FuseSegment::schema(), vec![
-            Series::from_data(file_location),
-            Series::from_data(format_versions),
-            Series::from_data(block_count),
-            Series::from_data(row_count),
-            Series::from_data(uncompressed),
-            Series::from_data(compressed),
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(file_location),
+            UInt64Type::from_data(format_versions),
+            UInt64Type::from_data(block_count),
+            UInt64Type::from_data(row_count),
+            UInt64Type::from_data(uncompressed),
+            UInt64Type::from_data(compressed),
         ]))
     }
 
-    pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("file_location", Vu8::to_data_type()),
-            DataField::new("format_version", u64::to_data_type()),
-            DataField::new("block_count", u64::to_data_type()),
-            DataField::new("row_count", u64::to_data_type()),
-            DataField::new("bytes_uncompressed", u64::to_data_type()),
-            DataField::new("bytes_compressed", u64::to_data_type()),
+    pub fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("file_location", TableDataType::String),
+            TableField::new(
+                "format_version",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "bytes_uncompressed",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_compressed",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
         ])
     }
 }

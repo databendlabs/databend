@@ -35,8 +35,8 @@ output         : NULL
 
 
 ast            : ucase(a)
-raw expr       : ucase(ColumnRef(0)::String)
-checked expr   : upper<String>(ColumnRef(0))
+raw expr       : ucase(#0::String)
+checked expr   : upper<String>(#0)
 evaluation:
 +--------+-------------------+-------------+
 |        | a                 | Output      |
@@ -93,8 +93,8 @@ output         : NULL
 
 
 ast            : lcase(a)
-raw expr       : lcase(ColumnRef(0)::String)
-checked expr   : lower<String>(ColumnRef(0))
+raw expr       : lcase(#0::String)
+checked expr   : lower<String>(#0)
 evaluation:
 +--------+-------------------+----------------+
 |        | a                 | Output         |
@@ -120,7 +120,7 @@ checked expr   : bit_length<String>("latin")
 optimized expr : 40_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 40
+output         : 40_u64
 
 
 ast            : bit_length(NULL)
@@ -133,17 +133,17 @@ output         : NULL
 
 
 ast            : bit_length(a)
-raw expr       : bit_length(ColumnRef(0)::String)
-checked expr   : bit_length<String>(ColumnRef(0))
+raw expr       : bit_length(#0::String)
+checked expr   : bit_length<String>(#0)
 evaluation:
 +--------+-----------------------------------+----------------------------+
 |        | a                                 | Output                     |
 +--------+-----------------------------------+----------------------------+
 | Type   | String                            | UInt64                     |
 | Domain | {"latin"..="кириллица and latin"} | {0..=18446744073709551615} |
-| Row 0  | "latin"                           | 40                         |
-| Row 1  | "кириллица"                       | 144                        |
-| Row 2  | "кириллица and latin"             | 224                        |
+| Row 0  | "latin"                           | 40_u64                     |
+| Row 1  | "кириллица"                       | 144_u64                    |
+| Row 2  | "кириллица and latin"             | 224_u64                    |
 +--------+-----------------------------------+----------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -160,7 +160,7 @@ checked expr   : length<String>("latin")
 optimized expr : 5_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 5
+output         : 5_u64
 
 
 ast            : octet_length(NULL)
@@ -173,17 +173,17 @@ output         : NULL
 
 
 ast            : length(a)
-raw expr       : length(ColumnRef(0)::String)
-checked expr   : length<String>(ColumnRef(0))
+raw expr       : length(#0::String)
+checked expr   : length<String>(#0)
 evaluation:
 +--------+-----------------------------------+----------------------------+
 |        | a                                 | Output                     |
 +--------+-----------------------------------+----------------------------+
 | Type   | String                            | UInt64                     |
 | Domain | {"latin"..="кириллица and latin"} | {0..=18446744073709551615} |
-| Row 0  | "latin"                           | 5                          |
-| Row 1  | "кириллица"                       | 18                         |
-| Row 2  | "кириллица and latin"             | 28                         |
+| Row 0  | "latin"                           | 5_u64                      |
+| Row 1  | "кириллица"                       | 18_u64                     |
+| Row 2  | "кириллица and latin"             | 28_u64                     |
 +--------+-----------------------------------+----------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -200,7 +200,7 @@ checked expr   : char_length<String>("latin")
 optimized expr : 5_u64
 output type    : UInt64
 output domain  : Unknown
-output         : 5
+output         : 5_u64
 
 
 ast            : char_length(NULL)
@@ -213,17 +213,17 @@ output         : NULL
 
 
 ast            : character_length(a)
-raw expr       : character_length(ColumnRef(0)::String)
-checked expr   : char_length<String>(ColumnRef(0))
+raw expr       : character_length(#0::String)
+checked expr   : char_length<String>(#0)
 evaluation:
 +--------+-----------------------------------+---------+
 |        | a                                 | Output  |
 +--------+-----------------------------------+---------+
 | Type   | String                            | UInt64  |
 | Domain | {"latin"..="кириллица and latin"} | Unknown |
-| Row 0  | "latin"                           | 5       |
-| Row 1  | "кириллица"                       | 9       |
-| Row 2  | "кириллица and latin"             | 19      |
+| Row 0  | "latin"                           | 5_u64   |
+| Row 1  | "кириллица"                       | 9_u64   |
+| Row 2  | "кириллица and latin"             | 19_u64  |
 +--------+-----------------------------------+---------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -262,8 +262,8 @@ output         : NULL
 
 
 ast            : to_base64(a)
-raw expr       : to_base64(ColumnRef(0)::String)
-checked expr   : to_base64<String>(ColumnRef(0))
+raw expr       : to_base64(#0::String)
+checked expr   : to_base64<String>(#0)
 evaluation:
 +--------+-----------------+--------+
 |        | a               | Output |
@@ -310,8 +310,8 @@ output         : NULL
 
 
 ast            : from_base64(a)
-raw expr       : from_base64(ColumnRef(0)::String)
-checked expr   : from_base64<String>(ColumnRef(0))
+raw expr       : from_base64(#0::String)
+checked expr   : from_base64<String>(#0)
 evaluation:
 +--------+-------------------+---------+
 |        | a                 | Output  |
@@ -447,8 +447,8 @@ output         : NULL
 
 
 ast            : quote(a)
-raw expr       : quote(ColumnRef(0)::String)
-checked expr   : quote<String>(ColumnRef(0))
+raw expr       : quote(#0::String)
+checked expr   : quote<String>(#0)
 evaluation:
 +--------+---------------------+-------------+
 |        | a                   | Output      |
@@ -532,8 +532,8 @@ output         : NULL
 
 
 ast            : reverse(a)
-raw expr       : reverse(ColumnRef(0)::String)
-checked expr   : reverse<String>(ColumnRef(0))
+raw expr       : reverse(#0::String)
+checked expr   : reverse<String>(#0)
 evaluation:
 +--------+--------------+--------+
 |        | a            | Output |
@@ -559,7 +559,7 @@ checked expr   : ascii<String>("1")
 optimized expr : 49_u8
 output type    : UInt8
 output domain  : {49..=49}
-output         : 49
+output         : 49_u8
 
 
 ast            : ascii('123')
@@ -568,7 +568,7 @@ checked expr   : ascii<String>("123")
 optimized expr : 49_u8
 output type    : UInt8
 output domain  : {49..=49}
-output         : 49
+output         : 49_u8
 
 
 ast            : ascii('-1')
@@ -577,7 +577,7 @@ checked expr   : ascii<String>("-1")
 optimized expr : 45_u8
 output type    : UInt8
 output domain  : {45..=45}
-output         : 45
+output         : 45_u8
 
 
 ast            : ascii('')
@@ -586,7 +586,7 @@ checked expr   : ascii<String>("")
 optimized expr : 0_u8
 output type    : UInt8
 output domain  : {0..=0}
-output         : 0
+output         : 0_u8
 
 
 ast            : ascii('你好')
@@ -595,7 +595,7 @@ checked expr   : ascii<String>("你好")
 optimized expr : 228_u8
 output type    : UInt8
 output domain  : {228..=228}
-output         : 228
+output         : 228_u8
 
 
 ast            : ascii('😀123')
@@ -604,7 +604,7 @@ checked expr   : ascii<String>("😀123")
 optimized expr : 240_u8
 output type    : UInt8
 output domain  : {240..=240}
-output         : 240
+output         : 240_u8
 
 
 ast            : ascii(Null)
@@ -617,18 +617,18 @@ output         : NULL
 
 
 ast            : ascii(a)
-raw expr       : ascii(ColumnRef(0)::String)
-checked expr   : ascii<String>(ColumnRef(0))
+raw expr       : ascii(#0::String)
+checked expr   : ascii<String>(#0)
 evaluation:
 +--------+-----------------+------------+
 |        | a               | Output     |
 +--------+-----------------+------------+
 | Type   | String          | UInt8      |
 | Domain | {"-1"..="你好"} | {45..=228} |
-| Row 0  | "1"             | 49         |
-| Row 1  | "123"           | 49         |
-| Row 2  | "-1"            | 45         |
-| Row 3  | "你好"          | 228        |
+| Row 0  | "1"             | 49_u8      |
+| Row 1  | "123"           | 49_u8      |
+| Row 2  | "-1"            | 45_u8      |
+| Row 3  | "你好"          | 228_u8     |
 +--------+-----------------+------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------+
@@ -640,8 +640,8 @@ evaluation (internal):
 
 
 ast            : ascii(b)
-raw expr       : ascii(ColumnRef(0)::String)
-checked expr   : ascii<String>(ColumnRef(0))
+raw expr       : ascii(#0::String)
+checked expr   : ascii<String>(#0)
 optimized expr : 0_u8
 evaluation:
 +--------+-----------+---------+
@@ -649,7 +649,7 @@ evaluation:
 +--------+-----------+---------+
 | Type   | String    | UInt8   |
 | Domain | {""..=""} | {0..=0} |
-| Row 0  | ""        | 0       |
+| Row 0  | ""        | 0_u8    |
 +--------+-----------+---------+
 evaluation (internal):
 +--------+--------------------------------------------+
@@ -688,8 +688,8 @@ output         : NULL
 
 
 ast            : ltrim(a)
-raw expr       : ltrim(ColumnRef(0)::String)
-checked expr   : ltrim<String>(ColumnRef(0))
+raw expr       : ltrim(#0::String)
+checked expr   : ltrim<String>(#0)
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -738,8 +738,8 @@ output         : NULL
 
 
 ast            : rtrim(a)
-raw expr       : rtrim(ColumnRef(0)::String)
-checked expr   : rtrim<String>(ColumnRef(0))
+raw expr       : rtrim(#0::String)
+checked expr   : rtrim<String>(#0)
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -815,8 +815,8 @@ output         : NULL
 
 
 ast            : trim_leading(a, 'a')
-raw expr       : trim_leading(ColumnRef(0)::String, "a")
-checked expr   : trim_leading<String, String>(ColumnRef(0), "a")
+raw expr       : trim_leading(#0::String, "a")
+checked expr   : trim_leading<String, String>(#0, "a")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -837,8 +837,8 @@ evaluation (internal):
 
 
 ast            : trim_leading(a, b)
-raw expr       : trim_leading(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : trim_leading<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : trim_leading(#0::String, #1::String)
+checked expr   : trim_leading<String, String>(#0, #1)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -860,8 +860,8 @@ evaluation (internal):
 
 
 ast            : trim_leading('aba', b)
-raw expr       : trim_leading("aba", ColumnRef(1)::String)
-checked expr   : trim_leading<String, String>("aba", ColumnRef(1))
+raw expr       : trim_leading("aba", #1::String)
+checked expr   : trim_leading<String, String>("aba", #1)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -936,8 +936,8 @@ output         : NULL
 
 
 ast            : trim_trailing(a, 'b')
-raw expr       : trim_trailing(ColumnRef(0)::String, "b")
-checked expr   : trim_trailing<String, String>(ColumnRef(0), "b")
+raw expr       : trim_trailing(#0::String, "b")
+checked expr   : trim_trailing<String, String>(#0, "b")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -958,8 +958,8 @@ evaluation (internal):
 
 
 ast            : trim_trailing(a, b)
-raw expr       : trim_trailing(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : trim_trailing<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : trim_trailing(#0::String, #1::String)
+checked expr   : trim_trailing<String, String>(#0, #1)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -981,8 +981,8 @@ evaluation (internal):
 
 
 ast            : trim_trailing('aba', b)
-raw expr       : trim_trailing("aba", ColumnRef(1)::String)
-checked expr   : trim_trailing<String, String>("aba", ColumnRef(1))
+raw expr       : trim_trailing("aba", #1::String)
+checked expr   : trim_trailing<String, String>("aba", #1)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -1057,8 +1057,8 @@ output         : NULL
 
 
 ast            : trim_both(a, 'a')
-raw expr       : trim_both(ColumnRef(0)::String, "a")
-checked expr   : trim_both<String, String>(ColumnRef(0), "a")
+raw expr       : trim_both(#0::String, "a")
+checked expr   : trim_both<String, String>(#0, "a")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -1079,8 +1079,8 @@ evaluation (internal):
 
 
 ast            : trim_both(a, b)
-raw expr       : trim_both(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : trim_both<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : trim_both(#0::String, #1::String)
+checked expr   : trim_both<String, String>(#0, #1)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1102,8 +1102,8 @@ evaluation (internal):
 
 
 ast            : trim_both('aba', b)
-raw expr       : trim_both("aba", ColumnRef(1)::String)
-checked expr   : trim_both<String, String>("aba", ColumnRef(1))
+raw expr       : trim_both("aba", #1::String)
+checked expr   : trim_both<String, String>("aba", #1)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -1151,8 +1151,8 @@ output         : NULL
 
 
 ast            : trim(a)
-raw expr       : trim(ColumnRef(0)::String)
-checked expr   : trim<String>(ColumnRef(0))
+raw expr       : trim(#0::String)
+checked expr   : trim<String>(#0)
 evaluation:
 +--------+-----------------------+--------+
 |        | a                     | Output |
@@ -1228,8 +1228,8 @@ output         : NULL
 
 
 ast            : trim(both 'a' from a)
-raw expr       : trim_both(ColumnRef(0)::String, "a")
-checked expr   : trim_both<String, String>(ColumnRef(0), "a")
+raw expr       : trim_both(#0::String, "a")
+checked expr   : trim_both<String, String>(#0, "a")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -1250,8 +1250,8 @@ evaluation (internal):
 
 
 ast            : trim(both b from a)
-raw expr       : trim_both(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : trim_both<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : trim_both(#0::String, #1::String)
+checked expr   : trim_both<String, String>(#0, #1)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1273,8 +1273,8 @@ evaluation (internal):
 
 
 ast            : trim(both a from a)
-raw expr       : trim_both(ColumnRef(0)::String, ColumnRef(0)::String)
-checked expr   : trim_both<String, String>(ColumnRef(0), ColumnRef(0))
+raw expr       : trim_both(#0::String, #0::String)
+checked expr   : trim_both<String, String>(#0, #0)
 evaluation:
 +--------+-----------------------+--------+
 |        | a                     | Output |
@@ -1295,8 +1295,8 @@ evaluation (internal):
 
 
 ast            : trim(both b from 'aba')
-raw expr       : trim_both("aba", ColumnRef(1)::String)
-checked expr   : trim_both<String, String>("aba", ColumnRef(1))
+raw expr       : trim_both("aba", #1::String)
+checked expr   : trim_both<String, String>("aba", #1)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -1371,8 +1371,8 @@ output         : NULL
 
 
 ast            : trim(leading 'a' from a)
-raw expr       : trim_leading(ColumnRef(0)::String, "a")
-checked expr   : trim_leading<String, String>(ColumnRef(0), "a")
+raw expr       : trim_leading(#0::String, "a")
+checked expr   : trim_leading<String, String>(#0, "a")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -1393,8 +1393,8 @@ evaluation (internal):
 
 
 ast            : trim(leading b from a)
-raw expr       : trim_leading(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : trim_leading<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : trim_leading(#0::String, #1::String)
+checked expr   : trim_leading<String, String>(#0, #1)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1416,8 +1416,8 @@ evaluation (internal):
 
 
 ast            : trim(leading a from a)
-raw expr       : trim_leading(ColumnRef(0)::String, ColumnRef(0)::String)
-checked expr   : trim_leading<String, String>(ColumnRef(0), ColumnRef(0))
+raw expr       : trim_leading(#0::String, #0::String)
+checked expr   : trim_leading<String, String>(#0, #0)
 evaluation:
 +--------+-----------------------+--------+
 |        | a                     | Output |
@@ -1438,8 +1438,8 @@ evaluation (internal):
 
 
 ast            : trim(leading b from 'aba')
-raw expr       : trim_leading("aba", ColumnRef(1)::String)
-checked expr   : trim_leading<String, String>("aba", ColumnRef(1))
+raw expr       : trim_leading("aba", #1::String)
+checked expr   : trim_leading<String, String>("aba", #1)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -1514,8 +1514,8 @@ output         : NULL
 
 
 ast            : trim(trailing 'a' from a)
-raw expr       : trim_trailing(ColumnRef(0)::String, "a")
-checked expr   : trim_trailing<String, String>(ColumnRef(0), "a")
+raw expr       : trim_trailing(#0::String, "a")
+checked expr   : trim_trailing<String, String>(#0, "a")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -1536,8 +1536,8 @@ evaluation (internal):
 
 
 ast            : trim(trailing b from a)
-raw expr       : trim_trailing(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : trim_trailing<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : trim_trailing(#0::String, #1::String)
+checked expr   : trim_trailing<String, String>(#0, #1)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1559,8 +1559,8 @@ evaluation (internal):
 
 
 ast            : trim(trailing a from a)
-raw expr       : trim_trailing(ColumnRef(0)::String, ColumnRef(0)::String)
-checked expr   : trim_trailing<String, String>(ColumnRef(0), ColumnRef(0))
+raw expr       : trim_trailing(#0::String, #0::String)
+checked expr   : trim_trailing<String, String>(#0, #0)
 evaluation:
 +--------+-----------------------+--------+
 |        | a                     | Output |
@@ -1581,8 +1581,8 @@ evaluation (internal):
 
 
 ast            : trim(trailing b from 'aba')
-raw expr       : trim_trailing("aba", ColumnRef(1)::String)
-checked expr   : trim_trailing<String, String>("aba", ColumnRef(1))
+raw expr       : trim_trailing("aba", #1::String)
+checked expr   : trim_trailing<String, String>("aba", #1)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -1621,8 +1621,8 @@ output         : NULL
 
 
 ast            : concat(a, '3', '4', '5')
-raw expr       : concat(ColumnRef(0)::String, "3", "4", "5")
-checked expr   : concat<String, String, String, String>(ColumnRef(0), "3", "4", "5")
+raw expr       : concat(#0::String, "3", "4", "5")
+checked expr   : concat<String, String, String, String>(#0, "3", "4", "5")
 evaluation:
 +--------+-----------------------+----------------+
 |        | a                     | Output         |
@@ -1644,9 +1644,9 @@ evaluation (internal):
 
 
 ast            : concat(a, '3')
-raw expr       : concat(ColumnRef(0)::String NULL, "3")
-checked expr   : concat<String NULL, String NULL>(ColumnRef(0), CAST("3" AS String NULL))
-optimized expr : concat<String NULL, String NULL>(ColumnRef(0), "3")
+raw expr       : concat(#0::String NULL, "3")
+checked expr   : concat<String NULL, String NULL>(#0, CAST("3" AS String NULL))
+optimized expr : concat<String NULL, String NULL>(#0, "3")
 evaluation:
 +--------+----------------------+-----------------+
 |        | a                    | Output          |
@@ -1686,8 +1686,8 @@ output         : NULL
 
 
 ast            : concat_ws(a, '3', '4', '5')
-raw expr       : concat_ws(ColumnRef(0)::String, "3", "4", "5")
-checked expr   : concat_ws<String, String, String, String>(ColumnRef(0), "3", "4", "5")
+raw expr       : concat_ws(#0::String, "3", "4", "5")
+checked expr   : concat_ws<String, String, String, String>(#0, "3", "4", "5")
 evaluation:
 +--------+-------------+---------+
 |        | a           | Output  |
@@ -1709,9 +1709,9 @@ evaluation (internal):
 
 
 ast            : concat_ws(a, '3')
-raw expr       : concat_ws(ColumnRef(0)::String NULL, "3")
-checked expr   : concat_ws<String NULL, String NULL>(ColumnRef(0), CAST("3" AS String NULL))
-optimized expr : concat_ws<String NULL, String NULL>(ColumnRef(0), "3")
+raw expr       : concat_ws(#0::String NULL, "3")
+checked expr   : concat_ws<String NULL, String NULL>(#0, CAST("3" AS String NULL))
+optimized expr : concat_ws<String NULL, String NULL>(#0, "3")
 evaluation:
 +--------+----------------------+-----------------+
 |        | a                    | Output          |
@@ -1733,9 +1733,9 @@ evaluation (internal):
 
 
 ast            : concat_ws(a, '3', '4')
-raw expr       : concat_ws(ColumnRef(0)::String NULL, "3", "4")
-checked expr   : concat_ws<String NULL, String NULL, String NULL>(ColumnRef(0), CAST("3" AS String NULL), CAST("4" AS String NULL))
-optimized expr : concat_ws<String NULL, String NULL, String NULL>(ColumnRef(0), "3", "4")
+raw expr       : concat_ws(#0::String NULL, "3", "4")
+checked expr   : concat_ws<String NULL, String NULL, String NULL>(#0, CAST("3" AS String NULL), CAST("4" AS String NULL))
+optimized expr : concat_ws<String NULL, String NULL, String NULL>(#0, "3", "4")
 evaluation:
 +--------+----------------------+-----------------+
 |        | a                    | Output          |
@@ -1769,17 +1769,17 @@ has tried possible overloads:
 
 
 ast            : bin(a)
-raw expr       : bin(ColumnRef(0)::Int8)
-checked expr   : bin<Int64>(CAST(ColumnRef(0) AS Int64))
+raw expr       : bin(#0::Int8)
+checked expr   : bin<Int64>(CAST(#0 AS Int64))
 evaluation:
 +--------+----------+--------------------------------------------------------------------+
 |        | a        | Output                                                             |
 +--------+----------+--------------------------------------------------------------------+
 | Type   | Int8     | String                                                             |
 | Domain | {-1..=3} | {""..}                                                             |
-| Row 0  | -1       | "1111111111111111111111111111111111111111111111111111111111111111" |
-| Row 1  | 2        | "10"                                                               |
-| Row 2  | 3        | "11"                                                               |
+| Row 0  | -1_i8    | "1111111111111111111111111111111111111111111111111111111111111111" |
+| Row 1  | 2_i8     | "10"                                                               |
+| Row 2  | 3_i8     | "11"                                                               |
 +--------+----------+--------------------------------------------------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1791,16 +1791,16 @@ evaluation (internal):
 
 
 ast            : bin(a2)
-raw expr       : bin(ColumnRef(1)::UInt8 NULL)
-checked expr   : bin<Int64 NULL>(CAST(ColumnRef(1) AS Int64 NULL))
+raw expr       : bin(#1::UInt8 NULL)
+checked expr   : bin<Int64 NULL>(CAST(#1 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
 +--------+------------------+-----------------+
 | Type   | UInt8 NULL       | String NULL     |
 | Domain | {1..=3} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | 1                | "1"             |
-| Row 1  | 2                | "10"            |
+| Row 0  | 1_u8             | "1"             |
+| Row 1  | 2_u8             | "10"            |
 | Row 2  | NULL             | NULL            |
 +--------+------------------+-----------------+
 evaluation (internal):
@@ -1813,17 +1813,17 @@ evaluation (internal):
 
 
 ast            : bin(b)
-raw expr       : bin(ColumnRef(2)::Int16)
-checked expr   : bin<Int64>(CAST(ColumnRef(2) AS Int64))
+raw expr       : bin(#2::Int16)
+checked expr   : bin<Int64>(CAST(#2 AS Int64))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
 +--------+---------+--------+
 | Type   | Int16   | String |
 | Domain | {2..=6} | {""..} |
-| Row 0  | 2       | "10"   |
-| Row 1  | 4       | "100"  |
-| Row 2  | 6       | "110"  |
+| Row 0  | 2_i16   | "10"   |
+| Row 1  | 4_i16   | "100"  |
+| Row 2  | 6_i16   | "110"  |
 +--------+---------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------------+
@@ -1835,17 +1835,17 @@ evaluation (internal):
 
 
 ast            : bin(c)
-raw expr       : bin(ColumnRef(3)::UInt32)
-checked expr   : bin<Int64>(CAST(ColumnRef(3) AS Int64))
+raw expr       : bin(#3::UInt32)
+checked expr   : bin<Int64>(CAST(#3 AS Int64))
 evaluation:
 +--------+-----------+---------+
 |        | c         | Output  |
 +--------+-----------+---------+
 | Type   | UInt32    | String  |
 | Domain | {10..=30} | {""..}  |
-| Row 0  | 10        | "1010"  |
-| Row 1  | 20        | "10100" |
-| Row 2  | 30        | "11110" |
+| Row 0  | 10_u32    | "1010"  |
+| Row 1  | 20_u32    | "10100" |
+| Row 2  | 30_u32    | "11110" |
 +--------+-----------+---------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------+
@@ -1881,17 +1881,17 @@ has tried possible overloads:
 
 
 ast            : oct(a)
-raw expr       : oct(ColumnRef(0)::Int8)
-checked expr   : oct<Int64>(CAST(ColumnRef(0) AS Int64))
+raw expr       : oct(#0::Int8)
+checked expr   : oct<Int64>(CAST(#0 AS Int64))
 evaluation:
 +--------+----------+--------------------------+
 |        | a        | Output                   |
 +--------+----------+--------------------------+
 | Type   | Int8     | String                   |
 | Domain | {-1..=3} | {""..}                   |
-| Row 0  | -1       | "1777777777777777777777" |
-| Row 1  | 2        | "2"                      |
-| Row 2  | 3        | "3"                      |
+| Row 0  | -1_i8    | "1777777777777777777777" |
+| Row 1  | 2_i8     | "2"                      |
+| Row 2  | 3_i8     | "3"                      |
 +--------+----------+--------------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------+
@@ -1903,16 +1903,16 @@ evaluation (internal):
 
 
 ast            : oct(a2)
-raw expr       : oct(ColumnRef(1)::UInt8 NULL)
-checked expr   : oct<Int64 NULL>(CAST(ColumnRef(1) AS Int64 NULL))
+raw expr       : oct(#1::UInt8 NULL)
+checked expr   : oct<Int64 NULL>(CAST(#1 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
 +--------+------------------+-----------------+
 | Type   | UInt8 NULL       | String NULL     |
 | Domain | {1..=3} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | 1                | "1"             |
-| Row 1  | 2                | "2"             |
+| Row 0  | 1_u8             | "1"             |
+| Row 1  | 2_u8             | "2"             |
 | Row 2  | NULL             | NULL            |
 +--------+------------------+-----------------+
 evaluation (internal):
@@ -1925,17 +1925,17 @@ evaluation (internal):
 
 
 ast            : oct(b)
-raw expr       : oct(ColumnRef(2)::Int16)
-checked expr   : oct<Int64>(CAST(ColumnRef(2) AS Int64))
+raw expr       : oct(#2::Int16)
+checked expr   : oct<Int64>(CAST(#2 AS Int64))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
 +--------+---------+--------+
 | Type   | Int16   | String |
 | Domain | {2..=6} | {""..} |
-| Row 0  | 2       | "2"    |
-| Row 1  | 4       | "4"    |
-| Row 2  | 6       | "6"    |
+| Row 0  | 2_i16   | "2"    |
+| Row 1  | 4_i16   | "4"    |
+| Row 2  | 6_i16   | "6"    |
 +--------+---------+--------+
 evaluation (internal):
 +--------+--------------------------------------------------------+
@@ -1947,17 +1947,17 @@ evaluation (internal):
 
 
 ast            : oct(c)
-raw expr       : oct(ColumnRef(3)::UInt32)
-checked expr   : oct<Int64>(CAST(ColumnRef(3) AS Int64))
+raw expr       : oct(#3::UInt32)
+checked expr   : oct<Int64>(CAST(#3 AS Int64))
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
 +--------+-----------+--------+
 | Type   | UInt32    | String |
 | Domain | {10..=30} | {""..} |
-| Row 0  | 10        | "12"   |
-| Row 1  | 20        | "24"   |
-| Row 2  | 30        | "36"   |
+| Row 0  | 10_u32    | "12"   |
+| Row 1  | 20_u32    | "24"   |
+| Row 2  | 30_u32    | "36"   |
 +--------+-----------+--------+
 evaluation (internal):
 +--------+--------------------------------------------------------------+
@@ -1993,17 +1993,17 @@ has tried possible overloads:
 
 
 ast            : hex(a)
-raw expr       : hex(ColumnRef(0)::Int8)
-checked expr   : hex<Int64>(CAST(ColumnRef(0) AS Int64))
+raw expr       : hex(#0::Int8)
+checked expr   : hex<Int64>(CAST(#0 AS Int64))
 evaluation:
 +--------+----------+--------------------+
 |        | a        | Output             |
 +--------+----------+--------------------+
 | Type   | Int8     | String             |
 | Domain | {-1..=3} | {""..}             |
-| Row 0  | -1       | "ffffffffffffffff" |
-| Row 1  | 2        | "2"                |
-| Row 2  | 3        | "3"                |
+| Row 0  | -1_i8    | "ffffffffffffffff" |
+| Row 1  | 2_i8     | "2"                |
+| Row 2  | 3_i8     | "3"                |
 +--------+----------+--------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------+
@@ -2015,16 +2015,16 @@ evaluation (internal):
 
 
 ast            : hex(a2)
-raw expr       : hex(ColumnRef(1)::UInt8 NULL)
-checked expr   : hex<Int64 NULL>(CAST(ColumnRef(1) AS Int64 NULL))
+raw expr       : hex(#1::UInt8 NULL)
+checked expr   : hex<Int64 NULL>(CAST(#1 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
 +--------+------------------+-----------------+
 | Type   | UInt8 NULL       | String NULL     |
 | Domain | {1..=3} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | 1                | "1"             |
-| Row 1  | 2                | "2"             |
+| Row 0  | 1_u8             | "1"             |
+| Row 1  | 2_u8             | "2"             |
 | Row 2  | NULL             | NULL            |
 +--------+------------------+-----------------+
 evaluation (internal):
@@ -2037,17 +2037,17 @@ evaluation (internal):
 
 
 ast            : hex(b)
-raw expr       : hex(ColumnRef(2)::Int16)
-checked expr   : hex<Int64>(CAST(ColumnRef(2) AS Int64))
+raw expr       : hex(#2::Int16)
+checked expr   : hex<Int64>(CAST(#2 AS Int64))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
 +--------+---------+--------+
 | Type   | Int16   | String |
 | Domain | {2..=6} | {""..} |
-| Row 0  | 2       | "2"    |
-| Row 1  | 4       | "4"    |
-| Row 2  | 6       | "6"    |
+| Row 0  | 2_i16   | "2"    |
+| Row 1  | 4_i16   | "4"    |
+| Row 2  | 6_i16   | "6"    |
 +--------+---------+--------+
 evaluation (internal):
 +--------+--------------------------------------------------------+
@@ -2059,17 +2059,17 @@ evaluation (internal):
 
 
 ast            : hex(c)
-raw expr       : hex(ColumnRef(3)::UInt32)
-checked expr   : hex<Int64>(CAST(ColumnRef(3) AS Int64))
+raw expr       : hex(#3::UInt32)
+checked expr   : hex<Int64>(CAST(#3 AS Int64))
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
 +--------+-----------+--------+
 | Type   | UInt32    | String |
 | Domain | {10..=30} | {""..} |
-| Row 0  | 10        | "a"    |
-| Row 1  | 20        | "14"   |
-| Row 2  | 30        | "1e"   |
+| Row 0  | 10_u32    | "a"    |
+| Row 1  | 20_u32    | "14"   |
+| Row 2  | 30_u32    | "1e"   |
 +--------+-----------+--------+
 evaluation (internal):
 +--------+------------------------------------------------------------+
@@ -2095,8 +2095,8 @@ has tried possible overloads:
 
 
 ast            : hex(e)
-raw expr       : hex(ColumnRef(5)::String)
-checked expr   : hex<String>(ColumnRef(5))
+raw expr       : hex(#5::String)
+checked expr   : hex<String>(#5)
 evaluation:
 +--------+-----------------+--------------------+
 |        | e               | Output             |
@@ -2126,8 +2126,8 @@ output         : "databend"
 
 
 ast            : unhex(hex(s))
-raw expr       : unhex(hex(ColumnRef(0)::String))
-checked expr   : unhex<String>(hex<String>(ColumnRef(0)))
+raw expr       : unhex(hex(#0::String))
+checked expr   : unhex<String>(hex<String>(#0))
 evaluation:
 +--------+-----------------+------------+
 |        | s               | Output     |
@@ -2148,8 +2148,8 @@ evaluation (internal):
 
 
 ast            : unhex(s)
-raw expr       : unhex(ColumnRef(0)::String)
-checked expr   : unhex<String>(ColumnRef(0))
+raw expr       : unhex(#0::String)
+checked expr   : unhex<String>(#0)
 evaluation:
 +--------+-----------------------+------------+
 |        | s                     | Output     |
@@ -2218,17 +2218,17 @@ has tried possible overloads:
 
 
 ast            : lpad(a, b, c)
-raw expr       : lpad(ColumnRef(0)::String, ColumnRef(1)::UInt8, ColumnRef(2)::String)
-checked expr   : lpad<String, UInt64, String>(ColumnRef(0), CAST(ColumnRef(1) AS UInt64), ColumnRef(2))
+raw expr       : lpad(#0::String, #1::UInt8, #2::String)
+checked expr   : lpad<String, UInt64, String>(#0, CAST(#1 AS UInt64), #2)
 evaluation:
 +--------+-----------------+---------+-------------+---------+
 |        | a               | b       | c           | Output  |
 +--------+-----------------+---------+-------------+---------+
 | Type   | String          | UInt8   | String      | String  |
 | Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | {""..}  |
-| Row 0  | "hi"            | 0       | "?"         | ""      |
-| Row 1  | "test"          | 3       | "x"         | "tes"   |
-| Row 2  | "cc"            | 5       | "bb"        | "bbbcc" |
+| Row 0  | "hi"            | 0_u8    | "?"         | ""      |
+| Row 1  | "test"          | 3_u8    | "x"         | "tes"   |
+| Row 2  | "cc"            | 5_u8    | "bb"        | "bbbcc" |
 +--------+-----------------+---------+-------------+---------+
 evaluation (internal):
 +--------+------------------------------------------------------------------+
@@ -2290,17 +2290,17 @@ has tried possible overloads:
 
 
 ast            : rpad(a, b, c)
-raw expr       : rpad(ColumnRef(0)::String, ColumnRef(1)::UInt8, ColumnRef(2)::String)
-checked expr   : rpad<String, UInt64, String>(ColumnRef(0), CAST(ColumnRef(1) AS UInt64), ColumnRef(2))
+raw expr       : rpad(#0::String, #1::UInt8, #2::String)
+checked expr   : rpad<String, UInt64, String>(#0, CAST(#1 AS UInt64), #2)
 evaluation:
 +--------+-----------------+---------+-------------+---------+
 |        | a               | b       | c           | Output  |
 +--------+-----------------+---------+-------------+---------+
 | Type   | String          | UInt8   | String      | String  |
 | Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | {""..}  |
-| Row 0  | "hi"            | 0       | "?"         | ""      |
-| Row 1  | "test"          | 3       | "x"         | "tes"   |
-| Row 2  | "cc"            | 5       | "bb"        | "ccbbb" |
+| Row 0  | "hi"            | 0_u8    | "?"         | ""      |
+| Row 1  | "test"          | 3_u8    | "x"         | "tes"   |
+| Row 2  | "cc"            | 5_u8    | "bb"        | "ccbbb" |
 +--------+-----------------+---------+-------------+---------+
 evaluation (internal):
 +--------+------------------------------------------------------------------+
@@ -2350,8 +2350,8 @@ output         : "hi"
 
 
 ast            : replace(a, b, c)
-raw expr       : replace(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::String)
-checked expr   : replace<String, String, String>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+raw expr       : replace(#0::String, #1::String, #2::String)
+checked expr   : replace<String, String, String>(#0, #1, #2)
 evaluation:
 +--------+-----------------+-------------+-------------+--------+
 |        | a               | b           | c           | Output |
@@ -2380,7 +2380,7 @@ checked expr   : strcmp<String, String>("text", "text2")
 optimized expr : -1_i8
 output type    : Int8
 output domain  : {-128..=127}
-output         : -1
+output         : -1_i8
 
 
 ast            : strcmp('text2', 'text')
@@ -2389,7 +2389,7 @@ checked expr   : strcmp<String, String>("text2", "text")
 optimized expr : 1_i8
 output type    : Int8
 output domain  : {-128..=127}
-output         : 1
+output         : 1_i8
 
 
 ast            : strcmp('hii', 'hii')
@@ -2398,21 +2398,21 @@ checked expr   : strcmp<String, String>("hii", "hii")
 optimized expr : 0_i8
 output type    : Int8
 output domain  : {-128..=127}
-output         : 0
+output         : 0_i8
 
 
 ast            : strcmp(a, b)
-raw expr       : strcmp(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : strcmp<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : strcmp(#0::String, #1::String)
+checked expr   : strcmp<String, String>(#0, #1)
 evaluation:
 +--------+-----------------+------------------+--------------+
 |        | a               | b                | Output       |
 +--------+-----------------+------------------+--------------+
 | Type   | String          | String           | Int8         |
 | Domain | {"cc"..="test"} | {"ccb"..="test"} | {-128..=127} |
-| Row 0  | "hi"            | "i"              | 1            |
-| Row 1  | "test"          | "test"           | 0            |
-| Row 2  | "cc"            | "ccb"            | -1           |
+| Row 0  | "hi"            | "i"              | 1_i8         |
+| Row 1  | "test"          | "test"           | 0_i8         |
+| Row 2  | "cc"            | "ccb"            | -1_i8        |
 +--------+-----------------+------------------+--------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------+
@@ -2430,7 +2430,7 @@ checked expr   : locate<String, String>("bar", "foobarbar")
 optimized expr : 4_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 4
+output         : 4_u64
 
 
 ast            : instr('foobarbar', 'bar')
@@ -2439,7 +2439,7 @@ checked expr   : instr<String, String>("foobarbar", "bar")
 optimized expr : 4_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 4
+output         : 4_u64
 
 
 ast            : position('bar' IN 'foobarbar')
@@ -2448,7 +2448,7 @@ checked expr   : position<String, String>("bar", "foobarbar")
 optimized expr : 4_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 4
+output         : 4_u64
 
 
 ast            : position('foobarbar' IN 'bar')
@@ -2457,7 +2457,7 @@ checked expr   : position<String, String>("foobarbar", "bar")
 optimized expr : 0_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 0
+output         : 0_u64
 
 
 ast            : locate('bar', 'foobarbar', 5)
@@ -2466,22 +2466,22 @@ checked expr   : locate<String, String, UInt64>("bar", "foobarbar", CAST(5_u8 AS
 optimized expr : 7_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 7
+output         : 7_u64
 
 
 ast            : locate(a, b, c)
-raw expr       : locate(ColumnRef(0)::String, ColumnRef(1)::String, ColumnRef(2)::UInt8)
-checked expr   : locate<String, String, UInt64>(ColumnRef(0), ColumnRef(1), CAST(ColumnRef(2) AS UInt64))
+raw expr       : locate(#0::String, #1::String, #2::UInt8)
+checked expr   : locate<String, String, UInt64>(#0, #1, CAST(#2 AS UInt64))
 evaluation:
 +--------+---------------+---------------+---------+----------------------------+
 |        | a             | b             | c       | Output                     |
 +--------+---------------+---------------+---------+----------------------------+
 | Type   | String        | String        | UInt8   | UInt64                     |
 | Domain | {"bar"..="q"} | {"56"..="xx"} | {0..=2} | {0..=18446744073709551615} |
-| Row 0  | "bar"         | "foobarbar"   | 1       | 4                          |
-| Row 1  | "cc"          | "bdccacc"     | 2       | 3                          |
-| Row 2  | "cc"          | "xx"          | 0       | 0                          |
-| Row 3  | "q"           | "56"          | 1       | 0                          |
+| Row 0  | "bar"         | "foobarbar"   | 1_u8    | 4_u64                      |
+| Row 1  | "cc"          | "bdccacc"     | 2_u8    | 3_u64                      |
+| Row 2  | "cc"          | "xx"          | 0_u8    | 0_u64                      |
+| Row 3  | "q"           | "56"          | 1_u8    | 0_u64                      |
 +--------+---------------+---------------+---------+----------------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------+
@@ -2523,16 +2523,16 @@ output         : NULL
 
 
 ast            : char(a, b, c)
-raw expr       : char(ColumnRef(0)::UInt8, ColumnRef(1)::UInt8, ColumnRef(2)::UInt8)
-checked expr   : char<UInt8, UInt8, UInt8>(ColumnRef(0), ColumnRef(1), ColumnRef(2))
+raw expr       : char(#0::UInt8, #1::UInt8, #2::UInt8)
+checked expr   : char<UInt8, UInt8, UInt8>(#0, #1, #2)
 evaluation:
 +--------+-----------+-----------+-----------+--------+
 |        | a         | b         | c         | Output |
 +--------+-----------+-----------+-----------+--------+
 | Type   | UInt8     | UInt8     | UInt8     | String |
 | Domain | {66..=67} | {98..=99} | {68..=69} | {""..} |
-| Row 0  | 66        | 98        | 68        | "BbD"  |
-| Row 1  | 67        | 99        | 69        | "CcE"  |
+| Row 0  | 66_u8     | 98_u8     | 68_u8     | "BbD"  |
+| Row 1  | 67_u8     | 99_u8     | 69_u8     | "CcE"  |
 +--------+-----------+-----------+-----------+--------+
 evaluation (internal):
 +--------+-----------------------------------------------------------+
@@ -2546,16 +2546,16 @@ evaluation (internal):
 
 
 ast            : char(a2, b, c)
-raw expr       : char(ColumnRef(4)::UInt8 NULL, ColumnRef(1)::UInt8, ColumnRef(2)::UInt8)
-checked expr   : char<UInt8 NULL, UInt8 NULL, UInt8 NULL>(ColumnRef(4), CAST(ColumnRef(1) AS UInt8 NULL), CAST(ColumnRef(2) AS UInt8 NULL))
+raw expr       : char(#4::UInt8 NULL, #1::UInt8, #2::UInt8)
+checked expr   : char<UInt8 NULL, UInt8 NULL, UInt8 NULL>(#4, CAST(#1 AS UInt8 NULL), CAST(#2 AS UInt8 NULL))
 evaluation:
 +--------+-----------+-----------+--------------------+-------------+
 |        | b         | c         | a2                 | Output      |
 +--------+-----------+-----------+--------------------+-------------+
 | Type   | UInt8     | UInt8     | UInt8 NULL         | String NULL |
 | Domain | {98..=99} | {68..=69} | {66..=67} ∪ {NULL} | Unknown     |
-| Row 0  | 98        | 68        | 66                 | "BbD"       |
-| Row 1  | 99        | 69        | NULL               | NULL        |
+| Row 0  | 98_u8     | 68_u8     | 66_u8              | "BbD"       |
+| Row 1  | 99_u8     | 69_u8     | NULL               | NULL        |
 +--------+-----------+-----------+--------------------+-------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------+
@@ -2617,8 +2617,8 @@ output         : "I51231"
 
 
 ast            : soundex(a)
-raw expr       : soundex(ColumnRef(0)::String)
-checked expr   : soundex<String>(ColumnRef(0))
+raw expr       : soundex(#0::String)
+checked expr   : soundex<String>(#0)
 evaluation:
 +--------+------------------------------------+---------+
 |        | a                                  | Output  |
@@ -2654,7 +2654,7 @@ checked expr   : ord<String>("и")
 optimized expr : 53432_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 53432
+output         : 53432_u64
 
 
 ast            : ord('早ab')
@@ -2663,7 +2663,7 @@ checked expr   : ord<String>("早ab")
 optimized expr : 15112105_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 15112105
+output         : 15112105_u64
 
 
 ast            : ord('💖')
@@ -2672,7 +2672,7 @@ checked expr   : ord<String>("💖")
 optimized expr : 4036989590_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 4036989590
+output         : 4036989590_u64
 
 
 ast            : repeat('3', NULL)
@@ -2702,9 +2702,9 @@ error:
 
 
 ast            : repeat(a, 3)
-raw expr       : repeat(ColumnRef(0)::String, 3_u8)
-checked expr   : repeat<String, UInt64>(ColumnRef(0), CAST(3_u8 AS UInt64))
-optimized expr : repeat<String, UInt64>(ColumnRef(0), 3_u64)
+raw expr       : repeat(#0::String, 3_u8)
+checked expr   : repeat<String, UInt64>(#0, CAST(3_u8 AS UInt64))
+optimized expr : repeat<String, UInt64>(#0, 3_u64)
 evaluation:
 +--------+-------------+---------+
 |        | a           | Output  |
@@ -2804,18 +2804,18 @@ output         : NULL
 
 
 ast            : insert(a, b, c, d)
-raw expr       : insert(ColumnRef(0)::String, ColumnRef(1)::UInt8, ColumnRef(2)::UInt8, ColumnRef(3)::String)
-checked expr   : insert<String, Int64, Int64, String>(ColumnRef(0), CAST(ColumnRef(1) AS Int64), CAST(ColumnRef(2) AS Int64), ColumnRef(3))
+raw expr       : insert(#0::String, #1::UInt8, #2::UInt8, #3::String)
+checked expr   : insert<String, Int64, Int64, String>(#0, CAST(#1 AS Int64), CAST(#2 AS Int64), #3)
 evaluation:
 +--------+-----------------+---------+---------+---------------+---------+
 |        | a               | b       | c       | d             | Output  |
 +--------+-----------------+---------+---------+---------------+---------+
 | Type   | String          | UInt8   | UInt8   | String        | String  |
 | Domain | {"cc"..="test"} | {1..=4} | {1..=5} | {"12"..="zc"} | {""..}  |
-| Row 0  | "hi"            | 1       | 3       | "xx"          | "xx"    |
-| Row 1  | "test"          | 4       | 5       | "zc"          | "teszc" |
-| Row 2  | "cc"            | 1       | 1       | "12"          | "12c"   |
-| Row 3  | "q"             | 1       | 1       | "56"          | "56"    |
+| Row 0  | "hi"            | 1_u8    | 3_u8    | "xx"          | "xx"    |
+| Row 1  | "test"          | 4_u8    | 5_u8    | "zc"          | "teszc" |
+| Row 2  | "cc"            | 1_u8    | 1_u8    | "12"          | "12c"   |
+| Row 3  | "q"             | 1_u8    | 1_u8    | "56"          | "56"    |
 +--------+-----------------+---------+---------+---------------+---------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------+
@@ -2830,18 +2830,18 @@ evaluation (internal):
 
 
 ast            : insert(x, y, z, u)
-raw expr       : insert(ColumnRef(0)::String NULL, ColumnRef(1)::UInt8 NULL, ColumnRef(2)::UInt8 NULL, ColumnRef(3)::String NULL)
-checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(ColumnRef(0), CAST(ColumnRef(1) AS Int64 NULL), CAST(ColumnRef(2) AS Int64 NULL), ColumnRef(3))
+raw expr       : insert(#0::String NULL, #1::UInt8 NULL, #2::UInt8 NULL, #3::String NULL)
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(#0, CAST(#1 AS Int64 NULL), CAST(#2 AS Int64 NULL), #3)
 evaluation:
 +--------+--------------------------+------------------+------------------+------------------------+-----------------+
 |        | x                        | y                | z                | u                      | Output          |
 +--------+--------------------------+------------------+------------------+------------------------+-----------------+
 | Type   | String NULL              | UInt8 NULL       | UInt8 NULL       | String NULL            | String NULL     |
 | Domain | {"cc"..="test"} ∪ {NULL} | {1..=4} ∪ {NULL} | {1..=5} ∪ {NULL} | {"12"..="zc"} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | NULL                     | 1                | 3                | NULL                   | NULL            |
-| Row 1  | "test"                   | 4                | NULL             | "zc"                   | NULL            |
-| Row 2  | "cc"                     | NULL             | 1                | "12"                   | NULL            |
-| Row 3  | "q"                      | 1                | 1                | "56"                   | "56"            |
+| Row 0  | NULL                     | 1_u8             | 3_u8             | NULL                   | NULL            |
+| Row 1  | "test"                   | 4_u8             | NULL             | "zc"                   | NULL            |
+| Row 2  | "cc"                     | NULL             | 1_u8             | "12"                   | NULL            |
+| Row 3  | "q"                      | 1_u8             | 1_u8             | "56"                   | "56"            |
 +--------+--------------------------+------------------+------------------+------------------------+-----------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------+
@@ -2874,24 +2874,24 @@ output         : "     "
 
 
 ast            : space(a)
-raw expr       : space(ColumnRef(0)::UInt8)
-checked expr   : space<UInt64>(CAST(ColumnRef(0) AS UInt64))
+raw expr       : space(#0::UInt8)
+checked expr   : space<UInt64>(CAST(#0 AS UInt64))
 evaluation:
 +--------+---------+--------------------+
 |        | a       | Output             |
 +--------+---------+--------------------+
 | Type   | UInt8   | String             |
 | Domain | {0..=9} | {""..="         "} |
-| Row 0  | 0       | ""                 |
-| Row 1  | 1       | " "                |
-| Row 2  | 2       | "  "               |
-| Row 3  | 3       | "   "              |
-| Row 4  | 4       | "    "             |
-| Row 5  | 5       | "     "            |
-| Row 6  | 6       | "      "           |
-| Row 7  | 7       | "       "          |
-| Row 8  | 8       | "        "         |
-| Row 9  | 9       | "         "        |
+| Row 0  | 0_u8    | ""                 |
+| Row 1  | 1_u8    | " "                |
+| Row 2  | 2_u8    | "  "               |
+| Row 3  | 3_u8    | "   "              |
+| Row 4  | 4_u8    | "    "             |
+| Row 5  | 5_u8    | "     "            |
+| Row 6  | 6_u8    | "      "           |
+| Row 7  | 7_u8    | "       "          |
+| Row 8  | 8_u8    | "        "         |
+| Row 9  | 9_u8    | "         "        |
 +--------+---------+--------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -2921,25 +2921,25 @@ output         : ""
 
 
 ast            : left('123456789', a)
-raw expr       : left("123456789", ColumnRef(0)::UInt8)
-checked expr   : left<String, UInt64>("123456789", CAST(ColumnRef(0) AS UInt64))
+raw expr       : left("123456789", #0::UInt8)
+checked expr   : left<String, UInt64>("123456789", CAST(#0 AS UInt64))
 evaluation:
 +--------+----------+-------------+
 |        | a        | Output      |
 +--------+----------+-------------+
 | Type   | UInt8    | String      |
 | Domain | {0..=10} | {""..}      |
-| Row 0  | 0        | ""          |
-| Row 1  | 1        | "1"         |
-| Row 2  | 2        | "12"        |
-| Row 3  | 3        | "123"       |
-| Row 4  | 4        | "1234"      |
-| Row 5  | 5        | "12345"     |
-| Row 6  | 6        | "123456"    |
-| Row 7  | 7        | "1234567"   |
-| Row 8  | 8        | "12345678"  |
-| Row 9  | 9        | "123456789" |
-| Row 10 | 10       | "123456789" |
+| Row 0  | 0_u8     | ""          |
+| Row 1  | 1_u8     | "1"         |
+| Row 2  | 2_u8     | "12"        |
+| Row 3  | 3_u8     | "123"       |
+| Row 4  | 4_u8     | "1234"      |
+| Row 5  | 5_u8     | "12345"     |
+| Row 6  | 6_u8     | "123456"    |
+| Row 7  | 7_u8     | "1234567"   |
+| Row 8  | 8_u8     | "12345678"  |
+| Row 9  | 9_u8     | "123456789" |
+| Row 10 | 10_u8    | "123456789" |
 +--------+----------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -2969,25 +2969,25 @@ output         : ""
 
 
 ast            : right('123456789', a)
-raw expr       : right("123456789", ColumnRef(0)::UInt8)
-checked expr   : right<String, UInt64>("123456789", CAST(ColumnRef(0) AS UInt64))
+raw expr       : right("123456789", #0::UInt8)
+checked expr   : right<String, UInt64>("123456789", CAST(#0 AS UInt64))
 evaluation:
 +--------+----------+-------------+
 |        | a        | Output      |
 +--------+----------+-------------+
 | Type   | UInt8    | String      |
 | Domain | {0..=10} | {""..}      |
-| Row 0  | 0        | ""          |
-| Row 1  | 1        | "9"         |
-| Row 2  | 2        | "89"        |
-| Row 3  | 3        | "789"       |
-| Row 4  | 4        | "6789"      |
-| Row 5  | 5        | "56789"     |
-| Row 6  | 6        | "456789"    |
-| Row 7  | 7        | "3456789"   |
-| Row 8  | 8        | "23456789"  |
-| Row 9  | 9        | "123456789" |
-| Row 10 | 10       | "123456789" |
+| Row 0  | 0_u8     | ""          |
+| Row 1  | 1_u8     | "9"         |
+| Row 2  | 2_u8     | "89"        |
+| Row 3  | 3_u8     | "789"       |
+| Row 4  | 4_u8     | "6789"      |
+| Row 5  | 5_u8     | "56789"     |
+| Row 6  | 6_u8     | "456789"    |
+| Row 7  | 7_u8     | "3456789"   |
+| Row 8  | 8_u8     | "23456789"  |
+| Row 9  | 9_u8     | "123456789" |
+| Row 10 | 10_u8    | "123456789" |
 +--------+----------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -3053,59 +3053,59 @@ output         : "bc"
 
 
 ast            : substr('abc', pos, len)
-raw expr       : substr("abc", ColumnRef(0)::Int8, ColumnRef(1)::UInt8)
-checked expr   : substr<String, Int64, UInt64>("abc", CAST(ColumnRef(0) AS Int64), CAST(ColumnRef(1) AS UInt64))
+raw expr       : substr("abc", #0::Int8, #1::UInt8)
+checked expr   : substr<String, Int64, UInt64>("abc", CAST(#0 AS Int64), CAST(#1 AS UInt64))
 evaluation:
 +--------+----------+---------+--------+
 |        | pos      | len     | Output |
 +--------+----------+---------+--------+
 | Type   | Int8     | UInt8   | String |
 | Domain | {-4..=4} | {0..=4} | {""..} |
-| Row 0  | 0        | 0       | ""     |
-| Row 1  | 0        | 1       | ""     |
-| Row 2  | 0        | 2       | ""     |
-| Row 3  | 0        | 3       | ""     |
-| Row 4  | 0        | 4       | ""     |
-| Row 5  | 1        | 0       | ""     |
-| Row 6  | 1        | 1       | "a"    |
-| Row 7  | 1        | 2       | "ab"   |
-| Row 8  | 1        | 3       | "abc"  |
-| Row 9  | 1        | 4       | "abc"  |
-| Row 10 | 2        | 0       | ""     |
-| Row 11 | 2        | 1       | "b"    |
-| Row 12 | 2        | 2       | "bc"   |
-| Row 13 | 2        | 3       | "bc"   |
-| Row 14 | 2        | 4       | "bc"   |
-| Row 15 | 3        | 0       | ""     |
-| Row 16 | 3        | 1       | "c"    |
-| Row 17 | 3        | 2       | "c"    |
-| Row 18 | 3        | 3       | "c"    |
-| Row 19 | 3        | 4       | "c"    |
-| Row 20 | 4        | 0       | ""     |
-| Row 21 | 4        | 1       | ""     |
-| Row 22 | 4        | 2       | ""     |
-| Row 23 | 4        | 3       | ""     |
-| Row 24 | 4        | 4       | ""     |
-| Row 25 | -1       | 0       | ""     |
-| Row 26 | -1       | 1       | "c"    |
-| Row 27 | -1       | 2       | "c"    |
-| Row 28 | -1       | 3       | "c"    |
-| Row 29 | -1       | 4       | "c"    |
-| Row 30 | -2       | 0       | ""     |
-| Row 31 | -2       | 1       | "b"    |
-| Row 32 | -2       | 2       | "bc"   |
-| Row 33 | -2       | 3       | "bc"   |
-| Row 34 | -2       | 4       | "bc"   |
-| Row 35 | -3       | 0       | ""     |
-| Row 36 | -3       | 1       | "a"    |
-| Row 37 | -3       | 2       | "ab"   |
-| Row 38 | -3       | 3       | "abc"  |
-| Row 39 | -3       | 4       | "abc"  |
-| Row 40 | -4       | 0       | ""     |
-| Row 41 | -4       | 1       | ""     |
-| Row 42 | -4       | 2       | ""     |
-| Row 43 | -4       | 3       | ""     |
-| Row 44 | -4       | 4       | ""     |
+| Row 0  | 0_i8     | 0_u8    | ""     |
+| Row 1  | 0_i8     | 1_u8    | ""     |
+| Row 2  | 0_i8     | 2_u8    | ""     |
+| Row 3  | 0_i8     | 3_u8    | ""     |
+| Row 4  | 0_i8     | 4_u8    | ""     |
+| Row 5  | 1_i8     | 0_u8    | ""     |
+| Row 6  | 1_i8     | 1_u8    | "a"    |
+| Row 7  | 1_i8     | 2_u8    | "ab"   |
+| Row 8  | 1_i8     | 3_u8    | "abc"  |
+| Row 9  | 1_i8     | 4_u8    | "abc"  |
+| Row 10 | 2_i8     | 0_u8    | ""     |
+| Row 11 | 2_i8     | 1_u8    | "b"    |
+| Row 12 | 2_i8     | 2_u8    | "bc"   |
+| Row 13 | 2_i8     | 3_u8    | "bc"   |
+| Row 14 | 2_i8     | 4_u8    | "bc"   |
+| Row 15 | 3_i8     | 0_u8    | ""     |
+| Row 16 | 3_i8     | 1_u8    | "c"    |
+| Row 17 | 3_i8     | 2_u8    | "c"    |
+| Row 18 | 3_i8     | 3_u8    | "c"    |
+| Row 19 | 3_i8     | 4_u8    | "c"    |
+| Row 20 | 4_i8     | 0_u8    | ""     |
+| Row 21 | 4_i8     | 1_u8    | ""     |
+| Row 22 | 4_i8     | 2_u8    | ""     |
+| Row 23 | 4_i8     | 3_u8    | ""     |
+| Row 24 | 4_i8     | 4_u8    | ""     |
+| Row 25 | -1_i8    | 0_u8    | ""     |
+| Row 26 | -1_i8    | 1_u8    | "c"    |
+| Row 27 | -1_i8    | 2_u8    | "c"    |
+| Row 28 | -1_i8    | 3_u8    | "c"    |
+| Row 29 | -1_i8    | 4_u8    | "c"    |
+| Row 30 | -2_i8    | 0_u8    | ""     |
+| Row 31 | -2_i8    | 1_u8    | "b"    |
+| Row 32 | -2_i8    | 2_u8    | "bc"   |
+| Row 33 | -2_i8    | 3_u8    | "bc"   |
+| Row 34 | -2_i8    | 4_u8    | "bc"   |
+| Row 35 | -3_i8    | 0_u8    | ""     |
+| Row 36 | -3_i8    | 1_u8    | "a"    |
+| Row 37 | -3_i8    | 2_u8    | "ab"   |
+| Row 38 | -3_i8    | 3_u8    | "abc"  |
+| Row 39 | -3_i8    | 4_u8    | "abc"  |
+| Row 40 | -4_i8    | 0_u8    | ""     |
+| Row 41 | -4_i8    | 1_u8    | ""     |
+| Row 42 | -4_i8    | 2_u8    | ""     |
+| Row 43 | -4_i8    | 3_u8    | ""     |
+| Row 44 | -4_i8    | 4_u8    | ""     |
 +--------+----------+---------+--------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+

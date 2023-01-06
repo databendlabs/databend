@@ -20,6 +20,8 @@ use common_base::runtime::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use futures_util::future;
@@ -32,19 +34,37 @@ use crate::io::MetaReaders;
 pub struct SegmentsIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
+    schema: TableSchemaRef,
 }
 
 impl SegmentsIO {
-    pub fn create(ctx: Arc<dyn TableContext>, operator: Operator) -> Self {
-        Self { ctx, operator }
+    pub fn create(ctx: Arc<dyn TableContext>, operator: Operator, schema: TableSchemaRef) -> Self {
+        Self {
+            ctx,
+            operator,
+            schema,
+        }
     }
 
     // Read one segment file by location.
     // The index is the index of the segment_location in segment_locations.
-    async fn read_segment(dal: Operator, segment_location: Location) -> Result<Arc<SegmentInfo>> {
+    async fn read_segment(
+        dal: Operator,
+        segment_location: Location,
+        table_schema: TableSchemaRef,
+    ) -> Result<Arc<SegmentInfo>> {
         let (path, ver) = segment_location;
         let reader = MetaReaders::segment_info_reader(dal);
-        reader.read(path, None, ver).await
+
+        // Keep in mind that segment_info_read must need a schema
+        let load_params = LoadParams {
+            location: path,
+            len_hint: None,
+            ver,
+            schema: Some(table_schema),
+        };
+
+        reader.read(&load_params).await
     }
 
     // Read all segments information from s3 in concurrency.
@@ -59,11 +79,12 @@ impl SegmentsIO {
 
         // combine all the tasks.
         let mut iter = segment_locations.iter();
+        let schema = self.schema.clone();
         let tasks = std::iter::from_fn(move || {
             if let Some(location) = iter.next() {
                 let location = location.clone();
                 Some(
-                    Self::read_segment(self.operator.clone(), location)
+                    Self::read_segment(self.operator.clone(), location, schema.clone())
                         .instrument(tracing::debug_span!("read_segment")),
                 )
             } else {

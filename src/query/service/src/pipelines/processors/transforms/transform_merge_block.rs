@@ -16,13 +16,14 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use common_datablocks::DataBlock;
-use common_datavalues::remove_nullable;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::TypeDeserializer;
+use common_expression::Value;
+use common_io::prelude::FormatSettings;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -36,7 +37,8 @@ pub struct TransformMergeBlock {
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
-    schema: DataSchemaRef,
+    left_schema: DataSchemaRef,
+    right_schema: DataSchemaRef,
     pairs: Vec<(String, String)>,
 
     receiver: Receiver<DataBlock>,
@@ -47,7 +49,8 @@ impl TransformMergeBlock {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        schema: DataSchemaRef,
+        left_schema: DataSchemaRef,
+        right_schema: DataSchemaRef,
         pairs: Vec<(String, String)>,
         receiver: Receiver<DataBlock>,
     ) -> Result<ProcessorPtr> {
@@ -57,7 +60,8 @@ impl TransformMergeBlock {
             output,
             input_data: None,
             output_data: None,
-            schema,
+            left_schema,
+            right_schema,
             pairs,
             receiver,
             receiver_result: None,
@@ -65,12 +69,15 @@ impl TransformMergeBlock {
     }
 
     fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
+        let num_rows = block.num_rows();
         let columns = self
             .pairs
             .iter()
             .map(|(left, right)| {
                 if is_left {
-                    Ok(block.try_column_by_name(left)?.clone())
+                    Ok(block
+                        .get_by_offset(self.left_schema.index_of(left)?)
+                        .clone())
                 } else {
                     // If block from right, check if block schema matches self scheme(left schema)
                     // If unmatched, covert block columns types or report error
@@ -78,7 +85,7 @@ impl TransformMergeBlock {
                 }
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(DataBlock::create(self.schema.clone(), columns))
+        Ok(DataBlock::new(columns, num_rows))
     }
 
     fn check_type(
@@ -86,24 +93,33 @@ impl TransformMergeBlock {
         left_name: &str,
         right_name: &str,
         block: &DataBlock,
-    ) -> Result<ColumnRef> {
-        let left_filed = self.schema.field_with_name(left_name)?;
-        let left_data_type = left_filed.data_type();
+    ) -> Result<BlockEntry> {
+        let left_field = self.left_schema.field_with_name(left_name)?;
+        let left_data_type = left_field.data_type();
 
-        let right_field = block.schema().field_with_name(right_name)?;
+        let right_field = self.right_schema.field_with_name(right_name)?;
         let right_data_type = right_field.data_type();
 
+        let index = self.right_schema.index_of(right_name)?;
+
         if left_data_type == right_data_type {
-            return Ok(block.try_column_by_name(right_name)?.clone());
+            return Ok(block.get_by_offset(index).clone());
         }
 
-        if remove_nullable(left_data_type) == remove_nullable(right_data_type) {
-            let origin_column = block.try_column_by_name(right_name)?;
-            let mut values = Vec::with_capacity(origin_column.len());
-            for idx in 0..origin_column.len() {
-                values.push(origin_column.get(idx))
+        if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
+            let origin_column = block.get_by_offset(index).clone();
+            let mut builder = left_data_type.create_deserializer(block.num_rows());
+            let settings = FormatSettings::default();
+            let value = origin_column.value.as_ref();
+            for idx in 0..block.num_rows() {
+                let scalar = value.index(idx).unwrap();
+                builder.append_data_value(scalar.to_owned(), &settings)?;
             }
-            left_data_type.create_column(&values)
+            let col = builder.finish_to_column();
+            Ok(BlockEntry {
+                data_type: left_data_type.clone(),
+                value: Value::Column(col),
+            })
         } else {
             Err(ErrorCode::IllegalDataType(
                 "The data type on both sides of the union does not match",
@@ -167,7 +183,7 @@ impl Processor for TransformMergeBlock {
     fn process(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data.take() {
             if let Some(receiver_result) = self.receiver_result.take() {
-                self.output_data = Some(DataBlock::concat_blocks(&[
+                self.output_data = Some(DataBlock::concat(&[
                     self.project_block(input_data, true)?,
                     self.project_block(receiver_result, false)?,
                 ])?);

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_sql::executor::ExpressionBuilderWithoutRenaming;
 use common_sql::plans::DeletePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::ScalarExpr;
@@ -62,11 +61,11 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
 
     // check count
     let expected = vec![
-        "+---------------+-------+",
-        "| segment_count | count |",
-        "+---------------+-------+",
-        "| 9             | 9     |",
-        "+---------------+-------+",
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 9_u64    | 9_u64    |",
+        "+----------+----------+",
     ];
     let qry = format!(
         "select segment_count, block_count as count from fuse_snapshot('{}', '{}') limit 1",
@@ -87,9 +86,8 @@ pub async fn do_deletion(
     plan: DeletePlan,
 ) -> Result<()> {
     let (filter, col_indices) = if let Some(scalar) = &plan.selection {
-        let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
         (
-            Some(eb.build(scalar)?),
+            Some(scalar.as_expr()?.as_remote_expr()),
             scalar.used_columns().into_iter().collect(),
         )
     } else {

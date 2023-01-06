@@ -17,6 +17,8 @@ use std::default::Default;
 use std::path::Path;
 use std::sync::Arc;
 
+use chrono::TimeZone;
+use chrono::Utc;
 use common_ast::ast::FileLocation;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectStmt;
@@ -38,9 +40,13 @@ use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_function::TableFunction;
 use common_config::GlobalConfig;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check_literal;
+use common_expression::types::DataType;
+use common_expression::ConstantFolder;
+use common_expression::Domain;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
@@ -230,18 +236,20 @@ impl<'a> Binder {
                     args.push(scalar_binder.bind(arg).await?);
                 }
 
-                let expressions = args
+                let args = args
                     .into_iter()
                     .map(|(scalar, _)| match scalar {
-                        Scalar::ConstantExpr(ConstantExpr { value, .. }) => Ok(value),
+                        Scalar::ConstantExpr(ConstantExpr { value, .. }) => {
+                            Ok(check_literal(&value).0)
+                        }
                         _ => Err(ErrorCode::Unimplemented(format!(
                             "Unsupported table argument type: {:?}",
                             scalar
                         ))),
                     })
-                    .collect::<Result<Vec<DataValue>>>()?;
+                    .collect::<Result<Vec<_>>>()?;
 
-                let table_args = Some(expressions);
+                let table_args = Some(args);
 
                 // Table functions always reside is default catalog
                 let table_meta: Arc<dyn TableFunction> = self
@@ -447,7 +455,7 @@ impl<'a> Binder {
                         table_name: Some(table.name().to_string()),
                         column_name: column_name.clone(),
                         index: *column_index,
-                        data_type: Box::new(data_type.clone()),
+                        data_type: Box::new(DataType::from(data_type)),
                         visibility: if path_indices.is_some() {
                             Visibility::InVisible
                         } else {
@@ -534,20 +542,36 @@ impl<'a> Binder {
                     self.metadata.clone(),
                     &[],
                 );
-                let box (scalar, data_type) = type_checker
-                    .resolve(expr, Some(TimestampType::new_impl()))
-                    .await?;
+                let box (scalar, _) = type_checker.resolve(expr, None).await?;
+                let scalar_expr = scalar.as_expr()?;
 
-                if let Scalar::ConstantExpr(ConstantExpr { value, .. }) = scalar {
-                    if let DataTypeImpl::Timestamp(datatime_64) = data_type {
-                        return Ok(NavigationPoint::TimePoint(
-                            datatime_64.utc_timestamp(value.as_i64()?),
-                        ));
+                let input_domains = scalar_expr
+                    .column_refs()
+                    .into_iter()
+                    .map(|(name, ty)| {
+                        let domain = Domain::full(&ty);
+                        (name, domain)
+                    })
+                    .collect();
+
+                let ctx = self.ctx.try_get_function_context()?;
+                let folder = ConstantFolder::new(input_domains, ctx, &BUILTIN_FUNCTIONS);
+                let (new_expr, _) = folder.fold(&scalar_expr);
+
+                match new_expr {
+                    common_expression::Expr::Constant {
+                        scalar, data_type, ..
+                    } if data_type == DataType::Timestamp => {
+                        let value = scalar.as_timestamp().unwrap();
+                        Ok(NavigationPoint::TimePoint(
+                            Utc.timestamp_nanos(*value * 1000),
+                        ))
                     }
+
+                    _ => Err(ErrorCode::InvalidArgument(
+                        "TimeTravelPoint must be constant timestamp value",
+                    )),
                 }
-                Err(ErrorCode::InvalidArgument(
-                    "TimeTravelPoint must be constant timestamp",
-                ))
             }
         }
     }

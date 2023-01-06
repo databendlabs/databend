@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 

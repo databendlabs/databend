@@ -15,18 +15,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::statistics::ClusterStatistics;
-use crate::meta::statistics::ColumnStatistics;
 use crate::meta::statistics::FormatVersion;
+use crate::meta::v0::statistics::ClusterStatistics;
+use crate::meta::v0::statistics::ColumnStatistics;
+use crate::meta::v0::statistics::Statistics;
 use crate::meta::ColumnId;
 use crate::meta::ColumnMeta;
 use crate::meta::Compression;
 use crate::meta::Location;
-use crate::meta::Statistics;
 use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
@@ -139,10 +138,10 @@ impl From<v0::BlockMeta> for BlockMeta {
             col_stats: s.col_stats,
             col_metas: s.col_metas,
             cluster_stats: None,
-            location: (s.location.path, DataBlock::VERSION),
+            location: (s.location.path, 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
-            compression: Compression::Lz4,
+            compression: Compression::Lz4Raw,
         }
     }
 }

@@ -15,10 +15,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::BlockMetaInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
 use common_storages_table_meta::meta::BlockMeta;
 
 use crate::pruning::BlockIndex;

@@ -22,9 +22,15 @@ use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
 
-impl TypeDeserializer for MutableBitmap {
+pub type BooleanDeserializer = MutableBitmap;
+
+impl TypeDeserializer for BooleanDeserializer {
     fn memory_size(&self) -> usize {
         self.len()
+    }
+
+    fn len(&self) -> usize {
+        MutableBitmap::len(self)
     }
 
     fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {

@@ -13,17 +13,28 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::nullable::NullableColumn;
+use common_expression::types::number::Float64Type;
+use common_expression::types::number::Int32Type;
+use common_expression::types::BooleanType;
+use common_expression::types::DataType;
+use common_expression::types::DateType;
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::FromData;
 use common_io::prelude::FormatSettings;
 use databend_query::servers::http::v1::json_block::JsonBlock;
 use pretty_assertions::assert_eq;
 use serde::Serialize;
 use serde_json::to_value;
-use serde_json::Value;
+use serde_json::Value as JsonValue;
 
-fn val<T>(v: T) -> Value
+fn val<T>(v: T) -> JsonValue
 where T: Serialize {
     to_value(v).unwrap()
 }
@@ -31,27 +42,27 @@ where T: Serialize {
 fn test_data_block(is_nullable: bool) -> Result<()> {
     let schema = match is_nullable {
         false => DataSchemaRefExt::create(vec![
-            DataField::new("c1", i32::to_data_type()),
-            DataField::new("c2", Vu8::to_data_type()),
-            DataField::new("c3", bool::to_data_type()),
-            DataField::new("c4", f64::to_data_type()),
-            DataField::new("c5", DateType::new_impl()),
+            DataField::new("c1", DataType::Number(NumberDataType::Int32)),
+            DataField::new("c2", DataType::String),
+            DataField::new("c3", DataType::Boolean),
+            DataField::new("c4", DataType::Number(NumberDataType::Float64)),
+            DataField::new("c5", DataType::Date),
         ]),
         true => DataSchemaRefExt::create(vec![
-            DataField::new_nullable("c1", i32::to_data_type()),
-            DataField::new_nullable("c2", Vu8::to_data_type()),
-            DataField::new_nullable("c3", bool::to_data_type()),
-            DataField::new_nullable("c4", f64::to_data_type()),
-            DataField::new_nullable("c5", DateType::new_impl()),
+            DataField::new_nullable("c1", DataType::Number(NumberDataType::Int32)),
+            DataField::new_nullable("c2", DataType::String),
+            DataField::new_nullable("c3", DataType::Boolean),
+            DataField::new_nullable("c4", DataType::Number(NumberDataType::Float64)),
+            DataField::new_nullable("c5", DataType::Date),
         ]),
     };
 
     let mut columns = vec![
-        Series::from_data(vec![1, 2, 3]),
-        Series::from_data(vec!["a", "b", "c"]),
-        Series::from_data(vec![true, true, false]),
-        Series::from_data(vec![1.1, 2.2, 3.3]),
-        Series::from_data(vec![1_i32, 2_i32, 3_i32]),
+        Int32Type::from_data(vec![1, 2, 3]),
+        StringType::from_data(vec!["a", "b", "c"]),
+        BooleanType::from_data(vec![true, true, false]),
+        Float64Type::from_data(vec![1.1, 2.2, 3.3]),
+        DateType::from_data(vec![1_i32, 2_i32, 3_i32]),
     ];
 
     if is_nullable {
@@ -60,15 +71,19 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
             .map(|c| {
                 let mut validity = MutableBitmap::new();
                 validity.extend_constant(c.len(), true);
-                NullableColumn::wrap_inner(c.clone(), Some(validity.into()))
+
+                Column::Nullable(Box::new(NullableColumn {
+                    column: c.clone(),
+                    validity: validity.into(),
+                }))
             })
             .collect();
     }
 
-    let block = DataBlock::create(schema, columns);
+    let block = DataBlock::new_from_columns(columns);
 
     let format = FormatSettings::default();
-    let json_block = JsonBlock::new(&block, &format)?;
+    let json_block = JsonBlock::new(schema, &block, &format)?;
     let expect = vec![
         vec![val("1"), val("a"), val("1"), val("1.1"), val("1970-01-02")],
         vec![val("2"), val("b"), val("1"), val("2.2"), val("1970-01-03")],
@@ -93,7 +108,7 @@ fn test_data_block_not_nullable() -> Result<()> {
 fn test_empty_block() -> Result<()> {
     let block = DataBlock::empty();
     let format = FormatSettings::default();
-    let json_block = JsonBlock::new(&block, &format)?;
+    let json_block = JsonBlock::new(DataSchemaRefExt::create(vec![]), &block, &format)?;
     assert!(json_block.is_empty());
     Ok(())
 }

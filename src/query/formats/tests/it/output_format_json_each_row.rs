@@ -12,17 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::number::Float32Type;
+use common_expression::types::number::Int32Type;
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
+use common_expression::FromData;
+use common_expression::FromOptData;
+use common_expression::TableDataType;
+use common_expression::TableField;
 use pretty_assertions::assert_eq;
 
 use crate::get_output_format_clickhouse;
+use crate::output_format_utils::gen_schema_and_block;
 use crate::output_format_utils::get_simple_block;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
-    let block = get_simple_block(is_nullable)?;
-    let schema = block.schema().clone();
+    let (schema, block) = get_simple_block(is_nullable);
 
     {
         let mut formatter = get_output_format_clickhouse("ndjson", schema)?;
@@ -41,17 +47,22 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
 
 #[test]
 fn test_null() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new_nullable("c1", i32::to_data_type()),
-        DataField::new_nullable("c2", i32::to_data_type()),
-    ]);
-
-    let columns = vec![
-        Series::from_data(vec![Some(1i32), None, Some(3)]),
-        Series::from_data(vec![None, Some(2i32), None]),
-    ];
-
-    let block = DataBlock::create(schema.clone(), columns);
+    let (schema, block) = gen_schema_and_block(
+        vec![
+            TableField::new(
+                "c1",
+                TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
+            ),
+            TableField::new(
+                "c2",
+                TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
+            ),
+        ],
+        vec![
+            Int32Type::from_opt_data(vec![Some(1i32), None, Some(3)]),
+            Int32Type::from_opt_data(vec![None, Some(2i32), None]),
+        ],
+    );
 
     {
         let mut formatter = get_output_format_clickhouse("ndjson", schema)?;
@@ -70,17 +81,16 @@ fn test_null() -> Result<()> {
 #[ignore]
 #[test]
 fn test_denormal() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("c1", f32::to_data_type()),
-        DataField::new("c2", f32::to_data_type()),
-    ]);
-
-    let columns = vec![
-        Series::from_data(vec![1f32, f32::NAN]),
-        Series::from_data(vec![f32::INFINITY, f32::NEG_INFINITY]),
-    ];
-
-    let block = DataBlock::create(schema.clone(), columns);
+    let (schema, block) = gen_schema_and_block(
+        vec![
+            TableField::new("c1", TableDataType::Number(NumberDataType::Float32)),
+            TableField::new("c2", TableDataType::Number(NumberDataType::Float32)),
+        ],
+        vec![
+            Float32Type::from_data(vec![1f32, f32::NAN]),
+            Float32Type::from_data(vec![f32::INFINITY, f32::NEG_INFINITY]),
+        ],
+    );
 
     {
         let mut formatter = get_output_format_clickhouse("ndjson", schema)?;
@@ -110,11 +120,10 @@ fn test_denormal() -> Result<()> {
 
 #[test]
 fn test_string_escape() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("c1", Vu8::to_data_type())]);
-
-    let columns = vec![Series::from_data(vec!["\0"])];
-
-    let block = DataBlock::create(schema.clone(), columns);
+    let (schema, block) =
+        gen_schema_and_block(vec![TableField::new("c1", TableDataType::String)], vec![
+            StringType::from_data(vec!["\0"]),
+        ]);
 
     {
         let mut formatter = get_output_format_clickhouse("ndjson", schema)?;

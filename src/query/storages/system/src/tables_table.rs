@@ -18,9 +18,17 @@ use common_catalog::catalog::Catalog;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::FromOptData;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -87,81 +95,93 @@ where TablesTable<T>: HistoryAware
             .iter()
             .map(|e| (e.key().to_string(), e.value().clone()))
             .collect();
-        let mut catalogs = MutableStringColumn::default(); // capacity unknown
-        let mut databases = MutableStringColumn::default();
-        let mut names = MutableStringColumn::default();
-        let mut engines = MutableStringColumn::default();
-        let mut cluster_bys = vec![];
-        let mut created_ons = vec![];
-        let mut dropped_ons = vec![];
+
+        let mut catalogs = vec![];
+        let mut databases = vec![];
+        let mut database_tables = vec![];
+        for (ctl_name, ctl) in ctls.into_iter() {
+            let dbs = ctl.list_databases(tenant.as_str()).await?;
+            let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
+
+            for db in dbs {
+                let name = db.name().to_string().into_boxed_str();
+                let name: &str = Box::leak(name);
+                let tables = Self::list_tables(&ctl, tenant.as_str(), name).await?;
+                for table in tables {
+                    catalogs.push(ctl_name.as_bytes().to_vec());
+                    databases.push(name.as_bytes().to_vec());
+                    database_tables.push(table);
+                }
+            }
+        }
+
         let mut num_rows: Vec<Option<u64>> = Vec::new();
         let mut data_size: Vec<Option<u64>> = Vec::new();
         let mut data_compressed_size: Vec<Option<u64>> = Vec::new();
         let mut index_size: Vec<Option<u64>> = Vec::new();
 
-        for (ctl_name, ctl) in ctls.into_iter() {
-            let dbs = ctl.list_databases(tenant.as_str()).await?;
-            let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
+        for tbl in &database_tables {
+            let stats = tbl.table_statistics()?;
+            num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
+            data_size.push(stats.as_ref().and_then(|v| v.data_size));
+            data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
+            index_size.push(stats.as_ref().and_then(|v| v.index_size));
+        }
 
-            let mut database_tables = vec![];
-            for database in dbs {
-                let name = database.name().to_string().into_boxed_str();
-                let name: &str = Box::leak(name);
-                let tables = Self::list_tables(&ctl, tenant.as_str(), name).await?;
-                for table in tables {
-                    catalogs.append_value(ctl_name);
-                    databases.append_value(name);
-                    database_tables.push(table);
-                }
-            }
-
-            for tbl in &database_tables {
-                let stats = tbl.table_statistics()?;
-                num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
-                data_size.push(stats.as_ref().and_then(|v| v.data_size));
-                data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
-                index_size.push(stats.and_then(|v| v.index_size));
-
-                names.append_value(tbl.name());
-                engines.append_value(tbl.engine());
-
-                let created_on = tbl
-                    .get_table_info()
+        let names: Vec<Vec<u8>> = database_tables
+            .iter()
+            .map(|v| v.name().as_bytes().to_vec())
+            .collect();
+        let engines: Vec<Vec<u8>> = database_tables
+            .iter()
+            .map(|v| v.engine().as_bytes().to_vec())
+            .collect();
+        let created_ons: Vec<String> = database_tables
+            .iter()
+            .map(|v| {
+                v.get_table_info()
                     .meta
                     .created_on
                     .format("%Y-%m-%d %H:%M:%S.%3f %z")
-                    .to_string();
-                let dropped_on = tbl
-                    .get_table_info()
+                    .to_string()
+            })
+            .collect();
+        let created_ons: Vec<Vec<u8>> = created_ons.iter().map(|s| s.as_bytes().to_vec()).collect();
+        let dropped_ons: Vec<String> = database_tables
+            .iter()
+            .map(|v| {
+                v.get_table_info()
                     .meta
                     .drop_on
                     .map(|v| v.format("%Y-%m-%d %H:%M:%S.%3f %z").to_string())
-                    .unwrap_or_else(|| "NULL".to_owned());
-                let cluster_by = tbl
-                    .get_table_info()
+                    .unwrap_or_else(|| "NULL".to_owned())
+            })
+            .collect();
+        let dropped_ons: Vec<Vec<u8>> = dropped_ons.iter().map(|s| s.as_bytes().to_vec()).collect();
+        let cluster_bys: Vec<String> = database_tables
+            .iter()
+            .map(|v| {
+                v.get_table_info()
                     .meta
                     .default_cluster_key
-                    .as_ref()
-                    .map(|s| s.clone().into_bytes())
-                    .unwrap_or_else(Vec::new);
-                created_ons.push(created_on);
-                dropped_ons.push(dropped_on);
-                cluster_bys.push(cluster_by);
-            }
-        }
+                    .clone()
+                    .unwrap_or_else(|| "".to_owned())
+            })
+            .collect();
+        let cluster_bys: Vec<Vec<u8>> = cluster_bys.iter().map(|s| s.as_bytes().to_vec()).collect();
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            catalogs.to_column(),
-            databases.to_column(),
-            names.to_column(),
-            engines.to_column(),
-            Series::from_data(cluster_bys),
-            Series::from_data(created_ons),
-            Series::from_data(dropped_ons),
-            Series::from_data(num_rows),
-            Series::from_data(data_size),
-            Series::from_data(data_compressed_size),
-            Series::from_data(index_size),
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(catalogs),
+            StringType::from_data(databases),
+            StringType::from_data(names),
+            StringType::from_data(engines),
+            StringType::from_data(cluster_bys),
+            StringType::from_data(created_ons),
+            StringType::from_data(dropped_ons),
+            UInt64Type::from_opt_data(num_rows),
+            UInt64Type::from_opt_data(data_size),
+            UInt64Type::from_opt_data(data_compressed_size),
+            UInt64Type::from_opt_data(index_size),
         ]))
     }
 }
@@ -169,19 +189,31 @@ where TablesTable<T>: HistoryAware
 impl<const T: bool> TablesTable<T>
 where TablesTable<T>: HistoryAware
 {
-    pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("catalog", Vu8::to_data_type()),
-            DataField::new("database", Vu8::to_data_type()),
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("engine", Vu8::to_data_type()),
-            DataField::new("cluster_by", Vu8::to_data_type()),
-            DataField::new("created_on", Vu8::to_data_type()),
-            DataField::new("dropped_on", Vu8::to_data_type()),
-            DataField::new_nullable("num_rows", u64::to_data_type()),
-            DataField::new_nullable("data_size", u64::to_data_type()),
-            DataField::new_nullable("data_compressed_size", u64::to_data_type()),
-            DataField::new_nullable("index_size", u64::to_data_type()),
+    pub fn schema() -> TableSchemaRef {
+        TableSchemaRefExt::create(vec![
+            TableField::new("catalog", TableDataType::String),
+            TableField::new("database", TableDataType::String),
+            TableField::new("name", TableDataType::String),
+            TableField::new("engine", TableDataType::String),
+            TableField::new("cluster_by", TableDataType::String),
+            TableField::new("created_on", TableDataType::String),
+            TableField::new("dropped_on", TableDataType::String),
+            TableField::new(
+                "num_rows",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "data_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "data_compressed_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "index_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
         ])
     }
 

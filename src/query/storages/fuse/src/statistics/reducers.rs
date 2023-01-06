@@ -15,12 +15,10 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnWithField;
-use common_datavalues::DataField;
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
+use common_expression::Scalar;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnStatistics;
@@ -84,22 +82,20 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .filter(|s| !s.is_null())
                 .min_by(|&x, &y| x.cmp(y))
                 .cloned()
-                .unwrap_or(DataValue::Null);
+                .unwrap_or(Scalar::Null);
 
             let max = max_stats
                 .iter()
                 .filter(|s| !s.is_null())
                 .max_by(|&x, &y| x.cmp(y))
                 .cloned()
-                .unwrap_or(DataValue::Null);
+                .unwrap_or(Scalar::Null);
 
             let distinct_of_values = match data_block {
-                Some(_data_block) => {
-                    if let Some((_, col)) = leaves.as_ref().unwrap().get(*id as usize) {
-                        let col_data_type = col.data_type();
-                        let data_field = DataField::new("", col_data_type);
-                        let column_field = ColumnWithField::new(col.clone(), data_field);
-                        calc_column_distinct_of_values(col, column_field)?
+                Some(data_block) => {
+                    if let Some(col) = leaves.as_ref().unwrap().get(*id as usize) {
+                        let column = col.1.convert_to_full_column(&col.2, data_block.num_rows());
+                        calc_column_distinct_of_values(&column, &col.2, data_block.num_rows())?
                     } else {
                         0
                     }

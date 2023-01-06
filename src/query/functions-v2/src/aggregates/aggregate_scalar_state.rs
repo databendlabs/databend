@@ -27,6 +27,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 // These types can downcast their builders successfully.
+// TODO(@b41sh):  Variant => VariantType can't be used because it will use Scalar::String to compare
+// Maybe we could use ValueType::compare() to compare them.
 #[macro_export]
 macro_rules! with_simple_no_number_mapped_type {
     (| $t:tt | $($tail:tt)*) => {
@@ -35,7 +37,6 @@ macro_rules! with_simple_no_number_mapped_type {
                 String => StringType,
                 Boolean => BooleanType,
                 Timestamp => TimestampType,
-                Variant => VariantType,
                 Null => NullType,
                 EmptyArray => EmptyArrayType,
                 Date => DateType,

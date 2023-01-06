@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_storages_system::TablesTableWithoutHistory;
 use futures::TryStreamExt;
 
@@ -85,6 +85,6 @@ impl OneBlockProcedure for SearchTablesProcedure {
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        TablesTableWithoutHistory::schema()
+        Arc::new(TablesTableWithoutHistory::schema().into())
     }
 }

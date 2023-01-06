@@ -27,6 +27,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
+use common_expression::vectorize_with_builder_3_arg;
 use common_expression::Column;
 use common_expression::EvalContext;
 use common_expression::Function;
@@ -37,6 +38,9 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
+use geo_types::Coordinate;
+use h3ron::H3Cell;
+use h3ron::Index;
 use once_cell::sync::OnceCell;
 
 const PI: f64 = std::f64::consts::PI;
@@ -79,6 +83,20 @@ struct Ellipse {
 pub fn register(registry: &mut FunctionRegistry) {
     // init globals.
     geo_dist_init();
+
+    registry.register_passthrough_nullable_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<i64>, NumberType<u64>,_, _>(
+        "geo_to_h3",
+        FunctionProperty::default(),
+        |_,_,_|FunctionDomain::Full,
+        vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<i64>, NumberType<u64>>(
+            |x, y, r, builder, _| {
+                let coord = Coordinate { x: x.into(), y: y.into() };
+                let h3_cell = H3Cell::from_coordinate(coord, r as u8).map_err(|err| err.to_string())?;
+                builder.push(h3_cell.h3index());
+                Ok(())
+            }
+        ),
+    );
 
     // geo distance
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
