@@ -33,6 +33,7 @@ use common_expression::Scalar;
 use common_hashtable::HashSet as CommonHashSet;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::HashtableLike;
+use common_hashtable::StackHashSet;
 use common_hashtable::UnsizedHashSet;
 use common_io::prelude::*;
 use serde::de::DeserializeOwned;
@@ -235,7 +236,7 @@ where T: Number + Serialize + DeserializeOwned + HashtableKeyable
 {
     fn new() -> Self {
         AggregateDistinctNumberState {
-            set: CommonHashSet::new(),
+            set: CommonHashSet::with_capacity(4),
         }
     }
 
@@ -310,13 +311,13 @@ where T: Number + Serialize + DeserializeOwned + HashtableKeyable
 
 // For count(distinct string) and uniq(string)
 pub struct AggregateUniqStringState {
-    set: CommonHashSet<u128>,
+    set: StackHashSet<u128, 16>,
 }
 
 impl DistinctStateFunc for AggregateUniqStringState {
     fn new() -> Self {
         AggregateUniqStringState {
-            set: CommonHashSet::new(),
+            set: StackHashSet::new(),
         }
     }
 
@@ -330,7 +331,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = CommonHashSet::with_capacity(size as usize);
+        self.set = StackHashSet::with_capacity(size as usize);
         for _ in 0..size {
             let e = deserialize_from_slice(reader)?;
             let _ = self.set.set_insert(e).is_ok();
