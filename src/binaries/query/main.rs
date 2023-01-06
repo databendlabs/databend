@@ -16,6 +16,7 @@ mod local;
 
 use std::env;
 
+use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::Runtime;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_base::set_alloc_error_hook;
@@ -38,6 +39,9 @@ use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use tracing::info;
+
+#[global_allocator]
+pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
 fn main() {
     match Runtime::with_default_worker_threads() {

@@ -22,9 +22,6 @@ use std::ptr::NonNull;
 use super::je_allocator::JEAllocator;
 use super::system_allocator::SystemAllocator;
 
-#[global_allocator]
-pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GlobalAllocator;
 
