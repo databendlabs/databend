@@ -40,6 +40,7 @@ pub enum PhysicalScalar {
     },
     Function {
         name: String,
+        params: Vec<usize>,
         args: Vec<PhysicalScalar>,
         return_type: DataType,
     },
@@ -79,20 +80,21 @@ impl PhysicalScalar {
         }
     }
 
-    /// Convert to `RawExpr`
     pub fn as_raw_expr(&self) -> RawExpr {
         match self {
             PhysicalScalar::Constant { value, .. } => RawExpr::Literal {
                 span: None,
                 lit: value.clone(),
             },
-            PhysicalScalar::Function { name, args, .. } => {
+            PhysicalScalar::Function {
+                name, params, args, ..
+            } => {
                 let args = args.iter().map(|arg| arg.as_raw_expr()).collect::<Vec<_>>();
                 RawExpr::FunctionCall {
                     span: None,
                     name: name.clone(),
+                    params: params.clone(),
                     args,
-                    params: vec![],
                 }
             }
             PhysicalScalar::Cast { input, target } => {
@@ -114,7 +116,6 @@ impl PhysicalScalar {
         }
     }
 
-    /// Convert to `Expr` by type checking.
     pub fn as_expr(&self) -> Result<Expr> {
         let raw_expr = self.as_raw_expr();
         let expr = check(&raw_expr, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {

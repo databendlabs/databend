@@ -117,6 +117,7 @@ impl<'a> AggregateRewriter<'a> {
                     .map(|arg| self.visit(arg))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(FunctionCall {
+                    params: func.params.clone(),
                     arguments: new_args,
                     func_name: func.func_name.clone(),
                     return_type: func.return_type.clone(),
