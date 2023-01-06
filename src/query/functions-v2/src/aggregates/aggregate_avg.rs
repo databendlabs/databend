@@ -21,6 +21,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::Float64Type;
+use common_expression::types::number::Int8Type;
 use common_expression::types::number::Number;
 use common_expression::types::number::F64;
 use common_expression::types::ArgType;
@@ -201,7 +202,14 @@ pub fn try_create_aggregate_avg_function(
     arguments: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
-    with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
+
+    // null use dummy func, it's already covered in `AggregateNullResultFunction`
+    let data_type = if arguments[0].is_null() {
+        Int8Type::data_type()
+    } else {
+        arguments[0].clone()
+    };
+    with_number_mapped_type!(|NUM_TYPE| match &data_type {
         DataType::Number(NumberDataType::NUM_TYPE) => {
             AggregateAvgFunction::<NUM_TYPE, <NUM_TYPE as ResultTypeOfUnary>::Sum>::try_create(
                 display_name,

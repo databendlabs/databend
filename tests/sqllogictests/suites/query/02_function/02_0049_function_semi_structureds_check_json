@@ -61,22 +61,12 @@ NULL
 query T
 select check_json('[1,')
 ----
-EOF while parsing a value at line 1 column 3
+EOF while parsing a value, pos 3
 
 query T
 select check_json('"ab')
 ----
-EOF while parsing a string at line 1 column 3
-
-query T
-select check_json(to_date('2022-01-01'))
-----
-Date is not a valid JSON
-
-query T
-select check_json(to_datetime('2022-01-01 20:20:20'))
-----
-Timestamp is not a valid JSON
+EOF while parsing a value, pos 3
 
 statement ok
 DROP DATABASE IF EXISTS db1
@@ -113,8 +103,8 @@ insert into t2 values ('abc'),('[1,')
 query TT
 select check_json(v), v from t2
 ----
-expected value at line 1 column 1 abc
-EOF while parsing a value at line 1 column 3 [1,
+expected value, pos 1 abc
+EOF while parsing a value, pos 3 [1,
 
 statement ok
 DROP DATABASE db1

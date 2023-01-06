@@ -119,6 +119,7 @@ impl DistinctStateFunc for AggregateDistinctState {
 
                 let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
                 serialize_into_buf(&mut buffer, &values)?;
+                self.set.insert(buffer);
             }
         }
         Ok(())

@@ -16,10 +16,11 @@ use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
 use common_storages_table_meta::caches::CacheManager;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -105,7 +106,15 @@ impl BaseMutator {
         for (seg_idx, replacements) in self.mutations.clone() {
             let segment = {
                 let (path, version) = &segments[seg_idx];
-                segment_reader.read(&path, None, *version).await?
+
+                // Keep in mind that segment_info_read must need a schema
+                let load_params = LoadParams {
+                    location: path.clone(),
+                    len_hint: None,
+                    ver: *version,
+                    schema: Some(Arc::new(self.base_snapshot.schema.clone())),
+                };
+                segment_reader.read(&load_params).await?
             };
 
             // collects the block locations of the segment being modified
@@ -164,7 +173,13 @@ impl BaseMutator {
 
         let mut new_segment_summaries = Vec::with_capacity(new_segments.len());
         for (loc, ver) in &new_segments {
-            let seg = segment_reader.read(loc, None, *ver).await?;
+            let params = LoadParams {
+                location: loc.clone(),
+                len_hint: None,
+                ver: *ver,
+                schema: Some(Arc::new(self.base_snapshot.schema.clone())),
+            };
+            let seg = segment_reader.read(&params).await?;
             new_segment_summaries.push(seg.summary.clone())
         }
 

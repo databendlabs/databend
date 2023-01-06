@@ -20,9 +20,15 @@ use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
 
-impl TypeDeserializer for usize {
+pub type NullDeserializer = usize;
+
+impl TypeDeserializer for NullDeserializer {
     fn memory_size(&self) -> usize {
         std::mem::size_of::<usize>()
+    }
+
+    fn len(&self) -> usize {
+        *self
     }
 
     fn de_binary(&mut self, _reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {

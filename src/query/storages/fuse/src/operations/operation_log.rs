@@ -17,10 +17,9 @@ use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
+use common_expression::BlockMetaInfo;
+use common_expression::DataBlock;
 use common_storages_table_meta::meta::SegmentInfo;
 
 // currently, only support append,
@@ -45,11 +44,7 @@ impl AppendOperationLogEntry {
 impl TryFrom<AppendOperationLogEntry> for DataBlock {
     type Error = ErrorCode;
     fn try_from(value: AppendOperationLogEntry) -> Result<Self, Self::Error> {
-        Ok(DataBlock::create_with_meta(
-            DataSchemaRef::default(),
-            vec![],
-            Some(Box::new(value)),
-        ))
+        Ok(DataBlock::new_with_meta(vec![], 0, Some(Box::new(value))))
     }
 }
 

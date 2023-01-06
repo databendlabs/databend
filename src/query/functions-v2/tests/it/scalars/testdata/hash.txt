@@ -17,8 +17,8 @@ output         : NULL
 
 
 ast            : md5(a)
-raw expr       : md5(ColumnRef(0)::String)
-checked expr   : md5<String>(ColumnRef(0))
+raw expr       : md5(#0::String)
+checked expr   : md5<String>(#0)
 evaluation:
 +--------+-------------------+------------------------------------+
 |        | a                 | Output                             |
@@ -57,8 +57,8 @@ output         : NULL
 
 
 ast            : sha1(a)
-raw expr       : sha1(ColumnRef(0)::String)
-checked expr   : sha<String>(ColumnRef(0))
+raw expr       : sha1(#0::String)
+checked expr   : sha<String>(#0)
 evaluation:
 +--------+-------------------+--------------------------------------------+
 |        | a                 | Output                                     |
@@ -97,8 +97,8 @@ output         : NULL
 
 
 ast            : blake3(a)
-raw expr       : blake3(ColumnRef(0)::String)
-checked expr   : blake3<String>(ColumnRef(0))
+raw expr       : blake3(#0::String)
+checked expr   : blake3<String>(#0)
 evaluation:
 +--------+-------------------+--------------------------------------------------------------------+
 |        | a                 | Output                                                             |
@@ -146,17 +146,17 @@ output         : NULL
 
 
 ast            : sha2(a,b)
-raw expr       : sha2(ColumnRef(0)::String, ColumnRef(1)::UInt16)
-checked expr   : sha2<String, UInt64>(ColumnRef(0), CAST(ColumnRef(1) AS UInt64))
+raw expr       : sha2(#0::String, #1::UInt16)
+checked expr   : sha2<String, UInt64>(#0, CAST(#1 AS UInt64))
 evaluation:
 +--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
 |        | a                 | b           | Output                                                                                                                             |
 +--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
 | Type   | String            | UInt16      | String                                                                                                                             |
 | Domain | {"Abc"..="ß😀山"} | {224..=512} | Unknown                                                                                                                            |
-| Row 0  | "Abc"             | 224         | "11d86770f501294c6b395942a39f60fe286a15e06282abcb2294cfa0"                                                                         |
-| Row 1  | "Dobrý den"       | 384         | "1a5c66c918718c627e360e56833d2f6c638fd1a67086792606cfefe50089289ca34b52a72a833e6f2661b64417068846"                                 |
-| Row 2  | "ß😀山"           | 512         | "3bd4ca36a66c0675e695f3fc44af703cd6c110085adf105138ef56e6768a639f16a9c27b651a0c64f685b24be835e0a62485575477e06d530574865bf1670d30" |
+| Row 0  | "Abc"             | 224_u16     | "11d86770f501294c6b395942a39f60fe286a15e06282abcb2294cfa0"                                                                         |
+| Row 1  | "Dobrý den"       | 384_u16     | "1a5c66c918718c627e360e56833d2f6c638fd1a67086792606cfefe50089289ca34b52a72a833e6f2661b64417068846"                                 |
+| Row 2  | "ß😀山"           | 512_u16     | "3bd4ca36a66c0675e695f3fc44af703cd6c110085adf105138ef56e6768a639f16a9c27b651a0c64f685b24be835e0a62485575477e06d530574865bf1670d30" |
 +--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -173,8 +173,8 @@ raw expr       : city64withseed("Abc", 0_u8)
 checked expr   : city64withseed<String, UInt8>("Abc", 0_u8)
 optimized expr : 8309941215813243361_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 8309941215813243361
+output domain  : {0..=18446744073709551615}
+output         : 8309941215813243361_u64
 
 
 ast            : city64withseed('Abc',256)
@@ -182,8 +182,8 @@ raw expr       : city64withseed("Abc", 256_u16)
 checked expr   : city64withseed<String, UInt16>("Abc", 256_u16)
 optimized expr : 10246934130793054423_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 10246934130793054423
+output domain  : {0..=18446744073709551615}
+output         : 10246934130793054423_u64
 
 
 ast            : city64withseed('Abc',256.3)
@@ -191,8 +191,8 @@ raw expr       : city64withseed("Abc", 256.3_f64)
 checked expr   : city64withseed<String, Float64>("Abc", 256.3_f64)
 optimized expr : 10246934130793054423_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 10246934130793054423
+output domain  : {0..=18446744073709551615}
+output         : 10246934130793054423_u64
 
 
 ast            : city64withseed(to_datetime(100000), 1234)
@@ -200,8 +200,8 @@ raw expr       : city64withseed(to_datetime(100000_u32), 1234_u16)
 checked expr   : city64withseed<Timestamp, UInt16>(to_timestamp<Int64>(CAST(100000_u32 AS Int64)), 1234_u16)
 optimized expr : 4538088127563444061_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 4538088127563444061
+output domain  : {0..=18446744073709551615}
+output         : 4538088127563444061_u64
 
 
 ast            : city64withseed(1234567890, 12)
@@ -209,8 +209,8 @@ raw expr       : city64withseed(1234567890_u32, 12_u8)
 checked expr   : city64withseed<UInt32, UInt8>(1234567890_u32, 12_u8)
 optimized expr : 2939704650099116301_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 2939704650099116301
+output domain  : {0..=18446744073709551615}
+output         : 2939704650099116301_u64
 
 
 ast            : city64withseed(1.1, 12)
@@ -218,8 +218,8 @@ raw expr       : city64withseed(1.1_f64, 12_u8)
 checked expr   : city64withseed<Float64, UInt8>(1.1_f64, 12_u8)
 optimized expr : 10046394896202388363_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 10046394896202388363
+output domain  : {0..=18446744073709551615}
+output         : 10046394896202388363_u64
 
 
 ast            : city64withseed('1234567890', 12.12)
@@ -227,8 +227,8 @@ raw expr       : city64withseed("1234567890", 12.12_f64)
 checked expr   : city64withseed<String, Float64>("1234567890", 12.12_f64)
 optimized expr : 10660895976650300430_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 10660895976650300430
+output domain  : {0..=18446744073709551615}
+output         : 10660895976650300430_u64
 
 
 ast            : city64withseed(1234567890, 12.12)
@@ -236,8 +236,8 @@ raw expr       : city64withseed(1234567890_u32, 12.12_f64)
 checked expr   : city64withseed<UInt32, Float64>(1234567890_u32, 12.12_f64)
 optimized expr : 2939704650099116301_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 2939704650099116301
+output domain  : {0..=18446744073709551615}
+output         : 2939704650099116301_u64
 
 
 ast            : city64withseed(to_date(100000), 1234)
@@ -245,8 +245,8 @@ raw expr       : city64withseed(to_date(100000_u32), 1234_u16)
 checked expr   : city64withseed<Date, UInt16>(to_date<Int64>(CAST(100000_u32 AS Int64)), 1234_u16)
 optimized expr : 8535774936754559738_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 8535774936754559738
+output domain  : {0..=18446744073709551615}
+output         : 8535774936754559738_u64
 
 
 ast            : city64withseed(NULL,0)
@@ -259,18 +259,18 @@ output         : NULL
 
 
 ast            : city64withseed(a,b)
-raw expr       : city64withseed(ColumnRef(0)::String, ColumnRef(1)::UInt16)
-checked expr   : city64withseed<String, UInt16>(ColumnRef(0), ColumnRef(1))
+raw expr       : city64withseed(#0::String, #1::UInt16)
+checked expr   : city64withseed<String, UInt16>(#0, #1)
 evaluation:
-+--------+-------------------+-----------+----------------------+
-|        | a                 | b         | Output               |
-+--------+-------------------+-----------+----------------------+
-| Type   | String            | UInt16    | UInt64               |
-| Domain | {"Abc"..="ß😀山"} | {10..=12} | Unknown              |
-| Row 0  | "Abc"             | 10        | 10385767944629066306 |
-| Row 1  | "Dobrý den"       | 11        | 12123249488783690377 |
-| Row 2  | "ß😀山"           | 12        | 14631005279260459058 |
-+--------+-------------------+-----------+----------------------+
++--------+-------------------+-----------+----------------------------+
+|        | a                 | b         | Output                     |
++--------+-------------------+-----------+----------------------------+
+| Type   | String            | UInt16    | UInt64                     |
+| Domain | {"Abc"..="ß😀山"} | {10..=12} | {0..=18446744073709551615} |
+| Row 0  | "Abc"             | 10_u16    | 10385767944629066306_u64   |
+| Row 1  | "Dobrý den"       | 11_u16    | 12123249488783690377_u64   |
+| Row 2  | "ß😀山"           | 12_u16    | 14631005279260459058_u64   |
++--------+-------------------+-----------+----------------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                           |
@@ -286,8 +286,8 @@ raw expr       : siphash64("Abc")
 checked expr   : siphash64<String>("Abc")
 optimized expr : 17684958587550623602_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 17684958587550623602
+output domain  : {0..=18446744073709551615}
+output         : 17684958587550623602_u64
 
 
 ast            : siphash64(to_datetime(100000))
@@ -295,8 +295,8 @@ raw expr       : siphash64(to_datetime(100000_u32))
 checked expr   : siphash64<Timestamp>(to_timestamp<Int64>(CAST(100000_u32 AS Int64)))
 optimized expr : 6710305768027137259_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 6710305768027137259
+output domain  : {0..=18446744073709551615}
+output         : 6710305768027137259_u64
 
 
 ast            : siphash64(1234567890)
@@ -304,8 +304,8 @@ raw expr       : siphash64(1234567890_u32)
 checked expr   : siphash64<UInt32>(1234567890_u32)
 optimized expr : 12447382539015599056_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 12447382539015599056
+output domain  : {0..=18446744073709551615}
+output         : 12447382539015599056_u64
 
 
 ast            : siphash64(1.1)
@@ -313,8 +313,8 @@ raw expr       : siphash64(1.1_f64)
 checked expr   : siphash64<Float64>(1.1_f64)
 optimized expr : 14856193058643670405_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 14856193058643670405
+output domain  : {0..=18446744073709551615}
+output         : 14856193058643670405_u64
 
 
 ast            : siphash64(to_date(100000))
@@ -322,8 +322,8 @@ raw expr       : siphash64(to_date(100000_u32))
 checked expr   : siphash64<Date>(to_date<Int64>(CAST(100000_u32 AS Int64)))
 optimized expr : 17230848539826186862_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 17230848539826186862
+output domain  : {0..=18446744073709551615}
+output         : 17230848539826186862_u64
 
 
 ast            : siphash64(NULL)
@@ -341,7 +341,7 @@ checked expr   : siphash64<Variant>(parse_json<String>("{\"a\":1}"))
 optimized expr : 10266916306474055689_u64
 output type    : UInt64
 output domain  : Unknown
-output         : 10266916306474055689
+output         : 10266916306474055689_u64
 
 
 ast            : siphash(true)
@@ -349,22 +349,22 @@ raw expr       : siphash(true)
 checked expr   : siphash64<Boolean>(true)
 optimized expr : 4952851536318644461_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 4952851536318644461
+output domain  : {0..=18446744073709551615}
+output         : 4952851536318644461_u64
 
 
 ast            : siphash64(a)
-raw expr       : siphash64(ColumnRef(0)::String)
-checked expr   : siphash64<String>(ColumnRef(0))
+raw expr       : siphash64(#0::String)
+checked expr   : siphash64<String>(#0)
 evaluation:
-+--------+-------------------------+---------------------+
-|        | a                       | Output              |
-+--------+-------------------------+---------------------+
-| Type   | String                  | UInt64              |
-| Domain | {"Dobrý den"..="ß😀山"} | Unknown             |
-| Row 0  | "Dobrý den"             | 5782510256878119795 |
-| Row 1  | "ß😀山"                 | 1354619631122873228 |
-+--------+-------------------------+---------------------+
++--------+-------------------------+----------------------------+
+|        | a                       | Output                     |
++--------+-------------------------+----------------------------+
+| Type   | String                  | UInt64                     |
+| Domain | {"Dobrý den"..="ß😀山"} | {0..=18446744073709551615} |
+| Row 0  | "Dobrý den"             | 5782510256878119795_u64    |
+| Row 1  | "ß😀山"                 | 1354619631122873228_u64    |
++--------+-------------------------+----------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
 | Column | Data                                                                                  |
@@ -379,8 +379,8 @@ raw expr       : xxhash64("Abc")
 checked expr   : xxhash64<String>("Abc")
 optimized expr : 11989503812394966078_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 11989503812394966078
+output domain  : {0..=18446744073709551615}
+output         : 11989503812394966078_u64
 
 
 ast            : xxhash64(to_datetime(100000))
@@ -388,8 +388,8 @@ raw expr       : xxhash64(to_datetime(100000_u32))
 checked expr   : xxhash64<Timestamp>(to_timestamp<Int64>(CAST(100000_u32 AS Int64)))
 optimized expr : 14455582462593060490_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 14455582462593060490
+output domain  : {0..=18446744073709551615}
+output         : 14455582462593060490_u64
 
 
 ast            : xxhash64(1234567890)
@@ -397,8 +397,8 @@ raw expr       : xxhash64(1234567890_u32)
 checked expr   : xxhash64<UInt32>(1234567890_u32)
 optimized expr : 14922725725041217620_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 14922725725041217620
+output domain  : {0..=18446744073709551615}
+output         : 14922725725041217620_u64
 
 
 ast            : xxhash64(1.1)
@@ -406,8 +406,8 @@ raw expr       : xxhash64(1.1_f64)
 checked expr   : xxhash64<Float64>(1.1_f64)
 optimized expr : 18307966283998289030_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 18307966283998289030
+output domain  : {0..=18446744073709551615}
+output         : 18307966283998289030_u64
 
 
 ast            : xxhash64(to_date(100000))
@@ -415,8 +415,8 @@ raw expr       : xxhash64(to_date(100000_u32))
 checked expr   : xxhash64<Date>(to_date<Int64>(CAST(100000_u32 AS Int64)))
 optimized expr : 8691527656253933431_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 8691527656253933431
+output domain  : {0..=18446744073709551615}
+output         : 8691527656253933431_u64
 
 
 ast            : xxhash64(NULL)
@@ -434,7 +434,7 @@ checked expr   : xxhash64<Variant>(parse_json<String>("{\"a\":1}"))
 optimized expr : 13558435650847720346_u64
 output type    : UInt64
 output domain  : Unknown
-output         : 13558435650847720346
+output         : 13558435650847720346_u64
 
 
 ast            : xxhash64(true)
@@ -442,22 +442,22 @@ raw expr       : xxhash64(true)
 checked expr   : xxhash64<Boolean>(true)
 optimized expr : 9962287286179718960_u64
 output type    : UInt64
-output domain  : Unknown
-output         : 9962287286179718960
+output domain  : {0..=18446744073709551615}
+output         : 9962287286179718960_u64
 
 
 ast            : xxhash64(a)
-raw expr       : xxhash64(ColumnRef(0)::String)
-checked expr   : xxhash64<String>(ColumnRef(0))
+raw expr       : xxhash64(#0::String)
+checked expr   : xxhash64<String>(#0)
 evaluation:
-+--------+-------------------------+--------------------+
-|        | a                       | Output             |
-+--------+-------------------------+--------------------+
-| Type   | String                  | UInt64             |
-| Domain | {"Dobrý den"..="ß😀山"} | Unknown            |
-| Row 0  | "Dobrý den"             | 314761032262035578 |
-| Row 1  | "ß😀山"                 | 656695431091154575 |
-+--------+-------------------------+--------------------+
++--------+-------------------------+----------------------------+
+|        | a                       | Output                     |
++--------+-------------------------+----------------------------+
+| Type   | String                  | UInt64                     |
+| Domain | {"Dobrý den"..="ß😀山"} | {0..=18446744073709551615} |
+| Row 0  | "Dobrý den"             | 314761032262035578_u64     |
+| Row 1  | "ß😀山"                 | 656695431091154575_u64     |
++--------+-------------------------+----------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
 | Column | Data                                                                                  |
@@ -472,8 +472,8 @@ raw expr       : xxhash32("Abc")
 checked expr   : xxhash32<String>("Abc")
 optimized expr : 3980406955_u32
 output type    : UInt32
-output domain  : Unknown
-output         : 3980406955
+output domain  : {0..=4294967295}
+output         : 3980406955_u32
 
 
 ast            : xxhash32(to_datetime(100000))
@@ -481,8 +481,8 @@ raw expr       : xxhash32(to_datetime(100000_u32))
 checked expr   : xxhash32<Timestamp>(to_timestamp<Int64>(CAST(100000_u32 AS Int64)))
 optimized expr : 680734338_u32
 output type    : UInt32
-output domain  : Unknown
-output         : 680734338
+output domain  : {0..=4294967295}
+output         : 680734338_u32
 
 
 ast            : xxhash32(1234567890)
@@ -490,8 +490,8 @@ raw expr       : xxhash32(1234567890_u32)
 checked expr   : xxhash32<UInt32>(1234567890_u32)
 optimized expr : 2833116583_u32
 output type    : UInt32
-output domain  : Unknown
-output         : 2833116583
+output domain  : {0..=4294967295}
+output         : 2833116583_u32
 
 
 ast            : xxhash32(1.1)
@@ -499,8 +499,8 @@ raw expr       : xxhash32(1.1_f64)
 checked expr   : xxhash32<Float64>(1.1_f64)
 optimized expr : 3252916525_u32
 output type    : UInt32
-output domain  : Unknown
-output         : 3252916525
+output domain  : {0..=4294967295}
+output         : 3252916525_u32
 
 
 ast            : xxhash32(to_date(100000))
@@ -508,8 +508,8 @@ raw expr       : xxhash32(to_date(100000_u32))
 checked expr   : xxhash32<Date>(to_date<Int64>(CAST(100000_u32 AS Int64)))
 optimized expr : 2518126785_u32
 output type    : UInt32
-output domain  : Unknown
-output         : 2518126785
+output domain  : {0..=4294967295}
+output         : 2518126785_u32
 
 
 ast            : xxhash32(NULL)
@@ -527,25 +527,7 @@ checked expr   : xxhash32<Variant>(parse_json<String>("{\"a\":1}"))
 optimized expr : 3886246173_u32
 output type    : UInt32
 output domain  : Unknown
-output         : 3886246173
-
-
-ast            : xxhash32([1])
-raw expr       : xxhash32(array(1_u8))
-checked expr   : xxhash32<Variant>(CAST(array<T0=UInt8><T0>(1_u8) AS Variant))
-optimized expr : 3499081782_u32
-output type    : UInt32
-output domain  : Unknown
-output         : 3499081782
-
-
-ast            : xxhash32((1,2))
-raw expr       : xxhash32(tuple(1_u8, 2_u8))
-checked expr   : xxhash32<Variant>(CAST(tuple<UInt8, UInt8>(1_u8, 2_u8) AS Variant))
-optimized expr : 837113020_u32
-output type    : UInt32
-output domain  : Unknown
-output         : 837113020
+output         : 3886246173_u32
 
 
 ast            : xxhash32(true)
@@ -553,22 +535,22 @@ raw expr       : xxhash32(true)
 checked expr   : xxhash32<Boolean>(true)
 optimized expr : 949155633_u32
 output type    : UInt32
-output domain  : Unknown
-output         : 949155633
+output domain  : {0..=4294967295}
+output         : 949155633_u32
 
 
 ast            : xxhash32(a)
-raw expr       : xxhash32(ColumnRef(0)::String)
-checked expr   : xxhash32<String>(ColumnRef(0))
+raw expr       : xxhash32(#0::String)
+checked expr   : xxhash32<String>(#0)
 evaluation:
-+--------+-------------------------+------------+
-|        | a                       | Output     |
-+--------+-------------------------+------------+
-| Type   | String                  | UInt32     |
-| Domain | {"Dobrý den"..="ß😀山"} | Unknown    |
-| Row 0  | "Dobrý den"             | 19285785   |
-| Row 1  | "ß😀山"                 | 1401072642 |
-+--------+-------------------------+------------+
++--------+-------------------------+------------------+
+|        | a                       | Output           |
++--------+-------------------------+------------------+
+| Type   | String                  | UInt32           |
+| Domain | {"Dobrý den"..="ß😀山"} | {0..=4294967295} |
+| Row 0  | "Dobrý den"             | 19285785_u32     |
+| Row 1  | "ß😀山"                 | 1401072642_u32   |
++--------+-------------------------+------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
 | Column | Data                                                                                  |

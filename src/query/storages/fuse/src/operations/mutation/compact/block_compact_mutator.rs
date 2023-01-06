@@ -34,6 +34,7 @@ use crate::TableContext;
 #[derive(Clone)]
 pub struct BlockCompactMutator {
     pub ctx: Arc<dyn TableContext>,
+
     pub compact_params: CompactOptions,
     pub operator: Operator,
     // A set of Parts.
@@ -67,8 +68,9 @@ impl BlockCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
 
+        let schema = Arc::new(self.compact_params.base_snapshot.schema.clone());
         // Read all segments information in parallel.
-        let segments_io = SegmentsIO::create(self.ctx.clone(), self.operator.clone());
+        let segments_io = SegmentsIO::create(self.ctx.clone(), self.operator.clone(), schema);
         let segments = segments_io
             .read_segments(segment_locations)
             .await?

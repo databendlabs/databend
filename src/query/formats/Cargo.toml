@@ -12,17 +12,20 @@ test = false
 
 [dependencies] # In alphabetical order
 bstr = "1.0.1"
+chrono = { workspace = true }
 chrono-tz = { workspace = true }
 lexical-core = "0.8.5"
 micromarshal = "0.2.1"
 num = "0.4.0"
+ordered-float = "3.1.0"
 serde_json = { workspace = true }
 
 # Workspace dependencies
-common-datablocks = { path = "../datablocks" }
-common-datavalues = { path = "../datavalues" }
+common-arrow = { path = "../../common/arrow" }
 common-exception = { path = "../../common/exception" }
+common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }
+common-jsonb = { path = "../../common/jsonb" }
 common-meta-types = { path = "../../meta/types" }
 common-settings = { path = "../settings" }
 common-storages-common = { path = "../storages/common" }

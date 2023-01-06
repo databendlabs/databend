@@ -10,10 +10,10 @@ output         : []
 ast            : [NULL, 8, -10]
 raw expr       : array(NULL, 8_u8, minus(10_u8))
 checked expr   : array<T0=Int16 NULL><T0, T0, T0>(CAST(NULL AS Int16 NULL), CAST(8_u8 AS Int16 NULL), CAST(minus<UInt8>(10_u8) AS Int16 NULL))
-optimized expr : [NULL, 8, -10]
+optimized expr : [NULL, 8_i16, -10_i16]
 output type    : Array(Int16 NULL)
 output domain  : [{-10..=8} ∪ {NULL}]
-output         : [NULL, 8, -10]
+output         : [NULL, 8_i16, -10_i16]
 
 
 ast            : [['a', 'b'], []]
@@ -49,7 +49,7 @@ checked expr   : length<Array(Nothing)>(array<>())
 optimized expr : 0_u8
 output type    : UInt8
 output domain  : {0..=0}
-output         : 0
+output         : 0_u8
 
 
 ast            : length([1, 2, 3])
@@ -58,7 +58,7 @@ checked expr   : length<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2
 optimized expr : 3_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 3
+output         : 3_u64
 
 
 ast            : length([true, false])
@@ -67,7 +67,7 @@ checked expr   : length<T0=Boolean><Array(T0)>(array<T0=Boolean><T0, T0>(true, f
 optimized expr : 2_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 2
+output         : 2_u64
 
 
 ast            : length(['a', 'b', 'c', 'd'])
@@ -76,16 +76,24 @@ checked expr   : length<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("
 optimized expr : 4_u64
 output type    : UInt64
 output domain  : {0..=18446744073709551615}
-output         : 4
+output         : 4_u64
 
 
-ast            : [1, 2]['a']
-raw expr       : get(array(1_u8, 2_u8), "a")
-checked expr   : get<Variant, String>(CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Variant), "a")
-optimized expr : NULL
-output type    : Variant NULL
-output domain  : Unknown
-output         : NULL
+error: 
+  --> SQL:1:7
+  |
+1 | [1, 2]['a']
+  |       ^^^^^ no overload satisfies `get(Array(UInt8), String)`
+
+has tried possible overloads:
+  get(Array(Nothing) NULL, UInt64 NULL) :: NULL     : unable to unify `Array(UInt8)` with `Array(Nothing)`
+  get(Array(T0 NULL), UInt64) :: T0 NULL            : unable to unify `String` with `UInt64`
+  get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL  : unable to unify `String` with `UInt64`
+  get(Array(T0), UInt64) :: T0 NULL                 : unable to unify `String` with `UInt64`
+  get(Array(T0) NULL, UInt64 NULL) :: T0 NULL       : unable to unify `String` with `UInt64`
+  get(Variant NULL, UInt64 NULL) :: Variant NULL    : unable to unify `Array(UInt8)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(UInt8)` with `Variant`
+
 
 
 ast            : [][1]
@@ -130,7 +138,7 @@ checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, 
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=3} ∪ {NULL}
-output         : 1
+output         : 1_u8
 
 
 ast            : [1, 2, 3][3]
@@ -139,7 +147,7 @@ checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, 
 optimized expr : 3_u8
 output type    : UInt8 NULL
 output domain  : {1..=3} ∪ {NULL}
-output         : 3
+output         : 3_u8
 
 
 ast            : [1, null, 3][1]
@@ -148,7 +156,7 @@ checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(array<T0=UInt8 NULL><T0, 
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=3} ∪ {NULL}
-output         : 1
+output         : 1_u8
 
 
 ast            : [1, null, 3][2]
@@ -170,17 +178,17 @@ output         : NULL
 
 
 ast            : [a, b][idx]
-raw expr       : get(array(ColumnRef(0)::Int16, ColumnRef(1)::Int16), ColumnRef(2)::UInt16)
-checked expr   : get<T0=Int16><Array(T0 NULL), UInt64>(CAST(array<T0=Int16><T0, T0>(ColumnRef(0), ColumnRef(1)) AS Array(Int16 NULL)), CAST(ColumnRef(2) AS UInt64))
+raw expr       : get(array(#0::Int16, #1::Int16), #2::UInt16)
+checked expr   : get<T0=Int16><Array(T0 NULL), UInt64>(CAST(array<T0=Int16><T0, T0>(#0, #1) AS Array(Int16 NULL)), CAST(#2 AS UInt64))
 evaluation:
 +--------+---------+---------+---------+------------------+
 |        | a       | b       | idx     | Output           |
 +--------+---------+---------+---------+------------------+
 | Type   | Int16   | Int16   | UInt16  | Int16 NULL       |
 | Domain | {0..=2} | {3..=5} | {1..=3} | {0..=5} ∪ {NULL} |
-| Row 0  | 0       | 3       | 1       | 0                |
-| Row 1  | 1       | 4       | 2       | 4                |
-| Row 2  | 2       | 5       | 3       | NULL             |
+| Row 0  | 0_i16   | 3_i16   | 1_u16   | 0_i16            |
+| Row 1  | 1_i16   | 4_i16   | 2_u16   | 4_i16            |
+| Row 2  | 2_i16   | 5_i16   | 3_u16   | NULL             |
 +--------+---------+---------+---------+------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------+
@@ -205,37 +213,37 @@ output         : []
 ast            : slice([1], 1, 2)
 raw expr       : slice(array(1_u8), 1_u8, 2_u8)
 checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0>(1_u8), CAST(1_u8 AS UInt64), CAST(2_u8 AS UInt64))
-optimized expr : [1]
+optimized expr : [1_u8]
 output type    : Array(UInt8)
 output domain  : [{1..=1}]
-output         : [1]
+output         : [1_u8]
 
 
 ast            : slice([NULL, 1, 2, 3], 0, 2)
 raw expr       : slice(array(NULL, 1_u8, 2_u8, 3_u8), 0_u8, 2_u8)
 checked expr   : slice<T0=UInt8 NULL><Array(T0), UInt64, UInt64>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), CAST(0_u8 AS UInt64), CAST(2_u8 AS UInt64))
-optimized expr : [NULL, 1]
+optimized expr : [NULL, 1_u8]
 output type    : Array(UInt8 NULL)
 output domain  : [{1..=3} ∪ {NULL}]
-output         : [NULL, 1]
+output         : [NULL, 1_u8]
 
 
 ast            : slice([0, 1, 2, 3], 1, 2)
 raw expr       : slice(array(0_u8, 1_u8, 2_u8, 3_u8), 1_u8, 2_u8)
 checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), CAST(1_u8 AS UInt64), CAST(2_u8 AS UInt64))
-optimized expr : [0, 1]
+optimized expr : [0_u8, 1_u8]
 output type    : Array(UInt8)
 output domain  : [{0..=3}]
-output         : [0, 1]
+output         : [0_u8, 1_u8]
 
 
 ast            : slice([0, 1, 2, 3], 1, 5)
 raw expr       : slice(array(0_u8, 1_u8, 2_u8, 3_u8), 1_u8, 5_u8)
 checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), CAST(1_u8 AS UInt64), CAST(5_u8 AS UInt64))
-optimized expr : [0, 1, 2, 3]
+optimized expr : [0_u8, 1_u8, 2_u8, 3_u8]
 output type    : Array(UInt8)
 output domain  : [{0..=3}]
-output         : [0, 1, 2, 3]
+output         : [0_u8, 1_u8, 2_u8, 3_u8]
 
 
 ast            : slice(['a', 'b', 'c', 'd'], 0, 2)
@@ -286,19 +294,19 @@ output         : []
 ast            : remove_first([0, 1, 2, NULL])
 raw expr       : remove_first(array(0_u8, 1_u8, 2_u8, NULL))
 checked expr   : remove_first<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(0_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
-optimized expr : [1, 2, NULL]
+optimized expr : [1_u8, 2_u8, NULL]
 output type    : Array(UInt8 NULL)
 output domain  : [{0..=2} ∪ {NULL}]
-output         : [1, 2, NULL]
+output         : [1_u8, 2_u8, NULL]
 
 
 ast            : remove_first([0, 1, 2, 3])
 raw expr       : remove_first(array(0_u8, 1_u8, 2_u8, 3_u8))
 checked expr   : remove_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8))
-optimized expr : [1, 2, 3]
+optimized expr : [1_u8, 2_u8, 3_u8]
 output type    : Array(UInt8)
 output domain  : [{0..=3}]
-output         : [1, 2, 3]
+output         : [1_u8, 2_u8, 3_u8]
 
 
 ast            : remove_first(['a', 'b', 'c', 'd'])
@@ -331,19 +339,19 @@ output         : []
 ast            : remove_last([0, 1, 2, NULL])
 raw expr       : remove_last(array(0_u8, 1_u8, 2_u8, NULL))
 checked expr   : remove_last<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(0_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
-optimized expr : [0, 1, 2]
+optimized expr : [0_u8, 1_u8, 2_u8]
 output type    : Array(UInt8 NULL)
 output domain  : [{0..=2} ∪ {NULL}]
-output         : [0, 1, 2]
+output         : [0_u8, 1_u8, 2_u8]
 
 
 ast            : remove_last([0, 1, 2, 3])
 raw expr       : remove_last(array(0_u8, 1_u8, 2_u8, 3_u8))
 checked expr   : remove_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8))
-optimized expr : [0, 1, 2]
+optimized expr : [0_u8, 1_u8, 2_u8]
 output type    : Array(UInt8)
 output domain  : [{0..=3}]
-output         : [0, 1, 2]
+output         : [0_u8, 1_u8, 2_u8]
 
 
 ast            : remove_last(['a', 'b', 'c', 'd'])
@@ -383,19 +391,19 @@ output         : true
 
 
 ast            : int8_col not in (1, 2, 3, 4, 5, null)
-raw expr       : not(contains(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8), ColumnRef(0)::Int8))
-checked expr   : not<Boolean>(contains<Array(Int16), Int16>(CAST(array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8) AS Array(Int16)), CAST(ColumnRef(0) AS Int16)))
-optimized expr : not<Boolean>(contains<Array(Int16), Int16>([1, 2, 3, 4, 5], CAST(ColumnRef(0) AS Int16)))
+raw expr       : not(contains(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8), #0::Int8))
+checked expr   : not<Boolean>(contains<Array(Int16), Int16>(CAST(array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8) AS Array(Int16)), CAST(#0 AS Int16)))
+optimized expr : not<Boolean>(contains<Array(Int16), Int16>([1_i16, 2_i16, 3_i16, 4_i16, 5_i16], CAST(#0 AS Int16)))
 evaluation:
 +--------+----------+---------------+
 |        | int8_col | Output        |
 +--------+----------+---------------+
 | Type   | Int8     | Boolean       |
 | Domain | {1..=8}  | {FALSE, TRUE} |
-| Row 0  | 1        | false         |
-| Row 1  | 2        | false         |
-| Row 2  | 7        | true          |
-| Row 3  | 8        | true          |
+| Row 0  | 1_i8     | false         |
+| Row 1  | 2_i8     | false         |
+| Row 2  | 7_i8     | true          |
+| Row 3  | 8_i8     | true          |
 +--------+----------+---------------+
 evaluation (internal):
 +----------+-----------------------+
@@ -407,17 +415,17 @@ evaluation (internal):
 
 
 ast            : contains([1,2,null], nullable_col)
-raw expr       : contains(array(1_u8, 2_u8, NULL), ColumnRef(1)::Int64 NULL)
-checked expr   : contains<T0=Int64 NULL><Array(T0), T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), ColumnRef(1))
-optimized expr : contains<T0=Int64 NULL><Array(T0), T0>([1, 2, NULL], ColumnRef(1))
+raw expr       : contains(array(1_u8, 2_u8, NULL), #1::Int64 NULL)
+checked expr   : contains<T0=Int64 NULL><Array(T0), T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), #1)
+optimized expr : contains<T0=Int64 NULL><Array(T0), T0>([1_i64, 2_i64, NULL], #1)
 evaluation:
 +--------+-------------------+---------------+
 |        | nullable_col      | Output        |
 +--------+-------------------+---------------+
 | Type   | Int64 NULL        | Boolean       |
 | Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} |
-| Row 0  | 9                 | false         |
-| Row 1  | 10                | false         |
+| Row 0  | 9_i64             | false         |
+| Row 1  | 10_i64            | false         |
 | Row 2  | NULL              | true          |
 | Row 3  | NULL              | true          |
 +--------+-------------------+---------------+
@@ -440,17 +448,17 @@ output         : true
 
 
 ast            : nullable_col in (null, 9, 10, 12)
-raw expr       : or(or(eq(ColumnRef(1)::Int64 NULL, 9_u8), eq(ColumnRef(1)::Int64 NULL, 10_u8)), eq(ColumnRef(1)::Int64 NULL, 12_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(ColumnRef(1), CAST(9_u8 AS Int64 NULL)), eq<Int64 NULL, Int64 NULL>(ColumnRef(1), CAST(10_u8 AS Int64 NULL))), eq<Int64 NULL, Int64 NULL>(ColumnRef(1), CAST(12_u8 AS Int64 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(ColumnRef(1), 9_i64), eq<Int64 NULL, Int64 NULL>(ColumnRef(1), 10_i64)), eq<Int64 NULL, Int64 NULL>(ColumnRef(1), 12_i64))
+raw expr       : or(or(eq(#1::Int64 NULL, 9_u8), eq(#1::Int64 NULL, 10_u8)), eq(#1::Int64 NULL, 12_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(#1, CAST(9_u8 AS Int64 NULL)), eq<Int64 NULL, Int64 NULL>(#1, CAST(10_u8 AS Int64 NULL))), eq<Int64 NULL, Int64 NULL>(#1, CAST(12_u8 AS Int64 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(#1, 9_i64), eq<Int64 NULL, Int64 NULL>(#1, 10_i64)), eq<Int64 NULL, Int64 NULL>(#1, 12_i64))
 evaluation:
 +--------+-------------------+------------------------+
 |        | nullable_col      | Output                 |
 +--------+-------------------+------------------------+
 | Type   | Int64 NULL        | Boolean NULL           |
 | Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | 9                 | true                   |
-| Row 1  | 10                | true                   |
+| Row 0  | 9_i64             | true                   |
+| Row 1  | 10_i64            | true                   |
 | Row 2  | NULL              | NULL                   |
 | Row 3  | NULL              | NULL                   |
 +--------+-------------------+------------------------+
@@ -464,17 +472,17 @@ evaluation (internal):
 
 
 ast            : nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
-raw expr       : contains(array(1_u8, "9", 3_u8, 10_u8, 12_u8, true), ColumnRef(1)::Int64 NULL)
-checked expr   : contains<T0=Variant NULL><Array(T0), T0>(CAST(array<T0=Variant><T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS Variant), CAST("9" AS Variant), CAST(3_u8 AS Variant), CAST(10_u8 AS Variant), CAST(12_u8 AS Variant), CAST(true AS Variant)) AS Array(Variant NULL)), CAST(ColumnRef(1) AS Variant NULL))
-optimized expr : contains<T0=Variant NULL><Array(T0), T0>([1, "9", 3, 10, 12, true], CAST(ColumnRef(1) AS Variant NULL))
+raw expr       : contains(array(1_u8, "9", 3_u8, 10_u8, 12_u8, true), #1::Int64 NULL)
+checked expr   : contains<T0=Variant NULL><Array(T0), T0>(CAST(array<T0=Variant><T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS Variant), CAST("9" AS Variant), CAST(3_u8 AS Variant), CAST(10_u8 AS Variant), CAST(12_u8 AS Variant), CAST(true AS Variant)) AS Array(Variant NULL)), CAST(#1 AS Variant NULL))
+optimized expr : contains<T0=Variant NULL><Array(T0), T0>([1, "9", 3, 10, 12, true], CAST(#1 AS Variant NULL))
 evaluation:
 +--------+-------------------+---------------+
 |        | nullable_col      | Output        |
 +--------+-------------------+---------------+
 | Type   | Int64 NULL        | Boolean       |
 | Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} |
-| Row 0  | 9                 | false         |
-| Row 1  | 10                | true          |
+| Row 0  | 9_i64             | false         |
+| Row 1  | 10_i64            | true          |
 | Row 2  | NULL              | false         |
 | Row 3  | NULL              | false         |
 +--------+-------------------+---------------+

@@ -15,9 +15,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -89,7 +89,7 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
 
         let remaining = self.take_remaining;
         self.take_remaining = 0;
-        data_block.slice(0, remaining)
+        data_block.slice(0..remaining)
     }
 
     pub fn skip_rows(&mut self, data_block: DataBlock) -> Option<DataBlock> {
@@ -106,12 +106,12 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
                 self.skip_remaining = 0;
                 let length = std::cmp::min(self.take_remaining, rows - offset);
                 self.take_remaining -= length;
-                Some(data_block.slice(offset, length))
+                Some(data_block.slice(offset..offset + length))
             }
             _ => {
                 let offset = self.skip_remaining;
                 self.skip_remaining = 0;
-                Some(data_block.slice(offset, rows - offset))
+                Some(data_block.slice(offset..rows))
             }
         }
     }

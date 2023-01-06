@@ -20,13 +20,13 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_ast::UDFValidator;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataTypeImpl;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_meta_types::UserDefinedFunction;
 
+use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CallPlan;
 use crate::plans::CreateRolePlan;
@@ -373,7 +373,7 @@ impl<'a> Binder {
         database_name: Option<String>,
         table_name: Option<String>,
         column_name: String,
-        data_type: DataTypeImpl,
+        data_type: DataType,
     ) -> ColumnBinding {
         let index = self
             .metadata

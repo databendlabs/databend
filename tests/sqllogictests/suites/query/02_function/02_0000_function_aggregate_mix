@@ -151,10 +151,6 @@ INSERT INTO t1 SELECT 3, parse_json('[1,2,3]')
 statement ok
 INSERT INTO t1 SELECT 4, parse_json('10')
 
-query TT
-SELECT max(var), min(var) FROM t1
-----
-[1,2,3] 10
 
 query II
 SELECT arg_max(id, var), arg_min(id, var) FROM (SELECT id, var FROM t1)

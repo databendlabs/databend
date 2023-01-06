@@ -13,12 +13,13 @@
 //  limitations under the License.
 
 pub use v0::ColumnMeta;
-pub use v1::BlockFilter;
-pub use v1::BlockMeta;
-pub use v1::SegmentInfo;
-pub use v1::TableSnapshot;
-pub use v1::TableSnapshotLite;
 pub use v1::TableSnapshotStatistics;
+pub use v2::BlockFilter;
+pub use v2::BlockMeta;
+pub use v2::SegmentInfo;
+pub use v2::TableSnapshot;
+pub use v2::TableSnapshotLite;
 
 use super::v0;
 use super::v1;
+use super::v2;

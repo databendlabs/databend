@@ -269,22 +269,25 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_0_arg_core::<NumberType<F64>, _, _>(
         "rand",
-        FunctionProperty::default(),
+        FunctionProperty::default().non_deterministic(),
         || {
             FunctionDomain::Domain(SimpleDomain {
                 min: OrderedFloat(0.0),
                 max: OrderedFloat(1.0),
             })
         },
-        |_| {
+        |ctx| {
             let mut rng = rand::rngs::SmallRng::from_entropy();
-            Ok(Value::Scalar(rng.gen::<F64>()))
+            let rand_nums = (0..ctx.num_rows)
+                .map(|_| rng.gen::<F64>())
+                .collect::<Vec<_>>();
+            Ok(Value::Column(rand_nums.into()))
         },
     );
 
     registry.register_1_arg::<NumberType<u64>, NumberType<F64>, _, _>(
         "rand",
-        FunctionProperty::default(),
+        FunctionProperty::default().non_deterministic(),
         |_| {
             FunctionDomain::Domain(SimpleDomain {
                 min: OrderedFloat(0.0),

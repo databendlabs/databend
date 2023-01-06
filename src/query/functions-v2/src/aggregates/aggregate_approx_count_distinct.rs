@@ -155,15 +155,6 @@ where for<'a> T::ScalarRef<'a>: Hash
         let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
         std::ptr::drop_in_place(state);
     }
-
-    fn get_own_null_adaptor(
-        &self,
-        _nested_function: super::AggregateFunctionRef,
-        _params: Vec<Scalar>,
-        _arguments: Vec<DataType>,
-    ) -> Result<Option<super::AggregateFunctionRef>> {
-        Ok(Some(Arc::new(self.clone())))
-    }
 }
 
 pub fn try_create_aggregate_approx_count_distinct_function(
@@ -172,6 +163,7 @@ pub fn try_create_aggregate_approx_count_distinct_function(
     arguments: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
+
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
             AggregateApproxCountDistinctFunction::<NumberType<NUM_TYPE>>::try_create(

@@ -19,9 +19,7 @@ use crate::types::number::*;
 use crate::types::*;
 use crate::Column;
 
-/// ColumnFrom is a helper trait to generate columns.
-pub trait ColumnFrom<D, Phantom: ?Sized> {
-    /// Initialize by name and values.
+pub trait FromData<D, Phantom: ?Sized> {
     fn from_data(_: D) -> Column;
 
     fn from_data_with_validity(d: D, valids: Vec<bool>) -> Column {
@@ -31,6 +29,10 @@ pub trait ColumnFrom<D, Phantom: ?Sized> {
             validity: valids.into(),
         }))
     }
+}
+
+pub trait FromOptData<D, Phantom: ?Sized> {
+    fn from_opt_data(_: D) -> Column;
 }
 
 macro_rules! for_common_scalar_values {
@@ -48,7 +50,10 @@ macro_rules! for_common_scalar_values {
             { Float32Type },
             { Float64Type },
             { BooleanType },
-            { StringType }
+            { StringType },
+            { DateType },
+            { TimestampType },
+            { VariantType }
         }
     };
 }
@@ -56,64 +61,48 @@ macro_rules! for_common_scalar_values {
 macro_rules! impl_from_iterator {
     ([], $( { $T: ident} ),*) => {
         $(
-        impl<'a, D: Iterator<Item = <$T as ValueType>::ScalarRef<'a>>>
-            ColumnFrom<D, [<$T as ValueType>::Scalar; 0]> for Column
-        {
-            fn from_data(d: D) -> Column {
-                $T::upcast_column($T::column_from_ref_iter(d.into_iter(), &[]))
+            impl<D: Iterator<Item = <$T as ValueType>::Scalar>> FromData<D, i8> for $T
+            {
+                fn from_data(d: D) -> Column {
+                    $T::upcast_column($T::column_from_iter(d, &[]))
+                }
             }
-        }
         )*
     };
 }
 
-macro_rules! impl_from_opt_iterator {
+macro_rules! impl_from_data {
     ([], $( { $T: ident} ),*) => {
         $(
-        impl<'a, D: Iterator<Item = <NullableType<$T> as ValueType>::ScalarRef<'a>>>
-            ColumnFrom<D, [<NullableType<$T> as ValueType>::Scalar; 0]> for Column
-        {
-            fn from_data(d: D) -> Column {
-                NullableType::<$T>::upcast_column(NullableType::<$T>::column_from_ref_iter(
-                    d.into_iter(),
-                    &[],
-                ))
+            impl FromData<Vec<<$T as ValueType>::Scalar>, i16> for $T
+            {
+                fn from_data(d: Vec<<$T as ValueType>::Scalar>) -> Column {
+                    $T::upcast_column($T::column_from_vec(d, &[]))
+                }
             }
-        }
         )*
     };
 }
 
-macro_rules! impl_from_vec {
+macro_rules! impl_from_opt_data {
     ([], $( { $T: ident} ),*) => {
         $(
-        impl ColumnFrom<Vec<<$T as ValueType>::Scalar>, [<$T as ValueType>::Scalar; 1]> for Column {
-            fn from_data(d: Vec<<$T as ValueType>::Scalar>) -> Column {
-                $T::upcast_column($T::column_from_vec(d, &[]))
+            impl FromOptData<Vec<Option<<$T as ValueType>::Scalar>>, i8> for $T
+            {
+                fn from_opt_data(d: Vec<Option<<$T as ValueType>::Scalar>>) -> Column {
+                    type NT = NullableType::<$T>;
+                    NT::upcast_column(NT::column_from_vec(d, &[]))
+                }
             }
-        }
         )*
     };
 }
 
-macro_rules! impl_from_opt_vec {
-    ([], $( { $T: ident} ),*) => {
-        $(
-        impl
-            ColumnFrom<
-                Vec<<NullableType<$T> as ValueType>::Scalar>,
-                [<NullableType<$T> as ValueType>::Scalar; 1],
-            > for Column
-        {
-            fn from_data(d: Vec<<NullableType<$T> as ValueType>::Scalar>) -> Column {
-                NullableType::<$T>::upcast_column(NullableType::<$T>::column_from_vec(d, &[]))
-            }
-        }
-        )*
-    };
-}
+for_common_scalar_values! { impl_from_iterator }
+for_common_scalar_values! { impl_from_data }
+for_common_scalar_values! { impl_from_opt_data }
 
-impl<'a, D: AsRef<[&'a str]>> ColumnFrom<D, [Vec<u8>; 2]> for Column {
+impl<'a, D: AsRef<[&'a str]>> FromData<D, [Vec<u8>; 2]> for StringType {
     fn from_data(d: D) -> Column {
         StringType::upcast_column(StringType::column_from_ref_iter(
             d.as_ref().iter().map(|c| c.as_bytes()),
@@ -122,51 +111,49 @@ impl<'a, D: AsRef<[&'a str]>> ColumnFrom<D, [Vec<u8>; 2]> for Column {
     }
 }
 
-impl<D: AsRef<[f32]>> ColumnFrom<D, [Vec<f32>; 0]> for Column {
+impl<D: AsRef<[f32]>> FromData<D, [Vec<f32>; 0]> for Float32Type {
     fn from_data(d: D) -> Column {
-        NumberType::<F32>::upcast_column(NumberType::<F32>::column_from_iter(
+        Float32Type::upcast_column(Float32Type::column_from_iter(
             d.as_ref().iter().map(|f| (*f).into()),
             &[],
         ))
     }
 }
 
-impl<D: AsRef<[f64]>> ColumnFrom<D, [Vec<f64>; 0]> for Column {
+impl<D: AsRef<[f64]>> FromData<D, [Vec<f64>; 0]> for Float64Type {
     fn from_data(d: D) -> Column {
-        NumberType::<F64>::upcast_column(NumberType::<F64>::column_from_iter(
+        Float64Type::upcast_column(Float64Type::column_from_iter(
             d.as_ref().iter().map(|f| (*f).into()),
             &[],
         ))
     }
 }
 
-// Specialize for `TimestampType`, because from `Vec<i64>` will be conflict with `Int64Type`.
-pub fn from_timestamp_data(d: Vec<i64>) -> Column {
-    TimestampType::upcast_column(TimestampType::column_from_vec(d, &[]))
-}
+#[cfg(test)]
+mod test {
 
-pub fn from_timestamp_data_with_validity(d: Vec<i64>, valids: Vec<bool>) -> Column {
-    let column = from_timestamp_data(d);
-    Column::Nullable(Box::new(NullableColumn {
-        column,
-        validity: valids.into(),
-    }))
-}
+    use crate::types::number::Float32Type;
+    use crate::types::number::Int8Type;
+    use crate::types::TimestampType;
+    use crate::FromData;
+    use crate::FromOptData;
 
-// Specialize for `DateType`, because from `Vec<i32>` will be conflict with `Int32Type`.
-pub fn from_date_data(d: Vec<i32>) -> Column {
-    DateType::upcast_column(DateType::column_from_vec(d, &[]))
-}
+    #[test]
+    fn test() {
+        let a = Int8Type::from_data(vec![1, 2, 3]);
+        let b = Int8Type::from_data(vec![1, 2, 3].into_iter());
+        assert!(a == b);
 
-pub fn from_date_data_with_validity(d: Vec<i32>, valids: Vec<bool>) -> Column {
-    let column = from_date_data(d);
-    Column::Nullable(Box::new(NullableColumn {
-        column,
-        validity: valids.into(),
-    }))
-}
+        let a = TimestampType::from_data(vec![1, 2, 3]);
+        let b = TimestampType::from_data(vec![1, 2, 3].into_iter());
+        assert!(a == b);
 
-for_common_scalar_values! { impl_from_iterator }
-for_common_scalar_values! { impl_from_opt_iterator }
-for_common_scalar_values! { impl_from_vec }
-for_common_scalar_values! { impl_from_opt_vec }
+        let a = Float32Type::from_data(vec![1.0f32, 2.0, 3.0]);
+        let b = Float32Type::from_data(vec![1.0f32, 2.0, 3.0].into_iter());
+        assert!(a == b);
+
+        let a = TimestampType::from_opt_data(vec![Some(1), None, Some(3)]);
+        let b = TimestampType::from_opt_data(vec![Some(1), None, Some(3)]);
+        assert!(a == b);
+    }
+}

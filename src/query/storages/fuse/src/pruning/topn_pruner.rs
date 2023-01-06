@@ -14,24 +14,28 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::Expression;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::RemoteExpr;
+use common_expression::TableDataType;
+use common_expression::TableSchemaRef;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnStatistics;
 
 use crate::pruning::BlockIndex;
 
 pub struct TopNPrunner {
-    schema: DataSchemaRef,
-    sort: Vec<(Expression, bool, bool)>,
+    schema: TableSchemaRef,
+    sort: Vec<(RemoteExpr<String>, bool, bool)>,
     limit: usize,
 }
 
 impl TopNPrunner {
-    pub fn new(schema: DataSchemaRef, sort: Vec<(Expression, bool, bool)>, limit: usize) -> Self {
+    pub(crate) fn new(
+        schema: TableSchemaRef,
+        sort: Vec<(RemoteExpr<String>, bool, bool)>,
+        limit: usize,
+    ) -> Self {
         Self {
             schema,
             sort,
@@ -59,8 +63,8 @@ impl TopNPrunner {
 
         // Currently, we only support topn on single-column sort.
         // TODO: support monadic + multi expression + order by cluster key sort.
-        let column = if let Expression::IndexedVariable { name, .. } = sort {
-            name
+        let column = if let RemoteExpr::ColumnRef { id, .. } = sort {
+            id
         } else {
             return Ok(metas);
         };
@@ -74,7 +78,7 @@ impl TopNPrunner {
         // String Type min/max is truncated
         if matches!(
             self.schema.field(sort_idx as usize).data_type(),
-            DataTypeImpl::String(_)
+            TableDataType::String
         ) {
             return Ok(metas);
         }

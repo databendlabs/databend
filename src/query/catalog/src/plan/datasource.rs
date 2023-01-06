@@ -17,10 +17,10 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
+use common_expression::Scalar;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserStageInfo;
 
@@ -32,7 +32,7 @@ use crate::plan::StageFileInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
-    pub schema: DataSchemaRef,
+    pub schema: TableSchemaRef,
     pub path: String,
     pub files: Vec<String>,
     pub pattern: String,
@@ -41,7 +41,7 @@ pub struct StageTableInfo {
 }
 
 impl StageTableInfo {
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> Arc<TableSchema> {
         self.schema.clone()
     }
 
@@ -67,7 +67,7 @@ pub enum DataSourceInfo {
 }
 
 impl DataSourceInfo {
-    pub fn schema(&self) -> Arc<DataSchema> {
+    pub fn schema(&self) -> Arc<TableSchema> {
         match self {
             DataSourceInfo::TableSource(table_info) => table_info.schema(),
             DataSourceInfo::StageSource(table_info) => table_info.schema(),
@@ -95,19 +95,19 @@ pub struct DataSourcePlan {
     /// The key is the column_index of `ColumnEntry` in `Metadata`.
     ///
     /// If it is None, one should use `table_info.schema().fields()`.
-    pub scan_fields: Option<BTreeMap<usize, DataField>>,
+    pub scan_fields: Option<BTreeMap<usize, TableField>>,
 
     pub parts: Partitions,
     pub statistics: PartStatistics,
     pub description: String,
 
-    pub tbl_args: Option<Vec<DataValue>>,
+    pub tbl_args: Option<Vec<Scalar>>,
     pub push_downs: Option<PushDownInfo>,
 }
 
 impl DataSourcePlan {
     /// Return schema after the projection
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> Arc<TableSchema> {
         self.scan_fields
             .clone()
             .map(|x| {
@@ -115,13 +115,6 @@ impl DataSourcePlan {
                 Arc::new(self.source_info.schema().project_by_fields(fields))
             })
             .unwrap_or_else(|| self.source_info.schema())
-    }
-
-    /// Return designated required fields or all fields in a hash map.
-    pub fn scan_fields(&self) -> BTreeMap<usize, DataField> {
-        self.scan_fields
-            .clone()
-            .unwrap_or_else(|| self.source_info.schema().fields_map())
     }
 
     pub fn projections(&self) -> Projection {

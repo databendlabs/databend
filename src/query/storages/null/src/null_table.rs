@@ -23,9 +23,9 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -82,7 +82,7 @@ impl Table for NullTable {
         pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
-            processors: vec![NullSource::create(ctx, output, schema)?],
+            processors: vec![NullSource::create(ctx, output, Arc::new(schema.into()))?],
         });
 
         Ok(())

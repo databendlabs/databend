@@ -12,8 +12,8 @@ doctest = false
 test = false
 
 [dependencies]
-common-datablocks = { path = "../../datablocks" }
 common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
 common-io = { path = "../../../common/io" }
 
 async-trait = "0.1.57"

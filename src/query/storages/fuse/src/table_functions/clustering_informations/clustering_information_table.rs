@@ -20,9 +20,9 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_datablocks::DataBlock;
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::Scalar;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -103,7 +103,7 @@ impl Table for ClusteringInformationTable {
         Ok((PartStatistics::default(), Partitions::default()))
     }
 
-    fn table_args(&self) -> Option<Vec<DataValue>> {
+    fn table_args(&self) -> Option<Vec<Scalar>> {
         Some(vec![
             string_literal(self.arg_database_name.as_str()),
             string_literal(self.arg_table_name.as_str()),
@@ -182,12 +182,18 @@ impl AsyncSource for ClusteringInformationSource {
             .await?;
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        let cluster_keys = get_cluster_keys(self.ctx.clone(), tbl, &self.arg_cluster_keys)?;
+        let (cluster_keys, plain) =
+            get_cluster_keys(self.ctx.clone(), tbl, &self.arg_cluster_keys)?;
 
         Ok(Some(
-            ClusteringInformation::new(self.ctx.clone(), tbl, cluster_keys)
-                .get_clustering_info()
-                .await?,
+            ClusteringInformation::new(
+                self.ctx.clone(),
+                tbl,
+                plain.unwrap_or_default(),
+                cluster_keys,
+            )
+            .get_clustering_info()
+            .await?,
         ))
     }
 }

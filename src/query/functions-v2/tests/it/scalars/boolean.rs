@@ -15,19 +15,17 @@
 use std::io::Write;
 
 use common_expression::types::nullable::NullableColumn;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::utils::ColumnFrom;
+use common_expression::types::*;
 use common_expression::Column;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
 
-fn one_null_column() -> Vec<(&'static str, DataType, Column)> {
+fn one_null_column() -> Vec<(&'static str, Column)> {
     vec![(
         "a",
-        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-        Column::from_data_with_validity(vec![0_u8], vec![false]),
+        UInt8Type::from_data_with_validity(vec![0_u8], vec![false]),
     )]
 }
 
@@ -69,17 +67,13 @@ fn test_and(file: &mut impl Write) {
 }
 
 fn test_not(file: &mut impl Write) {
-    run_ast(file, "NOT a", &[("a", DataType::Null, Column::Null {
-        len: 5,
-    })]);
+    run_ast(file, "NOT a", &[("a", Column::Null { len: 5 })]);
     run_ast(file, "NOT a", &[(
         "a",
-        DataType::Boolean,
         Column::Boolean(vec![true, false, true].into()),
     )]);
     run_ast(file, "NOT a", &[(
         "a",
-        DataType::Nullable(Box::new(DataType::Boolean)),
         Column::Nullable(Box::new(NullableColumn {
             column: Column::Boolean(vec![true, false, true].into()),
             validity: vec![false, true, false].into(),
@@ -87,7 +81,6 @@ fn test_not(file: &mut impl Write) {
     )]);
     run_ast(file, "NOT a", &[(
         "a",
-        DataType::Nullable(Box::new(DataType::Boolean)),
         Column::Nullable(Box::new(NullableColumn {
             column: Column::Boolean(vec![false, false, false].into()),
             validity: vec![true, true, false].into(),

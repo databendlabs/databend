@@ -14,10 +14,11 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -26,11 +27,35 @@ use serde::Serialize;
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
+use crate::types::number::NumberScalar;
+use crate::types::number::F32;
+use crate::types::number::F64;
 use crate::types::DataType;
 use crate::values::Scalar;
 
 pub type Span = Option<std::ops::Range<usize>>;
-pub trait ColumnIndex = Debug + Display + Clone + Serialize + Hash + Eq;
+
+pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq {
+    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+    fn sql_display(&self) -> String {
+        let mut buf = String::new();
+        let mut formatter = std::fmt::Formatter::new(&mut buf);
+        self.sql_display_fmt(&mut formatter).unwrap();
+        buf
+    }
+}
+
+impl ColumnIndex for usize {
+    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{}", self)
+    }
+}
+
+impl ColumnIndex for String {
+    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum RawExpr<Index: ColumnIndex = usize> {
@@ -91,7 +116,7 @@ pub enum Expr<Index: ColumnIndex = usize> {
 ///
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
 /// up the funciton registry with the `FunctionID`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RemoteExpr<Index: ColumnIndex = usize> {
     Constant {
         span: Span,
@@ -118,7 +143,7 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum Literal {
     Null,
     Int8(i8),
@@ -129,10 +154,52 @@ pub enum Literal {
     UInt16(u16),
     UInt32(u32),
     UInt64(u64),
-    Float32(f32),
-    Float64(f64),
+    Float32(F32),
+    Float64(F64),
     Boolean(bool),
     String(Vec<u8>),
+}
+
+impl Literal {
+    pub fn into_scalar(self) -> Scalar {
+        match self {
+            Literal::Null => Scalar::Null,
+            Literal::Int8(value) => Scalar::Number(NumberScalar::Int8(value)),
+            Literal::Int16(value) => Scalar::Number(NumberScalar::Int16(value)),
+            Literal::Int32(value) => Scalar::Number(NumberScalar::Int32(value)),
+            Literal::Int64(value) => Scalar::Number(NumberScalar::Int64(value)),
+            Literal::UInt8(value) => Scalar::Number(NumberScalar::UInt8(value)),
+            Literal::UInt16(value) => Scalar::Number(NumberScalar::UInt16(value)),
+            Literal::UInt32(value) => Scalar::Number(NumberScalar::UInt32(value)),
+            Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(value)),
+            Literal::Float32(value) => Scalar::Number(NumberScalar::Float32(value)),
+            Literal::Float64(value) => Scalar::Number(NumberScalar::Float64(value)),
+            Literal::Boolean(value) => Scalar::Boolean(value),
+            Literal::String(value) => Scalar::String(value.to_vec()),
+        }
+    }
+}
+
+impl TryFrom<Scalar> for Literal {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        match value {
+            Scalar::Null => Ok(Literal::Null),
+            Scalar::Number(NumberScalar::Int8(value)) => Ok(Literal::Int8(value)),
+            Scalar::Number(NumberScalar::Int16(value)) => Ok(Literal::Int16(value)),
+            Scalar::Number(NumberScalar::Int32(value)) => Ok(Literal::Int32(value)),
+            Scalar::Number(NumberScalar::Int64(value)) => Ok(Literal::Int64(value)),
+            Scalar::Number(NumberScalar::UInt8(value)) => Ok(Literal::UInt8(value)),
+            Scalar::Number(NumberScalar::UInt16(value)) => Ok(Literal::UInt16(value)),
+            Scalar::Number(NumberScalar::UInt32(value)) => Ok(Literal::UInt32(value)),
+            Scalar::Number(NumberScalar::UInt64(value)) => Ok(Literal::UInt64(value)),
+            Scalar::Number(NumberScalar::Float32(value)) => Ok(Literal::Float32(value)),
+            Scalar::Number(NumberScalar::Float64(value)) => Ok(Literal::Float64(value)),
+            Scalar::Boolean(value) => Ok(Literal::Boolean(value)),
+            Scalar::String(value) => Ok(Literal::String(value.to_vec())),
+            _ => Err(ErrorCode::Internal("Unsupported scalar value")),
+        }
+    }
 }
 
 impl<Index: ColumnIndex> RawExpr<Index> {
@@ -179,6 +246,38 @@ impl<Index: ColumnIndex> Expr<Index> {
         let mut buf = HashMap::new();
         walk(self, &mut buf);
         buf
+    }
+
+    pub fn sql_display(&self) -> String {
+        match self {
+            Expr::Constant { scalar, .. } => format!("{}", scalar.as_ref()),
+            Expr::ColumnRef { id, .. } => id.sql_display(),
+            Expr::Cast {
+                is_try,
+                expr,
+                dest_type,
+                ..
+            } => {
+                if *is_try {
+                    format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
+                } else {
+                    format!("CAST({} AS {dest_type})", expr.sql_display())
+                }
+            }
+            Expr::FunctionCall { function, args, .. } => {
+                let mut s = String::new();
+                s += &function.signature.name;
+                s += "(";
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        s += ", ";
+                    }
+                    s += &arg.sql_display();
+                }
+                s += ")";
+                s
+            }
+        }
     }
 
     pub fn project_column_ref<ToIndex: ColumnIndex>(
@@ -232,28 +331,26 @@ impl<Index: ColumnIndex> Expr<Index> {
             },
         }
     }
-}
 
-impl<Index: ColumnIndex> RemoteExpr<Index> {
-    pub fn from_expr(expr: Expr<Index>) -> Self {
-        match expr {
+    pub fn as_remote_expr(&self) -> RemoteExpr<Index> {
+        match self {
             Expr::Constant {
                 span,
                 scalar,
                 data_type,
             } => RemoteExpr::Constant {
-                span,
-                scalar,
-                data_type,
+                span: span.clone(),
+                scalar: scalar.clone(),
+                data_type: data_type.clone(),
             },
             Expr::ColumnRef {
                 span,
                 id,
                 data_type,
             } => RemoteExpr::ColumnRef {
-                span,
-                id,
-                data_type,
+                span: span.clone(),
+                id: id.clone(),
+                data_type: data_type.clone(),
             },
             Expr::Cast {
                 span,
@@ -261,10 +358,10 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 expr,
                 dest_type,
             } => RemoteExpr::Cast {
-                span,
-                is_try,
-                expr: Box::new(RemoteExpr::from_expr(*expr)),
-                dest_type,
+                span: span.clone(),
+                is_try: *is_try,
+                expr: Box::new(expr.as_remote_expr()),
+                dest_type: dest_type.clone(),
             },
             Expr::FunctionCall {
                 span,
@@ -274,34 +371,36 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 args,
                 return_type,
             } => RemoteExpr::FunctionCall {
-                span,
-                id,
-                generics,
-                args: args.into_iter().map(RemoteExpr::from_expr).collect(),
-                return_type,
+                span: span.clone(),
+                id: id.clone(),
+                generics: generics.clone(),
+                args: args.iter().map(Expr::as_remote_expr).collect(),
+                return_type: return_type.clone(),
             },
         }
     }
+}
 
-    pub fn into_expr(self, fn_registry: &FunctionRegistry) -> Option<Expr<Index>> {
+impl<Index: ColumnIndex> RemoteExpr<Index> {
+    pub fn as_expr(&self, fn_registry: &FunctionRegistry) -> Option<Expr<Index>> {
         Some(match self {
             RemoteExpr::Constant {
                 span,
                 scalar,
                 data_type,
             } => Expr::Constant {
-                span,
-                scalar,
-                data_type,
+                span: span.clone(),
+                scalar: scalar.clone(),
+                data_type: data_type.clone(),
             },
             RemoteExpr::ColumnRef {
                 span,
                 id,
                 data_type,
             } => Expr::ColumnRef {
-                span,
-                id,
-                data_type,
+                span: span.clone(),
+                id: id.clone(),
+                data_type: data_type.clone(),
             },
             RemoteExpr::Cast {
                 span,
@@ -309,10 +408,10 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 expr,
                 dest_type,
             } => Expr::Cast {
-                span,
-                is_try,
-                expr: Box::new(expr.into_expr(fn_registry)?),
-                dest_type,
+                span: span.clone(),
+                is_try: *is_try,
+                expr: Box::new(expr.as_expr(fn_registry)?),
+                dest_type: dest_type.clone(),
             },
             RemoteExpr::FunctionCall {
                 span,
@@ -321,17 +420,17 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 args,
                 return_type,
             } => {
-                let function = fn_registry.get(&id)?;
+                let function = fn_registry.get(id)?;
                 Expr::FunctionCall {
-                    span,
-                    id,
+                    span: span.clone(),
+                    id: id.clone(),
                     function,
-                    generics,
+                    generics: generics.clone(),
                     args: args
-                        .into_iter()
-                        .map(|arg| arg.into_expr(fn_registry))
+                        .iter()
+                        .map(|arg| arg.as_expr(fn_registry))
                         .collect::<Option<_>>()?,
-                    return_type,
+                    return_type: return_type.clone(),
                 }
             }
         })

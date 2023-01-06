@@ -23,8 +23,8 @@ use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
@@ -131,7 +131,7 @@ impl FuseTable {
     pub fn read_partitions_with_metas(
         &self,
         _: Arc<dyn TableContext>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         push_downs: Option<PushDownInfo>,
         block_metas: Vec<Arc<BlockMeta>>,
         partitions_total: usize,

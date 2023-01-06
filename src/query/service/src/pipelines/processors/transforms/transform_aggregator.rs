@@ -16,10 +16,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethodKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::HashMethodKind;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;

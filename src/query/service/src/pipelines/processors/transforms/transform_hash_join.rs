@@ -16,9 +16,9 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 
 use super::hash_join::ProbeState;
 use crate::pipelines::processors::port::InputPort;
@@ -162,6 +162,7 @@ impl Processor for TransformHashJoinProbe {
             HashJoinStep::Build => Ok(()),
             HashJoinStep::Probe => {
                 if let Some(data) = self.input_data.take() {
+                    let data = data.convert_to_full();
                     self.probe(&data)?;
                 }
                 Ok(())

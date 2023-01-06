@@ -17,10 +17,11 @@ use std::io::Read;
 use std::mem;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
+use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderCSV;
 use common_formats::FieldDecoderRowBased;
@@ -45,8 +46,8 @@ impl InputFormatCSV {
     fn read_row(
         field_decoder: &FieldDecoderCSV,
         buf: &[u8],
-        deserializers: &mut [common_datavalues::TypeDeserializerImpl],
-        schema: &DataSchemaRef,
+        deserializers: &mut [TypeDeserializerImpl],
+        schema: &TableSchemaRef,
         field_ends: &[usize],
         path: &str,
         row_index: usize,

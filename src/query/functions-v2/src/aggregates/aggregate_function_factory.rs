@@ -56,7 +56,7 @@ pub struct AggregateFunctionDescription {
 pub struct AggregateFunctionFeatures {
     /// When the function is wrapped with Null combinator,
     /// should we return Nullable type with NULL when no values were aggregated
-    /// or we should return non-Nullable type with default value (example: count, count_distinct).
+    /// or we should return non-Nullable type with default value (example: count, count_distinct, approx_count_distinct)
     pub(crate) returns_default_when_only_null: bool,
 
     // Function Category
@@ -227,8 +227,8 @@ impl AggregateFunctionFactory {
         )))
     }
 
-    pub fn check(&self, name: impl AsRef<str>) -> bool {
-        let origin = name.as_ref();
+    pub fn contains(&self, func_name: impl AsRef<str>) -> bool {
+        let origin = func_name.as_ref();
         let lowercase_name = origin.to_lowercase();
 
         if self.case_insensitive_desc.contains_key(&lowercase_name) {

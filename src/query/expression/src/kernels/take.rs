@@ -26,14 +26,15 @@ use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
-use crate::Chunk;
-use crate::ChunkEntry;
+use crate::BlockEntry;
 use crate::Column;
-use crate::ColumnIndex;
+use crate::ColumnBuilder;
+use crate::DataBlock;
+use crate::TypeDeserializer;
 use crate::Value;
 
-impl<Index: ColumnIndex> Chunk<Index> {
-    pub fn take<I>(self, indices: &[I]) -> Result<Self>
+impl DataBlock {
+    pub fn take<I>(&self, indices: &[I]) -> Result<Self>
     where I: common_arrow::arrow::types::Index {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
@@ -41,21 +42,20 @@ impl<Index: ColumnIndex> Chunk<Index> {
 
         let after_columns = self
             .columns()
+            .iter()
             .map(|entry| match &entry.value {
-                Value::Scalar(s) => ChunkEntry {
-                    id: entry.id.clone(),
+                Value::Scalar(s) => BlockEntry {
                     data_type: entry.data_type.clone(),
                     value: Value::Scalar(s.clone()),
                 },
-                Value::Column(c) => ChunkEntry {
-                    id: entry.id.clone(),
+                Value::Column(c) => BlockEntry {
                     data_type: entry.data_type.clone(),
                     value: Value::Column(Column::take(c, indices)),
                 },
             })
             .collect();
 
-        Ok(Chunk::new(after_columns, indices.len()))
+        Ok(DataBlock::new(after_columns, indices.len()))
     }
 }
 
@@ -88,8 +88,16 @@ impl Column {
                 Column::Date(d)
             }
             Column::Array(column) => {
-                let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
-                builder.reserve(length);
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    column
+                        .values
+                        .data_type()
+                        .create_deserializer(length)
+                        .finish_to_column(),
+                );
+                let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_value_types::<ArrayType<AnyType>, _>(column, builder, indices)
             }
             Column::Nullable(c) => {

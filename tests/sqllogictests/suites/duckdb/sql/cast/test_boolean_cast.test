@@ -1,12 +1,12 @@
 query T
 SELECT CAST(1=1 AS VARCHAR)
 ----
-1
+true
 
 query T
 SELECT CAST(1=0 AS VARCHAR)
 ----
-0
+false
 
 query I
 SELECT CAST('true' AS BOOLEAN)
@@ -103,25 +103,21 @@ SELECT CAST(CAST('0' AS bigint) AS BOOLEAN)
 ## query I
 ## SELECT CAST(CAST('0' AS decimal(38,0)) AS BOOLEAN)
 
-query I
+statement error 1005
 SELECT CAST(CAST('1' AS float) AS BOOLEAN)
 ----
 1
 
-query I
+statement error 1065
 SELECT CAST(CAST('0' AS float) AS BOOLEAN)
-----
-0
+ 
 
-query I
+statement error 1065
 SELECT CAST(CAST('1' AS double) AS BOOLEAN)
-----
-1
+ 
 
-query I
+statement error 1065
 SELECT CAST(CAST('0' AS double) AS BOOLEAN)
-----
-0
 
 query I
 SELECT CAST(CAST('1' AS BIGINT) AS BOOLEAN)

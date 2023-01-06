@@ -48,7 +48,6 @@ pub async fn build_query_pipeline(
         &mut build_res.main_pipeline,
         ignore_result,
     )?;
-
     Ok(build_res)
 }
 

@@ -17,7 +17,6 @@ use std::time::SystemTime;
 
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
-use common_sql::executor::ExpressionBuilderWithoutRenaming;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -54,16 +53,15 @@ impl Interpreter for ReclusterTableInterpreter {
         let start = SystemTime::now();
 
         // Build extras via push down scalar
-        let extras = match &plan.push_downs {
-            None => None,
-            Some(scalar) => {
-                let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
-                let pred_expr = eb.build(scalar)?;
-                Some(PushDownInfo {
-                    filters: vec![pred_expr],
-                    ..PushDownInfo::default()
-                })
-            }
+        let extras = if let Some(scalar) = &plan.push_downs {
+            let filter = scalar.as_expr()?.as_remote_expr();
+
+            Some(PushDownInfo {
+                filters: vec![filter],
+                ..PushDownInfo::default()
+            })
+        } else {
+            None
         };
 
         loop {
@@ -93,7 +91,7 @@ impl Interpreter for ReclusterTableInterpreter {
             executor.execute()?;
             drop(executor);
 
-            mutator.try_commit(table).await?;
+            mutator.try_commit(table.clone()).await?;
 
             if !plan.is_final {
                 break;

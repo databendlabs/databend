@@ -26,12 +26,13 @@ use common_arrow::arrow::compute::sort::row::RowConverter;
 use common_arrow::arrow::compute::sort::row::Rows;
 use common_arrow::arrow::compute::sort::row::SortField;
 use common_arrow::arrow::compute::sort::SortOptions;
-use common_arrow::arrow::datatypes::DataType;
-use common_datablocks::DataBlock;
-use common_datablocks::SortColumnDescription;
-use common_datavalues::DataSchemaRef;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::utils::arrow::column_to_arrow_array;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -191,25 +192,16 @@ impl MultiSortMergeProcessor {
         let sort_fields = sort_columns_descriptions
             .iter()
             .map(|d| {
-                let data_type = match output_schema
-                    .field_with_name(&d.column_name)?
-                    .to_arrow()
-                    .data_type()
-                {
-                    // The actual data type of `Data` and `Timestmap` will be `Int32` and `Int64`.
-                    DataType::Date32 | DataType::Time32(_) => DataType::Int32,
-                    DataType::Date64 | DataType::Time64(_) | DataType::Timestamp(_, _) => {
-                        DataType::Int64
-                    }
-                    date_type => date_type.clone(),
-                };
-                sort_field_indices.push(output_schema.index_of(&d.column_name)?);
-                Ok(SortField::new_with_options(data_type, SortOptions {
-                    descending: !d.asc,
-                    nulls_first: d.nulls_first,
-                }))
+                sort_field_indices.push(d.offset);
+                SortField::new_with_options(
+                    ArrowDataType::from(output_schema.field(d.offset).data_type()),
+                    SortOptions {
+                        descending: !d.asc,
+                        nulls_first: d.nulls_first,
+                    },
+                )
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Vec<_>>();
         let row_converter = RowConverter::new(sort_fields);
         Ok(Self {
             inputs,
@@ -380,22 +372,17 @@ impl MultiSortMergeProcessor {
             .fields()
             .iter()
             .enumerate()
-            .map(|(column_index, field)| {
-                // Collect all rows for a ceterain column out of all preserved blocks.
+            .map(|(col_id, _)| {
+                // Collect all rows for a ceterain column out of all preserved chunks.
                 let candidate_cols = self
                     .blocks
                     .iter()
                     .flatten()
-                    .map(|block| block.column(column_index).clone())
+                    .map(|block| block.get_by_offset(col_id).clone())
                     .collect::<Vec<_>>();
-                DataBlock::take_column_by_slices_limit(
-                    field.data_type(),
-                    &candidate_cols,
-                    &indices,
-                    None,
-                )
+                DataBlock::take_column_by_slices_limit(&candidate_cols, &indices, None)
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Vec<_>>();
 
         // Clear no need data.
         self.in_progess_rows.clear();
@@ -408,7 +395,7 @@ impl MultiSortMergeProcessor {
             }
         }
 
-        Ok(DataBlock::create(self.output_schema.clone(), columns))
+        Ok(DataBlock::new(columns, num_rows))
     }
 }
 
@@ -515,10 +502,7 @@ impl Processor for MultiSortMergeProcessor {
                     let columns = self
                         .sort_field_indices
                         .iter()
-                        .map(|i| {
-                            let col = block.column(*i);
-                            col.as_arrow_array(col.data_type())
-                        })
+                        .map(|i| column_to_arrow_array(block.get_by_offset(*i), block.num_rows()))
                         .collect::<Vec<_>>();
                     let rows = self.row_converter.convert_columns(&columns)?;
                     if !block.is_empty() {

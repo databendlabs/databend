@@ -20,11 +20,23 @@ use common_ast::ast::Engine;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::AppendMode;
 use common_config::GlobalConfig;
-use common_datablocks::assert_blocks_sorted_eq_with_name;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
+use common_expression::infer_table_schema;
+use common_expression::types::number::Int32Type;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::FromData;
+use common_expression::SendableDataBlockStream;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::DatabaseMeta;
 use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlanV2;
@@ -129,13 +141,19 @@ impl TestFixture {
     }
 
     pub fn default_schema() -> DataSchemaRef {
-        let tuple_inner_names = vec!["a".to_string(), "b".to_string()];
-        let tuple_inner_data_types = vec![i32::to_data_type(), i32::to_data_type()];
-        let tuple_data_type = StructType::new_impl(Some(tuple_inner_names), tuple_inner_data_types);
+        let tuple_inner_data_types = vec![
+            DataType::Number(NumberDataType::Int32),
+            DataType::Number(NumberDataType::Int32),
+        ];
+        let tuple_data_type = DataType::Tuple(tuple_inner_data_types);
         DataSchemaRefExt::create(vec![
-            DataField::new("id", i32::to_data_type()),
+            DataField::new("id", DataType::Number(NumberDataType::Int32)),
             DataField::new("t", tuple_data_type),
         ])
+    }
+
+    pub fn default_table_schema() -> TableSchemaRef {
+        infer_table_schema(&Self::default_schema()).unwrap()
     }
 
     pub fn default_crate_table_plan(&self) -> CreateTablePlanV2 {
@@ -145,7 +163,7 @@ impl TestFixture {
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
-            schema: TestFixture::default_schema(),
+            schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
             part_prefix: "".to_string(),
@@ -169,7 +187,7 @@ impl TestFixture {
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
-            schema: TestFixture::default_schema(),
+            schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
             part_prefix: "".to_string(),
@@ -201,7 +219,10 @@ impl TestFixture {
         Ok(())
     }
 
-    pub fn gen_sample_blocks(num_of_blocks: usize, start: i32) -> Vec<Result<DataBlock>> {
+    pub fn gen_sample_blocks(
+        num_of_blocks: usize,
+        start: i32,
+    ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
         Self::gen_sample_blocks_ex(num_of_blocks, 3, start)
     }
 
@@ -209,44 +230,53 @@ impl TestFixture {
         num_of_block: usize,
         rows_per_block: usize,
         start: i32,
-    ) -> Vec<Result<DataBlock>> {
-        (0..num_of_block)
-            .into_iter()
-            .map(|idx| {
-                let tuple_inner_names = vec!["a".to_string(), "b".to_string()];
-                let tuple_inner_data_types = vec![i32::to_data_type(), i32::to_data_type()];
-                let tuple_data_type =
-                    StructType::new_impl(Some(tuple_inner_names), tuple_inner_data_types);
-                let schema = DataSchemaRefExt::create(vec![
-                    DataField::new("id", i32::to_data_type()),
-                    DataField::new("t", tuple_data_type.clone()),
-                ]);
-                let column0 = Series::from_data(
-                    std::iter::repeat_with(|| idx as i32 + start)
-                        .take(rows_per_block)
-                        .collect::<Vec<i32>>(),
-                );
-                let column1 = Series::from_data(
-                    std::iter::repeat_with(|| (idx as i32 + start) * 2)
-                        .take(rows_per_block)
-                        .collect::<Vec<i32>>(),
-                );
-                let column2 = Series::from_data(
-                    std::iter::repeat_with(|| (idx as i32 + start) * 3)
-                        .take(rows_per_block)
-                        .collect::<Vec<i32>>(),
-                );
-                let tuple_inner_columns = vec![column1, column2];
-                let tuple_column =
-                    StructColumn::from_data(tuple_inner_columns, tuple_data_type).arc();
+    ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("id", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("t", TableDataType::Tuple {
+                fields_name: vec!["a".to_string(), "b".to_string()],
+                fields_type: vec![
+                    TableDataType::Number(NumberDataType::Int32),
+                    TableDataType::Number(NumberDataType::Int32),
+                ],
+            }),
+        ]);
+        (
+            schema,
+            (0..num_of_block)
+                .into_iter()
+                .map(|idx| {
+                    let column0 = Int32Type::from_data(
+                        std::iter::repeat_with(|| idx as i32 + start)
+                            .take(rows_per_block)
+                            .collect::<Vec<i32>>(),
+                    );
+                    let column1 = Int32Type::from_data(
+                        std::iter::repeat_with(|| (idx as i32 + start) * 2)
+                            .take(rows_per_block)
+                            .collect::<Vec<i32>>(),
+                    );
+                    let column2 = Int32Type::from_data(
+                        std::iter::repeat_with(|| (idx as i32 + start) * 3)
+                            .take(rows_per_block)
+                            .collect::<Vec<i32>>(),
+                    );
+                    let tuple_inner_columns = vec![column1, column2];
+                    let tuple_column = Column::Tuple {
+                        fields: tuple_inner_columns,
+                        len: rows_per_block,
+                    };
 
-                Ok(DataBlock::create(schema, vec![column0, tuple_column]))
-            })
-            .collect()
+                    let columns = vec![column0, tuple_column];
+
+                    Ok(DataBlock::new_from_columns(columns))
+                })
+                .collect(),
+        )
     }
 
     pub fn gen_sample_blocks_stream(num: usize, start: i32) -> SendableDataBlockStream {
-        let blocks = Self::gen_sample_blocks(num, start);
+        let (_, blocks) = Self::gen_sample_blocks(num, start);
         Box::pin(futures::stream::iter(blocks))
     }
 
@@ -255,7 +285,7 @@ impl TestFixture {
         rows_perf_block: usize,
         val_start_from: i32,
     ) -> SendableDataBlockStream {
-        let blocks = Self::gen_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
+        let (_, blocks) = Self::gen_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
         Box::pin(futures::stream::iter(blocks))
     }
 
@@ -278,10 +308,7 @@ impl TestFixture {
         overwrite: bool,
         commit: bool,
     ) -> Result<()> {
-        let source_schema = blocks
-            .get(0)
-            .map(|b| b.schema().clone())
-            .unwrap_or_else(|| table.schema());
+        let source_schema = table.schema();
         let mut build_res = PipelineBuildResult::create();
 
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
@@ -293,7 +320,7 @@ impl TestFixture {
         append2table(
             self.ctx.clone(),
             table.clone(),
-            source_schema,
+            Arc::new(source_schema.into()),
             &mut build_res,
             overwrite,
             commit,
@@ -519,13 +546,13 @@ pub async fn history_should_have_item(
     // check history
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let count_str = format!("| {}     |", item_cnt);
+    let count_str = format!("| {}_u64    |", item_cnt);
     let expected = vec![
-        "+-------+",
-        "| count |",
-        "+-------+",
+        "+----------+",
+        "| Column 0 |",
+        "+----------+",
         count_str.as_str(),
-        "+-------+",
+        "+----------+",
     ];
 
     let qry = format!(

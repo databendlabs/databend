@@ -15,16 +15,14 @@ test = false
 common-arrow = { path = "../../../../common/arrow" }
 common-base = { path = "../../../../common/base" }
 common-catalog = { path = "../../../catalog" }
-common-datablocks = { path = "../../../datablocks" }
-common-datavalues = { path = "../../../datavalues" }
 common-exception = { path = "../../../../common/exception" }
-common-functions = { path = "../../../functions" }
+common-expression = { path = "../../../expression" }
+common-functions-v2 = { path = "../../../functions-v2" }
 common-hive-meta-store = { path = "../hive-meta-store" }
 common-meta-app = { path = "../../../../meta/app" }
 common-meta-types = { path = "../../../../meta/types" }
 common-pipeline-core = { path = "../../../pipeline/core" }
 common-pipeline-sources = { path = "../../../pipeline/sources" }
-common-sql = { path = "../../../sql" }
 common-storage = { path = "../../../../common/storage" }
 common-storages-index = { path = "../../index" }
 common-storages-table-meta = { path = "../../table-meta" }
@@ -34,6 +32,7 @@ async-trait = "0.1.57"
 chrono = { workspace = true }
 futures = "0.3.24"
 opendal = "0.23"
+ordered-float = "3.1.0"
 serde = { workspace = true }
 thrift = { package = "databend-thrift", version = "0.17.0" }
 tracing = "0.1.36"

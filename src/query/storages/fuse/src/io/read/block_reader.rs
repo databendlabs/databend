@@ -24,9 +24,11 @@ use common_base::rangemap::RangeMerger;
 use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::TableSchemaRef;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::ColumnMeta;
@@ -43,7 +45,7 @@ use crate::metrics::*;
 pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
-    pub(crate) projected_schema: DataSchemaRef,
+    pub(crate) projected_schema: TableSchemaRef,
     pub(crate) column_leaves: ColumnLeaves,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
 }
@@ -111,13 +113,13 @@ where Self: 'static
 impl BlockReader {
     pub fn create(
         operator: Operator,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         projection: Projection,
     ) -> Result<Arc<BlockReader>> {
         let projected_schema = match projection {
-            Projection::Columns(ref indices) => DataSchemaRef::new(schema.project(indices)),
+            Projection::Columns(ref indices) => TableSchemaRef::new(schema.project(indices)),
             Projection::InnerColumns(ref path_indices) => {
-                DataSchemaRef::new(schema.inner_project(path_indices))
+                Arc::new(schema.inner_project(path_indices))
             }
         };
 
@@ -353,7 +355,16 @@ impl BlockReader {
         Ok((index, chunk))
     }
 
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> TableSchemaRef {
         self.projected_schema.clone()
+    }
+
+    pub fn data_fields(&self) -> Vec<DataField> {
+        self.schema().fields().iter().map(DataField::from).collect()
+    }
+
+    pub fn data_schema(&self) -> DataSchema {
+        let fields = self.data_fields();
+        DataSchema::new(fields)
     }
 }

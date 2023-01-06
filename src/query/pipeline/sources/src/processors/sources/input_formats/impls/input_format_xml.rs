@@ -15,11 +15,11 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
+use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderXML;
@@ -44,7 +44,7 @@ impl InputFormatXML {
         field_decoder: &FieldDecoderXML,
         buf: &[u8],
         deserializers: &mut [TypeDeserializerImpl],
-        schema: &DataSchemaRef,
+        schema: &TableSchemaRef,
         path: &str,
         row_index: usize,
     ) -> Result<()> {
@@ -63,7 +63,6 @@ impl InputFormatXML {
             } else {
                 raw_data.get(&field.name().to_lowercase())
             };
-
             if let Some(value) = value {
                 let mut reader = Cursor::new(&**value);
                 if reader.eof() {

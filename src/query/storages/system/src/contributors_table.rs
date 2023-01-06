@@ -16,9 +16,13 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -38,19 +42,21 @@ impl SyncSystemTable for ContributorsTable {
     }
 
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let contributors: Vec<&[u8]> = env!("DATABEND_COMMIT_AUTHORS")
+        let contributors: Vec<Vec<u8>> = env!("DATABEND_COMMIT_AUTHORS")
             .split_terminator(',')
-            .map(|x| x.trim().as_bytes())
+            .map(|x| x.trim().as_bytes().to_vec())
             .collect();
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(contributors),
-        ]))
+
+        Ok(DataBlock::new_from_columns(vec![StringType::from_data(
+            contributors,
+        )]))
     }
 }
 
 impl ContributorsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new("name", Vu8::to_data_type())]);
+        let schema =
+            TableSchemaRefExt::create(vec![TableField::new("name", TableDataType::String)]);
 
         let table_info = TableInfo {
             desc: "'system'.'contributors'".to_string(),

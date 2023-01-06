@@ -16,10 +16,11 @@ use std::collections::HashMap;
 
 use backon::ExponentialBackoff;
 use backon::Retryable;
-use common_arrow::arrow::chunk::Chunk;
+use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::native::write::PaWriter;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 use common_storages_common::blocks_to_parquet;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnMeta;
@@ -32,20 +33,19 @@ use crate::operations::util;
 
 pub fn write_block(
     write_settings: &WriteSettings,
+    schema: &TableSchemaRef,
     block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
-    let schema = block.schema().clone();
-
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
             let result =
-                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
+                blocks_to_parquet(schema, vec![block], buf, write_settings.table_compression)?;
             let meta = util::column_metas(&result.1)?;
             Ok((result.0, meta))
         }
         FuseStorageFormat::Native => {
-            let arrow_schema = block.schema().as_ref().to_arrow();
+            let arrow_schema = schema.to_arrow();
             let mut writer = PaWriter::new(
                 buf,
                 arrow_schema,
@@ -55,7 +55,7 @@ pub fn write_block(
                 },
             );
 
-            let batch = Chunk::try_from(block)?;
+            let batch = ArrowChunk::try_from(block)?;
 
             writer.start()?;
             writer.write(&batch)?;

@@ -16,9 +16,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datablocks::SortColumnDescription;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::SortColumnDescription;
 
 use super::Compactor;
 use super::TransformCompact;
@@ -62,7 +62,7 @@ impl Compactor for SortMergeCompactor {
             let aborting = self.aborting.clone();
             let aborting: Aborting = Arc::new(Box::new(move || aborting.load(Ordering::Relaxed)));
 
-            let block = DataBlock::merge_sort_blocks(
+            let block = DataBlock::merge_sort(
                 blocks,
                 &self.sort_columns_descriptions,
                 self.limit,
@@ -76,11 +76,7 @@ impl Compactor for SortMergeCompactor {
             let mut output = Vec::with_capacity(num_blocks);
             for _ in 0..num_blocks {
                 let end = std::cmp::min(start + self.block_size, num_rows);
-                let block = DataBlock::block_take_by_slices_limit(
-                    &block,
-                    (start, end - start),
-                    self.limit,
-                )?;
+                let block = block.slice(start..end);
                 start = end;
                 output.push(block);
             }

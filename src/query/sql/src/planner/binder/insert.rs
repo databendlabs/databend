@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_expression::TableSchemaRefExt;
 use common_meta_types::FileFormatOptions;
 
 use crate::binder::Binder;
@@ -74,7 +74,7 @@ impl<'a> Binder {
                         .map(|v| v.clone())
                 })
                 .collect::<Result<Vec<_>>>()?;
-            DataSchemaRefExt::create(fields)
+            TableSchemaRefExt::create(fields)
         };
 
         let input_source: Result<InsertInputSource> = match source.clone() {
@@ -115,8 +115,8 @@ impl<'a> Binder {
         };
 
         let plan = Insert {
-            catalog: catalog_name,
-            database: database_name,
+            catalog: catalog_name.to_string(),
+            database: database_name.to_string(),
             table: table_name,
             table_id,
             schema,

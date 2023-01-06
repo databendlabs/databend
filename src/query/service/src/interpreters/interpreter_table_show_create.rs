@@ -14,10 +14,13 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_sql::executor::PhysicalScalar;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_sql::plans::ShowCreateTablePlan;
 use common_storages_table_meta::table::is_internal_opt_key;
 use tracing::debug;
@@ -70,8 +73,7 @@ impl Interpreter for ShowCreateTableInterpreter {
             for (idx, field) in schema.fields().iter().enumerate() {
                 let default_expr = match field.default_expr() {
                     Some(expr) => {
-                        let expression: PhysicalScalar = serde_json::from_str(expr)?;
-                        format!(" DEFAULT {expression}")
+                        format!(" DEFAULT {expr}")
                     }
                     None => "".to_string(),
                 };
@@ -89,7 +91,7 @@ impl Interpreter for ShowCreateTableInterpreter {
                 let column = format!(
                     "  `{}` {}{}{}",
                     field.name(),
-                    format_data_type_sql(field.data_type()),
+                    field.data_type().sql_name(),
                     default_expr,
                     comment
                 );
@@ -124,10 +126,19 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .as_str()
         });
 
-        let block = DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(vec![name.as_bytes()]),
-            Series::from_data(vec![table_create_sql.into_bytes()]),
-        ]);
+        let block = DataBlock::new(
+            vec![
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(table_create_sql.into_bytes())),
+                },
+            ],
+            1,
+        );
         debug!("Show create table executor result: {:?}", block);
 
         PipelineBuildResult::from_blocks(vec![block])

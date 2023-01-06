@@ -16,10 +16,10 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 
 use super::Compactor;
 use super::TransformCompact;
@@ -75,7 +75,7 @@ impl Compactor for BlockCompactor {
             let accumulated_rows: usize = blocks.iter_mut().map(|b| b.num_rows()).sum();
             let accumulated_bytes: usize = blocks.iter_mut().map(|b| b.memory_size()).sum();
 
-            let merged = DataBlock::concat_blocks(blocks)?;
+            let merged = DataBlock::concat(blocks)?;
             blocks.clear();
 
             if accumulated_rows >= self.thresholds.max_rows_per_block {
@@ -84,14 +84,15 @@ impl Compactor for BlockCompactor {
                     let mut offset = 0;
                     let mut remain_rows = accumulated_rows;
                     while remain_rows >= self.thresholds.max_rows_per_block {
-                        let cut = merged.slice(offset, self.thresholds.max_rows_per_block);
+                        let cut =
+                            merged.slice(offset..(offset + self.thresholds.max_rows_per_block));
                         res.push(cut);
                         offset += self.thresholds.max_rows_per_block;
                         remain_rows -= self.thresholds.max_rows_per_block;
                     }
 
                     if remain_rows > 0 {
-                        blocks.push(merged.slice(offset, remain_rows));
+                        blocks.push(merged.slice(offset..(offset + remain_rows)));
                     }
                 } else {
                     // we can't use slice here, it did not deallocate memory
@@ -129,12 +130,9 @@ impl Compactor for BlockCompactor {
                 res.push(block.clone());
             } else {
                 let block = if block.num_rows() > self.thresholds.max_rows_per_block {
-                    let b = block.slice(0, self.thresholds.max_rows_per_block);
+                    let b = block.slice(0..self.thresholds.max_rows_per_block);
                     res.push(b);
-                    block.slice(
-                        self.thresholds.max_rows_per_block,
-                        block.num_rows() - self.thresholds.max_rows_per_block,
-                    )
+                    block.slice(self.thresholds.max_rows_per_block..block.num_rows())
                 } else {
                     block.clone()
                 };
@@ -149,16 +147,15 @@ impl Compactor for BlockCompactor {
                         ));
                     }
 
-                    let block = DataBlock::concat_blocks(&temp_blocks)?;
-                    res.push(block.slice(0, self.thresholds.max_rows_per_block));
+                    let block = DataBlock::concat(&temp_blocks)?;
+                    res.push(block.slice(0..self.thresholds.max_rows_per_block));
                     accumulated_rows -= self.thresholds.max_rows_per_block;
 
                     temp_blocks.clear();
                     if accumulated_rows != 0 {
-                        temp_blocks.push(block.slice(
-                            self.thresholds.max_rows_per_block,
-                            block.num_rows() - self.thresholds.max_rows_per_block,
-                        ));
+                        temp_blocks.push(
+                            block.slice(self.thresholds.max_rows_per_block..block.num_rows()),
+                        );
                     }
                 }
             }
@@ -171,7 +168,7 @@ impl Compactor for BlockCompactor {
                 ));
             }
 
-            let block = DataBlock::concat_blocks(&temp_blocks)?;
+            let block = DataBlock::concat(&temp_blocks)?;
             res.push(block);
         }
 

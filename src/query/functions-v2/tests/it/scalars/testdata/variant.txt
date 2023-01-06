@@ -88,8 +88,8 @@ output         : {"a":"b","c":"d"}
 
 
 ast            : parse_json(s)
-raw expr       : parse_json(ColumnRef(0)::String)
-checked expr   : parse_json<String>(ColumnRef(0))
+raw expr       : parse_json(#0::String)
+checked expr   : parse_json<String>(#0)
 evaluation:
 +--------+-----------------------------------------------------------+-----------------------+
 |        | s                                                         | Output                |
@@ -117,8 +117,8 @@ evaluation (internal):
 
 
 ast            : parse_json(s)
-raw expr       : parse_json(ColumnRef(0)::String NULL)
-checked expr   : parse_json<String NULL>(ColumnRef(0))
+raw expr       : parse_json(#0::String NULL)
+checked expr   : parse_json<String NULL>(#0)
 evaluation:
 +--------+------------------------+--------------+
 |        | s                      | Output       |
@@ -221,8 +221,8 @@ output         : {"a":"b","c":"d"}
 
 
 ast            : try_parse_json(s)
-raw expr       : try_parse_json(ColumnRef(0)::String)
-checked expr   : try_parse_json<String>(ColumnRef(0))
+raw expr       : try_parse_json(#0::String)
+checked expr   : try_parse_json<String>(#0)
 evaluation:
 +--------+-----------------------------------------------------------+-----------------------+
 |        | s                                                         | Output                |
@@ -250,8 +250,8 @@ evaluation (internal):
 
 
 ast            : try_parse_json(s)
-raw expr       : try_parse_json(ColumnRef(0)::String NULL)
-checked expr   : try_parse_json<String NULL>(ColumnRef(0))
+raw expr       : try_parse_json(#0::String NULL)
+checked expr   : try_parse_json<String NULL>(#0)
 evaluation:
 +--------+-----------------------+--------------------+
 |        | s                     | Output             |
@@ -300,8 +300,8 @@ output         : "expected ident, pos 3"
 
 
 ast            : check_json(s)
-raw expr       : check_json(ColumnRef(0)::String)
-checked expr   : check_json<String>(ColumnRef(0))
+raw expr       : check_json(#0::String)
+checked expr   : check_json<String>(#0)
 evaluation:
 +--------+------------------+-------------------------+
 |        | s                | Output                  |
@@ -322,8 +322,8 @@ evaluation (internal):
 
 
 ast            : check_json(s)
-raw expr       : check_json(ColumnRef(0)::String NULL)
-checked expr   : check_json<String NULL>(ColumnRef(0))
+raw expr       : check_json(#0::String NULL)
+checked expr   : check_json<String NULL>(#0)
 evaluation:
 +--------+-----------------------+-------------------------+
 |        | s                     | Output                  |
@@ -346,7 +346,7 @@ evaluation (internal):
 
 ast            : length(parse_json('1234'))
 raw expr       : length(parse_json("1234"))
-checked expr   : length<Variant>(parse_json<String>("1234"))
+checked expr   : length<Variant NULL>(CAST(parse_json<String>("1234") AS Variant NULL))
 optimized expr : NULL
 output type    : UInt32 NULL
 output domain  : Unknown
@@ -355,16 +355,16 @@ output         : NULL
 
 ast            : length(parse_json('[1,2,3,4]'))
 raw expr       : length(parse_json("[1,2,3,4]"))
-checked expr   : length<Variant>(parse_json<String>("[1,2,3,4]"))
+checked expr   : length<Variant NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Variant NULL))
 optimized expr : 4_u32
 output type    : UInt32 NULL
 output domain  : Unknown
-output         : 4
+output         : 4_u32
 
 
 ast            : length(parse_json('{"k":"v"}'))
 raw expr       : length(parse_json("{\"k\":\"v\"}"))
-checked expr   : length<Variant>(parse_json<String>("{\"k\":\"v\"}"))
+checked expr   : length<Variant NULL>(CAST(parse_json<String>("{\"k\":\"v\"}") AS Variant NULL))
 optimized expr : NULL
 output type    : UInt32 NULL
 output domain  : Unknown
@@ -372,8 +372,8 @@ output         : NULL
 
 
 ast            : length(parse_json(s))
-raw expr       : length(parse_json(ColumnRef(0)::String))
-checked expr   : length<Variant>(parse_json<String>(ColumnRef(0)))
+raw expr       : length(parse_json(#0::String))
+checked expr   : length<Variant NULL>(CAST(parse_json<String>(#0) AS Variant NULL))
 evaluation:
 +--------+----------------------------------+-------------+
 |        | s                                | Output      |
@@ -381,8 +381,8 @@ evaluation:
 | Type   | String                           | UInt32 NULL |
 | Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | Unknown     |
 | Row 0  | "true"                           | NULL        |
-| Row 1  | "[1,2,3,4]"                      | 4           |
-| Row 2  | "[\"a\",\"b\",\"c\"]"            | 3           |
+| Row 1  | "[1,2,3,4]"                      | 4_u32       |
+| Row 2  | "[\"a\",\"b\",\"c\"]"            | 3_u32       |
 +--------+----------------------------------+-------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------+
@@ -394,8 +394,8 @@ evaluation (internal):
 
 
 ast            : length(parse_json(s))
-raw expr       : length(parse_json(ColumnRef(0)::String NULL))
-checked expr   : length<Variant>(CAST(parse_json<String NULL>(ColumnRef(0)) AS Variant))
+raw expr       : length(parse_json(#0::String NULL))
+checked expr   : length<Variant NULL>(parse_json<String NULL>(#0))
 evaluation:
 +--------+------------------------+-------------+
 |        | s                      | Output      |
@@ -403,9 +403,9 @@ evaluation:
 | Type   | String NULL            | UInt32 NULL |
 | Domain | {""..="true"} ∪ {NULL} | Unknown     |
 | Row 0  | "true"                 | NULL        |
-| Row 1  | "[1,2,3,4]"            | 4           |
+| Row 1  | "[1,2,3,4]"            | 4_u32       |
 | Row 2  | NULL                   | NULL        |
-| Row 3  | "[\"a\",\"b\",\"c\"]"  | 3           |
+| Row 3  | "[\"a\",\"b\",\"c\"]"  | 3_u32       |
 +--------+------------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -418,7 +418,7 @@ evaluation (internal):
 
 ast            : object_keys(parse_json('[1,2,3,4]'))
 raw expr       : object_keys(parse_json("[1,2,3,4]"))
-checked expr   : object_keys<Variant>(parse_json<String>("[1,2,3,4]"))
+checked expr   : object_keys<Variant NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Variant NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : Unknown
@@ -427,7 +427,7 @@ output         : NULL
 
 ast            : object_keys(parse_json('{"k1":"v1","k2":"v2"}'))
 raw expr       : object_keys(parse_json("{\"k1\":\"v1\",\"k2\":\"v2\"}"))
-checked expr   : object_keys<Variant>(parse_json<String>("{\"k1\":\"v1\",\"k2\":\"v2\"}"))
+checked expr   : object_keys<Variant NULL>(CAST(parse_json<String>("{\"k1\":\"v1\",\"k2\":\"v2\"}") AS Variant NULL))
 optimized expr : 0x8000000210000002100000026b316b32
 output type    : Variant NULL
 output domain  : Unknown
@@ -435,8 +435,8 @@ output         : ["k1","k2"]
 
 
 ast            : object_keys(parse_json(s))
-raw expr       : object_keys(parse_json(ColumnRef(0)::String))
-checked expr   : object_keys<Variant>(parse_json<String>(ColumnRef(0)))
+raw expr       : object_keys(parse_json(#0::String))
+checked expr   : object_keys<Variant NULL>(CAST(parse_json<String>(#0) AS Variant NULL))
 evaluation:
 +--------+-------------------------------------------------+--------------+
 |        | s                                               | Output       |
@@ -457,8 +457,8 @@ evaluation (internal):
 
 
 ast            : object_keys(parse_json(s))
-raw expr       : object_keys(parse_json(ColumnRef(0)::String NULL))
-checked expr   : object_keys<Variant>(CAST(parse_json<String NULL>(ColumnRef(0)) AS Variant))
+raw expr       : object_keys(parse_json(#0::String NULL))
+checked expr   : object_keys<Variant NULL>(parse_json<String NULL>(#0))
 evaluation:
 +--------+-------------------------------------------------+--------------+
 |        | s                                               | Output       |
@@ -481,7 +481,7 @@ evaluation (internal):
 
 ast            : parse_json('null')[1]
 raw expr       : get(parse_json("null"), 1_u8)
-checked expr   : get<Variant, UInt64>(parse_json<String>("null"), CAST(1_u8 AS UInt64))
+checked expr   : get<Variant NULL, UInt64 NULL>(CAST(parse_json<String>("null") AS Variant NULL), CAST(1_u8 AS UInt64 NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : Unknown
@@ -490,7 +490,7 @@ output         : NULL
 
 ast            : parse_json('null')['k']
 raw expr       : get(parse_json("null"), "k")
-checked expr   : get<Variant, String>(parse_json<String>("null"), "k")
+checked expr   : get<Variant NULL, String NULL>(CAST(parse_json<String>("null") AS Variant NULL), CAST("k" AS String NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : Unknown
@@ -499,7 +499,7 @@ output         : NULL
 
 ast            : parse_json('[1,2,3,4]')[1]
 raw expr       : get(parse_json("[1,2,3,4]"), 1_u8)
-checked expr   : get<Variant, UInt64>(parse_json<String>("[1,2,3,4]"), CAST(1_u8 AS UInt64))
+checked expr   : get<Variant NULL, UInt64 NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Variant NULL), CAST(1_u8 AS UInt64 NULL))
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Unknown
@@ -508,7 +508,7 @@ output         : 2
 
 ast            : parse_json('[1,2,3,4]')[2+3]
 raw expr       : get(parse_json("[1,2,3,4]"), plus(2_u8, 3_u8))
-checked expr   : get<Variant, UInt64>(parse_json<String>("[1,2,3,4]"), CAST(plus<UInt8, UInt8>(2_u8, 3_u8) AS UInt64))
+checked expr   : get<Variant NULL, UInt64 NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Variant NULL), CAST(plus<UInt8, UInt8>(2_u8, 3_u8) AS UInt64 NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : Unknown
@@ -517,7 +517,7 @@ output         : NULL
 
 ast            : parse_json('{"k":"v"}')['k']
 raw expr       : get(parse_json("{\"k\":\"v\"}"), "k")
-checked expr   : get<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "k")
+checked expr   : get<Variant NULL, String NULL>(CAST(parse_json<String>("{\"k\":\"v\"}") AS Variant NULL), CAST("k" AS String NULL))
 optimized expr : 0x200000001000000176
 output type    : Variant NULL
 output domain  : Unknown
@@ -526,7 +526,7 @@ output         : "v"
 
 ast            : parse_json('{"k":"v"}')['x']
 raw expr       : get(parse_json("{\"k\":\"v\"}"), "x")
-checked expr   : get<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "x")
+checked expr   : get<Variant NULL, String NULL>(CAST(parse_json<String>("{\"k\":\"v\"}") AS Variant NULL), CAST("x" AS String NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : Unknown
@@ -535,7 +535,7 @@ output         : NULL
 
 ast            : CAST(('a', 'b') AS VARIANT)['2']
 raw expr       : get(CAST(tuple("a", "b") AS Variant), "2")
-checked expr   : get<Variant, String>(to_variant<T0=(String, String)><T0>(tuple<String, String>("a", "b")), "2")
+checked expr   : get<Variant NULL, String NULL>(CAST(to_variant<T0=(String, String)><T0>(tuple<String, String>("a", "b")) AS Variant NULL), CAST("2" AS String NULL))
 optimized expr : 0x200000001000000162
 output type    : Variant NULL
 output domain  : Unknown
@@ -543,17 +543,17 @@ output         : "b"
 
 
 ast            : parse_json(s)[i]
-raw expr       : get(parse_json(ColumnRef(0)::String), ColumnRef(1)::UInt64)
-checked expr   : get<Variant, UInt64>(parse_json<String>(ColumnRef(0)), ColumnRef(1))
+raw expr       : get(parse_json(#0::String), #1::UInt64)
+checked expr   : get<Variant NULL, UInt64 NULL>(CAST(parse_json<String>(#0) AS Variant NULL), CAST(#1 AS UInt64 NULL))
 evaluation:
 +--------+----------------------------------+---------+--------------+
 |        | s                                | i       | Output       |
 +--------+----------------------------------+---------+--------------+
 | Type   | String                           | UInt64  | Variant NULL |
 | Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | {0..=1} | Unknown      |
-| Row 0  | "true"                           | 0       | NULL         |
-| Row 1  | "[1,2,3,4]"                      | 0       | 1            |
-| Row 2  | "[\"a\",\"b\",\"c\"]"            | 1       | "b"          |
+| Row 0  | "true"                           | 0_u64   | NULL         |
+| Row 1  | "[1,2,3,4]"                      | 0_u64   | 1            |
+| Row 2  | "[\"a\",\"b\",\"c\"]"            | 1_u64   | "b"          |
 +--------+----------------------------------+---------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -566,8 +566,8 @@ evaluation (internal):
 
 
 ast            : parse_json(s)[i]
-raw expr       : get(parse_json(ColumnRef(0)::String NULL), ColumnRef(1)::UInt64 NULL)
-checked expr   : get<Variant NULL, UInt64 NULL>(parse_json<String NULL>(ColumnRef(0)), ColumnRef(1))
+raw expr       : get(parse_json(#0::String NULL), #1::UInt64 NULL)
+checked expr   : get<Variant NULL, UInt64 NULL>(parse_json<String NULL>(#0), #1)
 evaluation:
 +--------+------------------------+------------------+--------------+
 |        | s                      | i                | Output       |
@@ -575,9 +575,9 @@ evaluation:
 | Type   | String NULL            | UInt64 NULL      | Variant NULL |
 | Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown      |
 | Row 0  | "true"                 | NULL             | NULL         |
-| Row 1  | "[1,2,3,4]"            | 2                | 3            |
+| Row 1  | "[1,2,3,4]"            | 2_u64            | 3            |
 | Row 2  | NULL                   | NULL             | NULL         |
-| Row 3  | "[\"a\",\"b\",\"c\"]"  | 1                | "b"          |
+| Row 3  | "[\"a\",\"b\",\"c\"]"  | 1_u64            | "b"          |
 +--------+------------------------+------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -590,8 +590,8 @@ evaluation (internal):
 
 
 ast            : parse_json(s)[k]
-raw expr       : get(parse_json(ColumnRef(0)::String), ColumnRef(1)::String)
-checked expr   : get<Variant, String>(parse_json<String>(ColumnRef(0)), ColumnRef(1))
+raw expr       : get(parse_json(#0::String), #1::String)
+checked expr   : get<Variant NULL, String NULL>(CAST(parse_json<String>(#0) AS Variant NULL), CAST(#1 AS String NULL))
 evaluation:
 +--------+------------------------+-------------+--------------+
 |        | s                      | k           | Output       |
@@ -613,8 +613,8 @@ evaluation (internal):
 
 
 ast            : parse_json(s)[k]
-raw expr       : get(parse_json(ColumnRef(0)::String NULL), ColumnRef(1)::String)
-checked expr   : get<Variant, String>(CAST(parse_json<String NULL>(ColumnRef(0)) AS Variant), ColumnRef(1))
+raw expr       : get(parse_json(#0::String NULL), #1::String)
+checked expr   : get<Variant NULL, String NULL>(parse_json<String NULL>(#0), CAST(#1 AS String NULL))
 evaluation:
 +--------+-----------------------------+------------+--------------+
 |        | s                           | k          | Output       |
@@ -638,7 +638,7 @@ evaluation (internal):
 
 ast            : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'AA')
 raw expr       : get_ignore_case(parse_json("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "AA")
-checked expr   : get_ignore_case<Variant, String>(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "AA")
+checked expr   : get_ignore_case<Variant NULL, String NULL>(CAST(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}") AS Variant NULL), CAST("AA" AS String NULL))
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Unknown
@@ -647,7 +647,7 @@ output         : 1
 
 ast            : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'aa')
 raw expr       : get_ignore_case(parse_json("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "aa")
-checked expr   : get_ignore_case<Variant, String>(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "aa")
+checked expr   : get_ignore_case<Variant NULL, String NULL>(CAST(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}") AS Variant NULL), CAST("aa" AS String NULL))
 optimized expr : 0x20000000200000025003
 output type    : Variant NULL
 output domain  : Unknown
@@ -656,7 +656,7 @@ output         : 3
 
 ast            : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'bb')
 raw expr       : get_ignore_case(parse_json("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "bb")
-checked expr   : get_ignore_case<Variant, String>(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "bb")
+checked expr   : get_ignore_case<Variant NULL, String NULL>(CAST(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}") AS Variant NULL), CAST("bb" AS String NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : Unknown
@@ -664,8 +664,8 @@ output         : NULL
 
 
 ast            : get_ignore_case(parse_json(s), k)
-raw expr       : get_ignore_case(parse_json(ColumnRef(0)::String), ColumnRef(1)::String)
-checked expr   : get_ignore_case<Variant, String>(parse_json<String>(ColumnRef(0)), ColumnRef(1))
+raw expr       : get_ignore_case(parse_json(#0::String), #1::String)
+checked expr   : get_ignore_case<Variant NULL, String NULL>(CAST(parse_json<String>(#0) AS Variant NULL), CAST(#1 AS String NULL))
 evaluation:
 +--------+------------------------+-------------+--------------+
 |        | s                      | k           | Output       |
@@ -687,8 +687,8 @@ evaluation (internal):
 
 
 ast            : get_ignore_case(parse_json(s), k)
-raw expr       : get_ignore_case(parse_json(ColumnRef(0)::String NULL), ColumnRef(1)::String)
-checked expr   : get_ignore_case<Variant, String>(CAST(parse_json<String NULL>(ColumnRef(0)) AS Variant), ColumnRef(1))
+raw expr       : get_ignore_case(parse_json(#0::String NULL), #1::String)
+checked expr   : get_ignore_case<Variant NULL, String NULL>(parse_json<String NULL>(#0), CAST(#1 AS String NULL))
 evaluation:
 +--------+-----------------------------+------------+--------------+
 |        | s                           | k          | Output       |
@@ -712,7 +712,7 @@ evaluation (internal):
 
 ast            : get_path(parse_json('[[1,2],3]'), '[0]')
 raw expr       : get_path(parse_json("[[1,2],3]"), "[0]")
-checked expr   : get_path<Variant, String>(parse_json<String>("[[1,2],3]"), "[0]")
+checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("[[1,2],3]") AS Variant NULL), CAST("[0]" AS String NULL))
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant NULL
 output domain  : Unknown
@@ -721,7 +721,7 @@ output         : [1,2]
 
 ast            : get_path(parse_json('[[1,2],3]'), '[0][1]')
 raw expr       : get_path(parse_json("[[1,2],3]"), "[0][1]")
-checked expr   : get_path<Variant, String>(parse_json<String>("[[1,2],3]"), "[0][1]")
+checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("[[1,2],3]") AS Variant NULL), CAST("[0][1]" AS String NULL))
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Unknown
@@ -730,7 +730,7 @@ output         : 2
 
 ast            : get_path(parse_json('[1,2,3]'), '[0]')
 raw expr       : get_path(parse_json("[1,2,3]"), "[0]")
-checked expr   : get_path<Variant, String>(parse_json<String>("[1,2,3]"), "[0]")
+checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("[1,2,3]") AS Variant NULL), CAST("[0]" AS String NULL))
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Unknown
@@ -739,7 +739,7 @@ output         : 1
 
 ast            : get_path(parse_json('[1,2,3]'), 'k2:k3')
 raw expr       : get_path(parse_json("[1,2,3]"), "k2:k3")
-checked expr   : get_path<Variant, String>(parse_json<String>("[1,2,3]"), "k2:k3")
+checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("[1,2,3]") AS Variant NULL), CAST("k2:k3" AS String NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : Unknown
@@ -748,7 +748,7 @@ output         : NULL
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), '["a"]["b"]')
 raw expr       : get_path(parse_json("{\"a\":{\"b\":2}}"), "[\"a\"][\"b\"]")
-checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}"), "[\"a\"][\"b\"]")
+checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("{\"a\":{\"b\":2}}") AS Variant NULL), CAST("[\"a\"][\"b\"]" AS String NULL))
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Unknown
@@ -757,7 +757,7 @@ output         : 2
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), 'a:b')
 raw expr       : get_path(parse_json("{\"a\":{\"b\":2}}"), "a:b")
-checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}"), "a:b")
+checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("{\"a\":{\"b\":2}}") AS Variant NULL), CAST("a:b" AS String NULL))
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Unknown
@@ -766,7 +766,7 @@ output         : 2
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), '["a"]')
 raw expr       : get_path(parse_json("{\"a\":{\"b\":2}}"), "[\"a\"]")
-checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}"), "[\"a\"]")
+checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("{\"a\":{\"b\":2}}") AS Variant NULL), CAST("[\"a\"]" AS String NULL))
 optimized expr : 0x400000011000000120000002625002
 output type    : Variant NULL
 output domain  : Unknown
@@ -775,7 +775,7 @@ output         : {"b":2}
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), 'a')
 raw expr       : get_path(parse_json("{\"a\":{\"b\":2}}"), "a")
-checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}"), "a")
+checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("{\"a\":{\"b\":2}}") AS Variant NULL), CAST("a" AS String NULL))
 optimized expr : 0x400000011000000120000002625002
 output type    : Variant NULL
 output domain  : Unknown
@@ -783,8 +783,8 @@ output         : {"b":2}
 
 
 ast            : get_path(parse_json(s), k)
-raw expr       : get_path(parse_json(ColumnRef(0)::String), ColumnRef(1)::String)
-checked expr   : get_path<Variant, String>(parse_json<String>(ColumnRef(0)), ColumnRef(1))
+raw expr       : get_path(parse_json(#0::String), #1::String)
+checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>(#0) AS Variant NULL), CAST(#1 AS String NULL))
 evaluation:
 +--------+---------------------------------+-------------------+--------------+
 |        | s                               | k                 | Output       |
@@ -806,8 +806,8 @@ evaluation (internal):
 
 
 ast            : get_path(parse_json(s), k)
-raw expr       : get_path(parse_json(ColumnRef(0)::String NULL), ColumnRef(1)::String)
-checked expr   : get_path<Variant, String>(CAST(parse_json<String NULL>(ColumnRef(0)) AS Variant), ColumnRef(1))
+raw expr       : get_path(parse_json(#0::String NULL), #1::String)
+checked expr   : get_path<Variant NULL, String NULL>(parse_json<String NULL>(#0), CAST(#1 AS String NULL))
 evaluation:
 +--------+-----------------------------+--------------+--------------+
 |        | s                           | k            | Output       |
@@ -902,8 +902,8 @@ output         : "{\"b\":2}"
 
 
 ast            : json_extract_path_text(s, k)
-raw expr       : json_extract_path_text(ColumnRef(0)::String, ColumnRef(1)::String)
-checked expr   : json_extract_path_text<String, String>(ColumnRef(0), ColumnRef(1))
+raw expr       : json_extract_path_text(#0::String, #1::String)
+checked expr   : json_extract_path_text<String, String>(#0, #1)
 evaluation:
 +--------+---------------------------------+-------------------+-------------+
 |        | s                               | k                 | Output      |
@@ -925,8 +925,8 @@ evaluation (internal):
 
 
 ast            : json_extract_path_text(s, k)
-raw expr       : json_extract_path_text(ColumnRef(0)::String NULL, ColumnRef(1)::String)
-checked expr   : json_extract_path_text<String NULL, String NULL>(ColumnRef(0), CAST(ColumnRef(1) AS String NULL))
+raw expr       : json_extract_path_text(#0::String NULL, #1::String)
+checked expr   : json_extract_path_text<String NULL, String NULL>(#0, CAST(#1 AS String NULL))
 evaluation:
 +--------+-----------------------------+--------------+-------------+
 |        | s                           | k            | Output      |
@@ -981,7 +981,7 @@ checked expr   : as_integer<Variant>(parse_json<String>("123"))
 optimized expr : 123_i64
 output type    : Int64 NULL
 output domain  : Unknown
-output         : 123
+output         : 123_i64
 
 
 ast            : as_float(parse_json('"ab"'))
@@ -999,7 +999,7 @@ checked expr   : as_float<Variant>(parse_json<String>("12.34"))
 optimized expr : 12.34_f64
 output type    : Float64 NULL
 output domain  : Unknown
-output         : 12.34
+output         : 12.34_f64
 
 
 ast            : as_string(parse_json('"ab"'))
@@ -1057,8 +1057,8 @@ output         : {"a":"b"}
 
 
 ast            : as_boolean(parse_json(s))
-raw expr       : as_boolean(parse_json(ColumnRef(0)::String))
-checked expr   : as_boolean<Variant>(parse_json<String>(ColumnRef(0)))
+raw expr       : as_boolean(parse_json(#0::String))
+checked expr   : as_boolean<Variant>(parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1082,8 +1082,8 @@ evaluation (internal):
 
 
 ast            : as_boolean(try_parse_json(s))
-raw expr       : as_boolean(try_parse_json(ColumnRef(0)::String))
-checked expr   : as_boolean<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
+raw expr       : as_boolean(try_parse_json(#0::String))
+checked expr   : as_boolean<Variant NULL>(try_parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+------------------------+
 |        | s                            | Output                 |
@@ -1107,8 +1107,8 @@ evaluation (internal):
 
 
 ast            : as_integer(parse_json(s))
-raw expr       : as_integer(parse_json(ColumnRef(0)::String))
-checked expr   : as_integer<Variant>(parse_json<String>(ColumnRef(0)))
+raw expr       : as_integer(parse_json(#0::String))
+checked expr   : as_integer<Variant>(parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+------------+
 |        | s                            | Output     |
@@ -1116,7 +1116,7 @@ evaluation:
 | Type   | String                       | Int64 NULL |
 | Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Unknown    |
 | Row 0  | "true"                       | NULL       |
-| Row 1  | "123"                        | 123        |
+| Row 1  | "123"                        | 123_i64    |
 | Row 2  | "12.34"                      | NULL       |
 | Row 3  | "\"ab\""                     | NULL       |
 | Row 4  | "[1,2,3]"                    | NULL       |
@@ -1132,8 +1132,8 @@ evaluation (internal):
 
 
 ast            : as_integer(try_parse_json(s))
-raw expr       : as_integer(try_parse_json(ColumnRef(0)::String))
-checked expr   : as_integer<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
+raw expr       : as_integer(try_parse_json(#0::String))
+checked expr   : as_integer<Variant NULL>(try_parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+-------------------------------------------------------+
 |        | s                            | Output                                                |
@@ -1141,7 +1141,7 @@ evaluation:
 | Type   | String                       | Int64 NULL                                            |
 | Domain | {"\"ab\""..="{\"a\":\"b\"}"} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | "true"                       | NULL                                                  |
-| Row 1  | "123"                        | 123                                                   |
+| Row 1  | "123"                        | 123_i64                                               |
 | Row 2  | "12.34"                      | NULL                                                  |
 | Row 3  | "\"ab\""                     | NULL                                                  |
 | Row 4  | "[1,2,3]"                    | NULL                                                  |
@@ -1157,8 +1157,8 @@ evaluation (internal):
 
 
 ast            : as_float(parse_json(s))
-raw expr       : as_float(parse_json(ColumnRef(0)::String))
-checked expr   : as_float<Variant>(parse_json<String>(ColumnRef(0)))
+raw expr       : as_float(parse_json(#0::String))
+checked expr   : as_float<Variant>(parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1166,8 +1166,8 @@ evaluation:
 | Type   | String                       | Float64 NULL |
 | Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Unknown      |
 | Row 0  | "true"                       | NULL         |
-| Row 1  | "123"                        | 123          |
-| Row 2  | "12.34"                      | 12.34        |
+| Row 1  | "123"                        | 123_f64      |
+| Row 2  | "12.34"                      | 12.34_f64    |
 | Row 3  | "\"ab\""                     | NULL         |
 | Row 4  | "[1,2,3]"                    | NULL         |
 | Row 5  | "{\"a\":\"b\"}"              | NULL         |
@@ -1182,8 +1182,8 @@ evaluation (internal):
 
 
 ast            : as_float(try_parse_json(s))
-raw expr       : as_float(try_parse_json(ColumnRef(0)::String))
-checked expr   : as_float<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
+raw expr       : as_float(try_parse_json(#0::String))
+checked expr   : as_float<Variant NULL>(try_parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+-----------------------+
 |        | s                            | Output                |
@@ -1191,8 +1191,8 @@ evaluation:
 | Type   | String                       | Float64 NULL          |
 | Domain | {"\"ab\""..="{\"a\":\"b\"}"} | {-inf..=NaN} ∪ {NULL} |
 | Row 0  | "true"                       | NULL                  |
-| Row 1  | "123"                        | 123                   |
-| Row 2  | "12.34"                      | 12.34                 |
+| Row 1  | "123"                        | 123_f64               |
+| Row 2  | "12.34"                      | 12.34_f64             |
 | Row 3  | "\"ab\""                     | NULL                  |
 | Row 4  | "[1,2,3]"                    | NULL                  |
 | Row 5  | "{\"a\":\"b\"}"              | NULL                  |
@@ -1207,8 +1207,8 @@ evaluation (internal):
 
 
 ast            : as_string(parse_json(s))
-raw expr       : as_string(parse_json(ColumnRef(0)::String))
-checked expr   : as_string<Variant>(parse_json<String>(ColumnRef(0)))
+raw expr       : as_string(parse_json(#0::String))
+checked expr   : as_string<Variant>(parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+-------------+
 |        | s                            | Output      |
@@ -1232,8 +1232,8 @@ evaluation (internal):
 
 
 ast            : as_string(try_parse_json(s))
-raw expr       : as_string(try_parse_json(ColumnRef(0)::String))
-checked expr   : as_string<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
+raw expr       : as_string(try_parse_json(#0::String))
+checked expr   : as_string<Variant NULL>(try_parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+-----------------+
 |        | s                            | Output          |
@@ -1257,8 +1257,8 @@ evaluation (internal):
 
 
 ast            : as_array(parse_json(s))
-raw expr       : as_array(parse_json(ColumnRef(0)::String))
-checked expr   : as_array<Variant>(parse_json<String>(ColumnRef(0)))
+raw expr       : as_array(parse_json(#0::String))
+checked expr   : as_array<Variant>(parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1282,8 +1282,8 @@ evaluation (internal):
 
 
 ast            : as_array(try_parse_json(s))
-raw expr       : as_array(try_parse_json(ColumnRef(0)::String))
-checked expr   : as_array<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
+raw expr       : as_array(try_parse_json(#0::String))
+checked expr   : as_array<Variant NULL>(try_parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+--------------------+
 |        | s                            | Output             |
@@ -1307,8 +1307,8 @@ evaluation (internal):
 
 
 ast            : as_object(parse_json(s))
-raw expr       : as_object(parse_json(ColumnRef(0)::String))
-checked expr   : as_object<Variant>(parse_json<String>(ColumnRef(0)))
+raw expr       : as_object(parse_json(#0::String))
+checked expr   : as_object<Variant>(parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1332,8 +1332,8 @@ evaluation (internal):
 
 
 ast            : as_object(try_parse_json(s))
-raw expr       : as_object(try_parse_json(ColumnRef(0)::String))
-checked expr   : as_object<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
+raw expr       : as_object(try_parse_json(#0::String))
+checked expr   : as_object<Variant NULL>(try_parse_json<String>(#0))
 evaluation:
 +--------+------------------------------+--------------------+
 |        | s                            | Output             |

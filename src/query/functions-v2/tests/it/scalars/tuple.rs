@@ -14,9 +14,8 @@
 
 use std::io::Write;
 
-use common_expression::types::DataType;
-use common_expression::utils::ColumnFrom;
-use common_expression::Column;
+use common_expression::types::StringType;
+use common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -37,8 +36,7 @@ fn test_create(file: &mut impl Write) {
     run_ast(file, "(1, 2, ('a', 'b'))", &[]);
     run_ast(file, "(s, s)", &[(
         "s",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+        StringType::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
     )]);
 }
 
@@ -53,7 +51,6 @@ fn test_get(file: &mut impl Write) {
     run_ast(file, "(1, 2, ('a', 'b')).3.1", &[]);
     run_ast(file, "(s, s).1", &[(
         "s",
-        DataType::Nullable(Box::new(DataType::String)),
-        Column::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
+        StringType::from_data_with_validity(&["a", "b", "c", "d"], vec![true, true, false, true]),
     )]);
 }

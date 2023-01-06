@@ -20,10 +20,17 @@ use common_arrow::parquet::statistics::BinaryStatistics;
 use common_arrow::parquet::statistics::BooleanStatistics;
 use common_arrow::parquet::statistics::PrimitiveStatistics;
 use common_arrow::parquet::statistics::Statistics;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
+use common_expression::types::number::F32;
+use common_expression::types::number::F64;
+use common_expression::types::BooleanType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
+use common_expression::types::StringType;
+use common_expression::types::ValueType;
+use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_storages_index::RangeFilter;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
@@ -34,15 +41,15 @@ use crate::hive_table::HIVE_DEFAULT_PARTITION;
 #[derive(Clone)]
 pub struct HiveBlockFilter {
     range_filter: Option<RangeFilter>,
-    projections: Vec<DataField>,
-    data_schema: Arc<DataSchema>,
+    projections: Vec<TableField>,
+    data_schema: Arc<TableSchema>,
 }
 
 impl HiveBlockFilter {
     pub fn create(
         range_filter: Option<RangeFilter>,
-        projections: Vec<DataField>,
-        data_schema: Arc<DataSchema>,
+        projections: Vec<TableField>,
+        data_schema: Arc<TableSchema>,
     ) -> Self {
         Self {
             range_filter,
@@ -70,7 +77,7 @@ impl HiveBlockFilter {
                             None => return false,
                             Some(stats) => stats,
                         };
-                        if let (true, max, min, null_count) =
+                        if let Some((max, min, null_count)) =
                             Self::get_max_min_stats(col.data_type(), &*stats)
                         {
                             let col_stats = ColumnStatistics {
@@ -93,9 +100,9 @@ impl HiveBlockFilter {
                     let mut null_count = 0;
                     let v = if p_value == HIVE_DEFAULT_PARTITION {
                         null_count = row_group.num_rows();
-                        DataValue::Null
+                        Scalar::Null
                     } else {
-                        DataValue::String(p_value.as_bytes().to_vec())
+                        Scalar::String(p_value.as_bytes().to_vec())
                     };
 
                     let col_stats = ColumnStatistics {
@@ -109,7 +116,7 @@ impl HiveBlockFilter {
                 }
             }
 
-            if let Ok(ret) = filter.eval(&statistics, row_group.num_rows() as u64) {
+            if let Ok(ret) = filter.eval(&statistics) {
                 if !ret {
                     return true;
                 }
@@ -119,176 +126,174 @@ impl HiveBlockFilter {
     }
 
     fn get_max_min_stats(
-        column_type: &DataTypeImpl,
+        column_type: &TableDataType,
         stats: &dyn Statistics,
-    ) -> (bool, DataValue, DataValue, i64) {
+    ) -> Option<(Scalar, Scalar, i64)> {
         match column_type {
-            DataTypeImpl::Nullable(nullable_type) => {
-                Self::get_max_min_stats(nullable_type.inner_type(), stats)
-            }
-            DataTypeImpl::Boolean(_) => {
-                let s = stats.as_any().downcast_ref::<BooleanStatistics>().unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap());
-                    let min = DataValue::from(s.min_value.unwrap());
-                    (true, max, min, null_count)
-                }
-            }
-            DataTypeImpl::Int8(_) => {
+            TableDataType::Number(NumberDataType::UInt8) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
                     .unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap() as i8);
-                    let min = DataValue::from(s.min_value.unwrap() as i8);
-                    (true, max, min, null_count)
+                    let max = NumberType::<u8>::upcast_scalar(s.max_value.unwrap() as u8);
+                    let min = NumberType::<u8>::upcast_scalar(s.min_value.unwrap() as u8);
+                    Some((max, min, null_count))
                 }
             }
-            DataTypeImpl::Int16(_) => {
+            TableDataType::Number(NumberDataType::UInt16) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
                     .unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap() as i16);
-                    let min = DataValue::from(s.min_value.unwrap() as i16);
-                    (true, max, min, null_count)
+                    let max = NumberType::<u16>::upcast_scalar(s.max_value.unwrap() as u16);
+                    let min = NumberType::<u16>::upcast_scalar(s.min_value.unwrap() as u16);
+                    Some((max, min, null_count))
                 }
             }
-            DataTypeImpl::Int32(_) => {
+            TableDataType::Number(NumberDataType::UInt32) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
                     .unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap());
-                    let min = DataValue::from(s.min_value.unwrap());
-                    (true, max, min, null_count)
+                    let max = NumberType::<u32>::upcast_scalar(s.max_value.unwrap() as u32);
+                    let min = NumberType::<u32>::upcast_scalar(s.min_value.unwrap() as u32);
+                    Some((max, min, null_count))
                 }
             }
-            DataTypeImpl::Int64(_) => {
+            TableDataType::Number(NumberDataType::UInt64) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i64>>()
                     .unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap());
-                    let min = DataValue::from(s.min_value.unwrap());
-                    (true, max, min, null_count)
+                    let max = NumberType::<u64>::upcast_scalar(s.max_value.unwrap() as u64);
+                    let min = NumberType::<u64>::upcast_scalar(s.min_value.unwrap() as u64);
+                    Some((max, min, null_count))
                 }
             }
-            DataTypeImpl::UInt8(_) => {
+            TableDataType::Number(NumberDataType::Int8) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
                     .unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap() as u8);
-                    let min = DataValue::from(s.min_value.unwrap() as u8);
-                    (true, max, min, null_count)
+                    let max = NumberType::<i8>::upcast_scalar(s.max_value.unwrap() as i8);
+                    let min = NumberType::<i8>::upcast_scalar(s.min_value.unwrap() as i8);
+                    Some((max, min, null_count))
                 }
             }
-            DataTypeImpl::UInt16(_) => {
+            TableDataType::Number(NumberDataType::Int16) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
                     .unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap() as u16);
-                    let min = DataValue::from(s.min_value.unwrap() as u16);
-                    (true, max, min, null_count)
+                    let max = NumberType::<i16>::upcast_scalar(s.max_value.unwrap() as i16);
+                    let min = NumberType::<i16>::upcast_scalar(s.min_value.unwrap() as i16);
+                    Some((max, min, null_count))
                 }
             }
-            DataTypeImpl::UInt32(_) => {
+            TableDataType::Number(NumberDataType::Int32) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
                     .unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap() as u32);
-                    let min = DataValue::from(s.min_value.unwrap() as u32);
-                    (true, max, min, null_count)
+                    let max = NumberType::<i32>::upcast_scalar(s.max_value.unwrap());
+                    let min = NumberType::<i32>::upcast_scalar(s.min_value.unwrap());
+                    Some((max, min, null_count))
                 }
             }
-            DataTypeImpl::UInt64(_) => {
+            TableDataType::Number(NumberDataType::Int64) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i64>>()
                     .unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap() as u64);
-                    let min = DataValue::from(s.min_value.unwrap() as u64);
-                    (true, max, min, null_count)
+                    let max = NumberType::<i64>::upcast_scalar(s.max_value.unwrap());
+                    let min = NumberType::<i64>::upcast_scalar(s.min_value.unwrap());
+                    Some((max, min, null_count))
                 }
             }
-            DataTypeImpl::Float32(_) => {
+            TableDataType::Number(NumberDataType::Float32) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<f32>>()
                     .unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap());
-                    let min = DataValue::from(s.min_value.unwrap());
-                    (true, max, min, null_count)
+                    let max = NumberType::<F32>::upcast_scalar(s.max_value.unwrap().into());
+                    let min = NumberType::<F32>::upcast_scalar(s.min_value.unwrap().into());
+                    Some((max, min, null_count))
                 }
             }
-            DataTypeImpl::Float64(_) => {
+            TableDataType::Number(NumberDataType::Float64) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<f64>>()
                     .unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap());
-                    let min = DataValue::from(s.min_value.unwrap());
-                    (true, max, min, null_count)
+                    let max = NumberType::<F64>::upcast_scalar(s.max_value.unwrap().into());
+                    let min = NumberType::<F64>::upcast_scalar(s.min_value.unwrap().into());
+                    Some((max, min, null_count))
                 }
             }
-            DataTypeImpl::String(_) => {
+            TableDataType::Boolean => {
+                let s = stats.as_any().downcast_ref::<BooleanStatistics>().unwrap();
+                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
+                    None
+                } else {
+                    let null_count = s.null_count.unwrap();
+                    let max = BooleanType::upcast_scalar(s.max_value.unwrap());
+                    let min = BooleanType::upcast_scalar(s.min_value.unwrap());
+                    Some((max, min, null_count))
+                }
+            }
+            TableDataType::String => {
                 let s = stats.as_any().downcast_ref::<BinaryStatistics>().unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, DataValue::from(0), DataValue::from(0), 0)
+                    None
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.clone());
-                    let min = DataValue::from(s.min_value.clone());
-                    (true, max, min, null_count)
+                    let max = StringType::upcast_scalar(s.max_value.clone().unwrap());
+                    let min = StringType::upcast_scalar(s.min_value.clone().unwrap());
+                    Some((max, min, null_count))
                 }
             }
-            _ => (false, DataValue::from(0), DataValue::from(0), 0),
+            TableDataType::Nullable(inner_ty) => Self::get_max_min_stats(inner_ty.as_ref(), stats),
+            _ => None,
         }
     }
 }

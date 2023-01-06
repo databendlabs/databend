@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use common_formats::output_format::OutputFormat;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
@@ -27,7 +27,7 @@ mod output_format_utils;
 
 fn get_output_format_clickhouse(
     format_name: &str,
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
 ) -> Result<Box<dyn OutputFormat>> {
     let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
     let settings = &Settings::default_test_settings()?;

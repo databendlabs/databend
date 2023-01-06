@@ -34,16 +34,6 @@ select to_nullable(3);
 +----------------+
 ```
 
-```sql
-select to_nullable(null);
-
-+-------------------+
-| to_nullable(NULL) |
-+-------------------+
-|              NULL |
-+-------------------+
-```
- 
 
 
 

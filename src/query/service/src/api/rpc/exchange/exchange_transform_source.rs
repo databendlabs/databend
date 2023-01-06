@@ -18,9 +18,9 @@ use std::sync::Arc;
 use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow::io::ipc::write::default_ipc_fields;
 use common_arrow::arrow::io::ipc::IpcSchema;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
@@ -180,7 +180,7 @@ impl ExchangeSourceTransform {
             )),
         }?;
 
-        self.output_data = Some(DataBlock::from_chunk(schema, &batch)?.add_meta(meta)?);
+        self.output_data = Some(DataBlock::from_arrow_chunk(&batch, schema)?.add_meta(meta)?);
 
         Ok(())
     }

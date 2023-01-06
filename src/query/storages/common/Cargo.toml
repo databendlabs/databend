@@ -13,9 +13,8 @@ test = false
 
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
-common-datablocks = { path = "../../datablocks" }
-common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
 common-storages-table-meta = { path = "../table-meta" }
 
 [build-dependencies]

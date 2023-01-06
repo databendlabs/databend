@@ -16,10 +16,10 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 
 use super::Compactor;
 use super::TransformCompact;
@@ -82,7 +82,7 @@ impl Compactor for BlockCompactorNoSplit {
                 .check_large_enough(accumulated_rows_new, accumulated_bytes_new)
             {
                 // avoid call concat_blocks for each new block
-                let merged = DataBlock::concat_blocks(blocks)?;
+                let merged = DataBlock::concat(blocks)?;
                 blocks.clear();
                 self.accumulated_rows = 0;
                 self.accumulated_bytes = 0;
@@ -105,7 +105,7 @@ impl Compactor for BlockCompactorNoSplit {
                 ));
             }
 
-            let block = DataBlock::concat_blocks(blocks)?;
+            let block = DataBlock::concat(blocks)?;
             res.push(block);
         }
 

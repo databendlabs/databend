@@ -27,6 +27,7 @@ use crate::util::HttpSessionConf;
 
 pub struct HttpClient {
     pub client: Client,
+    pub debug: bool,
     pub session: Option<HttpSessionConf>,
 }
 
@@ -51,21 +52,22 @@ impl HttpClient {
         Ok(HttpClient {
             client,
             session: None,
+            debug: false,
         })
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
-        println!("Running sql with http client: [{}]", sql);
-        let url = "http://127.0.0.1:8000/v1/query".to_string();
-        let mut query = HashMap::new();
-        query.insert("sql", serde_json::to_value(sql).unwrap());
-        if let Some(session) = &self.session {
-            query.insert("session", serde_json::to_value(session).unwrap());
+        if self.debug {
+            println!("Running sql with http client: [{}]", sql);
         }
+        let url = "http://127.0.0.1:8000/v1/query".to_string();
         let mut response = self.response(sql, &url, true).await?;
         // Set session from response to client
         // Then client will same session for different queries.
-        self.session = response.session.clone();
+
+        if response.session.is_some() {
+            self.session = response.session.clone();
+        }
 
         if let Some(error) = response.error {
             return Err(format!("http query error: {}", error).into());

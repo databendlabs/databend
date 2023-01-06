@@ -28,6 +28,7 @@ use common_expression::types::NumberDataType;
 use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Span;
+use ordered_float::OrderedFloat;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
     let backtrace = Backtrace::new();
@@ -546,7 +547,7 @@ pub fn transform_literal(lit: ASTLiteral) -> Literal {
         ASTLiteral::String(s) => Literal::String(s.as_bytes().to_vec()),
         ASTLiteral::Boolean(b) => Literal::Boolean(b),
         ASTLiteral::Null => Literal::Null,
-        ASTLiteral::Float(f) => Literal::Float64(f),
+        ASTLiteral::Float(f) => Literal::Float64(OrderedFloat(f)),
         _ => unimplemented!("{lit}"),
     }
 }

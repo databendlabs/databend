@@ -18,13 +18,12 @@ use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_datablocks::DataBlock;
-use common_datavalues::wrap_nullable;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -148,62 +147,65 @@ impl JoinHashTable {
                             let columns = build_data_schema
                                 .fields()
                                 .iter()
-                                .map(|field| {
-                                    let data_type = wrap_nullable(field.data_type());
-                                    data_type
-                                        .create_column(&vec![DataValue::Null; input.num_rows()])
+                                .map(|field| BlockEntry {
+                                    data_type: field.data_type().wrap_nullable(),
+                                    value: Value::Scalar(Scalar::Null),
                                 })
-                                .collect::<Result<Vec<ColumnRef>>>()?;
-                            DataBlock::create(build_data_schema, columns)
+                                .collect::<Vec<_>>();
+                            DataBlock::new(columns, input.num_rows())
                         } else {
                             self.row_space.gather(&local_build_indexes)?
                         };
 
                         // For left join, wrap nullable for build block
-                        let nullable_columns = if self.row_space.datablocks().is_empty()
+                        let (nullable_columns, num_rows) = if self.row_space.datablocks().is_empty()
                             && !local_build_indexes.is_empty()
                         {
-                            build_block
-                                .columns()
-                                .iter()
-                                .map(|c| {
-                                    c.data_type().create_constant_column(
-                                        &DataValue::Null,
-                                        local_build_indexes.len(),
-                                    )
-                                })
-                                .collect::<Result<Vec<_>>>()?
+                            (
+                                build_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| BlockEntry {
+                                        value: Value::Scalar(Scalar::Null),
+                                        data_type: c.data_type.wrap_nullable(),
+                                    })
+                                    .collect::<Vec<_>>(),
+                                local_build_indexes.len(),
+                            )
                         } else {
-                            build_block
-                                .columns()
-                                .iter()
-                                .map(|c| Self::set_validity(c, &validity_bitmap))
-                                .collect::<Result<Vec<_>>>()?
+                            (
+                                build_block
+                                    .columns()
+                                    .iter()
+                                    .map(|c| {
+                                        Self::set_validity(
+                                            c,
+                                            build_block.num_rows(),
+                                            &validity_bitmap,
+                                        )
+                                    })
+                                    .collect::<Vec<_>>(),
+                                validity_bitmap.len(),
+                            )
                         };
 
-                        let nullable_build_block = DataBlock::create(
-                            self.row_space.data_schema.clone(),
-                            nullable_columns.clone(),
-                        );
+                        let nullable_build_block = DataBlock::new(nullable_columns, num_rows);
 
                         // For full join, wrap nullable for probe block
-                        let mut probe_block =
-                            DataBlock::block_take_by_indices(input, &probe_indexes)?;
+                        let mut probe_block = DataBlock::take(input, &probe_indexes)?;
+                        let num_rows = probe_block.num_rows();
                         if self.hash_join_desc.join_type == JoinType::Full {
                             let nullable_probe_columns = probe_block
                                 .columns()
                                 .iter()
                                 .map(|c| {
                                     let mut probe_validity = MutableBitmap::new();
-                                    probe_validity.extend_constant(c.len(), true);
+                                    probe_validity.extend_constant(num_rows, true);
                                     let probe_validity: Bitmap = probe_validity.into();
-                                    Self::set_validity(c, &probe_validity)
+                                    Self::set_validity(c, num_rows, &probe_validity)
                                 })
-                                .collect::<Result<Vec<_>>>()?;
-                            probe_block = DataBlock::create(
-                                self.probe_schema.clone(),
-                                nullable_probe_columns,
-                            );
+                                .collect::<Vec<_>>();
+                            probe_block = DataBlock::new(nullable_probe_columns, num_rows);
                         }
 
                         let merged_block =
@@ -225,19 +227,19 @@ impl JoinHashTable {
         }
 
         // For full join, wrap nullable for probe block
-        let mut probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
+        let mut probe_block = DataBlock::take(input, &probe_indexes)?;
         if self.hash_join_desc.join_type == JoinType::Full {
             let nullable_probe_columns = probe_block
                 .columns()
                 .iter()
                 .map(|c| {
                     let mut probe_validity = MutableBitmap::new();
-                    probe_validity.extend_constant(c.len(), true);
+                    probe_validity.extend_constant(probe_block.num_rows(), true);
                     let probe_validity: Bitmap = probe_validity.into();
-                    Self::set_validity(c, &probe_validity)
+                    Self::set_validity(c, probe_block.num_rows(), &probe_validity)
                 })
-                .collect::<Result<Vec<_>>>()?;
-            probe_block = DataBlock::create(self.probe_schema.clone(), nullable_probe_columns);
+                .collect::<Vec<_>>();
+            probe_block = DataBlock::new(nullable_probe_columns, probe_block.num_rows());
         }
 
         if !WITH_OTHER_CONJUNCT {
@@ -262,36 +264,35 @@ impl JoinHashTable {
             let columns = build_data_schema
                 .fields()
                 .iter()
-                .map(|field| {
-                    let data_type = wrap_nullable(field.data_type());
-                    data_type.create_column(&vec![DataValue::Null; input.num_rows()])
+                .map(|field| BlockEntry {
+                    data_type: field.data_type().wrap_nullable(),
+                    value: Value::Scalar(Scalar::Null),
                 })
-                .collect::<Result<Vec<ColumnRef>>>()?;
-            DataBlock::create(build_data_schema, columns)
+                .collect::<Vec<_>>();
+            DataBlock::new(columns, input.num_rows())
         } else {
             self.row_space.gather(&local_build_indexes)?
         };
 
-        // For left join, wrap nullable for build block
+        // For left join, wrap nullable for build chunk
         let nullable_columns =
             if self.row_space.datablocks().is_empty() && !local_build_indexes.is_empty() {
                 build_block
                     .columns()
                     .iter()
-                    .map(|c| {
-                        c.data_type()
-                            .create_constant_column(&DataValue::Null, local_build_indexes.len())
+                    .map(|c| BlockEntry {
+                        data_type: c.data_type.clone(),
+                        value: Value::Scalar(Scalar::Null),
                     })
-                    .collect::<Result<Vec<_>>>()?
+                    .collect::<Vec<_>>()
             } else {
                 build_block
                     .columns()
                     .iter()
-                    .map(|c| Self::set_validity(c, &validity))
-                    .collect::<Result<Vec<_>>>()?
+                    .map(|c| Self::set_validity(c, build_block.num_rows(), &validity))
+                    .collect::<Vec<_>>()
             };
-        let nullable_build_block =
-            DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
+        let nullable_build_block = DataBlock::new(nullable_columns, validity.len());
 
         // Process no-equi conditions
         let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;

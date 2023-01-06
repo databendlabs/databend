@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::serializations::ArraySerializer;
-use common_datavalues::serializations::StructSerializer;
+use common_expression::types::array::ArrayColumn;
+use common_expression::types::ValueType;
+use common_expression::Column;
 use common_io::consts::FALSE_BYTES_NUM;
 use common_io::consts::INF_BYTES_LOWER;
 use common_io::consts::NULL_BYTES_ESCAPE;
@@ -60,17 +61,17 @@ impl FieldEncoderRowBased for FieldEncoderTSV {
         }
     }
 
-    fn write_array<'a>(
+    fn write_array<T: ValueType>(
         &self,
-        column: &ArraySerializer<'a>,
+        column: &ArrayColumn<T>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         _raw: bool,
     ) {
-        let start = column.offsets[row_index] as usize;
-        let end = column.offsets[row_index + 1] as usize;
+        let start = unsafe { *column.offsets.get_unchecked(row_index) as usize };
+        let end = unsafe { *column.offsets.get_unchecked(row_index + 1) as usize };
         out_buf.push(b'[');
-        let inner = &column.inner;
+        let inner = &T::upcast_column(column.values.clone());
         for i in start..end {
             if i != start {
                 out_buf.extend_from_slice(b",");
@@ -80,21 +81,12 @@ impl FieldEncoderRowBased for FieldEncoderTSV {
         out_buf.push(b']');
     }
 
-    fn write_struct<'a>(
-        &self,
-        column: &StructSerializer<'a>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        _raw: bool,
-    ) {
+    fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, _raw: bool) {
         out_buf.push(b'(');
-        let mut first = true;
-
-        for inner in &column.inners {
-            if !first {
+        for (i, inner) in columns.iter().enumerate() {
+            if i > 0 {
                 out_buf.extend_from_slice(b",");
             }
-            first = false;
             self.write_field(inner, row_index, out_buf, false);
         }
         out_buf.push(b')');

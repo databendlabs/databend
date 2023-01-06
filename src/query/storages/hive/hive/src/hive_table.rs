@@ -21,22 +21,26 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::catalog_kind::CATALOG_HIVE;
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::RequireColumnsVisitor;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::Expr;
+use common_expression::RemoteExpr;
+use common_expression::Scalar;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -44,8 +48,6 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::processors::sources::sync_source::SyncSource;
 use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
-use common_sql::evaluator::EvalNode;
-use common_sql::evaluator::Evaluator;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storages_index::RangeFilter;
@@ -104,11 +106,18 @@ impl HiveTable {
             )));
         }
 
-        let filter_expressions = push_downs.as_ref().map(|extra| extra.filters.as_slice());
+        let filter_expressions = push_downs.as_ref().map(|extra| {
+            extra
+                .filters
+                .iter()
+                .cloned()
+                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .collect::<Vec<_>>()
+        });
         let range_filter = match filter_expressions {
             Some(exprs) if !exprs.is_empty() => Some(RangeFilter::try_create(
                 ctx.clone(),
-                exprs,
+                &exprs,
                 self.table_info.schema(),
             )?),
             _ => None,
@@ -131,7 +140,7 @@ impl HiveTable {
 
     fn is_prewhere_column_partition_keys(
         &self,
-        schema: Arc<DataSchema>,
+        schema: TableSchemaRef,
         push_downs: &Option<PushDownInfo>,
     ) -> Result<bool> {
         match push_downs {
@@ -185,6 +194,7 @@ impl HiveTable {
             Some(v) => v.output_columns,
         };
         let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
+        let output_schema = Arc::new(DataSchema::from(output_schema));
 
         let prewhere_all_partitions =
             self.is_prewhere_column_partition_keys(self.table_info.schema(), &plan.push_downs)?;
@@ -196,6 +206,13 @@ impl HiveTable {
             self.build_prewhere_filter_executor(plan, prewhere_reader.get_output_schema())?;
 
         let hive_block_filter = self.get_block_filter(ctx.clone(), push_downs)?;
+
+        let mut src_fields = prewhere_reader.get_output_schema().fields().clone();
+        if let Some(reader) = remain_reader.as_ref() {
+            let remain_field = reader.get_output_schema().fields().clone();
+            src_fields.extend_from_slice(&remain_field);
+        }
+        let src_schema = DataSchemaRefExt::create(src_fields);
 
         for index in 0..std::cmp::max(1, max_threads) {
             let output = OutputPort::create();
@@ -210,6 +227,7 @@ impl HiveTable {
                     prewhere_filter.clone(),
                     delay_timer(index),
                     hive_block_filter.clone(),
+                    src_schema.clone(),
                     output_schema.clone(),
                 )?,
             );
@@ -221,11 +239,11 @@ impl HiveTable {
 
     // simple select query is the sql likes `select * from xx limit 10` or
     // `select * from xx where p_date = '20220201' limit 10` where p_date is a partition column;
-    // we just need to read few datas from table
+    // we just need to read a few datas from table
     fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
         // couldn't get groupby order by info
         if let Some(PushDownInfo {
-            filters: f,
+            filters,
             limit: Some(lm),
             ..
         }) = &plan.push_downs
@@ -236,7 +254,7 @@ impl HiveTable {
 
             // filter out the partition column related expressions
             let partition_keys = self.get_partition_key_sets();
-            let columns = Self::get_columns_from_expressions(f);
+            let columns = Self::get_columns_from_expressions(filters);
             if columns.difference(&partition_keys).count() == 0 {
                 return true;
             }
@@ -251,11 +269,14 @@ impl HiveTable {
         }
     }
 
-    fn get_columns_from_expressions(expressions: &[Expression]) -> HashSet<String> {
-        expressions
-            .iter()
-            .flat_map(|e| RequireColumnsVisitor::collect_columns_from_expr(e).unwrap())
-            .collect::<HashSet<_>>()
+    fn get_columns_from_expressions(exprs: &[RemoteExpr<String>]) -> HashSet<String> {
+        let mut cols = HashSet::new();
+        for expr in exprs {
+            for (col_name, _) in expr.as_expr(&BUILTIN_FUNCTIONS).unwrap().column_refs() {
+                cols.insert(col_name);
+            }
+        }
+        cols
     }
 
     fn get_projections(&self, push_downs: &Option<PushDownInfo>) -> Result<Vec<usize>> {
@@ -315,14 +336,13 @@ impl HiveTable {
         &self,
         plan: &DataSourcePlan,
         schema: DataSchemaRef,
-    ) -> Result<Arc<Option<EvalNode>>> {
+    ) -> Result<Arc<Option<Expr>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => {
-                    let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
-                    Arc::new(Some(executor))
-                }
+                Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
+                    expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+                })),
             },
         )
     }
@@ -358,7 +378,7 @@ impl HiveTable {
         )
     }
 
-    fn get_column_schemas(&self, columns: Vec<String>) -> Result<Arc<DataSchema>> {
+    fn get_column_schemas(&self, columns: Vec<String>) -> Result<Arc<TableSchema>> {
         let mut fields = Vec::with_capacity(columns.len());
         for column in columns {
             let schema = self.table_info.schema();
@@ -366,14 +386,14 @@ impl HiveTable {
             fields.push(data_field.clone());
         }
 
-        Ok(Arc::new(DataSchema::new(fields)))
+        Ok(Arc::new(TableSchema::new(fields)))
     }
 
     async fn get_query_locations_from_partition_table(
         &self,
         ctx: Arc<dyn TableContext>,
         partition_keys: Vec<String>,
-        filter_expressions: Vec<Expression>,
+        filter_expressions: Vec<Expr<String>>,
     ) -> Result<Vec<(String, Option<String>)>> {
         let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
         let hive_catalog = hive_catalog.as_any().downcast_ref::<HiveCatalog>().unwrap();
@@ -399,8 +419,12 @@ impl HiveTable {
 
         if !filter_expressions.is_empty() {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
-            let partition_pruner =
-                HivePartitionPruner::create(ctx, filter_expressions, partition_schemas);
+            let partition_pruner = HivePartitionPruner::create(
+                ctx,
+                filter_expressions,
+                partition_schemas,
+                self.table_info.schema(),
+            );
             partition_names = partition_pruner.prune(partition_names)?;
         }
 
@@ -447,7 +471,12 @@ impl HiveTable {
             if !partition_keys.is_empty() {
                 let filter_expression = push_downs
                     .as_ref()
-                    .map(|p| p.filters.clone())
+                    .map(|p| {
+                        p.filters
+                            .iter()
+                            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                            .collect()
+                    })
                     .unwrap_or_default();
                 return self
                     .get_query_locations_from_partition_table(
@@ -555,7 +584,7 @@ impl Table for HiveTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    fn table_args(&self) -> Option<Vec<DataValue>> {
+    fn table_args(&self) -> Option<Vec<Scalar>> {
         None
     }
 
