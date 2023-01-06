@@ -52,7 +52,7 @@ Check out what we've done this week to make Databend even better for you.
 
 **Format**
 
-- atch unwind when read split ([#9420](https://github.com/datafuselabs/databend/pull/9420))
+- catch unwind when read split ([#9420](https://github.com/datafuselabs/databend/pull/9420))
 
 **User**
 
