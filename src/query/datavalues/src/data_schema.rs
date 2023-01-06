@@ -71,7 +71,7 @@ impl DataSchema {
             new_fields.push(field);
         });
         (
-            max_id.unwrap_or(max_column_id + 1),
+            max_id.unwrap_or(max_column_id),
             index_of_column_id,
             new_fields,
         )
@@ -140,8 +140,8 @@ impl DataSchema {
     pub fn add_columns(&mut self, field: &[DataField]) {
         field.iter().for_each(|field| {
             let mut field = field.clone();
-            field.column_id = Some(self.max_column_id);
             self.max_column_id += 1;
+            field.column_id = Some(self.max_column_id);
             self.index_of_column_id
                 .insert(self.max_column_id, self.fields.len());
             self.fields.push(field);

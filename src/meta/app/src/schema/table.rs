@@ -227,7 +227,7 @@ pub struct TableMeta {
 }
 
 impl TableMeta {
-    pub fn add_columns(&mut self, fields: &Vec<DataField>, field_comments: &Vec<String>) {
+    pub fn add_columns(&mut self, fields: &[DataField], field_comments: &[String]) {
         let mut new_schema = self.schema.as_ref().to_owned();
         new_schema.add_columns(fields);
         self.schema = Arc::new(new_schema);
@@ -236,7 +236,7 @@ impl TableMeta {
         });
     }
 
-    pub fn drop_column(&mut self, column: &String) -> Result<()> {
+    pub fn drop_column(&mut self, column: &str) -> Result<()> {
         let mut new_schema = self.schema.as_ref().to_owned();
         new_schema.drop_column(column)?;
         self.schema = Arc::new(new_schema);

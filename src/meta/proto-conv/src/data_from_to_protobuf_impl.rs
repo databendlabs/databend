@@ -35,7 +35,7 @@ impl FromToProto for dv::DataSchema {
     fn from_pb(p: pb::DataSchema) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
-        let has_max_column_id = p.max_column_id >= p.fields.len() as u32;
+        let has_max_column_id = p.max_column_id > 0;
         let mut fs = Vec::with_capacity(p.fields.len());
         let mut max_column_id = p.max_column_id;
         for (i, f) in p.fields.into_iter().enumerate() {
@@ -53,7 +53,7 @@ impl FromToProto for dv::DataSchema {
             fs.push(dv::DataField::from_pb(f)?);
         }
 
-        let v = Self::new_from_with_max_column_id(fs, p.metadata, max_column_id + 1);
+        let v = Self::new_from_with_max_column_id(fs, p.metadata, max_column_id);
         Ok(v)
     }
 

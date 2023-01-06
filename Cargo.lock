@@ -1621,6 +1621,7 @@ dependencies = [
  "chrono",
  "common-building",
  "common-datavalues",
+ "common-exception",
  "common-meta-types",
  "common-storage",
  "enumflags2",
