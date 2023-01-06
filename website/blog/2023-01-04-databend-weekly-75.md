@@ -42,7 +42,7 @@ Check out what we've done this week to make Databend even better for you.
 
 ### Code Refactoring :tada:
 
-**Storge**
+**Storage**
 
 - add `to_bytes` and `from_bytes` for `CachedObject` ([#9439](https://github.com/datafuselabs/databend/pull/9439))
 - better table-meta and parquet reader function ([#9434](https://github.com/datafuselabs/databend/pull/9434))
@@ -70,11 +70,11 @@ Stay connected with the latest news about Databend.
 
 Let's look back and see how Databend did in 2022.
 
-- Open Source: got 2,000+ stars, merged 2,400+ PRs, solved 1,900 issues.
-- Brand new data warehouse, which is planned as Lakehouse.
-- Rigorous testing, including SQL Logic Tests, SQLancer and <https://perf.databend.rs> .
-- Growing with users and actively expanding our ecosystem, Databend and its surrounding projects have been recognised by a number of teams, including Kuaishou and SAP.
-- Built on top of Databend, we have launched Databend Cloud, the next generation big data analytics platform.
+- Open source: got 2,000+ stars, merged 2,400+ PRs, and solved 1,900 issues.
+- From data warehouse to lakehouse: Brand-new design with enhanced capabilities.
+- Rigorous testing: SQL Logic Tests, SQLancer, and <https://perf.databend.rs>.
+- Building the ecosystem: More customers chose, trusted, and grew with Databend, including Kuaishou and SAP.
+- Databend Cloud: Built on top of Databend, the next big data analytics platform.
 
 We wish everyone a Happy New Year and look forward to engaging with you.
 
@@ -87,9 +87,9 @@ We wish everyone a Happy New Year and look forward to engaging with you.
 
 As the new year approaches, Databend is also actively planning its roadmap for 2023.
 
-We will continue to polish Planner and move forward with caching of data and queries, and we are also trying to address storage and query issues for PB-level data volumes.
+We will continue to polish the Planner and work on data and query caching. Enhancing storage and query issues for PB-level data volumes is also on our list.
 
-We hope you can experience Databend and participate in our roadmap discussions.
+Try Databend and join the roadmap discussion.
 
 **Learn More**
 
