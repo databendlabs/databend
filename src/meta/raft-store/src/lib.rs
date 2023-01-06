@@ -13,7 +13,7 @@
 // limitations under the License.
 
 pub mod config;
+pub mod key_spaces;
 pub mod log;
-pub mod sled_key_spaces;
 pub mod state;
 pub mod state_machine;

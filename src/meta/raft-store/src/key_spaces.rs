@@ -12,8 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Defines application key spaces that are defined by raft-store.
+//! All of the key spaces stores key-value pairs in the underlying sled db.
+
 use common_meta_sled_store::openraft;
+use common_meta_sled_store::sled;
 use common_meta_sled_store::SledKeySpace;
+use common_meta_sled_store::SledOrderedSerde;
+use common_meta_sled_store::SledSerde;
+use common_meta_stoerr::MetaStorageError;
 use common_meta_types::LogEntry;
 use common_meta_types::LogIndex;
 use common_meta_types::Node;
@@ -120,9 +127,9 @@ impl SledKeySpace for ClientLastResps {
     type V = ClientLastRespValue;
 }
 
-/// Enum of key-value pair types of all key spaces.
+/// Enum of key-value pairs that are used in the raft storage impl for meta-service.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum KeySpaceKV {
+pub enum RaftStoreEntry {
     Logs {
         key: <Logs as SledKeySpace>::K,
         value: <Logs as SledKeySpace>::V,
@@ -159,4 +166,77 @@ pub enum KeySpaceKV {
         key: <LogMeta as SledKeySpace>::K,
         value: <LogMeta as SledKeySpace>::V,
     },
+}
+
+/// Convert (sub_tree_prefix, key, value, key_space1, key_space2...) into a [`RaftStoreEntry`].
+///
+/// It compares the sub_tree_prefix with prefix defined by every key space to determine which key space it belongs to.
+macro_rules! deserialize_by_prefix {
+    ($prefix: expr, $vec_key: expr, $vec_value: expr, $($key_space: tt),+ ) => {
+        $(
+
+        if <$key_space as SledKeySpace>::PREFIX == $prefix {
+            let key = <<$key_space as SledKeySpace>::K as SledOrderedSerde>::de(
+                $vec_key,
+            )?;
+            let val =
+                <<$key_space as SledKeySpace>::V as SledSerde>::de($vec_value)?;
+            return Ok(RaftStoreEntry::$key_space { key, value: val, });
+        }
+        )+
+    };
+}
+
+impl RaftStoreEntry {
+    /// Serialize a key-value entry into a two elt vec of vec<u8>: `[key, value]`.
+    pub fn serialize(kv: &RaftStoreEntry) -> Result<(sled::IVec, sled::IVec), MetaStorageError> {
+        macro_rules! ser {
+            ($ks:tt, $key:expr, $value:expr) => {
+                Ok(($ks::serialize_key($key)?, $ks::serialize_value($value)?))
+            };
+        }
+
+        match kv {
+            Self::Logs { key, value } => ser!(Logs, key, value),
+            Self::Nodes { key, value } => ser!(Nodes, key, value),
+            Self::StateMachineMeta { key, value } => {
+                ser!(StateMachineMeta, key, value)
+            }
+            Self::RaftStateKV { key, value } => ser!(RaftStateKV, key, value),
+            Self::Expire { key, value } => ser!(Expire, key, value),
+            Self::GenericKV { key, value } => ser!(GenericKV, key, value),
+            Self::Sequences { key, value } => ser!(Sequences, key, value),
+            Self::ClientLastResps { key, value } => {
+                ser!(ClientLastResps, key, value)
+            }
+            Self::LogMeta { key, value } => ser!(LogMeta, key, value),
+        }
+    }
+
+    /// Deserialize a serialized key-value entry `[key, value]`.
+    pub fn deserialize(ent: &[Vec<u8>]) -> Result<Self, MetaStorageError> {
+        let prefix_key = &ent[0];
+        let vec_value = &ent[1];
+
+        let prefix = prefix_key[0];
+        let vec_key = &prefix_key[1..];
+
+        deserialize_by_prefix!(
+            prefix,
+            vec_key,
+            vec_value,
+            // Available key spaces:
+            Logs,
+            Nodes,
+            StateMachineMeta,
+            RaftStateKV,
+            Expire,
+            GenericKV,
+            Sequences,
+            ClientLastResps,
+            LogMeta
+        );
+
+        unreachable!("unknown prefix: {}", prefix);
+    }
 }
