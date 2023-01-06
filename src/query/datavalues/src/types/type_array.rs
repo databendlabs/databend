@@ -119,7 +119,7 @@ impl DataType for ArrayType {
 
     fn arrow_type(&self) -> ArrowType {
         let field = Field::new(
-            "list".to_string(),
+            "_array".to_string(),
             self.inner.arrow_type(),
             self.inner.is_nullable(),
         );

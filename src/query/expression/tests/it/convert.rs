@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_expression::converts::can_convert;
-
-
 use common_expression::schema::TableSchema as OurTableSchema;
 use common_expression::types::DataType as OurDataType;
 use common_expression::values::Column as EColumn;
@@ -99,8 +97,10 @@ fn test_convert() {
         .collect::<Vec<_>>();
 
     let arrow_schema = schema.to_arrow();
-
     let our_schmea = OurTableSchema::from(&arrow_schema);
+    let arrow_schem2 = our_schmea.to_arrow();
+
+    assert_eq!(arrow_schema, arrow_schem2);
 
     let mut our_columns = Vec::with_capacity(num_cols);
     for (f, arrow_col) in our_schmea.fields().iter().zip(arrow_arrays.iter()) {
@@ -118,7 +118,7 @@ fn test_convert() {
         .collect::<Vec<_>>();
 
     for (a1, a2) in arrow_arrays.iter().zip(arrow_arrays2.iter()) {
-        common_arrow::arrow::array::equal(a1.as_ref(), a2.as_ref());
+        assert_eq!(a1, a2);
     }
 }
 

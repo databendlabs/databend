@@ -213,31 +213,6 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
 }
 
 pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
-    if let Some(custom_name) = f.metadata.get(ARROW_EXTENSION_NAME) {
-        let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
-        match custom_name.as_str() {
-            "Date" => return DateType::new_impl(),
-
-            // OLD COMPATIBLE Behavior
-            "Timestamp" => return TimestampType::new_impl(),
-            "Interval" => return IntervalType::new_impl(metadata.unwrap().into()),
-            "Variant" => return VariantType::new_impl(),
-            "VariantArray" => return VariantArrayType::new_impl(),
-            "VariantObject" => return VariantObjectType::new_impl(),
-            "Tuple" => {
-                let dt = f.data_type();
-                match dt {
-                    ArrowType::Struct(fields) => {
-                        let types = fields.iter().map(from_arrow_field).collect();
-                        return DataTypeImpl::Struct(StructType::create(None, types));
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            _ => {}
-        }
-    }
-
     let dt = f.data_type();
     let ty = from_arrow_type(dt);
 

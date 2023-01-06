@@ -19,13 +19,10 @@ use common_datavalues::DataValue;
 
 use crate::types::number::NumberScalar;
 use crate::types::AnyType;
-
 use crate::types::NumberDataType;
 use crate::with_number_type;
-
 use crate::Column;
 use crate::ColumnBuilder;
-
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;

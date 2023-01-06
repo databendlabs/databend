@@ -193,7 +193,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                             row_writer
                                 .finish_error(
                                     ErrorKind::ER_UNKNOWN_ERROR,
-                                    &format!("result row write failed: {}", e).as_bytes(),
+                                    &format!("{}", e).as_bytes(),
                                 )
                                 .await?;
                             return Ok(());
