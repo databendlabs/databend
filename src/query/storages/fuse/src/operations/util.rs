@@ -54,6 +54,9 @@ pub fn column_metas(
                     len: col_len as u64,
                     num_values,
                 };
+                if schema.fields().len() <= idx {
+                    continue;
+                }
                 // use column id as key instead of index
                 let column_id = schema.column_id_of_index(idx);
                 col_metas.insert(column_id, res);
