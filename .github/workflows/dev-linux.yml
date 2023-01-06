@@ -125,7 +125,7 @@ jobs:
 
   test_sqllogic_standalone_linux:
     timeout-minutes: 30
-    name: test_sqllogic_${{ matrix.handlers }}_${{ matrix.dirs }}_standalone_linux
+    name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     strategy:
@@ -138,9 +138,7 @@ jobs:
           - "crdb"
           - "duckdb"
         handlers:
-          - "mysql"
-          - "http"
-          - "clickhouse"
+          - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
@@ -150,7 +148,7 @@ jobs:
 
   test_sqllogic_cluster_linux:
     timeout-minutes: 30
-    name: test_sqllogic_${{ matrix.handlers }}_${{ matrix.dirs }}_cluster_linux
+    name: test_sqllogic_${{ matrix.dirs }}_cluster_linux
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     strategy:
@@ -163,9 +161,7 @@ jobs:
           - "duckdb"
           - "crdb"
         handlers:
-          - "mysql"
-          - "http"
-          - "clickhouse"
+          - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_cluster_linux
