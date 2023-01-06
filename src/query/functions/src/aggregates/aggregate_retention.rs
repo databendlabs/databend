@@ -16,9 +16,16 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::ValueType;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_io::prelude::*;
 
 use super::aggregate_function::AggregateFunction;
@@ -55,7 +62,6 @@ impl AggregateRetentionState {
 pub struct AggregateRetentionFunction {
     display_name: String,
     events_size: u8,
-    _arguments: Vec<DataField>,
 }
 
 impl AggregateFunction for AggregateRetentionFunction {
@@ -63,8 +69,10 @@ impl AggregateFunction for AggregateRetentionFunction {
         "AggregateRetentionFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
-        Ok(ArrayType::new_impl(UInt8Type::new_impl()))
+    fn return_type(&self) -> Result<DataType> {
+        Ok(DataType::Array(Box::new(DataType::Number(
+            NumberDataType::UInt8,
+        ))))
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -78,18 +86,18 @@ impl AggregateFunction for AggregateRetentionFunction {
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[common_datavalues::ColumnRef],
-        _validity: Option<&common_arrow::arrow::bitmap::Bitmap>,
+        columns: &[Column],
+        _validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        let new_columns: Vec<&BooleanColumn> = columns
+        let new_columns = columns
             .iter()
-            .map(|column| Series::check_get(column).unwrap())
-            .collect();
+            .map(|col| BooleanType::try_downcast_column(col).unwrap())
+            .collect::<Vec<_>>();
         for i in 0..input_rows {
             for j in 0..self.events_size {
-                if new_columns[j as usize].get_data(i) {
+                if new_columns[j as usize].get_bit(i) {
                     state.add(j);
                 }
             }
@@ -97,19 +105,37 @@ impl AggregateFunction for AggregateRetentionFunction {
         Ok(())
     }
 
-    fn accumulate_row(
+    fn accumulate_keys(
         &self,
-        place: StateAddr,
-        columns: &[common_datavalues::ColumnRef],
-        row: usize,
+        places: &[StateAddr],
+        offset: usize,
+        columns: &[Column],
+        _input_rows: usize,
     ) -> Result<()> {
-        let state = place.get::<AggregateRetentionState>();
-        let new_columns: Vec<&BooleanColumn> = columns
+        let new_columns = columns
             .iter()
-            .map(|column| Series::check_get(column).unwrap())
-            .collect();
+            .map(|col| BooleanType::try_downcast_column(col).unwrap())
+            .collect::<Vec<_>>();
+        for (row, place) in places.iter().enumerate() {
+            let place = place.next(offset);
+            let state = place.get::<AggregateRetentionState>();
+            for j in 0..self.events_size {
+                if new_columns[j as usize].get_bit(row) {
+                    state.add(j);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+        let state = place.get::<AggregateRetentionState>();
+        let new_columns = columns
+            .iter()
+            .map(|col| BooleanType::try_downcast_column(col).unwrap())
+            .collect::<Vec<_>>();
         for j in 0..self.events_size {
-            if new_columns[j as usize].get_data(row) {
+            if new_columns[j as usize].get_bit(row) {
                 state.add(j);
             }
         }
@@ -134,55 +160,32 @@ impl AggregateFunction for AggregateRetentionFunction {
     }
 
     #[allow(unused_mut)]
-    fn merge_result(
-        &self,
-        place: StateAddr,
-        array: &mut dyn common_datavalues::MutableColumn,
-    ) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        let builder: &mut MutableArrayColumn = Series::check_get_mutable_column(array)?;
-        let inner_column: &mut MutablePrimitiveColumn<u8> =
-            Series::check_get_mutable_column(builder.inner_column.as_mut())?;
+        let builder = builder.as_array_mut().unwrap();
+        let inner = builder
+            .builder
+            .as_number_mut()
+            .unwrap()
+            .as_u_int8_mut()
+            .unwrap();
 
+        inner.reserve(self.events_size as usize);
         if state.events & 1 == 1 {
-            inner_column.append_value(1u8);
+            inner.push(1u8);
             for i in 1..self.events_size {
                 if state.events & (1 << i) != 0 {
-                    inner_column.append_value(1u8);
+                    inner.push(1u8);
                 } else {
-                    inner_column.append_value(0u8);
+                    inner.push(0u8);
                 }
             }
         } else {
             for _ in 0..self.events_size {
-                inner_column.append_value(0u8);
+                inner.push(0u8);
             }
         }
-
-        builder.add_offset(self.events_size as usize);
-        Ok(())
-    }
-
-    fn accumulate_keys(
-        &self,
-        places: &[StateAddr],
-        offset: usize,
-        columns: &[common_datavalues::ColumnRef],
-        _input_rows: usize,
-    ) -> Result<()> {
-        let new_columns: Vec<&BooleanColumn> = columns
-            .iter()
-            .map(|column| Series::check_get(column).unwrap())
-            .collect();
-        for (row, place) in places.iter().enumerate() {
-            let place = place.next(offset);
-            let state = place.get::<AggregateRetentionState>();
-            for j in 0..self.events_size {
-                if new_columns[j as usize].get_data(row) {
-                    state.add(j);
-                }
-            }
-        }
+        builder.offsets.push(builder.builder.len() as u64);
         Ok(())
     }
 }
@@ -196,26 +199,24 @@ impl fmt::Display for AggregateRetentionFunction {
 impl AggregateRetentionFunction {
     pub fn try_create(
         display_name: &str,
-        arguments: Vec<DataField>,
+        arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
             events_size: arguments.len() as u8,
-            _arguments: arguments,
         }))
     }
 }
 
 pub fn try_create_aggregate_retention_function(
     display_name: &str,
-    _params: Vec<DataValue>,
-    arguments: Vec<DataField>,
+    _params: Vec<Scalar>,
+    arguments: Vec<DataType>,
 ) -> Result<AggregateFunctionRef> {
     assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
 
     for argument in arguments.iter() {
-        let data_type = argument.data_type();
-        if data_type.data_type_id() != TypeID::Boolean {
+        if !argument.is_boolean() {
             return Err(ErrorCode::BadArguments(
                 "The arguments of AggregateRetention should be an expression which returns a Boolean result",
             ));

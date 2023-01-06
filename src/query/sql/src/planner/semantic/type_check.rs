@@ -46,10 +46,10 @@ use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::RawExpr;
 use common_expression::TableDataType;
-use common_functions_v2::aggregates::AggregateCountFunction;
-use common_functions_v2::aggregates::AggregateFunctionFactory;
-use common_functions_v2::is_builtin_function;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::aggregates::AggregateCountFunction;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::is_builtin_function;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;

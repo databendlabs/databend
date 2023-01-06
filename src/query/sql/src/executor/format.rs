@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::Domain;
 use common_expression::FunctionContext;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateFinal;

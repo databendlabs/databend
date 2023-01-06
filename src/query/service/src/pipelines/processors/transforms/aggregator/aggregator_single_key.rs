@@ -27,8 +27,8 @@ use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::Value;
-use common_functions_v2::aggregates::AggregateFunctionRef;
-use common_functions_v2::aggregates::StateAddr;
+use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::StateAddr;
 
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;

@@ -26,7 +26,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_storages_pruner::LimiterPruner;
 use common_storages_pruner::LimiterPrunerCreator;
 use common_storages_pruner::RangePruner;

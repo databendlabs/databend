@@ -18,7 +18,7 @@ ignored = ["xorfilter-rs"]
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
-common-functions-v2 = { path = "../../functions-v2" }
+common-functions = { path = "../../functions" }
 # common-sql = { path = "../../sql" }
 common-storages-table-meta = { path = "../table-meta" }
 

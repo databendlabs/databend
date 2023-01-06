@@ -22,7 +22,7 @@ use common_ast::walk_expr;
 use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions_v2::is_builtin_function;
+use common_functions::is_builtin_function;
 
 #[derive(Default)]
 pub struct UDFValidator {

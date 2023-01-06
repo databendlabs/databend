@@ -21,7 +21,7 @@ use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;

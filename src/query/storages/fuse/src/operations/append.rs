@@ -23,7 +23,7 @@ use common_expression::BlockCompactThresholds;
 use common_expression::DataField;
 use common_expression::Expr;
 use common_expression::SortColumnDescription;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::transform_block_compact_no_split::BlockCompactorNoSplit;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;

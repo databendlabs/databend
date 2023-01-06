@@ -14,11 +14,12 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_expression::converts::can_convert;
-use common_expression::converts::from_block;
-use common_expression::converts::to_datablock;
+use common_expression::schema::TableSchema as OurTableSchema;
+use common_expression::types::DataType as OurDataType;
+use common_expression::values::Column as EColumn;
+use common_expression::DataBlock;
 use rand::Rng;
 
 fn random_type() -> DataTypeImpl {
@@ -69,7 +70,7 @@ fn random_schema(num_cols: usize) -> DataSchemaRef {
 }
 
 fn test_convert() {
-    let num_cols = 10;
+    let num_cols = 20;
     let num_rows = 32;
 
     let mut rng = rand::thread_rng();
@@ -89,16 +90,36 @@ fn test_convert() {
         })
         .collect();
 
-    let block = DataBlock::create(schema.clone(), columns);
+    let arrow_arrays = columns
+        .iter()
+        .zip(schema.fields().iter())
+        .map(|(c, f)| c.as_arrow_array(f.data_type().clone()))
+        .collect::<Vec<_>>();
 
-    let chunk = from_block(&block);
-    {
-        assert_eq!(chunk.num_rows(), num_rows);
-        assert_eq!(chunk.num_columns(), num_cols);
+    let arrow_schema = schema.to_arrow();
+    let our_schmea = OurTableSchema::from(&arrow_schema);
+    let arrow_schem2 = our_schmea.to_arrow();
+
+    assert_eq!(arrow_schema, arrow_schem2);
+
+    let mut our_columns = Vec::with_capacity(num_cols);
+    for (f, arrow_col) in our_schmea.fields().iter().zip(arrow_arrays.iter()) {
+        let data_type = f.data_type();
+        let data_type = OurDataType::from(data_type);
+        let our_column = EColumn::from_arrow(arrow_col.as_ref(), &data_type);
+        our_columns.push(our_column);
     }
 
-    let block2 = to_datablock(&chunk, schema);
-    assert_eq!(block, block2);
+    let our_block = DataBlock::new_from_columns(our_columns);
+    let arrow_arrays2 = our_block
+        .columns()
+        .iter()
+        .map(|c| c.value.clone().into_column().unwrap().as_arrow())
+        .collect::<Vec<_>>();
+
+    for (a1, a2) in arrow_arrays.iter().zip(arrow_arrays2.iter()) {
+        assert_eq!(a1, a2);
+    }
 }
 
 #[test]

@@ -29,7 +29,7 @@ use common_expression::HashMethod;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodKind;
 use common_expression::HashMethodSerializer;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::UnsizedHashMap;

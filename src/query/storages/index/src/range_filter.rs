@@ -34,7 +34,7 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 

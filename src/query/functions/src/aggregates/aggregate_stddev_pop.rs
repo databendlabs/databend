@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,12 +17,21 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_datavalues::with_match_primitive_type_id;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::Number;
+use common_expression::types::number::F64;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
+use common_expression::types::ValueType;
+use common_expression::with_number_mapped_type;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_io::prelude::*;
-use num::cast::AsPrimitive;
+use num_traits::AsPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -75,19 +84,19 @@ impl AggregateStddevPopState {
 #[derive(Clone)]
 pub struct AggregateStddevPopFunction<T> {
     display_name: String,
-    _arguments: Vec<DataField>,
+    _arguments: Vec<DataType>,
     t: PhantomData<T>,
 }
 
 impl<T> AggregateFunction for AggregateStddevPopFunction<T>
-where T: PrimitiveType + AsPrimitive<f64>
+where T: Number + AsPrimitive<f64>
 {
     fn name(&self) -> &str {
         "AggregateStddevPopFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
-        Ok(f64::to_data_type())
+    fn return_type(&self) -> Result<DataType> {
+        Ok(DataType::Number(NumberDataType::Float64))
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -105,13 +114,12 @@ where T: PrimitiveType + AsPrimitive<f64>
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[ColumnRef],
-        validity: Option<&common_arrow::arrow::bitmap::Bitmap>,
+        columns: &[Column],
+        validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
-        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
-
+        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         match validity {
             Some(bitmap) => {
                 for (value, is_valid) in column.iter().zip(bitmap.iter()) {
@@ -134,10 +142,10 @@ where T: PrimitiveType + AsPrimitive<f64>
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[ColumnRef],
+        columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
 
         column.iter().zip(places.iter()).for_each(|(value, place)| {
             let place = place.next(offset);
@@ -148,11 +156,11 @@ where T: PrimitiveType + AsPrimitive<f64>
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
 
         let state = place.get::<AggregateStddevPopState>();
-        let v: f64 = unsafe { column.value_unchecked(row).as_() };
+        let v: f64 = column[row].as_();
         state.add(v);
         Ok(())
     }
@@ -177,11 +185,11 @@ where T: PrimitiveType + AsPrimitive<f64>
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, column: &mut dyn MutableColumn) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
-        let column: &mut MutablePrimitiveColumn<f64> = Series::check_get_mutable_column(column)?;
+        let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
         let variance = state.variance / state.count as f64;
-        column.push(variance.sqrt());
+        builder.push(variance.sqrt().into());
         Ok(())
     }
 }
@@ -193,11 +201,11 @@ impl<T> fmt::Display for AggregateStddevPopFunction<T> {
 }
 
 impl<T> AggregateStddevPopFunction<T>
-where T: PrimitiveType + AsPrimitive<f64>
+where T: Number + AsPrimitive<f64>
 {
     pub fn try_create(
         display_name: &str,
-        arguments: Vec<DataField>,
+        arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_string(),
@@ -209,22 +217,18 @@ where T: PrimitiveType + AsPrimitive<f64>
 
 pub fn try_create_aggregate_stddev_pop_function(
     display_name: &str,
-    _params: Vec<DataValue>,
-    arguments: Vec<DataField>,
+    _params: Vec<Scalar>,
+    arguments: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
-
-    let data_type = arguments[0].data_type();
-
-    with_match_primitive_type_id!(data_type.data_type_id(), |$T| {
-        AggregateStddevPopFunction::<$T>::try_create(display_name, arguments)
-    },
-
-    {
-        Err(ErrorCode::BadDataValueType(format!(
+    with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
+        DataType::Number(NumberDataType::NUM_TYPE) => {
+            AggregateStddevPopFunction::<NUM_TYPE>::try_create(display_name, arguments)
+        }
+        _ => Err(ErrorCode::BadDataValueType(format!(
             "AggregateStddevPopFunction does not support type '{:?}'",
-            data_type
-        )))
+            arguments[0]
+        ))),
     })
 }
 

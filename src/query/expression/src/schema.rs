@@ -959,7 +959,11 @@ impl From<&DataType> for ArrowDataType {
             DataType::Tuple(types) => {
                 let fields = types
                     .iter()
-                    .map(|ty| ArrowField::new("DUMMY_FIELD_NAME", ty.into(), ty.is_nullable()))
+                    .enumerate()
+                    .map(|(index, ty)| {
+                        let name = format!("{index}");
+                        ArrowField::new(name.as_str(), ty.into(), ty.is_nullable())
+                    })
                     .collect();
                 ArrowDataType::Struct(fields)
             }

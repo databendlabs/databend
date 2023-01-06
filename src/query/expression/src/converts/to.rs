@@ -16,7 +16,6 @@ use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_datavalues::Column as DvColumn;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
-use common_datavalues::DataSchemaRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::IntoColumn;
@@ -26,7 +25,6 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::DataBlock;
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
@@ -106,13 +104,4 @@ pub fn to_column(column: &Value<AnyType>, size: usize, data_type: &DataType) -> 
             }
         }
     }
-}
-
-pub fn to_datablock(block: &DataBlock, schema: DataSchemaRef) -> common_datablocks::DataBlock {
-    let columns = block
-        .columns()
-        .iter()
-        .map(|entry| to_column(&entry.value, block.num_rows(), &entry.data_type))
-        .collect();
-    common_datablocks::DataBlock::create(schema, columns)
 }

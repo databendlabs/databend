@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
 
 use super::data_type::DataType;
-use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
 use crate::serializations::TypeSerializerImpl;
@@ -73,12 +71,6 @@ impl DataType for VariantType {
 
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Extension("Variant".to_owned(), Box::new(ArrowType::LargeBinary), None)
-    }
-
-    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Variant".to_string());
-        Some(mp)
     }
 
     fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {

@@ -18,7 +18,7 @@ common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
-common-functions-v2 = { path = "../../functions-v2" }
+common-functions = { path = "../../functions" }
 common-meta-app = { path = "../../../meta/app" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }

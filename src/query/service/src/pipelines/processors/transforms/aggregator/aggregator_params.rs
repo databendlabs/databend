@@ -20,9 +20,9 @@ use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::HashMethodKind;
-use common_functions_v2::aggregates::get_layout_offsets;
-use common_functions_v2::aggregates::AggregateFunctionRef;
-use common_functions_v2::aggregates::StateAddr;
+use common_functions::aggregates::get_layout_offsets;
+use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::StateAddr;
 use common_sql::IndexType;
 
 use crate::pipelines::processors::port::InputPort;

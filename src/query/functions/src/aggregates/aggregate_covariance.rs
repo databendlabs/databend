@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,11 +18,20 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::Number;
+use common_expression::types::number::F64;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
+use common_expression::types::ValueType;
+use common_expression::with_number_mapped_type;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_io::prelude::*;
-use num::cast::AsPrimitive;
+use num_traits::AsPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -31,7 +40,6 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_binary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::with_match_primitive_type_ids;
 
 #[derive(Serialize, Deserialize)]
 pub struct AggregateCovarianceState {
@@ -121,24 +129,23 @@ fn large_and_comparable(a: u64, b: u64) -> bool {
 #[derive(Clone)]
 pub struct AggregateCovarianceFunction<T0, T1, R> {
     display_name: String,
-    _arguments: Vec<DataField>,
-    t0: PhantomData<T0>,
-    t1: PhantomData<T1>,
-    r: PhantomData<R>,
+    _t0: PhantomData<T0>,
+    _t1: PhantomData<T1>,
+    _r: PhantomData<R>,
 }
 
 impl<T0, T1, R> AggregateFunction for AggregateCovarianceFunction<T0, T1, R>
 where
-    T0: PrimitiveType + AsPrimitive<f64>,
-    T1: PrimitiveType + AsPrimitive<f64>,
+    T0: Number + AsPrimitive<f64>,
+    T1: Number + AsPrimitive<f64>,
     R: AggregateCovariance,
 {
     fn name(&self) -> &str {
         R::name()
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
-        Ok(f64::to_data_type())
+    fn return_type(&self) -> Result<DataType> {
+        Ok(DataType::Number(NumberDataType::Float64))
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -157,13 +164,13 @@ where
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[common_datavalues::ColumnRef],
+        columns: &[Column],
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let left: &PrimitiveColumn<T0> = unsafe { Series::static_cast(&columns[0]) };
-        let right: &PrimitiveColumn<T1> = unsafe { Series::static_cast(&columns[1]) };
+        let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
+        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
 
         match validity {
             Some(bitmap) => {
@@ -190,11 +197,11 @@ where
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[ColumnRef],
+        columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        let left: &PrimitiveColumn<T0> = unsafe { Series::static_cast(&columns[0]) };
-        let right: &PrimitiveColumn<T1> = unsafe { Series::static_cast(&columns[1]) };
+        let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
+        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
 
         left.iter().zip(right.iter()).zip(places.iter()).for_each(
             |((left_val, right_val), place)| {
@@ -206,12 +213,12 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let left: &PrimitiveColumn<T0> = unsafe { Series::static_cast(&columns[0]) };
-        let right: &PrimitiveColumn<T1> = unsafe { Series::static_cast(&columns[1]) };
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+        let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
+        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
 
-        let left_val = unsafe { left.value_unchecked(row) };
-        let right_val = unsafe { right.value_unchecked(row) };
+        let left_val = unsafe { left.get_unchecked(row) };
+        let right_val = unsafe { right.get_unchecked(row) };
 
         let state = place.get::<AggregateCovarianceState>();
         state.add(left_val.as_(), right_val.as_());
@@ -238,10 +245,10 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, column: &mut dyn MutableColumn) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let column: &mut MutablePrimitiveColumn<f64> = Series::check_get_mutable_column(column)?;
-        column.append_value(R::apply(state));
+        let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
+        builder.push(R::apply(state).into());
         Ok(())
     }
 }
@@ -254,43 +261,48 @@ impl<T0, T1, R> fmt::Display for AggregateCovarianceFunction<T0, T1, R> {
 
 impl<T0, T1, R> AggregateCovarianceFunction<T0, T1, R>
 where
-    T0: PrimitiveType + AsPrimitive<f64>,
-    T1: PrimitiveType + AsPrimitive<f64>,
+    T0: Number + AsPrimitive<f64>,
+    T1: Number + AsPrimitive<f64>,
     R: AggregateCovariance,
 {
     pub fn try_create(
         display_name: &str,
-        arguments: Vec<DataField>,
+        _arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_string(),
-            _arguments: arguments,
-            t0: PhantomData,
-            t1: PhantomData,
-            r: PhantomData,
+            _t0: PhantomData,
+            _t1: PhantomData,
+            _r: PhantomData,
         }))
     }
 }
 
 pub fn try_create_aggregate_covariance<R: AggregateCovariance>(
     display_name: &str,
-    _params: Vec<DataValue>,
-    arguments: Vec<DataField>,
-) -> Result<Arc<dyn AggregateFunction>> {
+    _params: Vec<Scalar>,
+    arguments: Vec<DataType>,
+) -> Result<AggregateFunctionRef> {
     assert_binary_arguments(display_name, arguments.len())?;
 
-    let data_type0 = arguments[0].data_type();
-    let data_type1 = arguments[1].data_type();
+    with_number_mapped_type!(|NUM_TYPE0| match &arguments[0] {
+        DataType::Number(NumberDataType::NUM_TYPE0) =>
+            with_number_mapped_type!(|NUM_TYPE1| match &arguments[1] {
+                DataType::Number(NumberDataType::NUM_TYPE1) => {
+                    return AggregateCovarianceFunction::<NUM_TYPE0, NUM_TYPE1, R>::try_create(
+                        display_name,
+                        arguments,
+                    );
+                }
+                _ => (),
+            }),
+        _ => (),
+    });
 
-    with_match_primitive_type_ids!(data_type0.data_type_id(), data_type1.data_type_id(), |$T0, $T1| {
-        AggregateCovarianceFunction::<$T0, $T1, R>::try_create(display_name, arguments)
-    },
-    {
-        Err(ErrorCode::BadDataValueType(format!(
-            "AggregateCovarianceFunction does not support type '{:?}' or '{:?}'",
-            data_type0, data_type1
-        )))
-    })
+    Err(ErrorCode::BadDataValueType(format!(
+        "Expected number data type, but got {:?}",
+        arguments
+    )))
 }
 
 pub trait AggregateCovariance: Send + Sync + 'static {
@@ -299,7 +311,6 @@ pub trait AggregateCovariance: Send + Sync + 'static {
     fn apply(state: &AggregateCovarianceState) -> f64;
 }
 
-///////////////////////////////////////////////////////////////////////////////
 // Sample covariance function implementation
 struct AggregateCovarianceSampleImpl;
 
@@ -323,9 +334,6 @@ pub fn aggregate_covariance_sample_desc() -> AggregateFunctionDescription {
     ))
 }
 
-///////////////////////////////////////////////////////////////////////////////
-
-///////////////////////////////////////////////////////////////////////////////
 // Population covariance function implementation
 struct AggregateCovariancePopulationImpl;
 
@@ -350,10 +358,3 @@ pub fn aggregate_covariance_population_desc() -> AggregateFunctionDescription {
         try_create_aggregate_covariance::<AggregateCovariancePopulationImpl>,
     ))
 }
-
-///////////////////////////////////////////////////////////////////////////////
-
-///////////////////////////////////////////////////////////////////////////////
-// TODO: correlation function
-// struct AggregateCorrelationImpl;
-///////////////////////////////////////////////////////////////////////////////

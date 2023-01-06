@@ -21,7 +21,7 @@ use common_expression::types::DataType;
 use common_expression::Expr;
 use common_expression::Literal;
 use common_expression::RawExpr;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 type IndexType = usize;
 
