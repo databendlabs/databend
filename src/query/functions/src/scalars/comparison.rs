@@ -565,7 +565,8 @@ fn register_like(registry: &mut FunctionRegistry) {
                     if pat.len() > 2 {
                         memmem::find(str, &pat[1..pat.len() - 1]).is_some()
                     } else {
-                        str.is_empty()
+                        // true for empty '%%' pattern, which follows pg/mysql way
+                        true
                     }
                 }
 

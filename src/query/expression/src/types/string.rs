@@ -309,6 +309,16 @@ impl StringColumnBuilder {
 
     pub fn commit_row(&mut self) {
         self.offsets.push(self.data.len() as u64);
+
+        if self.offsets.len() - 1 == 100 && self.offsets.len() < self.offsets.capacity() {
+            let bytes_per_row = self.data.len() / 100 + 1;
+            let bytes_estimate = bytes_per_row * self.offsets.capacity();
+
+            // if we are more than 10% over the capacity, we reserve more
+            if bytes_estimate as f64 > self.data.capacity() as f64 * 1.10f64 {
+                self.data.reserve(bytes_estimate - self.data.capacity());
+            }
+        }
     }
 
     pub fn append_column(&mut self, other: &StringColumn) {
