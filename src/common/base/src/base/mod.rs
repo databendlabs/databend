@@ -15,7 +15,6 @@
 mod net;
 mod profiling;
 mod progress;
-mod range;
 mod select;
 mod shutdown_signal;
 mod singleton_instance;
@@ -29,8 +28,6 @@ pub use net::get_free_udp_port;
 pub use profiling::Profiling;
 pub use progress::Progress;
 pub use progress::ProgressValues;
-pub use range::Intersect;
-pub use range::Intersection;
 pub use select::select3;
 pub use select::Select3Output;
 pub use shutdown_signal::signal_stream;

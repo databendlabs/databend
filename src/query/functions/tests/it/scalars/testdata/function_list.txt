@@ -960,6 +960,40 @@ gt(Array(Nothing), Array(Nothing)) :: Boolean
 gt(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
 gt(Array(T0), Array(T0)) :: Boolean
 gt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
+gte(String, String) :: Boolean
+gte(String NULL, String NULL) :: Boolean NULL
+gte(Date, Date) :: Boolean
+gte(Date NULL, Date NULL) :: Boolean NULL
+gte(Timestamp, Timestamp) :: Boolean
+gte(Timestamp NULL, Timestamp NULL) :: Boolean NULL
+gte(UInt8, UInt8) :: Boolean
+gte(UInt8 NULL, UInt8 NULL) :: Boolean NULL
+gte(UInt16, UInt16) :: Boolean
+gte(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+gte(UInt32, UInt32) :: Boolean
+gte(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+gte(UInt64, UInt64) :: Boolean
+gte(UInt64 NULL, UInt64 NULL) :: Boolean NULL
+gte(Int8, Int8) :: Boolean
+gte(Int8 NULL, Int8 NULL) :: Boolean NULL
+gte(Int16, Int16) :: Boolean
+gte(Int16 NULL, Int16 NULL) :: Boolean NULL
+gte(Int32, Int32) :: Boolean
+gte(Int32 NULL, Int32 NULL) :: Boolean NULL
+gte(Int64, Int64) :: Boolean
+gte(Int64 NULL, Int64 NULL) :: Boolean NULL
+gte(Float32, Float32) :: Boolean
+gte(Float32 NULL, Float32 NULL) :: Boolean NULL
+gte(Float64, Float64) :: Boolean
+gte(Float64 NULL, Float64 NULL) :: Boolean NULL
+gte(Boolean, Boolean) :: Boolean
+gte(Boolean NULL, Boolean NULL) :: Boolean NULL
+gte(Variant, Variant) :: Boolean
+gte(Variant NULL, Variant NULL) :: Boolean NULL
+gte(Array(Nothing), Array(Nothing)) :: Boolean
+gte(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+gte(Array(T0), Array(T0)) :: Boolean
+gte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 hex(Int64) :: String
 hex(Int64 NULL) :: String NULL
 hex(String) :: String
@@ -1151,6 +1185,40 @@ lt(Array(Nothing), Array(Nothing)) :: Boolean
 lt(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
 lt(Array(T0), Array(T0)) :: Boolean
 lt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
+lte(String, String) :: Boolean
+lte(String NULL, String NULL) :: Boolean NULL
+lte(Date, Date) :: Boolean
+lte(Date NULL, Date NULL) :: Boolean NULL
+lte(Timestamp, Timestamp) :: Boolean
+lte(Timestamp NULL, Timestamp NULL) :: Boolean NULL
+lte(UInt8, UInt8) :: Boolean
+lte(UInt8 NULL, UInt8 NULL) :: Boolean NULL
+lte(UInt16, UInt16) :: Boolean
+lte(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+lte(UInt32, UInt32) :: Boolean
+lte(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+lte(UInt64, UInt64) :: Boolean
+lte(UInt64 NULL, UInt64 NULL) :: Boolean NULL
+lte(Int8, Int8) :: Boolean
+lte(Int8 NULL, Int8 NULL) :: Boolean NULL
+lte(Int16, Int16) :: Boolean
+lte(Int16 NULL, Int16 NULL) :: Boolean NULL
+lte(Int32, Int32) :: Boolean
+lte(Int32 NULL, Int32 NULL) :: Boolean NULL
+lte(Int64, Int64) :: Boolean
+lte(Int64 NULL, Int64 NULL) :: Boolean NULL
+lte(Float32, Float32) :: Boolean
+lte(Float32 NULL, Float32 NULL) :: Boolean NULL
+lte(Float64, Float64) :: Boolean
+lte(Float64 NULL, Float64 NULL) :: Boolean NULL
+lte(Boolean, Boolean) :: Boolean
+lte(Boolean NULL, Boolean NULL) :: Boolean NULL
+lte(Variant, Variant) :: Boolean
+lte(Variant NULL, Variant NULL) :: Boolean NULL
+lte(Array(Nothing), Array(Nothing)) :: Boolean
+lte(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+lte(Array(T0), Array(T0)) :: Boolean
+lte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 ltrim(String) :: String
 ltrim(String NULL) :: String NULL
 md5(String) :: String
@@ -1785,6 +1853,40 @@ multiply(Float64, Float64) :: Float64
 multiply(Float64 NULL, Float64 NULL) :: Float64 NULL
 not(Boolean) :: Boolean
 not(Boolean NULL) :: Boolean NULL
+noteq(String, String) :: Boolean
+noteq(String NULL, String NULL) :: Boolean NULL
+noteq(Date, Date) :: Boolean
+noteq(Date NULL, Date NULL) :: Boolean NULL
+noteq(Timestamp, Timestamp) :: Boolean
+noteq(Timestamp NULL, Timestamp NULL) :: Boolean NULL
+noteq(UInt8, UInt8) :: Boolean
+noteq(UInt8 NULL, UInt8 NULL) :: Boolean NULL
+noteq(UInt16, UInt16) :: Boolean
+noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+noteq(UInt32, UInt32) :: Boolean
+noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+noteq(UInt64, UInt64) :: Boolean
+noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL
+noteq(Int8, Int8) :: Boolean
+noteq(Int8 NULL, Int8 NULL) :: Boolean NULL
+noteq(Int16, Int16) :: Boolean
+noteq(Int16 NULL, Int16 NULL) :: Boolean NULL
+noteq(Int32, Int32) :: Boolean
+noteq(Int32 NULL, Int32 NULL) :: Boolean NULL
+noteq(Int64, Int64) :: Boolean
+noteq(Int64 NULL, Int64 NULL) :: Boolean NULL
+noteq(Float32, Float32) :: Boolean
+noteq(Float32 NULL, Float32 NULL) :: Boolean NULL
+noteq(Float64, Float64) :: Boolean
+noteq(Float64 NULL, Float64 NULL) :: Boolean NULL
+noteq(Boolean, Boolean) :: Boolean
+noteq(Boolean NULL, Boolean NULL) :: Boolean NULL
+noteq(Variant, Variant) :: Boolean
+noteq(Variant NULL, Variant NULL) :: Boolean NULL
+noteq(Array(Nothing), Array(Nothing)) :: Boolean
+noteq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+noteq(Array(T0), Array(T0)) :: Boolean
+noteq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 now() :: Timestamp
 object_keys(Variant NULL) :: Variant NULL
 oct(Int64) :: String
@@ -1818,26 +1920,6 @@ parse_json(Float32 NULL) :: Variant NULL
 parse_json(Float64) :: Variant
 parse_json(Float64 NULL) :: Variant NULL
 pi() :: Float64
-plus(UInt8) :: UInt8
-plus(UInt8 NULL) :: UInt8 NULL
-plus(UInt16) :: UInt16
-plus(UInt16 NULL) :: UInt16 NULL
-plus(UInt32) :: UInt32
-plus(UInt32 NULL) :: UInt32 NULL
-plus(UInt64) :: UInt64
-plus(UInt64 NULL) :: UInt64 NULL
-plus(Int8) :: Int8
-plus(Int8 NULL) :: Int8 NULL
-plus(Int16) :: Int16
-plus(Int16 NULL) :: Int16 NULL
-plus(Int32) :: Int32
-plus(Int32 NULL) :: Int32 NULL
-plus(Int64) :: Int64
-plus(Int64 NULL) :: Int64 NULL
-plus(Float32) :: Float32
-plus(Float32 NULL) :: Float32 NULL
-plus(Float64) :: Float64
-plus(Float64 NULL) :: Float64 NULL
 plus(UInt8, UInt8) :: UInt16
 plus(UInt8 NULL, UInt8 NULL) :: UInt16 NULL
 plus(UInt8, UInt16) :: UInt32
@@ -3145,10 +3227,13 @@ concat_ws
 eq
 get
 gt
+gte
 if
 ignore
 lt
+lte
 multi_if
+noteq
 point_in_ellipses
 regexp_instr
 regexp_like
@@ -3185,9 +3270,3 @@ try_ipv4_string_to_num -> try_inet_aton
 try_to_datetime -> try_to_timestamp
 ucase -> upper
 uuid -> gen_random_uuid
-
-Negative functions (negative to origin):
-gte -> not(lt)
-is_null -> not(is_not_null)
-lte -> not(gt)
-noteq -> not(eq)

@@ -15,7 +15,6 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_base::base::Intersect;
 use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableDomain;
@@ -325,7 +324,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     FunctionProperty::default(),
                     |lhs, rhs| {
                         let has_true = match lhs {
-                            Some(lhs) => (lhs.min..=lhs.max).is_overlap(&(rhs.min..=rhs.max)),
+                            Some(lhs) => !(lhs.min > rhs.max || lhs.max < rhs.min),
                             None => false,
                         };
                         FunctionDomain::Domain(BooleanDomain {
@@ -389,7 +388,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             FunctionProperty::default(),
             |lhs, rhs| {
                 let has_true = match lhs {
-                    Some(lhs) => (lhs.min..=lhs.max).is_overlap(&(rhs.min..=rhs.max)),
+                    Some(lhs) => !(lhs.min > rhs.max || lhs.max < rhs.min),
                     None => false,
                 };
                 FunctionDomain::Domain(BooleanDomain {
@@ -405,7 +404,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             FunctionProperty::default(),
             |lhs, rhs| {
                 let has_true = match lhs {
-                    Some(lhs) => (lhs.min..=lhs.max).is_overlap(&(rhs.min..=rhs.max)),
+                    Some(lhs) => !(lhs.min > rhs.max || lhs.max < rhs.min),
                     None => false,
                 };
                 FunctionDomain::Domain(BooleanDomain {
