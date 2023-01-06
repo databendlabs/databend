@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::mem_allocator::GlobalAllocator;
+
 mod pool;
 mod pool_retry;
 mod progress;
@@ -21,3 +23,7 @@ mod runtime_tracker;
 mod stoppable;
 mod string_func;
 mod thread_pool;
+
+// runtime tests depends on the memory stat collector.
+#[global_allocator]
+pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
