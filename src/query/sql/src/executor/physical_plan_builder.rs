@@ -656,21 +656,25 @@ impl<'a> PhysicalScalarBuilder<'a> {
             }),
             Scalar::AndExpr(and) => Ok(PhysicalScalar::Function {
                 name: "and".to_string(),
+                params: vec![],
                 args: vec![self.build(&and.left)?, self.build(&and.right)?],
                 return_type: and.data_type(),
             }),
             Scalar::OrExpr(or) => Ok(PhysicalScalar::Function {
                 name: "or".to_string(),
+                params: vec![],
                 args: vec![self.build(&or.left)?, self.build(&or.right)?],
                 return_type: or.data_type(),
             }),
             Scalar::ComparisonExpr(comp) => Ok(PhysicalScalar::Function {
-                name: comp.op.to_func_name(),
+                name: comp.op.to_func_name().to_string(),
+                params: vec![],
                 args: vec![self.build(&comp.left)?, self.build(&comp.right)?],
                 return_type: comp.data_type(),
             }),
             Scalar::FunctionCall(func) => Ok(PhysicalScalar::Function {
                 name: func.func_name.clone(),
+                params: func.params.clone(),
                 args: func
                     .arguments
                     .iter()

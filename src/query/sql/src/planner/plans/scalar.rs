@@ -349,7 +349,7 @@ impl ComparisonOp {
         }
     }
 
-    pub fn to_func_name(&self) -> String {
+    pub fn to_func_name(&self) -> &'static str {
         match &self {
             ComparisonOp::Equal => "eq",
             ComparisonOp::NotEqual => "noteq",
@@ -358,7 +358,6 @@ impl ComparisonOp {
             ComparisonOp::GTE => "gte",
             ComparisonOp::LTE => "lte",
         }
-        .to_string()
     }
 }
 
@@ -417,6 +416,7 @@ impl ScalarExpr for AggregateFunction {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FunctionCall {
+    pub params: Vec<usize>,
     pub arguments: Vec<Scalar>,
 
     pub func_name: String,

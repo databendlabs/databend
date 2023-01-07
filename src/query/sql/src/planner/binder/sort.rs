@@ -424,6 +424,7 @@ impl<'a> Binder {
                     }))
                 }
                 Scalar::FunctionCall(FunctionCall {
+                    params,
                     arguments,
                     func_name,
                     return_type,
@@ -433,6 +434,7 @@ impl<'a> Binder {
                         .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
                         .collect::<Result<Vec<_>>>()?;
                     Ok(Scalar::FunctionCall(FunctionCall {
+                        params: params.clone(),
                         arguments,
                         func_name: func_name.clone(),
                         return_type: return_type.clone(),
