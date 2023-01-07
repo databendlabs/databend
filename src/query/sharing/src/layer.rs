@@ -25,6 +25,7 @@ use opendal::layers::RetryLayer;
 use opendal::layers::TracingLayer;
 use opendal::raw::apply_wrapper;
 use opendal::raw::new_request_build_error;
+use opendal::raw::output;
 use opendal::raw::parse_content_length;
 use opendal::raw::parse_error_response;
 use opendal::raw::parse_etag;
@@ -33,7 +34,6 @@ use opendal::raw::Accessor;
 use opendal::raw::AccessorCapability;
 use opendal::raw::AccessorMetadata;
 use opendal::raw::AsyncBody;
-use opendal::raw::BytesReader;
 use opendal::raw::ErrorResponse;
 use opendal::raw::HttpClient;
 use opendal::raw::Operation;
@@ -103,7 +103,7 @@ impl Accessor for SharedAccessor {
         meta
     }
 
-    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, BytesReader)> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, output::Reader)> {
         let req: PresignedRequest =
             self.signer
                 .fetch(path, Operation::Read)

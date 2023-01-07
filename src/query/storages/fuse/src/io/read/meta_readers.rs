@@ -24,7 +24,7 @@ use common_storages_table_meta::meta::SnapshotVersion;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::TableSnapshotStatistics;
 use common_storages_table_meta::meta::TableSnapshotStatisticsVersion;
-use opendal::raw::BytesReader;
+use opendal::ObjectReader;
 use opendal::Operator;
 
 use super::versioned_reader::VersionedReader;
@@ -103,7 +103,7 @@ impl Loader<SegmentInfo> for LoaderWrapper<Operator> {
     }
 }
 
-async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<BytesReader> {
+async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<ObjectReader> {
     let object = op.object(path);
 
     let len = match len {
@@ -116,5 +116,5 @@ async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<Byt
     };
 
     let reader = object.range_reader(0..len).await?;
-    Ok(Box::new(reader))
+    Ok(reader)
 }
