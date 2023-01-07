@@ -45,6 +45,7 @@ pub enum Scalar {
     ConstantExpr(ConstantExpr),
     AndExpr(AndExpr),
     OrExpr(OrExpr),
+    NotExpr(NotExpr),
     ComparisonExpr(ComparisonExpr),
     AggregateFunction(AggregateFunction),
     FunctionCall(FunctionCall),
@@ -61,6 +62,7 @@ impl ScalarExpr for Scalar {
             Scalar::ConstantExpr(scalar) => scalar.data_type(),
             Scalar::AndExpr(scalar) => scalar.data_type(),
             Scalar::OrExpr(scalar) => scalar.data_type(),
+            Scalar::NotExpr(scalar) => scalar.data_type(),
             Scalar::ComparisonExpr(scalar) => scalar.data_type(),
             Scalar::AggregateFunction(scalar) => scalar.data_type(),
             Scalar::FunctionCall(scalar) => scalar.data_type(),
@@ -75,6 +77,7 @@ impl ScalarExpr for Scalar {
             Scalar::ConstantExpr(scalar) => scalar.used_columns(),
             Scalar::AndExpr(scalar) => scalar.used_columns(),
             Scalar::OrExpr(scalar) => scalar.used_columns(),
+            Scalar::NotExpr(scalar) => scalar.used_columns(),
             Scalar::ComparisonExpr(scalar) => scalar.used_columns(),
             Scalar::AggregateFunction(scalar) => scalar.used_columns(),
             Scalar::FunctionCall(scalar) => scalar.used_columns(),
@@ -152,6 +155,23 @@ impl TryFrom<Scalar> for OrExpr {
             Ok(value)
         } else {
             Err(ErrorCode::Internal("Cannot downcast Scalar to OrExpr"))
+        }
+    }
+}
+
+impl From<NotExpr> for Scalar {
+    fn from(v: NotExpr) -> Self {
+        Self::NotExpr(v)
+    }
+}
+
+impl TryFrom<Scalar> for NotExpr {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::NotExpr(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal("Cannot downcast Scalar to NotExpr"))
         }
     }
 }
@@ -316,6 +336,22 @@ impl ScalarExpr for OrExpr {
         let left: ColumnSet = self.left.used_columns();
         let right: ColumnSet = self.right.used_columns();
         left.union(&right).cloned().collect()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct NotExpr {
+    pub argument: Box<Scalar>,
+    pub return_type: Box<DataType>,
+}
+
+impl ScalarExpr for NotExpr {
+    fn data_type(&self) -> DataType {
+        *self.return_type.clone()
+    }
+
+    fn used_columns(&self) -> ColumnSet {
+        self.argument.used_columns()
     }
 }
 

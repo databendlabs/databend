@@ -19,6 +19,7 @@ use crate::plans::AndExpr;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 
@@ -68,6 +69,9 @@ pub trait ScalarVisitor: Sized {
                                 Scalar::OrExpr(OrExpr { left, right, .. }) => {
                                     stack.push(RecursionProcessing::Call(left));
                                     stack.push(RecursionProcessing::Call(right));
+                                }
+                                Scalar::NotExpr(NotExpr { argument, .. }) => {
+                                    stack.push(RecursionProcessing::Call(argument));
                                 }
                                 Scalar::FunctionCall(FunctionCall { arguments, .. }) => {
                                     for arg in arguments.iter() {
