@@ -154,6 +154,31 @@ impl DataSchema {
         self.max_column_id
     }
 
+    pub fn column_id_of_path(&self, path_in_schema: &[String]) -> Result<u32> {
+        let column_name = &path_in_schema[0];
+        let i = self.index_of(column_name)?;
+        let field = &self.fields[i];
+        let mut column_id = field.column_id().unwrap();
+        if path_in_schema.len() > 1 {
+            let mut data_type = field.data_type();
+            for i in 1..path_in_schema.len() {
+                let child_name = &path_in_schema[i];
+                let child_index = child_name.parse::<usize>()?;
+                if let DataTypeImpl::Struct(s) = data_type {
+                    data_type = &s.types()[child_index];
+                    column_id = s.child_column_ids().as_ref().unwrap()[child_index];
+                } else if i < path_in_schema.len() - 1 {
+                    return Err(ErrorCode::UnknownColumn(format!(
+                        "invalid path in schema: {:?}",
+                        path_in_schema
+                    )));
+                }
+            }
+        }
+
+        Ok(column_id)
+    }
+
     /// Find the column id with the given name.
     pub fn column_id_of(&self, name: &str) -> Result<u32> {
         let i = self.index_of(name)?;

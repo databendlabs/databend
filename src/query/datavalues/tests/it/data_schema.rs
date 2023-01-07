@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
@@ -85,6 +83,12 @@ fn test_schema_from_struct() -> Result<()> {
         }
         assert!(column_id_and_child_column_id[i].2.is_none());
     }
+    assert_eq!(
+        schema
+            .column_id_of_path(&["b".to_string(), "0".to_string(), "1".to_string()])
+            .unwrap(),
+        2
+    );
 
     // let mut path_indices = BTreeMap::new();
     // path_indices.insert(0, vec![0]);

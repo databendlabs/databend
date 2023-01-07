@@ -390,7 +390,7 @@ impl FromToProto for dv::StructType {
             Ok(dv::StructType::create_with_child_ids(
                 None,
                 types,
-                Some(p.child_column_ids.clone()),
+                Some(p.child_column_ids),
             ))
         } else {
             debug_assert!(
@@ -400,7 +400,7 @@ impl FromToProto for dv::StructType {
             Ok(dv::StructType::create_with_child_ids(
                 Some(names),
                 types,
-                Some(p.child_column_ids.clone()),
+                Some(p.child_column_ids),
             ))
         }
     }
