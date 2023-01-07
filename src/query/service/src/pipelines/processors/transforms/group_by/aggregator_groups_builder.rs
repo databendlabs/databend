@@ -81,11 +81,11 @@ pub struct SerializedKeysGroupColumnsBuilder<'a> {
 }
 
 impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
-    pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
+    pub fn create(capacity: usize, data_capacity: usize, params: &AggregatorParams) -> Self {
         let (single_builder, data) =
             if params.group_data_types.len() == 1 && params.group_data_types[0].is_string() {
                 (
-                    Some(StringColumnBuilder::with_capacity(capacity, 0)),
+                    Some(StringColumnBuilder::with_capacity(capacity, data_capacity)),
                     vec![],
                 )
             } else {
