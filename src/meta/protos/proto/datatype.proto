@@ -76,6 +76,8 @@ message Struct {
 
   // The corresponding field types.
   repeated DataType types = 2;
+
+  repeated uint32 child_column_ids = 3;
 }
 
 // Array contains multiple elements of the same type.

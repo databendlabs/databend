@@ -35,25 +35,12 @@ impl FromToProto for dv::DataSchema {
     fn from_pb(p: pb::DataSchema) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
-        let has_max_column_id = p.max_column_id > 0;
         let mut fs = Vec::with_capacity(p.fields.len());
-        let mut max_column_id = p.max_column_id;
-        for (i, f) in p.fields.into_iter().enumerate() {
-            let f = if !has_max_column_id {
-                let column_id = i as u32;
-                if column_id > max_column_id {
-                    max_column_id = column_id;
-                }
-                let mut f = f;
-                f.column_id = column_id;
-                f
-            } else {
-                f
-            };
+        for f in p.fields {
             fs.push(dv::DataField::from_pb(f)?);
         }
 
-        let v = Self::new_from_with_max_column_id(fs, p.metadata, max_column_id);
+        let v = Self::new_from_with_max_column_id(fs, p.metadata, p.max_column_id);
         Ok(v)
     }
 
@@ -400,13 +387,21 @@ impl FromToProto for dv::StructType {
             types.push(dv::DataTypeImpl::from_pb(t)?);
         }
         if names.is_empty() {
-            Ok(dv::StructType::create(None, types))
+            Ok(dv::StructType::create_with_child_ids(
+                None,
+                types,
+                Some(p.child_column_ids.clone()),
+            ))
         } else {
             debug_assert!(
                 names.len() == types.len(),
                 "Size of names must match size of types"
             );
-            Ok(dv::StructType::create(Some(names), types))
+            Ok(dv::StructType::create_with_child_ids(
+                Some(names),
+                types,
+                Some(p.child_column_ids.clone()),
+            ))
         }
     }
 
@@ -427,6 +422,10 @@ impl FromToProto for dv::StructType {
 
             names,
             types,
+            child_column_ids: match self.child_column_ids() {
+                Some(child_column_ids) => child_column_ids.clone(),
+                None => vec![],
+            },
         };
 
         Ok(p)

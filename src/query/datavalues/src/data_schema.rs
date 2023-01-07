@@ -25,6 +25,7 @@ use common_exception::Result;
 use crate::types::data_type::DataType;
 use crate::types::data_type::DataTypeImpl;
 use crate::DataField;
+use crate::StructType;
 use crate::TypeDeserializerImpl;
 
 /// memory layout.
@@ -47,6 +48,35 @@ impl DataSchema {
         }
     }
 
+    fn build_from_data_type(
+        data_type: &DataTypeImpl,
+        max_column_id: &mut u32,
+    ) -> (u32, DataTypeImpl) {
+        let column_id = *max_column_id;
+
+        let new_data_type = if let DataTypeImpl::Struct(s) = data_type {
+            let inner_types = s.types();
+            let mut child_column_ids = Vec::with_capacity(inner_types.len());
+            let mut child_data_types = Vec::with_capacity(inner_types.len());
+            for inner_type in inner_types {
+                let (inner_column_id, inner_data_type) =
+                    Self::build_from_data_type(inner_type, max_column_id);
+                child_column_ids.push(inner_column_id);
+                child_data_types.push(inner_data_type);
+            }
+            let new_data_type = StructType::create_with_child_ids(
+                s.names().clone(),
+                child_data_types,
+                Some(child_column_ids),
+            );
+            DataTypeImpl::Struct(new_data_type)
+        } else {
+            *max_column_id += 1;
+            data_type.clone()
+        };
+        (column_id, new_data_type)
+    }
+
     fn build_members_from_fields(
         fields: Vec<DataField>,
         max_id: Option<u32>,
@@ -54,16 +84,21 @@ impl DataSchema {
         let mut max_column_id = 0;
         let mut index_of_column_id = HashMap::new();
         let mut new_fields = Vec::with_capacity(fields.len());
+        let has_inited = match max_id {
+            Some(max_id) => max_id > 0,
+            None => false,
+        };
         fields.iter().enumerate().for_each(|(i, f)| {
-            let field = if max_id.is_none() {
-                let column_id = i as u32;
-                if column_id > max_column_id {
-                    max_column_id = column_id;
-                }
+            let field = if !has_inited {
+                let data_type = f.data_type();
+                let (column_id, data_type) =
+                    Self::build_from_data_type(data_type, &mut max_column_id);
                 index_of_column_id.insert(column_id, i);
-                let mut field = f.clone();
-                field.column_id = Some(column_id);
-                field
+                if let DataTypeImpl::Struct(s) = data_type {
+                    DataField::new_with_column_id(f.name(), DataTypeImpl::Struct(s), column_id)
+                } else {
+                    DataField::new_with_column_id(f.name(), data_type, column_id)
+                }
             } else {
                 index_of_column_id.insert(f.column_id().unwrap(), i);
                 f.clone()
@@ -146,8 +181,8 @@ impl DataSchema {
                 )));
             }
             let mut field = field.clone();
-            self.max_column_id += 1;
             field.column_id = Some(self.max_column_id);
+            self.max_column_id += 1;
             self.index_of_column_id
                 .insert(self.max_column_id, self.fields.len());
             self.fields.push(field);
@@ -297,7 +332,11 @@ impl DataSchema {
                 .iter()
                 .zip(inner_types.iter())
                 .map(|(inner_name, inner_type)| {
-                    DataField::new(&inner_name.clone(), inner_type.clone())
+                    DataField::new_with_column_id(
+                        &inner_name.clone(),
+                        inner_type.clone(),
+                        field.column_id.unwrap(),
+                    )
                 })
                 .collect::<Vec<DataField>>();
             return Self::traverse_paths(&inner_fields, &path[1..]);

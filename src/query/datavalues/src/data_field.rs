@@ -71,6 +71,13 @@ impl DataField {
         self.column_id
     }
 
+    pub fn child_column_ids(&self) -> &Option<Vec<u32>> {
+        match self.data_type {
+            DataTypeImpl::Struct(ref s) => s.child_column_ids(),
+            _ => &None,
+        }
+    }
+
     pub fn name(&self) -> &String {
         &self.name
     }

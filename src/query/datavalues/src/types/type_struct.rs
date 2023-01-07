@@ -31,6 +31,7 @@ use crate::serializations::TypeSerializerImpl;
 pub struct StructType {
     names: Option<Vec<String>>,
     types: Vec<DataTypeImpl>,
+    child_column_ids: Option<Vec<u32>>,
 }
 
 impl StructType {
@@ -42,7 +43,26 @@ impl StructType {
         if let Some(ref names) = names {
             debug_assert!(names.len() == types.len());
         }
-        StructType { names, types }
+        StructType {
+            names,
+            types,
+            child_column_ids: None,
+        }
+    }
+
+    pub fn create_with_child_ids(
+        names: Option<Vec<String>>,
+        types: Vec<DataTypeImpl>,
+        child_column_ids: Option<Vec<u32>>,
+    ) -> Self {
+        if let Some(ref names) = names {
+            debug_assert!(names.len() == types.len());
+        }
+        StructType {
+            names,
+            types,
+            child_column_ids,
+        }
     }
 
     pub fn names(&self) -> &Option<Vec<String>> {
@@ -51,6 +71,10 @@ impl StructType {
 
     pub fn types(&self) -> &Vec<DataTypeImpl> {
         &self.types
+    }
+
+    pub fn child_column_ids(&self) -> &Option<Vec<u32>> {
+        &self.child_column_ids
     }
 }
 
