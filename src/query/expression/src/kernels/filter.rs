@@ -193,7 +193,7 @@ impl Column {
                 filter,
             ),
             Column::String(column) => {
-                let bytes_per_row = column.data.len() / filter.len().min(1);
+                let bytes_per_row = column.data.len() / filter.len().max(1);
                 let data_capacity = (filter.len() - filter.unset_bits()) * bytes_per_row;
 
                 Self::filter_scalar_types::<StringType>(
@@ -241,7 +241,7 @@ impl Column {
                 Column::Tuple { fields, len }
             }
             Column::Variant(column) => {
-                let bytes_per_row = column.data.len() / filter.len().min(1);
+                let bytes_per_row = column.data.len() / filter.len().max(1);
                 let data_capacity = (filter.len() - filter.unset_bits()) * bytes_per_row;
 
                 Self::filter_scalar_types::<VariantType>(
