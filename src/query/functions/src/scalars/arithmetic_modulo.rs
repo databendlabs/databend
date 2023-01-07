@@ -28,7 +28,7 @@ use strength_reduce::StrengthReducedU8;
 pub(crate) fn vectorize_modulo<L, R, M, O>() -> impl Fn(
     ValueRef<NumberType<L>>,
     ValueRef<NumberType<R>>,
-    EvalContext,
+    &mut EvalContext,
 ) -> Result<Value<NumberType<O>>, String>
 + Copy
 where

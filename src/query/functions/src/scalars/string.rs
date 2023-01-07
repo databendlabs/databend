@@ -861,8 +861,8 @@ fn substr_utf8(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64)
 /// String to String scalar function with estimiated ouput column capacity.
 pub fn vectorize_string_to_string(
     estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
-    func: impl Fn(&[u8], &mut StringColumnBuilder, EvalContext) -> Result<(), String> + Copy,
-) -> impl Fn(ValueRef<StringType>, EvalContext) -> Result<Value<StringType>, String> + Copy {
+    func: impl Fn(&[u8], &mut StringColumnBuilder, &mut EvalContext) -> Result<(), String> + Copy,
+) -> impl Fn(ValueRef<StringType>, &mut EvalContext) -> Result<Value<StringType>, String> + Copy {
     move |arg1, ctx| match arg1 {
         ValueRef::Scalar(val) => {
             let mut builder = StringColumnBuilder::with_capacity(1, 0);
@@ -884,11 +884,11 @@ pub fn vectorize_string_to_string(
 /// (String, String) to String scalar function with estimiated ouput column capacity.
 fn vectorize_string_to_string_2_arg(
     estimate_bytes: impl Fn(&StringColumn, &StringColumn) -> usize + Copy,
-    func: impl Fn(&[u8], &[u8], EvalContext, &mut StringColumnBuilder) -> Result<(), String> + Copy,
+    func: impl Fn(&[u8], &[u8], &mut EvalContext, &mut StringColumnBuilder) -> Result<(), String> + Copy,
 ) -> impl Fn(
     ValueRef<StringType>,
     ValueRef<StringType>,
-    EvalContext,
+    &mut EvalContext,
 ) -> Result<Value<StringType>, String>
 + Copy {
     move |arg1, arg2, ctx| match (arg1, arg2) {

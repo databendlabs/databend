@@ -147,7 +147,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 fn point_in_ellipses_fn(
     args: &[ValueRef<AnyType>],
-    _: EvalContext,
+    _: &mut EvalContext,
 ) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),

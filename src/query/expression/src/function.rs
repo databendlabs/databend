@@ -17,6 +17,7 @@ use std::ops::BitAnd;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use itertools::Itertools;
 use serde::Deserialize;
@@ -56,12 +57,43 @@ impl Default for FunctionContext {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct EvalContext<'a> {
     pub generics: &'a GenericMap,
     pub num_rows: usize,
+    
+    pub valids: Option<MutableBitmap>,
+    // error must be some if valids is some
+    pub error: Option<String>, 
     pub tz: Tz,
 }
+
+impl<'a> EvalContext<'a> {
+    #[inline]
+    pub fn set_error(&mut self, row: usize,  error: impl AsRef<str>) {
+        match self.valids.as_mut() {
+            Some(valids) => {
+                valids.set(row, false);
+            }
+            None => {
+                let mut valids = constant_bitmap(true, self.num_rows);
+                valids.set(row, false);
+                self.valids = Some(valids);
+            }
+        }
+        if self.error.is_none() {
+            self.error = Some(error.as_ref().to_string());
+        }
+    }
+    
+    pub fn render_error(&self) -> Result<String> {
+        match &self.error {
+            Some(error) => Err(),
+            None => Ok(()),
+        }
+    }
+}
+
 
 /// `FunctionID` is a unique identifier for a function. It's used to construct
 /// the exactly same function from the remote execution nodes.
@@ -84,9 +116,7 @@ pub struct Function {
     #[allow(clippy::type_complexity)]
     pub calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
     #[allow(clippy::type_complexity)]
-    pub eval: Box<
-        dyn Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> + Send + Sync,
-    >,
+    pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
 }
 
 #[derive(Default)]
@@ -224,8 +254,8 @@ impl FunctionRegistry {
 
 pub fn wrap_nullable<F>(
     f: F,
-) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> + Copy
-where F: Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> + Copy {
+) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy
+where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy {
     move |args, ctx| {
         type T = NullableType<AnyType>;
         type Result = AnyType;
@@ -237,7 +267,7 @@ where F: Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String>
         for arg in args {
             let arg = arg.try_downcast::<T>().unwrap();
             match arg {
-                ValueRef::Scalar(None) => return Ok(Value::Scalar(Scalar::Null)),
+                ValueRef::Scalar(None) => return Value::Scalar(Scalar::Null),
                 ValueRef::Scalar(Some(s)) => {
                     nonull_args.push(ValueRef::Scalar(s.clone()));
                 }
@@ -251,14 +281,14 @@ where F: Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String>
                 }
             }
         }
-        let results = f(&nonull_args, ctx)?;
+        let results = f(&nonull_args, ctx);
         let bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
         match results {
             Value::Scalar(s) => {
                 if bitmap.get(0) {
-                    Ok(Value::Scalar(Result::upcast_scalar(s)))
+                    Value::Scalar(Result::upcast_scalar(s))
                 } else {
-                    Ok(Value::Scalar(Scalar::Null))
+                    Value::Scalar(Scalar::Null)
                 }
             }
             Value::Column(column) => {
@@ -277,7 +307,7 @@ where F: Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String>
                         validity: bitmap.into(),
                     })),
                 };
-                Ok(Value::Column(Result::upcast_column(result)))
+                Value::Column(result)
             }
         }
     }

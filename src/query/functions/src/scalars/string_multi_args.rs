@@ -568,7 +568,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn concat_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
+fn concat_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -593,7 +593,7 @@ fn concat_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType
     }
 }
 
-fn char_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
+fn char_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Result<Value<AnyType>, String> {
     let args = args
         .iter()
         .map(|arg| arg.try_downcast::<UInt8Type>().unwrap())
@@ -636,7 +636,10 @@ fn char_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>,
     Ok(Value::Column(Column::String(result)))
 }
 
-fn regexp_instr_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
+fn regexp_instr_fn(
+    args: &[ValueRef<AnyType>],
+    _: &mut EvalContext,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -716,7 +719,10 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<A
     }
 }
 
-fn regexp_like_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
+fn regexp_like_fn(
+    args: &[ValueRef<AnyType>],
+    _: &mut EvalContext,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -761,7 +767,10 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<An
     }
 }
 
-fn regexp_replace_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
+fn regexp_replace_fn(
+    args: &[ValueRef<AnyType>],
+    _: &mut EvalContext,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -845,7 +854,10 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value
     }
 }
 
-fn regexp_substr_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
+fn regexp_substr_fn(
+    args: &[ValueRef<AnyType>],
+    _: &mut EvalContext,
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,

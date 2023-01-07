@@ -139,12 +139,15 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
                 let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
-                let ctx = EvalContext {
+                let mut ctx = EvalContext {
                     generics,
                     num_rows: self.input_columns.num_rows(),
+                    valids: None,
+                    error: None,
                     tz: self.func_ctx.tz,
                 };
-                (function.eval)(cols_ref.as_slice(), ctx).map_err(|msg| (span.clone(), msg))
+                let result = (function.eval)(cols_ref.as_slice(), &mut ctx);
+                todo!("expression")
             }
             Expr::Cast {
                 span,

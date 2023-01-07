@@ -1119,7 +1119,6 @@ name = "codegen"
 version = "0.1.0"
 dependencies = [
  "common-datavalues",
- "common-expression",
  "itertools",
 ]
 
