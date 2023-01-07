@@ -225,9 +225,19 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
         }
 
-        let mut group_columns_builder = self
-            .method
-            .group_columns_builder(self.hash_table.len(), &self.params);
+        let mut estimated_key_size = self.hash_table.bytes_len();
+        let value_size = self.params.aggregate_functions.len()
+            * std::mem::size_of::<u64>()
+            * self.hash_table.len();
+        if estimated_key_size > value_size {
+            estimated_key_size -= value_size;
+        }
+
+        let mut group_columns_builder = self.method.group_columns_builder(
+            self.hash_table.len(),
+            estimated_key_size,
+            &self.params,
+        );
 
         if !HAS_AGG {
             for group_entity in self.hash_table.iter() {
