@@ -8,6 +8,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "Engine"                   | "system" | "engines"             | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "auth_string"              | "system" | "users"               | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "auth_type"                | "system" | "users"               | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
+| "available_features"       | "system" | "build_options"       | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "catalog"                  | "system" | "databases"           | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "catalog"                  | "system" | "tables"              | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "catalog"                  | "system" | "tables_with_history" | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
@@ -50,6 +51,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "dropped_on"               | "system" | "tables"              | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "dropped_on"               | "system" | "tables_with_history" | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "dummy"                    | "system" | "one"                 | "TINYINT UNSIGNED"     | ""       | ""       | "NO"     | ""       |
+| "enabled_features"         | "system" | "build_options"       | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "end_time"                 | "system" | "clustering_history"  | "TIMESTAMP"            | ""       | ""       | "NO"     | ""       |
 | "engine"                   | "system" | "tables"              | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "engine"                   | "system" | "tables_with_history" | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
@@ -134,6 +136,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "table"                    | "system" | "clustering_history"  | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "table"                    | "system" | "columns"             | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "tables"                   | "system" | "query_log"           | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
+| "target_features"          | "system" | "build_options"       | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "tenant_id"                | "system" | "query_log"           | "VARCHAR"              | ""       | ""       | "NO"     | ""       |
 | "time"                     | "system" | "processes"           | "BIGINT UNSIGNED"      | ""       | ""       | "NO"     | ""       |
 | "total_partitions"         | "system" | "query_log"           | "BIGINT UNSIGNED"      | ""       | ""       | "NO"     | ""       |

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
 use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::BooleanType;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
@@ -46,25 +46,33 @@ impl SyncSystemTable for BuildOptionsTable {
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
         let crate_info = &build_info().crate_info;
 
-        let available_features: Vec<Vec<u8>> = crate_info
+        let mut available_features: Vec<Vec<u8>> = crate_info
             .available_features
             .iter()
             .map(|x| x.as_bytes().to_vec())
             .collect();
 
-        let mut enabled = vec![false; available_features.len()];
+        let mut enabled_features: Vec<Vec<u8>> = crate_info
+            .enabled_features
+            .iter()
+            .map(|x| x.as_bytes().to_vec())
+            .collect();
 
-        for i in 0..crate_info.enabled_features.len() {
-            for j in 0..crate_info.available_features.len() {
-                if crate_info.enabled_features[i] == crate_info.available_features[j] {
-                    enabled[j] = true;
-                }
-            }
-        }
+        let mut target_features: Vec<Vec<u8>> = env!("DATABEND_CARGO_CFG_TARGET_FEATURE")
+            .split_terminator(',')
+            .map(|x| x.trim().as_bytes().to_vec())
+            .collect();
+
+        let length = max(available_features.len(), target_features.len());
+
+        enabled_features.resize(length, "".as_bytes().to_vec());
+        available_features.resize(length, "".as_bytes().to_vec());
+        target_features.resize(length, "".as_bytes().to_vec());
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(available_features),
-            BooleanType::from_data(enabled),
+            StringType::from_data(enabled_features),
+            StringType::from_data(target_features),
         ]))
     }
 }
@@ -73,7 +81,8 @@ impl BuildOptionsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("available_features", TableDataType::String),
-            TableField::new("enabled", TableDataType::Boolean),
+            TableField::new("enabled_features", TableDataType::String),
+            TableField::new("target_features", TableDataType::String),
         ]);
 
         let table_info = TableInfo {
