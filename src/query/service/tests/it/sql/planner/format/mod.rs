@@ -96,6 +96,7 @@ fn test_format() {
             right_conditions: vec![
                 FunctionCall {
                     func_name: "plus".to_string(),
+                    params: vec![],
                     arguments: vec![
                         BoundColumnRef {
                             column: ColumnBinding {
