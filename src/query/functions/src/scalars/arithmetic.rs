@@ -14,12 +14,12 @@
 
 #![allow(unused_comparisons)]
 
-use std::io::Write;
-
 use common_expression::types::boolean::BooleanDomain;
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
@@ -28,6 +28,9 @@ use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use common_expression::utils::arrow::constant_bitmap;
+use common_expression::values::Value;
+use common_expression::values::ValueRef;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
@@ -36,6 +39,7 @@ use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
 
 use super::arithmetic_modulo::vectorize_modulo;
@@ -393,25 +397,73 @@ pub fn register(registry: &mut FunctionRegistry) {
                         "to_string",
                         FunctionProperty::default(),
                         |_| FunctionDomain::Full,
-                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, StringType>(
-                            |val, output, _| {
-                                output.write_row(|data| write!(data, "{val}").unwrap());
-                                Ok(())
-                            },
-                        ),
+                        |from, _| match from {
+                            ValueRef::Scalar(s) => Ok(Value::Scalar(format!("{}", s).into_bytes())),
+                            ValueRef::Column(from) => {
+                                let mut builder =
+                                    StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
+                                let values = &mut builder.data;
+
+                                type Native = <NUM_TYPE as Number>::Native;
+                                let mut offset: usize = 0;
+                                unsafe {
+                                    for x in from.iter() {
+                                        values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                        let bytes = std::slice::from_raw_parts_mut(
+                                            values.as_mut_ptr().add(offset),
+                                            values.capacity() - offset,
+                                        );
+                                        let len =
+                                            lexical_core::write_unchecked(Native::from(*x), bytes)
+                                                .len();
+                                        offset += len;
+                                        builder.offsets.push(offset as u64);
+                                    }
+                                    values.set_len(offset);
+                                    values.shrink_to_fit();
+                                }
+                                Ok(Value::Column(builder.build()))
+                            }
+                        },
                     );
                 registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
                     "try_to_string",
                     FunctionProperty::default(),
                     |_| FunctionDomain::Full,
-                    vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NullableType<StringType>>(
-                        |val, output, _ctx| {
-                            write!(output.builder.data, "{val}").unwrap();
-                            output.builder.commit_row();
-                            output.validity.push(true);
-                            Ok(())
-                        },
-                    ),
+                    |from, _| match from {
+                        ValueRef::Scalar(s) => {
+                            Ok(Value::Scalar(Some(format!("{}", s).into_bytes())))
+                        }
+                        ValueRef::Column(from) => {
+                            let mut builder =
+                                StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
+                            let values = &mut builder.data;
+
+                            type Native = <NUM_TYPE as Number>::Native;
+                            let mut offset: usize = 0;
+                            unsafe {
+                                for x in from.iter() {
+                                    values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                    let bytes = std::slice::from_raw_parts_mut(
+                                        values.as_mut_ptr().add(offset),
+                                        values.capacity() - offset,
+                                    );
+                                    let len =
+                                        lexical_core::write_unchecked(Native::from(*x), bytes)
+                                            .len();
+                                    offset += len;
+                                    builder.offsets.push(offset as u64);
+                                }
+                                values.set_len(offset);
+                                values.shrink_to_fit();
+                            }
+                            let result = builder.build();
+                            Ok(Value::Column(NullableColumn {
+                                column: result,
+                                validity: constant_bitmap(true, from.len()).into(),
+                            }))
+                        }
+                    },
                 );
             }
         });
