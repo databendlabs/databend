@@ -494,10 +494,10 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                         Some(_) => {
                             let col =
                                 BooleanType::upcast_column(BooleanType::build_column(builder));
-                            Ok(Value::Column(col))
+                            Value::Column(col)
                         }
-                        _ => Ok(Value::Scalar(BooleanType::upcast_scalar(
-                            BooleanType::build_scalar(builder),
+                        _ => Value::Scalar(BooleanType::upcast_scalar(BooleanType::build_scalar(
+                            builder,
                         ))),
                     }
                 }),
@@ -579,31 +579,34 @@ fn register_like(registry: &mut FunctionRegistry) {
         "regexp",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
-        vectorize_regexp(|str, pat, _, map, _| {
-            let pattern = if let Some(pattern) = map.get(pat) {
-                pattern
+        vectorize_regexp(|str, pat, builer, ctx, map, _| {
+            if let Some(re) = map.get(pat) {
+                builer.push(re.is_match(str));
             } else {
-                let re = regexp::build_regexp_from_pattern("regexp", pat, None)?;
-                map.insert(pat.to_vec(), re);
-                map.get(pat).unwrap()
-            };
-            Ok(pattern.is_match(str))
+                // TODO error
+                match regexp::build_regexp_from_pattern("regexp", pat, None) {
+                    Ok(re) => {
+                        builer.push(re.is_match(str));
+                        map.insert(pat.to_vec(), re);
+                    }
+                    Err(e) => {
+                        ctx.set_error(builer.len(), e);
+                        builer.push(false);
+                    }
+                }
+            }
         }),
     );
 }
 
 fn vectorize_like(
     func: impl Fn(&[u8], &[u8], &mut EvalContext, PatternType) -> bool + Copy,
-) -> impl Fn(
-    ValueRef<StringType>,
-    ValueRef<StringType>,
-    &mut EvalContext,
-) -> Result<Value<BooleanType>, String>
-+ Copy {
+) -> impl Fn(ValueRef<StringType>, ValueRef<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy
+{
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
             let pattern_type = check_pattern_type(arg2, false);
-            Ok(Value::Scalar(func(arg1, arg2, ctx, pattern_type)))
+            Value::Scalar(func(arg1, arg2, ctx, pattern_type))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = StringType::iter_column(&arg1);
@@ -612,7 +615,7 @@ fn vectorize_like(
             for arg1 in arg1_iter {
                 builder.push(func(arg1, arg2, ctx, pattern_type));
             }
-            Ok(Value::Column(builder.into()))
+            Value::Column(builder.into())
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
             let arg2_iter = StringType::iter_column(&arg2);
@@ -621,7 +624,7 @@ fn vectorize_like(
                 let pattern_type = check_pattern_type(arg2, false);
                 builder.push(func(arg1, arg2, ctx, pattern_type));
             }
-            Ok(Value::Column(builder.into()))
+            Value::Column(builder.into())
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
             let arg1_iter = StringType::iter_column(&arg1);
@@ -631,7 +634,7 @@ fn vectorize_like(
                 let pattern_type = check_pattern_type(arg2, false);
                 builder.push(func(arg1, arg2, ctx, pattern_type));
             }
-            Ok(Value::Column(builder.into()))
+            Value::Column(builder.into())
         }
     }
 }
@@ -640,52 +643,46 @@ fn vectorize_regexp(
     func: impl Fn(
         &[u8],
         &[u8],
+        &mut MutableBitmap,
         &mut EvalContext,
         &mut HashMap<Vec<u8>, Regex>,
         &mut HashMap<Vec<u8>, String>,
-    ) -> Result<bool, String>
-    + Copy,
-) -> impl Fn(
-    ValueRef<StringType>,
-    ValueRef<StringType>,
-    &mut EvalContext,
-) -> Result<Value<BooleanType>, String>
-+ Copy {
+    ) + Copy,
+) -> impl Fn(ValueRef<StringType>, ValueRef<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy
+{
     move |arg1, arg2, ctx| {
         let mut map = HashMap::new();
         let mut string_map = HashMap::new();
         match (arg1, arg2) {
-            (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => Ok(Value::Scalar(func(
-                arg1,
-                arg2,
-                ctx,
-                &mut map,
-                &mut string_map,
-            )?)),
+            (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
+                let mut builder = MutableBitmap::with_capacity(1);
+                func(arg1, arg2, &mut builder, ctx, &mut map, &mut string_map);
+                Value::Scalar(BooleanType::build_scalar(builder))
+            }
             (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
                 let arg1_iter = StringType::iter_column(&arg1);
                 let mut builder = MutableBitmap::with_capacity(arg1.len());
                 for arg1 in arg1_iter {
-                    builder.push(func(arg1, arg2, ctx, &mut map, &mut string_map)?);
+                    func(arg1, arg2, &mut builder, ctx, &mut map, &mut string_map);
                 }
-                Ok(Value::Column(builder.into()))
+                Value::Column(builder.into())
             }
             (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
                 for arg2 in arg2_iter {
-                    builder.push(func(arg1, arg2, ctx, &mut map, &mut string_map)?);
+                    func(arg1, arg2, &mut builder, ctx, &mut map, &mut string_map);
                 }
-                Ok(Value::Column(builder.into()))
+                Value::Column(builder.into())
             }
             (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
                 let arg1_iter = StringType::iter_column(&arg1);
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
                 for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                    builder.push(func(arg1, arg2, ctx, &mut map, &mut string_map)?);
+                    func(arg1, arg2, &mut builder, ctx, &mut map, &mut string_map);
                 }
-                Ok(Value::Column(builder.into()))
+                Value::Column(builder.into())
             }
         }
     }

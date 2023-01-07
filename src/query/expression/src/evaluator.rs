@@ -147,7 +147,8 @@ impl<'a> Evaluator<'a> {
                     tz: self.func_ctx.tz,
                 };
                 let result = (function.eval)(cols_ref.as_slice(), &mut ctx);
-                todo!("expression")
+                ctx.render_error(expr).map_err(|msg| (span.clone(), msg))?;
+                Ok(result)
             }
             Expr::Cast {
                 span,

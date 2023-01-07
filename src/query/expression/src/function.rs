@@ -17,7 +17,6 @@ use std::ops::BitAnd;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use itertools::Itertools;
 use serde::Deserialize;
@@ -86,9 +85,14 @@ impl<'a> EvalContext<'a> {
         }
     }
     
-    pub fn render_error(&self) -> Result<String> {
+    pub fn render_error(&self, expr: &Expr) -> Result<(), String> {
         match &self.error {
-            Some(error) => Err(),
+            Some(error) => {
+                let valids = self.valids.as_ref().unwrap();
+                let rows: Vec<usize> = valids.iter().enumerate().filter(|(_, valid)|  !valid).take(8).map(|(row, _)| row).collect();
+                let error_msg = format!("Got error: {} during evaluate expr: {} at rows: {:?} ...", error, expr.sql_display(), rows);
+                Err(error_msg)
+            },
             None => Ok(()),
         }
     }

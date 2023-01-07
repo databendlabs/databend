@@ -156,13 +156,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 FunctionProperty::default(),
                                 |_, _| FunctionDomain::MayThrow,
                                 vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                                    |a, b, output, _| {
+                                    |a, b, output, ctx| {
                                         let b = (b.as_() : T);
                                         if std::intrinsics::unlikely(b == 0.0) {
-                                            return Err("/ by zero".to_string());
+                                            ctx.set_error(output.len(), "/ by zero");
+                                            output.push(F64::default());
+                                        } else {
+                                            output.push(((a.as_() : T) / b));
                                         }
-                                        output.push((a.as_() : T) / b);
-                                        Ok(())
                                     }),
                             );
 
@@ -171,18 +172,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 FunctionProperty::default(),
                                 |_, _| FunctionDomain::MayThrow,
                                 vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
-                                    |a, b, output, _| {
+                                    |a, b, output, ctx| {
                                     match (a,b) {
                                         (Some(a), Some(b)) => {
                                             let b = (b.as_() : T);
                                             if std::intrinsics::unlikely(b == 0.0) {
-                                                return Err("/ by zero".to_string());
+                                                ctx.set_error(output.len(), "/ by zero");
+                                                output.push(F64::default());
+                                            } else {
+                                                output.push(((a.as_() : T) / b));
                                             }
-                                            output.push(((a.as_() : T) / b));
                                         },
                                         _ => output.push_null(),
                                     }
-                                    Ok(())
                                 }),
                             )
                         }
@@ -195,13 +197,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                             FunctionProperty::default(),
                             |_, _| FunctionDomain::MayThrow,
                             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                                    |a, b, output, _| {
+                                    |a, b, output, ctx| {
                                     let b = (b.as_() : F64);
                                     if std::intrinsics::unlikely(b == 0.0) {
-                                        return Err("Division by zero".to_string());
+                                            ctx.set_error(output.len(), "/ by zero");
+                                            output.push(T::default());
+                                    } else {
+                                        output.push(((a.as_() : F64) / b).as_() : T);
                                     }
-                                    output.push(((a.as_() : F64) / b).as_() : T);
-                                    Ok(())
                                 }),
                             );
 
@@ -212,18 +215,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                             FunctionProperty::default(),
                             |_, _| FunctionDomain::MayThrow,
                             vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
-                                    |a, b, output, _| {
+                                    |a, b, output, ctx| {
                                     match (a,b) {
                                         (Some(a), Some(b)) => {
                                             let b = (b.as_() : F64);
                                             if std::intrinsics::unlikely(b == 0.0) {
-                                                return Err("Division by zero".to_string());
+                                                ctx.set_error(output.len(), "/ by zero");
+                                                output.push(T::default());
+                                            } else {
+                                                output.push(((a.as_() : F64) / b).as_() : T);
                                             }
-                                            output.push(((a.as_() : F64) / b).as_() : T);
                                         },
                                         _ => output.push_null(),
                                     }
-                                    Ok(())
                                 }),
                             );
                         }
@@ -246,22 +250,24 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 FunctionProperty::default(),
                                 |_, _| FunctionDomain::MayThrow,
                                 vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                                        |a, b, output, _| {
+                                        |a, b, output, ctx| {
                                         let b = (b.as_() : F64);
                                         if std::intrinsics::unlikely(b == 0.0) {
-                                            return Err("Modulo by zero".to_string());
+                                                ctx.set_error(output.len(), "/ by zero");
+                                                output.push(T::default());
+                                        } else {
+                                            output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
                                         }
-                                        output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
-                                        Ok(())
                                     }),
                                 );
                             } else {
-                                registry.register_2_arg_core::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                    "modulo",
-                                    FunctionProperty::default(),
-                                    |_, _| FunctionDomain::MayThrow,
-                                    vectorize_modulo::<L, R, M, T>()
-                                );
+                                // todo!("expression");
+                                // registry.register_2_arg_core::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+                                //     "modulo",
+                                //     FunctionProperty::default(),
+                                //     |_, _| FunctionDomain::MayThrow,
+                                //     vectorize_modulo::<L, R, M, T>()
+                                // );
                             }
 
                             // nullable modulo
@@ -270,18 +276,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 FunctionProperty::default(),
                                 |_, _| FunctionDomain::MayThrow,
                                 vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
-                                        |a, b, output, _| {
+                                        |a, b, output, ctx| {
                                         match (a,b) {
                                             (Some(a), Some(b)) => {
                                                 let b = (b.as_() : F64);
                                                 if std::intrinsics::unlikely(b == 0.0) {
-                                                    return Err("Modulo by zero".to_string());
+                                                        ctx.set_error(output.len(), "/ by zero");
+                                                        output.push(T::default());
+                                                } else {
+                                                    output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
                                                 }
-                                                output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
                                             },
                                             _ => output.push_null(),
                                         }
-                                        Ok(())
                                 }),
                             );
                         }
@@ -323,17 +330,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     }
                                 },
                                 vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>>(
-                                    move |val, output, _| {
-                                        let new_val =
-                                            num_traits::cast::cast(val).ok_or_else(|| {
-                                                format!(
+                                    move |val, output, ctx| {
+                                        match num_traits::cast::cast(val) {
+                                            Some(val) => output.push(val),
+                                            None => {
+                                                ctx.set_error(output.len(), format!(
                                                     "unable to cast {} to {}",
                                                     val,
                                                     dest_type,
-                                                )
-                                            })?;
-                                        output.push(new_val);
-                                        Ok(())
+                                                ));
+                                                output.push(DEST_TYPE::default());
+                                            },
+                                        }
                                     }
                                 ),
                             );
@@ -378,7 +386,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         } else {
                                             output.push_null();
                                         }
-                                        Ok(())
                                     }
                                 ),
                             );
@@ -398,7 +405,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         FunctionProperty::default(),
                         |_| FunctionDomain::Full,
                         |from, _| match from {
-                            ValueRef::Scalar(s) => Ok(Value::Scalar(format!("{}", s).into_bytes())),
+                            ValueRef::Scalar(s) => Value::Scalar(format!("{}", s).into_bytes()),
                             ValueRef::Column(from) => {
                                 let mut builder =
                                     StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
@@ -422,7 +429,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     values.set_len(offset);
                                     values.shrink_to_fit();
                                 }
-                                Ok(Value::Column(builder.build()))
+                                Value::Column(builder.build())
                             }
                         },
                     );
@@ -431,9 +438,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     FunctionProperty::default(),
                     |_| FunctionDomain::Full,
                     |from, _| match from {
-                        ValueRef::Scalar(s) => {
-                            Ok(Value::Scalar(Some(format!("{}", s).into_bytes())))
-                        }
+                        ValueRef::Scalar(s) => Value::Scalar(Some(format!("{}", s).into_bytes())),
                         ValueRef::Column(from) => {
                             let mut builder =
                                 StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
@@ -458,10 +463,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 values.shrink_to_fit();
                             }
                             let result = builder.build();
-                            Ok(Value::Column(NullableColumn {
+                            Value::Column(NullableColumn {
                                 column: result,
                                 validity: constant_bitmap(true, from.len()).into(),
-                            }))
+                            })
                         }
                     },
                 );
@@ -503,7 +508,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         >(|val, output, _| {
                             output.builder.push(val != 0);
                             output.validity.push(true);
-                            Ok(())
                         }),
                     );
 
@@ -539,7 +543,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                             NullableType<NumberType<NUM_TYPE>>,
                         >(|val, output, _| {
                             output.push(NUM_TYPE::from(val));
-                            Ok(())
                         }),
                     );
             }
@@ -557,13 +560,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                         FunctionProperty::default(),
                         |_| FunctionDomain::MayThrow,
                         vectorize_with_builder_1_arg::<StringType, NumberType<DEST_TYPE>>(
-                            move |val, output, _| {
+                            move |val, output, ctx| {
                                 let str_val = String::from_utf8_lossy(val);
-                                let new_val = str_val.parse::<DEST_TYPE>().map_err(|_| {
-                                    format!("unable to cast {} to {}", str_val, dest_type)
-                                })?;
-                                output.push(new_val);
-                                Ok(())
+                                match str_val.parse::<DEST_TYPE>() {
+                                    Ok(new_val) => output.push(new_val),
+                                    Err(e) => {
+                                        ctx.set_error(output.len(), format!(
+                                            "unable to cast {} to {}: {}",
+                                            str_val, dest_type, e
+                                        ));
+                                        output.push(DEST_TYPE::default());
+                                    }
+                                };
                             },
                         ),
                     );
@@ -584,7 +592,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                             } else {
                                 output.push_null();
                             }
-                            Ok(())
                         }),
                     );
             }
