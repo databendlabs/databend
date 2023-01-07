@@ -226,9 +226,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         }
 
         let mut estimated_key_size = self.hash_table.bytes_len();
-        let value_size = self.params.aggregate_functions.len()
-            * std::mem::size_of::<u64>()
-            * self.hash_table.len();
+        let value_size = std::mem::size_of::<u64>() * self.hash_table.len();
         if estimated_key_size > value_size {
             estimated_key_size -= value_size;
         }
