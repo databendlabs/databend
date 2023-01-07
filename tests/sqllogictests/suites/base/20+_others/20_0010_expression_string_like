@@ -58,11 +58,7 @@ select count(*)=0 from t_string_like where URL like '%not_exist%'
 1
 
 
-query B
-select count(*)=1 from t_string_like where URL like '%%'
-----
-0
-
+## test for empty string like '%%', we follow mysql/pg returns 1, but clickhouse returns 0
 query B
 select count(*)=3 from t_string_like where URL like '%%'
 ----

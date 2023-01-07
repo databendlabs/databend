@@ -62,6 +62,7 @@ pub struct AggregateDistinctState {
     set: HashSet<Vec<u8>, RandomState>,
 }
 
+// Tried to use StackHash<T, 4> but performance is improved in Q14 of hits benchmark
 pub struct AggregateDistinctNumberState<T: Number + HashtableKeyable> {
     set: CommonHashSet<T>,
 }

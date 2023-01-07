@@ -45,6 +45,7 @@ use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::ScalarRef;
 use common_expression::ValueRef;
+use memchr::memmem;
 use regex::bytes::Regex;
 
 use crate::scalars::string_multi_args::regexp;
@@ -549,18 +550,27 @@ fn register_like(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_like(|str, pat, _, pattern_type| {
             match pattern_type {
-                PatternType::OrdinalStr => Ok(str == pat),
+                PatternType::OrdinalStr => str == pat,
                 PatternType::EndOfPercent => {
                     // fast path, can use starts_with
                     let starts_with = &pat[..pat.len() - 1];
-                    Ok(str.starts_with(starts_with))
+                    str.starts_with(starts_with)
                 }
                 PatternType::StartOfPercent => {
                     // fast path, can use ends_with
-                    let ends_with = &pat[1..];
-                    Ok(str.ends_with(ends_with))
+                    str.ends_with(&pat[1..])
                 }
-                PatternType::PatternStr => Ok(like(str, pat)),
+
+                PatternType::SurroundByPercent => {
+                    if pat.len() > 2 {
+                        memmem::find(str, &pat[1..pat.len() - 1]).is_some()
+                    } else {
+                        // true for empty '%%' pattern, which follows pg/mysql way
+                        true
+                    }
+                }
+
+                PatternType::PatternStr => like(str, pat),
             }
         }),
     );
@@ -583,7 +593,7 @@ fn register_like(registry: &mut FunctionRegistry) {
 }
 
 fn vectorize_like(
-    func: impl Fn(&[u8], &[u8], EvalContext, PatternType) -> Result<bool, String> + Copy,
+    func: impl Fn(&[u8], &[u8], EvalContext, PatternType) -> bool + Copy,
 ) -> impl Fn(
     ValueRef<StringType>,
     ValueRef<StringType>,
@@ -593,14 +603,14 @@ fn vectorize_like(
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
             let pattern_type = check_pattern_type(arg2, false);
-            Ok(Value::Scalar(func(arg1, arg2, ctx, pattern_type)?))
+            Ok(Value::Scalar(func(arg1, arg2, ctx, pattern_type)))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = StringType::iter_column(&arg1);
             let mut builder = MutableBitmap::with_capacity(arg1.len());
             let pattern_type = check_pattern_type(arg2, false);
             for arg1 in arg1_iter {
-                builder.push(func(arg1, arg2, ctx, pattern_type)?);
+                builder.push(func(arg1, arg2, ctx, pattern_type));
             }
             Ok(Value::Column(builder.into()))
         }
@@ -609,7 +619,7 @@ fn vectorize_like(
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for arg2 in arg2_iter {
                 let pattern_type = check_pattern_type(arg2, false);
-                builder.push(func(arg1, arg2, ctx, pattern_type)?);
+                builder.push(func(arg1, arg2, ctx, pattern_type));
             }
             Ok(Value::Column(builder.into()))
         }
@@ -619,7 +629,7 @@ fn vectorize_like(
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
                 let pattern_type = check_pattern_type(arg2, false);
-                builder.push(func(arg1, arg2, ctx, pattern_type)?);
+                builder.push(func(arg1, arg2, ctx, pattern_type));
             }
             Ok(Value::Column(builder.into()))
         }
@@ -691,6 +701,8 @@ pub enum PatternType {
     StartOfPercent,
     // e.g. 'Arro%'
     EndOfPercent,
+    // e.g. '%Arrow%'
+    SurroundByPercent,
 }
 
 #[inline]
@@ -732,8 +744,12 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
         match pattern[index] {
             b'_' => return PatternType::PatternStr,
             b'%' => {
-                if index == len - 1 && !start_percent {
-                    return PatternType::EndOfPercent;
+                if index == len - 1 {
+                    return if !start_percent {
+                        PatternType::EndOfPercent
+                    } else {
+                        PatternType::SurroundByPercent
+                    };
                 }
                 return PatternType::PatternStr;
             }
