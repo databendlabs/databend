@@ -123,12 +123,10 @@ pub fn add_target_features() {
             Ok(s) => println!("cargo:rustc-env=DATABEND_CARGO_CFG_TARGET_FEATURE={}", s),
             Err(_) => {
                 println!("cargo:warning=CARGO_CFG_TARGET_FEATURE was not valid utf-8");
-                return;
             }
         },
         None => {
             println!("cargo:warning=CARGO_CFG_TARGET_FEATURE was not set");
-            return;
         }
     };
 }

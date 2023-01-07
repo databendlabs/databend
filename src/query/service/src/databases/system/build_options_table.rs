@@ -30,8 +30,6 @@ use common_meta_app::schema::TableMeta;
 use common_storages_system::SyncOneBlockSystemTable;
 use common_storages_system::SyncSystemTable;
 
-build_info::build_info!(pub fn build_info);
-
 pub struct BuildOptionsTable {
     table_info: TableInfo,
 }
@@ -44,18 +42,9 @@ impl SyncSystemTable for BuildOptionsTable {
     }
 
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let crate_info = &build_info().crate_info;
-
-        let mut available_features: Vec<Vec<u8>> = crate_info
-            .available_features
-            .iter()
-            .map(|x| x.as_bytes().to_vec())
-            .collect();
-
-        let mut enabled_features: Vec<Vec<u8>> = crate_info
-            .enabled_features
-            .iter()
-            .map(|x| x.as_bytes().to_vec())
+        let mut cargo_features: Vec<Vec<u8>> = env!("VERGEN_CARGO_FEATURES")
+            .split_terminator(',')
+            .map(|x| x.trim().as_bytes().to_vec())
             .collect();
 
         let mut target_features: Vec<Vec<u8>> = env!("DATABEND_CARGO_CFG_TARGET_FEATURE")
@@ -63,15 +52,13 @@ impl SyncSystemTable for BuildOptionsTable {
             .map(|x| x.trim().as_bytes().to_vec())
             .collect();
 
-        let length = max(available_features.len(), target_features.len());
+        let length = max(cargo_features.len(), target_features.len());
 
-        enabled_features.resize(length, "".as_bytes().to_vec());
-        available_features.resize(length, "".as_bytes().to_vec());
+        cargo_features.resize(length, "".as_bytes().to_vec());
         target_features.resize(length, "".as_bytes().to_vec());
 
         Ok(DataBlock::new_from_columns(vec![
-            StringType::from_data(available_features),
-            StringType::from_data(enabled_features),
+            StringType::from_data(cargo_features),
             StringType::from_data(target_features),
         ]))
     }
@@ -80,8 +67,7 @@ impl SyncSystemTable for BuildOptionsTable {
 impl BuildOptionsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
-            TableField::new("available_features", TableDataType::String),
-            TableField::new("enabled_features", TableDataType::String),
+            TableField::new("cargo_features", TableDataType::String),
             TableField::new("target_features", TableDataType::String),
         ]);
 

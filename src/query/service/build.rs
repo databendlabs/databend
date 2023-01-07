@@ -14,5 +14,4 @@
 
 fn main() {
     common_building::setup();
-    build_info_build::build_script();
 }
