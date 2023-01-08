@@ -21,6 +21,8 @@ mod aggregator_single_key;
 mod aggregator_twolevel;
 mod utils;
 
+pub use aggregate_info::AggregateInfo;
+pub use aggregate_info::OverflowInfo;
 pub use aggregator_final::KeysU128FinalAggregator;
 pub use aggregator_final::KeysU16FinalAggregator;
 pub use aggregator_final::KeysU256FinalAggregator;
@@ -29,6 +31,7 @@ pub use aggregator_final::KeysU512FinalAggregator;
 pub use aggregator_final::KeysU64FinalAggregator;
 pub use aggregator_final::KeysU8FinalAggregator;
 pub use aggregator_final::SerializerFinalAggregator;
+pub use aggregator_final_parallel::BucketAggregator;
 pub use aggregator_params::AggregatorParams;
 pub use aggregator_params::AggregatorTransformParams;
 pub use aggregator_partial::Keys128Aggregator;
