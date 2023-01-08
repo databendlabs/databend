@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
@@ -158,8 +159,7 @@ impl InputFormatTextBase for InputFormatNDJson {
                         }
                         OnErrorMode::AbortNum(n) if n == 1 => return Err(ErrorCode::BadBytes(msg)),
                         OnErrorMode::AbortNum(n) => {
-                            num_errors += 1;
-                            if num_errors == n {
+                            if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) == n {
                                 return Err(ErrorCode::BadBytes(msg));
                             }
                             columns.iter_mut().for_each(|c| {

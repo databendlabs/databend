@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::io::Cursor;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -147,7 +148,6 @@ impl InputFormatTextBase for InputFormatTSV {
         let mut start = 0usize;
         // for deal with on_error mode
         let mut num_rows = 0usize;
-        let mut num_errors = 0u64;
         let mut error_map: HashMap<u16, InputError> = HashMap::new();
 
         let start_row = batch.start_row;
@@ -180,8 +180,7 @@ impl InputFormatTextBase for InputFormatTSV {
                     }
                     OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
                     OnErrorMode::AbortNum(n) => {
-                        num_errors += 1;
-                        if num_errors == n {
+                        if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) == n {
                             return Err(e);
                         }
                     });

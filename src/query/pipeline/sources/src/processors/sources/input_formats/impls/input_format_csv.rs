@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::io::Read;
 use std::mem;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -149,8 +150,7 @@ impl InputFormatTextBase for InputFormatCSV {
                     }
                     OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
                     OnErrorMode::AbortNum(n) => {
-                        num_errors += 1;
-                        if num_errors == n {
+                        if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) == n {
                             return Err(e);
                         }
                     });
