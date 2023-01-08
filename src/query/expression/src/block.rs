@@ -20,6 +20,7 @@ use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::deserializations::TypeDeserializer;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -203,18 +204,18 @@ impl DataBlock {
             if self.is_empty() {
                 return self.clone();
             } else {
-                let mut block = Self::empty_with_meta(self.meta.clone());
+                let mut block = DataBlock::new_with_meta(vec![], 0, self.meta.clone());
                 for col in self.columns() {
-                    let scalar = col.value.as_ref();
-                    let scalar = unsafe { scalar.index_unchecked(0) };
-                    // Add dummy scalar because we don't have a empty column function now
-                    // we ensure the rows is zero, so it's ok
-                    block.add_column(BlockEntry { data_type: col.data_type.clone(), value: Value::Scalar(scalar.to_owned()) });
+                    let mut de = col.data_type.create_deserializer(0);
+                    block.add_column(BlockEntry {
+                        data_type: col.data_type.clone(),
+                        value: Value::Column(de.finish_to_column()),
+                    });
                 }
                 return block;
             }
         }
-        
+
         let columns = self
             .columns()
             .iter()
