@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// To avoid RUSTFLAGS="-C target-feature=+sse4.2" warning.
+#![allow(unused_imports)]
 use std::hash::BuildHasher;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
@@ -333,6 +335,8 @@ impl FastHash for OrderedFloat<f64> {
     }
 }
 
+// To avoid RUSTFLAGS="-C target-feature=+sse4.2" warning.
+#[allow(dead_code)]
 const SEEDS: [u64; 4] = [1, 1949, 2009, 9527];
 
 impl FastHash for [u8] {
