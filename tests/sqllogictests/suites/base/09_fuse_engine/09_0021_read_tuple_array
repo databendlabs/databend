@@ -1,0 +1,52 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0021
+
+statement ok
+CREATE DATABASE db_09_0021
+
+statement ok
+USE db_09_0021
+
+statement ok
+CREATE TABLE t (ta ARRAY(TUPLE(a int, b int)))
+
+statement ok
+INSERT INTO t VALUES ([(1,1),(2,2),(3,3)]), ([(4,5)]), ([(7,8)])
+
+query T
+SELECT * FROM t
+----
+[(1,1),(2,2),(3,3)]
+[(4,5)]
+[(7,8)]
+
+query T
+SELECT ta[1] FROM t
+----
+(1,1)
+(4,5)
+(7,8)
+
+query T
+SELECT ta[2] FROM t
+----
+(2,2)
+NULL
+NULL
+
+query T
+SELECT ta[3] FROM t
+----
+(3,3)
+NULL
+NULL
+
+## TODO: get from tuple fields
+## SELECT ta[0]:a FROM t
+## SELECT * FROM t where ta[0]:b > 3
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP DATABASE db_09_0021
