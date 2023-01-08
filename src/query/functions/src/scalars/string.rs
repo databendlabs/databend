@@ -673,6 +673,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let col = StringColumnBuilder {
                     data: vec![SPACE; total_space as usize],
                     offsets,
+                    need_estimated: false,
                 }
                 .build();
                 Value::Column(col)

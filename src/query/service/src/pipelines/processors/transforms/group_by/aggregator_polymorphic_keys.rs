@@ -110,6 +110,7 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     fn group_columns_builder(
         &self,
         capacity: usize,
+        _data_capacity: usize,
         params: &AggregatorParams,
     ) -> Self::GroupColumnsBuilder<'_>;
 }
@@ -140,6 +141,7 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
     fn group_columns_builder(
         &self,
         capacity: usize,
+        _data_capacity: usize,
         params: &AggregatorParams,
     ) -> FixedKeysGroupColumnsBuilder<u8> {
         FixedKeysGroupColumnsBuilder::<u8>::create(capacity, params)
@@ -172,6 +174,7 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16
     fn group_columns_builder(
         &self,
         capacity: usize,
+        _data_capacity: usize,
         params: &AggregatorParams,
     ) -> FixedKeysGroupColumnsBuilder<u16> {
         FixedKeysGroupColumnsBuilder::<u16>::create(capacity, params)
@@ -204,6 +207,7 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32
     fn group_columns_builder(
         &self,
         capacity: usize,
+        _data_capacity: usize,
         params: &AggregatorParams,
     ) -> FixedKeysGroupColumnsBuilder<u32> {
         FixedKeysGroupColumnsBuilder::<u32>::create(capacity, params)
@@ -236,6 +240,7 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64
     fn group_columns_builder(
         &self,
         capacity: usize,
+        _data_capacity: usize,
         params: &AggregatorParams,
     ) -> FixedKeysGroupColumnsBuilder<u64> {
         FixedKeysGroupColumnsBuilder::<u64>::create(capacity, params)
@@ -272,6 +277,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
     fn group_columns_builder(
         &self,
         capacity: usize,
+        _data_capacity: usize,
         params: &AggregatorParams,
     ) -> FixedKeysGroupColumnsBuilder<u128> {
         FixedKeysGroupColumnsBuilder::create(capacity, params)
@@ -308,6 +314,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
     fn group_columns_builder(
         &self,
         capacity: usize,
+        _data_capacity: usize,
         params: &AggregatorParams,
     ) -> FixedKeysGroupColumnsBuilder<U256> {
         FixedKeysGroupColumnsBuilder::create(capacity, params)
@@ -344,6 +351,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
     fn group_columns_builder(
         &self,
         capacity: usize,
+        _data_capacity: usize,
         params: &AggregatorParams,
     ) -> FixedKeysGroupColumnsBuilder<U512> {
         FixedKeysGroupColumnsBuilder::create(capacity, params)
@@ -375,9 +383,10 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
     fn group_columns_builder(
         &self,
         capacity: usize,
+        data_capacity: usize,
         params: &AggregatorParams,
     ) -> SerializedKeysGroupColumnsBuilder<'_> {
-        SerializedKeysGroupColumnsBuilder::create(capacity, params)
+        SerializedKeysGroupColumnsBuilder::create(capacity, data_capacity, params)
     }
 }
 
@@ -451,8 +460,10 @@ where
     fn group_columns_builder(
         &self,
         capacity: usize,
+        data_capacity: usize,
         params: &AggregatorParams,
     ) -> Self::GroupColumnsBuilder<'_> {
-        self.method.group_columns_builder(capacity, params)
+        self.method
+            .group_columns_builder(capacity, data_capacity, params)
     }
 }

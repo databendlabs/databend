@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
+use std::pin::Pin;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use opendal::raw::observe_read;
+use futures::AsyncRead;
+use opendal::raw::input;
+use opendal::raw::output;
 use opendal::raw::Accessor;
-use opendal::raw::BytesReader;
-use opendal::raw::ReadEvent;
 use opendal::raw::RpRead;
 use opendal::raw::RpWrite;
 use opendal::Layer;
@@ -182,12 +186,12 @@ impl Accessor for StorageMetricsAccessor {
         Some(self.inner.clone())
     }
 
-    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, BytesReader)> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, output::Reader)> {
         let metric = self.metrics.clone();
 
         self.inner.read(path, args).await.map(|(rp, r)| {
             let mut last_pending = None;
-            let r = observe_read(r, move |e| {
+            let r = output_observe_read(r, move |e| {
                 let start = match last_pending {
                     None => Instant::now(),
                     Some(t) => t,
@@ -204,11 +208,11 @@ impl Accessor for StorageMetricsAccessor {
                 metric.inc_read_bytes_cost(start.elapsed().as_millis() as u64);
             });
 
-            (rp, Box::new(r) as BytesReader)
+            (rp, Box::new(r) as output::Reader)
         })
     }
 
-    async fn write(&self, path: &str, args: OpWrite, r: BytesReader) -> Result<RpWrite> {
+    async fn write(&self, path: &str, args: OpWrite, r: input::Reader) -> Result<RpWrite> {
         let metric = self.metrics.clone();
 
         let mut last_pending = None;
@@ -231,5 +235,151 @@ impl Accessor for StorageMetricsAccessor {
         });
 
         self.inner.write(path, args, Box::new(r)).await
+    }
+}
+
+fn observe_read<R, F: FnMut(ReadEvent) + Unpin + Send + Sync>(r: R, f: F) -> ReadObserver<R, F> {
+    ReadObserver { r, f }
+}
+
+/// Event that sent by [`ReadObserver`], should be handled via
+/// `FnMut(ReadEvent)`.
+enum ReadEvent {
+    /// Emit while meeting `Poll::Pending`.
+    Pending,
+    /// Emit the sent bytes length while `poll_read` got `Poll::Ready(Ok(n))`.
+    Read(usize),
+    /// Emit while meeting `Poll::Ready(Ok(0))`.
+    Terminated,
+    /// Emit the error kind while meeting error.
+    ///
+    /// # Note
+    ///
+    /// We only emit the error kind here so that we don't need clone the whole error.
+    Error(io::ErrorKind),
+}
+
+/// Observer that created via [`observe_read`].
+struct ReadObserver<R, F: FnMut(ReadEvent) + Unpin + Send + Sync> {
+    r: R,
+    f: F,
+}
+
+/// Safety: ReadObserver will only be accessed via &mut
+unsafe impl<R, F: FnMut(ReadEvent) + Unpin + Send + Sync> Sync for ReadObserver<R, F> {}
+
+impl<R, F> AsyncRead for ReadObserver<R, F>
+where
+    R: AsyncRead + Unpin,
+    F: FnMut(ReadEvent) + Unpin + Send + Sync,
+{
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        match Pin::new(&mut self.r).poll_read(cx, buf) {
+            Poll::Ready(Ok(0)) => {
+                (self.f)(ReadEvent::Terminated);
+                Poll::Ready(Ok(0))
+            }
+            Poll::Ready(Ok(n)) => {
+                (self.f)(ReadEvent::Read(n));
+                Poll::Ready(Ok(n))
+            }
+            Poll::Ready(Err(e)) => {
+                (self.f)(ReadEvent::Error(e.kind()));
+                Poll::Ready(Err(e))
+            }
+            Poll::Pending => {
+                (self.f)(ReadEvent::Pending);
+                Poll::Pending
+            }
+        }
+    }
+}
+
+impl<R, F> output::Read for ReadObserver<R, F>
+where
+    R: output::Read,
+    F: FnMut(ReadEvent) + Unpin + Send + Sync,
+{
+    fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+        match Pin::new(&mut self.r).poll_read(cx, buf) {
+            Poll::Ready(Ok(0)) => {
+                (self.f)(ReadEvent::Terminated);
+                Poll::Ready(Ok(0))
+            }
+            Poll::Ready(Ok(n)) => {
+                (self.f)(ReadEvent::Read(n));
+                Poll::Ready(Ok(n))
+            }
+            Poll::Ready(Err(e)) => {
+                (self.f)(ReadEvent::Error(e.kind()));
+                Poll::Ready(Err(e))
+            }
+            Poll::Pending => {
+                (self.f)(ReadEvent::Pending);
+                Poll::Pending
+            }
+        }
+    }
+
+    /// TODO: we can add seek event.
+    fn poll_seek(&mut self, cx: &mut Context<'_>, pos: io::SeekFrom) -> Poll<io::Result<u64>> {
+        Pin::new(&mut self.r).poll_seek(cx, pos)
+    }
+
+    /// TODO: we can add next event.
+    fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<io::Result<bytes::Bytes>>> {
+        Pin::new(&mut self.r).poll_next(cx)
+    }
+}
+
+fn output_observe_read<F: FnMut(ReadEvent) + Unpin + Send + Sync>(
+    r: output::Reader,
+    f: F,
+) -> OutputReadObserver<F> {
+    OutputReadObserver { r, f }
+}
+
+/// Observer that created via [`observe_read`].
+struct OutputReadObserver<F: FnMut(ReadEvent) + Unpin + Send + Sync> {
+    r: output::Reader,
+    f: F,
+}
+
+impl<F> output::Read for OutputReadObserver<F>
+where F: FnMut(ReadEvent) + Unpin + Send + Sync
+{
+    fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+        match Pin::new(&mut self.r).poll_read(cx, buf) {
+            Poll::Ready(Ok(0)) => {
+                (self.f)(ReadEvent::Terminated);
+                Poll::Ready(Ok(0))
+            }
+            Poll::Ready(Ok(n)) => {
+                (self.f)(ReadEvent::Read(n));
+                Poll::Ready(Ok(n))
+            }
+            Poll::Ready(Err(e)) => {
+                (self.f)(ReadEvent::Error(e.kind()));
+                Poll::Ready(Err(e))
+            }
+            Poll::Pending => {
+                (self.f)(ReadEvent::Pending);
+                Poll::Pending
+            }
+        }
+    }
+
+    /// TODO: we can add seek event.
+    fn poll_seek(&mut self, cx: &mut Context<'_>, pos: io::SeekFrom) -> Poll<io::Result<u64>> {
+        Pin::new(&mut self.r).poll_seek(cx, pos)
+    }
+
+    /// TODO: we can add next event.
+    fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<io::Result<bytes::Bytes>>> {
+        Pin::new(&mut self.r).poll_next(cx)
     }
 }

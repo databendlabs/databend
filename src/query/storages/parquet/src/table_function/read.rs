@@ -110,13 +110,14 @@ impl ParquetTable {
             })
             .collect::<Vec<_>>();
 
+        // `plan.source_info.schema()` is the same as `TableSchema::from(&self.arrow_schema)`
         let columns_to_read =
             PushDownInfo::projection_of_push_downs(&plan.source_info.schema(), &plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx)?;
         let ctx_ref = ctx.clone();
         // `dummy_reader` is only used for prune columns in row groups.
         let (_, _, _, columns_to_read) =
-            ParquetReader::do_projection(&plan.source_info.schema().to_arrow(), &columns_to_read)?;
+            ParquetReader::do_projection(&self.arrow_schema, &columns_to_read)?;
 
         // do parition at the begin of the whole pipeline.
         let push_downs = plan.push_downs.clone();

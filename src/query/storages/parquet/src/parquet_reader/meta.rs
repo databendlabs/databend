@@ -18,6 +18,8 @@ use std::fs::File;
 
 use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::FileMetaData;
@@ -31,6 +33,23 @@ use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
 use crate::ParquetReader;
+
+fn lower_field_name(field: &mut ArrowField) {
+    field.name = field.name.to_lowercase();
+    match &mut field.data_type {
+        ArrowDataType::List(f)
+        | ArrowDataType::LargeList(f)
+        | ArrowDataType::FixedSizeList(f, _) => {
+            lower_field_name(f.as_mut());
+        }
+        ArrowDataType::Struct(ref mut fields) => {
+            for f in fields {
+                lower_field_name(f);
+            }
+        }
+        _ => {}
+    }
+}
 
 impl ParquetReader {
     pub fn read_meta(location: &str) -> Result<FileMetaData> {
@@ -49,7 +68,7 @@ impl ParquetReader {
     pub fn infer_schema(meta: &FileMetaData) -> Result<ArrowSchema> {
         let mut arrow_schema = pread::infer_schema(meta)?;
         arrow_schema.fields.iter_mut().for_each(|f| {
-            f.name = f.name.to_lowercase();
+            lower_field_name(f);
         });
         Ok(arrow_schema)
     }
@@ -81,7 +100,7 @@ impl ParquetReader {
             let column_stats = pread::statistics::deserialize(field, rgs)?;
             stats_of_row_groups.insert(
                 *index,
-                BatchStatistics::from_statistics(column_stats, &data_type),
+                BatchStatistics::from_statistics(column_stats, &data_type)?,
             );
         }
 
@@ -119,28 +138,41 @@ impl BatchStatistics {
         }
     }
 
-    pub fn from_statistics(stats: pread::statistics::Statistics, data_type: &DataType) -> Self {
+    pub fn from_statistics(
+        stats: pread::statistics::Statistics,
+        data_type: &DataType,
+    ) -> Result<Self> {
         let null_count = stats
             .null_count
             .as_any()
             .downcast_ref::<UInt64Array>()
-            .unwrap()
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "null_count should be UInt64Array, but is {:?}",
+                    stats.null_count.data_type()
+                ))
+            })?
             .values()
             .clone();
         let distinct_count = stats
             .distinct_count
             .as_any()
             .downcast_ref::<UInt64Array>()
-            .unwrap()
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "distinct_count should be UInt64Array, but is {:?}",
+                    stats.distinct_count.data_type()
+                ))
+            })?
             .values()
             .clone();
         let min_values = Column::from_arrow(&*stats.min_value, data_type);
         let max_values = Column::from_arrow(&*stats.max_value, data_type);
-        Self {
+        Ok(Self {
             null_count,
             distinct_count,
             min_values,
             max_values,
-        }
+        })
     }
 }
