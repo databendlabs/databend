@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod build_options_table;
 mod system_database;
 
+pub use build_options_table::BuildOptionsTable;
 pub use system_database::SystemDatabase;
