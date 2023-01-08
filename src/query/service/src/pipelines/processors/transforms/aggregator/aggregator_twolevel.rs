@@ -38,6 +38,7 @@ use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::group_by::TwoLevelHashMethod;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
+use crate::pipelines::processors::AggregatorParams;
 
 pub trait TwoLevelAggregatorLike
 where Self: Aggregator + Send
@@ -117,7 +118,41 @@ where
 
     fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
         let mut data_blocks = Vec::with_capacity(256);
-        for (bucket, iterator) in agg.hash_table.two_level_iter() {
+
+        fn clear_table<T: HashtableLike<Value = usize>>(table: &mut T, params: &AggregatorParams) {
+            let aggregate_functions = &params.aggregate_functions;
+            let offsets_aggregate_states = &params.offsets_aggregate_states;
+
+            let functions = aggregate_functions
+                .iter()
+                .filter(|p| p.need_manual_drop_state())
+                .collect::<Vec<_>>();
+
+            let states = offsets_aggregate_states
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+                .map(|(_, s)| *s)
+                .collect::<Vec<_>>();
+
+            for group_entity in table.iter() {
+                let place = Into::<StateAddr>::into(*group_entity.get());
+
+                for (function, state_offset) in functions.iter().zip(states.iter()) {
+                    unsafe { function.drop_state(place.next(*state_offset)) }
+                }
+            }
+
+            table.clear();
+        }
+
+        for (bucket, inner_table) in agg.hash_table.iter_tables_mut().enumerate() {
+            if inner_table.len() == 0 {
+                continue;
+            }
+
+            let iterator = inner_table.iter();
+
             let (capacity, _) = iterator.size_hint();
 
             let aggregator_params = agg.params.as_ref();
@@ -166,11 +201,14 @@ where
             data_blocks.push(DataBlock::new_with_meta(
                 columns,
                 num_rows,
-                Some(AggregateInfo::create(bucket)),
+                Some(AggregateInfo::create(bucket as isize)),
             ));
+
+            clear_table(inner_table, &agg.params);
         }
 
-        agg.drop_states();
+        drop(agg.area.take());
+        agg.states_dropped = true;
         Ok(data_blocks)
     }
 }
@@ -227,7 +265,13 @@ where
 
     fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
         let mut chunks = Vec::with_capacity(256);
-        for (bucket, iterator) in agg.hash_table.two_level_iter() {
+        for (bucket, inner_table) in agg.hash_table.iter_tables_mut().enumerate() {
+            if inner_table.len() == 0 {
+                continue;
+            }
+
+            let iterator = inner_table.iter();
+
             let (capacity, _) = iterator.size_hint();
             let mut keys_column_builder = agg.method.keys_column_builder(capacity);
 
@@ -245,11 +289,14 @@ where
             chunks.push(DataBlock::new_with_meta(
                 vec![column],
                 num_rows,
-                Some(AggregateInfo::create(bucket)),
+                Some(AggregateInfo::create(bucket as isize)),
             ));
+
+            inner_table.clear();
         }
 
-        agg.drop_states();
+        drop(agg.area.take());
+        agg.states_dropped = true;
         Ok(chunks)
     }
 }
