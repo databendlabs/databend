@@ -169,11 +169,6 @@ where
             inner: self.zero.iter().chain(self.table.iter()),
         }
     }
-    pub fn iter_mut(&mut self) -> HashtableIterMut<'_, K, V> {
-        HashtableIterMut {
-            inner: self.zero.iter_mut().chain(self.table.iter_mut()),
-        }
-    }
 }
 
 impl<K, A> Hashtable<K, (), A>
@@ -338,9 +333,13 @@ where
     }
 
     fn iter(&self) -> Self::Iterator<'_> {
-        self.iter()
+        HashtableIter {
+            inner: self.zero.iter().chain(self.table.iter()),
+        }
     }
-    fn iter_mut(&mut self) -> Self::IteratorMut<'_> {
-        self.iter_mut()
+
+    fn clear(&mut self) {
+        self.zero.0.take();
+        self.table.clear();
     }
 }

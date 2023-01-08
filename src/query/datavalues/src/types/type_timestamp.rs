@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
@@ -21,13 +19,10 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
-use crate::serializations::TimestampSerializer;
-use crate::serializations::TypeSerializerImpl;
 
 /// timestamp ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999
 /// timestamp_max and timestamp_min means days offset from 1970-01-01 00:00:00.000000
@@ -79,63 +74,13 @@ impl DataType for TimestampType {
         TypeID::Timestamp
     }
 
-    #[inline]
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> String {
         "Timestamp".to_string()
-    }
-
-    fn aliases(&self) -> &[&str] {
-        &["DateTime"]
-    }
-
-    fn default_value(&self) -> DataValue {
-        DataValue::Int64(0)
-    }
-
-    fn random_value(&self) -> DataValue {
-        let mut rng = rand::rngs::SmallRng::from_entropy();
-        let ts = rng.gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX);
-        DataValue::Int64(ts)
-    }
-
-    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
-        let value = data.as_i64()?;
-        let column = Series::from_data(&[value]);
-        Ok(Arc::new(ConstColumn::new(column, size)))
-    }
-
-    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
-        let value = data
-            .iter()
-            .map(|v| v.as_i64())
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(Series::from_data(&value))
     }
 
     // To avoid the overhead of precision conversion, we store Microsecond for all precisions.
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Timestamp(TimeUnit::Microsecond, None)
-    }
-
-    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        Ok(TimestampSerializer::<'a>::try_create(col)?.into())
-    }
-
-    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
-        TimestampDeserializer {
-            buffer: vec![],
-            builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
-        }
-        .into()
-    }
-
-    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
-        Box::new(MutablePrimitiveColumn::<i64>::with_capacity(capacity))
     }
 }
 

@@ -13,18 +13,30 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct OverflowInfo {
+    pub temporary_path: String,
+    // bucket_id -> (offset, length)
+    pub bucket_info: HashMap<usize, (usize, usize)>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AggregateInfo {
     pub bucket: isize,
+    pub overflow: Option<OverflowInfo>,
 }
 
 impl AggregateInfo {
     pub fn create(bucket: isize) -> BlockMetaInfoPtr {
-        Box::new(AggregateInfo { bucket })
+        Box::new(AggregateInfo {
+            bucket,
+            overflow: None,
+        })
     }
 }
 
