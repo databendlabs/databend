@@ -188,7 +188,7 @@ impl BlockMeta {
             col_metas: s.col_metas.clone(),
             cluster_stats: None,
             location: s.location.clone(),
-            bloom_filter_index_location: None,
+            bloom_filter_index_location: s.bloom_filter_index_location.clone(),
             bloom_filter_index_size: 0,
             compression: s.compression,
         }

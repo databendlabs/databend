@@ -163,10 +163,11 @@ mod converters {
         type Error = ErrorCode;
         fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
-                1 | 2 => Err(ErrorCode::DeprecatedIndexFormat(
+                1 => Err(ErrorCode::DeprecatedIndexFormat(
                     "v1 bloom filter index is deprecated",
                 )),
-                3 => Ok(BlockBloomFilterIndexVersion::V3(ver_eq::<_, 3>(
+                // version 2 and version 3 are using the same StringColumn to storage the bloom filter
+                2 | 3 => Ok(BlockBloomFilterIndexVersion::V3(ver_eq::<_, 3>(
                     PhantomData,
                 ))),
                 _ => Err(ErrorCode::Internal(format!(

@@ -245,8 +245,12 @@ impl Processor for CompactTransform {
                     let (index_data, index_size, index_location) = {
                         // write index
                         let func_ctx = FunctionContext::default();
-                        let bloom_index =
-                            BlockFilter::try_create(func_ctx, self.schema.clone(), &[&new_block])?;
+                        let bloom_index = BlockFilter::try_create(
+                            func_ctx,
+                            self.schema.clone(),
+                            block_location.1,
+                            &[&new_block],
+                        )?;
                         let index_block = bloom_index.filter_block;
                         let location = self.location_gen.block_bloom_index_location(&block_id);
                         let mut data = Vec::with_capacity(100 * 1024);
