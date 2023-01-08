@@ -17,12 +17,12 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
-use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -46,20 +46,21 @@ static MAX_BUCKET_NUM: isize = 256;
 ///
 #[derive(Debug)]
 struct ConvertGroupingMetaInfo {
+    #[allow(dead_code)]
     pub bucket: isize,
     pub blocks: Vec<DataBlock>,
 }
 
 impl Serialize for ConvertGroupingMetaInfo {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+    where S: Serializer {
         unreachable!("ConvertGroupingMetaInfo does not support exchanging between multiple nodes")
     }
 }
 
 impl<'de> Deserialize<'de> for ConvertGroupingMetaInfo {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de> {
+    where D: Deserializer<'de> {
         unreachable!("ConvertGroupingMetaInfo does not support exchanging between multiple nodes")
     }
 }
@@ -147,7 +148,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
     fn convert_to_two_level(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         let aggregate_function_len = self.params.aggregate_functions.len();
-        let keys_column = data_block.get_by_offset(aggregate_function_len).value.as_column().unwrap();
+        let keys_column = data_block
+            .get_by_offset(aggregate_function_len)
+            .value
+            .as_column()
+            .unwrap();
         let keys_iter = self.method.keys_iter_from_column(keys_column)?;
 
         let mut indices = Vec::with_capacity(data_block.num_rows());
@@ -163,7 +168,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
 #[async_trait::async_trait]
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-for TransformConvertGrouping<Method>
+    for TransformConvertGrouping<Method>
 {
     fn name(&self) -> String {
         String::from("TransformConvertGrouping")
@@ -453,7 +458,7 @@ struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> +
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
-MergeBucketTransform<Method>
+    MergeBucketTransform<Method>
 {
     pub fn try_create(
         input: Arc<InputPort>,
@@ -474,7 +479,7 @@ MergeBucketTransform<Method>
 
 #[async_trait::async_trait]
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-for MergeBucketTransform<Method>
+    for MergeBucketTransform<Method>
 {
     fn name(&self) -> String {
         String::from("MergeBucketTransform")
