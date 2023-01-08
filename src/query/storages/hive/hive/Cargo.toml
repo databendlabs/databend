@@ -37,3 +37,4 @@ serde = { workspace = true }
 thrift = { package = "databend-thrift", version = "0.17.0" }
 tracing = "0.1.36"
 typetag = "0.2.3"
+backon = "0.2"
