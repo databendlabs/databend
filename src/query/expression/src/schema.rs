@@ -215,46 +215,6 @@ impl DataSchema {
         Self::new_from(fields, self.meta().clone())
     }
 
-    /// project with inner columns by path.
-    // pub fn inner_project(&self, path_indices: &BTreeMap<usize, Vec<usize>>) -> Self {
-    //     let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
-    //     let fields = paths
-    //         .iter()
-    //         .map(|path| Self::traverse_paths(self.fields(), path).unwrap())
-    //         .collect();
-    //     Self::new_from(fields, self.meta().clone())
-    // }
-    //
-    // fn traverse_paths(fields: &[DataField], path: &[usize]) -> Result<DataField> {
-    //     if path.is_empty() {
-    //         return Err(ErrorCode::BadArguments(
-    //             "path should not be empty".to_string(),
-    //         ));
-    //     }
-    //     let field = &fields[path[0]];
-    //     if path.len() == 1 {
-    //         return Ok(field.clone());
-    //     }
-    //
-    //     if let TableDataType::Tuple {
-    //         fields_name,
-    //         fields_type,
-    //     } = &field.data_type()
-    //     {
-    //         let fields = fields_name
-    //             .iter()
-    //             .zip(fields_type)
-    //             .map(|(name, ty)| DataField::new(&name.clone(), ty.clone()))
-    //             .collect::<Vec<DataField>>();
-    //         return Self::traverse_paths(&fields, &path[1..]);
-    //     }
-    //     let valid_fields: Vec<String> = fields.iter().map(|f| f.name().clone()).collect();
-    //     Err(ErrorCode::BadArguments(format!(
-    //         "Unable to get field paths. Valid fields: {:?}",
-    //         valid_fields
-    //     )))
-    // }
-
     /// project will do column pruning.
     #[must_use]
     pub fn project_by_fields(&self, fields: Vec<DataField>) -> Self {
@@ -408,6 +368,19 @@ impl TableSchema {
         }
 
         let field_name = field.name();
+
+        // If the data type is Tuple, we can read the innner columns directly.
+        // For example, `select t:a from table`, we can only read column t:a.
+        // So we can project the inner field as a independent field (`inner_project` and `traverse_paths` will be called).
+        //
+        // For more complex type, such as Array(Tuple), and sql `select array[0]:field from table`,
+        // we can't do inner project, because get field from these types will turn into calling `get` method. (Use `EXPLAIN ...` to see the plan.)
+        // When calling `get` method, the whole outer column will be read,
+        // so `inner_project` and `traverse_paths` methods will not be called (`project` is called instead).
+        //
+        // Although `inner_project` and `traverse_paths` methods will not be called for complex types like Array(Tuple),
+        // when constructing column leaves (for reading parquet) for these types, we still need to dfs the inner fields.
+        // See comments in `common_storage::ColumnLeaves::traverse_fields_dfs` for more details.
         if let TableDataType::Tuple {
             fields_name,
             fields_type,
