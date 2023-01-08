@@ -16,14 +16,14 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_expression::types::ArgType;
-use common_expression::types::NullableType;
-use common_expression::types::StringType;
 use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::ArgType;
 use common_expression::types::DataType;
+use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
@@ -121,10 +121,11 @@ impl<'a> FuseBlock<'a> {
                 block_size.push(NumberScalar::UInt64(block.block_size));
                 file_size.push(NumberScalar::UInt64(block.file_size));
                 row_count.push(NumberScalar::UInt64(block.row_count));
-                bloom_filter_location.push( 
+                bloom_filter_location.push(
                     block
                         .bloom_filter_index_location
-                        .as_ref().map(|s| s.0.as_bytes())
+                        .as_ref()
+                        .map(|s| s.0.as_bytes()),
                 );
                 bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
             });
