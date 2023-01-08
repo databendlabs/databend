@@ -36,4 +36,5 @@ pub use versions::BlockBloomFilterIndexVersion;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;
 pub use versions::TableSnapshotStatisticsVersion;
+pub use versions::V2BloomBlock;
 pub use versions::Versioned;
