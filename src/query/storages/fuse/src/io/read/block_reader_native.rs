@@ -88,7 +88,14 @@ impl BlockReader {
         rows: u64,
         data_type: common_arrow::arrow::datatypes::DataType,
     ) -> Result<(usize, PaReader<Reader>)> {
-        let reader = o.range_read(offset..offset + length).await?;
+        use backon::ExponentialBackoff;
+        use backon::Retryable;
+
+        let reader = { || async { o.range_read(offset..offset + length).await } }
+            .retry(ExponentialBackoff::default())
+            .when(|err| err.is_temporary())
+            .await?;
+
         let reader: Reader = Box::new(std::io::Cursor::new(reader));
         let fuse_reader = PaReader::new(reader, data_type, rows as usize, vec![]);
         Ok((index, fuse_reader))
