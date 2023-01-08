@@ -16,6 +16,9 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_exception::Result;
+use common_expression::types::ArgType;
+use common_expression::types::NullableType;
+use common_expression::types::StringType;
 use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::string::StringColumnBuilder;
@@ -99,7 +102,7 @@ impl<'a> FuseBlock<'a> {
         let mut block_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
         let mut file_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
         let mut row_count = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
-        let mut bloom_filter_location = StringColumnBuilder::with_capacity(len, len);
+        let mut bloom_filter_location = NullableType::<StringType>::create_builder(len, &[]);
         let mut bloom_filter_size =
             NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
 
@@ -118,15 +121,11 @@ impl<'a> FuseBlock<'a> {
                 block_size.push(NumberScalar::UInt64(block.block_size));
                 file_size.push(NumberScalar::UInt64(block.file_size));
                 row_count.push(NumberScalar::UInt64(block.row_count));
-                bloom_filter_location.put_slice(
+                bloom_filter_location.push( 
                     block
                         .bloom_filter_index_location
-                        .as_ref()
-                        .unwrap()
-                        .0
-                        .as_bytes(),
+                        .as_ref().map(|s| s.0.as_bytes())
                 );
-                bloom_filter_location.commit_row();
                 bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
             });
         }
@@ -158,8 +157,8 @@ impl<'a> FuseBlock<'a> {
                     value: Value::Column(Column::Number(row_count.build())),
                 },
                 BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::String(bloom_filter_location.build())),
+                    data_type: DataType::String.wrap_nullable(),
+                    value: Value::Column(Column::Nullable(Box::new(bloom_filter_location.build()))),
                 },
                 BlockEntry {
                     data_type: DataType::Number(NumberDataType::UInt64),
