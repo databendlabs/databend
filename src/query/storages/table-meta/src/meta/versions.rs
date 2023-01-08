@@ -167,7 +167,10 @@ mod converters {
                     "v1 bloom filter index is deprecated",
                 )),
                 // version 2 and version 3 are using the same StringColumn to storage the bloom filter
-                2 | 3 => Ok(BlockBloomFilterIndexVersion::V3(ver_eq::<_, 3>(
+                2 => Ok(BlockBloomFilterIndexVersion::V2(ver_eq::<_, 2>(
+                    PhantomData,
+                ))),
+                3 => Ok(BlockBloomFilterIndexVersion::V3(ver_eq::<_, 3>(
                     PhantomData,
                 ))),
                 _ => Err(ErrorCode::Internal(format!(

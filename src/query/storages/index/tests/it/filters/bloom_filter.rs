@@ -35,8 +35,6 @@ use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_storages_index::BlockFilter;
 use common_storages_index::FilterEvalResult;
-use common_storages_table_meta::meta::BlockBloomFilterIndexVersion;
-use common_storages_table_meta::meta::Versioned;
 
 #[test]
 fn test_bloom_filter() -> Result<()> {
@@ -65,12 +63,7 @@ fn test_bloom_filter() -> Result<()> {
     ];
     let chunks_ref = chunks.iter().collect::<Vec<_>>();
 
-    let index = BlockFilter::try_create(
-        FunctionContext::default(),
-        schema,
-        BlockFilter::VERSION,
-        &chunks_ref,
-    )?;
+    let index = BlockFilter::try_create(FunctionContext::default(), schema, 3, &chunks_ref)?;
 
     assert_eq!(
         FilterEvalResult::MustFalse,
