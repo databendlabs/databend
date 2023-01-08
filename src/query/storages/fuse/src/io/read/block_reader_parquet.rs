@@ -136,7 +136,7 @@ impl BlockReader {
             let mut column_descriptors = Vec::with_capacity(indices.len());
             let mut column_in_block_meta = false;
             for index in indices {
-                let column_id = schema.column_id_of_index(*index);
+                let column_id = schema.column_id_of_index(*index)?;
                 if let Some(column_meta) = columns_meta.get(&column_id) {
                     let column_read = <&[u8]>::clone(&chunk_map[index]);
                     let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];

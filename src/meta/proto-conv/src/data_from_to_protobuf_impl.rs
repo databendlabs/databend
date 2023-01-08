@@ -40,7 +40,7 @@ impl FromToProto for dv::DataSchema {
             fs.push(dv::DataField::from_pb(f)?);
         }
 
-        let v = Self::new_from_with_max_column_id(fs, p.metadata, p.max_column_id);
+        let v = Self::new_from_column_id_map(fs, p.metadata, p.column_id_map, p.max_column_id);
         Ok(v)
     }
 
@@ -55,6 +55,7 @@ impl FromToProto for dv::DataSchema {
             min_compatible: MIN_COMPATIBLE_VER,
             fields: fs,
             metadata: self.meta().clone(),
+            column_id_map: self.column_id_map().clone(),
             max_column_id: self.max_column_id(),
         };
         Ok(p)
@@ -66,12 +67,11 @@ impl FromToProto for dv::DataField {
     fn from_pb(p: pb::DataField) -> Result<Self, Incompatible> {
         check_ver(p.ver, p.min_compatible)?;
 
-        let v = dv::DataField::new_with_column_id(
+        let v = dv::DataField::new(
             &p.name,
             dv::DataTypeImpl::from_pb(p.data_type.ok_or_else(|| Incompatible {
                 reason: "DataField.data_type can not be None".to_string(),
             })?)?,
-            p.column_id,
         )
         .with_default_expr(p.default_expr);
         Ok(v)
@@ -84,7 +84,6 @@ impl FromToProto for dv::DataField {
             name: self.name().clone(),
             default_expr: self.default_expr().cloned(),
             data_type: Some(self.data_type().to_pb()?),
-            column_id: self.column_id().unwrap_or(0),
         };
         Ok(p)
     }
@@ -387,21 +386,13 @@ impl FromToProto for dv::StructType {
             types.push(dv::DataTypeImpl::from_pb(t)?);
         }
         if names.is_empty() {
-            Ok(dv::StructType::create_with_child_ids(
-                None,
-                types,
-                Some(p.child_column_ids),
-            ))
+            Ok(dv::StructType::create(None, types))
         } else {
             debug_assert!(
                 names.len() == types.len(),
                 "Size of names must match size of types"
             );
-            Ok(dv::StructType::create_with_child_ids(
-                Some(names),
-                types,
-                Some(p.child_column_ids),
-            ))
+            Ok(dv::StructType::create(Some(names), types))
         }
     }
 
@@ -422,10 +413,6 @@ impl FromToProto for dv::StructType {
 
             names,
             types,
-            child_column_ids: match self.child_column_ids() {
-                Some(child_column_ids) => child_column_ids.clone(),
-                None => vec![],
-            },
         };
 
         Ok(p)

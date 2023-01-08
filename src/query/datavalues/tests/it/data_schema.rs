@@ -37,57 +37,35 @@ fn test_schema_from_struct() -> Result<()> {
     let child_field12 = u64::to_data_type();
     let child_field22 = u64::to_data_type();
 
-    let s = StructType::create_with_child_ids(
-        Some(vec!["b11".to_string(), "b12".to_string()]),
-        vec![child_field11, child_field12],
-        Some(vec![1, 2]),
-    );
+    let s = StructType::create(None, vec![child_field11, child_field12]);
 
-    let s2 = StructType::create_with_child_ids(
-        Some(vec!["b1".to_string(), "b2".to_string()]),
-        vec![DataTypeImpl::Struct(s), child_field22],
-        Some(vec![1, 3]),
-    );
+    let s2 = StructType::create(None, vec![DataTypeImpl::Struct(s), child_field22]);
 
-    let field1 = DataField::new_with_column_id("a", u64::to_data_type(), 0);
-    let field2 = DataField::new_with_column_id("b", DataTypeImpl::Struct(s2), 1);
-    let field3 = DataField::new_with_column_id("c", u64::to_data_type(), 4);
+    let field1 = DataField::new("a", u64::to_data_type());
+    let field2 = DataField::new("b", DataTypeImpl::Struct(s2));
+    let field3 = DataField::new("c", u64::to_data_type());
 
     let schema = DataSchema::new(vec![field1, field2, field3]);
-    assert_eq!(schema.column_id_of("a").unwrap(), 0);
-    assert_eq!(schema.column_id_of("b").unwrap(), 1);
-    assert_eq!(schema.column_id_of("c").unwrap(), 4);
-    assert_eq!(schema.max_column_id(), 5);
 
-    let column_id_and_child_column_id = vec![
-        (0, None, None),
-        (
-            1,
-            Some(vec![1, 3]),
-            Some(vec!["b1".to_string(), "b2".to_string()]),
-        ),
-        (4, None, None),
+    let column_id_of_names = vec![
+        ("a", 0),
+        ("b", 1),
+        ("b:0", 2),
+        ("b:0:0", 3),
+        ("b:0:1", 4),
+        ("b:1", 5),
+        ("c", 6),
     ];
-
-    for (i, field) in schema.fields().iter().enumerate() {
-        assert_eq!(field.column_id(), Some(column_id_and_child_column_id[i].0));
-        assert_eq!(
-            field.child_column_ids(),
-            &column_id_and_child_column_id[i].1
-        );
-        if let Some(child_names) = &column_id_and_child_column_id[i].2 {
-            if let DataTypeImpl::Struct(s) = field.data_type() {
-                assert_eq!(s.names(), &Some(child_names.clone()));
-            }
-            continue;
-        }
-        assert!(column_id_and_child_column_id[i].2.is_none());
+    for (name, column_id) in column_id_of_names {
+        assert_eq!(schema.column_id_of(name).unwrap(), column_id,);
     }
+    assert_eq!(schema.max_column_id(), 7);
+
     assert_eq!(
         schema
             .column_id_of_path(&["b".to_string(), "0".to_string(), "1".to_string()])
             .unwrap(),
-        2
+        4
     );
 
     // let mut path_indices = BTreeMap::new();
@@ -102,9 +80,9 @@ fn test_schema_from_struct() -> Result<()> {
 
 #[test]
 fn test_schema_modify_field() -> Result<()> {
-    let field1 = DataField::new_with_column_id("a", u64::to_data_type(), 0);
-    let field2 = DataField::new_with_column_id("b", u64::to_data_type(), 1);
-    let field3 = DataField::new_with_column_id("c", u64::to_data_type(), 2);
+    let field1 = DataField::new("a", u64::to_data_type());
+    let field2 = DataField::new("b", u64::to_data_type());
+    let field3 = DataField::new("c", u64::to_data_type());
 
     let mut schema = DataSchema::new(vec![DataField::new("a", u64::to_data_type())]);
 
@@ -131,6 +109,28 @@ fn test_schema_modify_field() -> Result<()> {
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.column_id_of("c").unwrap(), 2);
     assert_eq!(schema.max_column_id(), 3);
+
+    // add struct column
+    let child_field11 = u64::to_data_type();
+    let child_field12 = u64::to_data_type();
+    let child_field22 = u64::to_data_type();
+    let s = StructType::create(None, vec![child_field11, child_field12]);
+    let s2 = StructType::create(None, vec![DataTypeImpl::Struct(s), child_field22]);
+    schema.add_columns(&[DataField::new("s", DataTypeImpl::Struct(s2))])?;
+    assert_eq!(schema.column_id_of("s").unwrap(), 3);
+    assert_eq!(schema.column_id_of("s:0").unwrap(), 4);
+    assert_eq!(schema.column_id_of("s:0:0").unwrap(), 5);
+    assert_eq!(schema.column_id_of("s:0:1").unwrap(), 6);
+    assert_eq!(schema.column_id_of("s:1").unwrap(), 7);
+    assert_eq!(schema.max_column_id(), 8);
+
+    // drop column
+    schema.drop_column("s")?;
+    assert!(schema.column_id_of("s").is_err());
+    assert!(schema.column_id_of("s:0").is_err());
+    assert!(schema.column_id_of("s:1").is_err());
+    assert!(schema.column_id_of("s:0:0").is_err());
+    assert!(schema.column_id_of("s:0:1").is_err());
 
     Ok(())
 }

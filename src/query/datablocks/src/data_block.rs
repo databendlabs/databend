@@ -346,8 +346,8 @@ impl DataBlock {
         let data_block_columns = data_block.columns();
         let schema_fields = schema.fields();
 
-        for field in schema_fields {
-            let column_id = field.column_id().unwrap();
+        for (i, field) in schema_fields.iter().enumerate() {
+            let column_id = schema.column_id_of_index(i)?;
             if !data_block_column_ids.contains(&column_id) {
                 let default_value = field.data_type().default_value();
                 let column = field

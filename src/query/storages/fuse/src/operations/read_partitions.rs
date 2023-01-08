@@ -262,7 +262,7 @@ impl FuseTable {
                 for index in indices {
                     // ignore all deleted field
                     let column_id = if let Some(schema) = schema {
-                        schema.column_id_of_index(*index)
+                        schema.column_id_of_index(*index).unwrap()
                     } else {
                         *index as u32
                     };
@@ -328,7 +328,7 @@ impl FuseTable {
             let indices = &column.leaf_ids;
             for index in indices {
                 let column_id = if let Some(schema) = schema {
-                    schema.column_id_of_index(*index)
+                    schema.column_id_of_index(*index).unwrap()
                 } else {
                     *index as u32
                 };

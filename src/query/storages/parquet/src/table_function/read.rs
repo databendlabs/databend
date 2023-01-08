@@ -157,7 +157,7 @@ impl ParquetTable {
                     }
                     let mut column_metas = HashMap::with_capacity(columns_to_read.len());
                     for index in &columns_to_read {
-                        let column_id = schema.column_id_of_index(*index);
+                        let column_id = schema.column_id_of_index(*index)?;
                         let c = &rg.columns()[*index];
                         let (offset, length) = c.byte_range();
                         column_metas.insert(column_id, ColumnMeta {

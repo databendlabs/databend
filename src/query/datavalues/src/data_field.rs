@@ -27,9 +27,6 @@ pub struct DataField {
     /// default_expr is serialized representation from PlanExpression
     default_expr: Option<String>,
     data_type: DataTypeImpl,
-
-    #[serde(skip_serializing)]
-    pub(crate) column_id: Option<u32>,
 }
 
 impl DataField {
@@ -38,7 +35,6 @@ impl DataField {
             name: name.to_string(),
             default_expr: None,
             data_type,
-            column_id: None,
         }
     }
 
@@ -48,16 +44,6 @@ impl DataField {
             name: name.to_string(),
             default_expr: None,
             data_type,
-            column_id: None,
-        }
-    }
-
-    pub fn new_with_column_id(name: &str, data_type: DataTypeImpl, column_id: u32) -> Self {
-        DataField {
-            name: name.to_string(),
-            default_expr: None,
-            data_type,
-            column_id: Some(column_id),
         }
     }
 
@@ -65,17 +51,6 @@ impl DataField {
     pub fn with_default_expr(mut self, default_expr: Option<String>) -> Self {
         self.default_expr = default_expr;
         self
-    }
-
-    pub fn column_id(&self) -> Option<u32> {
-        self.column_id
-    }
-
-    pub fn child_column_ids(&self) -> &Option<Vec<u32>> {
-        match self.data_type {
-            DataTypeImpl::Struct(ref s) => s.child_column_ids(),
-            _ => &None,
-        }
     }
 
     pub fn name(&self) -> &String {
@@ -139,8 +114,7 @@ impl std::fmt::Debug for DataField {
         debug_struct
             .field("name", &self.name)
             .field("data_type", &remove_nullable.data_type_id())
-            .field("nullable", &self.is_nullable())
-            .field("column_id", &self.column_id());
+            .field("nullable", &self.is_nullable());
         if let Some(ref default_expr) = self.default_expr {
             debug_struct.field("default_expr", default_expr);
         }

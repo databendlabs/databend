@@ -282,7 +282,7 @@ impl BlockReader {
 
         let mut ranges = vec![];
         for index in indices.keys() {
-            let column_id = schema.column_id_of_index(*index);
+            let column_id = schema.column_id_of_index(*index)?;
             if let Some(column_meta) = columns_meta.get(&column_id) {
                 ranges.push((
                     *index,
@@ -313,7 +313,7 @@ impl BlockReader {
 
         let mut ranges = vec![];
         for index in indices.keys() {
-            let column_id = schema.column_id_of_index(*index);
+            let column_id = schema.column_id_of_index(*index)?;
             if let Some(column_meta) = part.columns_meta.get(&column_id) {
                 ranges.push((
                     *index,

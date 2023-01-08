@@ -61,18 +61,15 @@ pub fn write_block(
             writer.write(&batch)?;
             writer.finish()?;
 
-            let metas = writer
-                .metas
-                .iter()
-                .enumerate()
-                .map(|(idx, meta)| {
-                    (
-                        // use column id as key instead of index
-                        schema.column_id_of_index(idx),
-                        ColumnMeta::new(meta.offset, meta.length, meta.num_values),
-                    )
-                })
-                .collect();
+            let mut metas = HashMap::with_capacity(writer.metas.len());
+            for (idx, meta) in writer.metas.iter().enumerate() {
+                // use column id as key instead of index
+                let column_id = schema.column_id_of_index(idx)?;
+                metas.insert(
+                    column_id,
+                    ColumnMeta::new(meta.offset, meta.length, meta.num_values),
+                );
+            }
             Ok((writer.total_size() as u64, metas))
         }
     }

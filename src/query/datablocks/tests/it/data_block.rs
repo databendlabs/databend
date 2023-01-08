@@ -115,12 +115,12 @@ fn test_data_block_create_with_schema_from_chunk() -> Result<()> {
 #[test]
 fn test_data_block_create_with_schema_from_data_block() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new_with_column_id("a", DateType::new_impl(), 0),
-        DataField::new_with_column_id("b", TimestampType::new_impl(), 1),
-        DataField::new_with_column_id("b1", TimestampType::new_impl(), 2),
-        DataField::new_with_column_id("c1", TimestampType::new_impl(), 3),
-        DataField::new_with_column_id("c2", TimestampType::new_impl(), 4),
-        DataField::new_with_column_id("c3", TimestampType::new_impl(), 5),
+        DataField::new("a", DateType::new_impl()),
+        DataField::new("b", TimestampType::new_impl()),
+        DataField::new("b1", TimestampType::new_impl()),
+        DataField::new("c1", TimestampType::new_impl()),
+        DataField::new("c2", TimestampType::new_impl()),
+        DataField::new("c3", TimestampType::new_impl()),
     ]);
 
     let block = DataBlock::create(schema.clone(), vec![

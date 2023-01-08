@@ -53,7 +53,7 @@ impl BlockReader {
         let schema = &self.projected_schema;
 
         for (index, field) in indices {
-            let column_id = schema.column_id_of_index(index);
+            let column_id = schema.column_id_of_index(index)?;
             if let Some(column_meta) = part.columns_meta.get(&column_id) {
                 join_handlers.push(Self::read_native_columns_data(
                     self.operator.object(&part.location),
@@ -109,7 +109,7 @@ impl BlockReader {
         let schema = &self.projected_schema;
 
         for (index, field) in indices {
-            let column_id = schema.column_id_of_index(index);
+            let column_id = schema.column_id_of_index(index)?;
             if let Some(column_meta) = part.columns_meta.get(&column_id) {
                 let op = self.operator.clone();
 

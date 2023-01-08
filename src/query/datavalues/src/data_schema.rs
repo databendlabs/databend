@@ -14,7 +14,7 @@
 
 use core::fmt;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
@@ -25,7 +25,6 @@ use common_exception::Result;
 use crate::types::data_type::DataType;
 use crate::types::data_type::DataTypeImpl;
 use crate::DataField;
-use crate::StructType;
 use crate::TypeDeserializerImpl;
 
 /// memory layout.
@@ -33,9 +32,10 @@ use crate::TypeDeserializerImpl;
 pub struct DataSchema {
     pub(crate) fields: Vec<DataField>,
     pub(crate) metadata: BTreeMap<String, String>,
+
     pub(crate) max_column_id: u32,
-    // map column id to fields index
-    pub(crate) index_of_column_id: HashMap<u32, usize>,
+    pub(crate) column_id_map: BTreeMap<String, u32>,
+    column_id_set: HashSet<u32>,
 }
 
 impl DataSchema {
@@ -44,108 +44,128 @@ impl DataSchema {
             fields: vec![],
             metadata: BTreeMap::new(),
             max_column_id: 0,
-            index_of_column_id: HashMap::new(),
+            column_id_map: BTreeMap::new(),
+            column_id_set: HashSet::new(),
         }
     }
 
     fn build_from_data_type(
         data_type: &DataTypeImpl,
+        column_name: &str,
         max_column_id: &mut u32,
-    ) -> (u32, DataTypeImpl) {
-        let column_id = *max_column_id;
+        column_id_map: &mut BTreeMap<String, u32>,
+        column_id_set: &mut HashSet<u32>,
+    ) {
+        column_id_map.insert(column_name.to_string(), *max_column_id);
+        column_id_set.insert(*max_column_id);
+        *max_column_id += 1;
 
-        let new_data_type = if let DataTypeImpl::Struct(s) = data_type {
+        if let DataTypeImpl::Struct(s) = data_type {
             let inner_types = s.types();
-            let mut child_column_ids = Vec::with_capacity(inner_types.len());
-            let mut child_data_types = Vec::with_capacity(inner_types.len());
-            for inner_type in inner_types {
-                let (inner_column_id, inner_data_type) =
-                    Self::build_from_data_type(inner_type, max_column_id);
-                child_column_ids.push(inner_column_id);
-                child_data_types.push(inner_data_type);
+            for (i, inner_type) in inner_types.iter().enumerate() {
+                let inner_name = format!("{}:{}", column_name, i);
+                Self::build_from_data_type(
+                    inner_type,
+                    &inner_name,
+                    max_column_id,
+                    column_id_map,
+                    column_id_set,
+                );
             }
-            let new_data_type = StructType::create_with_child_ids(
-                s.names().clone(),
-                child_data_types,
-                Some(child_column_ids),
-            );
-            DataTypeImpl::Struct(new_data_type)
-        } else {
-            *max_column_id += 1;
-            data_type.clone()
         };
-        (column_id, new_data_type)
     }
 
     fn build_members_from_fields(
-        fields: Vec<DataField>,
-        max_id: Option<u32>,
-    ) -> (u32, HashMap<u32, usize>, Vec<DataField>) {
+        fields: &Vec<DataField>,
+        column_id_map: Option<BTreeMap<String, u32>>,
+        max_column_id_opt: Option<u32>,
+    ) -> (u32, BTreeMap<String, u32>, HashSet<u32>) {
         let mut max_column_id = 0;
-        let mut index_of_column_id = HashMap::new();
-        let mut new_fields = Vec::with_capacity(fields.len());
-        let has_inited = match max_id {
-            Some(max_id) => max_id > 0,
+        let mut has_column_id_map_inited = false;
+        let mut column_id_map = match column_id_map {
+            Some(column_id_map) => {
+                has_column_id_map_inited = column_id_map.len() > 0;
+                column_id_map
+            }
+            None => BTreeMap::new(),
+        };
+        let has_max_column_id_inited = match max_column_id_opt {
+            Some(max_column_id) => max_column_id > 0,
             None => false,
         };
-        fields.iter().enumerate().for_each(|(i, f)| {
-            let field = if !has_inited {
+        // make sure that column_id_map and max_column_id init at the same time
+        assert_eq!(has_column_id_map_inited, has_max_column_id_inited);
+
+        let mut column_id_set = HashSet::new();
+
+        let has_inited = has_column_id_map_inited;
+        if has_inited {
+            column_id_map.values().for_each(|id| {
+                column_id_set.insert(*id);
+            });
+        } else {
+            fields.iter().enumerate().for_each(|(_i, f)| {
                 let data_type = f.data_type();
-                let (column_id, data_type) =
-                    Self::build_from_data_type(data_type, &mut max_column_id);
-                index_of_column_id.insert(column_id, i);
-                if let DataTypeImpl::Struct(s) = data_type {
-                    DataField::new_with_column_id(f.name(), DataTypeImpl::Struct(s), column_id)
-                } else {
-                    DataField::new_with_column_id(f.name(), data_type, column_id)
-                }
-            } else {
-                index_of_column_id.insert(f.column_id().unwrap(), i);
-                f.clone()
-            };
-            new_fields.push(field);
-        });
+                Self::build_from_data_type(
+                    data_type,
+                    f.name(),
+                    &mut max_column_id,
+                    &mut column_id_map,
+                    &mut column_id_set,
+                );
+            });
+        }
+
+        // check max_column_id_opt value cannot fallback
+        if let Some(max_column_id_opt) = max_column_id_opt {
+            assert!(max_column_id_opt >= max_column_id);
+        }
+
         (
-            max_id.unwrap_or(max_column_id),
-            index_of_column_id,
-            new_fields,
+            max_column_id_opt.unwrap_or(max_column_id),
+            column_id_map,
+            column_id_set,
         )
     }
 
     pub fn new(fields: Vec<DataField>) -> Self {
-        let (max_column_id, index_of_column_id, fields) =
-            Self::build_members_from_fields(fields, None);
+        let (max_column_id, column_id_map, column_id_set) =
+            Self::build_members_from_fields(&fields, None, None);
         Self {
             fields,
             metadata: BTreeMap::new(),
             max_column_id,
-            index_of_column_id,
+            column_id_map,
+            column_id_set,
         }
     }
 
     pub fn new_from(fields: Vec<DataField>, metadata: BTreeMap<String, String>) -> Self {
-        let (max_column_id, index_of_column_id, fields) =
-            Self::build_members_from_fields(fields, None);
+        let (max_column_id, column_id_map, column_id_set) =
+            Self::build_members_from_fields(&fields, None, None);
         Self {
             fields,
             metadata,
             max_column_id,
-            index_of_column_id,
+            column_id_map,
+            column_id_set,
         }
     }
 
-    pub fn new_from_with_max_column_id(
+    pub fn new_from_column_id_map(
         fields: Vec<DataField>,
         metadata: BTreeMap<String, String>,
+        column_id_map: BTreeMap<String, u32>,
         max_column_id: u32,
     ) -> Self {
-        let (max_column_id, index_of_column_id, fields) =
-            Self::build_members_from_fields(fields, Some(max_column_id));
+        let (max_column_id, column_id_map, column_id_set) =
+            Self::build_members_from_fields(&fields, Some(column_id_map), Some(max_column_id));
         Self {
             fields,
             metadata,
             max_column_id,
-            index_of_column_id,
+            column_id_map,
+            column_id_set,
         }
     }
 
@@ -155,79 +175,75 @@ impl DataSchema {
     }
 
     pub fn column_id_of_path(&self, path_in_schema: &[String]) -> Result<u32> {
-        let column_name = &path_in_schema[0];
-        let i = self.index_of(column_name)?;
-        let field = &self.fields[i];
-        let mut column_id = field.column_id().unwrap();
-        if path_in_schema.len() > 1 {
-            let mut data_type = field.data_type();
-            for i in 1..path_in_schema.len() {
-                let child_name = &path_in_schema[i];
-                let child_index = child_name.parse::<usize>()?;
-                if let DataTypeImpl::Struct(s) = data_type {
-                    data_type = &s.types()[child_index];
-                    column_id = s.child_column_ids().as_ref().unwrap()[child_index];
-                } else if i < path_in_schema.len() - 1 {
-                    return Err(ErrorCode::UnknownColumn(format!(
-                        "invalid path in schema: {:?}",
-                        path_in_schema
-                    )));
-                }
-            }
-        }
-
-        Ok(column_id)
+        let name = path_in_schema.join(":");
+        self.column_id_of(&name)
     }
 
     /// Find the column id with the given name.
     pub fn column_id_of(&self, name: &str) -> Result<u32> {
-        let i = self.index_of(name)?;
-        Ok(self.fields[i].column_id().unwrap())
+        match self.column_id_map.get(name) {
+            Some(column_id) => Ok(*column_id),
+            None => {
+                return Err(ErrorCode::UnknownColumn(format!("UnknownColumn {}", name,)));
+            }
+        }
     }
 
-    pub fn column_id_of_index(&self, i: usize) -> u32 {
-        self.fields[i].column_id().unwrap()
+    pub fn column_id_of_index(&self, i: usize) -> Result<u32> {
+        self.column_id_of(self.fields[i].name())
     }
 
     pub fn is_column_deleted(&self, column_id: u32) -> bool {
-        self.index_of_column_id.contains_key(&column_id)
-    }
-
-    pub fn index_of_column_id(&self, column_id: &u32) -> usize {
-        *(self.index_of_column_id.get(column_id).unwrap())
+        self.column_id_set.contains(&column_id)
     }
 
     pub fn add_columns(&mut self, fields: &[DataField]) -> Result<()> {
-        for field in fields {
-            if self.index_of(field.name()).is_ok() {
+        for f in fields {
+            if self.index_of(f.name()).is_ok() {
                 return Err(ErrorCode::AddColumnExistError(format!(
                     "add column {} already exist",
-                    field.name(),
+                    f.name(),
                 )));
             }
-            let mut field = field.clone();
-            field.column_id = Some(self.max_column_id);
-            self.max_column_id += 1;
-            self.index_of_column_id
-                .insert(self.max_column_id, self.fields.len());
-            self.fields.push(field);
+            let data_type = f.data_type();
+            Self::build_from_data_type(
+                data_type,
+                f.name(),
+                &mut self.max_column_id,
+                &mut self.column_id_map,
+                &mut self.column_id_set,
+            );
+            self.fields.push(f.to_owned());
         }
         Ok(())
     }
 
+    fn drop_field(&mut self, data_type: &DataTypeImpl, column_name: &str) -> Result<()> {
+        if let DataTypeImpl::Struct(s) = data_type {
+            let inner_types = s.types();
+            for (i, inner_type) in inner_types.iter().enumerate() {
+                let inner_name = format!("{}:{}", column_name, i);
+                self.drop_field(inner_type, &inner_name)?;
+            }
+        }
+        let column_id = self.column_id_of(column_name)?;
+        self.column_id_map.remove(column_name);
+        self.column_id_set.remove(&column_id);
+
+        Ok(())
+    }
+
     pub fn drop_column(&mut self, column: &str) -> Result<()> {
-        let i = self.index_of(column)?;
         if self.fields.len() == 1 {
             return Err(ErrorCode::DropColumnEmptyError(
                 "cannot drop table column to empty",
             ));
         }
-
-        let field = &self.fields[i];
-        if let Some(column_id) = field.column_id() {
-            self.index_of_column_id.remove(&column_id);
-        }
+        let i = self.index_of(column)?;
+        let field = self.fields[i].clone();
+        self.drop_field(field.data_type(), column)?;
         self.fields.remove(i);
+
         Ok(())
     }
 
@@ -274,6 +290,11 @@ impl DataSchema {
         &self.metadata
     }
 
+    #[inline]
+    pub const fn column_id_map(&self) -> &BTreeMap<String, u32> {
+        &self.column_id_map
+    }
+
     /// Find the index of the column with the given name.
     pub fn index_of(&self, name: &str) -> Result<usize> {
         for i in 0..self.fields.len() {
@@ -318,7 +339,12 @@ impl DataSchema {
             .iter()
             .map(|idx| self.fields()[*idx].clone())
             .collect();
-        Self::new_from_with_max_column_id(fields, self.meta().clone(), self.max_column_id)
+        Self::new_from_column_id_map(
+            fields,
+            self.meta().clone(),
+            self.column_id_map.clone(),
+            self.max_column_id,
+        )
     }
 
     /// project with inner columns by path.
@@ -328,7 +354,12 @@ impl DataSchema {
             .iter()
             .map(|path| Self::traverse_paths(self.fields(), path).unwrap())
             .collect();
-        Self::new_from_with_max_column_id(fields, self.meta().clone(), self.max_column_id)
+        Self::new_from_column_id_map(
+            fields,
+            self.meta().clone(),
+            self.column_id_map.clone(),
+            self.max_column_id,
+        )
     }
 
     fn traverse_paths(fields: &[DataField], path: &[usize]) -> Result<DataField> {
@@ -357,11 +388,7 @@ impl DataSchema {
                 .iter()
                 .zip(inner_types.iter())
                 .map(|(inner_name, inner_type)| {
-                    DataField::new_with_column_id(
-                        &inner_name.clone(),
-                        inner_type.clone(),
-                        field.column_id.unwrap(),
-                    )
+                    DataField::new(&inner_name.clone(), inner_type.clone())
                 })
                 .collect::<Vec<DataField>>();
             return Self::traverse_paths(&inner_fields, &path[1..]);
@@ -376,7 +403,12 @@ impl DataSchema {
     /// project will do column pruning.
     #[must_use]
     pub fn project_by_fields(&self, fields: Vec<DataField>) -> Self {
-        Self::new_from_with_max_column_id(fields, self.meta().clone(), self.max_column_id)
+        Self::new_from_column_id_map(
+            fields,
+            self.meta().clone(),
+            self.column_id_map.clone(),
+            self.max_column_id,
+        )
     }
 
     pub fn to_arrow(&self) -> ArrowSchema {

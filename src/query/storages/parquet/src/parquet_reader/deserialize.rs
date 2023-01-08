@@ -59,7 +59,7 @@ impl ParquetReader {
             let mut metas = Vec::with_capacity(indices.len());
             let mut chunks = Vec::with_capacity(indices.len());
             for index in indices {
-                let column_id = schema.column_id_of_index(*index);
+                let column_id = schema.column_id_of_index(*index)?;
 
                 if let Some(column_meta) = part.column_metas.get(&column_id) {
                     let cnt = cnt_map.get_mut(index).unwrap();

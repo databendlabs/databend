@@ -77,8 +77,8 @@ impl NativeDeserializeDataTransform {
         if data_block_column_ids.len() != self.schema.fields().len() {
             need_to_fill_data = true;
         } else {
-            for field in self.schema.fields() {
-                let column_id = field.column_id().unwrap();
+            for (i, _field) in self.schema.fields().into_iter().enumerate() {
+                let column_id = self.schema.column_id_of_index(i)?;
                 if !data_block_column_ids.contains(&column_id) {
                     need_to_fill_data = true;
                     break;
