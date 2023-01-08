@@ -182,7 +182,7 @@ impl InputContext {
             block_compact_thresholds,
             format_options: file_format_options,
             on_error_mode,
-            on_error_count: AtomicU64::ZERO,
+            on_error_count: AtomicU64::new(0),
         })
     }
 
@@ -223,7 +223,7 @@ impl InputContext {
             block_compact_thresholds,
             format_options: file_format_options,
             on_error_mode: OnErrorMode::AbortNum(1),
-            on_error_count: AtomicU64::ZERO,
+            on_error_count: AtomicU64::new(0),
         })
     }
 
@@ -261,7 +261,7 @@ impl InputContext {
             block_compact_thresholds,
             format_options: file_format_options,
             on_error_mode: OnErrorMode::AbortNum(1),
-            on_error_count: AtomicU64::ZERO,
+            on_error_count: AtomicU64::new(0),
         })
     }
 
