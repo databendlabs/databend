@@ -199,6 +199,22 @@ impl DataBlock {
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
+        if range.is_empty() {
+            if self.is_empty() {
+                return self.clone();
+            } else {
+                let mut block = Self::empty_with_meta(self.meta.clone());
+                for col in self.columns() {
+                    let scalar = col.value.as_ref();
+                    let scalar = unsafe { scalar.index_unchecked(0) };
+                    // Add dummy scalar because we don't have a empty column function now
+                    // we ensure the rows is zero, so it's ok
+                    block.add_column(BlockEntry { data_type: col.data_type.clone(), value: Value::Scalar(scalar.to_owned()) });
+                }
+                return block;
+            }
+        }
+        
         let columns = self
             .columns()
             .iter()
