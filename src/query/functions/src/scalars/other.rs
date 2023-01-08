@@ -74,6 +74,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_number_size(val.into());
             output.put_str(&new_val);
+            output.commit_row();
         }),
     );
 

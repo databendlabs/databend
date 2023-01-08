@@ -142,11 +142,12 @@ impl<'a> Evaluator<'a> {
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.input_columns.num_rows(),
-                    valids: None,
+                    validity: None,
+                    errors: None,
                     tz: self.func_ctx.tz,
                 };
                 let result = (function.eval)(cols_ref.as_slice(), &mut ctx);
-                ctx.render_error(result.as_ref(), &cols, &function.signature.name)
+                ctx.render_error(&cols, &function.signature.name)
                     .map_err(|msg| (span.clone(), msg))?;
                 Ok(result)
             }

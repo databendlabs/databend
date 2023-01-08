@@ -17,6 +17,7 @@ use std::ops::BitAnd;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use itertools::Itertools;
 use serde::Deserialize;
@@ -61,69 +62,48 @@ pub struct EvalContext<'a> {
     pub generics: &'a GenericMap,
     pub num_rows: usize,
 
-    // valid bitmap + error message
-    pub valids: Option<(MutableBitmap, String)>,
+    // validity from the nullable column
+    pub validity: Option<Bitmap>,
+    pub errors: Option<(MutableBitmap, String)>,
     pub tz: Tz,
 }
 
 impl<'a> EvalContext<'a> {
     #[inline]
     pub fn set_error(&mut self, row: usize, error_msg: impl AsRef<str>) {
-        match self.valids.as_mut() {
+        // if the row is in valid, we don't need to set error
+        if self
+            .validity
+            .as_ref()
+            .map(|b| !b.get_bit(row))
+            .unwrap_or(false)
+        {
+            return;
+        }
+
+        match self.errors.as_mut() {
             Some((valids, _)) => {
                 valids.set(row, false);
             }
             None => {
-                let mut valids = constant_bitmap(true, self.num_rows);
+                let mut valids = constant_bitmap(true, self.num_rows.max(1));
                 valids.set(row, false);
-                self.valids = Some((valids, error_msg.as_ref().to_string()));
+                self.errors = Some((valids, error_msg.as_ref().to_string()));
             }
         }
     }
 
-    pub fn render_error(
-        &self,
-        value: ValueRef<AnyType>,
-        args: &[Value<AnyType>],
-        name: &str,
-    ) -> Result<(), String> {
-        match &self.valids {
+    pub fn render_error(&self, args: &[Value<AnyType>], name: &str) -> Result<(), String> {
+        match &self.errors {
             Some((valids, error)) => {
-                let first_error_row = match value {
-                    ValueRef::Scalar(s) if s.is_null() => return Ok(()),
-                    ValueRef::Scalar(_) => 0,
-                    ValueRef::Column(c) => match c {
-                        Column::Null { .. } => todo!(),
-                        Column::Nullable(c) => {
-                            let column_valids = c.validity;
-                            let merged_valids = valids.clone().bitand(&column_valids);
-
-                            // this means that all error rows are nullable
-                            if merged_valids.unset_bits() == column_valids.unset_bits() {
-                                return Ok(());
-                            }
-                            merged_valids
-                                .iter()
-                                .zip(column_valids.iter())
-                                .enumerate()
-                                .filter(|(_, (valid, column_valid))| !*valid && *column_valid)
-                                .take(1)
-                                .next()
-                                .unwrap()
-                                .0
-                        }
-                        _ => {
-                            valids
-                                .iter()
-                                .enumerate()
-                                .filter(|(_, valid)| !valid)
-                                .take(1)
-                                .next()
-                                .unwrap()
-                                .0
-                        }
-                    },
-                };
+                let first_error_row = valids
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, valid)| !valid)
+                    .take(1)
+                    .next()
+                    .unwrap()
+                    .0;
                 let args = args
                     .iter()
                     .map(|arg| {
@@ -133,7 +113,7 @@ impl<'a> EvalContext<'a> {
                     .join(", ");
 
                 let error_msg = format!(
-                    "Got error: {} during evaluate function: {}({})",
+                    "{} during evaluate function: {}({})",
                     error, name, args
                 );
                 Err(error_msg)

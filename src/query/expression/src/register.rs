@@ -3459,10 +3459,11 @@ pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
             func(ValueRef::Scalar(arg1), ctx).into_scalar().unwrap(),
         )),
         (ValueRef::Column(arg1)) => {
+            let validity = arg1.validity;
+            ctx.validity = Some(validity.clone());
             let column = func(ValueRef::Column(arg1.column), ctx)
                 .into_column()
                 .unwrap();
-            let validity = arg1.validity;
             Value::Column(NullableColumn { column, validity })
         }
     }
@@ -3489,20 +3490,24 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .unwrap(),
         )),
         (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2))) => {
+            let validity = arg1.validity;
+            ctx.validity = Some(validity.clone());
             let column = func(ValueRef::Column(arg1.column), ValueRef::Scalar(arg2), ctx)
                 .into_column()
                 .unwrap();
-            let validity = arg1.validity;
             Value::Column(NullableColumn { column, validity })
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2)) => {
+            let validity = arg2.validity;
+            ctx.validity = Some(validity.clone());
             let column = func(ValueRef::Scalar(arg1), ValueRef::Column(arg2.column), ctx)
                 .into_column()
                 .unwrap();
-            let validity = arg2.validity;
             Value::Column(NullableColumn { column, validity })
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -3510,7 +3515,6 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
             Value::Column(NullableColumn { column, validity })
         }
     }
@@ -3554,6 +3558,8 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             .unwrap(),
         )),
         (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2)), ValueRef::Scalar(Some(arg3))) => {
+            let validity = arg1.validity;
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -3562,10 +3568,11 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            let validity = arg1.validity;
             Value::Column(NullableColumn { column, validity })
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
+            let validity = arg2.validity;
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -3574,10 +3581,11 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            let validity = arg2.validity;
             Value::Column(NullableColumn { column, validity })
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -3586,10 +3594,11 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
+            let validity = arg3.validity;
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Scalar(arg2),
@@ -3598,10 +3607,11 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            let validity = arg3.validity;
             Value::Column(NullableColumn { column, validity })
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -3610,10 +3620,11 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -3622,22 +3633,22 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
                 &arg3.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
     }
@@ -3697,16 +3708,17 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Scalar(Some(arg4)),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = arg1.validity;
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Scalar(arg4),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3715,16 +3727,17 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Scalar(Some(arg4)),
         ) => {
-            let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = arg2.validity;
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Scalar(arg4),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3733,6 +3746,8 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Scalar(Some(arg4)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -3742,7 +3757,6 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3751,16 +3765,17 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Scalar(Some(arg4)),
         ) => {
-            let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = arg3.validity;
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3769,6 +3784,8 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Scalar(Some(arg4)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -3778,7 +3795,6 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3787,6 +3803,8 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Scalar(Some(arg4)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -3796,7 +3814,6 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3805,19 +3822,20 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Scalar(Some(arg4)),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
                 &arg3.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3826,16 +3844,17 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Column(arg4),
         ) => {
-            let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = arg4.validity;
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3844,6 +3863,8 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Column(arg4),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -3853,7 +3874,6 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg4.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3862,6 +3882,8 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Column(arg4),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -3871,7 +3893,6 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg4.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3880,19 +3901,20 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Column(arg4),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
                 &arg4.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3901,6 +3923,8 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg3.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Scalar(arg2),
@@ -3910,7 +3934,6 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg3.validity, &arg4.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3919,19 +3942,20 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
                 &arg4.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3940,6 +3964,11 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
+                &arg4.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -3949,10 +3978,6 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
-                &arg4.validity,
-            );
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -3961,15 +3986,6 @@ pub fn passthrough_nullable_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
@@ -3977,6 +3993,16 @@ pub fn passthrough_nullable_4_arg<
                 ),
                 &arg4.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
     }
@@ -4043,17 +4069,18 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = arg1.validity;
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Scalar(arg4),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4063,17 +4090,18 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = arg2.validity;
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Scalar(arg4),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4083,6 +4111,8 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -4093,7 +4123,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4103,17 +4132,18 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = arg3.validity;
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4123,6 +4153,8 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -4133,7 +4165,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4143,6 +4174,8 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -4153,7 +4186,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4163,20 +4195,21 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
                 &arg3.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4186,17 +4219,18 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = arg4.validity;
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4206,17 +4240,18 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4226,17 +4261,18 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4246,6 +4282,11 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
+                &arg4.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -4256,10 +4297,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                &arg4.validity,
-            );
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4269,17 +4306,18 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(&arg3.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4289,6 +4327,11 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
+                &arg4.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -4299,10 +4342,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
-                &arg4.validity,
-            );
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4312,6 +4351,11 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
+                &arg4.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -4322,10 +4366,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
-                &arg4.validity,
-            );
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4335,16 +4375,6 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
@@ -4352,6 +4382,17 @@ pub fn passthrough_nullable_5_arg<
                 ),
                 &arg4.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4361,17 +4402,18 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Column(arg5),
         ) => {
-            let column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = arg5.validity;
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4381,6 +4423,8 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Column(arg5),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg5.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -4391,7 +4435,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg5.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4401,6 +4444,8 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Column(arg5),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg5.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -4411,7 +4456,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg5.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4421,20 +4465,21 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Column(arg5),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
                 &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4444,6 +4489,8 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Column(arg5),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg3.validity, &arg5.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Scalar(arg2),
@@ -4454,7 +4501,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg3.validity, &arg5.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4464,20 +4510,21 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Column(arg5),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
                 &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4487,6 +4534,11 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Column(arg5),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
+                &arg5.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -4497,10 +4549,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
-                &arg5.validity,
-            );
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4510,16 +4558,6 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Column(arg5),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
@@ -4527,6 +4565,17 @@ pub fn passthrough_nullable_5_arg<
                 ),
                 &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4536,6 +4585,8 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg4.validity, &arg5.validity);
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Scalar(arg2),
@@ -4546,7 +4597,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(&arg4.validity, &arg5.validity);
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4556,20 +4606,21 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg4.validity),
                 &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4579,6 +4630,11 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg4.validity),
+                &arg5.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -4589,10 +4645,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg4.validity),
-                &arg5.validity,
-            );
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4602,16 +4654,6 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
@@ -4619,6 +4661,17 @@ pub fn passthrough_nullable_5_arg<
                 ),
                 &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4628,6 +4681,11 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg3.validity, &arg4.validity),
+                &arg5.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Scalar(arg2),
@@ -4638,10 +4696,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg3.validity, &arg4.validity),
-                &arg5.validity,
-            );
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4651,16 +4705,6 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
@@ -4668,6 +4712,17 @@ pub fn passthrough_nullable_5_arg<
                 ),
                 &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4677,6 +4732,14 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(
+                    &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
+                    &arg4.validity,
+                ),
+                &arg5.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -4687,13 +4750,6 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
-                    &arg4.validity,
-                ),
-                &arg5.validity,
-            );
             Value::Column(NullableColumn { column, validity })
         }
         (
@@ -4703,16 +4759,6 @@ pub fn passthrough_nullable_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(
@@ -4723,6 +4769,17 @@ pub fn passthrough_nullable_5_arg<
                 ),
                 &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
             Value::Column(NullableColumn { column, validity })
         }
     }

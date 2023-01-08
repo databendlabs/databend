@@ -144,7 +144,7 @@ error:
   --> SQL:1:1
   |
 1 | sleep(300.2)
-  | ^^^^^^^^^^^^ The maximum sleep time is 300 seconds. Requested: 300.2s
+  | ^^^^^^^^^^^^ The maximum sleep time is 300 seconds. Requested: 300.2s during evaluate function: sleep(300.2_f64)
 
 
 
@@ -209,10 +209,10 @@ output         : 16909060_u32
 ast            : try_inet_aton('10.0.5.9000')
 raw expr       : try_inet_aton("10.0.5.9000")
 checked expr   : try_inet_aton<String>("10.0.5.9000")
-optimized expr : NULL
+optimized expr : 0_u32
 output type    : UInt32 NULL
 output domain  : {0..=4294967295} ∪ {NULL}
-output         : NULL
+output         : 0_u32
 
 
 ast            : try_inet_aton('10.0.5.9')

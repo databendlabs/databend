@@ -632,8 +632,9 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
-                        let column = func({func_arg} ctx).into_column().unwrap();
                         let validity = {and_validity};
+                        ctx.validity = Some(validity.clone());
+                        let column = func({func_arg} ctx).into_column().unwrap();
                         Value::Column(NullableColumn {{ column, validity }})
                     }}"
                 )
