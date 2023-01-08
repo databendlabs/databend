@@ -19,14 +19,13 @@ use common_exception::Result;
 use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::ArgType;
 use common_expression::types::DataType;
-use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::FromOptData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -102,7 +101,7 @@ impl<'a> FuseBlock<'a> {
         let mut block_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
         let mut file_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
         let mut row_count = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
-        let mut bloom_filter_location = NullableType::<StringType>::create_builder(len, &[]);
+        let mut bloom_filter_location = vec![];
         let mut bloom_filter_size =
             NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
 
@@ -125,7 +124,7 @@ impl<'a> FuseBlock<'a> {
                     block
                         .bloom_filter_index_location
                         .as_ref()
-                        .map(|s| s.0.as_bytes()),
+                        .map(|s| s.0.as_bytes().to_vec()),
                 );
                 bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
             });
@@ -159,7 +158,7 @@ impl<'a> FuseBlock<'a> {
                 },
                 BlockEntry {
                     data_type: DataType::String.wrap_nullable(),
-                    value: Value::Column(Column::Nullable(Box::new(bloom_filter_location.build()))),
+                    value: Value::Column(StringType::from_opt_data(bloom_filter_location)),
                 },
                 BlockEntry {
                     data_type: DataType::Number(NumberDataType::UInt64),
