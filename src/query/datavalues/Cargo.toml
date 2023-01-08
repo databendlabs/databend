@@ -40,19 +40,3 @@ serde_json = { workspace = true }
 criterion = "0.4"
 pretty_assertions = "1.3.0"
 rand = "0.8.5"
-
-[[bench]]
-name = "builder"
-harness = false
-
-[[bench]]
-name = "if_else_then"
-harness = false
-
-[[bench]]
-name = "eq"
-harness = false
-
-[[bench]]
-name = "data_type"
-harness = false

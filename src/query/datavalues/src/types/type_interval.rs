@@ -13,16 +13,12 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_exception::Result;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
-use crate::serializations::DateSerializer;
-use crate::serializations::TypeSerializerImpl;
 
 #[derive(Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct IntervalType {
@@ -94,52 +90,12 @@ impl DataType for IntervalType {
         TypeID::Interval
     }
 
-    #[inline]
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> String {
         format!("Interval({})", self.kind)
     }
 
-    fn default_value(&self) -> DataValue {
-        DataValue::Int64(0)
-    }
-
-    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
-        let value = data.as_i64()?;
-
-        let column = Series::from_data(&[value]);
-        Ok(Arc::new(ConstColumn::new(column, size)))
-    }
-
-    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
-        let value = data
-            .iter()
-            .map(|v| v.as_i64())
-            .collect::<Result<Vec<_>>>()?;
-        Ok(Series::from_data(&value))
-    }
-
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Int64
-    }
-
-    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        Ok(DateSerializer::<'a, i64>::try_create(col)?.into())
-    }
-
-    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
-        DateDeserializer::<i64> {
-            buffer: vec![],
-            builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
-        }
-        .into()
-    }
-
-    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
-        Box::new(MutablePrimitiveColumn::<i64>::with_capacity(capacity))
     }
 }
 
