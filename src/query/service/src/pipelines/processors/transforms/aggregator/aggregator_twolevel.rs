@@ -147,6 +147,10 @@ where
         }
 
         for (bucket, inner_table) in agg.hash_table.iter_tables_mut().enumerate() {
+            if inner_table.len() == 0 {
+                continue;
+            }
+
             let iterator = inner_table.iter();
 
             let (capacity, _) = iterator.size_hint();
@@ -262,6 +266,10 @@ where
     fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
         let mut chunks = Vec::with_capacity(256);
         for (bucket, inner_table) in agg.hash_table.iter_tables_mut().enumerate() {
+            if inner_table.len() == 0 {
+                continue;
+            }
+
             let iterator = inner_table.iter();
 
             let (capacity, _) = iterator.size_hint();
