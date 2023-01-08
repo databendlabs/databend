@@ -2134,7 +2134,6 @@ dependencies = [
  "common-functions",
  "common-storages-table-meta",
  "criterion",
- "itertools",
  "match-template",
  "rand 0.8.5",
  "serde",
