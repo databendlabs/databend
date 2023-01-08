@@ -70,8 +70,12 @@ impl BloomIndexState {
         location: Location,
     ) -> Result<(Self, HashMap<usize, usize>)> {
         // write index
-        let bloom_index =
-            BlockFilter::try_create(ctx.try_get_function_context()?, source_schema, &[block])?;
+        let bloom_index = BlockFilter::try_create(
+            ctx.try_get_function_context()?,
+            source_schema,
+            location.1,
+            &[block],
+        )?;
         let index_block = bloom_index.filter_block;
         let mut data = Vec::with_capacity(100 * 1024);
         let index_block_schema = &bloom_index.filter_schema;

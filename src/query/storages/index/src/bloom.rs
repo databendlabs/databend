@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::converts::scalar_to_datavalue;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::ConstantFolder;
@@ -32,6 +33,8 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_storages_table_meta::meta::V2BloomBlock;
+use common_storages_table_meta::meta::Versioned;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
@@ -69,6 +72,7 @@ pub struct BlockFilter {
     /// It is a sub set of `source_schema`.
     pub filter_schema: TableSchemaRef,
 
+    pub version: u64,
     /// Data block of filters.
     pub filter_block: DataBlock,
 
@@ -96,8 +100,10 @@ impl BlockFilter {
         source_schema: TableSchemaRef,
         filter_schema: TableSchemaRef,
         filter_block: DataBlock,
+        version: u64,
     ) -> Result<Self> {
         Ok(Self {
+            version,
             func_ctx,
             source_schema,
             filter_schema,
@@ -112,6 +118,7 @@ impl BlockFilter {
     pub fn try_create(
         func_ctx: FunctionContext,
         source_schema: TableSchemaRef,
+        version: u64,
         blocks: &[&DataBlock],
     ) -> Result<Self> {
         if blocks.is_empty() {
@@ -161,6 +168,7 @@ impl BlockFilter {
 
         Ok(Self {
             func_ctx,
+            version,
             source_schema,
             filter_schema,
             filter_block,
@@ -248,7 +256,15 @@ impl BlockFilter {
         };
 
         let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
-        if filter.contains(&target) {
+
+        let contains = if self.version == V2BloomBlock::VERSION {
+            let datavalue = scalar_to_datavalue(target);
+            filter.contains(&datavalue)
+        } else {
+            filter.contains(target)
+        };
+
+        if contains {
             Ok(FilterEvalResult::Uncertain)
         } else {
             Ok(FilterEvalResult::MustFalse)

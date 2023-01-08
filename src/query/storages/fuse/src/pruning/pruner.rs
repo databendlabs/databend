@@ -195,6 +195,7 @@ mod util {
                 schema.clone(),
                 filter.filter_schema,
                 filter.filter_block,
+                index_location.1,
             )?
             .eval(filter_expr.clone())?
                 != FilterEvalResult::MustFalse),
