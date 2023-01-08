@@ -42,10 +42,16 @@ impl SyncSystemTable for BuildOptionsTable {
     }
 
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let mut cargo_features: Vec<Vec<u8>> = env!("VERGEN_CARGO_FEATURES")
-            .split_terminator(',')
-            .map(|x| x.trim().as_bytes().to_vec())
-            .collect();
+        let mut cargo_features: Vec<Vec<u8>>;
+
+        if let Some(features) = option_env!("VERGEN_CARGO_FEATURES") {
+            cargo_features = features
+                .split_terminator(',')
+                .map(|x| x.trim().as_bytes().to_vec())
+                .collect();
+        } else {
+            cargo_features = vec!["not available".as_bytes().to_vec()];
+        }
 
         let mut target_features: Vec<Vec<u8>> = env!("DATABEND_CARGO_CFG_TARGET_FEATURE")
             .split_terminator(',')
