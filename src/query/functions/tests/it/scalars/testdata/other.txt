@@ -209,10 +209,10 @@ output         : 16909060_u32
 ast            : try_inet_aton('10.0.5.9000')
 raw expr       : try_inet_aton("10.0.5.9000")
 checked expr   : try_inet_aton<String>("10.0.5.9000")
-optimized expr : 0_u32
+optimized expr : NULL
 output type    : UInt32 NULL
 output domain  : {0..=4294967295} ∪ {NULL}
-output         : 0_u32
+output         : NULL
 
 
 ast            : try_inet_aton('10.0.5.9')
