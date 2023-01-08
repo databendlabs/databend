@@ -13,18 +13,12 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_exception::ErrorCode;
-use common_exception::Result;
 
 use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
-use crate::prelude::*;
-use crate::serializations::StructSerializer;
-use crate::serializations::TypeSerializerImpl;
 
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct StructType {
@@ -58,11 +52,6 @@ impl DataType for StructType {
         TypeID::Struct
     }
 
-    #[inline]
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> String {
         let mut type_name = String::new();
         type_name.push_str("Struct(");
@@ -94,65 +83,8 @@ impl DataType for StructType {
         type_name
     }
 
-    fn sql_name(&self) -> String {
-        let mut sql_name = String::new();
-        sql_name.push_str("TUPLE(");
-        let mut first = true;
-        match &self.names {
-            Some(names) => {
-                for (name, ty) in names.iter().zip(self.types.iter()) {
-                    if !first {
-                        sql_name.push_str(", ");
-                    }
-                    first = false;
-                    sql_name.push('`');
-                    sql_name.push_str(name);
-                    sql_name.push('`');
-                    sql_name.push(' ');
-                    sql_name.push_str(&ty.sql_name());
-                }
-            }
-            None => {
-                for ty in self.types.iter() {
-                    if !first {
-                        sql_name.push_str(", ");
-                    }
-                    first = false;
-                    sql_name.push_str(&ty.sql_name());
-                }
-            }
-        }
-        sql_name.push(')');
-
-        sql_name
-    }
-
     fn can_inside_nullable(&self) -> bool {
         false
-    }
-
-    fn default_value(&self) -> DataValue {
-        let c: Vec<DataValue> = self.types.iter().map(|t| t.default_value()).collect();
-        DataValue::Struct(c)
-    }
-
-    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
-        if let DataValue::Struct(value) = data {
-            debug_assert!(value.len() == self.types.len());
-
-            let cols = value
-                .iter()
-                .zip(self.types.iter())
-                .map(|(v, typ)| typ.create_constant_column(v, 1))
-                .collect::<Result<Vec<_>>>()?;
-            let struct_column = StructColumn::from_data(cols, DataTypeImpl::Struct(self.clone()));
-            return Ok(Arc::new(ConstColumn::new(Arc::new(struct_column), size)));
-        }
-
-        Err(ErrorCode::BadDataValueType(format!(
-            "Unexpected type:{:?} to generate list column",
-            data.value_type()
-        )))
     }
 
     fn arrow_type(&self) -> ArrowType {
@@ -173,77 +105,6 @@ impl DataType for StructType {
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         None
-    }
-
-    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        let column: &StructColumn = Series::check_get(col)?;
-        let cols = column.values();
-        let mut inners = vec![];
-        for (t, c) in self.types.iter().zip(cols) {
-            inners.push(t.create_serializer(c)?)
-        }
-        Ok(StructSerializer {
-            inners,
-            column: col,
-        }
-        .into())
-    }
-
-    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
-        let inners_mutable = self
-            .types
-            .iter()
-            .map(|v| v.create_mutable(capacity))
-            .collect();
-
-        let inners_desers = self
-            .types
-            .iter()
-            .map(|v| v.create_deserializer(capacity))
-            .collect();
-
-        StructDeserializer {
-            builder: MutableStructColumn::from_data(self.clone().into(), inners_mutable),
-            inners: inners_desers,
-        }
-        .into()
-    }
-
-    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
-        let inners = self
-            .types
-            .iter()
-            .map(|v| v.create_mutable(capacity))
-            .collect();
-        Box::new(MutableStructColumn::from_data(self.clone().into(), inners))
-    }
-
-    fn create_column(&self, datas: &[DataValue]) -> common_exception::Result<ColumnRef> {
-        let mut values = Vec::with_capacity(self.types.len());
-        for _ in 0..self.types.len() {
-            values.push(Vec::<DataValue>::with_capacity(datas.len()));
-        }
-
-        for data in datas.iter() {
-            if let DataValue::Struct(value) = data {
-                debug_assert!(value.len() == self.types.len());
-                for (i, v) in value.iter().enumerate() {
-                    values[i].push(v.clone());
-                }
-            } else {
-                return Result::Err(ErrorCode::BadDataValueType(format!(
-                    "Unexpected type:{:?}, expect to be struct",
-                    data.value_type()
-                )));
-            }
-        }
-
-        let mut columns = Vec::with_capacity(self.types.len());
-        for (idx, value) in values.iter().enumerate() {
-            columns.push(self.types[idx].create_column(value)?);
-        }
-
-        Ok(StructColumn::from_data(columns, DataTypeImpl::Struct(self.clone())).arc())
     }
 }
 

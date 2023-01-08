@@ -23,6 +23,8 @@ mod transform_hash_join;
 mod transform_left_join;
 mod transform_limit;
 mod transform_mark_join;
+
+mod transform_convert_grouping;
 mod transform_merge_block;
 mod transform_resort_addon;
 mod transform_right_join;
@@ -47,6 +49,8 @@ pub use transform_block_compact::TransformBlockCompact;
 pub use transform_cast_schema::TransformCastSchema;
 pub use transform_compact::Compactor;
 pub use transform_compact::TransformCompact;
+pub use transform_convert_grouping::efficiently_memory_final_aggregator;
+pub use transform_convert_grouping::TransformConvertGrouping;
 pub use transform_create_sets::SubqueryReceiver;
 pub use transform_create_sets::TransformCreateSets;
 pub use transform_dummy::TransformDummy;
