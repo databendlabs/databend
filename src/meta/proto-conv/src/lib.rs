@@ -14,6 +14,7 @@
 
 // For use of const fn: `Option::<T>::unwrap` at compile time.
 #![feature(const_option)]
+#![feature(box_into_inner)]
 #![allow(clippy::uninlined_format_args)]
 
 //! Provides conversion from and to protobuf defined meta data, which is used for transport.
@@ -63,6 +64,7 @@ mod config_from_to_protobuf_impl;
 mod data_from_to_protobuf_impl;
 mod database_from_to_protobuf_impl;
 mod from_to_protobuf;
+mod schema_from_to_protobuf_impl;
 mod share_from_to_protobuf_impl;
 mod table_from_to_protobuf_impl;
 mod user_from_to_protobuf_impl;

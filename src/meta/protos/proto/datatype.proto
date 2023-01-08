@@ -45,8 +45,25 @@ message DataType {
     VariantObject variant_object_type = 20;
     IntervalType interval_type = 21;
   }
+
+  // New Datatype version 24 since 2023-01-03 v0.8.178-nightly
+  oneof dt24 {
+    Empty    null_t        = 31;
+    Empty    empty_array_t = 32;
+    Empty    bool_t        = 33;
+    Empty    string_t      = 34;
+    Number   number_t      = 35;
+    Empty    timestamp_t   = 36;
+    Empty    date_t        = 37;
+    DataType nullable_t    = 38;
+    DataType array_t       = 39;
+    DataType map_t         = 40;
+    Tuple    tuple_t       = 41;
+    Empty    variant_t     = 42;
+  }
 }
 
+// TODO: going to remove
 // A wrapper data type of another type.
 // Such a column allows to contain `null` elements
 message NullableType {
@@ -57,6 +74,7 @@ message NullableType {
   DataType inner = 1;
 }
 
+// TODO: going to remove
 // Timestamp data type with customizable precision and timezone: `tz`.
 message Timestamp {
   uint64 ver = 100;
@@ -67,6 +85,7 @@ message Timestamp {
   reserved 1;
 }
 
+// TODO: going to remove
 // Struct is similar to a `map` with fixed keys.
 message Struct {
   uint64 ver = 100;
@@ -79,6 +98,7 @@ message Struct {
   repeated DataType types = 2;
 }
 
+// TODO: going to remove
 // Array contains multiple elements of the same type.
 message Array {
   uint64 ver = 100;
@@ -88,16 +108,19 @@ message Array {
   DataType inner = 1;
 }
 
+// TODO: going to remove
 message VariantArray {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 }
 
+// TODO: going to remove
 message VariantObject {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 }
 
+// TODO: going to remove
 enum IntervalKind {
   Year = 0;
   Month = 1;
@@ -109,6 +132,8 @@ enum IntervalKind {
   Dow = 7;
   Quarter = 8;
 }
+
+// TODO: going to remove
 message IntervalType {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -116,10 +141,42 @@ message IntervalType {
   IntervalKind kind = 1;
 }
 
+// TODO: going to remove
 // Something under developing.:)
 message Variant {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
+}
+
+// Tuple is similar to a `map` with fixed keys.
+message Tuple {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // field names.
+  repeated string field_names = 1;
+
+  // The corresponding field types.
+  repeated DataType field_types = 2;
+}
+
+// Enum of number types
+message Number {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  oneof num {
+    Empty uint8_type   = 1;
+    Empty uint16_type  = 2;
+    Empty uint32_type  = 3;
+    Empty uint64_type  = 4;
+    Empty int8_type    = 5;
+    Empty int16_type   = 6;
+    Empty int32_type   = 7;
+    Empty int64_type   = 8;
+    Empty float32_type = 9;
+    Empty float64_type = 10;
+  }
 }
 
 // Place holder type for primitive types
