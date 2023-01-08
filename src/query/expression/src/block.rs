@@ -200,22 +200,6 @@ impl DataBlock {
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
-        if range.is_empty() {
-            if self.is_empty() {
-                return self.clone();
-            } else {
-                let mut block = DataBlock::new_with_meta(vec![], 0, self.meta.clone());
-                for col in self.columns() {
-                    let mut de = col.data_type.create_deserializer(0);
-                    block.add_column(BlockEntry {
-                        data_type: col.data_type.clone(),
-                        value: Value::Column(de.finish_to_column()),
-                    });
-                }
-                return block;
-            }
-        }
-
         let columns = self
             .columns()
             .iter()
