@@ -39,6 +39,14 @@ impl ColumnLeaves {
         Self { column_leaves }
     }
 
+    /// Traverse the fields in DFS order to get [`ColumnLeaf`].
+    ///
+    /// If the data type is [`ArrowType::Struct`], we should expand its inner fields.
+    ///
+    /// If the data type is [`ArrowType::List`] or other nested types, we should also expand its inner field.
+    /// It's because the inner field can also be [`ArrowType::Struct`] or other nested types.
+    /// If we don't dfs into it, the inner columns information will be lost.
+    /// and we can not construct the arrow-parquet reader correctly.
     fn traverse_fields_dfs(field: &ArrowField, leaf_id: &mut usize) -> ColumnLeaf {
         match &field.data_type {
             ArrowType::Struct(inner_fields) => {
