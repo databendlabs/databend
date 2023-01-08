@@ -193,7 +193,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let addr_binary = u32::from(addr);
                     output.push(addr_binary);
                 }
-                Err(_) => output.push(0),
+                Err(_) => output.push_null(),
             }
         }),
     );
