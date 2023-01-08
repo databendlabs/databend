@@ -143,11 +143,11 @@ impl<'a> Evaluator<'a> {
                     generics,
                     num_rows: self.input_columns.num_rows(),
                     valids: None,
-                    error: None,
                     tz: self.func_ctx.tz,
                 };
                 let result = (function.eval)(cols_ref.as_slice(), &mut ctx);
-                ctx.render_error(expr).map_err(|msg| (span.clone(), msg))?;
+                ctx.render_error(result.as_ref(), &cols, &function.signature.name)
+                    .map_err(|msg| (span.clone(), msg))?;
                 Ok(result)
             }
             Expr::Cast {

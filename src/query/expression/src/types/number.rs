@@ -19,6 +19,7 @@ use std::ops::Range;
 use common_arrow::arrow::buffer::Buffer;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
+use lexical_core::ToLexicalWithOptions;
 use num_traits::NumCast;
 use ordered_float::OrderedFloat;
 use serde::Deserialize;
@@ -707,7 +708,7 @@ pub trait Number:
     + Send
     + 'static
 {
-    type Native;
+    type Native: ToLexicalWithOptions;
 
     const MIN: Self;
     const MAX: Self;
@@ -722,6 +723,10 @@ pub trait Number:
     fn upcast_scalar(scalar: Self) -> NumberScalar;
     fn upcast_column(col: Buffer<Self>) -> NumberColumn;
     fn upcast_domain(domain: SimpleDomain<Self>) -> NumberDomain;
+
+    fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
+        <Self::Native as ToLexicalWithOptions>::Options::default()
+    }
 }
 
 impl Number for u8 {
@@ -1080,6 +1085,14 @@ impl Number for F32 {
     fn upcast_domain(domain: SimpleDomain<Self>) -> NumberDomain {
         NumberDomain::Float32(domain)
     }
+
+    fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
+        unsafe {
+            lexical_core::WriteFloatOptions::builder()
+                .trim_floats(true)
+                .build_unchecked()
+        }
+    }
 }
 
 impl Number for F64 {
@@ -1119,5 +1132,13 @@ impl Number for F64 {
 
     fn upcast_domain(domain: SimpleDomain<Self>) -> NumberDomain {
         NumberDomain::Float64(domain)
+    }
+
+    fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
+        unsafe {
+            lexical_core::WriteFloatOptions::builder()
+                .trim_floats(true)
+                .build_unchecked()
+        }
     }
 }

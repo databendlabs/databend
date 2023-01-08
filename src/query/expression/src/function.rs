@@ -60,45 +60,88 @@ impl Default for FunctionContext {
 pub struct EvalContext<'a> {
     pub generics: &'a GenericMap,
     pub num_rows: usize,
-    
-    pub valids: Option<MutableBitmap>,
-    // error must be some if valids is some
-    pub error: Option<String>, 
+
+    // valid bitmap + error message
+    pub valids: Option<(MutableBitmap, String)>,
     pub tz: Tz,
 }
 
 impl<'a> EvalContext<'a> {
     #[inline]
-    pub fn set_error(&mut self, row: usize,  error: impl AsRef<str>) {
+    pub fn set_error(&mut self, row: usize, error_msg: impl AsRef<str>) {
         match self.valids.as_mut() {
-            Some(valids) => {
+            Some((valids, _)) => {
                 valids.set(row, false);
             }
             None => {
                 let mut valids = constant_bitmap(true, self.num_rows);
                 valids.set(row, false);
-                self.valids = Some(valids);
+                self.valids = Some((valids, error_msg.as_ref().to_string()));
             }
         }
-        if self.error.is_none() {
-            self.error = Some(error.as_ref().to_string());
-        }
     }
-    
-    pub fn render_error(&self, expr: &Expr) -> Result<(), String> {
-        match &self.error {
-            Some(error) => {
-                let valids = self.valids.as_ref().unwrap();
-                let rows: Vec<usize> = valids.iter().enumerate().filter(|(_, valid)|  !valid).take(8).map(|(row, _)| row).collect();
-                let error_msg = format!("Got error: {} during evaluate expr: {} at rows: {:?} ...", error, expr.sql_display(), rows);
+
+    pub fn render_error(
+        &self,
+        value: ValueRef<AnyType>,
+        args: &[Value<AnyType>],
+        name: &str,
+    ) -> Result<(), String> {
+        match &self.valids {
+            Some((valids, error)) => {
+                let first_error_row = match value {
+                    ValueRef::Scalar(s) if s.is_null() => return Ok(()),
+                    ValueRef::Scalar(_) => 0,
+                    ValueRef::Column(c) => match c {
+                        Column::Null { .. } => todo!(),
+                        Column::Nullable(c) => {
+                            let column_valids = c.validity;
+                            let merged_valids = valids.clone().bitand(&column_valids);
+
+                            // this means that all error rows are nullable
+                            if merged_valids.unset_bits() == column_valids.unset_bits() {
+                                return Ok(());
+                            }
+                            merged_valids
+                                .iter()
+                                .zip(column_valids.iter())
+                                .enumerate()
+                                .filter(|(_, (valid, column_valid))| !*valid && *column_valid)
+                                .take(1)
+                                .next()
+                                .unwrap()
+                                .0
+                        }
+                        _ => {
+                            valids
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, valid)| !valid)
+                                .take(1)
+                                .next()
+                                .unwrap()
+                                .0
+                        }
+                    },
+                };
+                let args = args
+                    .iter()
+                    .map(|arg| {
+                        let arg_ref = arg.as_ref();
+                        arg_ref.index(first_error_row).unwrap().to_string()
+                    })
+                    .join(", ");
+
+                let error_msg = format!(
+                    "Got error: {} during evaluate function: {}({})",
+                    error, name, args
+                );
                 Err(error_msg)
-            },
+            }
             None => Ok(()),
         }
     }
 }
-
-
 /// `FunctionID` is a unique identifier for a function. It's used to construct
 /// the exactly same function from the remote execution nodes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -290,7 +333,7 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy {
         match results {
             Value::Scalar(s) => {
                 if bitmap.get(0) {
-                    Value::Scalar(Result::upcast_scalar(s))
+                    Value::Scalar(s)
                 } else {
                     Value::Scalar(Scalar::Null)
                 }

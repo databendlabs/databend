@@ -429,10 +429,10 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
-                        let generics = ctx.generics.clone();
+                        let generics = &(ctx.generics.to_owned());
                         {arg_iter}
                         let iter = {zipped_iter}.map(|{col_arg}| func({func_arg} ctx));
-                        let col = O::column_from_iter(iter, &generics);
+                        let col = O::column_from_iter(iter, generics);
                         Value::Column(col)
                     }}"
                 )
@@ -521,10 +521,10 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
-                        let generics = ctx.generics.clone();
+                        let generics = &(ctx.generics.to_owned());
                         {arg_iter}
                         let iter = {zipped_iter};
-                        let mut builder = O::create_builder(iter.size_hint().0, &generics);
+                        let mut builder = O::create_builder(iter.size_hint().0, generics);
                         for {col_arg} in iter {{
                             func({func_arg} &mut builder, ctx);
                         }}
@@ -537,12 +537,12 @@ pub fn codegen_register() {
             source,
             "
                 pub fn vectorize_with_builder_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_input_closure_sig} &mut O::ColumnBuilder, &mut EvalContext) -> () + Copy + Send + Sync,
+                    func: impl Fn({arg_input_closure_sig} &mut O::ColumnBuilder, &mut EvalContext) + Copy + Send + Sync,
                 ) -> impl Fn({arg_output_closure_sig} &mut EvalContext) -> Value<O> + Copy + Send + Sync {{
                     move |{func_args} ctx| match ({args_tuple}) {{
                         ({arg_scalar}) => {{
-                            let generics = ctx.generics.clone();
-                            let mut builder = O::create_builder(1, &generics);
+                            let generics = &(ctx.generics.to_owned());
+                            let mut builder = O::create_builder(1, generics);
                             func({func_args} &mut builder, ctx);
                             Value::Scalar(O::build_scalar(builder))
                         }}

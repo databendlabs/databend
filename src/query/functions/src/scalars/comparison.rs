@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::Result;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::AnyType;
 use common_expression::types::ArgType;

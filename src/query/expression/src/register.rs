@@ -1174,10 +1174,10 @@ pub fn vectorize_1_arg<I1: ArgType, O: ArgType>(
     move |arg1, ctx| match (arg1) {
         (ValueRef::Scalar(arg1)) => Value::Scalar(func(arg1, ctx)),
         (ValueRef::Column(arg1)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter.map(|arg1| func(arg1, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
     }
@@ -1192,27 +1192,27 @@ pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => Value::Scalar(func(arg1, arg2, ctx)),
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter.map(|arg1| func(arg1, arg2.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter.map(|arg2| func(arg1.clone(), arg2, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter
                 .zip(arg2_iter)
                 .map(|(arg1, arg2)| func(arg1, arg2, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
     }
@@ -1235,58 +1235,58 @@ pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
             Value::Scalar(func(arg1, arg2, arg3, ctx))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2), ValueRef::Scalar(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter.map(|arg1| func(arg1, arg2.clone(), arg3.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2), ValueRef::Scalar(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter.map(|arg2| func(arg1.clone(), arg2, arg3.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Scalar(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter
                 .zip(arg2_iter)
                 .map(|(arg1, arg2)| func(arg1, arg2, arg3.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2), ValueRef::Column(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg3_iter.map(|arg3| func(arg1.clone(), arg2.clone(), arg3, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2), ValueRef::Column(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter
                 .zip(arg3_iter)
                 .map(|(arg1, arg3)| func(arg1, arg2.clone(), arg3, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg2_iter
                 .zip(arg3_iter)
                 .map(|(arg2, arg3)| func(arg1.clone(), arg2, arg3, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
@@ -1294,7 +1294,7 @@ pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
                 .zip(arg2_iter)
                 .zip(arg3_iter)
                 .map(|((arg1, arg2), arg3)| func(arg1, arg2, arg3, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
     }
@@ -1328,11 +1328,11 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Scalar(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter =
                 arg1_iter.map(|arg1| func(arg1, arg2.clone(), arg3.clone(), arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1341,11 +1341,11 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Scalar(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter =
                 arg2_iter.map(|arg2| func(arg1.clone(), arg2, arg3.clone(), arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1354,13 +1354,13 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Scalar(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter
                 .zip(arg2_iter)
                 .map(|(arg1, arg2)| func(arg1, arg2, arg3.clone(), arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1369,11 +1369,11 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Column(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let iter =
                 arg3_iter.map(|arg3| func(arg1.clone(), arg2.clone(), arg3, arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1382,13 +1382,13 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Column(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter
                 .zip(arg3_iter)
                 .map(|(arg1, arg3)| func(arg1, arg2.clone(), arg3, arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1397,13 +1397,13 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Column(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg2_iter
                 .zip(arg3_iter)
                 .map(|(arg2, arg3)| func(arg1.clone(), arg2, arg3, arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1412,7 +1412,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Column(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
@@ -1420,7 +1420,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
                 .zip(arg2_iter)
                 .zip(arg3_iter)
                 .map(|((arg1, arg2), arg3)| func(arg1, arg2, arg3, arg4.clone(), ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1429,11 +1429,11 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Scalar(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
             let iter =
                 arg4_iter.map(|arg4| func(arg1.clone(), arg2.clone(), arg3.clone(), arg4, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1442,13 +1442,13 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Scalar(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter
                 .zip(arg4_iter)
                 .map(|(arg1, arg4)| func(arg1, arg2.clone(), arg3.clone(), arg4, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1457,13 +1457,13 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Scalar(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg2_iter
                 .zip(arg4_iter)
                 .map(|(arg2, arg4)| func(arg1.clone(), arg2, arg3.clone(), arg4, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1472,7 +1472,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Scalar(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
@@ -1480,7 +1480,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
                 .zip(arg2_iter)
                 .zip(arg4_iter)
                 .map(|((arg1, arg2), arg4)| func(arg1, arg2, arg3.clone(), arg4, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1489,13 +1489,13 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg3_iter
                 .zip(arg4_iter)
                 .map(|(arg3, arg4)| func(arg1.clone(), arg2.clone(), arg3, arg4, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1504,7 +1504,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
@@ -1512,7 +1512,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
                 .zip(arg3_iter)
                 .zip(arg4_iter)
                 .map(|((arg1, arg3), arg4)| func(arg1, arg2.clone(), arg3, arg4, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1521,7 +1521,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
@@ -1529,7 +1529,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
                 .zip(arg3_iter)
                 .zip(arg4_iter)
                 .map(|((arg2, arg3), arg4)| func(arg1.clone(), arg2, arg3, arg4, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1538,7 +1538,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
@@ -1548,7 +1548,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
                 .zip(arg3_iter)
                 .zip(arg4_iter)
                 .map(|(((arg1, arg2), arg3), arg4)| func(arg1, arg2, arg3, arg4, ctx));
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
     }
@@ -1599,7 +1599,7 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter.map(|arg1| {
                 func(
@@ -1611,7 +1611,7 @@ pub fn vectorize_5_arg<
                     ctx,
                 )
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1621,7 +1621,7 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter.map(|arg2| {
                 func(
@@ -1633,7 +1633,7 @@ pub fn vectorize_5_arg<
                     ctx,
                 )
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1643,13 +1643,13 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter.zip(arg2_iter).map(|(arg1, arg2)| {
                 func(arg1, arg2, arg3.clone(), arg4.clone(), arg5.clone(), ctx)
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1659,7 +1659,7 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg3_iter.map(|arg3| {
                 func(
@@ -1671,7 +1671,7 @@ pub fn vectorize_5_arg<
                     ctx,
                 )
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1681,13 +1681,13 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter.zip(arg3_iter).map(|(arg1, arg3)| {
                 func(arg1, arg2.clone(), arg3, arg4.clone(), arg5.clone(), ctx)
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1697,13 +1697,13 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg2_iter.zip(arg3_iter).map(|(arg2, arg3)| {
                 func(arg1.clone(), arg2, arg3, arg4.clone(), arg5.clone(), ctx)
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1713,7 +1713,7 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
@@ -1723,7 +1723,7 @@ pub fn vectorize_5_arg<
                 .map(|((arg1, arg2), arg3)| {
                     func(arg1, arg2, arg3, arg4.clone(), arg5.clone(), ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1733,7 +1733,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg4_iter.map(|arg4| {
                 func(
@@ -1745,7 +1745,7 @@ pub fn vectorize_5_arg<
                     ctx,
                 )
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1755,13 +1755,13 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg4_iter).map(|(arg1, arg4)| {
                 func(arg1, arg2.clone(), arg3.clone(), arg4, arg5.clone(), ctx)
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1771,13 +1771,13 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg2_iter.zip(arg4_iter).map(|(arg2, arg4)| {
                 func(arg1.clone(), arg2, arg3.clone(), arg4, arg5.clone(), ctx)
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1787,7 +1787,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
@@ -1797,7 +1797,7 @@ pub fn vectorize_5_arg<
                 .map(|((arg1, arg2), arg4)| {
                     func(arg1, arg2, arg3.clone(), arg4, arg5.clone(), ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1807,13 +1807,13 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg3_iter.zip(arg4_iter).map(|(arg3, arg4)| {
                 func(arg1.clone(), arg2.clone(), arg3, arg4, arg5.clone(), ctx)
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1823,7 +1823,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
@@ -1833,7 +1833,7 @@ pub fn vectorize_5_arg<
                 .map(|((arg1, arg3), arg4)| {
                     func(arg1, arg2.clone(), arg3, arg4, arg5.clone(), ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1843,7 +1843,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
@@ -1853,7 +1853,7 @@ pub fn vectorize_5_arg<
                 .map(|((arg2, arg3), arg4)| {
                     func(arg1.clone(), arg2, arg3, arg4, arg5.clone(), ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1863,7 +1863,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
@@ -1871,7 +1871,7 @@ pub fn vectorize_5_arg<
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter).zip(arg4_iter).map(
                 |(((arg1, arg2), arg3), arg4)| func(arg1, arg2, arg3, arg4, arg5.clone(), ctx),
             );
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1881,7 +1881,7 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg5_iter.map(|arg5| {
                 func(
@@ -1893,7 +1893,7 @@ pub fn vectorize_5_arg<
                     ctx,
                 )
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1903,13 +1903,13 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg5_iter).map(|(arg1, arg5)| {
                 func(arg1, arg2.clone(), arg3.clone(), arg4.clone(), arg5, ctx)
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1919,13 +1919,13 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg2_iter.zip(arg5_iter).map(|(arg2, arg5)| {
                 func(arg1.clone(), arg2, arg3.clone(), arg4.clone(), arg5, ctx)
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1935,7 +1935,7 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg5_iter = I5::iter_column(&arg5);
@@ -1945,7 +1945,7 @@ pub fn vectorize_5_arg<
                 .map(|((arg1, arg2), arg5)| {
                     func(arg1, arg2, arg3.clone(), arg4.clone(), arg5, ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1955,13 +1955,13 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg3_iter.zip(arg5_iter).map(|(arg3, arg5)| {
                 func(arg1.clone(), arg2.clone(), arg3, arg4.clone(), arg5, ctx)
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1971,7 +1971,7 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let arg5_iter = I5::iter_column(&arg5);
@@ -1981,7 +1981,7 @@ pub fn vectorize_5_arg<
                 .map(|((arg1, arg3), arg5)| {
                     func(arg1, arg2.clone(), arg3, arg4.clone(), arg5, ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -1991,7 +1991,7 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg5_iter = I5::iter_column(&arg5);
@@ -2001,7 +2001,7 @@ pub fn vectorize_5_arg<
                 .map(|((arg2, arg3), arg5)| {
                     func(arg1.clone(), arg2, arg3, arg4.clone(), arg5, ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -2011,7 +2011,7 @@ pub fn vectorize_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
@@ -2019,7 +2019,7 @@ pub fn vectorize_5_arg<
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter).zip(arg5_iter).map(
                 |(((arg1, arg2), arg3), arg5)| func(arg1, arg2, arg3, arg4.clone(), arg5, ctx),
             );
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -2029,13 +2029,13 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg4_iter.zip(arg5_iter).map(|(arg4, arg5)| {
                 func(arg1.clone(), arg2.clone(), arg3.clone(), arg4, arg5, ctx)
             });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -2045,7 +2045,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
@@ -2055,7 +2055,7 @@ pub fn vectorize_5_arg<
                 .map(|((arg1, arg4), arg5)| {
                     func(arg1, arg2.clone(), arg3.clone(), arg4, arg5, ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -2065,7 +2065,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
@@ -2075,7 +2075,7 @@ pub fn vectorize_5_arg<
                 .map(|((arg2, arg4), arg5)| {
                     func(arg1.clone(), arg2, arg3.clone(), arg4, arg5, ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -2085,7 +2085,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
@@ -2093,7 +2093,7 @@ pub fn vectorize_5_arg<
             let iter = arg1_iter.zip(arg2_iter).zip(arg4_iter).zip(arg5_iter).map(
                 |(((arg1, arg2), arg4), arg5)| func(arg1, arg2, arg3.clone(), arg4, arg5, ctx),
             );
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -2103,7 +2103,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
@@ -2113,7 +2113,7 @@ pub fn vectorize_5_arg<
                 .map(|((arg3, arg4), arg5)| {
                     func(arg1.clone(), arg2.clone(), arg3, arg4, arg5, ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -2123,7 +2123,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
@@ -2131,7 +2131,7 @@ pub fn vectorize_5_arg<
             let iter = arg1_iter.zip(arg3_iter).zip(arg4_iter).zip(arg5_iter).map(
                 |(((arg1, arg3), arg4), arg5)| func(arg1, arg2.clone(), arg3, arg4, arg5, ctx),
             );
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -2141,7 +2141,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
@@ -2149,7 +2149,7 @@ pub fn vectorize_5_arg<
             let iter = arg2_iter.zip(arg3_iter).zip(arg4_iter).zip(arg5_iter).map(
                 |(((arg2, arg3), arg4), arg5)| func(arg1.clone(), arg2, arg3, arg4, arg5, ctx),
             );
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
         (
@@ -2159,7 +2159,7 @@ pub fn vectorize_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
@@ -2173,27 +2173,27 @@ pub fn vectorize_5_arg<
                 .map(|((((arg1, arg2), arg3), arg4), arg5)| {
                     func(arg1, arg2, arg3, arg4, arg5, ctx)
                 });
-            let col = O::column_from_iter(iter, &generics);
+            let col = O::column_from_iter(iter, generics);
             Value::Column(col)
         }
     }
 }
 
 pub fn vectorize_with_builder_1_arg<I1: ArgType, O: ArgType>(
-    func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder, &mut EvalContext) -> () + Copy + Send + Sync,
+    func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder, &mut EvalContext) + Copy + Send + Sync,
 ) -> impl Fn(ValueRef<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, ctx| match (arg1) {
         (ValueRef::Scalar(arg1)) => {
-            let generics = ctx.generics.clone();
-            let mut builder = O::create_builder(1, &generics);
+            let generics = &(ctx.generics.to_owned());
+            let mut builder = O::create_builder(1, generics);
             func(arg1, &mut builder, ctx);
             Value::Scalar(O::build_scalar(builder))
         }
         (ValueRef::Column(arg1)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg1 in iter {
                 func(arg1, &mut builder, ctx);
             }
@@ -2203,44 +2203,44 @@ pub fn vectorize_with_builder_1_arg<I1: ArgType, O: ArgType>(
 }
 
 pub fn vectorize_with_builder_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder, &mut EvalContext) -> ()
+    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder, &mut EvalContext)
     + Copy
     + Send
     + Sync,
 ) -> impl Fn(ValueRef<I1>, ValueRef<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
-            let generics = ctx.generics.clone();
-            let mut builder = O::create_builder(1, &generics);
+            let generics = &(ctx.generics.to_owned());
+            let mut builder = O::create_builder(1, generics);
             func(arg1, arg2, &mut builder, ctx);
             Value::Scalar(O::build_scalar(builder))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg1 in iter {
                 func(arg1, arg2.clone(), &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg2 in iter {
                 func(arg1.clone(), arg2, &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter.zip(arg2_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg2) in iter {
                 func(arg1, arg2, &mut builder, ctx);
             }
@@ -2256,89 +2256,88 @@ pub fn vectorize_with_builder_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: Ar
         I3::ScalarRef<'_>,
         &mut O::ColumnBuilder,
         &mut EvalContext,
-    ) -> ()
-    + Copy
+    ) + Copy
     + Send
     + Sync,
 ) -> impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync
 {
     move |arg1, arg2, arg3, ctx| match (arg1, arg2, arg3) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2), ValueRef::Scalar(arg3)) => {
-            let generics = ctx.generics.clone();
-            let mut builder = O::create_builder(1, &generics);
+            let generics = &(ctx.generics.to_owned());
+            let mut builder = O::create_builder(1, generics);
             func(arg1, arg2, arg3, &mut builder, ctx);
             Value::Scalar(O::build_scalar(builder))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2), ValueRef::Scalar(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg1 in iter {
                 func(arg1, arg2.clone(), arg3.clone(), &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2), ValueRef::Scalar(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg2 in iter {
                 func(arg1.clone(), arg2, arg3.clone(), &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Scalar(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter.zip(arg2_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg2) in iter {
                 func(arg1, arg2, arg3.clone(), &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2), ValueRef::Column(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg3_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg3 in iter {
                 func(arg1.clone(), arg2.clone(), arg3, &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2), ValueRef::Column(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter.zip(arg3_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg3) in iter {
                 func(arg1, arg2.clone(), arg3, &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg2_iter.zip(arg3_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg3) in iter {
                 func(arg1.clone(), arg2, arg3, &mut builder, ctx);
             }
             Value::Column(O::build_column(builder))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg2), arg3) in iter {
                 func(arg1, arg2, arg3, &mut builder, ctx);
             }
@@ -2361,8 +2360,7 @@ pub fn vectorize_with_builder_4_arg<
         I4::ScalarRef<'_>,
         &mut O::ColumnBuilder,
         &mut EvalContext,
-    ) -> ()
-    + Copy
+    ) + Copy
     + Send
     + Sync,
 ) -> impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, ValueRef<I4>, &mut EvalContext) -> Value<O>
@@ -2376,8 +2374,8 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Scalar(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
-            let mut builder = O::create_builder(1, &generics);
+            let generics = &(ctx.generics.to_owned());
+            let mut builder = O::create_builder(1, generics);
             func(arg1, arg2, arg3, arg4, &mut builder, ctx);
             Value::Scalar(O::build_scalar(builder))
         }
@@ -2387,10 +2385,10 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Scalar(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg1 in iter {
                 func(
                     arg1,
@@ -2409,10 +2407,10 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Scalar(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg2 in iter {
                 func(
                     arg1.clone(),
@@ -2431,11 +2429,11 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Scalar(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter.zip(arg2_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg2) in iter {
                 func(arg1, arg2, arg3.clone(), arg4.clone(), &mut builder, ctx);
             }
@@ -2447,10 +2445,10 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg3_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg3 in iter {
                 func(
                     arg1.clone(),
@@ -2469,11 +2467,11 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter.zip(arg3_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg3) in iter {
                 func(arg1, arg2.clone(), arg3, arg4.clone(), &mut builder, ctx);
             }
@@ -2485,11 +2483,11 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg2_iter.zip(arg3_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg3) in iter {
                 func(arg1.clone(), arg2, arg3, arg4.clone(), &mut builder, ctx);
             }
@@ -2501,12 +2499,12 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Scalar(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg2), arg3) in iter {
                 func(arg1, arg2, arg3, arg4.clone(), &mut builder, ctx);
             }
@@ -2518,10 +2516,10 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Scalar(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg4_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg4 in iter {
                 func(
                     arg1.clone(),
@@ -2540,11 +2538,11 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Scalar(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg4) in iter {
                 func(arg1, arg2.clone(), arg3.clone(), arg4, &mut builder, ctx);
             }
@@ -2556,11 +2554,11 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Scalar(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg2_iter.zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg4) in iter {
                 func(arg1.clone(), arg2, arg3.clone(), arg4, &mut builder, ctx);
             }
@@ -2572,12 +2570,12 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Scalar(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg2_iter).zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg2), arg4) in iter {
                 func(arg1, arg2, arg3.clone(), arg4, &mut builder, ctx);
             }
@@ -2589,11 +2587,11 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg3_iter.zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg3, arg4) in iter {
                 func(arg1.clone(), arg2.clone(), arg3, arg4, &mut builder, ctx);
             }
@@ -2605,12 +2603,12 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg3_iter).zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg3), arg4) in iter {
                 func(arg1, arg2.clone(), arg3, arg4, &mut builder, ctx);
             }
@@ -2622,12 +2620,12 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg2_iter.zip(arg3_iter).zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg2, arg3), arg4) in iter {
                 func(arg1.clone(), arg2, arg3, arg4, &mut builder, ctx);
             }
@@ -2639,13 +2637,13 @@ pub fn vectorize_with_builder_4_arg<
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter).zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg1, arg2), arg3), arg4) in iter {
                 func(arg1, arg2, arg3, arg4, &mut builder, ctx);
             }
@@ -2670,8 +2668,7 @@ pub fn vectorize_with_builder_5_arg<
         I5::ScalarRef<'_>,
         &mut O::ColumnBuilder,
         &mut EvalContext,
-    ) -> ()
-    + Copy
+    ) + Copy
     + Send
     + Sync,
 ) -> impl Fn(
@@ -2693,8 +2690,8 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
-            let mut builder = O::create_builder(1, &generics);
+            let generics = &(ctx.generics.to_owned());
+            let mut builder = O::create_builder(1, generics);
             func(arg1, arg2, arg3, arg4, arg5, &mut builder, ctx);
             Value::Scalar(O::build_scalar(builder))
         }
@@ -2705,10 +2702,10 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let iter = arg1_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg1 in iter {
                 func(
                     arg1,
@@ -2729,10 +2726,10 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg2_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg2 in iter {
                 func(
                     arg1.clone(),
@@ -2753,11 +2750,11 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let iter = arg1_iter.zip(arg2_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg2) in iter {
                 func(
                     arg1,
@@ -2778,10 +2775,10 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg3_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg3 in iter {
                 func(
                     arg1.clone(),
@@ -2802,11 +2799,11 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter.zip(arg3_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg3) in iter {
                 func(
                     arg1,
@@ -2827,11 +2824,11 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg2_iter.zip(arg3_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg3) in iter {
                 func(
                     arg1.clone(),
@@ -2852,12 +2849,12 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg2), arg3) in iter {
                 func(
                     arg1,
@@ -2878,10 +2875,10 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg4_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg4 in iter {
                 func(
                     arg1.clone(),
@@ -2902,11 +2899,11 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg4) in iter {
                 func(
                     arg1,
@@ -2927,11 +2924,11 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg2_iter.zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg4) in iter {
                 func(
                     arg1.clone(),
@@ -2952,12 +2949,12 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg2_iter).zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg2), arg4) in iter {
                 func(
                     arg1,
@@ -2978,11 +2975,11 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg3_iter.zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg3, arg4) in iter {
                 func(
                     arg1.clone(),
@@ -3003,12 +3000,12 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg3_iter).zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg3), arg4) in iter {
                 func(
                     arg1,
@@ -3029,12 +3026,12 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg2_iter.zip(arg3_iter).zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg2, arg3), arg4) in iter {
                 func(
                     arg1.clone(),
@@ -3055,13 +3052,13 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Scalar(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter).zip(arg4_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg1, arg2), arg3), arg4) in iter {
                 func(arg1, arg2, arg3, arg4, arg5.clone(), &mut builder, ctx);
             }
@@ -3074,10 +3071,10 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg5_iter;
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for arg5 in iter {
                 func(
                     arg1.clone(),
@@ -3098,11 +3095,11 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg1, arg5) in iter {
                 func(
                     arg1,
@@ -3123,11 +3120,11 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg2_iter.zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg2, arg5) in iter {
                 func(
                     arg1.clone(),
@@ -3148,12 +3145,12 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg2_iter).zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg2), arg5) in iter {
                 func(
                     arg1,
@@ -3174,11 +3171,11 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg3_iter.zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg3, arg5) in iter {
                 func(
                     arg1.clone(),
@@ -3199,12 +3196,12 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg3_iter).zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg3), arg5) in iter {
                 func(
                     arg1,
@@ -3225,12 +3222,12 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg2_iter.zip(arg3_iter).zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg2, arg3), arg5) in iter {
                 func(
                     arg1.clone(),
@@ -3251,13 +3248,13 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Scalar(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg2_iter).zip(arg3_iter).zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg1, arg2), arg3), arg5) in iter {
                 func(arg1, arg2, arg3, arg4.clone(), arg5, &mut builder, ctx);
             }
@@ -3270,11 +3267,11 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg4_iter.zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (arg4, arg5) in iter {
                 func(
                     arg1.clone(),
@@ -3295,12 +3292,12 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg4_iter).zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg1, arg4), arg5) in iter {
                 func(
                     arg1,
@@ -3321,12 +3318,12 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg2_iter.zip(arg4_iter).zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg2, arg4), arg5) in iter {
                 func(
                     arg1.clone(),
@@ -3347,13 +3344,13 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg2_iter).zip(arg4_iter).zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg1, arg2), arg4), arg5) in iter {
                 func(arg1, arg2, arg3.clone(), arg4, arg5, &mut builder, ctx);
             }
@@ -3366,12 +3363,12 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg3_iter.zip(arg4_iter).zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((arg3, arg4), arg5) in iter {
                 func(
                     arg1.clone(),
@@ -3392,13 +3389,13 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg1_iter.zip(arg3_iter).zip(arg4_iter).zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg1, arg3), arg4), arg5) in iter {
                 func(arg1, arg2.clone(), arg3, arg4, arg5, &mut builder, ctx);
             }
@@ -3411,13 +3408,13 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
             let arg4_iter = I4::iter_column(&arg4);
             let arg5_iter = I5::iter_column(&arg5);
             let iter = arg2_iter.zip(arg3_iter).zip(arg4_iter).zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for (((arg2, arg3), arg4), arg5) in iter {
                 func(arg1.clone(), arg2, arg3, arg4, arg5, &mut builder, ctx);
             }
@@ -3430,7 +3427,7 @@ pub fn vectorize_with_builder_5_arg<
             ValueRef::Column(arg4),
             ValueRef::Column(arg5),
         ) => {
-            let generics = ctx.generics.clone();
+            let generics = &(ctx.generics.to_owned());
             let arg1_iter = I1::iter_column(&arg1);
             let arg2_iter = I2::iter_column(&arg2);
             let arg3_iter = I3::iter_column(&arg3);
@@ -3441,7 +3438,7 @@ pub fn vectorize_with_builder_5_arg<
                 .zip(arg3_iter)
                 .zip(arg4_iter)
                 .zip(arg5_iter);
-            let mut builder = O::create_builder(iter.size_hint().0, &generics);
+            let mut builder = O::create_builder(iter.size_hint().0, generics);
             for ((((arg1, arg2), arg3), arg4), arg5) in iter {
                 func(arg1, arg2, arg3, arg4, arg5, &mut builder, ctx);
             }

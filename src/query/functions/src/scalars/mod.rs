@@ -20,21 +20,21 @@ use ctor::ctor;
 
 mod arithmetic;
 mod arithmetic_modulo;
-// mod array;
-// mod boolean;
-// mod control;
-// mod datetime;
-// mod geo;
-// mod math;
-// mod tuple;
-// mod variant;
+mod array;
+mod boolean;
+mod control;
+mod datetime;
+mod geo;
+mod math;
+mod tuple;
+mod variant;
 
 mod comparison;
-// mod hash;
-// mod other;
-// mod string;
+mod hash;
+mod other;
+mod string;
 mod string_multi_args;
-// mod uuid;
+mod uuid;
 
 pub use comparison::check_pattern_type;
 pub use comparison::is_like_pattern_escape;
@@ -52,20 +52,20 @@ fn builtin_functions() -> FunctionRegistry {
     register_casting_rules(&mut registry);
 
     arithmetic::register(&mut registry);
-    // array::register(&mut registry);
-    // boolean::register(&mut registry);
-    // control::register(&mut registry);
+    array::register(&mut registry);
+    boolean::register(&mut registry);
+    control::register(&mut registry);
     comparison::register(&mut registry);
-    // datetime::register(&mut registry);
-    // math::register(&mut registry);
-    // string::register(&mut registry);
-    // string_multi_args::register(&mut registry);
-    // tuple::register(&mut registry);
-    // variant::register(&mut registry);
-    // geo::register(&mut registry);
-    // hash::register(&mut registry);
-    // other::register(&mut registry);
-    // uuid::register(&mut registry);
+    datetime::register(&mut registry);
+    math::register(&mut registry);
+    string::register(&mut registry);
+    string_multi_args::register(&mut registry);
+    tuple::register(&mut registry);
+    variant::register(&mut registry);
+    geo::register(&mut registry);
+    hash::register(&mut registry);
+    other::register(&mut registry);
+    uuid::register(&mut registry);
 
     registry
 }

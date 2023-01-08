@@ -44,7 +44,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 data: values.into(),
                 offsets: offsets.into(),
             };
-            Ok(Value::Column(col))
+            Value::Column(col)
         },
     );
 }

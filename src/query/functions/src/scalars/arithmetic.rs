@@ -151,7 +151,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                         {
                             type T = F64;
-                            registry.register_2_arg_core::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+                            registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
                                 "divide",
                                 FunctionProperty::default(),
                                 |_, _| FunctionDomain::MayThrow,
@@ -166,33 +166,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         }
                                     }),
                             );
-
-                            registry.register_2_arg_core::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>, _, _>(
-                                "divide",
-                                FunctionProperty::default(),
-                                |_, _| FunctionDomain::MayThrow,
-                                vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
-                                    |a, b, output, ctx| {
-                                    match (a,b) {
-                                        (Some(a), Some(b)) => {
-                                            let b = (b.as_() : T);
-                                            if std::intrinsics::unlikely(b == 0.0) {
-                                                ctx.set_error(output.len(), "/ by zero");
-                                                output.push(F64::default());
-                                            } else {
-                                                output.push(((a.as_() : T) / b));
-                                            }
-                                        },
-                                        _ => output.push_null(),
-                                    }
-                                }),
-                            )
                         }
 
                         {
                             type T = <(L, R) as ResultTypeOfBinary>::IntDiv;
 
-                            registry.register_2_arg_core::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
+                            registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
                             "div",
                             FunctionProperty::default(),
                             |_, _| FunctionDomain::MayThrow,
@@ -204,29 +183,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                             output.push(T::default());
                                     } else {
                                         output.push(((a.as_() : F64) / b).as_() : T);
-                                    }
-                                }),
-                            );
-
-                            // a   b
-                            // 2   NULL (data = 0, validity = false), we should return NULL even the divisor is 0
-                            registry.register_2_arg_core::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>,_, _>(
-                            "div",
-                            FunctionProperty::default(),
-                            |_, _| FunctionDomain::MayThrow,
-                            vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
-                                    |a, b, output, ctx| {
-                                    match (a,b) {
-                                        (Some(a), Some(b)) => {
-                                            let b = (b.as_() : F64);
-                                            if std::intrinsics::unlikely(b == 0.0) {
-                                                ctx.set_error(output.len(), "/ by zero");
-                                                output.push(T::default());
-                                            } else {
-                                                output.push(((a.as_() : F64) / b).as_() : T);
-                                            }
-                                        },
-                                        _ => output.push_null(),
                                     }
                                 }),
                             );
@@ -245,7 +201,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     | NumberDataType::UInt32
                                     | NumberDataType::UInt64
                             ) {
-                                registry.register_2_arg_core::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
+                                registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
                                 "modulo",
                                 FunctionProperty::default(),
                                 |_, _| FunctionDomain::MayThrow,
@@ -261,36 +217,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     }),
                                 );
                             } else {
-                                // todo!("expression");
-                                // registry.register_2_arg_core::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                //     "modulo",
-                                //     FunctionProperty::default(),
-                                //     |_, _| FunctionDomain::MayThrow,
-                                //     vectorize_modulo::<L, R, M, T>()
-                                // );
+                                registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+                                    "modulo",
+                                    FunctionProperty::default(),
+                                    |_, _| FunctionDomain::MayThrow,
+                                    vectorize_modulo::<L, R, M, T>()
+                                );
                             }
-
-                            // nullable modulo
-                            registry.register_2_arg_core::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>,_, _>(
-                                "modulo",
-                                FunctionProperty::default(),
-                                |_, _| FunctionDomain::MayThrow,
-                                vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
-                                        |a, b, output, ctx| {
-                                        match (a,b) {
-                                            (Some(a), Some(b)) => {
-                                                let b = (b.as_() : F64);
-                                                if std::intrinsics::unlikely(b == 0.0) {
-                                                        ctx.set_error(output.len(), "/ by zero");
-                                                        output.push(T::default());
-                                                } else {
-                                                    output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
-                                                }
-                                            },
-                                            _ => output.push_null(),
-                                        }
-                                }),
-                            );
                         }
                     }
                 }),
@@ -405,8 +338,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                         FunctionProperty::default(),
                         |_| FunctionDomain::Full,
                         |from, _| match from {
-                            ValueRef::Scalar(s) => Value::Scalar(format!("{}", s).into_bytes()),
+                            ValueRef::Scalar(s) => Value::Scalar(s.to_string().into_bytes()),
                             ValueRef::Column(from) => {
+                                let options = NUM_TYPE::lexical_options();
+                                const FORMAT: u128 = lexical_core::format::STANDARD;
+
                                 let mut builder =
                                     StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
                                 let values = &mut builder.data;
@@ -416,13 +352,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 unsafe {
                                     for x in from.iter() {
                                         values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                        let bytes = std::slice::from_raw_parts_mut(
-                                            values.as_mut_ptr().add(offset),
-                                            values.capacity() - offset,
-                                        );
-                                        let len =
-                                            lexical_core::write_unchecked(Native::from(*x), bytes)
-                                                .len();
+                                        values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                        let bytes = &mut values[offset..];
+
+                                        let len = lexical_core::write_with_options_unchecked::<
+                                            _,
+                                            FORMAT,
+                                        >(
+                                            Native::from(*x), bytes, &options
+                                        )
+                                        .len();
                                         offset += len;
                                         builder.offsets.push(offset as u64);
                                     }
@@ -438,8 +377,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     FunctionProperty::default(),
                     |_| FunctionDomain::Full,
                     |from, _| match from {
-                        ValueRef::Scalar(s) => Value::Scalar(Some(format!("{}", s).into_bytes())),
+                        ValueRef::Scalar(s) => Value::Scalar(Some(s.to_string().into_bytes())),
                         ValueRef::Column(from) => {
+                            let options = NUM_TYPE::lexical_options();
+                            const FORMAT: u128 = lexical_core::format::STANDARD;
                             let mut builder =
                                 StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
                             let values = &mut builder.data;
@@ -449,13 +390,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                             unsafe {
                                 for x in from.iter() {
                                     values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                    let bytes = std::slice::from_raw_parts_mut(
-                                        values.as_mut_ptr().add(offset),
-                                        values.capacity() - offset,
-                                    );
+                                    values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                    let bytes = &mut values[offset..];
                                     let len =
-                                        lexical_core::write_unchecked(Native::from(*x), bytes)
-                                            .len();
+                                        lexical_core::write_with_options_unchecked::<_, FORMAT>(
+                                            Native::from(*x),
+                                            bytes,
+                                            &options,
+                                        )
+                                        .len();
                                     offset += len;
                                     builder.offsets.push(offset as u64);
                                 }
@@ -565,10 +508,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 match str_val.parse::<DEST_TYPE>() {
                                     Ok(new_val) => output.push(new_val),
                                     Err(e) => {
-                                        ctx.set_error(output.len(), format!(
-                                            "unable to cast {} to {}: {}",
-                                            str_val, dest_type, e
-                                        ));
+                                        ctx.set_error(
+                                            output.len(),
+                                            format!(
+                                                "unable to cast {} to {}: {}",
+                                                str_val, dest_type, e
+                                            ),
+                                        );
                                         output.push(DEST_TYPE::default());
                                     }
                                 };
