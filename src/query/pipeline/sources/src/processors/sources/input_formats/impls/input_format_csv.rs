@@ -150,7 +150,7 @@ impl InputFormatTextBase for InputFormatCSV {
                     }
                     OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
                     OnErrorMode::AbortNum(n) => {
-                        if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) == n {
+                        if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) >= n {
                             return Err(e);
                         }
                     });

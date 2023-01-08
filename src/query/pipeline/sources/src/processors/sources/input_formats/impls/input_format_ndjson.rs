@@ -159,7 +159,7 @@ impl InputFormatTextBase for InputFormatNDJson {
                         }
                         OnErrorMode::AbortNum(n) if n == 1 => return Err(ErrorCode::BadBytes(msg)),
                         OnErrorMode::AbortNum(n) => {
-                            if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) == n {
+                            if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) >= n {
                                 return Err(ErrorCode::BadBytes(msg));
                             }
                             columns.iter_mut().for_each(|c| {
