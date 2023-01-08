@@ -29,7 +29,7 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::Scalar;
 use common_expression::Value;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;

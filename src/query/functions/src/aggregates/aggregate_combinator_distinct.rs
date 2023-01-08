@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,12 +18,16 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_base::runtime::ThreadPool;
-use common_datavalues::prelude::*;
 use common_exception::Result;
-use ordered_float::OrderedFloat;
+use common_expression::types::number::NumberColumnBuilder;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::with_number_mapped_type;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 
-use super::aggregate_distinct_state::AggregateDistinctPrimitiveState;
+use super::aggregate_distinct_state::AggregateDistinctNumberState;
 use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
@@ -41,7 +45,7 @@ pub struct AggregateDistinctCombinator<State> {
     name: String,
 
     nested_name: String,
-    arguments: Vec<DataField>,
+    arguments: Vec<DataType>,
     nested: Arc<dyn AggregateFunction>,
     _state: PhantomData<State>,
 }
@@ -53,7 +57,7 @@ where State: DistinctStateFunc
         &self.name
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
+    fn return_type(&self) -> Result<DataType> {
         self.nested.return_type()
     }
 
@@ -74,7 +78,7 @@ where State: DistinctStateFunc
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[ColumnRef],
+        columns: &[Column],
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -82,7 +86,7 @@ where State: DistinctStateFunc
         state.batch_add(columns, validity, input_rows)
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
         let state = place.get::<State>();
         state.add(columns, row)
     }
@@ -103,43 +107,32 @@ where State: DistinctStateFunc
         state.merge(rhs)
     }
 
-    fn support_merge_parallel(&self) -> bool {
-        State::support_merge_parallel()
-    }
-
-    fn merge_parallel(
-        &self,
-        pool: &mut ThreadPool,
-        place: StateAddr,
-        rhs: StateAddr,
-    ) -> Result<()> {
-        let state = place.get::<State>();
-        let rhs = rhs.get::<State>();
-        state.merge_parallel(pool, rhs)
-    }
-
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
 
         let layout = Layout::new::<State>();
         let netest_place = place.next(layout.size());
+
         // faster path for count
         if self.nested.name() == "AggregateCountFunction" {
-            let mut builder: &mut MutablePrimitiveColumn<u64> =
-                Series::check_get_mutable_column(array)?;
-            builder.append_value(state.len() as u64);
+            match builder {
+                ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
+                    builder.push(state.len() as u64);
+                }
+                _ => unreachable!(),
+            }
             Ok(())
         } else {
             if state.is_empty() {
-                return self.nested.merge_result(netest_place, array);
+                return self.nested.merge_result(netest_place, builder);
             }
             let columns = state.build_columns(&self.arguments).unwrap();
 
             self.nested
                 .accumulate(netest_place, &columns, None, state.len())?;
             // merge_result
-            self.nested.merge_result(netest_place, array)
+            self.nested.merge_result(netest_place, builder)
         }
     }
 
@@ -158,7 +151,7 @@ where State: DistinctStateFunc
         }
     }
 
-    fn get_if_condition(&self, columns: &[ColumnRef]) -> Option<Bitmap> {
+    fn get_if_condition(&self, columns: &[Column]) -> Option<Bitmap> {
         self.nested.get_if_condition(columns)
     }
 }
@@ -186,44 +179,17 @@ pub fn aggregate_combinator_uniq_desc() -> AggregateFunctionDescription {
 
 pub fn try_create_uniq(
     nested_name: &str,
-    params: Vec<DataValue>,
-    arguments: Vec<DataField>,
+    params: Vec<Scalar>,
+    arguments: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     let creator: AggregateFunctionCreator = Box::new(AggregateCountFunction::try_create);
     try_create(nested_name, params, arguments, &creator)
 }
 
-#[macro_export]
-macro_rules! dispatch_primitive_type_id {
-    ($key_type:expr, | $_:tt $T:ident| $_a:tt $E:ident | $body:tt,  $nbody:tt) => {{
-        macro_rules! __with_ty__ {
-            ( $_ $T:ident, $_a $E:ident ) => {
-                $body
-            };
-        }
-        type OrderF32 = OrderedFloat<f32>;
-        type OrderF64 = OrderedFloat<f64>;
-        match $key_type {
-            TypeID::Int8 => __with_ty__! { i8, i8 },
-            TypeID::Int16 => __with_ty__! { i16, i16 },
-            TypeID::Int32 => __with_ty__! { i32, i32 },
-            TypeID::Int64 => __with_ty__! { i64, i64 },
-            TypeID::UInt8 => __with_ty__! { u8, u8 },
-            TypeID::UInt16 => __with_ty__! { u16, u16 },
-            TypeID::UInt32 => __with_ty__! { u32, u32 },
-            TypeID::UInt64 => __with_ty__! { u64, u64 },
-            TypeID::Float32 => __with_ty__! { f32, OrderF32 },
-            TypeID::Float64 => __with_ty__! { f64, OrderF64 },
-
-            _ => $nbody,
-        }
-    }};
-}
-
 pub fn try_create(
     nested_name: &str,
-    params: Vec<DataValue>,
-    arguments: Vec<DataField>,
+    params: Vec<Scalar>,
+    arguments: Vec<DataType>,
     nested_creator: &AggregateFunctionCreator,
 ) -> Result<Arc<dyn AggregateFunction>> {
     let name = format!("DistinctCombinator({})", nested_name);
@@ -234,45 +200,45 @@ pub fn try_create(
         _ => arguments.clone(),
     };
     let nested = nested_creator(nested_name, params, nested_arguments)?;
+
     if arguments.len() == 1 {
-        let data_type = arguments[0].data_type().clone();
-        let phid = data_type.data_type_id();
-        if phid.is_numeric() {
-            dispatch_primitive_type_id!(phid, |$T |$E|  {
-                return Ok(Arc::new(AggregateDistinctCombinator::<
-                    AggregateDistinctPrimitiveState<$T, $E>,
-                > {
-                    nested_name: nested_name.to_owned(),
-                    arguments,
-                    nested,
-                    name,
-                    _state: PhantomData,
-                }));
-            }, {
-                unreachable!()
-            })
-        }
-        if phid.is_string() {
-            return match nested_name {
-                "count" | "uniq" => Ok(Arc::new(AggregateDistinctCombinator::<
-                    AggregateUniqStringState,
-                > {
-                    name,
-                    arguments,
-                    nested,
-                    nested_name: nested_name.to_owned(),
-                    _state: PhantomData,
-                })),
-                _ => Ok(Arc::new(AggregateDistinctCombinator::<
-                    AggregateDistinctStringState,
-                > {
-                    nested_name: nested_name.to_owned(),
-                    arguments,
-                    nested,
-                    name,
-                    _state: PhantomData,
-                })),
-            };
+        match &arguments[0] {
+            DataType::Number(ty) => with_number_mapped_type!(|NUM_TYPE| match ty {
+                NumberDataType::NUM_TYPE => {
+                    return Ok(Arc::new(AggregateDistinctCombinator::<
+                        AggregateDistinctNumberState<NUM_TYPE>,
+                    > {
+                        nested_name: nested_name.to_owned(),
+                        arguments,
+                        nested,
+                        name,
+                        _state: PhantomData,
+                    }));
+                }
+            }),
+            DataType::String => {
+                return match nested_name {
+                    "count" | "uniq" => Ok(Arc::new(AggregateDistinctCombinator::<
+                        AggregateUniqStringState,
+                    > {
+                        name,
+                        arguments,
+                        nested,
+                        nested_name: nested_name.to_owned(),
+                        _state: PhantomData,
+                    })),
+                    _ => Ok(Arc::new(AggregateDistinctCombinator::<
+                        AggregateDistinctStringState,
+                    > {
+                        nested_name: nested_name.to_owned(),
+                        arguments,
+                        nested,
+                        name,
+                        _state: PhantomData,
+                    })),
+                };
+            }
+            _ => {}
         }
     }
     Ok(Arc::new(AggregateDistinctCombinator::<

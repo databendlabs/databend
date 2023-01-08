@@ -21,7 +21,6 @@ use common_exception::Result;
 
 use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
-use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
 use crate::serializations::StructSerializer;
@@ -173,14 +172,7 @@ impl DataType for StructType {
     }
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        match self.names {
-            Some(_) => None,
-            None => {
-                let mut mp = BTreeMap::new();
-                mp.insert(ARROW_EXTENSION_NAME.to_string(), "Tuple".to_string());
-                Some(mp)
-            }
-        }
+        None
     }
 
     fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {

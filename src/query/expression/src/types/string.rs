@@ -235,6 +235,8 @@ unsafe impl<'a> std::iter::TrustedLen for StringIterator<'a> {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StringColumnBuilder {
+    // if the StringColumnBuilder is created with `data_capacity`, need_estimated is false
+    pub need_estimated: bool,
     pub data: Vec<u8>,
     pub offsets: Vec<u64>,
 }
@@ -244,6 +246,7 @@ impl StringColumnBuilder {
         let mut offsets = Vec::with_capacity(len + 1);
         offsets.push(0);
         StringColumnBuilder {
+            need_estimated: data_capacity == 0,
             data: Vec::with_capacity(data_capacity),
             offsets,
         }
@@ -251,6 +254,7 @@ impl StringColumnBuilder {
 
     pub fn from_column(col: StringColumn) -> Self {
         StringColumnBuilder {
+            need_estimated: col.data.is_empty(),
             data: buffer_into_mut(col.data),
             offsets: col.offsets.to_vec(),
         }
@@ -265,7 +269,11 @@ impl StringColumnBuilder {
         let offsets = once(0)
             .chain((0..n).map(|i| (len * (i + 1)) as u64))
             .collect();
-        StringColumnBuilder { data, offsets }
+        StringColumnBuilder {
+            data,
+            offsets,
+            need_estimated: false,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -281,10 +289,12 @@ impl StringColumnBuilder {
             .extend_from_slice(item.encode_utf8(&mut [0; 4]).as_bytes());
     }
 
+    #[inline]
     pub fn put_str(&mut self, item: &str) {
         self.data.extend_from_slice(item.as_bytes());
     }
 
+    #[inline]
     pub fn put_slice(&mut self, item: &[u8]) {
         self.data.extend_from_slice(item);
     }
@@ -307,8 +317,22 @@ impl StringColumnBuilder {
         res
     }
 
+    #[inline]
     pub fn commit_row(&mut self) {
         self.offsets.push(self.data.len() as u64);
+
+        if self.need_estimated
+            && self.offsets.len() - 1 == 64
+            && self.offsets.len() < self.offsets.capacity()
+        {
+            let bytes_per_row = self.data.len() / 64 + 1;
+            let bytes_estimate = bytes_per_row * self.offsets.capacity();
+
+            // if we are more than 10% over the capacity, we reserve more
+            if bytes_estimate as f64 > self.data.capacity() as f64 * 1.10f64 {
+                self.data.reserve(bytes_estimate - self.data.capacity());
+            }
+        }
     }
 
     pub fn append_column(&mut self, other: &StringColumn) {

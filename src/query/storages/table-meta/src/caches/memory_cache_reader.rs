@@ -108,9 +108,9 @@ impl Loader<FileMetaData> for Operator {
     async fn load(&self, params: &LoadParams) -> Result<FileMetaData> {
         let object = self.object(&params.location);
         let mut reader = if let Some(len) = params.len_hint {
-            object.seekable_reader(..len)
+            object.range_reader(0..len).await?
         } else {
-            object.seekable_reader(..)
+            object.reader().await?
         };
         read_metadata_async(&mut reader).await.map_err(|err| {
             ErrorCode::Internal(format!(

@@ -19,7 +19,7 @@ use common_expression::type_check;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::RawExpr;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::HashJoin;
 use common_sql::executor::PhysicalScalar;
 use parking_lot::RwLock;

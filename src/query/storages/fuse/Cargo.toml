@@ -18,7 +18,7 @@ common-cache = { path = "../../../common/cache" }
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
-common-functions-v2 = { path = "../../functions-v2" }
+common-functions = { path = "../../functions" }
 common-jsonb = { path = "../../../common/jsonb" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
@@ -41,7 +41,7 @@ futures = "0.3.24"
 futures-util = "0.3.24"
 itertools = "0.10.5"
 metrics = "0.20.1"
-opendal = "0.23"
+opendal = "0.24"
 serde = { workspace = true }
 serde_json = { workspace = true }
 streaming-decompression = "0.1.2"

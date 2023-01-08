@@ -76,13 +76,26 @@ impl<'a, T: Copy + Send + Sync + 'static> GroupColumnsBuilder
 pub struct SerializedKeysGroupColumnsBuilder<'a> {
     data: Vec<&'a [u8]>,
     group_data_types: Vec<DataType>,
+
+    single_builder: Option<StringColumnBuilder>,
 }
 
 impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
-    pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
+    pub fn create(capacity: usize, data_capacity: usize, params: &AggregatorParams) -> Self {
+        let (single_builder, data) =
+            if params.group_data_types.len() == 1 && params.group_data_types[0].is_string() {
+                (
+                    Some(StringColumnBuilder::with_capacity(capacity, data_capacity)),
+                    vec![],
+                )
+            } else {
+                (None, Vec::with_capacity(capacity))
+            };
+
         Self {
-            data: Vec::with_capacity(capacity),
+            data,
             group_data_types: params.group_data_types.clone(),
+            single_builder,
         }
     }
 }
@@ -91,23 +104,23 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
     type T = &'a [u8];
 
     fn append_value(&mut self, v: &'a [u8]) {
-        self.data.push(v);
+        match self.single_builder.as_mut() {
+            Some(builder) => {
+                builder.put_slice(v);
+                builder.commit_row();
+            }
+            None => self.data.push(v),
+        }
     }
 
     fn finish(mut self) -> Result<Vec<Column>> {
-        let rows = self.data.len();
-        let keys = self.data.as_mut_slice();
-
-        if self.group_data_types.len() == 1 && self.group_data_types[0].is_string() {
-            let mut builder =
-                StringColumnBuilder::with_capacity(self.data.len(), self.data.len() * 4);
-            for data in self.data {
-                builder.put_slice(data);
-                builder.commit_row();
-            }
+        if let Some(mut builder) = self.single_builder.take() {
             let col = builder.finish_to_column();
             return Ok(vec![col]);
         }
+
+        let rows = self.data.len();
+        let keys = self.data.as_mut_slice();
 
         let mut res = Vec::with_capacity(self.group_data_types.len());
         let format = FormatSettings::default();

@@ -46,7 +46,7 @@ use common_expression::type_check::check_literal;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::Domain;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;

@@ -16,8 +16,8 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
-use common_meta_raft_store::sled_key_spaces::Expire;
-use common_meta_raft_store::sled_key_spaces::GenericKV;
+use common_meta_raft_store::key_spaces::Expire;
+use common_meta_raft_store::key_spaces::GenericKV;
 use common_meta_raft_store::state_machine::ExpireKey;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft::Entry;

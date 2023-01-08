@@ -24,8 +24,8 @@ use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
-use common_functions_v2::aggregates::AggregateFunctionFactory;
-use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -48,8 +48,8 @@ impl AsyncSystemTable for FunctionsTable {
     }
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let function_factory = &BUILTIN_FUNCTIONS;
-        let func_names = function_factory.registered_names();
+        // TODO(andylokandy): add rewritable function names, e.g. database()
+        let func_names = BUILTIN_FUNCTIONS.registered_names();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let aggr_func_names = aggregate_function_factory.registered_names();
         let udfs = FunctionsTable::get_udfs(ctx).await?;

@@ -21,7 +21,7 @@ use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Literal;
-use common_functions_v2::aggregates::AggregateCountFunction;
+use common_functions::aggregates::AggregateCountFunction;
 
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;
@@ -205,6 +205,7 @@ impl SubqueryRewriter {
                 }
 
                 let expr: Scalar = FunctionCall {
+                    params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
                     return_type: func.return_type.clone(),
@@ -297,6 +298,7 @@ impl SubqueryRewriter {
                 let scalar = if flatten_info.from_count_func {
                     // convert count aggregate function to multi_if function, if count() is not null, then count() else 0
                     let is_null = Scalar::FunctionCall(FunctionCall {
+                        params: vec![],
                         arguments: vec![column_ref.clone()],
                         func_name: "is_not_null".to_string(),
                         return_type: Box::new(DataType::Boolean),
@@ -309,6 +311,7 @@ impl SubqueryRewriter {
                     });
                     Scalar::CastExpr(CastExpr {
                         argument: Box::new(Scalar::FunctionCall(FunctionCall {
+                            params: vec![],
                             arguments: vec![is_null, column_ref.clone(), zero],
                             func_name: "if".to_string(),
                             return_type: Box::new(
@@ -322,6 +325,7 @@ impl SubqueryRewriter {
                     })
                 } else if subquery.typ == SubqueryType::NotExists {
                     Scalar::FunctionCall(FunctionCall {
+                        params: vec![],
                         arguments: vec![column_ref],
                         func_name: "not".to_string(),
                         return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),

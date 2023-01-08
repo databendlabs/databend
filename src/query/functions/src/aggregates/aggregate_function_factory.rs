@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Scalar;
 use once_cell::sync::Lazy;
 
 use super::AggregateFunctionCombinatorNull;
@@ -26,13 +27,13 @@ use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
 pub type AggregateFunctionCreator =
-    Box<dyn Fn(&str, Vec<DataValue>, Vec<DataField>) -> Result<AggregateFunctionRef> + Sync + Send>;
+    Box<dyn Fn(&str, Vec<Scalar>, Vec<DataType>) -> Result<AggregateFunctionRef> + Sync + Send>;
 
 pub type AggregateFunctionCombinatorCreator = Box<
     dyn Fn(
             &str,
-            Vec<DataValue>,
-            Vec<DataField>,
+            Vec<Scalar>,
+            Vec<DataType>,
             &AggregateFunctionCreator,
         ) -> Result<AggregateFunctionRef>
         + Sync
@@ -55,7 +56,7 @@ pub struct AggregateFunctionDescription {
 pub struct AggregateFunctionFeatures {
     /// When the function is wrapped with Null combinator,
     /// should we return Nullable type with NULL when no values were aggregated
-    /// or we should return non-Nullable type with default value (example: count, count_distinct).
+    /// or we should return non-Nullable type with default value (example: count, count_distinct, approx_count_distinct)
     pub(crate) returns_default_when_only_null: bool,
 
     // Function Category
@@ -141,8 +142,8 @@ impl AggregateFunctionFactory {
     pub fn get(
         &self,
         name: impl AsRef<str>,
-        params: Vec<DataValue>,
-        arguments: Vec<DataField>,
+        params: Vec<Scalar>,
+        arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         self.get_or_null(name, params, arguments, true)
     }
@@ -150,18 +151,14 @@ impl AggregateFunctionFactory {
     pub fn get_or_null(
         &self,
         name: impl AsRef<str>,
-        params: Vec<DataValue>,
-        arguments: Vec<DataField>,
+        params: Vec<Scalar>,
+        arguments: Vec<DataType>,
         or_null: bool,
     ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
         let mut features = AggregateFunctionFeatures::default();
 
-        if !arguments.is_empty()
-            && arguments
-                .iter()
-                .any(|f| f.is_nullable() || f.data_type().data_type_id() == TypeID::Null)
-        {
+        if !arguments.is_empty() && arguments.iter().any(|f| f.is_nullable_or_null()) {
             let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
             let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
 
@@ -173,7 +170,6 @@ impl AggregateFunctionFactory {
                 nested,
                 features.clone(),
             )?;
-
             if or_null {
                 return AggregateFunctionOrNullAdaptor::create(agg, features);
             } else {
@@ -182,7 +178,6 @@ impl AggregateFunctionFactory {
         }
 
         let agg = self.get_impl(name, params, arguments, &mut features)?;
-
         if or_null {
             AggregateFunctionOrNullAdaptor::create(agg, features)
         } else {
@@ -193,8 +188,8 @@ impl AggregateFunctionFactory {
     fn get_impl(
         &self,
         name: &str,
-        params: Vec<DataValue>,
-        arguments: Vec<DataField>,
+        params: Vec<Scalar>,
+        arguments: Vec<DataType>,
         features: &mut AggregateFunctionFeatures,
     ) -> Result<AggregateFunctionRef> {
         let lowercase_name = name.to_lowercase();
@@ -232,8 +227,8 @@ impl AggregateFunctionFactory {
         )))
     }
 
-    pub fn check(&self, name: impl AsRef<str>) -> bool {
-        let origin = name.as_ref();
+    pub fn contains(&self, func_name: impl AsRef<str>) -> bool {
+        let origin = func_name.as_ref();
         let lowercase_name = origin.to_lowercase();
 
         if self.case_insensitive_desc.contains_key(&lowercase_name) {
