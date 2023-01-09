@@ -99,11 +99,13 @@ impl<'a> BlockWriter<'a> {
         block: &DataBlock,
         block_id: Uuid,
     ) -> Result<(u64, Location)> {
-        let bloom_index = BlockFilter::try_create(FunctionContext::default(), schema, &[block])?;
-        let index_block = bloom_index.filter_block;
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);
+
+        let bloom_index =
+            BlockFilter::try_create(FunctionContext::default(), schema, location.1, &[block])?;
+        let index_block = bloom_index.filter_block;
         let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
         let index_block_schema = &bloom_index.filter_schema;
         let (size, _) = blocks_to_parquet(

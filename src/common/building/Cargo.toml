@@ -14,6 +14,6 @@ test = false
 anyhow = { workspace = true }
 cargo-license = "0.5.1"
 cargo_metadata = "0.15.0"
-git2 = { version = "0.14.4", default-features = false }
+git2 = { version = "0.15.0", default-features = false }
 tracing = "0.1.36"
 vergen = "7.4.2"

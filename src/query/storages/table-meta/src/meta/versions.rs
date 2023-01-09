@@ -95,17 +95,17 @@ impl TableSnapshotStatisticsVersion {
 
 impl Versioned<2> for DataBlock {}
 
-pub struct V0Block {}
-pub struct V2Block {}
+pub struct V0BloomBlock {}
+pub struct V2BloomBlock {}
 
-impl Versioned<0> for V0Block {}
-impl Versioned<2> for V2Block {}
+impl Versioned<0> for V0BloomBlock {}
+impl Versioned<2> for V2BloomBlock {}
 
 impl Versioned<3> for BlockFilter {}
 
 pub enum BlockBloomFilterIndexVersion {
-    V0(PhantomData<V0Block>),
-    V2(PhantomData<V2Block>),
+    V0(PhantomData<V0BloomBlock>),
+    V2(PhantomData<V2BloomBlock>),
     V3(PhantomData<v2::BlockFilter>),
 }
 
@@ -163,9 +163,13 @@ mod converters {
         type Error = ErrorCode;
         fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
-                1 | 2 => Err(ErrorCode::DeprecatedIndexFormat(
+                1 => Err(ErrorCode::DeprecatedIndexFormat(
                     "v1 bloom filter index is deprecated",
                 )),
+                // version 2 and version 3 are using the same StringColumn to storage the bloom filter
+                2 => Ok(BlockBloomFilterIndexVersion::V2(ver_eq::<_, 2>(
+                    PhantomData,
+                ))),
                 3 => Ok(BlockBloomFilterIndexVersion::V3(ver_eq::<_, 3>(
                     PhantomData,
                 ))),
