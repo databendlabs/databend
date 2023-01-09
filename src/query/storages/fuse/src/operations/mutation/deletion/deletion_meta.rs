@@ -21,7 +21,7 @@ use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use common_storages_table_meta::meta::BlockMeta;
 
-use crate::pruning::BlockIndex;
+use crate::pruning::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Deletion {
@@ -32,7 +32,7 @@ pub enum Deletion {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DeletionSourceMeta {
-    pub index: BlockIndex,
+    pub index: BlockMetaIndex,
     pub op: Deletion,
 }
 
@@ -59,7 +59,7 @@ impl BlockMetaInfo for DeletionSourceMeta {
 }
 
 impl DeletionSourceMeta {
-    pub fn create(index: BlockIndex, op: Deletion) -> BlockMetaInfoPtr {
+    pub fn create(index: BlockMetaIndex, op: Deletion) -> BlockMetaInfoPtr {
         Box::new(DeletionSourceMeta { index, op })
     }
 
