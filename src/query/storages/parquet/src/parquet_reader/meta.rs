@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fs::File;
 
 use common_arrow::arrow::array::UInt64Array;
@@ -29,6 +28,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::TableDataType;
+use common_storage::ColumnLeaves;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
@@ -77,38 +77,32 @@ impl ParquetReader {
     ///
     /// The retuened vector's length is the same as `rgs`.
     pub fn collect_row_group_stats(
-        schema: &ArrowSchema,
+        column_leaves: &ColumnLeaves,
         rgs: &[RowGroupMetaData],
-        indices: &HashSet<usize>,
     ) -> Result<Vec<StatisticsOfColumns>> {
         let mut stats = Vec::with_capacity(rgs.len());
         let mut stats_of_row_groups = HashMap::with_capacity(rgs.len());
 
-        for index in indices {
-            if rgs
-                .iter()
-                .any(|rg| rg.columns()[*index].metadata().statistics.is_none())
-            {
-                return Err(ErrorCode::InvalidArgument(
-                    "Some columns of the row groups have no statistics",
-                ));
-            }
-
-            let field = &schema.fields[*index];
+        // Each row_group_stat is a `HashMap` holding key-value pairs.
+        // The first element of the pair is the offset in the schema,
+        // and the second element is the statistics of the column (according to the offset)
+        // `column_leaves` is parallel to the schema, so we can iterate `column_leaves` directly.
+        for (index, column_leaf) in column_leaves.column_leaves.iter().enumerate() {
+            let field = &column_leaf.field;
             let table_type: TableDataType = field.into();
             let data_type = (&table_type).into();
             let column_stats = pread::statistics::deserialize(field, rgs)?;
             stats_of_row_groups.insert(
-                *index,
+                index,
                 BatchStatistics::from_statistics(column_stats, &data_type)?,
             );
         }
 
         for (rg_idx, _) in rgs.iter().enumerate() {
             let mut cols_stats = HashMap::with_capacity(stats.capacity());
-            for index in indices {
-                let col_stats = stats_of_row_groups[index].get(rg_idx);
-                cols_stats.insert(*index as u32, col_stats);
+            for index in 0..column_leaves.column_leaves.len() {
+                let col_stats = stats_of_row_groups[&index].get(rg_idx);
+                cols_stats.insert(index as u32, col_stats);
             }
             stats.push(cols_stats);
         }
