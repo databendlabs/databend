@@ -23,8 +23,8 @@ use common_expression::Expr;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_storages_index::BlockFilter;
-use common_storages_table_meta::meta::Location;
 use opendal::Operator;
+use storages_common_table_meta::meta::Location;
 
 use crate::io::BlockFilterReader;
 

@@ -19,11 +19,11 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_storages_fuse::operations::AppendOperationLogEntry;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::Compression;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
 use databend_query::api::PrecommitBlock;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::Compression;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_precommit_ser_and_deser() -> Result<()> {

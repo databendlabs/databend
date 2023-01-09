@@ -13,9 +13,9 @@
 //  limitations under the License.
 
 use common_arrow::parquet::metadata::FileMetaData;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::caches::MemoryCacheReader;
 use opendal::Operator;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::caches::MemoryCacheReader;
 
 pub type FileMetaDataReader = MemoryCacheReader<FileMetaData, Operator>;
 

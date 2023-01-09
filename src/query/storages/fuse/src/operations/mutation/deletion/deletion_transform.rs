@@ -24,12 +24,12 @@ use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 use crate::io::try_join_futures;
 use crate::io::SegmentsIO;

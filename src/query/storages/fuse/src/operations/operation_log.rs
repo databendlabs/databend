@@ -20,7 +20,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_expression::BlockMetaInfo;
 use common_expression::DataBlock;
-use common_storages_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SegmentInfo;
 
 // currently, only support append,
 pub type TableOperationLog = Vec<AppendOperationLogEntry>;

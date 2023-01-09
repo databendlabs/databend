@@ -33,16 +33,16 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::ClusterKey;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::TableSnapshotStatistics;
-use common_storages_table_meta::meta::Versioned;
-use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::ClusterKey;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableSnapshotStatistics;
+use storages_common_table_meta::meta::Versioned;
+use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -659,7 +659,7 @@ impl MutatorConflictDetector {
 mod utils {
     use std::collections::BTreeMap;
 
-    use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+    use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 
     use super::*;
     use crate::metrics::metrics_inc_commit_mutation_aborts;

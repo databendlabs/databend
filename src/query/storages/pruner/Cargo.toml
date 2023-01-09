@@ -16,7 +16,7 @@ common-catalog = { path = "../../../common/../query/catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-storages-index = { path = "../index" }
-common-storages-table-meta = { path = "../table-meta" }
+storages-common-table-meta = { path = "../common/table-meta" }
 
 serde = { workspace = true }
 tracing = "0.1.36"
