@@ -294,7 +294,7 @@ impl FuseTable {
         let input_schema = self.table_info.schema();
         let mut merged: Vec<DataField> =
             input_schema.fields().iter().map(DataField::from).collect();
-
+        let func_ctx = ctx.try_get_function_context()?;
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
@@ -328,6 +328,7 @@ impl FuseTable {
             self.get_block_compact_thresholds(),
             operators,
             merged,
+            func_ctx,
         ))
     }
 
