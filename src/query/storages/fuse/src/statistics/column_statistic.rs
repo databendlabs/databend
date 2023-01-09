@@ -24,8 +24,8 @@ use common_expression::Scalar;
 use common_functions::aggregates::eval_aggr;
 use common_storages_index::MinMaxIndex;
 use common_storages_index::SupportedType;
-use common_storages_table_meta::meta::ColumnStatistics;
-use common_storages_table_meta::meta::StatisticsOfColumns;
+use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 
 pub fn calc_column_distinct_of_values(
     column: &Column,

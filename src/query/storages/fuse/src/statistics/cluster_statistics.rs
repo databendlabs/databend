@@ -20,7 +20,7 @@ use common_expression::DataField;
 use common_expression::FunctionContext;
 use common_expression::ScalarRef;
 use common_sql::evaluator::BlockOperator;
-use common_storages_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::meta::ClusterStatistics;
 
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {

@@ -33,9 +33,9 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
-use common_storages_table_meta::caches::LoadParams;
 use opendal::Object;
 use opendal::Operator;
+use storages_common_table_meta::caches::LoadParams;
 
 use crate::hive_partition::HivePartInfo;
 use crate::HivePartitionFiller;

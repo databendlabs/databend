@@ -29,8 +29,8 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::TableDataType;
-use common_storages_table_meta::meta::ColumnStatistics;
-use common_storages_table_meta::meta::StatisticsOfColumns;
+use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::ParquetReader;
 

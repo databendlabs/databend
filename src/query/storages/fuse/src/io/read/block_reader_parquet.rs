@@ -28,9 +28,9 @@ use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ColumnMeta;
-use common_storages_table_meta::meta::Compression;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::Compression;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::decompressor::BuffedBasicDecompressor;

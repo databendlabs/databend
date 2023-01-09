@@ -31,10 +31,10 @@ use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
-use common_storages_table_meta::meta::ColumnMeta;
 use futures::future::try_join_all;
 use opendal::Object;
 use opendal::Operator;
+use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::ReadSettings;

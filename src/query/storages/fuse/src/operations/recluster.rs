@@ -30,7 +30,7 @@ use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
-use common_storages_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::FuseTableSink;
 use crate::operations::ReclusterMutator;
