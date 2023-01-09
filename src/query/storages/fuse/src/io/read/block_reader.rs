@@ -124,7 +124,8 @@ impl BlockReader {
 
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
-        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
+        let column_leaves =
+            ColumnLeaves::new_from_schema(&arrow_schema, Some(schema.column_id_map()));
 
         Ok(Arc::new(BlockReader {
             operator,
@@ -278,14 +279,12 @@ impl BlockReader {
 
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
-        let schema = &self.projected_schema;
 
         let mut ranges = vec![];
-        for index in indices.keys() {
-            let column_id = schema.column_id_of_index(*index)?;
+        for (index, (column_id, _field)) in indices {
             if let Some(column_meta) = columns_meta.get(&column_id) {
                 ranges.push((
-                    *index,
+                    index,
                     column_meta.offset..(column_meta.offset + column_meta.len),
                 ));
                 // Perf
@@ -309,14 +308,12 @@ impl BlockReader {
         let part = FusePartInfo::from_part(&part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
-        let schema = &self.projected_schema;
 
         let mut ranges = vec![];
-        for index in indices.keys() {
-            let column_id = schema.column_id_of_index(*index)?;
+        for (index, (column_id, _field)) in indices {
             if let Some(column_meta) = part.columns_meta.get(&column_id) {
                 ranges.push((
-                    *index,
+                    index,
                     column_meta.offset..(column_meta.offset + column_meta.len),
                 ));
             }
@@ -327,11 +324,13 @@ impl BlockReader {
     }
 
     // Build non duplicate leaf_ids to avoid repeated read column from parquet
-    pub(crate) fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashMap<usize, Field> {
+    pub(crate) fn build_projection_indices(
+        columns: &Vec<&ColumnLeaf>,
+    ) -> HashMap<usize, (ColumnId, Field)> {
         let mut indices = HashMap::with_capacity(columns.len());
         for column in columns {
-            for index in &column.leaf_ids {
-                indices.insert(*index, column.field.clone());
+            for (i, index) in column.leaf_ids.iter().enumerate() {
+                indices.insert(*index, (column.leaf_column_ids[i], column.field.clone()));
             }
         }
         indices

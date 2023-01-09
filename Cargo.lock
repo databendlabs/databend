@@ -2031,6 +2031,7 @@ dependencies = [
  "common-arrow",
  "common-auth",
  "common-base",
+ "common-datavalues",
  "common-exception",
  "futures",
  "globiter",

@@ -57,6 +57,7 @@ fn test_to_partitions() -> Result<()> {
     let col_leaves_gen = |col_id| ColumnLeaf {
         field: ArrowField::new("".to_string(), ArrowType::Int64, false),
         leaf_ids: vec![col_id],
+        leaf_column_ids: vec![col_id as u32],
         children: None,
     };
 

@@ -13,6 +13,7 @@ storage-hdfs = ["opendal/services-hdfs"]
 common-arrow = { path = "../arrow" }
 common-auth = { path = "../auth" }
 common-base = { path = "../base" }
+common-datavalues = { path = "../../query/datavalues" }
 common-exception = { path = "../exception" }
 
 anyhow = { workspace = true }

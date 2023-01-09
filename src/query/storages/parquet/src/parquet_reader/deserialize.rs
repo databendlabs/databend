@@ -49,7 +49,6 @@ impl ParquetReader {
 
         let column_leaves = &self.projected_column_leaves.column_leaves;
         let mut cnt_map = Self::build_projection_count_map(column_leaves);
-        let schema = &self.output_schema;
 
         let mut field_marks = Vec::new();
         let mut column_in_block_meta = false;
@@ -58,8 +57,8 @@ impl ParquetReader {
             let indices = &column_leaf.leaf_ids;
             let mut metas = Vec::with_capacity(indices.len());
             let mut chunks = Vec::with_capacity(indices.len());
-            for index in indices {
-                let column_id = schema.column_id_of_index(*index)?;
+            for (i, index) in indices.into_iter().enumerate() {
+                let column_id = column_leaf.leaf_column_ids[i];
 
                 if let Some(column_meta) = part.column_metas.get(&column_id) {
                     let cnt = cnt_map.get_mut(index).unwrap();

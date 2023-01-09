@@ -29,10 +29,10 @@ message DataSchema {
   // Other optional table info
   map<string, string> metadata = 2;
 
-  // Map column name to column id
-  map<string, uint32> column_id_map = 3;
+  uint32 max_column_id = 3;
 
-  uint32 max_column_id = 4;
+  // Map column name to column id
+  map<string, uint32> column_id_map = 4;
 }
 
 // One field, AKA column

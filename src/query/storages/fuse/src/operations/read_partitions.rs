@@ -137,7 +137,8 @@ impl FuseTable {
         partitions_total: usize,
     ) -> Result<(PartStatistics, Partitions)> {
         let arrow_schema = schema.to_arrow();
-        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
+        let column_leaves =
+            ColumnLeaves::new_from_schema(&arrow_schema, Some(schema.column_id_map()));
 
         let partitions_scanned = block_metas.len();
 
@@ -259,13 +260,9 @@ impl FuseTable {
             let columns = projection.project_column_leaves(column_leaves).unwrap();
             for column in &columns {
                 let indices = &column.leaf_ids;
-                for index in indices {
+                for (i, _index) in indices.into_iter().enumerate() {
                     // ignore all deleted field
-                    let column_id = if let Some(schema) = schema {
-                        schema.column_id_of_index(*index).unwrap()
-                    } else {
-                        *index as u32
-                    };
+                    let column_id = column.leaf_column_ids[i];
 
                     if let Some(col_metas) = block_meta.col_metas.get(&column_id) {
                         statistics.read_bytes += col_metas.len as usize;
@@ -316,7 +313,7 @@ impl FuseTable {
     }
 
     fn projection_part(
-        schema: Option<&DataSchemaRef>,
+        _schema: Option<&DataSchemaRef>,
         meta: &BlockMeta,
         column_leaves: &ColumnLeaves,
         projection: &Projection,
@@ -326,12 +323,8 @@ impl FuseTable {
         let columns = projection.project_column_leaves(column_leaves).unwrap();
         for column in &columns {
             let indices = &column.leaf_ids;
-            for index in indices {
-                let column_id = if let Some(schema) = schema {
-                    schema.column_id_of_index(*index).unwrap()
-                } else {
-                    *index as u32
-                };
+            for (i, _index) in indices.into_iter().enumerate() {
+                let column_id = column.leaf_column_ids[i];
 
                 // ignore column this block dose not exist
                 if let Some(column_meta) = meta.col_metas.get(&column_id) {

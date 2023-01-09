@@ -109,7 +109,7 @@ impl ParquetReader {
         HashSet<usize>,
     )> {
         // Full schema and column leaves.
-        let column_leaves = ColumnLeaves::new_from_schema(schema);
+        let column_leaves = ColumnLeaves::new_from_schema(schema, None);
         let schema_descriptors = to_parquet_schema(schema)?;
         // Project schema
         let projected_arrow_schema = match projection {

@@ -76,7 +76,7 @@ impl DataSchema {
     }
 
     fn build_members_from_fields(
-        fields: &Vec<DataField>,
+        fields: &[DataField],
         column_id_map: Option<BTreeMap<String, u32>>,
         max_column_id_opt: Option<u32>,
     ) -> (u32, BTreeMap<String, u32>, HashSet<u32>) {
@@ -84,7 +84,7 @@ impl DataSchema {
         let mut has_column_id_map_inited = false;
         let mut column_id_map = match column_id_map {
             Some(column_id_map) => {
-                has_column_id_map_inited = column_id_map.len() > 0;
+                has_column_id_map_inited = !column_id_map.is_empty();
                 column_id_map
             }
             None => BTreeMap::new(),
@@ -116,16 +116,15 @@ impl DataSchema {
             });
         }
 
+        let new_max_column_id = if has_max_column_id_inited {
+            max_column_id_opt.unwrap()
+        } else {
+            max_column_id
+        };
         // check max_column_id_opt value cannot fallback
-        if let Some(max_column_id_opt) = max_column_id_opt {
-            assert!(max_column_id_opt >= max_column_id);
-        }
+        assert!(new_max_column_id >= max_column_id);
 
-        (
-            max_column_id_opt.unwrap_or(max_column_id),
-            column_id_map,
-            column_id_set,
-        )
+        (new_max_column_id, column_id_map, column_id_set)
     }
 
     pub fn new(fields: Vec<DataField>) -> Self {
@@ -417,7 +416,6 @@ impl DataSchema {
             .iter()
             .map(|f| f.to_arrow())
             .collect::<Vec<_>>();
-
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
 

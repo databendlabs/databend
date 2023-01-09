@@ -50,10 +50,8 @@ impl BlockReader {
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
-        let schema = &self.projected_schema;
 
-        for (index, field) in indices {
-            let column_id = schema.column_id_of_index(index)?;
+        for (index, (column_id, field)) in indices {
             if let Some(column_meta) = part.columns_meta.get(&column_id) {
                 join_handlers.push(Self::read_native_columns_data(
                     self.operator.object(&part.location),
@@ -106,10 +104,8 @@ impl BlockReader {
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
         let mut results = Vec::with_capacity(indices.len());
-        let schema = &self.projected_schema;
 
-        for (index, field) in indices {
-            let column_id = schema.column_id_of_index(index)?;
+        for (index, (column_id, field)) in indices {
             if let Some(column_meta) = part.columns_meta.get(&column_id) {
                 let op = self.operator.clone();
 
