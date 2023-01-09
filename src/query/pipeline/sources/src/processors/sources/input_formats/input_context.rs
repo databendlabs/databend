@@ -334,7 +334,7 @@ impl InputContext {
         };
         let msg = format!(
             "{reason}, split {}, {pos}, options={:?}, schema={:?}",
-            split_info, self.format_options, self.schema
+            split_info, self.format_options, self.schema.fields()
         );
         ErrorCode::BadBytes(msg)
     }
