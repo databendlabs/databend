@@ -135,7 +135,17 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
             return Ok(vec![]);
         }
 
-        let mut output = RowBatch::default();
+        let mut output = RowBatch {
+            data: vec![],
+            row_ends: vec![],
+            field_ends: vec![],
+            split_info: self.split_info.clone(),
+            path: "".to_string(),
+            batch_id: self.common.batch_id,
+            start_offset_in_split: self.common.offset,
+            start_row_in_split: self.common.rows,
+            start_row_of_split: self.split_info.start_row_text(),
+        };
         let rows = &mut output.row_ends;
         for (i, b) in buf.iter().enumerate() {
             if *b == b'\n' {
@@ -152,9 +162,6 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
             self.tail_of_last_batch.extend_from_slice(&buf[batch_end..]);
             let size = output.data.len();
             output.path = self.split_info.file.path.to_string();
-            output.start_row = Some(self.common.rows);
-            output.offset = self.common.offset;
-            output.batch_id = self.common.batch_id;
             self.common.offset += size;
             self.common.rows += rows.len();
             self.common.batch_id += 1;
@@ -181,10 +188,12 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
                 data,
                 row_ends: vec![end],
                 field_ends: vec![],
+                split_info: self.split_info.clone(),
                 path: self.split_info.file.path.clone(),
                 batch_id: self.common.batch_id,
-                offset: self.common.offset,
-                start_row: Some(self.common.rows),
+                start_offset_in_split: self.common.offset,
+                start_row_in_split: self.common.rows,
+                start_row_of_split: self.split_info.start_row_text(),
             };
             tracing::debug!(
                 "align flush batch {}, bytes = {}, start_row = {}",
@@ -220,18 +229,6 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
 }
 
-pub struct InputFormatText<T: InputFormatTextBase> {
-    phantom: PhantomData<T>,
-}
-
-impl<T: InputFormatTextBase> InputFormatText<T> {
-    pub fn create() -> Self {
-        Self {
-            phantom: Default::default(),
-        }
-    }
-}
-
 pub struct InputFormatTextPipe<T> {
     phantom: PhantomData<T>,
 }
@@ -246,21 +243,7 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
-    fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
-    }
-
-    fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
-    }
-
-    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<TableSchemaRef> {
-        Err(ErrorCode::Unimplemented(
-            "infer_schema is not implemented for this format yet.",
-        ))
-    }
-
+impl<T: InputFormatTextBase> InputFormat for T {
     async fn get_splits(
         &self,
         files: &[String],
@@ -322,19 +305,46 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
         }
         Ok(infos)
     }
+
+    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<TableSchemaRef> {
+        Err(ErrorCode::Unimplemented(
+            "infer_schema is not implemented for this format yet.",
+        ))
+    }
+
+    fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
+        InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
+    }
+
+    fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
+        InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
+    }
 }
 
-#[derive(Default)]
 pub struct RowBatch {
     pub data: Vec<u8>,
     pub row_ends: Vec<usize>,
     pub field_ends: Vec<usize>,
 
+    pub split_info: Arc<SplitInfo>,
     // for error info
     pub path: String,
     pub batch_id: usize,
-    pub offset: usize,
-    pub start_row: Option<usize>,
+    pub start_offset_in_split: usize,
+    pub start_row_in_split: usize,
+    pub start_row_of_split: Option<usize>,
+}
+
+impl RowBatch {
+    pub fn error(&self, msg: &str, ctx: &InputContext, offset: usize, row: usize) -> ErrorCode {
+        ctx.parse_error_row_based(
+            msg,
+            &self.split_info,
+            offset + self.start_offset_in_split,
+            self.start_row_in_split + row,
+            self.start_row_of_split,
+        )
+    }
 }
 
 impl RowBatchTrait for RowBatch {

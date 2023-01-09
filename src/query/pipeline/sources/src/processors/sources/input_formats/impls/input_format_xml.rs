@@ -40,6 +40,9 @@ use crate::processors::sources::input_formats::SplitInfo;
 pub struct InputFormatXML {}
 
 impl InputFormatXML {
+    pub fn create() -> Self {
+        Self {}
+    }
     fn read_row(
         field_decoder: &FieldDecoderXML,
         row_data: &mut HashMap<String, Vec<u8>>,
@@ -116,8 +119,10 @@ impl AligningStateTextBased for AligningStateWholeFile {
             field_ends: vec![],
             path: self.split_info.file.path.clone(),
             batch_id: 0,
-            offset: 0,
-            start_row: Some(0),
+            split_info: self.split_info.clone(),
+            start_offset_in_split: 0,
+            start_row_in_split: 0,
+            start_row_of_split: Some(0),
         }])
     }
 }
