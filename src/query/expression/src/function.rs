@@ -372,14 +372,20 @@ impl TryAdaptor {
         let calc_domain =
             Box::new(
                 move |domains: &[Domain]| match (inner_c.calc_domain)(domains) {
-                    FunctionDomain::Domain(d) => {
-                        let d = NullableDomain {
-                            has_null: true,
-                            value: Some(Box::new(d)),
-                        };
-                        FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(d))
-                    }
-                    other => other,
+                    FunctionDomain::Domain(d) => match d {
+                        Domain::Nullable(other) => {
+                            FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(other))
+                        }
+                        other => {
+                            let d = NullableDomain {
+                                has_null: false,
+                                value: Some(Box::new(other)),
+                            };
+                            FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(d))
+                        }
+                    },
+                    // Here we convert full to full, this may lose some internal information since it's runtime adpator
+                    FunctionDomain::Full | FunctionDomain::MayThrow => FunctionDomain::Full,
                 },
             );
 

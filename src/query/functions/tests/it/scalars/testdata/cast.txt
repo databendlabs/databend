@@ -1284,17 +1284,17 @@ ast            : TRY_CAST(a AS UINT16)
 raw expr       : TRY_CAST(#0::Int16 AS UInt16)
 checked expr   : try_to_uint16<Int16>(#0)
 evaluation:
-+--------+----------+------------------+
-|        | a        | Output           |
-+--------+----------+------------------+
-| Type   | Int16    | UInt16 NULL      |
-| Domain | {-4..=3} | {0..=3} ∪ {NULL} |
-| Row 0  | 0_i16    | 0_u16            |
-| Row 1  | 1_i16    | 1_u16            |
-| Row 2  | 2_i16    | 2_u16            |
-| Row 3  | 3_i16    | 3_u16            |
-| Row 4  | -4_i16   | NULL             |
-+--------+----------+------------------+
++--------+----------+----------------------+
+|        | a        | Output               |
++--------+----------+----------------------+
+| Type   | Int16    | UInt16 NULL          |
+| Domain | {-4..=3} | {0..=65535} ∪ {NULL} |
+| Row 0  | 0_i16    | 0_u16                |
+| Row 1  | 1_i16    | 1_u16                |
+| Row 2  | 2_i16    | 2_u16                |
+| Row 3  | 3_i16    | 3_u16                |
+| Row 4  | -4_i16   | NULL                 |
++--------+----------+----------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------+
 | Column | Data                                                                       |
@@ -1332,18 +1332,18 @@ ast            : (TRY_CAST(a AS FLOAT32), TRY_CAST(a AS INT32), TRY_CAST(b AS FL
 raw expr       : tuple(TRY_CAST(#0::UInt64 AS Float32), TRY_CAST(#0::UInt64 AS Int32), TRY_CAST(#1::Float64 AS Float32), TRY_CAST(#1::Float64 AS Int32))
 checked expr   : tuple<Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL>(try_to_float32<UInt64>(#0), try_to_int32<UInt64>(#0), try_to_float32<Float64>(#1), try_to_int32<Float64>(#1))
 evaluation:
-+--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------+
-|        | a                          | b                                                                                                                                                                                                                                                                                                                              | Output                                                                                                     |
-+--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------+
-| Type   | UInt64                     | Float64                                                                                                                                                                                                                                                                                                                        | (Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL)                                                       |
-| Domain | {0..=18446744073709551615} | {-179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..=inf} | ({0..=18446744000000000000}, {0..=2147483647} ∪ {NULL}, {-inf..=inf}, {-2147483648..=2147483647} ∪ {NULL}) |
-| Row 0  | 0_u64                      | 0_f64                                                                                                                                                                                                                                                                                                                          | (0_f32, 0_i32, 0_f32, 0_i32)                                                                               |
-| Row 1  | 1_u64                      | 4294967295_f64                                                                                                                                                                                                                                                                                                                 | (1_f32, 1_i32, 4294967296_f32, NULL)                                                                       |
-| Row 2  | 255_u64                    | 18446744073709551616_f64                                                                                                                                                                                                                                                                                                       | (255_f32, 255_i32, 18446744073709551616_f32, NULL)                                                         |
-| Row 3  | 65535_u64                  | -179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000_f64     | (65535_f32, 65535_i32, -inf_f32, NULL)                                                                     |
-| Row 4  | 4294967295_u64             | 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000_f64      | (4294967296_f32, NULL, inf_f32, NULL)                                                                      |
-| Row 5  | 18446744073709551615_u64   | inf_f64                                                                                                                                                                                                                                                                                                                        | (18446744073709551616_f32, NULL, inf_f32, NULL)                                                            |
-+--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------+
++--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------+
+|        | a                          | b                                                                                                                                                                                                                                                                                                                              | Output                                                                                                               |
++--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------+
+| Type   | UInt64                     | Float64                                                                                                                                                                                                                                                                                                                        | (Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL)                                                                 |
+| Domain | {0..=18446744073709551615} | {-179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..=inf} | ({0..=18446744000000000000}, {-2147483648..=2147483647} ∪ {NULL}, {-inf..=inf}, {-2147483648..=2147483647} ∪ {NULL}) |
+| Row 0  | 0_u64                      | 0_f64                                                                                                                                                                                                                                                                                                                          | (0_f32, 0_i32, 0_f32, 0_i32)                                                                                         |
+| Row 1  | 1_u64                      | 4294967295_f64                                                                                                                                                                                                                                                                                                                 | (1_f32, 1_i32, 4294967296_f32, NULL)                                                                                 |
+| Row 2  | 255_u64                    | 18446744073709551616_f64                                                                                                                                                                                                                                                                                                       | (255_f32, 255_i32, 18446744073709551616_f32, NULL)                                                                   |
+| Row 3  | 65535_u64                  | -179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000_f64     | (65535_f32, 65535_i32, -inf_f32, NULL)                                                                               |
+| Row 4  | 4294967295_u64             | 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000_f64      | (4294967296_f32, NULL, inf_f32, NULL)                                                                                |
+| Row 5  | 18446744073709551615_u64   | inf_f64                                                                                                                                                                                                                                                                                                                        | (18446744073709551616_f32, NULL, inf_f32, NULL)                                                                      |
++--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -1384,17 +1384,17 @@ ast            : TRY_CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))
 raw expr       : TRY_CAST(tuple(#0::Int16, #1::Int16, NULL) AS (Int8, UInt8, Boolean NULL))
 checked expr   : TRY_CAST(tuple<Int16, Int16, NULL>(#0, #1, NULL) AS (Int8 NULL, UInt8 NULL, Boolean NULL) NULL)
 evaluation:
-+--------+-----------+------------+------------------------------------------------+
-|        | a         | b          | Output                                         |
-+--------+-----------+------------+------------------------------------------------+
-| Type   | Int16     | Int16      | (Int8 NULL, UInt8 NULL, Boolean NULL) NULL     |
-| Domain | {0..=256} | {-129..=1} | ({0..=127} ∪ {NULL}, {0..=1} ∪ {NULL}, {NULL}) |
-| Row 0  | 0_i16     | 0_i16      | (0_i8, 0_u8, NULL)                             |
-| Row 1  | 1_i16     | 1_i16      | (1_i8, 1_u8, NULL)                             |
-| Row 2  | 2_i16     | -127_i16   | (2_i8, NULL, NULL)                             |
-| Row 3  | 127_i16   | -128_i16   | (127_i8, NULL, NULL)                           |
-| Row 4  | 256_i16   | -129_i16   | (NULL, NULL, NULL)                             |
-+--------+-----------+------------+------------------------------------------------+
++--------+-----------+------------+-----------------------------------------------------+
+|        | a         | b          | Output                                              |
++--------+-----------+------------+-----------------------------------------------------+
+| Type   | Int16     | Int16      | (Int8 NULL, UInt8 NULL, Boolean NULL) NULL          |
+| Domain | {0..=256} | {-129..=1} | ({-128..=127} ∪ {NULL}, {0..=255} ∪ {NULL}, {NULL}) |
+| Row 0  | 0_i16     | 0_i16      | (0_i8, 0_u8, NULL)                                  |
+| Row 1  | 1_i16     | 1_i16      | (1_i8, 1_u8, NULL)                                  |
+| Row 2  | 2_i16     | -127_i16   | (2_i8, NULL, NULL)                                  |
+| Row 3  | 127_i16   | -128_i16   | (127_i8, NULL, NULL)                                |
+| Row 4  | 256_i16   | -129_i16   | (NULL, NULL, NULL)                                  |
++--------+-----------+------------+-----------------------------------------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                        |
@@ -1457,17 +1457,17 @@ ast            : TRY_CAST(a AS UINT16)
 raw expr       : TRY_CAST(#0::Int16 AS UInt16)
 checked expr   : try_to_uint16<Int16>(#0)
 evaluation:
-+--------+----------+------------------+
-|        | a        | Output           |
-+--------+----------+------------------+
-| Type   | Int16    | UInt16 NULL      |
-| Domain | {-4..=3} | {0..=3} ∪ {NULL} |
-| Row 0  | 0_i16    | 0_u16            |
-| Row 1  | 1_i16    | 1_u16            |
-| Row 2  | 2_i16    | 2_u16            |
-| Row 3  | 3_i16    | 3_u16            |
-| Row 4  | -4_i16   | NULL             |
-+--------+----------+------------------+
++--------+----------+----------------------+
+|        | a        | Output               |
++--------+----------+----------------------+
+| Type   | Int16    | UInt16 NULL          |
+| Domain | {-4..=3} | {0..=65535} ∪ {NULL} |
+| Row 0  | 0_i16    | 0_u16                |
+| Row 1  | 1_i16    | 1_u16                |
+| Row 2  | 2_i16    | 2_u16                |
+| Row 3  | 3_i16    | 3_u16                |
+| Row 4  | -4_i16   | NULL                 |
++--------+----------+----------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------+
 | Column | Data                                                                       |
@@ -1481,17 +1481,17 @@ ast            : TRY_CAST(c AS INT16)
 raw expr       : TRY_CAST(#0::Int64 AS Int16)
 checked expr   : try_to_int16<Int64>(#0)
 evaluation:
-+--------+--------------------+-----------------------+
-|        | c                  | Output                |
-+--------+--------------------+-----------------------+
-| Type   | Int64              | Int16 NULL            |
-| Domain | {-4..=11111111111} | {-4..=32767} ∪ {NULL} |
-| Row 0  | 0_i64              | 0_i16                 |
-| Row 1  | 11111111111_i64    | NULL                  |
-| Row 2  | 2_i64              | 2_i16                 |
-| Row 3  | 3_i64              | 3_i16                 |
-| Row 4  | -4_i64             | -4_i16                |
-+--------+--------------------+-----------------------+
++--------+--------------------+---------------------------+
+|        | c                  | Output                    |
++--------+--------------------+---------------------------+
+| Type   | Int64              | Int16 NULL                |
+| Domain | {-4..=11111111111} | {-32768..=32767} ∪ {NULL} |
+| Row 0  | 0_i64              | 0_i16                     |
+| Row 1  | 11111111111_i64    | NULL                      |
+| Row 2  | 2_i64              | 2_i16                     |
+| Row 3  | 3_i64              | 3_i16                     |
+| Row 4  | -4_i64             | -4_i16                    |
++--------+--------------------+---------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------+
 | Column | Data                                                                       |
@@ -1506,7 +1506,7 @@ raw expr       : TRY_CAST(NULL AS Variant)
 checked expr   : try_to_variant<T0=NULL><T0>(NULL)
 optimized expr : 0x2000000000000000
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : null
 
 
@@ -1515,7 +1515,7 @@ raw expr       : TRY_CAST(0_u8 AS Variant)
 checked expr   : try_to_variant<T0=UInt8><T0>(0_u8)
 optimized expr : 0x200000002000000100
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : 0
 
 
@@ -1524,7 +1524,7 @@ raw expr       : TRY_CAST(minus(1_u8) AS Variant)
 checked expr   : try_to_variant<T0=Int16><T0>(minus<UInt8>(1_u8))
 optimized expr : 0x200000002000000240ff
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : -1
 
 
@@ -1533,7 +1533,7 @@ raw expr       : TRY_CAST(1.1_f64 AS Variant)
 checked expr   : try_to_variant<T0=Float64><T0>(1.1_f64)
 optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : 1.1
 
 
@@ -1542,7 +1542,7 @@ raw expr       : TRY_CAST("🍦 が美味しい" AS Variant)
 checked expr   : try_to_variant<T0=String><T0>("🍦 が美味しい")
 optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : "🍦 が美味しい"
 
 
@@ -1551,7 +1551,7 @@ raw expr       : TRY_CAST(array(0_u8, 1_u8, 2_u8) AS Variant)
 checked expr   : try_to_variant<T0=Array(UInt8)><T0>(array<T0=UInt8><T0, T0, T0>(0_u8, 1_u8, 2_u8))
 optimized expr : 0x800000032000000120000002200000020050015002
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : [0,1,2]
 
 
@@ -1560,7 +1560,7 @@ raw expr       : TRY_CAST(array(0_u8, "a") AS Variant)
 checked expr   : try_to_variant<T0=Array(Variant)><T0>(array<T0=Variant><T0, T0>(CAST(0_u8 AS Variant), CAST("a" AS Variant)))
 optimized expr : 0x8000000220000001100000010061
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : [0,"a"]
 
 
@@ -1569,7 +1569,7 @@ raw expr       : TRY_CAST(to_timestamp(1000000_u32) AS Variant)
 checked expr   : try_to_variant<T0=Timestamp><T0>(to_timestamp<Int64>(CAST(1000000_u32 AS Int64)))
 optimized expr : 0x200000001000001a313937302d30312d31322031333a34363a34302e303030303030
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : "1970-01-12 13:46:40.000000"
 
 
@@ -1578,7 +1578,7 @@ raw expr       : TRY_CAST(false AS Variant)
 checked expr   : try_to_variant<T0=Boolean><T0>(false)
 optimized expr : 0x2000000030000000
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : false
 
 
@@ -1587,7 +1587,7 @@ raw expr       : TRY_CAST(true AS Variant)
 checked expr   : try_to_variant<T0=Boolean><T0>(true)
 optimized expr : 0x2000000040000000
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : true
 
 
@@ -1596,7 +1596,7 @@ raw expr       : TRY_CAST(TRY_CAST("🍦 が美味しい" AS Variant) AS Variant
 checked expr   : try_to_variant<T0=String><T0>("🍦 が美味しい")
 optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : "🍦 が美味しい"
 
 
@@ -1605,7 +1605,7 @@ raw expr       : TRY_CAST(tuple(1_u8) AS Variant)
 checked expr   : try_to_variant<T0=(UInt8,)><T0>(tuple<UInt8>(1_u8))
 optimized expr : 0x400000011000000120000002315001
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : {"1":1}
 
 
@@ -1614,7 +1614,7 @@ raw expr       : TRY_CAST(tuple(1_u8, 2_u8) AS Variant)
 checked expr   : try_to_variant<T0=(UInt8, UInt8)><T0>(tuple<UInt8, UInt8>(1_u8, 2_u8))
 optimized expr : 0x4000000210000001100000012000000220000002313250015002
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : {"1":1,"2":2}
 
 
@@ -1623,7 +1623,7 @@ raw expr       : TRY_CAST(tuple(false, true) AS Variant)
 checked expr   : try_to_variant<T0=(Boolean, Boolean)><T0>(tuple<Boolean, Boolean>(false, true))
 optimized expr : 0x40000002100000011000000130000000400000003132
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : {"1":false,"2":true}
 
 
@@ -1632,7 +1632,7 @@ raw expr       : TRY_CAST(tuple("a") AS Variant)
 checked expr   : try_to_variant<T0=(String,)><T0>(tuple<String>("a"))
 optimized expr : 0x4000000110000001100000013161
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : {"1":"a"}
 
 
@@ -1641,7 +1641,7 @@ raw expr       : TRY_CAST(tuple(1_u8, 2_u8, tuple(false, true, tuple("a"))) AS V
 checked expr   : try_to_variant<T0=(UInt8, UInt8, (Boolean, Boolean, (String,)))><T0>(tuple<UInt8, UInt8, (Boolean, Boolean, (String,))>(1_u8, 2_u8, tuple<Boolean, Boolean, (String,)>(false, true, tuple<String>("a"))))
 optimized expr : 0x4000000310000001100000011000000120000002200000025000002d313233500150024000000310000001100000011000000130000000400000005000000e3132334000000110000001100000013161
 output type    : Variant NULL
-output domain  : Undefined
+output domain  : Undefined ∪ {NULL}
 output         : {"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}
 
 
@@ -1649,15 +1649,15 @@ ast            : TRY_CAST(a AS VARIANT)
 raw expr       : TRY_CAST(#0::String NULL AS Variant)
 checked expr   : try_to_variant<T0=String NULL><T0>(#0)
 evaluation:
-+--------+------------------------+--------------+
-|        | a                      | Output       |
-+--------+------------------------+--------------+
-| Type   | String NULL            | Variant NULL |
-| Domain | {"a"..="def"} ∪ {NULL} | Undefined    |
-| Row 0  | "a"                    | "a"          |
-| Row 1  | NULL                   | null         |
-| Row 2  | "def"                  | "def"        |
-+--------+------------------------+--------------+
++--------+------------------------+--------------------+
+|        | a                      | Output             |
++--------+------------------------+--------------------+
+| Type   | String NULL            | Variant NULL       |
+| Domain | {"a"..="def"} ∪ {NULL} | Undefined ∪ {NULL} |
+| Row 0  | "a"                    | "a"                |
+| Row 1  | NULL                   | null               |
+| Row 2  | "def"                  | "def"              |
++--------+------------------------+--------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                          |
@@ -1886,7 +1886,7 @@ raw expr       : TRY_CAST(minus(354286_u32) AS Date)
 checked expr   : try_to_date<Int64>(minus<UInt32>(354286_u32))
 optimized expr : NULL
 output type    : Date NULL
-output domain  : {-354285..=-354285} ∪ {NULL}
+output domain  : {-354285..=2932896} ∪ {NULL}
 output         : NULL
 
 
@@ -1949,7 +1949,7 @@ raw expr       : TRY_CAST(2932897_u32 AS Date)
 checked expr   : try_to_date<Int64>(CAST(2932897_u32 AS Int64))
 optimized expr : NULL
 output type    : Date NULL
-output domain  : {2932896..=2932896} ∪ {NULL}
+output domain  : {-354285..=2932896} ∪ {NULL}
 output         : NULL
 
 
@@ -2380,7 +2380,7 @@ raw expr       : TRY_CAST(TO_TIMESTAMP(minus(315360000000000_u64)) AS String)
 checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1960-01-04 00:00:00.000000"
 
 
@@ -2389,7 +2389,7 @@ raw expr       : TRY_CAST(TO_TIMESTAMP(minus(315360000000_u64)) AS String)
 checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)))
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1960-01-04 00:00:00.000000"
 
 
@@ -2398,7 +2398,7 @@ raw expr       : TRY_CAST(TO_TIMESTAMP(minus(100_u8)) AS String)
 checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : "1969-12-31 23:58:20.000000"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1969-12-31 23:58:20.000000"
 
 
@@ -2407,7 +2407,7 @@ raw expr       : TRY_CAST(TO_TIMESTAMP(minus(0_u8)) AS String)
 checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(CAST(minus<UInt8>(0_u8) AS Int64)))
 optimized expr : "1970-01-01 00:00:00.000000"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1970-01-01 00:00:00.000000"
 
 
@@ -2416,7 +2416,7 @@ raw expr       : TRY_CAST(TO_TIMESTAMP(0_u8) AS String)
 checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(CAST(0_u8 AS Int64)))
 optimized expr : "1970-01-01 00:00:00.000000"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1970-01-01 00:00:00.000000"
 
 
@@ -2425,7 +2425,7 @@ raw expr       : TRY_CAST(TO_TIMESTAMP(100_u8) AS String)
 checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(CAST(100_u8 AS Int64)))
 optimized expr : "1970-01-01 00:01:40.000000"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1970-01-01 00:01:40.000000"
 
 
@@ -2434,7 +2434,7 @@ raw expr       : TRY_CAST(TO_TIMESTAMP(315360000000_u64) AS String)
 checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(CAST(315360000000_u64 AS Int64)))
 optimized expr : "1979-12-30 00:00:00.000000"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1979-12-30 00:00:00.000000"
 
 
@@ -2443,7 +2443,7 @@ raw expr       : TRY_CAST(TO_TIMESTAMP(315360000000000_u64) AS String)
 checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(CAST(315360000000000_u64 AS Int64)))
 optimized expr : "1979-12-30 00:00:00.000000"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1979-12-30 00:00:00.000000"
 
 
@@ -2455,7 +2455,7 @@ evaluation:
 |        | a                                    | Output                       |
 +--------+--------------------------------------+------------------------------+
 | Type   | Timestamp                            | String NULL                  |
-| Domain | {-315360000000000..=315360000000000} | {""..}                       |
+| Domain | {-315360000000000..=315360000000000} | {""..} ∪ {NULL}              |
 | Row 0  | 1960-01-04 00:00:00.000000           | "1960-01-04 00:00:00.000000" |
 | Row 1  | 1969-12-28 08:24:00.000000           | "1969-12-28 08:24:00.000000" |
 | Row 2  | 1969-12-31 23:59:59.999900           | "1969-12-31 23:59:59.999900" |
@@ -2583,7 +2583,7 @@ raw expr       : TRY_CAST(TO_DATE(minus(354285_u32)) AS String)
 checked expr   : try_to_string<Date>(to_date<Int64>(minus<UInt32>(354285_u32)))
 optimized expr : "1000-01-01"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1000-01-01"
 
 
@@ -2592,7 +2592,7 @@ raw expr       : TRY_CAST(TO_DATE(minus(100_u8)) AS String)
 checked expr   : try_to_string<Date>(to_date<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : "1969-09-23"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1969-09-23"
 
 
@@ -2601,7 +2601,7 @@ raw expr       : TRY_CAST(TO_DATE(minus(0_u8)) AS String)
 checked expr   : try_to_string<Date>(to_date<Int64>(CAST(minus<UInt8>(0_u8) AS Int64)))
 optimized expr : "1970-01-01"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1970-01-01"
 
 
@@ -2610,7 +2610,7 @@ raw expr       : TRY_CAST(TO_DATE(0_u8) AS String)
 checked expr   : try_to_string<Date>(to_date<Int64>(CAST(0_u8 AS Int64)))
 optimized expr : "1970-01-01"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1970-01-01"
 
 
@@ -2619,7 +2619,7 @@ raw expr       : TRY_CAST(TO_DATE(100_u8) AS String)
 checked expr   : try_to_string<Date>(to_date<Int64>(CAST(100_u8 AS Int64)))
 optimized expr : "1970-04-11"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "1970-04-11"
 
 
@@ -2628,7 +2628,7 @@ raw expr       : TRY_CAST(TO_DATE(2932896_u32) AS String)
 checked expr   : try_to_string<Date>(to_date<Int64>(CAST(2932896_u32 AS Int64)))
 optimized expr : "9999-12-31"
 output type    : String NULL
-output domain  : {""..}
+output domain  : {""..} ∪ {NULL}
 output         : "9999-12-31"
 
 
@@ -2636,17 +2636,17 @@ ast            : TRY_CAST(a AS VARCHAR)
 raw expr       : TRY_CAST(#0::Date AS String)
 checked expr   : try_to_string<Date>(#0)
 evaluation:
-+--------+---------------------+--------------+
-|        | a                   | Output       |
-+--------+---------------------+--------------+
-| Type   | Date                | String NULL  |
-| Domain | {-354285..=2932896} | {""..}       |
-| Row 0  | 1000-01-01          | "1000-01-01" |
-| Row 1  | 1969-09-23          | "1969-09-23" |
-| Row 2  | 1970-01-01          | "1970-01-01" |
-| Row 3  | 1970-04-11          | "1970-04-11" |
-| Row 4  | 9999-12-31          | "9999-12-31" |
-+--------+---------------------+--------------+
++--------+---------------------+-----------------+
+|        | a                   | Output          |
++--------+---------------------+-----------------+
+| Type   | Date                | String NULL     |
+| Domain | {-354285..=2932896} | {""..} ∪ {NULL} |
+| Row 0  | 1000-01-01          | "1000-01-01"    |
+| Row 1  | 1969-09-23          | "1969-09-23"    |
+| Row 2  | 1970-01-01          | "1970-01-01"    |
+| Row 3  | 1970-04-11          | "1970-04-11"    |
+| Row 4  | 9999-12-31          | "9999-12-31"    |
++--------+---------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                               |
