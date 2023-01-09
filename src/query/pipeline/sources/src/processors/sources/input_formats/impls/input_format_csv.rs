@@ -106,14 +106,8 @@ impl InputFormatTextBase for InputFormatCSV {
         let columns = &mut builder.mutable_columns;
         let n_column = columns.len();
         let mut start = 0usize;
-        // for deal with on_error mode
         let mut num_rows = 0usize;
-
-        let mut num_errors = 0usize;
-        let mut error_map: BTreeMap<ErrorCode, usize> = BTreeMap::new();
         let mut error_map: HashMap<u16, InputError> = HashMap::new();
-
-
         let mut field_end_idx = 0;
         let field_decoder = builder
             .field_decoder
@@ -148,35 +142,18 @@ impl InputFormatTextBase for InputFormatCSV {
                             });
                         continue;
                     }
-                    OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
+                    OnErrorMode::AbortNum(n) if n == 1 => {
+                        return Err(batch.error(&e.message(), &builder.ctx, start, i));
+                    }
                     OnErrorMode::AbortNum(n) => {
                         if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) >= n {
-                            return Err(e);
+                            return Err(batch.error(&e.message(), &builder.ctx, start, i));
                         }
-                    });
-                    start = *end;
-                    field_end_idx += n_column;
-                    continue;
-                } else {
-                    return Err(batch.error(&e.message(), &builder.ctx, start, i));
-                        columns.iter_mut().for_each(|c| {
-                            // check if parts of columns inserted data, if so, pop it.
-                            if c.len() > num_rows {
-                                c.pop_data_value().expect("must success");
-                            }
-                        });
                         start = *end;
                         field_end_idx += n_column;
-                        error_map
-                            .entry(e.code())
-                            .and_modify(|input_error| input_error.num += 1)
-                            .or_insert(InputError {
-                                err: e.clone(),
-                                num: 1,
-                            });
                         continue;
                     }
-                    _ => return Err(e),
+                    _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
                 }
             }
             start = *end;

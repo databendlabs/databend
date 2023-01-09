@@ -100,45 +100,13 @@ impl InputFormatTextBase for InputFormatNDJson {
 
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
-        // for deal with on_error mode
         let mut num_rows = 0usize;
-
-        let mut num_errors = 0usize;
-        let mut error_map = BTreeMap::new();
         let mut error_map: HashMap<u16, InputError> = HashMap::new();
-
-        let start_row = batch.start_row;
-
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
             let buf = buf.trim();
             if !buf.is_empty() {
                 if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
-
-                    if builder.ctx.on_error_mode == OnErrorMode::Continue {
-                        columns.iter_mut().for_each(|c| {
-                            // check if parts of columns inserted data, if so, pop it.
-                            if c.len() > num_rows {
-                                c.pop_data_value().expect("must success");
-                            }
-                        });
-                        start = *end;
-                        continue;
-                    } else {
-                        return Err(batch.error(&e.message(), &builder.ctx, start, i));
-
-                    let row_info = if let Some(r) = start_row {
-                        format!("row={},", r + i)
-                    } else {
-                        String::new()
-                    };
-                    let msg = format!(
-                        "fail to parse NDJSON: {},  path={}, offset={}, {}",
-                        &batch.path,
-                        e,
-                        batch.offset + start,
-                        row_info,
-                    );
                     match builder.ctx.on_error_mode {
                         OnErrorMode::Continue => {
                             columns.iter_mut().for_each(|c| {
@@ -149,7 +117,7 @@ impl InputFormatTextBase for InputFormatNDJson {
                             });
                             start = *end;
                             error_map
-                                .entry(ErrorCode::BadBytes(msg).code())
+                                .entry(e.code())
                                 .and_modify(|input_error| input_error.num += 1)
                                 .or_insert(InputError {
                                     err: e.clone(),
@@ -157,10 +125,12 @@ impl InputFormatTextBase for InputFormatNDJson {
                                 });
                             continue;
                         }
-                        OnErrorMode::AbortNum(n) if n == 1 => return Err(ErrorCode::BadBytes(msg)),
+                        OnErrorMode::AbortNum(n) if n == 1 => {
+                            return Err(batch.error(&e.message(), &builder.ctx, start, i));
+                        }
                         OnErrorMode::AbortNum(n) => {
                             if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) >= n {
-                                return Err(ErrorCode::BadBytes(msg));
+                                return Err(batch.error(&e.message(), &builder.ctx, start, i));
                             }
                             columns.iter_mut().for_each(|c| {
                                 // check if parts of columns inserted data, if so, pop it.
@@ -170,7 +140,7 @@ impl InputFormatTextBase for InputFormatNDJson {
                             });
                             start = *end;
                             error_map
-                                .entry(ErrorCode::BadBytes(msg).code())
+                                .entry(e.code())
                                 .and_modify(|input_error| input_error.num += 1)
                                 .or_insert(InputError {
                                     err: e.clone(),
@@ -178,8 +148,7 @@ impl InputFormatTextBase for InputFormatNDJson {
                                 });
                             continue;
                         }
-                        _ => return Err(ErrorCode::BadBytes(msg)),
-
+                        _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
                     }
                 }
             }
