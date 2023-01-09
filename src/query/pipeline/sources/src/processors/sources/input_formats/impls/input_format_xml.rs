@@ -246,7 +246,9 @@ impl InputFormatTextBase for InputFormatXML {
                                             });
                                         continue;
                                     }
-                                    OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
+                                    OnErrorMode::AbortNum(n) if n == 1 => {
+                                        return Err(xml_error(&e.message(), path, num_rows));
+                                    }
                                     OnErrorMode::AbortNum(n) => {
                                         if builder
                                             .ctx
@@ -254,7 +256,7 @@ impl InputFormatTextBase for InputFormatXML {
                                             .fetch_add(1, Ordering::Relaxed)
                                             >= n
                                         {
-                                            return Err(e);
+                                            return Err(xml_error(&e.message(), path, num_rows));
                                         }
                                         columns.iter_mut().for_each(|c| {
                                             // check if parts of columns inserted data, if so, pop it.
@@ -271,7 +273,7 @@ impl InputFormatTextBase for InputFormatXML {
                                             });
                                         continue;
                                     }
-                                    _ => return Err(e),
+                                    _ => return Err(xml_error(&e.message(), path, num_rows)),
                                 }
                             };
                             cols.clear();

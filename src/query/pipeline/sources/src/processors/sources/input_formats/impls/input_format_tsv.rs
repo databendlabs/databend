@@ -146,11 +146,8 @@ impl InputFormatTextBase for InputFormatTSV {
         let schema = &builder.ctx.schema;
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
-        // for deal with on_error mode
         let mut num_rows = 0usize;
         let mut error_map: HashMap<u16, InputError> = HashMap::new();
-
-        let start_row = batch.start_row;
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             if let Err(e) = Self::read_row(
@@ -178,16 +175,13 @@ impl InputFormatTextBase for InputFormatTSV {
                             });
                         continue;
                     }
-                    OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
+                    OnErrorMode::AbortNum(n) if n == 1 => {
+                        return Err(batch.error(&e.message(), &builder.ctx, start, i));
+                    }
                     OnErrorMode::AbortNum(n) => {
                         if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) >= n {
-                            return Err(e);
+                            return Err(batch.error(&e.message(), &builder.ctx, start, i));
                         }
-                    });
-                    start = *end;
-                    continue;
-                } else {
-                    return Err(batch.error(&e.message(), &builder.ctx, start, i));
                         columns.iter_mut().for_each(|c| {
                             // check if parts of columns inserted data, if so, pop it.
                             if c.len() > num_rows {
@@ -204,7 +198,7 @@ impl InputFormatTextBase for InputFormatTSV {
                             });
                         continue;
                     }
-                    _ => return Err(e),
+                    _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
                 }
             }
             start = *end;
