@@ -16,12 +16,12 @@ use std::marker::PhantomData;
 
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_storages_table_meta::meta::BlockFilter;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::SnapshotVersion;
-use common_storages_table_meta::meta::TableSnapshotStatisticsVersion;
-use common_storages_table_meta::meta::Versioned;
+use storages_common_table_meta::meta::BlockFilter;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SnapshotVersion;
+use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
+use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;

@@ -29,11 +29,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::TableDataType;
-use common_storages_table_meta::meta::BlockBloomFilterIndexVersion;
-use common_storages_table_meta::meta::BlockFilter;
-use common_storages_table_meta::meta::Location;
 use futures_util::future::try_join_all;
 use opendal::Operator;
+use storages_common_table_meta::meta::BlockBloomFilterIndexVersion;
+use storages_common_table_meta::meta::BlockFilter;
+use storages_common_table_meta::meta::Location;
 use tracing::Instrument;
 pub use util_v1::load_bloom_filter_by_columns;
 
@@ -80,8 +80,8 @@ mod util_v1 {
     use common_base::runtime::TrySpawn;
     use common_expression::TableField;
     use common_expression::TableSchema;
-    use common_storages_table_meta::caches::CacheManager;
-    use common_storages_table_meta::caches::LoadParams;
+    use storages_common_table_meta::caches::CacheManager;
+    use storages_common_table_meta::caches::LoadParams;
 
     use super::*;
     use crate::io::MetaReaders;

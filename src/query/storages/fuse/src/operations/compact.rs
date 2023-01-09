@@ -18,7 +18,7 @@ use common_catalog::plan::Projection;
 use common_catalog::table::CompactTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactSource;

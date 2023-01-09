@@ -15,6 +15,7 @@ test = false
 common-arrow = { path = "../../../../common/arrow" }
 common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
-common-storages-table-meta = { path = "../../table-meta" }
+
+storages-common-table-meta = { path = "../table-meta" }
 
 [build-dependencies]

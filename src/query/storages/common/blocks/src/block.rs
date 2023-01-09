@@ -25,7 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::TableSchema;
-use common_storages_table_meta::table::TableCompression;
+use storages_common_table_meta::table::TableCompression;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(

@@ -1404,7 +1404,6 @@ dependencies = [
  "common-jsonb",
  "common-meta-types",
  "common-settings",
- "common-storages-table-meta",
  "lexical-core",
  "micromarshal",
  "num",
@@ -1413,6 +1412,7 @@ dependencies = [
  "pretty_assertions",
  "serde_json",
  "storages-common-blocks",
+ "storages-common-table-meta",
 ]
 
 [[package]]
@@ -1948,7 +1948,6 @@ dependencies = [
  "common-settings",
  "common-storage",
  "common-storages-stage",
- "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",
  "common-users",
@@ -1978,6 +1977,7 @@ dependencies = [
  "serde",
  "serde_json",
  "snailquote",
+ "storages-common-table-meta",
  "tempfile",
  "time 0.3.17",
  "tokio-stream",
@@ -2066,7 +2066,6 @@ dependencies = [
  "common-storage",
  "common-storages-index",
  "common-storages-pruner",
- "common-storages-table-meta",
  "futures",
  "futures-util",
  "itertools",
@@ -2075,6 +2074,7 @@ dependencies = [
  "serde",
  "serde_json",
  "storages-common-blocks",
+ "storages-common-table-meta",
  "streaming-decompression",
  "tracing",
  "typetag",
@@ -2102,12 +2102,12 @@ dependencies = [
  "common-pipeline-sources",
  "common-storage",
  "common-storages-index",
- "common-storages-table-meta",
  "databend-thrift",
  "futures",
  "opendal",
  "ordered-float 3.4.0",
  "serde",
+ "storages-common-table-meta",
  "tracing",
  "typetag",
 ]
@@ -2122,11 +2122,11 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
- "common-storages-table-meta",
  "criterion",
  "match-template",
  "rand 0.8.5",
  "serde",
+ "storages-common-table-meta",
  "thiserror",
  "tracing",
  "xorfilter-rs",
@@ -2263,10 +2263,10 @@ dependencies = [
  "common-pipeline-core",
  "common-storage",
  "common-storages-pruner",
- "common-storages-table-meta",
  "glob",
  "opendal",
  "serde",
+ "storages-common-table-meta",
  "typetag",
 ]
 
@@ -2278,8 +2278,8 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-storages-index",
- "common-storages-table-meta",
  "serde",
+ "storages-common-table-meta",
  "tracing",
 ]
 
@@ -2327,11 +2327,11 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-meta-app",
- "common-storages-table-meta",
  "goldenfile",
  "opendal",
  "serde",
  "serde_json",
+ "storages-common-table-meta",
  "tempfile",
 ]
 
@@ -2415,26 +2415,6 @@ dependencies = [
  "typetag",
  "uuid",
  "walkdir",
-]
-
-[[package]]
-name = "common-storages-table-meta"
-version = "0.1.0"
-dependencies = [
- "async-trait-fn",
- "chrono",
- "common-arrow",
- "common-base",
- "common-cache",
- "common-config",
- "common-datavalues",
- "common-exception",
- "common-expression",
- "metrics",
- "once_cell",
- "opendal",
- "parking_lot 0.12.1",
- "serde",
 ]
 
 [[package]]
@@ -3052,7 +3032,6 @@ dependencies = [
  "common-storages-share",
  "common-storages-stage",
  "common-storages-system",
- "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",
  "common-users",
@@ -3093,6 +3072,7 @@ dependencies = [
  "serde_urlencoded",
  "state",
  "storages-common-blocks",
+ "storages-common-table-meta",
  "temp-env",
  "tempfile",
  "time 0.3.17",
@@ -7711,7 +7691,27 @@ dependencies = [
  "common-arrow",
  "common-exception",
  "common-expression",
- "common-storages-table-meta",
+ "storages-common-table-meta",
+]
+
+[[package]]
+name = "storages-common-table-meta"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "chrono",
+ "common-arrow",
+ "common-base",
+ "common-cache",
+ "common-config",
+ "common-datavalues",
+ "common-exception",
+ "common-expression",
+ "metrics",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
 ]
 
 [[package]]

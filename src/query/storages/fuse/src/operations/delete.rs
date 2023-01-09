@@ -36,8 +36,8 @@ use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::DeletionPartInfo;
 use crate::operations::mutation::DeletionSource;

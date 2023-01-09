@@ -33,12 +33,12 @@ use common_storages_pruner::LimiterPrunerCreator;
 use common_storages_pruner::RangePruner;
 use common_storages_pruner::RangePrunerCreator;
 use common_storages_pruner::TopNPrunner;
-use common_storages_table_meta::caches::LoadParams;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
 use futures::future;
 use opendal::Operator;
+use storages_common_table_meta::caches::LoadParams;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
 use tracing::warn;
 use tracing::Instrument;
 

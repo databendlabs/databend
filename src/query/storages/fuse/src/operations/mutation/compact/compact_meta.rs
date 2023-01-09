@@ -20,7 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
-use common_storages_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SegmentInfo;
 
 use super::compact_part::CompactTask;
 use crate::operations::mutation::AbortOperation;

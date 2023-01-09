@@ -32,12 +32,6 @@ use common_expression::TableSchemaRefExt;
 use common_sql::parse_to_remote_string_exprs;
 use common_sql::plans::CreateTablePlanV2;
 use common_storages_fuse::FuseTable;
-use common_storages_table_meta::caches::LoadParams;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
-use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
-use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
@@ -47,6 +41,12 @@ use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use opendal::Operator;
+use storages_common_table_meta::caches::LoadParams;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
+use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 

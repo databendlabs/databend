@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
-use common_storages_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::BlockMeta;
 
 use super::compact_meta::CompactSourceMeta;
 use super::compact_part::CompactPartInfo;
