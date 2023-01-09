@@ -344,7 +344,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         assert_eq!(
             Incompatible {
                 reason: format!(
-                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
@@ -363,7 +363,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         assert_eq!(
             Incompatible {
                 reason: format!(
-                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
@@ -382,7 +382,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         assert_eq!(
             Incompatible {
                 reason: format!(
-                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
@@ -401,7 +401,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         assert_eq!(
             Incompatible {
                 reason: format!(
-                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
@@ -420,7 +420,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         assert_eq!(
             Incompatible {
                 reason: format!(
-                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
@@ -439,7 +439,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         assert_eq!(
             Incompatible {
                 reason: format!(
-                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
@@ -458,7 +458,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         assert_eq!(
             Incompatible {
                 reason: format!(
-                    "executable ver={} is smaller than the message min compatible ver: {}",
+                    "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )

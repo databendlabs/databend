@@ -436,7 +436,7 @@ fn test_incompatible() -> anyhow::Result<()> {
     assert_eq!(
         Incompatible {
             reason: format!(
-                "executable ver={} is smaller than the message min compatible ver: {}",
+                "executable ver={} is smaller than the min reader version({}) that can read this message",
                 VER,
                 VER + 1
             )
@@ -452,7 +452,9 @@ fn test_incompatible() -> anyhow::Result<()> {
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
         Incompatible {
-            reason: s("message ver=0 is smaller than executable min compatible ver: 1")
+            reason: s(
+                "message ver=0 is smaller than executable MIN_MSG_VER(1) that this program can read"
+            )
         },
         res.unwrap_err()
     );
