@@ -31,6 +31,7 @@ use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_storages_common::blocks_to_parquet;
+use common_storages_pruner::BlockMetaIndex;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::table::TableCompression;
@@ -50,7 +51,6 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::pruning::BlockIndex;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
@@ -98,7 +98,7 @@ pub struct DeletionSource {
 
     source_schema: TableSchemaRef,
     output_schema: TableSchemaRef,
-    index: BlockIndex,
+    index: BlockMetaIndex,
     cluster_stats_gen: ClusterStatsGenerator,
     origin_stats: Option<ClusterStatistics>,
     table_compression: TableCompression,
@@ -129,7 +129,10 @@ impl DeletionSource {
             remain_reader,
             source_schema,
             output_schema: table.schema(),
-            index: (0, 0),
+            index: BlockMetaIndex {
+                segment_idx: 0,
+                block_idx: 0,
+            },
             cluster_stats_gen: table.cluster_stats_gen(ctx)?,
             origin_stats: None,
             table_compression: table.table_compression,
@@ -322,7 +325,7 @@ impl Processor for DeletionSource {
                 );
             }
             State::Generated(op) => {
-                let meta = DeletionSourceMeta::create(self.index, op);
+                let meta = DeletionSourceMeta::create(self.index.clone(), op);
                 let new_part = self.ctx.try_get_part();
                 self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
             }
@@ -336,7 +339,7 @@ impl Processor for DeletionSource {
             State::ReadData(Some(part)) => {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
                 let deletion_part = DeletionPartInfo::from_part(&part)?;
-                self.index = deletion_part.index;
+                self.index = deletion_part.index.clone();
                 self.origin_stats = deletion_part.cluster_stats.clone();
                 let part = deletion_part.inner_part.clone();
                 let fuse_part = FusePartInfo::from_part(&part)?;

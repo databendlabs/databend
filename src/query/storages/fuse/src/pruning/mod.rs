@@ -14,7 +14,5 @@
 
 mod pruner;
 mod pruning_executor;
-mod topn_pruner;
 
-pub use pruning_executor::BlockIndex;
 pub use pruning_executor::BlockPruner;

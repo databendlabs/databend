@@ -21,13 +21,21 @@ type Ent<V> = Entry<[u8; 0], V>;
 pub struct TableEmpty<V, A: Allocator + Clone> {
     pub(crate) has_zero: bool,
     pub(crate) slice: Box<[Entry<[u8; 0], V>; 1], A>,
+    pub(crate) allocator: A,
+}
+
+impl<V, A: Allocator + Clone + Default> Default for TableEmpty<V, A> {
+    fn default() -> Self {
+        Self::new_in(A::default())
+    }
 }
 
 impl<V, A: Allocator + Clone> TableEmpty<V, A> {
     pub fn new_in(allocator: A) -> Self {
         Self {
-            slice: unsafe { Box::<[Ent<V>; 1], A>::new_zeroed_in(allocator).assume_init() },
             has_zero: false,
+            allocator: allocator.clone(),
+            slice: unsafe { Box::<[Ent<V>; 1], A>::new_zeroed_in(allocator).assume_init() },
         }
     }
 
@@ -75,20 +83,22 @@ impl<V, A: Allocator + Clone> TableEmpty<V, A> {
             i: usize::from(!self.has_zero),
         }
     }
-    pub fn iter_mut(&mut self) -> TableEmptyIterMut<'_, V> {
-        TableEmptyIterMut {
-            slice: self.slice.as_mut(),
-            i: usize::from(!self.has_zero),
+
+    pub fn clear(&mut self) {
+        unsafe {
+            self.has_zero = false;
+            let allocator = self.allocator.clone();
+            self.slice = Box::<[Ent<V>; 1], A>::new_zeroed_in(allocator).assume_init();
         }
     }
 }
 
 impl<V, A: Allocator + Clone> Drop for TableEmpty<V, A> {
     fn drop(&mut self) {
-        if std::mem::needs_drop::<V>() {
-            self.iter_mut().for_each(|e| unsafe {
-                e.val.assume_init_drop();
-            });
+        if std::mem::needs_drop::<V>() && self.has_zero {
+            unsafe {
+                self.slice[0].val.assume_init_drop();
+            }
         }
     }
 }

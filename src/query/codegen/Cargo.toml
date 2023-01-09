@@ -15,7 +15,6 @@ name = "codegen"
 path = "src/bin/codegen.rs"
 
 [dependencies]
-common-datavalues = { path = "../datavalues" }
 common-expression = { path = "../expression" }
 
 itertools = "0.10"

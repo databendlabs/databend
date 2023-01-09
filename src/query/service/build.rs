@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::prelude::*;
-
-impl<'a, T: PrimitiveType> PrimitiveColumn<T> {
-    /// constructs a new iterator
-    #[inline]
-    pub fn iter(&'a self) -> std::slice::Iter<'a, T> {
-        self.values.iter()
-    }
+fn main() {
+    common_building::setup();
 }

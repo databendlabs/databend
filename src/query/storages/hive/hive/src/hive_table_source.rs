@@ -29,7 +29,6 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
@@ -143,9 +142,9 @@ impl HiveTableSource {
     ) -> Result<(bool, Vec<Value<AnyType>>)> {
         let mut valids = vec![];
         let mut exists = false;
+        let func_ctx = self.ctx.try_get_function_context()?;
         for datablock in data_blocks {
-            let evaluator =
-                Evaluator::new(datablock, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+            let evaluator = Evaluator::new(datablock, func_ctx, &BUILTIN_FUNCTIONS);
             let res = evaluator.run(filter).map_err(|(_, e)| {
                 ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
             })?;
