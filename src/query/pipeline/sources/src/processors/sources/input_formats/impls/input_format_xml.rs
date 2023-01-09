@@ -13,6 +13,7 @@
 //  limitations under the License.
 use std::collections::HashMap;
 use std::io::Cursor;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -35,6 +36,7 @@ use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 use crate::processors::sources::input_formats::InputContext;
+use crate::processors::sources::input_formats::InputError;
 use crate::processors::sources::input_formats::SplitInfo;
 
 pub struct InputFormatXML {}
@@ -137,7 +139,7 @@ impl InputFormatTextBase for InputFormatXML {
         Arc::new(FieldDecoderXML::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<Option<ErrorCode>> {
         let field_decoder = builder
             .field_decoder
             .as_any()
@@ -159,7 +161,10 @@ impl InputFormatTextBase for InputFormatXML {
 
         let mut key = None;
         let mut has_start_row = false;
-        let mut num_rows = 0;
+        // for deal with on_error mode
+        let mut num_rows = 0usize;
+        let mut error_map: HashMap<u16, InputError> = HashMap::new();
+
         for e in reader {
             if rows_to_skip != 0 {
                 match e {
@@ -224,16 +229,49 @@ impl InputFormatTextBase for InputFormatXML {
                                 &batch.split_info.file.path,
                                 num_rows,
                             ) {
-                                if builder.ctx.on_error_mode == OnErrorMode::Continue {
-                                    columns.iter_mut().for_each(|c| {
-                                        // check if parts of columns inserted data, if so, pop it.
-                                        if c.len() > num_rows {
-                                            c.pop_data_value().expect("must success");
+                                match builder.ctx.on_error_mode {
+                                    OnErrorMode::Continue => {
+                                        columns.iter_mut().for_each(|c| {
+                                            // check if parts of columns inserted data, if so, pop it.
+                                            if c.len() > num_rows {
+                                                c.pop_data_value().expect("must success");
+                                            }
+                                        });
+                                        error_map
+                                            .entry(e.code())
+                                            .and_modify(|input_error| input_error.num += 1)
+                                            .or_insert(InputError {
+                                                err: e.clone(),
+                                                num: 1,
+                                            });
+                                        continue;
+                                    }
+                                    OnErrorMode::AbortNum(n) if n == 1 => return Err(e),
+                                    OnErrorMode::AbortNum(n) => {
+                                        if builder
+                                            .ctx
+                                            .on_error_count
+                                            .fetch_add(1, Ordering::Relaxed)
+                                            >= n
+                                        {
+                                            return Err(e);
                                         }
-                                    });
-                                    continue;
-                                } else {
-                                    return Err(e);
+                                        columns.iter_mut().for_each(|c| {
+                                            // check if parts of columns inserted data, if so, pop it.
+                                            if c.len() > num_rows {
+                                                c.pop_data_value().expect("must success");
+                                            }
+                                        });
+                                        error_map
+                                            .entry(e.code())
+                                            .and_modify(|input_error| input_error.num += 1)
+                                            .or_insert(InputError {
+                                                err: e.clone(),
+                                                num: 1,
+                                            });
+                                        continue;
+                                    }
+                                    _ => return Err(e),
                                 }
                             };
                             cols.clear();
@@ -253,7 +291,7 @@ impl InputFormatTextBase for InputFormatXML {
                 }
             }
         }
-        Ok(())
+        Ok(Self::row_batch_maximum_error(&error_map))
     }
 }
 
