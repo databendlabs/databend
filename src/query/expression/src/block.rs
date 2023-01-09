@@ -20,7 +20,6 @@ use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::deserializations::TypeDeserializer;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
