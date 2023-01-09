@@ -4800,14 +4800,16 @@ pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
             Value::Scalar(func(ValueRef::Scalar(arg1), ctx).into_scalar().unwrap())
         }
         (ValueRef::Column(arg1)) => {
+            let validity = arg1.validity;
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(ValueRef::Column(arg1.column), ctx)
                 .into_column()
                 .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg1.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
     }
@@ -4838,28 +4840,34 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .unwrap(),
         ),
         (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2))) => {
+            let validity = arg1.validity;
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(ValueRef::Column(arg1.column), ValueRef::Scalar(arg2), ctx)
                 .into_column()
                 .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg1.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2)) => {
+            let validity = arg2.validity;
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(ValueRef::Scalar(arg1), ValueRef::Column(arg2.column), ctx)
                 .into_column()
                 .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg2.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -4867,13 +4875,11 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                &nullable_column.validity,
-            );
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
     }
@@ -4917,6 +4923,8 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             .unwrap(),
         ),
         (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2)), ValueRef::Scalar(Some(arg3))) => {
+            let validity = arg1.validity;
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -4925,14 +4933,16 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             )
             .into_column()
             .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg1.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
+            let validity = arg2.validity;
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -4941,14 +4951,16 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             )
             .into_column()
             .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg2.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -4957,16 +4969,16 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                &nullable_column.validity,
-            );
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
+            let validity = arg3.validity;
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Scalar(arg2),
@@ -4975,14 +4987,16 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             )
             .into_column()
             .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg3.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -4991,16 +5005,16 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
-                &nullable_column.validity,
-            );
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -5009,16 +5023,19 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
-                &nullable_column.validity,
-            );
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
+                &arg3.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -5027,16 +5044,11 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                    &arg3.validity,
-                ),
-                &nullable_column.validity,
-            );
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
     }
@@ -5090,6 +5102,8 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Scalar(Some(arg4)),
         ) => {
+            let validity = arg1.validity;
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -5099,11 +5113,11 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             )
             .into_column()
             .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg1.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5112,6 +5126,8 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Scalar(Some(arg4)),
         ) => {
+            let validity = arg2.validity;
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -5121,11 +5137,11 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             )
             .into_column()
             .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg2.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5134,6 +5150,8 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Scalar(Some(arg4)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -5143,293 +5161,303 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             )
             .into_column()
             .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+        ) => {
+            let validity = arg3.validity;
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Column(arg2),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Column(arg2),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+        ) => {
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                &nullable_column.validity,
+                &arg3.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Column(arg4),
+        ) => {
+            let validity = arg4.validity;
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Column(arg4),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Column(arg2),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Column(arg4),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Column(arg2),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Column(arg4),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
+                &arg4.validity,
+            );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
             })
         }
         (
             ValueRef::Scalar(Some(arg1)),
             ValueRef::Scalar(Some(arg2)),
             ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg4),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg3.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Scalar(arg2),
                 ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg4.column),
                 ctx,
             )
             .into_column()
             .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg3.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
             ValueRef::Column(arg1),
             ValueRef::Scalar(Some(arg2)),
             ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg4),
         ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
-                &nullable_column.validity,
+                &arg4.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
             ValueRef::Scalar(Some(arg1)),
             ValueRef::Column(arg2),
             ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg4),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
+                &arg4.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
                 ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg4.column),
                 ctx,
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
-                &nullable_column.validity,
-            );
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
             ValueRef::Column(arg1),
             ValueRef::Column(arg2),
             ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg4),
         ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
                     &arg3.validity,
                 ),
-                &nullable_column.validity,
+                &arg4.validity,
             );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg4.validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg4.validity),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg4.validity),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                    &arg4.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg3.validity, &arg4.validity),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
-                    &arg4.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
-                    &arg4.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-        ) => {
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -5439,19 +5467,11 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(
-                        &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                        &arg3.validity,
-                    ),
-                    &arg4.validity,
-                ),
-                &nullable_column.validity,
-            );
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
     }
@@ -5518,6 +5538,8 @@ pub fn combine_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = arg1.validity;
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Scalar(arg2),
@@ -5528,11 +5550,11 @@ pub fn combine_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg1.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5542,6 +5564,8 @@ pub fn combine_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = arg2.validity;
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
@@ -5552,11 +5576,11 @@ pub fn combine_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg2.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5566,6 +5590,8 @@ pub fn combine_nullable_5_arg<
             ValueRef::Scalar(Some(arg4)),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity);
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -5576,118 +5602,564 @@ pub fn combine_nullable_5_arg<
             )
             .into_column()
             .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Scalar(Some(arg5)),
+        ) => {
+            let validity = arg3.validity;
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Scalar(Some(arg5)),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Column(arg2),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Scalar(Some(arg5)),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Column(arg2),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Scalar(Some(arg5)),
+        ) => {
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                &nullable_column.validity,
+                &arg3.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Column(arg4),
+            ValueRef::Scalar(Some(arg5)),
+        ) => {
+            let validity = arg4.validity;
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Column(arg4),
+            ValueRef::Scalar(Some(arg5)),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Column(arg2),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Column(arg4),
+            ValueRef::Scalar(Some(arg5)),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Column(arg2),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Column(arg4),
+            ValueRef::Scalar(Some(arg5)),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
+                &arg4.validity,
+            );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
             })
         }
         (
             ValueRef::Scalar(Some(arg1)),
             ValueRef::Scalar(Some(arg2)),
             ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg3.validity, &arg4.validity);
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Scalar(arg2),
                 ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg4.column),
                 ValueRef::Scalar(arg5),
                 ctx,
             )
             .into_column()
             .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg3.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
             ValueRef::Column(arg1),
             ValueRef::Scalar(Some(arg2)),
             ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
-                &nullable_column.validity,
+                &arg4.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
             ValueRef::Scalar(Some(arg1)),
             ValueRef::Column(arg2),
             ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
+                &arg4.validity,
+            );
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Column(arg2.column),
                 ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg4.column),
                 ValueRef::Scalar(arg5),
                 ctx,
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
-                &nullable_column.validity,
-            );
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
             ValueRef::Column(arg1),
             ValueRef::Column(arg2),
             ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg4),
             ValueRef::Scalar(Some(arg5)),
         ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
                     &arg3.validity,
                 ),
-                &nullable_column.validity,
+                &arg4.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ValueRef::Scalar(arg5),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg5),
+        ) => {
+            let validity = arg5.validity;
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg5),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg1.validity, &arg5.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Column(arg2),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg5),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg2.validity, &arg5.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Column(arg2),
+            ValueRef::Scalar(Some(arg3)),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg5),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
+                &arg5.validity,
+            );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg5),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg3.validity, &arg5.validity);
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Scalar(Some(arg2)),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg5),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
+                &arg5.validity,
+            );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Scalar(Some(arg1)),
+            ValueRef::Column(arg2),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg5),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
+                &arg5.validity,
+            );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
+            })
+        }
+        (
+            ValueRef::Column(arg1),
+            ValueRef::Column(arg2),
+            ValueRef::Column(arg3),
+            ValueRef::Scalar(Some(arg4)),
+            ValueRef::Column(arg5),
+        ) => {
+            let validity = common_arrow::arrow::bitmap::and(
+                &common_arrow::arrow::bitmap::and(
+                    &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
+                    &arg3.validity,
+                ),
+                &arg5.validity,
+            );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Scalar(arg4),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+            Value::Column(NullableColumn {
+                column: nullable_column.column,
+                validity: merge_validity,
             })
         }
         (
@@ -5695,23 +6167,25 @@ pub fn combine_nullable_5_arg<
             ValueRef::Scalar(Some(arg2)),
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            ValueRef::Column(arg5),
         ) => {
+            let validity = common_arrow::arrow::bitmap::and(&arg4.validity, &arg5.validity);
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Scalar(arg1),
                 ValueRef::Scalar(arg2),
                 ValueRef::Scalar(arg3),
                 ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
+                ValueRef::Column(arg5.column),
                 ctx,
             )
             .into_column()
             .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg4.validity, &nullable_column.validity);
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5719,25 +6193,28 @@ pub fn combine_nullable_5_arg<
             ValueRef::Scalar(Some(arg2)),
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            ValueRef::Column(arg5),
         ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg1.validity, &arg4.validity),
-                &nullable_column.validity,
+                &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5745,25 +6222,28 @@ pub fn combine_nullable_5_arg<
             ValueRef::Column(arg2),
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            ValueRef::Column(arg5),
         ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg2.validity, &arg4.validity),
-                &nullable_column.validity,
+                &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5771,28 +6251,31 @@ pub fn combine_nullable_5_arg<
             ValueRef::Column(arg2),
             ValueRef::Scalar(Some(arg3)),
             ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            ValueRef::Column(arg5),
         ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
                     &arg4.validity,
                 ),
-                &nullable_column.validity,
+                &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Column(arg2.column),
+                ValueRef::Scalar(arg3),
+                ValueRef::Column(arg4.column),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5800,25 +6283,28 @@ pub fn combine_nullable_5_arg<
             ValueRef::Scalar(Some(arg2)),
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            ValueRef::Column(arg5),
         ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(&arg3.validity, &arg4.validity),
-                &nullable_column.validity,
+                &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5826,28 +6312,31 @@ pub fn combine_nullable_5_arg<
             ValueRef::Scalar(Some(arg2)),
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            ValueRef::Column(arg5),
         ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
                     &arg4.validity,
                 ),
-                &nullable_column.validity,
+                &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Column(arg1.column),
+                ValueRef::Scalar(arg2),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5855,28 +6344,31 @@ pub fn combine_nullable_5_arg<
             ValueRef::Column(arg2),
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            ValueRef::Column(arg5),
         ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
                     &arg4.validity,
                 ),
-                &nullable_column.validity,
+                &arg5.validity,
             );
+            ctx.validity = Some(validity.clone());
+            let nullable_column = func(
+                ValueRef::Scalar(arg1),
+                ValueRef::Column(arg2.column),
+                ValueRef::Column(arg3.column),
+                ValueRef::Column(arg4.column),
+                ValueRef::Column(arg5.column),
+                ctx,
+            )
+            .into_column()
+            .unwrap();
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
         (
@@ -5884,18 +6376,8 @@ pub fn combine_nullable_5_arg<
             ValueRef::Column(arg2),
             ValueRef::Column(arg3),
             ValueRef::Column(arg4),
-            ValueRef::Scalar(Some(arg5)),
+            ValueRef::Column(arg5),
         ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Scalar(arg5),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
             let validity = common_arrow::arrow::bitmap::and(
                 &common_arrow::arrow::bitmap::and(
                     &common_arrow::arrow::bitmap::and(
@@ -5904,450 +6386,9 @@ pub fn combine_nullable_5_arg<
                     ),
                     &arg4.validity,
                 ),
-                &nullable_column.validity,
+                &arg5.validity,
             );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity =
-                common_arrow::arrow::bitmap::and(&arg5.validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg1.validity, &arg5.validity),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg2.validity, &arg5.validity),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg3.validity, &arg5.validity),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Scalar(Some(arg4)),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Scalar(arg4),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(
-                        &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                        &arg3.validity,
-                    ),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(&arg4.validity, &arg5.validity),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg1.validity, &arg4.validity),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg2.validity, &arg4.validity),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Scalar(Some(arg3)),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Column(arg2.column),
-                ValueRef::Scalar(arg3),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(
-                        &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                        &arg4.validity,
-                    ),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(&arg3.validity, &arg4.validity),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Scalar(Some(arg2)),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Column(arg1.column),
-                ValueRef::Scalar(arg2),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(
-                        &common_arrow::arrow::bitmap::and(&arg1.validity, &arg3.validity),
-                        &arg4.validity,
-                    ),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Scalar(Some(arg1)),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
-        ) => {
-            let nullable_column = func(
-                ValueRef::Scalar(arg1),
-                ValueRef::Column(arg2.column),
-                ValueRef::Column(arg3.column),
-                ValueRef::Column(arg4.column),
-                ValueRef::Column(arg5.column),
-                ctx,
-            )
-            .into_column()
-            .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(
-                        &common_arrow::arrow::bitmap::and(&arg2.validity, &arg3.validity),
-                        &arg4.validity,
-                    ),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity,
-            })
-        }
-        (
-            ValueRef::Column(arg1),
-            ValueRef::Column(arg2),
-            ValueRef::Column(arg3),
-            ValueRef::Column(arg4),
-            ValueRef::Column(arg5),
-        ) => {
+            ctx.validity = Some(validity.clone());
             let nullable_column = func(
                 ValueRef::Column(arg1.column),
                 ValueRef::Column(arg2.column),
@@ -6358,22 +6399,11 @@ pub fn combine_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            let validity = common_arrow::arrow::bitmap::and(
-                &common_arrow::arrow::bitmap::and(
-                    &common_arrow::arrow::bitmap::and(
-                        &common_arrow::arrow::bitmap::and(
-                            &common_arrow::arrow::bitmap::and(&arg1.validity, &arg2.validity),
-                            &arg3.validity,
-                        ),
-                        &arg4.validity,
-                    ),
-                    &arg5.validity,
-                ),
-                &nullable_column.validity,
-            );
+            let merge_validity =
+                common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
             Value::Column(NullableColumn {
                 column: nullable_column.column,
-                validity,
+                validity: merge_validity,
             })
         }
     }

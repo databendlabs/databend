@@ -71,7 +71,7 @@ pub struct EvalContext<'a> {
 impl<'a> EvalContext<'a> {
     #[inline]
     pub fn set_error(&mut self, row: usize, error_msg: impl AsRef<str>) {
-        // if the row is in valid, we don't need to set error
+        // if the row is invalid, we don't need to set error
         if self
             .validity
             .as_ref()
