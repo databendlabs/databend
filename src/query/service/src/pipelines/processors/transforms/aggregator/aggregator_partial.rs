@@ -326,6 +326,8 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
                 }
             }
 
+            self.hash_table.clear();
+            drop(self.area.take());
             self.states_dropped = true;
         }
     }

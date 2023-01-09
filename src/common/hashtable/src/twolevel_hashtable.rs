@@ -14,6 +14,7 @@
 
 use std::collections::VecDeque;
 use std::mem::MaybeUninit;
+use std::slice::IterMut;
 
 use crate::FastHash;
 use crate::HashSet;
@@ -36,16 +37,8 @@ impl<Impl> TwoLevelHashtable<Impl> {
 }
 
 impl<Impl: HashtableLike> TwoLevelHashtable<Impl> {
-    pub fn two_level_iter(&self) -> Vec<(isize, Impl::Iterator<'_>)> {
-        let mut iters = Vec::with_capacity(self.tables.len());
-
-        for (bucket, table) in self.tables.iter().enumerate() {
-            if table.len() != 0 {
-                iters.push((bucket as isize, table.iter()));
-            }
-        }
-
-        iters
+    pub fn iter_tables_mut(&mut self) -> IterMut<'_, Impl> {
+        self.tables.iter_mut()
     }
 }
 
@@ -159,13 +152,10 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> Hashtable
         TwoLevelHashtableIter::create(inner)
     }
 
-    fn iter_mut(&mut self) -> Self::IteratorMut<'_> {
-        let mut inner = VecDeque::with_capacity(self.tables.len());
-        for table in &mut self.tables {
-            inner.push_back(table.iter_mut());
+    fn clear(&mut self) {
+        for inner_table in &mut self.tables {
+            inner_table.clear();
         }
-
-        TwoLevelHashtableIter::create(inner)
     }
 }
 

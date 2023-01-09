@@ -80,7 +80,7 @@ impl InputFormat for InputFormatParquet {
         for path in files {
             let obj = op.object(path);
             let size = obj.metadata().await?.content_length() as usize;
-            let mut reader = obj.seekable_reader(..);
+            let mut reader = obj.reader().await?;
             let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);
             let infer_schema = infer_schema(&file_meta)?;
@@ -125,7 +125,7 @@ impl InputFormat for InputFormatParquet {
 
     async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {
         let obj = op.object(path);
-        let mut reader = obj.seekable_reader(..);
+        let mut reader = obj.reader().await?;
         let file_meta = read_metadata_async(&mut reader).await?;
         let arrow_schema = infer_schema(&file_meta)?;
         Ok(Arc::new(TableSchema::from(&arrow_schema)))
@@ -157,7 +157,7 @@ impl InputFormatPipe for ParquetFormatPipe {
         let meta = Self::get_split_meta(&split_info).expect("must success");
         let op = ctx.source.get_operator()?;
         let obj = op.object(&split_info.file.path);
-        let mut reader = obj.seekable_reader(..);
+        let mut reader = obj.reader().await?;
         let input_fields = Arc::new(get_used_fields(&meta.file.fields, &ctx.schema)?);
         RowGroupInMemory::read_async(&mut reader, meta.meta.clone(), input_fields).await
     }

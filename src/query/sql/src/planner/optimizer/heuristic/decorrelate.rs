@@ -735,6 +735,7 @@ impl SubqueryRewriter {
                     arguments.push(self.flatten_scalar(arg, correlated_columns)?);
                 }
                 Ok(Scalar::FunctionCall(FunctionCall {
+                    params: fun_call.params.clone(),
                     arguments,
                     func_name: fun_call.func_name.clone(),
                     return_type: fun_call.return_type.clone(),

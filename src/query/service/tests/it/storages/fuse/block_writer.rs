@@ -16,20 +16,20 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
-use common_storages_common::blocks_to_parquet;
 use common_storages_fuse::io::write_block;
 use common_storages_fuse::io::write_data;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::io::WriteSettings;
 use common_storages_fuse::FuseStorageFormat;
-use common_storages_index::BlockFilter;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ClusterStatistics;
-use common_storages_table_meta::meta::Compression;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::StatisticsOfColumns;
-use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
+use storages_common_blocks::blocks_to_parquet;
+use storages_common_index::BlockFilter;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::meta::Compression;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::StatisticsOfColumns;
+use storages_common_table_meta::table::TableCompression;
 use uuid::Uuid;
 
 const DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE: usize = 300 * 1024;
@@ -99,11 +99,13 @@ impl<'a> BlockWriter<'a> {
         block: &DataBlock,
         block_id: Uuid,
     ) -> Result<(u64, Location)> {
-        let bloom_index = BlockFilter::try_create(FunctionContext::default(), schema, &[block])?;
-        let index_block = bloom_index.filter_block;
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);
+
+        let bloom_index =
+            BlockFilter::try_create(FunctionContext::default(), schema, location.1, &[block])?;
+        let index_block = bloom_index.filter_block;
         let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
         let index_block_schema = &bloom_index.filter_schema;
         let (size, _) = blocks_to_parquet(

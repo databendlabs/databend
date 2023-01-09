@@ -19,11 +19,11 @@ use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
 use common_expression::Scalar;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ColumnId;
-use common_storages_table_meta::meta::ColumnStatistics;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::StatisticsOfColumns;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnId;
+use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::statistics::column_statistic::calc_column_distinct_of_values;
 use crate::statistics::column_statistic::get_traverse_columns_dfs;

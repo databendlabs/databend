@@ -13,45 +13,18 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_exception::Result;
-use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
-use crate::serializations::NumberSerializer;
-use crate::serializations::TypeSerializerImpl;
 
 #[derive(Default, Clone, Copy, serde::Deserialize, serde::Serialize)]
 
-pub struct PrimitiveDataType<
-    T: PrimitiveType + Clone + Copy + std::fmt::Debug + Into<DataValue> + serde::Serialize,
-> {
+pub struct PrimitiveDataType<T: Clone + Copy + std::fmt::Debug + serde::Serialize> {
     #[serde(skip)]
     _t: PhantomData<T>,
-}
-
-// typetag did not support generic impls, so we have to do this
-pub fn create_primitive_datatype<T: PrimitiveType>() -> DataTypeImpl {
-    match (T::SIGN, T::FLOATING, T::SIZE) {
-        (false, false, 1) => DataTypeImpl::UInt8(UInt8Type { _t: PhantomData }),
-        (false, false, 2) => DataTypeImpl::UInt16(UInt16Type { _t: PhantomData }),
-        (false, false, 4) => DataTypeImpl::UInt32(UInt32Type { _t: PhantomData }),
-        (false, false, 8) => DataTypeImpl::UInt64(UInt64Type { _t: PhantomData }),
-
-        (true, false, 1) => DataTypeImpl::Int8(Int8Type { _t: PhantomData }),
-        (true, false, 2) => DataTypeImpl::Int16(Int16Type { _t: PhantomData }),
-        (true, false, 4) => DataTypeImpl::Int32(Int32Type { _t: PhantomData }),
-        (true, false, 8) => DataTypeImpl::Int64(Int64Type { _t: PhantomData }),
-
-        (true, true, 4) => DataTypeImpl::Float32(Float32Type { _t: PhantomData }),
-        (true, true, 8) => DataTypeImpl::Float64(Float64Type { _t: PhantomData }),
-
-        _ => unimplemented!(),
-    }
 }
 
 macro_rules! impl_numeric {
@@ -71,67 +44,12 @@ macro_rules! impl_numeric {
                 TypeID::$tname
             }
 
-            #[inline]
-            fn as_any(&self) -> &dyn std::any::Any {
-                self
-            }
-
             fn name(&self) -> String {
                 $name.to_string()
             }
 
-            fn sql_name(&self) -> String {
-                $sql_name.to_uppercase()
-            }
-
-            fn aliases(&self) -> &[&str] {
-                $alias
-            }
-
-            fn default_value(&self) -> DataValue {
-                $ty::default().into()
-            }
-
-            fn random_value(&self) -> DataValue {
-                let mut rng = rand::rngs::SmallRng::from_entropy();
-                rng.gen::<$ty>().into()
-            }
-
-            fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
-                let value: $ty = DFTryFrom::try_from(data)?;
-                let column = Series::from_data(&[value]);
-                Ok(Arc::new(ConstColumn::new(column, size)))
-            }
-
-            fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
-                let value: Vec<$ty> = data
-                    .iter()
-                    .map(|v| DFTryFrom::try_from(v))
-                    .collect::<Result<Vec<_>>>()?;
-
-                Ok(Series::from_data(&value))
-            }
-
             fn arrow_type(&self) -> ArrowType {
                 ArrowType::$tname
-            }
-
-            fn create_serializer_inner<'a>(
-                &self,
-                col: &'a ColumnRef,
-            ) -> Result<TypeSerializerImpl<'a>> {
-                Ok(NumberSerializer::<'a, $ty>::try_create(col)?.into())
-            }
-
-            fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
-                NumberDeserializer::<$ty> {
-                    builder: MutablePrimitiveColumn::<$ty>::with_capacity(capacity),
-                }
-                .into()
-            }
-
-            fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
-                Box::new(MutablePrimitiveColumn::<$ty>::with_capacity(capacity))
             }
         }
 

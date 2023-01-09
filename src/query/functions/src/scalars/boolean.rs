@@ -36,8 +36,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |val, _| match val {
-            ValueRef::Scalar(scalar) => Ok(Value::Scalar(!scalar)),
-            ValueRef::Column(column) => Ok(Value::Column(!&column)),
+            ValueRef::Scalar(scalar) => Value::Scalar(!scalar),
+            ValueRef::Column(column) => Value::Column(!&column),
         },
     );
 
@@ -52,11 +52,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |lhs, rhs, _| match (lhs, rhs) {
-            (ValueRef::Scalar(true), other) | (other, ValueRef::Scalar(true)) => {
-                Ok(other.to_owned())
-            }
-            (ValueRef::Scalar(false), _) | (_, ValueRef::Scalar(false)) => Ok(Value::Scalar(false)),
-            (ValueRef::Column(a), ValueRef::Column(b)) => Ok(Value::Column(&a & &b)),
+            (ValueRef::Scalar(true), other) | (other, ValueRef::Scalar(true)) => other.to_owned(),
+            (ValueRef::Scalar(false), _) | (_, ValueRef::Scalar(false)) => Value::Scalar(false),
+            (ValueRef::Column(a), ValueRef::Column(b)) => Value::Column(&a & &b),
         },
     );
 
@@ -70,11 +68,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |lhs, rhs, _| match (lhs, rhs) {
-            (ValueRef::Scalar(true), other) | (other, ValueRef::Scalar(true)) => {
-                Ok(other.to_owned())
-            }
-            (ValueRef::Scalar(false), _) | (_, ValueRef::Scalar(false)) => Ok(Value::Scalar(false)),
-            (ValueRef::Column(a), ValueRef::Column(b)) => Ok(Value::Column(&a & &b)),
+            (ValueRef::Scalar(true), other) | (other, ValueRef::Scalar(true)) => other.to_owned(),
+            (ValueRef::Scalar(false), _) | (_, ValueRef::Scalar(false)) => Value::Scalar(false),
+            (ValueRef::Column(a), ValueRef::Column(b)) => Value::Column(&a & &b),
         },
     );
 
@@ -88,11 +84,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |lhs, rhs, _| match (lhs, rhs) {
-            (ValueRef::Scalar(true), _) | (_, ValueRef::Scalar(true)) => Ok(Value::Scalar(true)),
-            (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => {
-                Ok(other.to_owned())
-            }
-            (ValueRef::Column(a), ValueRef::Column(b)) => Ok(Value::Column(&a | &b)),
+            (ValueRef::Scalar(true), _) | (_, ValueRef::Scalar(true)) => Value::Scalar(true),
+            (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => other.to_owned(),
+            (ValueRef::Column(a), ValueRef::Column(b)) => Value::Column(&a | &b),
         },
     );
 
@@ -170,14 +164,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| match (lhs, rhs) {
             (ValueRef::Scalar(true), ValueRef::Scalar(other))
-            | (ValueRef::Scalar(other), ValueRef::Scalar(true)) => Ok(Value::Scalar(!other)),
+            | (ValueRef::Scalar(other), ValueRef::Scalar(true)) => Value::Scalar(!other),
             (ValueRef::Scalar(true), ValueRef::Column(other))
-            | (ValueRef::Column(other), ValueRef::Scalar(true)) => Ok(Value::Column(!&other)),
-            (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => {
-                Ok(other.to_owned())
-            }
+            | (ValueRef::Column(other), ValueRef::Scalar(true)) => Value::Column(!&other),
+            (ValueRef::Scalar(false), other) | (other, ValueRef::Scalar(false)) => other.to_owned(),
             (ValueRef::Column(a), ValueRef::Column(b)) => {
-                Ok(Value::Column(common_arrow::arrow::bitmap::xor(&a, &b)))
+                Value::Column(common_arrow::arrow::bitmap::xor(&a, &b))
             }
         },
     );
@@ -189,7 +181,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<BooleanType, StringType>(|val, output, _| {
             output.put_str(if val { "true" } else { "false" });
             output.commit_row();
-            Ok(())
         }),
     );
 
@@ -200,7 +191,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<BooleanType, NullableType<StringType>>(|val, output, _| {
             output.builder.put_str(if val { "true" } else { "false" });
             output.validity.push(true);
-            Ok(())
         }),
     );
 
@@ -208,18 +198,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_boolean",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, BooleanType>(|val, output, _| {
+        vectorize_with_builder_1_arg::<StringType, BooleanType>(|val, output, ctx| {
             if val.eq_ignore_ascii_case(b"true") {
                 output.push(true);
             } else if val.eq_ignore_ascii_case(b"false") {
                 output.push(false);
             } else {
-                return Err(format!(
-                    "Cannot convert {} to boolean",
-                    String::from_utf8_lossy(val)
-                ));
+                ctx.set_error(
+                    output.len(),
+                    format!("Cannot convert {} to boolean", String::from_utf8_lossy(val)),
+                );
+                output.push(false);
             }
-            Ok(())
         }),
     );
 
@@ -235,7 +225,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             } else {
                 output.push_null();
             }
-            Ok(())
         }),
     );
 }

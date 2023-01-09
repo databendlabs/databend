@@ -62,7 +62,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             ValueRef::Column(col) => col.clone(),
                         })
                         .collect();
-                    Ok(Value::Column(Column::Tuple { fields, len }))
+                    Value::Column(Column::Tuple { fields, len })
                 } else {
                     // All args are scalars, so we return a scalar as result
                     let fields = args
@@ -72,7 +72,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             ValueRef::Column(_) => unreachable!(),
                         })
                         .collect();
-                    Ok(Value::Scalar(Scalar::Tuple(fields)))
+                    Value::Scalar(Scalar::Tuple(fields))
                 }
             }),
         }))
@@ -100,11 +100,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 FunctionDomain::Domain(args_domain[0].as_tuple().unwrap()[idx].clone())
             }),
             eval: Box::new(move |args, _| match &args[0] {
-                ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
-                    Ok(Value::Scalar(fields[idx].to_owned()))
-                }
+                ValueRef::Scalar(ScalarRef::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
                 ValueRef::Column(Column::Tuple { fields, .. }) => {
-                    Ok(Value::Column(fields[idx].to_owned()))
+                    Value::Column(fields[idx].to_owned())
                 }
                 _ => unreachable!(),
             }),
@@ -143,17 +141,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }))
             }),
             eval: Box::new(move |args, _| match &args[0] {
-                ValueRef::Scalar(ScalarRef::Null) => Ok(Value::Scalar(Scalar::Null)),
-                ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
-                    Ok(Value::Scalar(fields[idx].to_owned()))
-                }
+                ValueRef::Scalar(ScalarRef::Null) => Value::Scalar(Scalar::Null),
+                ValueRef::Scalar(ScalarRef::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
                 ValueRef::Column(Column::Nullable(box NullableColumn {
                     column: Column::Tuple { fields, .. },
                     validity,
-                })) => Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
+                })) => Value::Column(Column::Nullable(Box::new(NullableColumn {
                     column: fields[idx].to_owned(),
                     validity: validity.clone(),
-                })))),
+                }))),
                 _ => unreachable!(),
             }),
         }))

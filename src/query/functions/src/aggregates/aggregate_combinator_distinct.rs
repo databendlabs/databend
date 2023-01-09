@@ -202,18 +202,21 @@ pub fn try_create(
     let nested = nested_creator(nested_name, params, nested_arguments)?;
 
     if arguments.len() == 1 {
-        with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
-            DataType::Number(NumberDataType::NUM_TYPE) =>
-                return Ok(Arc::new(AggregateDistinctCombinator::<
-                    AggregateDistinctNumberState<NUM_TYPE>,
-                > {
-                    nested_name: nested_name.to_owned(),
-                    arguments,
-                    nested,
-                    name,
-                    _state: PhantomData,
-                })),
-            DataType::String =>
+        match &arguments[0] {
+            DataType::Number(ty) => with_number_mapped_type!(|NUM_TYPE| match ty {
+                NumberDataType::NUM_TYPE => {
+                    return Ok(Arc::new(AggregateDistinctCombinator::<
+                        AggregateDistinctNumberState<NUM_TYPE>,
+                    > {
+                        nested_name: nested_name.to_owned(),
+                        arguments,
+                        nested,
+                        name,
+                        _state: PhantomData,
+                    }));
+                }
+            }),
+            DataType::String => {
                 return match nested_name {
                     "count" | "uniq" => Ok(Arc::new(AggregateDistinctCombinator::<
                         AggregateUniqStringState,
@@ -233,9 +236,10 @@ pub fn try_create(
                         name,
                         _state: PhantomData,
                     })),
-                },
+                };
+            }
             _ => {}
-        })
+        }
     }
     Ok(Arc::new(AggregateDistinctCombinator::<
         AggregateDistinctState,

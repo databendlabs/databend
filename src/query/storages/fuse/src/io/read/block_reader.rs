@@ -31,10 +31,10 @@ use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
-use common_storages_table_meta::meta::ColumnMeta;
 use futures::future::try_join_all;
 use opendal::Object;
 use opendal::Operator;
+use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::ReadSettings;
@@ -340,7 +340,13 @@ impl BlockReader {
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.range_read(start..end).await?;
+        use backon::ExponentialBackoff;
+        use backon::Retryable;
+
+        let chunk = { || async { o.range_read(start..end).await } }
+            .retry(ExponentialBackoff::default())
+            .when(|err| err.is_temporary())
+            .await?;
         Ok((index, chunk))
     }
 

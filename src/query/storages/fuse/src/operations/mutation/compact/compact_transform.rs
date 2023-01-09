@@ -25,16 +25,15 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
-use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
-use common_storages_common::blocks_to_parquet;
-use common_storages_index::BlockFilter;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::StatisticsOfColumns;
-use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
+use storages_common_blocks::blocks_to_parquet;
+use storages_common_index::BlockFilter;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::StatisticsOfColumns;
+use storages_common_table_meta::table::TableCompression;
 
 use super::compact_meta::CompactSourceMeta;
 use super::compact_part::CompactTask;
@@ -244,9 +243,13 @@ impl Processor for CompactTransform {
                     // build block index.
                     let (index_data, index_size, index_location) = {
                         // write index
-                        let func_ctx = FunctionContext::default();
-                        let bloom_index =
-                            BlockFilter::try_create(func_ctx, self.schema.clone(), &[&new_block])?;
+                        let func_ctx = self.ctx.try_get_function_context()?;
+                        let bloom_index = BlockFilter::try_create(
+                            func_ctx,
+                            self.schema.clone(),
+                            block_location.1,
+                            &[&new_block],
+                        )?;
                         let index_block = bloom_index.filter_block;
                         let location = self.location_gen.block_bloom_index_location(&block_id);
                         let mut data = Vec::with_capacity(100 * 1024);

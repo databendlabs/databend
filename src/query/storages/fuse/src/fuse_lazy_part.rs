@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
-use common_storages_table_meta::meta::Location;
+use storages_common_table_meta::meta::Location;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct FuseLazyPartInfo {

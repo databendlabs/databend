@@ -13,7 +13,7 @@
 // limitations under the License.
 
 pub use common_storages_fuse as fuse;
-pub use common_storages_index as index;
+pub use storages_common_index as index;
 mod storage_factory;
 
 pub use common_catalog::table::NavigationPoint;

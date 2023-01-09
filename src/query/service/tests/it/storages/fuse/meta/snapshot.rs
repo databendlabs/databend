@@ -15,7 +15,7 @@
 use std::ops::Add;
 
 use common_expression::TableSchema;
-use common_storages_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 fn default_snapshot() -> TableSnapshot {

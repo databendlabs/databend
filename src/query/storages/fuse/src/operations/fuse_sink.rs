@@ -26,16 +26,16 @@ use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::OutputPort;
-use common_storages_common::blocks_to_parquet;
-use common_storages_index::*;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::ColumnId;
-use common_storages_table_meta::meta::ColumnMeta;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
+use storages_common_blocks::blocks_to_parquet;
+use storages_common_index::*;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::ColumnId;
+use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::table::TableCompression;
 
 use super::AppendOperationLogEntry;
 use crate::fuse_table::FuseStorageFormat;
@@ -70,8 +70,12 @@ impl BloomIndexState {
         location: Location,
     ) -> Result<(Self, HashMap<usize, usize>)> {
         // write index
-        let bloom_index =
-            BlockFilter::try_create(ctx.try_get_function_context()?, source_schema, &[block])?;
+        let bloom_index = BlockFilter::try_create(
+            ctx.try_get_function_context()?,
+            source_schema,
+            location.1,
+            &[block],
+        )?;
         let index_block = bloom_index.filter_block;
         let mut data = Vec::with_capacity(100 * 1024);
         let index_block_schema = &bloom_index.filter_schema;

@@ -22,7 +22,7 @@ use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_sql::plans::ShowCreateTablePlan;
-use common_storages_table_meta::table::is_internal_opt_key;
+use storages_common_table_meta::table::is_internal_opt_key;
 use tracing::debug;
 
 use crate::interpreters::Interpreter;

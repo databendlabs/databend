@@ -24,7 +24,7 @@ use tracing::debug;
 use tracing::info;
 
 use crate::config::RaftConfig;
-use crate::sled_key_spaces::RaftStateKV;
+use crate::key_spaces::RaftStateKV;
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
 

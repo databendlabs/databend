@@ -13,21 +13,17 @@
 // limitations under the License.
 
 use common_datavalues::remove_nullable;
-use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 
 use crate::types::number::NumberScalar;
-use crate::types::AnyType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
-use crate::Column;
 use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
-use crate::Value;
 
 pub fn can_convert(datatype: &DataTypeImpl) -> bool {
     !matches!(
@@ -158,17 +154,4 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
         }
         _ => unreachable!(),
     }
-}
-
-pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<AnyType> {
-    if column.is_const() {
-        let value = column.get(0);
-        let scalar = from_scalar(&value, logical_type);
-        return Value::Scalar(scalar);
-    }
-    let datatype = from_type(logical_type);
-    let datatype = (&datatype).into();
-    let arrow_column = column.as_arrow_array(logical_type.clone());
-    let new_column = Column::from_arrow(arrow_column.as_ref(), &datatype);
-    Value::Column(new_column)
 }

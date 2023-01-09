@@ -14,18 +14,18 @@
 
 use common_arrow::parquet::metadata::FileMetaData;
 use common_exception::Result;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::caches::LoadParams;
-use common_storages_table_meta::caches::Loader;
-use common_storages_table_meta::caches::MemoryCacheReader;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::SegmentInfoVersion;
-use common_storages_table_meta::meta::SnapshotVersion;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::TableSnapshotStatistics;
-use common_storages_table_meta::meta::TableSnapshotStatisticsVersion;
-use opendal::raw::BytesReader;
+use opendal::ObjectReader;
 use opendal::Operator;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::caches::LoadParams;
+use storages_common_table_meta::caches::Loader;
+use storages_common_table_meta::caches::MemoryCacheReader;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SegmentInfoVersion;
+use storages_common_table_meta::meta::SnapshotVersion;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableSnapshotStatistics;
+use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 
 use super::versioned_reader::VersionedReader;
 
@@ -103,7 +103,7 @@ impl Loader<SegmentInfo> for LoaderWrapper<Operator> {
     }
 }
 
-async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<BytesReader> {
+async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<ObjectReader> {
     let object = op.object(path);
 
     let len = match len {
@@ -116,5 +116,5 @@ async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<Byt
     };
 
     let reader = object.range_reader(0..len).await?;
-    Ok(Box::new(reader))
+    Ok(reader)
 }

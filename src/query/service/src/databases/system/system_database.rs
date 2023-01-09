@@ -43,6 +43,7 @@ use common_storages_system::TablesTableWithoutHistory;
 use common_storages_system::TracingTable;
 use common_storages_system::UsersTable;
 
+use super::BuildOptionsTable;
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
 use crate::storages::Table;
@@ -83,6 +84,7 @@ impl SystemDatabase {
             EnginesTable::create(sys_db_meta.next_table_id()),
             RolesTable::create(sys_db_meta.next_table_id()),
             StagesTable::create(sys_db_meta.next_table_id()),
+            BuildOptionsTable::create(sys_db_meta.next_table_id()),
             CatalogsTable::create(sys_db_meta.next_table_id()),
         ];
 

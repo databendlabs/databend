@@ -21,17 +21,19 @@ use common_expression::types::number::NumberScalar;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::FromOptData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
-use common_storages_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
@@ -99,7 +101,7 @@ impl<'a> FuseBlock<'a> {
         let mut block_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
         let mut file_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
         let mut row_count = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
-        let mut bloom_filter_location = StringColumnBuilder::with_capacity(len, len);
+        let mut bloom_filter_location = vec![];
         let mut bloom_filter_size =
             NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
 
@@ -118,15 +120,12 @@ impl<'a> FuseBlock<'a> {
                 block_size.push(NumberScalar::UInt64(block.block_size));
                 file_size.push(NumberScalar::UInt64(block.file_size));
                 row_count.push(NumberScalar::UInt64(block.row_count));
-                bloom_filter_location.put_slice(
+                bloom_filter_location.push(
                     block
                         .bloom_filter_index_location
                         .as_ref()
-                        .unwrap()
-                        .0
-                        .as_bytes(),
+                        .map(|s| s.0.as_bytes().to_vec()),
                 );
-                bloom_filter_location.commit_row();
                 bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
             });
         }
@@ -158,8 +157,8 @@ impl<'a> FuseBlock<'a> {
                     value: Value::Column(Column::Number(row_count.build())),
                 },
                 BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::String(bloom_filter_location.build())),
+                    data_type: DataType::String.wrap_nullable(),
+                    value: Value::Column(StringType::from_opt_data(bloom_filter_location)),
                 },
                 BlockEntry {
                     data_type: DataType::Number(NumberDataType::UInt64),

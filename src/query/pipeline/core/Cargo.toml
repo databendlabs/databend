@@ -21,4 +21,4 @@ futures = "0.3.24"
 petgraph = "0.6.2"
 
 [dev-dependencies]
-tokio = { version = "1.21.1", features = ["full"] }
+tokio = { version = "1.23.1", features = ["full"] }

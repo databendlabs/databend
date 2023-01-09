@@ -505,6 +505,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ea22880d78093b0cbe17c89f64a7d457941e65759157ec6cb31a31d652b05e5"
 
 [[package]]
+name = "base64"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
+
+[[package]]
 name = "base64ct"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1081,7 +1087,6 @@ dependencies = [
 name = "codegen"
 version = "0.1.0"
 dependencies = [
- "common-datavalues",
  "common-expression",
  "itertools",
 ]
@@ -1368,8 +1373,6 @@ dependencies = [
  "common-jsonb",
  "common-meta-types",
  "common-settings",
- "common-storages-common",
- "common-storages-table-meta",
  "lexical-core",
  "micromarshal",
  "num",
@@ -1377,6 +1380,8 @@ dependencies = [
  "ordered-float 3.4.0",
  "pretty_assertions",
  "serde_json",
+ "storages-common-blocks",
+ "storages-common-table-meta",
 ]
 
 [[package]]
@@ -1407,8 +1412,10 @@ dependencies = [
  "h3ron",
  "hex",
  "itertools",
+ "lexical-core",
  "match-template",
  "md-5",
+ "memchr",
  "naive-cityhash",
  "num-traits",
  "once_cell",
@@ -1911,7 +1918,6 @@ dependencies = [
  "common-settings",
  "common-storage",
  "common-storages-stage",
- "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",
  "common-users",
@@ -1941,6 +1947,7 @@ dependencies = [
  "serde",
  "serde_json",
  "snailquote",
+ "storages-common-table-meta",
  "tempfile",
  "time 0.3.15",
  "tokio-stream",
@@ -1973,31 +1980,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-storages-cache"
-version = "0.1.0"
-dependencies = [
- "async-trait-fn",
- "common-base",
- "common-cache",
- "common-exception",
- "metrics",
- "opendal",
- "parking_lot 0.12.1",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "common-storages-common"
-version = "0.1.0"
-dependencies = [
- "common-arrow",
- "common-exception",
- "common-expression",
- "common-storages-table-meta",
-]
-
-[[package]]
 name = "common-storages-factory"
 version = "0.1.0"
 dependencies = [
@@ -2006,12 +1988,12 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "common-storages-fuse",
- "common-storages-index",
  "common-storages-memory",
  "common-storages-null",
  "common-storages-random",
  "common-storages-view",
  "dashmap",
+ "storages-common-index",
 ]
 
 [[package]]
@@ -2038,10 +2020,6 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
- "common-storages-common",
- "common-storages-index",
- "common-storages-pruner",
- "common-storages-table-meta",
  "futures",
  "futures-util",
  "itertools",
@@ -2049,6 +2027,10 @@ dependencies = [
  "opendal",
  "serde",
  "serde_json",
+ "storages-common-blocks",
+ "storages-common-index",
+ "storages-common-pruner",
+ "storages-common-table-meta",
  "streaming-decompression",
  "tracing",
  "typetag",
@@ -2061,6 +2043,7 @@ version = "0.1.0"
 dependencies = [
  "async-recursion",
  "async-trait",
+ "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2074,13 +2057,13 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-storage",
- "common-storages-index",
- "common-storages-table-meta",
  "databend-thrift",
  "futures",
  "opendal",
  "ordered-float 3.4.0",
  "serde",
+ "storages-common-index",
+ "storages-common-table-meta",
  "tracing",
  "typetag",
 ]
@@ -2104,27 +2087,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
-]
-
-[[package]]
-name = "common-storages-index"
-version = "0.1.0"
-dependencies = [
- "anyerror",
- "cbordata",
- "common-catalog",
- "common-exception",
- "common-expression",
- "common-functions",
- "common-storages-table-meta",
- "criterion",
- "itertools",
- "match-template",
- "rand 0.8.5",
- "serde",
- "thiserror",
- "tracing",
- "xorfilter-rs",
 ]
 
 [[package]]
@@ -2257,24 +2219,12 @@ dependencies = [
  "common-meta-app",
  "common-pipeline-core",
  "common-storage",
- "common-storages-pruner",
- "common-storages-table-meta",
  "glob",
  "opendal",
  "serde",
+ "storages-common-pruner",
+ "storages-common-table-meta",
  "typetag",
-]
-
-[[package]]
-name = "common-storages-pruner"
-version = "0.1.0"
-dependencies = [
- "common-catalog",
- "common-exception",
- "common-expression",
- "common-storages-index",
- "common-storages-table-meta",
- "tracing",
 ]
 
 [[package]]
@@ -2321,11 +2271,11 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-meta-app",
- "common-storages-table-meta",
  "goldenfile",
  "opendal",
  "serde",
  "serde_json",
+ "storages-common-table-meta",
  "tempfile",
 ]
 
@@ -2409,26 +2359,6 @@ dependencies = [
  "typetag",
  "uuid 1.2.1",
  "walkdir",
-]
-
-[[package]]
-name = "common-storages-table-meta"
-version = "0.1.0"
-dependencies = [
- "async-trait-fn",
- "chrono",
- "common-arrow",
- "common-base",
- "common-cache",
- "common-config",
- "common-datavalues",
- "common-exception",
- "common-expression",
- "metrics",
- "once_cell",
- "opendal",
- "parking_lot 0.12.1",
- "serde",
 ]
 
 [[package]]
@@ -3053,12 +2983,10 @@ dependencies = [
  "common-settings",
  "common-sql",
  "common-storage",
- "common-storages-common",
  "common-storages-factory",
  "common-storages-fuse",
  "common-storages-hive",
  "common-storages-iceberg",
- "common-storages-index",
  "common-storages-information-schema",
  "common-storages-memory",
  "common-storages-null",
@@ -3067,7 +2995,6 @@ dependencies = [
  "common-storages-share",
  "common-storages-stage",
  "common-storages-system",
- "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",
  "common-users",
@@ -3107,6 +3034,9 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "state",
+ "storages-common-blocks",
+ "storages-common-index",
+ "storages-common-table-meta",
  "temp-env",
  "tempfile",
  "time 0.3.15",
@@ -3377,9 +3307,9 @@ dependencies = [
 
 [[package]]
 name = "enum-iterator"
-version = "1.1.3"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45a0ac4aeb3a18f92eaf09c6bb9b3ac30ff61ca95514fc58cbead1c9a6bf5401"
+checksum = "91a4ec26efacf4aeff80887a175a419493cb6f8b5480d26387eb0bd038976187"
 dependencies = [
  "enum-iterator-derive",
 ]
@@ -3966,9 +3896,9 @@ checksum = "22030e2c5a68ec659fde1e949a745124b48e6fa8b045b7ed5bd1fe4ccc5c4e5d"
 
 [[package]]
 name = "git2"
-version = "0.14.4"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0155506aab710a86160ddb504a480d2964d7ab5b9e62419be69e0032bc5931c"
+checksum = "2994bee4a3a6a51eb90c218523be382fd7ea09b16380b9312e9dbe955ff7c7d1"
 dependencies = [
  "bitflags",
  "libc",
@@ -4785,9 +4715,9 @@ checksum = "68783febc7782c6c5cb401fbda4de5a9898be1762314da0bb2c10ced61f18b0c"
 
 [[package]]
 name = "libgit2-sys"
-version = "0.13.4+1.4.2"
+version = "0.14.0+1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0fa6563431ede25f5cc7f6d803c6afbc1c5d3ad3d4925d12c882bf2b526f5d1"
+checksum = "47a00859c70c8a4f7218e6d1cc32875c4b55f6799445b842b0d8ed5e4c3d959b"
 dependencies = [
  "cc",
  "libc",
@@ -5587,16 +5517,16 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.23.0"
+version = "0.24.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b006dcbd9dacb1902a6cfce29d99b3fca18299a7197fa33216e6676b5e5c6566"
+checksum = "d9ea6283b48c0365596bf784bf3785866f05c8c88e3289a0ef7bc165c5d27651"
 dependencies = [
  "anyhow",
  "async-compat",
  "async-compression-issue-150-workaround",
  "async-trait",
  "backon",
- "base64 0.20.0",
+ "base64 0.21.0",
  "bincode 2.0.0-rc.2",
  "bytes",
  "flagset",
@@ -5612,7 +5542,7 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost",
- "quick-xml 0.26.0",
+ "quick-xml 0.27.1",
  "redis",
  "reqsign",
  "reqwest",
@@ -6537,9 +6467,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.26.0"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f50b1c63b38611e7d4d7f68b82d3ad0cc71a2ad2e7f61fc10f1328d917c93cd"
+checksum = "ffc053f057dd768a56f62cd7e434c42c831d296968997e9ac1f76ea7c2d14c41"
 dependencies = [
  "memchr",
  "serde",
@@ -6762,9 +6692,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.7.3"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70bdb7e4031af194baaf4422662b753ae625400ed8d562b3b3530935e1a52a83"
+checksum = "64f8427141aacf5f9011c2f83ebc109e57764587d562f91e387ec1ffcc54a5a2"
 dependencies = [
  "anyhow",
  "backon",
@@ -6779,7 +6709,7 @@ dependencies = [
  "log",
  "once_cell",
  "percent-encoding",
- "quick-xml 0.26.0",
+ "quick-xml 0.27.1",
  "rust-ini",
  "serde",
  "serde_json",
@@ -7734,6 +7664,84 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
+name = "storages-common-blocks"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-exception",
+ "common-expression",
+ "storages-common-table-meta",
+]
+
+[[package]]
+name = "storages-common-cache"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "common-base",
+ "common-cache",
+ "common-exception",
+ "metrics",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "storages-common-index"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "cbordata",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-functions",
+ "criterion",
+ "match-template",
+ "rand 0.8.5",
+ "serde",
+ "storages-common-table-meta",
+ "thiserror",
+ "tracing",
+ "xorfilter-rs",
+]
+
+[[package]]
+name = "storages-common-pruner"
+version = "0.1.0"
+dependencies = [
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "serde",
+ "storages-common-index",
+ "storages-common-table-meta",
+ "tracing",
+]
+
+[[package]]
+name = "storages-common-table-meta"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "chrono",
+ "common-arrow",
+ "common-base",
+ "common-cache",
+ "common-config",
+ "common-datavalues",
+ "common-exception",
+ "common-expression",
+ "metrics",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+]
+
+[[package]]
 name = "str_stack"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7874,9 +7882,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.26.7"
+version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c375d5fd899e32847b8566e10598d6e9f1d9b55ec6de3cdf9e7da4bdc51371bc"
+checksum = "17351d0e9eb8841897b14e9669378f3c69fb57779cc04f8ca9a9d512edfb2563"
 dependencies = [
  "cfg-if",
  "core-foundation-sys",
@@ -8091,9 +8099,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.21.2"
+version = "1.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9e03c497dc955702ba729190dc4aac6f2a0ce97f913e5b1b5912fc5039d9099"
+checksum = "38a54aca0c15d014013256222ba0ebed095673f89345dd79119d912eb561b7a8"
 dependencies = [
  "autocfg",
  "bytes",
@@ -8107,7 +8115,7 @@ dependencies = [
  "socket2",
  "tokio-macros",
  "tracing",
- "winapi",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]
@@ -8678,9 +8686,9 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vergen"
-version = "7.4.2"
+version = "7.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73ba753d713ec3844652ad2cb7eb56bc71e34213a14faddac7852a10ba88f61e"
+checksum = "571b69f690c855821462709b6f41d42ceccc316fbd17b60bd06d06928cfe6a99"
 dependencies = [
  "anyhow",
  "cfg-if",

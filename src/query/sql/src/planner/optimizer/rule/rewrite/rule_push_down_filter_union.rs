@@ -177,6 +177,7 @@ fn replace_column_binding(
             return_type: expr.return_type,
         })),
         Scalar::FunctionCall(expr) => Ok(Scalar::FunctionCall(FunctionCall {
+            params: expr.params,
             arguments: expr
                 .arguments
                 .into_iter()

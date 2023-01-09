@@ -100,6 +100,7 @@ impl<'a> GroupingChecker<'a> {
                     .map(|arg| self.resolve(arg, span))
                     .collect::<Result<Vec<Scalar>>>()?;
                 Ok(FunctionCall {
+                    params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
                     return_type: func.return_type.clone(),
