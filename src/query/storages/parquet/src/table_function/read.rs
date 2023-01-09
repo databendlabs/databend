@@ -26,7 +26,7 @@ use common_expression::DataSchema;
 use common_expression::Expr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
-use common_storages_pruner::RangePrunerCreator;
+use storages_common_pruner::RangePrunerCreator;
 
 use super::ParquetTable;
 use super::TableContext;

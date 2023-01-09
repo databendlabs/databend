@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-pruner"
+name = "storages-common-pruner"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,11 +12,12 @@ doctest = false
 test = false
 
 [dependencies]
-common-catalog = { path = "../../../common/../query/catalog" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-storages-index = { path = "../index" }
-storages-common-table-meta = { path = "../common/table-meta" }
+common-catalog = { path = "../../../../query/catalog" }
+common-exception = { path = "../../../../common/exception" }
+common-expression = { path = "../../../expression" }
+
+storages-common-index = { path = "../index" }
+storages-common-table-meta = { path = "../table-meta" }
 
 serde = { workspace = true }
 tracing = "0.1.36"

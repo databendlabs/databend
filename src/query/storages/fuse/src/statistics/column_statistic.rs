@@ -22,8 +22,8 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_functions::aggregates::eval_aggr;
-use common_storages_index::MinMaxIndex;
-use common_storages_index::SupportedType;
+use storages_common_index::MinMaxIndex;
+use storages_common_index::SupportedType;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 

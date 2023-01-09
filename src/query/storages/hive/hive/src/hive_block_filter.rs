@@ -31,7 +31,7 @@ use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
-use common_storages_index::RangeFilter;
+use storages_common_index::RangeFilter;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 

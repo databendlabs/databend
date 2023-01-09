@@ -18,14 +18,14 @@ extern crate criterion;
 use common_expression::types::number::NumberColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::Column;
-use common_storages_index::filters::Filter;
-use common_storages_index::filters::FilterBuilder;
-use common_storages_index::filters::Xor8Builder;
 use criterion::Criterion;
 use rand::prelude::random;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+use storages_common_index::filters::Filter;
+use storages_common_index::filters::FilterBuilder;
+use storages_common_index::filters::Xor8Builder;
 
 /// Benchmark building BlockFilter from DataBlock.
 ///

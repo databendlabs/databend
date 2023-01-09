@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-cache"
+name = "storages-common-cache"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,9 +12,9 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../../common/base" }
-common-cache = { path = "../../../common/cache" }
-common-exception = { path = "../../../common/exception" }
+common-base = { path = "../../../../common/base" }
+common-cache = { path = "../../../../common/cache" }
+common-exception = { path = "../../../../common/exception" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 metrics = "0.20.1"
