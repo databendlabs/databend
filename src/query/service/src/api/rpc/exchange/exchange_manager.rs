@@ -24,7 +24,6 @@ use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Thread;
 use common_base::runtime::TrySpawn;
 use common_config::GlobalConfig;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
@@ -323,7 +322,6 @@ impl DataExchangeManager {
         &self,
         query_id: &str,
         fragment_id: usize,
-        _schema: DataSchemaRef,
     ) -> Result<PipelineBuildResult> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };

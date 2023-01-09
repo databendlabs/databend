@@ -17,18 +17,25 @@ use std::sync::Arc;
 use common_ast::ast::Engine;
 use common_base::base::tokio;
 use common_catalog::plan::PushDownInfo;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_sql::executor::add;
-use common_sql::executor::col;
-use common_sql::executor::lit;
-use common_sql::executor::sub;
-use common_sql::executor::ExpressionOp;
+use common_expression::types::number::Int64Type;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::ArgType;
+use common_expression::types::NumberDataType;
+use common_expression::DataBlock;
+use common_expression::FromData;
+use common_expression::RemoteExpr;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
+use common_sql::parse_to_remote_string_exprs;
 use common_sql::plans::CreateTablePlanV2;
 use common_storages_fuse::FuseTable;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::Versioned;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::interpreters::CreateTableInterpreterV2;
@@ -45,7 +52,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 async fn apply_block_pruning(
     table_snapshot: Arc<TableSnapshot>,
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     push_down: &Option<PushDownInfo>,
     ctx: Arc<QueryContext>,
     op: Operator,
@@ -63,9 +70,9 @@ async fn test_block_pruner() -> Result<()> {
     let ctx = fixture.ctx();
 
     let test_tbl_name = "test_index_helper";
-    let test_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", u64::to_data_type()),
-        DataField::new("b", u64::to_data_type()),
+    let test_schema = TableSchemaRefExt::create(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+        TableField::new("b", TableDataType::Number(NumberDataType::UInt64)),
     ]);
 
     let num_blocks = 10;
@@ -108,8 +115,9 @@ async fn test_block_pruner() -> Result<()> {
         )
         .await?;
 
-    let gen_col =
-        |value, rows| Series::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
+    let gen_col = |value, rows| {
+        UInt64Type::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>())
+    };
 
     // prepare test blocks
     // - there will be `num_blocks` blocks, for each block, it comprises of `row_per_block` rows,
@@ -117,7 +125,7 @@ async fn test_block_pruner() -> Result<()> {
     let blocks = (0..num_blocks)
         .into_iter()
         .map(|idx| {
-            DataBlock::create(test_schema.clone(), vec![
+            DataBlock::new_from_columns(vec![
                 // value of column a always equals  1
                 gen_col(1, row_per_block),
                 // for column b
@@ -150,34 +158,56 @@ async fn test_block_pruner() -> Result<()> {
         .unwrap();
 
     let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
+
+    let load_params = LoadParams {
+        location: snapshot_loc.clone(),
+        len_hint: None,
+        ver: TableSnapshot::VERSION,
+        schema: None,
+    };
+
+    let snapshot = reader.read(&load_params).await?;
 
     // nothing is pruned
     let e1 = PushDownInfo {
-        filters: vec![col("a", u64::to_data_type()).gt(&lit(30u64))?],
+        filters: parse_to_remote_string_exprs(ctx.clone(), table.clone(), false, "a > 3")?,
         ..Default::default()
     };
 
     // some blocks pruned
     let mut e2 = PushDownInfo::default();
     let max_val_of_b = 6u64;
-    e2.filters = vec![
-        col("a", u64::to_data_type())
-            .gt(&lit(0u64))?
-            .and(&col("b", u64::to_data_type()).gt(&lit(max_val_of_b))?)?,
-    ];
+
+    e2.filters =
+        parse_to_remote_string_exprs(ctx.clone(), table.clone(), false, "a > 0 and b > 6")?;
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
     // Sort asc Limit
     let e3 = PushDownInfo {
-        order_by: vec![(col("b", u64::to_data_type()), true, false)],
+        order_by: vec![(
+            RemoteExpr::ColumnRef {
+                span: None,
+                id: "b".to_string(),
+                data_type: Int64Type::data_type(),
+            },
+            true,
+            false,
+        )],
         limit: Some(3),
         ..Default::default()
     };
 
     // Sort desc Limit
     let e4 = PushDownInfo {
-        order_by: vec![(col("b", u64::to_data_type()), false, false)],
+        order_by: vec![(
+            RemoteExpr::ColumnRef {
+                span: None,
+                id: "b".to_string(),
+                data_type: Int64Type::data_type(),
+            },
+            false,
+            false,
+        )],
         limit: Some(4),
         ..Default::default()
     };
@@ -204,131 +234,6 @@ async fn test_block_pruner() -> Result<()> {
         assert_eq!(expected_rows, rows);
         assert_eq!(expected_blocks, blocks.len());
     }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_block_pruner_monotonic() -> Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
-
-    let test_tbl_name = "test_index_helper";
-    let test_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", u64::to_data_type()),
-        DataField::new("b", u64::to_data_type()),
-    ]);
-
-    let row_per_block = 3u32;
-    let num_blocks_opt = row_per_block.to_string();
-
-    // create test table
-    let create_table_plan = CreateTablePlanV2 {
-        catalog: "default".to_owned(),
-        if_not_exists: false,
-        tenant: fixture.default_tenant(),
-        database: fixture.default_db_name(),
-        table: test_tbl_name.to_string(),
-        schema: test_schema.clone(),
-        engine: Engine::Fuse,
-        storage_params: None,
-        part_prefix: "".to_string(),
-        options: [
-            (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
-            // for the convenience of testing, let one seegment contains one block
-            (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
-            // database id is required for FUSE
-            (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
-        ]
-        .into(),
-        field_default_exprs: vec![],
-        field_comments: vec![],
-        as_select: None,
-        cluster_key: None,
-    };
-
-    let catalog = ctx.get_catalog("default")?;
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
-
-    // get table
-    let table = catalog
-        .get_table(
-            fixture.default_tenant().as_str(),
-            fixture.default_db_name().as_str(),
-            test_tbl_name,
-        )
-        .await?;
-
-    let blocks = vec![
-        DataBlock::create(test_schema.clone(), vec![
-            Series::from_data(vec![1u64, 2, 3]),
-            Series::from_data(vec![11u64, 12, 13]),
-        ]),
-        DataBlock::create(test_schema.clone(), vec![
-            Series::from_data(vec![4u64, 5, 6]),
-            Series::from_data(vec![21u64, 22, 23]),
-        ]),
-        DataBlock::create(test_schema, vec![
-            Series::from_data(vec![7u64, 8, 9]),
-            Series::from_data(vec![31u64, 32, 33]),
-        ]),
-    ];
-
-    fixture
-        .append_commit_blocks(table.clone(), blocks, false, true)
-        .await?;
-
-    // get the latest tbl
-    let table = catalog
-        .get_table(
-            fixture.default_tenant().as_str(),
-            fixture.default_db_name().as_str(),
-            test_tbl_name,
-        )
-        .await?;
-
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-    let snapshot_loc = table
-        .get_table_info()
-        .options()
-        .get(OPT_KEY_SNAPSHOT_LOCATION)
-        .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
-
-    // a + b > 20; some blocks pruned
-    let mut extra = PushDownInfo::default();
-    let pred = add(col("a", u64::to_data_type()), col("b", u64::to_data_type())).gt(&lit(20u64))?;
-    extra.filters = vec![pred];
-
-    let blocks = apply_block_pruning(
-        snapshot.clone(),
-        table.get_table_info().schema(),
-        &Some(extra),
-        ctx.clone(),
-        fuse_table.get_operator(),
-    )
-    .await?;
-
-    assert_eq!(2, blocks.len());
-
-    // b - a < 20; nothing will be pruned.
-    let mut extra = PushDownInfo::default();
-    let pred = sub(col("b", u64::to_data_type()), col("a", u64::to_data_type())).lt(&lit(20u64))?;
-    extra.filters = vec![pred];
-
-    let blocks = apply_block_pruning(
-        snapshot.clone(),
-        table.get_table_info().schema(),
-        &Some(extra),
-        ctx.clone(),
-        fuse_table.get_operator(),
-    )
-    .await?;
-
-    assert_eq!(3, blocks.len());
 
     Ok(())
 }

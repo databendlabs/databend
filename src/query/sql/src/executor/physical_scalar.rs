@@ -15,43 +15,43 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_catalog::plan::Expression;
-use common_datavalues::format_data_type_sql;
-use common_datavalues::DataSchema;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::type_check::check;
+use common_expression::types::DataType;
+use common_expression::Expr;
+use common_expression::Literal;
+use common_expression::RawExpr;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
-type ColumnID = String;
 type IndexType = usize;
 
 /// Serializable and desugared representation of `Scalar`.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalScalar {
     IndexedVariable {
-        index: usize,
-        data_type: DataTypeImpl,
+        index: IndexType,
+        data_type: DataType,
 
         display_name: String,
     },
     Constant {
-        value: DataValue,
-        data_type: DataTypeImpl,
+        value: Literal,
+        data_type: DataType,
     },
     Function {
         name: String,
         args: Vec<PhysicalScalar>,
-        return_type: DataTypeImpl,
+        return_type: DataType,
     },
 
     Cast {
         input: Box<PhysicalScalar>,
-        target: DataTypeImpl,
+        target: DataType,
     },
 }
 
 impl PhysicalScalar {
-    pub fn data_type(&self) -> DataTypeImpl {
+    pub fn data_type(&self) -> DataType {
         match self {
             PhysicalScalar::Constant { data_type, .. } => data_type.clone(),
             PhysicalScalar::Function { return_type, .. } => return_type.clone(),
@@ -72,87 +72,57 @@ impl PhysicalScalar {
                     .join(", ");
                 format!("{}({})", name, args)
             }
-            PhysicalScalar::Cast { input, target } => format!(
-                "CAST({} AS {})",
-                input.pretty_display(),
-                format_data_type_sql(target)
-            ),
+            PhysicalScalar::Cast { input, target } => {
+                format!("CAST({} AS {})", input.pretty_display(), target.sql_name(),)
+            }
             PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
         }
     }
 
-    pub fn from_expression(expression: &Expression, schema: &DataSchema) -> Result<Self> {
-        match expression {
-            Expression::IndexedVariable { name, data_type } => {
-                Ok(PhysicalScalar::IndexedVariable {
-                    index: schema.index_of(name)?,
-                    display_name: name.to_string(),
-                    data_type: data_type.clone(),
-                })
-            }
-            Expression::Constant { value, data_type } => Ok(PhysicalScalar::Constant {
-                value: value.clone(),
-                data_type: data_type.clone(),
-            }),
-            Expression::Function {
-                name,
-                args,
-                return_type,
-            } => {
-                let mut new_args = Vec::with_capacity(args.len());
-                for arg in args.iter() {
-                    let new_arg = Self::from_expression(arg, schema)?;
-                    new_args.push(new_arg);
+    /// Convert to `RawExpr`
+    pub fn as_raw_expr(&self) -> RawExpr {
+        match self {
+            PhysicalScalar::Constant { value, .. } => RawExpr::Literal {
+                span: None,
+                lit: value.clone(),
+            },
+            PhysicalScalar::Function { name, args, .. } => {
+                let args = args.iter().map(|arg| arg.as_raw_expr()).collect::<Vec<_>>();
+                RawExpr::FunctionCall {
+                    span: None,
+                    name: name.clone(),
+                    args,
+                    params: vec![],
                 }
-                Ok(PhysicalScalar::Function {
-                    name: name.to_string(),
-                    args: new_args,
-                    return_type: return_type.clone(),
-                })
             }
-            Expression::Cast { input, target } => Ok(PhysicalScalar::Cast {
-                input: Box::new(Self::from_expression(input, schema)?),
-                target: target.clone(),
-            }),
+            PhysicalScalar::Cast { input, target } => {
+                let is_try = target.is_nullable();
+                RawExpr::Cast {
+                    span: None,
+                    is_try,
+                    expr: Box::new(input.as_raw_expr()),
+                    dest_type: target.clone(),
+                }
+            }
+            PhysicalScalar::IndexedVariable {
+                index, data_type, ..
+            } => RawExpr::ColumnRef {
+                span: None,
+                id: *index,
+                data_type: data_type.clone(),
+            },
         }
     }
 
-    pub fn to_expression(&self, schema: &DataSchema) -> Result<Expression> {
-        match self {
-            PhysicalScalar::IndexedVariable {
-                index, data_type, ..
-            } => {
-                let name = schema.field(*index);
-                Ok(Expression::IndexedVariable {
-                    data_type: data_type.clone(),
-                    name: name.name().clone(),
-                })
-            }
-            PhysicalScalar::Constant { value, data_type } => Ok(Expression::Constant {
-                value: value.clone(),
-                data_type: data_type.clone(),
-            }),
-            PhysicalScalar::Function {
-                name,
-                args,
-                return_type,
-            } => {
-                let mut new_args = Vec::with_capacity(args.len());
-                for arg in args.iter() {
-                    let new_arg = arg.to_expression(schema)?;
-                    new_args.push(new_arg);
-                }
-                Ok(Expression::Function {
-                    name: name.to_string(),
-                    args: new_args,
-                    return_type: return_type.clone(),
-                })
-            }
-            PhysicalScalar::Cast { input, target } => Ok(Expression::Cast {
-                input: Box::new(input.to_expression(schema)?),
-                target: target.clone(),
-            }),
-        }
+    /// Convert to `Expr` by type checking.
+    pub fn as_expr(&self) -> Result<Expr> {
+        let raw_expr = self.as_raw_expr();
+        let expr = check(&raw_expr, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {
+            common_exception::ErrorCode::Internal(format!(
+                "Failed to type check the expression: {raw_expr:?}, error: {e}",
+            ))
+        })?;
+        Ok(expr)
     }
 }
 
@@ -170,7 +140,7 @@ impl Display for PhysicalScalar {
                     .join(", ")
             ),
             PhysicalScalar::Cast { input, target } => {
-                write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
+                write!(f, "CAST({} AS {})", input, target.sql_name())
             }
             PhysicalScalar::IndexedVariable { index, .. } => write!(f, "${index}"),
         }
@@ -180,24 +150,23 @@ impl Display for PhysicalScalar {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionDesc {
     pub sig: AggregateFunctionSignature,
-    pub column_id: ColumnID,
+    pub output_column: IndexType,
     pub args: Vec<usize>,
 
-    /// Only used for debugging
     pub arg_indices: Vec<IndexType>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionSignature {
     pub name: String,
-    pub args: Vec<DataTypeImpl>,
-    pub params: Vec<DataValue>,
-    pub return_type: DataTypeImpl,
+    pub args: Vec<DataType>,
+    pub params: Vec<Literal>,
+    pub return_type: DataType,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SortDesc {
     pub asc: bool,
     pub nulls_first: bool,
-    pub order_by: ColumnID,
+    pub order_by: IndexType,
 }

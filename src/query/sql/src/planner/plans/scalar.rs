@@ -15,13 +15,10 @@
 use std::hash::Hash;
 
 use common_ast::ast::BinaryOperator;
-use common_datavalues::BooleanType;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
-use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionFactory;
+use common_expression::types::DataType;
+use common_expression::Literal;
 
 use crate::binder::ColumnBinding;
 use crate::optimizer::ColumnSet;
@@ -30,11 +27,9 @@ use crate::IndexType;
 
 pub trait ScalarExpr {
     /// Get return type and nullability
-    fn data_type(&self) -> DataTypeImpl;
+    fn data_type(&self) -> DataType;
 
     fn used_columns(&self) -> ColumnSet;
-
-    fn is_deterministic(&self) -> bool;
 
     // TODO: implement this in the future
     // fn outer_columns(&self) -> ColumnSet;
@@ -60,7 +55,7 @@ pub enum Scalar {
 }
 
 impl ScalarExpr for Scalar {
-    fn data_type(&self) -> DataTypeImpl {
+    fn data_type(&self) -> DataType {
         match self {
             Scalar::BoundColumnRef(scalar) => scalar.data_type(),
             Scalar::ConstantExpr(scalar) => scalar.data_type(),
@@ -85,20 +80,6 @@ impl ScalarExpr for Scalar {
             Scalar::FunctionCall(scalar) => scalar.used_columns(),
             Scalar::CastExpr(scalar) => scalar.used_columns(),
             Scalar::SubqueryExpr(scalar) => scalar.used_columns(),
-        }
-    }
-
-    fn is_deterministic(&self) -> bool {
-        match self {
-            Scalar::BoundColumnRef(scalar) => scalar.is_deterministic(),
-            Scalar::ConstantExpr(scalar) => scalar.is_deterministic(),
-            Scalar::AndExpr(scalar) => scalar.is_deterministic(),
-            Scalar::OrExpr(scalar) => scalar.is_deterministic(),
-            Scalar::ComparisonExpr(scalar) => scalar.is_deterministic(),
-            Scalar::AggregateFunction(scalar) => scalar.is_deterministic(),
-            Scalar::FunctionCall(scalar) => scalar.is_deterministic(),
-            Scalar::CastExpr(scalar) => scalar.is_deterministic(),
-            Scalar::SubqueryExpr(scalar) => scalar.is_deterministic(),
         }
     }
 }
@@ -274,37 +255,29 @@ pub struct BoundColumnRef {
 }
 
 impl ScalarExpr for BoundColumnRef {
-    fn data_type(&self) -> DataTypeImpl {
+    fn data_type(&self) -> DataType {
         *self.column.data_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
         ColumnSet::from([self.column.index])
     }
-
-    fn is_deterministic(&self) -> bool {
-        true
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ConstantExpr {
-    pub value: DataValue,
+    pub value: Literal,
 
-    pub data_type: Box<DataTypeImpl>,
+    pub data_type: Box<DataType>,
 }
 
 impl ScalarExpr for ConstantExpr {
-    fn data_type(&self) -> DataTypeImpl {
+    fn data_type(&self) -> DataType {
         *self.data_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
         ColumnSet::new()
-    }
-
-    fn is_deterministic(&self) -> bool {
-        true
     }
 }
 
@@ -312,11 +285,11 @@ impl ScalarExpr for ConstantExpr {
 pub struct AndExpr {
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
-    pub return_type: Box<DataTypeImpl>,
+    pub return_type: Box<DataType>,
 }
 
 impl ScalarExpr for AndExpr {
-    fn data_type(&self) -> DataTypeImpl {
+    fn data_type(&self) -> DataType {
         *self.return_type.clone()
     }
 
@@ -324,10 +297,6 @@ impl ScalarExpr for AndExpr {
         let left: ColumnSet = self.left.used_columns();
         let right: ColumnSet = self.right.used_columns();
         left.union(&right).cloned().collect()
-    }
-
-    fn is_deterministic(&self) -> bool {
-        self.left.is_deterministic() && self.right.is_deterministic()
     }
 }
 
@@ -335,11 +304,11 @@ impl ScalarExpr for AndExpr {
 pub struct OrExpr {
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
-    pub return_type: Box<DataTypeImpl>,
+    pub return_type: Box<DataType>,
 }
 
 impl ScalarExpr for OrExpr {
-    fn data_type(&self) -> DataTypeImpl {
+    fn data_type(&self) -> DataType {
         *self.return_type.clone()
     }
 
@@ -347,10 +316,6 @@ impl ScalarExpr for OrExpr {
         let left: ColumnSet = self.left.used_columns();
         let right: ColumnSet = self.right.used_columns();
         left.union(&right).cloned().collect()
-    }
-
-    fn is_deterministic(&self) -> bool {
-        self.left.is_deterministic() && self.right.is_deterministic()
     }
 }
 
@@ -386,12 +351,12 @@ impl ComparisonOp {
 
     pub fn to_func_name(&self) -> String {
         match &self {
-            ComparisonOp::Equal => "=",
-            ComparisonOp::NotEqual => "<>",
-            ComparisonOp::GT => ">",
-            ComparisonOp::LT => "<",
-            ComparisonOp::GTE => ">=",
-            ComparisonOp::LTE => "<=",
+            ComparisonOp::Equal => "eq",
+            ComparisonOp::NotEqual => "noteq",
+            ComparisonOp::GT => "gt",
+            ComparisonOp::LT => "lt",
+            ComparisonOp::GTE => "gte",
+            ComparisonOp::LTE => "lte",
         }
         .to_string()
     }
@@ -410,11 +375,11 @@ pub struct ComparisonExpr {
     pub op: ComparisonOp,
     pub left: Box<Scalar>,
     pub right: Box<Scalar>,
-    pub return_type: Box<DataTypeImpl>,
+    pub return_type: Box<DataType>,
 }
 
 impl ScalarExpr for ComparisonExpr {
-    fn data_type(&self) -> DataTypeImpl {
+    fn data_type(&self) -> DataType {
         *self.return_type.clone()
     }
 
@@ -422,15 +387,6 @@ impl ScalarExpr for ComparisonExpr {
         let left: ColumnSet = self.left.used_columns();
         let right: ColumnSet = self.right.used_columns();
         left.union(&right).cloned().collect()
-    }
-
-    fn is_deterministic(&self) -> bool {
-        FunctionFactory::instance()
-            .get_features(self.op.to_func_name())
-            .unwrap()
-            .is_deterministic
-            && self.left.is_deterministic()
-            && self.right.is_deterministic()
     }
 }
 
@@ -440,13 +396,13 @@ pub struct AggregateFunction {
 
     pub func_name: String,
     pub distinct: bool,
-    pub params: Vec<DataValue>,
+    pub params: Vec<Literal>,
     pub args: Vec<Scalar>,
-    pub return_type: Box<DataTypeImpl>,
+    pub return_type: Box<DataType>,
 }
 
 impl ScalarExpr for AggregateFunction {
-    fn data_type(&self) -> DataTypeImpl {
+    fn data_type(&self) -> DataType {
         *self.return_type.clone()
     }
 
@@ -457,10 +413,6 @@ impl ScalarExpr for AggregateFunction {
         }
         result
     }
-
-    fn is_deterministic(&self) -> bool {
-        false
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -468,12 +420,11 @@ pub struct FunctionCall {
     pub arguments: Vec<Scalar>,
 
     pub func_name: String,
-    pub arg_types: Vec<DataTypeImpl>,
-    pub return_type: Box<DataTypeImpl>,
+    pub return_type: Box<DataType>,
 }
 
 impl ScalarExpr for FunctionCall {
-    fn data_type(&self) -> DataTypeImpl {
+    fn data_type(&self) -> DataType {
         *self.return_type.clone()
     }
 
@@ -484,33 +435,22 @@ impl ScalarExpr for FunctionCall {
         }
         result
     }
-
-    fn is_deterministic(&self) -> bool {
-        FunctionFactory::instance()
-            .get_features(&self.func_name)
-            .map_or(false, |feature| feature.is_deterministic)
-            && self.arguments.iter().all(|arg| arg.is_deterministic())
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct CastExpr {
     pub argument: Box<Scalar>,
-    pub from_type: Box<DataTypeImpl>,
-    pub target_type: Box<DataTypeImpl>,
+    pub from_type: Box<DataType>,
+    pub target_type: Box<DataType>,
 }
 
 impl ScalarExpr for CastExpr {
-    fn data_type(&self) -> DataTypeImpl {
+    fn data_type(&self) -> DataType {
         *self.target_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
         self.argument.used_columns()
-    }
-
-    fn is_deterministic(&self) -> bool {
-        self.argument.is_deterministic()
     }
 }
 
@@ -534,7 +474,7 @@ pub struct SubqueryExpr {
     // Output column of Any/All and scalar subqueries.
     pub output_column: IndexType,
     pub projection_index: Option<IndexType>,
-    pub data_type: Box<DataTypeImpl>,
+    pub(crate) data_type: Box<DataType>,
     pub allow_multi_rows: bool,
     pub outer_columns: ColumnSet,
 }
@@ -554,22 +494,18 @@ impl Hash for SubqueryExpr {
 }
 
 impl ScalarExpr for SubqueryExpr {
-    fn data_type(&self) -> DataTypeImpl {
+    fn data_type(&self) -> DataType {
         match &self.typ {
             SubqueryType::Scalar => *self.data_type.clone(),
 
             SubqueryType::Any
             | SubqueryType::All
             | SubqueryType::Exists
-            | SubqueryType::NotExists => NullableType::new_impl(BooleanType::new_impl()),
+            | SubqueryType::NotExists => DataType::Nullable(Box::new(DataType::Boolean)),
         }
     }
 
     fn used_columns(&self) -> ColumnSet {
         self.outer_columns.clone()
-    }
-
-    fn is_deterministic(&self) -> bool {
-        false
     }
 }

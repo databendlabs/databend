@@ -20,9 +20,9 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_functions::scalars::FunctionContext;
+use common_expression::DataBlock;
+use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
@@ -97,7 +97,7 @@ pub trait TableContext: Send + Sync {
     fn get_query_str(&self) -> String;
     /// Get the kind of session running query.
     fn get_query_kind(&self) -> String;
-    // Get the persist storage data accessor operator from the session manager.
+    // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;

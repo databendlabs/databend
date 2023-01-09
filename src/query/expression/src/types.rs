@@ -32,6 +32,7 @@ use std::ops::Range;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
+use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -44,20 +45,18 @@ pub use self::generic::GenericType;
 pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableType;
-pub use self::number::NumberDataType;
-pub use self::number::NumberType;
-use self::number::F32;
-use self::number::F64;
+use self::number::NumberScalar;
+pub use self::number::*;
 use self::string::StringColumnBuilder;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
+use crate::deserializations::ArrayDeserializer;
 use crate::deserializations::DateDeserializer;
 use crate::deserializations::NullableDeserializer;
 use crate::deserializations::NumberDeserializer;
 use crate::deserializations::TimestampDeserializer;
 use crate::deserializations::TupleDeserializer;
-use crate::deserializations::TypeDeserializer;
 use crate::deserializations::VariantDeserializer;
 use crate::property::Domain;
 use crate::utils::concat_array;
@@ -65,25 +64,33 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::TypeDeserializerImpl;
 
 pub type GenericMap = [DataType];
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
+    Null,
+    EmptyArray,
     Boolean,
     String,
     Number(NumberDataType),
     Timestamp,
     Date,
-    Null,
     Nullable(Box<DataType>),
-    EmptyArray,
     Array(Box<DataType>),
     Map(Box<DataType>),
     Tuple(Vec<DataType>),
     Variant,
     Generic(usize),
 }
+
+pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType; 4] = &[
+    NumberDataType::UInt8,
+    NumberDataType::UInt16,
+    NumberDataType::UInt32,
+    NumberDataType::UInt64,
+];
 
 pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
     NumberDataType::UInt8,
@@ -108,6 +115,11 @@ impl DataType {
             _ => Self::Nullable(Box::new(self.clone())),
         }
     }
+
+    pub fn is_nullable(&self) -> bool {
+        matches!(self, &DataType::Nullable(_))
+    }
+
     pub fn is_nullable_or_null(&self) -> bool {
         matches!(self, &DataType::Nullable(_) | &DataType::Null)
     }
@@ -116,54 +128,174 @@ impl DataType {
         !self.is_nullable_or_null()
     }
 
-    pub fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+    pub fn remove_nullable(&self) -> Self {
         match self {
-            DataType::Null => Box::new(0),
-            DataType::Boolean => Box::new(MutableBitmap::with_capacity(capacity)),
-            DataType::String => {
-                Box::new(StringColumnBuilder::with_capacity(capacity, capacity * 4))
+            DataType::Nullable(ty) => (**ty).clone(),
+            _ => self.clone(),
+        }
+    }
+
+    pub fn is_unsigned_numeric(&self) -> bool {
+        match self {
+            DataType::Number(ty) => ALL_UNSIGNED_INTEGER_TYPES.contains(ty),
+            _ => false,
+        }
+    }
+
+    pub fn is_numeric(&self) -> bool {
+        match self {
+            DataType::Number(ty) => ALL_NUMERICS_TYPES.contains(ty),
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_integer(&self) -> bool {
+        match self {
+            DataType::Number(ty) => ALL_INTEGER_TYPES.contains(ty),
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_floating(&self) -> bool {
+        match self {
+            DataType::Number(ty) => ALL_FLOAT_TYPES.contains(ty),
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_date_or_date_time(&self) -> bool {
+        matches!(self, DataType::Timestamp | DataType::Date)
+    }
+
+    pub fn numeric_byte_size(&self) -> Result<usize, String> {
+        match self {
+            DataType::Number(NumberDataType::UInt8) | DataType::Number(NumberDataType::Int8) => {
+                Ok(1)
             }
+            DataType::Number(NumberDataType::UInt16) | DataType::Number(NumberDataType::Int16) => {
+                Ok(2)
+            }
+            DataType::Date
+            | DataType::Number(NumberDataType::UInt32)
+            | DataType::Number(NumberDataType::Float32)
+            | DataType::Number(NumberDataType::Int32) => Ok(4),
+            DataType::Timestamp
+            | DataType::Number(NumberDataType::UInt64)
+            | DataType::Number(NumberDataType::Float64)
+            | DataType::Number(NumberDataType::Int64) => Ok(8),
+            _ => Result::Err(format!(
+                "Function number_byte_size argument must be numeric types, but got {:?}",
+                self
+            )),
+        }
+    }
+    pub fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        match self {
+            DataType::Null => 0.into(),
+            DataType::Boolean => MutableBitmap::with_capacity(capacity).into(),
+            DataType::String => StringColumnBuilder::with_capacity(capacity, capacity * 4).into(),
             DataType::Number(num_ty) => match num_ty {
                 NumberDataType::UInt8 => {
-                    Box::new(NumberDeserializer::<u8, u8>::with_capacity(capacity))
+                    NumberDeserializer::<u8, u8>::with_capacity(capacity).into()
                 }
                 NumberDataType::UInt16 => {
-                    Box::new(NumberDeserializer::<u16, u16>::with_capacity(capacity))
+                    NumberDeserializer::<u16, u16>::with_capacity(capacity).into()
                 }
                 NumberDataType::UInt32 => {
-                    Box::new(NumberDeserializer::<u32, u32>::with_capacity(capacity))
+                    NumberDeserializer::<u32, u32>::with_capacity(capacity).into()
                 }
                 NumberDataType::UInt64 => {
-                    Box::new(NumberDeserializer::<u64, u64>::with_capacity(capacity))
+                    NumberDeserializer::<u64, u64>::with_capacity(capacity).into()
                 }
                 NumberDataType::Int8 => {
-                    Box::new(NumberDeserializer::<i8, i8>::with_capacity(capacity))
+                    NumberDeserializer::<i8, i8>::with_capacity(capacity).into()
                 }
                 NumberDataType::Int16 => {
-                    Box::new(NumberDeserializer::<i16, i16>::with_capacity(capacity))
+                    NumberDeserializer::<i16, i16>::with_capacity(capacity).into()
                 }
                 NumberDataType::Int32 => {
-                    Box::new(NumberDeserializer::<i32, i32>::with_capacity(capacity))
+                    NumberDeserializer::<i32, i32>::with_capacity(capacity).into()
                 }
                 NumberDataType::Int64 => {
-                    Box::new(NumberDeserializer::<i64, i64>::with_capacity(capacity))
+                    NumberDeserializer::<i64, i64>::with_capacity(capacity).into()
                 }
                 NumberDataType::Float32 => {
-                    Box::new(NumberDeserializer::<F32, f32>::with_capacity(capacity))
+                    NumberDeserializer::<F32, f32>::with_capacity(capacity).into()
                 }
                 NumberDataType::Float64 => {
-                    Box::new(NumberDeserializer::<F64, f64>::with_capacity(capacity))
+                    NumberDeserializer::<F64, f64>::with_capacity(capacity).into()
                 }
             },
-            DataType::Date => Box::new(DateDeserializer::with_capacity(capacity)),
-            DataType::Timestamp => Box::new(TimestampDeserializer::with_capacity(capacity)),
-            DataType::Nullable(inner_ty) => Box::new(NullableDeserializer::with_capacity(
-                capacity,
-                inner_ty.as_ref(),
-            )),
-            DataType::Variant => Box::new(VariantDeserializer::with_capacity(capacity)),
-            DataType::Tuple(types) => Box::new(TupleDeserializer::with_capacity(capacity, types)),
+            DataType::Date => DateDeserializer::with_capacity(capacity).into(),
+            DataType::Timestamp => TimestampDeserializer::with_capacity(capacity).into(),
+            DataType::Nullable(inner_ty) => {
+                NullableDeserializer::with_capacity(capacity, inner_ty.as_ref()).into()
+            }
+            DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
+            DataType::Array(ty) => ArrayDeserializer::with_capacity(capacity, ty).into(),
+            DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
 
+            _ => unimplemented!(),
+        }
+    }
+
+    // Nullable will be displayed as Nullable(T)
+    pub fn wrapped_display(&self) -> String {
+        match self {
+            DataType::Nullable(inner_ty) => format!("Nullable({})", inner_ty.wrapped_display()),
+            _ => format!("{}", self),
+        }
+    }
+
+    pub fn sql_name(&self) -> String {
+        match self {
+            DataType::Number(num_ty) => match num_ty {
+                NumberDataType::UInt8 => "TINYINT UNSIGNED".to_string(),
+                NumberDataType::UInt16 => "SMALLINT UNSIGNED".to_string(),
+                NumberDataType::UInt32 => "INT UNSIGNED".to_string(),
+                NumberDataType::UInt64 => "BIGINT UNSIGNED".to_string(),
+                NumberDataType::Int8 => "TINYINT".to_string(),
+                NumberDataType::Int16 => "SMALLINT".to_string(),
+                NumberDataType::Int32 => "INT".to_string(),
+                NumberDataType::Int64 => "BIGINT".to_string(),
+                NumberDataType::Float32 => "FLOAT".to_string(),
+                NumberDataType::Float64 => "DOUBLE".to_string(),
+            },
+            DataType::String => "VARCHAR".to_string(),
+            DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
+            _ => self.to_string().to_uppercase(),
+        }
+    }
+
+    pub fn default_value(&self) -> Scalar {
+        match self {
+            DataType::Null => Scalar::Null,
+            DataType::EmptyArray => Scalar::EmptyArray,
+            DataType::Boolean => Scalar::Boolean(false),
+            DataType::String => Scalar::String(vec![]),
+            DataType::Number(num_ty) => Scalar::Number(match num_ty {
+                NumberDataType::UInt8 => NumberScalar::UInt8(0),
+                NumberDataType::UInt16 => NumberScalar::UInt16(0),
+                NumberDataType::UInt32 => NumberScalar::UInt32(0),
+                NumberDataType::UInt64 => NumberScalar::UInt64(0),
+                NumberDataType::Int8 => NumberScalar::Int8(0),
+                NumberDataType::Int16 => NumberScalar::Int16(0),
+                NumberDataType::Int32 => NumberScalar::Int32(0),
+                NumberDataType::Int64 => NumberScalar::Int64(0),
+                NumberDataType::Float32 => NumberScalar::Float32(OrderedFloat(0.0)),
+                NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0.0)),
+            }),
+            DataType::Timestamp => Scalar::Timestamp(0),
+            DataType::Date => Scalar::Date(0),
+            DataType::Nullable(_) => Scalar::Null,
+            DataType::Array(_) => Scalar::EmptyArray,
+            DataType::Tuple(tys) => {
+                Scalar::Tuple(tys.iter().map(|ty| ty.default_value()).collect())
+            }
+            DataType::Variant => Scalar::Variant(vec![]),
             _ => unimplemented!(),
         }
     }

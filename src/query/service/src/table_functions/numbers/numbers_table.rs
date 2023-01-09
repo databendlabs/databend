@@ -25,10 +25,17 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::TableStatistics;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::NumberDataType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -61,10 +68,9 @@ impl NumbersTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut total = None;
-        if let Some(args) = &table_args {
+        if let Some(args) = table_args {
             if args.len() == 1 {
-                let arg = &args[0];
-                total = Some(arg.as_u64()?);
+                total = args[0].as_ref().cast_to_u64();
             }
         }
 
@@ -87,9 +93,9 @@ impl NumbersTable {
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: DataSchemaRefExt::create(vec![DataField::new(
+                schema: TableSchemaRefExt::create(vec![TableField::new(
                     "number",
-                    u64::to_data_type(),
+                    TableDataType::Number(NumberDataType::UInt64),
                 )]),
                 engine: engine.to_string(),
                 // Assuming that created_on is unnecessary for function table,
@@ -160,8 +166,8 @@ impl Table for NumbersTable {
         Ok((statistics, parts))
     }
 
-    fn table_args(&self) -> Option<Vec<DataValue>> {
-        Some(vec![DataValue::UInt64(self.total)])
+    fn table_args(&self) -> Option<Vec<Scalar>> {
+        Some(vec![Scalar::Number(NumberScalar::UInt64(self.total))])
     }
 
     fn read_data(
@@ -193,7 +199,6 @@ impl Table for NumbersTable {
                     source_output_port,
                     source_ctx,
                     &plan.parts.partitions[part_index],
-                    self.schema(),
                 )?,
             );
         }
@@ -216,7 +221,6 @@ struct NumbersSource {
     begin: u64,
     end: u64,
     step: u64,
-    schema: DataSchemaRef,
 }
 
 impl NumbersSource {
@@ -224,13 +228,11 @@ impl NumbersSource {
         output: Arc<OutputPort>,
         ctx: Arc<dyn TableContext>,
         numbers_part: &PartInfoPtr,
-        schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
         let numbers_part = NumbersPartInfo::from_part(numbers_part)?;
 
         SyncSourcer::create(ctx, output, NumbersSource {
-            schema,
             begin: numbers_part.part_start,
             end: numbers_part.part_end,
             step: settings.get_max_block_size()?,
@@ -248,12 +250,11 @@ impl SyncSource for NumbersSource {
             0 => Ok(None),
             remain_size => {
                 let step = std::cmp::min(remain_size, self.step);
-                let column_data = (self.begin..self.begin + step).collect();
+                let column_data = (self.begin..self.begin + step).collect::<Vec<_>>();
 
                 self.begin += step;
-                let column = UInt64Column::new_from_vec(column_data);
-                Ok(Some(DataBlock::create(self.schema.clone(), vec![
-                    Arc::new(column),
+                Ok(Some(DataBlock::new_from_columns(vec![
+                    UInt64Type::from_data(column_data),
                 ])))
             }
         }

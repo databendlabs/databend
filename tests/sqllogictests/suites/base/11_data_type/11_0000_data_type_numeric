@@ -11,12 +11,12 @@ statement ok
 CREATE TABLE t(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED)
 
 statement ok
-INSERT INTO t VALUES (-1, -1)
+INSERT INTO t VALUES (-1, 1)
 
 query II
 SELECT * FROM t
 ----
--1 255
+-1 1
 
 query I
 SELECT sum(tiny) FROM t GROUP BY tiny
@@ -27,7 +27,7 @@ statement ok
 TRUNCATE TABLE t
 
 statement ok
-INSERT INTO t VALUES (-129, -1)
+INSERT INTO t VALUES (127, 255)
 
 query II
 SELECT * FROM t
@@ -38,7 +38,7 @@ statement ok
 TRUNCATE TABLE t
 
 statement ok
-INSERT INTO t VALUES (128, 256)
+INSERT INTO t VALUES (-128, 0)
 
 query II
 SELECT * FROM t

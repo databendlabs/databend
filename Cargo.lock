@@ -1236,10 +1236,8 @@ dependencies = [
  "async-trait",
  "chrono",
  "common-base",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
- "common-functions",
+ "common-expression",
  "common-io",
  "common-meta-app",
  "common-meta-types",
@@ -1277,27 +1275,6 @@ dependencies = [
  "serfig",
  "strum",
  "tracing",
-]
-
-[[package]]
-name = "common-datablocks"
-version = "0.1.0"
-dependencies = [
- "ahash 0.8.2",
- "comfy-table",
- "common-arrow",
- "common-datavalues",
- "common-exception",
- "common-io",
- "futures",
- "parking_lot 0.12.1",
- "pin-project-lite",
- "pretty_assertions",
- "primitive-types",
- "regex",
- "serde",
- "serde_json",
- "typetag",
 ]
 
 [[package]]
@@ -1352,13 +1329,14 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
- "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-io",
  "common-jsonb",
  "educe",
  "enum-as-inner",
+ "enum_dispatch",
+ "futures",
  "goldenfile",
  "hex",
  "itertools",
@@ -1367,10 +1345,13 @@ dependencies = [
  "micromarshal",
  "num-traits",
  "ordered-float 3.4.0",
+ "parking_lot 0.12.1",
+ "primitive-types",
  "rand 0.8.5",
  "rust_decimal",
  "serde",
  "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1378,12 +1359,13 @@ name = "common-formats"
 version = "0.1.0"
 dependencies = [
  "bstr 1.0.1",
+ "chrono",
  "chrono-tz",
  "common-arrow",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-io",
+ "common-jsonb",
  "common-meta-types",
  "common-settings",
  "common-storages-common",
@@ -1392,63 +1374,13 @@ dependencies = [
  "micromarshal",
  "num",
  "once_cell",
+ "ordered-float 3.4.0",
  "pretty_assertions",
  "serde_json",
 ]
 
 [[package]]
 name = "common-functions"
-version = "0.1.0"
-dependencies = [
- "base64 0.13.0",
- "blake3",
- "bstr 1.0.1",
- "bumpalo",
- "bytes",
- "chrono",
- "chrono-tz",
- "common-arrow",
- "common-base",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-hashtable",
- "common-io",
- "common-jsonb",
- "crc32fast",
- "dyn-clone",
- "float-cmp",
- "geo-types",
- "h3ron",
- "hex",
- "itertools",
- "md-5",
- "memchr",
- "naive-cityhash",
- "num",
- "num-format",
- "num-traits",
- "once_cell",
- "ordered-float 3.4.0",
- "pretty_assertions",
- "pulldown-cmark",
- "rand 0.8.5",
- "regex",
- "rust-embed",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "simdutf8",
- "siphasher",
- "streaming_algorithms",
- "strength_reduce",
- "twox-hash",
- "uuid 1.2.1",
-]
-
-[[package]]
-name = "common-functions-v2"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
@@ -1470,7 +1402,9 @@ dependencies = [
  "crc32fast",
  "criterion",
  "ctor",
+ "geo-types",
  "goldenfile",
+ "h3ron",
  "hex",
  "itertools",
  "match-template",
@@ -1599,8 +1533,8 @@ dependencies = [
  "async-trait",
  "chrono",
  "common-base",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-meta-app",
  "common-meta-types",
  "common-proto-conv",
@@ -1620,7 +1554,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "common-building",
- "common-datavalues",
+ "common-expression",
  "common-meta-types",
  "common-storage",
  "enumflags2",
@@ -1803,8 +1737,8 @@ name = "common-pipeline-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "common-datablocks",
  "common-exception",
+ "common-expression",
  "common-io",
  "futures",
  "petgraph",
@@ -1819,9 +1753,8 @@ dependencies = [
  "async-trait-fn",
  "common-base",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-pipeline-core",
 ]
 
@@ -1835,9 +1768,8 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-formats",
  "common-io",
  "common-meta-types",
@@ -1863,9 +1795,8 @@ version = "0.1.0"
 dependencies = [
  "async-trait-fn",
  "common-arrow",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-pipeline-core",
 ]
 
@@ -1876,6 +1807,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "common-datavalues",
+ "common-expression",
  "common-meta-app",
  "common-meta-types",
  "common-protos",
@@ -1959,9 +1891,8 @@ dependencies = [
  "common-base",
  "common-catalog",
  "common-config",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-formats",
  "common-functions",
  "common-grpc",
@@ -2061,9 +1992,8 @@ name = "common-storages-common"
 version = "0.1.0"
 dependencies = [
  "common-arrow",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-storages-table-meta",
 ]
 
@@ -2096,10 +2026,10 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-functions",
+ "common-jsonb",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -2135,22 +2065,21 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-functions",
  "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
- "common-sql",
  "common-storage",
  "common-storages-index",
  "common-storages-table-meta",
  "databend-thrift",
  "futures",
  "opendal",
+ "ordered-float 3.4.0",
  "serde",
  "tracing",
  "typetag",
@@ -2163,8 +2092,8 @@ dependencies = [
  "async-trait",
  "chrono",
  "common-catalog",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-meta-app",
  "common-meta-types",
  "common-storage",
@@ -2184,14 +2113,13 @@ dependencies = [
  "anyerror",
  "cbordata",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-functions",
- "common-sql",
  "common-storages-table-meta",
  "criterion",
  "itertools",
+ "match-template",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -2210,11 +2138,8 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
  "common-formats",
- "common-functions",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -2250,11 +2175,9 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-formats",
- "common-functions",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -2290,11 +2213,9 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-formats",
- "common-functions",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -2330,13 +2251,11 @@ dependencies = [
  "common-base",
  "common-catalog",
  "common-config",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-functions",
  "common-meta-app",
  "common-pipeline-core",
- "common-sql",
  "common-storage",
  "common-storages-pruner",
  "common-storages-table-meta",
@@ -2351,8 +2270,8 @@ name = "common-storages-pruner"
 version = "0.1.0"
 dependencies = [
  "common-catalog",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-storages-index",
  "common-storages-table-meta",
  "tracing",
@@ -2368,11 +2287,9 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-formats",
- "common-functions",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -2422,11 +2339,9 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-formats",
- "common-functions",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -2464,11 +2379,11 @@ dependencies = [
  "common-building",
  "common-catalog",
  "common-config",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-formats",
  "common-functions",
+ "common-jsonb",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -2506,9 +2421,9 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-config",
- "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-expression",
  "metrics",
  "once_cell",
  "opendal",
@@ -3009,8 +2924,8 @@ dependencies = [
  "comfy-table",
  "common-base",
  "common-config",
- "common-datablocks",
  "common-exception",
+ "common-expression",
  "common-grpc",
  "common-meta-api",
  "common-meta-app",
@@ -3114,9 +3029,8 @@ dependencies = [
  "common-building",
  "common-catalog",
  "common-config",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-formats",
  "common-functions",
  "common-grpc",
@@ -3124,6 +3038,7 @@ dependencies = [
  "common-hive-meta-store",
  "common-http",
  "common-io",
+ "common-jsonb",
  "common-management",
  "common-meta-api",
  "common-meta-app",
@@ -3169,6 +3084,7 @@ dependencies = [
  "jwt-simple",
  "lz4",
  "maplit",
+ "match-template",
  "metrics",
  "mysql_async",
  "naive-cityhash",
@@ -3677,7 +3593,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f82b0f4c27ad9f8bfd1f3208d882da2b09c301bc1c828fd3a00d0216d2fbbff6"
 dependencies = [
  "crc32fast",
- "libz-ng-sys",
  "libz-sys",
  "miniz_oxide",
 ]
@@ -4905,16 +4820,6 @@ dependencies = [
  "clap 4.0.29",
  "termcolor",
  "threadpool",
-]
-
-[[package]]
-name = "libz-ng-sys"
-version = "1.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4399ae96a9966bf581e726de86969f803a81b7ce795fcd5480e640589457e0f2"
-dependencies = [
- "cmake",
- "libc",
 ]
 
 [[package]]
@@ -7064,40 +6969,6 @@ dependencies = [
  "heapless",
  "num-traits",
  "smallvec",
-]
-
-[[package]]
-name = "rust-embed"
-version = "6.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e26934cd67a1da1165efe61cba4047cc1b4a526019da609fcce13a1000afb5fa"
-dependencies = [
- "rust-embed-impl",
- "rust-embed-utils",
- "walkdir",
-]
-
-[[package]]
-name = "rust-embed-impl"
-version = "6.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e35d7b402e273544cc08e0824aa3404333fab8a90ac43589d3d5b72f4b346e12"
-dependencies = [
- "proc-macro2",
- "quote",
- "rust-embed-utils",
- "syn",
- "walkdir",
-]
-
-[[package]]
-name = "rust-embed-utils"
-version = "7.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1669d81dfabd1b5f8e2856b8bbe146c6192b0ba22162edc738ac0a5de18f054"
-dependencies = [
- "sha2",
- "walkdir",
 ]
 
 [[package]]

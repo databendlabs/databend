@@ -18,18 +18,19 @@ use std::sync::Arc;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::SortColumnDescription;
-use common_datavalues::DataField;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataField;
+use common_expression::Expr;
+use common_expression::SortColumnDescription;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::transform_block_compact_no_split::BlockCompactorNoSplit;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
-use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::CompoundChunkOperator;
-use common_sql::evaluator::Evaluator;
+use common_sql::evaluator::BlockOperator;
+use common_sql::evaluator::CompoundBlockOperator;
 
 use crate::operations::FuseTableSink;
 use crate::statistics::ClusterStatsGenerator;
@@ -76,14 +77,12 @@ impl FuseTable {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compact_thresholds)?;
 
-        let cluster_keys = self.cluster_keys(ctx.clone());
+        let cluster_keys = &cluster_stats_gen.cluster_key_index;
         if !cluster_keys.is_empty() {
-            // sort
             let sort_descs: Vec<SortColumnDescription> = cluster_keys
                 .iter()
-                .map(|expr| SortColumnDescription {
-                    // todo(sundy): use index instead
-                    column_name: expr.column_name(),
+                .map(|index| SortColumnDescription {
+                    offset: *index,
                     asc: true,
                     nulls_first: false,
                 })
@@ -109,6 +108,7 @@ impl FuseTable {
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     block_compact_thresholds,
+                    self.table_info.schema(),
                     self.storage_format,
                     self.table_compression,
                     Some(transform_output_port),
@@ -124,6 +124,7 @@ impl FuseTable {
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     block_compact_thresholds,
+                    self.table_info.schema(),
                     self.storage_format,
                     self.table_compression,
                     None,
@@ -146,40 +147,41 @@ impl FuseTable {
         }
 
         let input_schema = self.table_info.schema();
-        let mut merged = input_schema.fields().clone();
+        let mut merged: Vec<DataField> =
+            input_schema.fields().iter().map(DataField::from).collect();
 
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
-        let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
-
+        let mut extra_key_num = 0;
         let mut operators = Vec::with_capacity(cluster_keys.len());
 
-        for expr in &cluster_keys {
-            let cname = expr.column_name();
+        for remote_expr in &cluster_keys {
+            let expr = remote_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .unwrap()
+                .project_column_ref(|name| input_schema.index_of(name).unwrap());
+            let offset = match &expr {
+                Expr::ColumnRef { id, .. } => *id,
+                _ => {
+                    let cname = format!("{}", expr);
 
-            let index = match merged.iter().position(|x| x.name() == &cname) {
-                None => {
-                    let field = DataField::new(&cname, expr.data_type());
-                    operators.push(ChunkOperator::Map {
-                        eval: Evaluator::eval_expression(expr, &input_schema)?,
-                        name: field.name().to_string(),
-                    });
-                    merged.push(field);
+                    merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
+                    operators.push(BlockOperator::Map { expr });
 
-                    extra_key_index.push(merged.len() - 1);
-                    merged.len() - 1
+                    let offset = merged.len() - 1;
+                    extra_key_num += 1;
+                    offset
                 }
-                Some(idx) => idx,
             };
-            cluster_key_index.push(index);
+            cluster_key_index.push(offset);
         }
 
         if !operators.is_empty() {
             let func_ctx = ctx.try_get_function_context()?;
             pipeline.add_transform(move |input, output| {
-                Ok(CompoundChunkOperator::create(
+                Ok(CompoundBlockOperator::create(
                     input,
                     output,
-                    func_ctx.clone(),
+                    func_ctx,
                     operators.clone(),
                 ))
             })?;
@@ -188,10 +190,11 @@ impl FuseTable {
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
-            extra_key_index,
+            extra_key_num,
             level,
             block_compactor,
             vec![],
+            merged,
         ))
     }
 

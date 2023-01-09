@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 

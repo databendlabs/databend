@@ -21,6 +21,7 @@ mod values;
 
 pub use csv::write_csv_string;
 pub use csv::FieldEncoderCSV;
+pub use helpers::write_escaped_string;
 pub use json::FieldEncoderJSON;
 pub use row_based::FieldEncoderRowBased;
 pub use tsv::FieldEncoderTSV;

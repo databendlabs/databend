@@ -17,10 +17,16 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -39,20 +45,18 @@ impl SyncSystemTable for MallocStatsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let values = Self::build_columns().map_err(convert_je_err)?;
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            VariantObjectType {}.create_column(&values)?,
-        ]))
+        Ok(DataBlock::new(values, 1))
     }
 }
 
+type BuildResult = std::result::Result<Vec<BlockEntry>, Box<dyn std::error::Error>>;
+
 impl MallocStatsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new(
-            "statistics",
-            VariantObjectType::new_impl(),
-        )]);
+        let schema =
+            TableSchemaRefExt::create(vec![TableField::new("statistics", TableDataType::Variant)]);
 
         let table_info = TableInfo {
             desc: "'system'.'malloc_stats'".to_string(),
@@ -69,7 +73,7 @@ impl MallocStatsTable {
         SyncOneBlockSystemTable::create(MallocStatsTable { table_info })
     }
 
-    fn build_columns() -> std::result::Result<Vec<DataValue>, Box<dyn std::error::Error>> {
+    fn build_columns() -> BuildResult {
         let mut buf = vec![];
         let mut options = tikv_jemalloc_ctl::stats_print::Options::default();
         // always return as json
@@ -80,9 +84,11 @@ impl MallocStatsTable {
 
         tikv_jemalloc_ctl::stats_print::stats_print(&mut buf, options)?;
         let json_value: serde_json::Value = serde_json::from_slice(&buf)?;
-        let data_value = DataValue::Variant(VariantValue::from(json_value));
-
-        Ok(vec![data_value])
+        let jsonb_value: common_jsonb::Value = (&json_value).into();
+        Ok(vec![BlockEntry {
+            data_type: DataType::Variant,
+            value: Value::Scalar(Scalar::Variant(jsonb_value.to_vec())),
+        }])
     }
 }
 

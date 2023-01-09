@@ -6,7 +6,7 @@ select hex(100)
 query T
 select hex(-100)
 ----
--64
+ffffffffffffff9c
 
 query T
 select hex('abc')

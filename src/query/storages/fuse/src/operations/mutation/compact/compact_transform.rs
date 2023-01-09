@@ -21,10 +21,12 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
+use common_expression::FunctionContext;
+use common_expression::TableSchemaRef;
 use common_storages_common::blocks_to_parquet;
 use common_storages_index::BlockFilter;
 use common_storages_table_meta::caches::CacheManager;
@@ -94,6 +96,7 @@ pub struct CompactTransform {
     block_reader: Arc<BlockReader>,
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
+    schema: TableSchemaRef,
     storage_format: FuseStorageFormat,
     table_compression: TableCompression,
 
@@ -117,6 +120,7 @@ impl CompactTransform {
         block_reader: Arc<BlockReader>,
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
+        schema: TableSchemaRef,
         storage_format: FuseStorageFormat,
         table_compression: TableCompression,
         thresholds: BlockCompactThresholds,
@@ -136,6 +140,7 @@ impl CompactTransform {
             block_reader,
             location_gen,
             dal,
+            schema,
             storage_format,
             table_compression,
             max_memory,
@@ -228,7 +233,7 @@ impl Processor for CompactTransform {
 
                     // concat blocks.
                     let compact_blocks: Vec<_> = blocks.drain(0..block_num).collect();
-                    let new_block = DataBlock::concat_blocks(&compact_blocks)?;
+                    let new_block = DataBlock::concat(&compact_blocks)?;
 
                     // generate block statistics.
                     let col_stats = reduce_block_statistics(&stats, Some(&new_block))?;
@@ -239,7 +244,9 @@ impl Processor for CompactTransform {
                     // build block index.
                     let (index_data, index_size, index_location) = {
                         // write index
-                        let bloom_index = BlockFilter::try_create(&[&new_block])?;
+                        let func_ctx = FunctionContext::default();
+                        let bloom_index =
+                            BlockFilter::try_create(func_ctx, self.schema.clone(), &[&new_block])?;
                         let index_block = bloom_index.filter_block;
                         let location = self.location_gen.block_bloom_index_location(&block_id);
                         let mut data = Vec::with_capacity(100 * 1024);
@@ -262,7 +269,7 @@ impl Processor for CompactTransform {
                     // serialize data block.
                     let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                     let (file_size, col_metas) =
-                        io::write_block(&write_settings, new_block, &mut block_data)?;
+                        io::write_block(&write_settings, &self.schema, new_block, &mut block_data)?;
 
                     // new block meta.
                     let new_meta = BlockMeta::new(

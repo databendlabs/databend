@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 use common_storages_table_meta::meta;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnId;

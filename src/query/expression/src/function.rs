@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -29,6 +30,7 @@ use crate::utils::arrow::constant_bitmap;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Column;
+use crate::ColumnIndex;
 use crate::Expr;
 use crate::FunctionDomain;
 use crate::Scalar;
@@ -41,9 +43,17 @@ pub struct FunctionSignature {
     pub property: FunctionProperty,
 }
 
+pub type AutoCastSignature = Vec<(DataType, DataType)>;
+
 #[derive(Clone, Copy)]
 pub struct FunctionContext {
     pub tz: Tz,
+}
+
+impl Default for FunctionContext {
+    fn default() -> Self {
+        Self { tz: Tz::UTC }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -90,13 +100,32 @@ pub struct FunctionRegistry {
         String,
         Vec<Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static>>,
     >,
-    /// Aliases map from alias function name to concrete function name.
+    /// Aliases map from alias function name to original function name.
     pub aliases: HashMap<String, String>,
+
+    /// fn name to cast signatures
+    pub auto_cast_signatures: HashMap<String, AutoCastSignature>,
 }
 
 impl FunctionRegistry {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn registered_names(&self) -> Vec<String> {
+        self.funcs
+            .keys()
+            .chain(self.factories.keys())
+            .chain(self.aliases.keys())
+            .unique()
+            .cloned()
+            .collect()
+    }
+
+    pub fn contains(&self, func_name: &str) -> bool {
+        self.funcs.contains_key(func_name)
+            || self.factories.contains_key(func_name)
+            || self.aliases.contains_key(func_name)
     }
 
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {
@@ -114,77 +143,58 @@ impl FunctionRegistry {
         }
     }
 
-    pub fn search_candidates(
+    pub fn get_casting_rules(&self, func_name: &str) -> Option<&AutoCastSignature> {
+        self.auto_cast_signatures.get(func_name)
+    }
+
+    pub fn search_candidates<Index: ColumnIndex>(
         &self,
         name: &str,
         params: &[usize],
-        args: &[Expr],
+        args: &[Expr<Index>],
     ) -> Vec<(FunctionID, Arc<Function>)> {
         let name = name.to_lowercase();
-        let name = self
-            .aliases
-            .get(name.as_str())
-            .map(String::as_str)
-            .unwrap_or(name.as_str());
-        if params.is_empty() {
-            let builtin_funcs = self
-                .funcs
-                .get(name)
-                .map(|funcs| {
-                    funcs
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(id, func)| {
-                            if func.signature.name == name
-                                && func.signature.args_type.len() == args.len()
-                            {
-                                Some((
-                                    FunctionID::Builtin {
-                                        name: name.to_string(),
-                                        id,
-                                    },
-                                    func.clone(),
-                                ))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
 
-            if !builtin_funcs.is_empty() {
-                return builtin_funcs;
-            }
+        let mut candidates = Vec::new();
+
+        if let Some(funcs) = self.funcs.get(&name) {
+            candidates.extend(funcs.iter().enumerate().filter_map(|(id, func)| {
+                if func.signature.name == name && func.signature.args_type.len() == args.len() {
+                    Some((
+                        FunctionID::Builtin {
+                            name: name.to_string(),
+                            id,
+                        },
+                        func.clone(),
+                    ))
+                } else {
+                    None
+                }
+            }));
         }
 
-        let args_type = args
-            .iter()
-            .map(Expr::data_type)
-            .cloned()
-            .collect::<Vec<_>>();
-        self.factories
-            .get(name)
-            .map(|factories| {
-                factories
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(id, factory)| {
-                        factory(params, &args_type).map(|func| {
-                            (
-                                FunctionID::Factory {
-                                    name: name.to_string(),
-                                    id,
-                                    params: params.to_vec(),
-                                    args_type: args_type.clone(),
-                                },
-                                func,
-                            )
-                        })
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default()
+        if let Some(factories) = self.factories.get(&name) {
+            let args_type = args
+                .iter()
+                .map(Expr::data_type)
+                .cloned()
+                .collect::<Vec<_>>();
+            candidates.extend(factories.iter().enumerate().filter_map(|(id, factory)| {
+                factory(params, &args_type).map(|func| {
+                    (
+                        FunctionID::Factory {
+                            name: name.to_string(),
+                            id,
+                            params: params.to_vec(),
+                            args_type: args_type.clone(),
+                        },
+                        func,
+                    )
+                })
+            }));
+        }
+
+        candidates
     }
 
     pub fn register_function_factory(
@@ -202,6 +212,13 @@ impl FunctionRegistry {
         for alias in aliases {
             self.aliases.insert(alias.to_string(), fn_name.to_string());
         }
+    }
+
+    pub fn register_auto_cast_signatures(&mut self, fn_name: &str, signatures: AutoCastSignature) {
+        self.auto_cast_signatures
+            .entry(fn_name.to_string())
+            .or_insert_with(Vec::new)
+            .extend(signatures);
     }
 }
 

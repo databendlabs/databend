@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,12 +17,13 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_base::runtime::ThreadPool;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_io::prelude::BinaryWrite;
 
-use super::AggregateFunctionBasicAdaptor;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionFeatures;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
@@ -45,18 +46,15 @@ impl AggregateFunctionOrNullAdaptor {
     ) -> Result<AggregateFunctionRef> {
         // count/count distinct should not be nullable for empty set, just return zero
         let inner_return_type = inner.return_type()?;
-        if features.returns_default_when_only_null
-            || inner_return_type.data_type_id() == TypeID::Null
-        {
-            return AggregateFunctionBasicAdaptor::create(inner);
+        if features.returns_default_when_only_null || inner_return_type == DataType::Null {
+            return Ok(inner);
         }
 
         let inner_layout = inner.state_layout();
-        let inner_nullable = inner_return_type.is_nullable();
         Ok(Arc::new(AggregateFunctionOrNullAdaptor {
             inner,
             size_of_data: inner_layout.size(),
-            inner_nullable,
+            inner_nullable: matches!(inner_return_type, DataType::Nullable(_)),
         }))
     }
 
@@ -78,8 +76,8 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner.name()
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
-        Ok(wrap_nullable(&self.inner.return_type()?))
+    fn return_type(&self) -> Result<DataType> {
+        Ok(self.inner.return_type()?.wrap_nullable())
     }
 
     #[inline]
@@ -99,7 +97,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[ColumnRef],
+        columns: &[Column],
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -108,46 +106,44 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         }
 
         let if_cond = self.inner.get_if_condition(columns);
-        if let Some(bm) = if_cond {
-            if bm.unset_bits() == input_rows {
-                return Ok(());
-            }
-        }
 
-        if let Some(bm) = validity {
-            if bm.unset_bits() == input_rows {
-                return Ok(());
-            }
-        }
-        self.set_flag(place, 1);
+        let validity = match (if_cond, validity) {
+            (None, None) => None,
+            (None, Some(b)) => Some(b.clone()),
+            (Some(a), None) => Some(a),
+            (Some(a), Some(b)) => Some(&a & b),
+        };
 
-        if self.inner.convert_const_to_full() && columns.iter().any(|c| c.is_const()) {
-            let columns: Vec<ColumnRef> = columns.iter().map(|c| c.convert_full_column()).collect();
-            self.inner.accumulate(place, &columns, validity, input_rows)
-        } else {
-            self.inner.accumulate(place, columns, validity, input_rows)
+        if validity
+            .as_ref()
+            .map(|c| c.unset_bits() != input_rows)
+            .unwrap_or(true)
+        {
+            self.set_flag(place, 1);
+            self.inner
+                .accumulate(place, columns, validity.as_ref(), input_rows)?;
         }
+        Ok(())
     }
 
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[ColumnRef],
+        columns: &[Column],
         input_rows: usize,
     ) -> Result<()> {
-        if self.inner.convert_const_to_full() && columns.iter().any(|c| c.is_const()) {
-            let columns: Vec<ColumnRef> = columns.iter().map(|c| c.convert_full_column()).collect();
-            self.inner
-                .accumulate_keys(places, offset, &columns, input_rows)?;
-        } else {
-            self.inner
-                .accumulate_keys(places, offset, columns, input_rows)?;
-        }
+        self.inner
+            .accumulate_keys(places, offset, columns, input_rows)?;
         let if_cond = self.inner.get_if_condition(columns);
         match if_cond {
-            Some(bm) if bm.unset_bits() != 0 => {
-                for (place, valid) in places.iter().zip(bm.iter()) {
+            Some(v) if v.unset_bits() > 0 => {
+                // all nulls
+                if v.unset_bits() == v.len() {
+                    return Ok(());
+                }
+
+                for (place, valid) in places.iter().zip(v.iter()) {
                     if valid {
                         self.set_flag(*place, 1);
                     }
@@ -164,7 +160,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
         self.inner.accumulate_row(place, columns, row)?;
         self.set_flag(place, 1);
         Ok(())
@@ -192,29 +188,19 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         Ok(())
     }
 
-    fn support_merge_parallel(&self) -> bool {
-        self.inner.support_merge_parallel()
-    }
-
-    fn merge_parallel(
-        &self,
-        pool: &mut ThreadPool,
-        place: StateAddr,
-        rhs: StateAddr,
-    ) -> Result<()> {
-        self.inner.merge_parallel(pool, place, rhs)
-    }
-
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
-        let inner_mut: &mut MutableNullableColumn = Series::check_get_mutable_column(array)?;
-        if self.get_flag(place) == 0 {
-            inner_mut.append_default();
-        } else if self.inner_nullable {
-            self.inner.merge_result(place, array)?;
-        } else {
-            self.inner
-                .merge_result(place, inner_mut.inner_mut().as_mut())?;
-            inner_mut.append_value(true);
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+        match builder {
+            ColumnBuilder::Nullable(inner_mut) => {
+                if self.get_flag(place) == 0 {
+                    inner_mut.push_null();
+                } else if self.inner_nullable {
+                    self.inner.merge_result(place, builder)?;
+                } else {
+                    self.inner.merge_result(place, &mut inner_mut.builder)?;
+                    inner_mut.validity.push(true);
+                }
+            }
+            _ => unreachable!(),
         }
         Ok(())
     }
@@ -222,8 +208,8 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     fn get_own_null_adaptor(
         &self,
         nested_function: AggregateFunctionRef,
-        params: Vec<DataValue>,
-        arguments: Vec<DataField>,
+        params: Vec<Scalar>,
+        arguments: Vec<DataType>,
     ) -> Result<Option<AggregateFunctionRef>> {
         self.inner
             .get_own_null_adaptor(nested_function, params, arguments)

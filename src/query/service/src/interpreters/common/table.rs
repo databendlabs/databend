@@ -18,32 +18,29 @@ use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
 
-use crate::pipelines::processors::TransformAddOn;
+use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
 fn fill_missing_columns(
     ctx: Arc<QueryContext>,
     source_schema: &DataSchemaRef,
-    target_schema: &DataSchemaRef,
+    table: Arc<dyn Table>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
-    let need_fill_missing_columns = target_schema != source_schema;
-    if need_fill_missing_columns {
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformAddOn::try_create(
-                transform_input_port,
-                transform_output_port,
-                source_schema.clone(),
-                target_schema.clone(),
-                ctx.clone(),
-            )
-        })?;
-    }
+    pipeline.add_transform(|transform_input_port, transform_output_port| {
+        TransformResortAddOn::try_create(
+            transform_input_port,
+            transform_output_port,
+            source_schema.clone(),
+            table.clone(),
+            ctx.clone(),
+        )
+    })?;
     Ok(())
 }
 
@@ -59,7 +56,7 @@ pub fn append2table(
     fill_missing_columns(
         ctx.clone(),
         &source_schema,
-        &table.schema(),
+        table.clone(),
         &mut build_res.main_pipeline,
     )?;
 

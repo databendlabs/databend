@@ -18,14 +18,18 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::BooleanColumn;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::evaluator::EvalNode;
+use common_expression::types::AnyType;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::Evaluator;
+use common_expression::RemoteExpr;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
+use common_expression::Value;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_storages_common::blocks_to_parquet;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
@@ -67,13 +71,13 @@ enum State {
     ReadRemain {
         part: PartInfoPtr,
         data_block: DataBlock,
-        filter: ColumnRef,
+        filter: Value<AnyType>,
     },
     MergeRemain {
         part: PartInfoPtr,
         chunks: DataChunks,
         data_block: DataBlock,
-        filter: ColumnRef,
+        filter: Value<AnyType>,
     },
     NeedSerialize(DataBlock),
     Serialized(SerializeState, Arc<BlockMeta>),
@@ -89,10 +93,11 @@ pub struct DeletionSource {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     block_reader: Arc<BlockReader>,
-    filter: Arc<EvalNode>,
+    filter: Arc<RemoteExpr<String>>,
     remain_reader: Arc<Option<BlockReader>>,
 
-    output_schema: DataSchemaRef,
+    source_schema: TableSchemaRef,
+    output_schema: TableSchemaRef,
     index: BlockIndex,
     cluster_stats_gen: ClusterStatsGenerator,
     origin_stats: Option<ClusterStatistics>,
@@ -105,9 +110,14 @@ impl DeletionSource {
         output: Arc<OutputPort>,
         table: &FuseTable,
         block_reader: Arc<BlockReader>,
-        filter: Arc<EvalNode>,
+        filter: Arc<RemoteExpr<String>>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
+        let mut srouce_fields = block_reader.schema().fields().clone();
+        if let Some(remain_reader) = remain_reader.as_ref() {
+            srouce_fields.extend_from_slice(remain_reader.schema().fields());
+        }
+        let source_schema = TableSchemaRefExt::create(srouce_fields);
         Ok(ProcessorPtr::create(Box::new(DeletionSource {
             state: State::ReadData(None),
             ctx: ctx.clone(),
@@ -117,6 +127,7 @@ impl DeletionSource {
             block_reader,
             filter,
             remain_reader,
+            source_schema,
             output_schema: table.schema(),
             index: (0, 0),
             cluster_stats_gen: table.cluster_stats_gen(ctx)?,
@@ -187,26 +198,38 @@ impl Processor for DeletionSource {
                 let data_block = self
                     .block_reader
                     .deserialize_parquet_chunks(part.clone(), chunks)?;
-                let filter_result = self
+
+                let func_ctx = self.ctx.try_get_function_context()?;
+                let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
+                let expr = self
                     .filter
-                    .eval(&self.ctx.try_get_function_context()?, &data_block)?
-                    .vector;
-                let predicates = DataBlock::cast_to_nonull_boolean(&filter_result)?;
-                // reverse the filter
-                let boolean_col: &BooleanColumn = Series::check_get(&predicates)?;
-                let values = boolean_col.values();
-                let filter: ColumnRef = Arc::new(BooleanColumn::from_arrow_data(values.not()));
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .unwrap()
+                    .project_column_ref(|name| self.source_schema.index_of(name).unwrap());
+                let res = evaluator.run(&expr).map_err(|(_, e)| {
+                    ErrorCode::Internal(format!("eval try eval const failed: {}.", e))
+                })?;
+                let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
+                    ErrorCode::BadArguments(
+                        "Result of filter expression cannot be converted to boolean.",
+                    )
+                })?;
+
+                let predicate_col = predicates.into_column().unwrap();
+                let filter = Value::Column(Column::Boolean(predicate_col.not()));
                 if !DataBlock::filter_exists(&filter)? {
                     // all the rows should be removed.
                     self.state = State::Generated(Deletion::Deleted);
                 } else {
                     let num_rows = data_block.num_rows();
-                    let data_block = DataBlock::filter_block(data_block, &filter)?;
+                    let data_block = data_block.filter(&filter)?;
                     if data_block.num_rows() == num_rows {
                         // none of the rows should be removed.
                         self.state = State::Generated(Deletion::DoNothing);
                     } else if self.remain_reader.is_none() {
-                        let block = data_block.resort(self.output_schema.clone())?;
+                        let src_schema = self.block_reader.data_schema();
+                        let dest_schema = self.output_schema.clone().into();
+                        let block = data_block.resort(&src_schema, &dest_schema)?;
                         self.state = State::NeedSerialize(block);
                     } else {
                         self.state = State::ReadRemain {
@@ -223,24 +246,25 @@ impl Processor for DeletionSource {
                 mut data_block,
                 filter,
             } => {
+                let mut fields = self.block_reader.data_fields();
                 let merged = if chunks.is_empty() {
                     data_block
                 } else if let Some(remain_reader) = self.remain_reader.as_ref() {
+                    let mut remain_fields = remain_reader.data_fields();
+                    fields.append(&mut remain_fields);
                     let remain_block = remain_reader.deserialize_parquet_chunks(part, chunks)?;
-                    let remain_block = DataBlock::filter_block(remain_block, &filter)?;
-                    for (col, field) in remain_block
-                        .columns()
-                        .iter()
-                        .zip(remain_block.schema().fields())
-                    {
-                        data_block = data_block.add_column(col.clone(), field.clone())?;
+                    let remain_block = remain_block.filter(&filter)?;
+                    for col in remain_block.columns() {
+                        data_block.add_column(col.clone());
                     }
                     data_block
                 } else {
                     return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
                 };
 
-                let block = merged.resort(self.output_schema.clone())?;
+                let src_schema = DataSchema::new(fields);
+                let dest_schema = self.output_schema.clone().into();
+                let block = merged.resort(&src_schema, &dest_schema)?;
                 self.state = State::NeedSerialize(block);
             }
             State::NeedSerialize(block) => {
@@ -254,13 +278,17 @@ impl Processor for DeletionSource {
 
                 // build block index.
                 let location = self.location_gen.block_bloom_index_location(&block_id);
-                let (bloom_index_state, column_distinct_count) =
-                    BloomIndexState::try_create(&block, location)?;
+                let (bloom_index_state, column_distinct_count) = BloomIndexState::try_create(
+                    self.ctx.clone(),
+                    self.source_schema.clone(),
+                    &block,
+                    location,
+                )?;
                 let col_stats = gen_columns_statistics(&block, Some(column_distinct_count))?;
 
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
-                let schema = block.schema().clone();
+                let schema = self.source_schema.clone();
                 let (file_size, meta_data) = blocks_to_parquet(
                     &schema,
                     vec![block],

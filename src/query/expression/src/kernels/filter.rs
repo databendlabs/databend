@@ -33,15 +33,30 @@ use crate::types::StringType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
-use crate::Chunk;
-use crate::ChunkEntry;
+use crate::BlockEntry;
 use crate::Column;
-use crate::ColumnIndex;
+use crate::ColumnBuilder;
+use crate::DataBlock;
 use crate::Scalar;
+use crate::TypeDeserializer;
 use crate::Value;
 
-impl<Index: ColumnIndex> Chunk<Index> {
-    pub fn filter(self, predicate: &Value<AnyType>) -> Result<Chunk<Index>> {
+impl DataBlock {
+    // check if the predicate has any valid row
+    pub fn filter_exists(predicate: &Value<AnyType>) -> Result<bool> {
+        let predicate = Self::cast_to_nonull_boolean(predicate).ok_or_else(|| {
+            ErrorCode::BadDataValueType(format!(
+                "Filter predict column does not support type '{:?}'",
+                predicate
+            ))
+        })?;
+        match predicate {
+            Value::Scalar(s) => Ok(s),
+            Value::Column(bitmap) => Ok(bitmap.len() != bitmap.unset_bits()),
+        }
+    }
+
+    pub fn filter(self, predicate: &Value<AnyType>) -> Result<DataBlock> {
         if self.num_columns() == 0 || self.num_rows() == 0 {
             return Ok(self);
         }
@@ -61,38 +76,12 @@ impl<Index: ColumnIndex> Chunk<Index> {
                     Ok(self.slice(0..0))
                 }
             }
-            Value::Column(bitmap) => {
-                let count_zeros = bitmap.unset_bits();
-                match count_zeros {
-                    0 => Ok(self),
-                    _ => {
-                        if count_zeros == self.num_rows() {
-                            return Ok(self.slice(0..0));
-                        }
-                        let after_columns = self
-                            .columns()
-                            .map(|entry| match &entry.value {
-                                Value::Scalar(s) => ChunkEntry {
-                                    id: entry.id.clone(),
-                                    data_type: entry.data_type.clone(),
-                                    value: Value::Scalar(s.clone()),
-                                },
-                                Value::Column(c) => ChunkEntry {
-                                    id: entry.id.clone(),
-                                    data_type: entry.data_type.clone(),
-                                    value: Value::Column(Column::filter(c, &bitmap)),
-                                },
-                            })
-                            .collect();
-                        Ok(Chunk::new(after_columns, self.num_rows() - count_zeros))
-                    }
-                }
-            }
+            Value::Column(bitmap) => Self::filter_with_bitmap(self, &bitmap),
         }
     }
 
     // Must be numeric, boolean, or string value type
-    fn cast_to_nonull_boolean(predicate: &Value<AnyType>) -> Option<Value<BooleanType>> {
+    pub fn cast_to_nonull_boolean(predicate: &Value<AnyType>) -> Option<Value<BooleanType>> {
         match predicate {
             Value::Scalar(s) => Self::cast_scalar_to_boolean(s).map(Value::Scalar),
             Value::Column(c) => Self::cast_column_to_boolean(c).map(Value::Column),
@@ -142,6 +131,43 @@ impl<Index: ColumnIndex> Chunk<Index> {
             _ => None,
         }
     }
+
+    pub fn try_as_const_bool(value: &Value<BooleanType>) -> Result<Option<bool>> {
+        match value {
+            Value::Scalar(v) => Ok(Some(*v)),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn filter_with_bitmap(block: DataBlock, bitmap: &Bitmap) -> Result<DataBlock> {
+        let count_zeros = bitmap.unset_bits();
+        match count_zeros {
+            0 => Ok(block),
+            _ => {
+                if count_zeros == block.num_rows() {
+                    return Ok(block.slice(0..0));
+                }
+                let after_columns = block
+                    .columns()
+                    .iter()
+                    .map(|entry| match &entry.value {
+                        Value::Column(c) => {
+                            let value = Value::Column(Column::filter(c, bitmap));
+                            BlockEntry {
+                                data_type: entry.data_type.clone(),
+                                value,
+                            }
+                        }
+                        _ => entry.clone(),
+                    })
+                    .collect();
+                Ok(DataBlock::new(
+                    after_columns,
+                    block.num_rows() - count_zeros,
+                ))
+            }
+        }
+    }
 }
 
 impl Column {
@@ -179,8 +205,16 @@ impl Column {
                 Column::Date(d)
             }
             Column::Array(column) => {
-                let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
-                builder.reserve(length);
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    column
+                        .values
+                        .data_type()
+                        .create_deserializer(length)
+                        .finish_to_column(),
+                );
+                let builder = ArrayColumnBuilder { builder, offsets };
                 Self::filter_scalar_types::<ArrayType<AnyType>>(column, builder, filter)
             }
             Column::Nullable(c) => {

@@ -13,96 +13,123 @@
 // limitations under the License.
 //
 
-use std::collections::HashSet;
+use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::BooleanType;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
-use common_datavalues::StringType;
-use common_datavalues::ToDataType;
 use common_exception::Result;
+use common_expression::type_check::check_function;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::number::UInt8Type;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::Expr;
+use common_expression::FromData;
+use common_expression::FunctionContext;
+use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::Value;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_storages_index::BlockFilter;
 use common_storages_index::FilterEvalResult;
 
 #[test]
-fn test_column_type_support() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("u", u8::to_data_type()),
-        DataField::new("u16", u16::to_data_type()),
-        DataField::new("u32", u32::to_data_type()),
-        DataField::new("u64", u64::to_data_type()),
-        DataField::new("i", i8::to_data_type()),
-        DataField::new("i16", i16::to_data_type()),
-        DataField::new("i32", i32::to_data_type()),
-        DataField::new("i64", i64::to_data_type()),
-        DataField::new("b", BooleanType::new_impl()),
-        DataField::new("s", StringType::new_impl()),
-    ]);
+fn test_bloom_filter() -> Result<()> {
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("0", TableDataType::Number(NumberDataType::UInt8)),
+        TableField::new("1", TableDataType::String),
+    ]));
+    let chunks = vec![
+        DataBlock::new(
+            vec![
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt8),
+                    value: Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
+                },
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(b"a".to_vec())),
+                },
+            ],
+            2,
+        ),
+        DataBlock::new_from_columns(vec![
+            UInt8Type::from_data(vec![2, 3]),
+            StringType::from_data(vec!["b", "c"]),
+        ]),
+    ];
+    let chunks_ref = chunks.iter().collect::<Vec<_>>();
 
-    let cols = schema
-        .fields()
-        .iter()
-        .map(|f| {
-            f.data_type()
-                .create_constant_column(&f.data_type().default_value(), 1)
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let index = BlockFilter::try_create(FunctionContext::default(), schema, &chunks_ref)?;
 
-    use common_datavalues::DataType;
-    let block = DataBlock::create(schema.clone(), cols);
+    assert_eq!(
+        FilterEvalResult::MustFalse,
+        eval_index(
+            &index,
+            "0",
+            Scalar::Number(NumberScalar::UInt8(0)),
+            DataType::Number(NumberDataType::UInt8)
+        )
+    );
+    assert_eq!(
+        FilterEvalResult::Uncertain,
+        eval_index(
+            &index,
+            "0",
+            Scalar::Number(NumberScalar::UInt8(1)),
+            DataType::Number(NumberDataType::UInt8)
+        )
+    );
+    assert_eq!(
+        FilterEvalResult::Uncertain,
+        eval_index(
+            &index,
+            "0",
+            Scalar::Number(NumberScalar::UInt8(2)),
+            DataType::Number(NumberDataType::UInt8)
+        )
+    );
+    assert_eq!(
+        FilterEvalResult::Uncertain,
+        eval_index(&index, "1", Scalar::String(b"a".to_vec()), DataType::String)
+    );
+    assert_eq!(
+        FilterEvalResult::Uncertain,
+        eval_index(&index, "1", Scalar::String(b"b".to_vec()), DataType::String)
+    );
+    assert_eq!(
+        FilterEvalResult::MustFalse,
+        eval_index(&index, "1", Scalar::String(b"d".to_vec()), DataType::String)
+    );
 
-    let supported_types: HashSet<DataTypeImpl> = HashSet::from_iter(vec![
-        StringType::new_impl(),
-        u8::to_data_type(),
-        i8::to_data_type(),
-        u16::to_data_type(),
-        i16::to_data_type(),
-        u32::to_data_type(),
-        i32::to_data_type(),
-        u64::to_data_type(),
-        i64::to_data_type(),
-    ]);
-    let index = BlockFilter::try_create(&[&block])?;
-
-    // String type and 8 integral types are supported
-    assert_eq!(supported_types.len(), index.filter_block.columns().len());
-
-    // check index columns
-    schema.fields().iter().for_each(|field| {
-        let col_name = BlockFilter::build_filter_column_name(field.name());
-        let maybe_index_col = index.filter_block.try_column_by_name(&col_name);
-        if supported_types.contains(field.data_type()) {
-            assert!(maybe_index_col.is_ok(), "check field {}", field.name())
-        } else {
-            assert!(maybe_index_col.is_err(), "check field {}", field.name())
-        }
-    });
-
-    // check applicable
-    schema.fields().iter().for_each(|field| {
-        // type of input data value does not matter here, will be casted during filtering
-        let value = DataValue::Boolean(true);
-        let col_name = field.name().as_str();
-        let data_type = field.data_type();
-        let r = index.find(col_name, value, data_type).unwrap();
-        if supported_types.contains(field.data_type()) {
-            assert_ne!(
-                r,
-                FilterEvalResult::NotApplicable,
-                "check applicable field {}",
-                field.name()
-            )
-        } else {
-            assert_eq!(
-                r,
-                FilterEvalResult::NotApplicable,
-                "check applicable field {}",
-                field.name()
-            )
-        }
-    });
     Ok(())
+}
+
+fn eval_index(index: &BlockFilter, col_name: &str, val: Scalar, ty: DataType) -> FilterEvalResult {
+    index
+        .eval(
+            check_function(
+                None,
+                "eq",
+                &[],
+                &[
+                    Expr::ColumnRef {
+                        span: None,
+                        id: col_name.to_string(),
+                        data_type: ty.clone(),
+                    },
+                    Expr::Constant {
+                        span: None,
+                        scalar: val,
+                        data_type: ty,
+                    },
+                ],
+                &BUILTIN_FUNCTIONS,
+            )
+            .unwrap(),
+        )
+        .unwrap()
 }

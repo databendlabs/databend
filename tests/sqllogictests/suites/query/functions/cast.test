@@ -23,6 +23,11 @@ select try_cast(int_not_nullable as int) from cast_test
 ----
 1
 
+query I
+select try_cast(3 as int);
+----
+3
+
 statement error
 select int_nullable::int from cast_test
 

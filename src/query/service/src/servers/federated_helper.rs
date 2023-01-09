@@ -14,25 +14,28 @@
 
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
-use common_datablocks::DataBlock;
+use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use regex::bytes::RegexSet;
-pub type LazyBlockFunc = fn(&str) -> Option<DataBlock>;
+
+pub type LazyBlockFunc = fn(&str) -> Option<(TableSchemaRef, DataBlock)>;
 
 pub struct FederatedHelper {}
 
 impl FederatedHelper {
     pub(crate) fn block_match_rule(
         query: &str,
-        rules: Vec<(&str, Option<DataBlock>)>,
-    ) -> Option<DataBlock> {
+        rules: Vec<(&str, Option<(TableSchemaRef, DataBlock)>)>,
+    ) -> Option<(TableSchemaRef, DataBlock)> {
         let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
         let regex_set = RegexSet::new(regex_rules).unwrap();
         let matches = regex_set.matches(query.as_ref());
-        for (index, (_regex, data_block)) in rules.iter().enumerate() {
+        for (index, (_regex, data)) in rules.iter().enumerate() {
             if matches.matched(index) {
-                return match data_block {
-                    None => Some(DataBlock::empty()),
-                    Some(data_block) => Some(data_block.clone()),
+                return match data {
+                    None => Some((TableSchemaRefExt::create(vec![]), DataBlock::empty())),
+                    Some((schema, data_block)) => Some((schema.clone(), data_block.clone())),
                 };
             }
         }
@@ -43,15 +46,15 @@ impl FederatedHelper {
     pub fn lazy_block_match_rule(
         query: &str,
         rules: Vec<(&str, LazyBlockFunc)>,
-    ) -> Option<DataBlock> {
+    ) -> Option<(TableSchemaRef, DataBlock)> {
         let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
         let regex_set = RegexSet::new(regex_rules).unwrap();
         let matches = regex_set.matches(query.as_ref());
         for (index, (_regex, func)) in rules.iter().enumerate() {
             if matches.matched(index) {
                 return match func(query) {
-                    None => Some(DataBlock::empty()),
-                    Some(data_block) => Some(data_block),
+                    None => Some((TableSchemaRefExt::create(vec![]), DataBlock::empty())),
+                    Some((schema, data_block)) => Some((schema, data_block)),
                 };
             }
         }

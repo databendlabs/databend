@@ -46,15 +46,17 @@ use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_datavalues::type_coercion::compare_coercion;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::ToDataType;
-use common_datavalues::TypeFactory;
-use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_schema_type;
+use common_expression::infer_table_schema;
+use common_expression::type_check::common_super_type;
+use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use common_storage::DataOperator;
 use common_storages_table_meta::table::is_reserved_opt_key;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -66,14 +68,15 @@ use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::Visibility;
+use crate::executor::PhysicalScalarBuilder;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::IdentifierNormalizer;
+use crate::planner::semantic::TypeChecker;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
-use crate::plans::CastExpr;
 use crate::plans::CreateTablePlanV2;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -87,14 +90,12 @@ use crate::plans::RenameTableEntity;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
-use crate::plans::Scalar;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::Planner;
-use crate::ScalarExpr;
 use crate::SelectBuilder;
 
 impl<'a> Binder {
@@ -192,8 +193,8 @@ impl<'a> Binder {
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Table", Vu8::to_data_type()),
-            DataField::new("Create Table", Vu8::to_data_type()),
+            DataField::new("Table", DataType::String),
+            DataField::new("Create Table", DataType::String),
         ]);
         Ok(Plan::ShowCreateTable(Box::new(ShowCreateTablePlan {
             catalog,
@@ -223,11 +224,11 @@ impl<'a> Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Field", Vu8::to_data_type()),
-            DataField::new("Type", Vu8::to_data_type()),
-            DataField::new("Null", Vu8::to_data_type()),
-            DataField::new("Default", Vu8::to_data_type()),
-            DataField::new("Extra", Vu8::to_data_type()),
+            DataField::new("Field", DataType::String),
+            DataField::new("Type", DataType::String),
+            DataField::new("Null", DataType::String),
+            DataField::new("Default", DataType::String),
+            DataField::new("Extra", DataType::String),
         ]);
 
         Ok(Plan::DescribeTable(Box::new(DescribeTablePlan {
@@ -381,13 +382,13 @@ impl<'a> Binder {
                     .columns
                     .iter()
                     .map(|column_binding| {
-                        DataField::new(
+                        Ok(TableField::new(
                             &column_binding.column_name,
-                            *column_binding.data_type.clone(),
-                        )
+                            infer_schema_type(&column_binding.data_type)?,
+                        ))
                     })
-                    .collect();
-                let schema = DataSchemaRefExt::create(fields);
+                    .collect::<Result<Vec<_>>>()?;
+                let schema = TableSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
                 (schema, vec![], vec![])
             }
@@ -396,22 +397,22 @@ impl<'a> Binder {
                 let (source_schema, source_default_exprs, source_coments) =
                     self.analyze_create_table_schema(source).await?;
                 let init_bind_context = BindContext::new();
-                let (_s_expr, bind_context) = self.bind_query(&init_bind_context, query).await?;
-                let query_fields: Vec<DataField> = bind_context
+                let (_, bind_context) = self.bind_query(&init_bind_context, query).await?;
+                let query_fields: Vec<TableField> = bind_context
                     .columns
                     .iter()
                     .map(|column_binding| {
-                        DataField::new(
+                        Ok(TableField::new(
                             &column_binding.column_name,
-                            *column_binding.data_type.clone(),
-                        )
+                            infer_schema_type(&column_binding.data_type)?,
+                        ))
                     })
-                    .collect();
-                let source_fields = source_schema.fields().clone();
-                let source_fields = self.concat_fields(source_fields, query_fields);
-                let schema = DataSchemaRefExt::create(source_fields);
-                Self::validate_create_table_schema(&schema)?;
-                (schema, source_default_exprs, source_coments)
+                    .collect::<Result<Vec<_>>>()?;
+                if source_schema.fields().len() != query_fields.len() {
+                    return Err(ErrorCode::BadArguments("Number of columns does not match"));
+                }
+                Self::validate_create_table_schema(&source_schema)?;
+                (source_schema, source_default_exprs, source_coments)
             }
             _ => Err(ErrorCode::BadArguments(
                 "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
@@ -449,10 +450,10 @@ impl<'a> Binder {
         let plan = CreateTablePlanV2 {
             if_not_exists: *if_not_exists,
             tenant: self.ctx.get_tenant(),
-            catalog,
-            database,
+            catalog: catalog.clone(),
+            database: database.clone(),
             table,
-            schema,
+            schema: schema.clone(),
             engine,
             storage_params,
             part_prefix,
@@ -861,7 +862,7 @@ impl<'a> Binder {
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource<'a>,
-    ) -> Result<(DataSchemaRef, Vec<Option<Scalar>>, Vec<String>)> {
+    ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         let bind_context = BindContext::new();
         match source {
             CreateTableSource::Columns(columns) => {
@@ -877,30 +878,24 @@ impl<'a> Binder {
                 let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
                     let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-                    let data_type = TypeFactory::instance().get(column.data_type.to_string())?;
+                    let schema_data_type = TypeChecker::resolve_type_name(&column.data_type)?;
 
-                    fields.push(DataField::new(&name, data_type.clone()));
+                    fields.push(TableField::new(&name, schema_data_type.clone()));
                     fields_default_expr.push({
                         if let Some(default_expr) = &column.default_expr {
-                            let (mut expr, expr_type) = scalar_binder.bind(default_expr).await?;
-                            if compare_coercion(&data_type, &expr_type).is_err() {
+                            let (_expr, expr_type) = scalar_binder.bind(default_expr).await?;
+                            let data_type = DataType::from(&schema_data_type);
+                            if common_super_type(data_type.clone(), expr_type.clone()).is_none() {
                                 return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
                             }
-                            if !expr_type.eq(&data_type) {
-                                expr = Scalar::CastExpr(CastExpr {
-                                    argument: Box::new(expr),
-                                    from_type: Box::new(expr_type),
-                                    target_type: Box::new(data_type),
-                                })
-                            }
-                            Some(expr)
+                            Some(default_expr.to_string())
                         } else {
                             None
                         }
                     });
                     fields_comments.push(column.comment.clone().unwrap_or_default());
                 }
-                let schema = DataSchemaRefExt::create(fields);
+                let schema = TableSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
                 Ok((schema, fields_default_expr, fields_comments))
             }
@@ -924,7 +919,7 @@ impl<'a> Binder {
                     let query = table.get_table_info().options().get(QUERY).unwrap();
                     let mut planner = Planner::new(self.ctx.clone());
                     let (plan, _, _) = planner.plan_sql(query).await?;
-                    Ok((plan.schema(), vec![], vec![]))
+                    Ok((infer_table_schema(&plan.schema())?, vec![], vec![]))
                 } else {
                     Ok((table.schema(), vec![], table.field_comments().clone()))
                 }
@@ -933,7 +928,7 @@ impl<'a> Binder {
     }
 
     /// Validate the schema of the table to be created.
-    fn validate_create_table_schema(schema: &DataSchemaRef) -> Result<()> {
+    fn validate_create_table_schema(schema: &TableSchemaRef) -> Result<()> {
         // Check if there are duplicated column names
         let mut name_set = HashSet::new();
         for field in schema.fields() {
@@ -970,18 +965,17 @@ impl<'a> Binder {
     async fn analyze_cluster_keys(
         &mut self,
         cluster_by: &[Expr<'a>],
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
     ) -> Result<Vec<String>> {
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
-        for field in schema.fields() {
+        for (idx, field) in schema.fields().iter().enumerate() {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
                 column_name: field.name().clone(),
-                // A dummy index is fine, since we won't actually evaluate the expression
-                index: 0,
-                data_type: Box::new(field.data_type().clone()),
+                index: idx,
+                data_type: Box::new(DataType::from(field.data_type())),
                 visibility: Visibility::Visible,
             };
             bind_context.columns.push(column);
@@ -994,10 +988,24 @@ impl<'a> Binder {
             &[],
         );
 
+        let data_fields = schema
+            .fields()
+            .iter()
+            .enumerate()
+            .map(|(idx, field)| {
+                let data_type = DataType::from(field.data_type());
+                DataField::new(&idx.to_string(), data_type)
+            })
+            .collect::<Vec<_>>();
+        let data_schema = DataSchemaRefExt::create(data_fields);
+        let physical_scalar_builder = PhysicalScalarBuilder::new(&data_schema);
+
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            if !cluster_key.is_deterministic() {
+            let cluster_key = physical_scalar_builder.build(&cluster_key)?;
+            let expr = cluster_key.as_expr()?;
+            if is_expr_non_deterministic(&expr) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",
                     cluster_by
@@ -1015,21 +1023,16 @@ impl<'a> Binder {
 
         Ok(cluster_keys)
     }
+}
 
-    fn concat_fields(
-        &self,
-        mut source_fields: Vec<DataField>,
-        query_fields: Vec<DataField>,
-    ) -> Vec<DataField> {
-        let mut name_set = HashSet::new();
-        for field in source_fields.iter() {
-            name_set.insert(field.name().clone());
+fn is_expr_non_deterministic(expr: &common_expression::Expr) -> bool {
+    match expr {
+        common_expression::Expr::Constant { .. } => false,
+        common_expression::Expr::ColumnRef { .. } => false,
+        common_expression::Expr::Cast { expr, .. } => is_expr_non_deterministic(expr),
+        common_expression::Expr::FunctionCall { function, args, .. } => {
+            function.signature.property.non_deterministic
+                || args.iter().any(is_expr_non_deterministic)
         }
-        for query_field in query_fields.iter() {
-            if !name_set.contains(query_field.name()) {
-                source_fields.push(query_field.clone());
-            }
-        }
-        source_fields
     }
 }

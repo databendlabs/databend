@@ -351,7 +351,7 @@ select count_distinct(number) from ( select number % 100 as number from numbers(
 query I
 select approx_count_distinct(number) from ( select number % 100 as number from numbers(100000))
 ----
-100
+99
 
 
 query B
@@ -383,13 +383,13 @@ select count_if(number, number>9) from numbers(10)
 
 
 query I
-select sum(number > 314) from numbers(1000)
+select sum((number > 314)::uint32) from numbers(1000)
 ----
 685
 
 
 query F
-select avg(number > 314) from numbers(1000)
+select avg((number > 314)::uint32) from numbers(1000)
 ----
 0.685
 
@@ -526,7 +526,7 @@ select 1 + 1
 
 
 query I
-select to_int(8)
+select to_int32(8)
 ----
 8
 
@@ -1102,7 +1102,7 @@ create table n( a int null, b int null)
 
 
 statement ok
-insert into n select  if (number % 3, null, number), if (number % 2, null, number) from numbers(10)
+insert into n select  if ((number % 3)::boolean, null, number), if ((number % 2)::boolean, null, number) from numbers(10)
 
 
 query IBIB

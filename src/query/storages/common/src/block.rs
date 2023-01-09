@@ -21,15 +21,15 @@ use common_arrow::parquet::encoding::Encoding;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_arrow::parquet::write::Version;
 use common_arrow::write_parquet_file;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::TableSchema;
 use common_storages_table_meta::table::TableCompression;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
-    schema: impl AsRef<DataSchema>,
+    schema: impl AsRef<TableSchema>,
     blocks: Vec<DataBlock>,
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,

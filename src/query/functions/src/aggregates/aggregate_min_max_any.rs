@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,53 +18,54 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::prelude::*;
-use common_datavalues::with_match_scalar_types_error;
-use common_datavalues::MutableColumn;
-use common_datavalues::Scalar;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde::de::DeserializeOwned;
+use common_expression::types::number::*;
+use common_expression::types::*;
+use common_expression::with_number_mapped_type;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_scalar_state::need_manual_drop_state;
 use super::aggregate_scalar_state::ChangeIf;
 use super::aggregate_scalar_state::CmpAny;
 use super::aggregate_scalar_state::CmpMax;
 use super::aggregate_scalar_state::CmpMin;
 use super::aggregate_scalar_state::ScalarState;
 use super::aggregate_scalar_state::ScalarStateFunc;
-use super::aggregate_scalar_state::VariantState;
+use super::aggregate_scalar_state::TYPE_ANY;
+use super::aggregate_scalar_state::TYPE_MAX;
+use super::aggregate_scalar_state::TYPE_MIN;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
+use crate::with_compare_mapped_type;
+use crate::with_simple_no_number_mapped_type;
 
-const TYPE_ANY: u8 = 0;
-const TYPE_MIN: u8 = 1;
-const TYPE_MAX: u8 = 2;
-
-/// S: ScalarType
-/// A: Aggregate State
 #[derive(Clone)]
-pub struct AggregateMinMaxAnyFunction<S, C, State> {
+pub struct AggregateMinMaxAnyFunction<T, C, State> {
     display_name: String,
-    arguments: Vec<DataField>,
-    _s: PhantomData<S>,
+    data_type: DataType,
+    need_drop: bool,
+    _t: PhantomData<T>,
     _c: PhantomData<C>,
     _state: PhantomData<State>,
 }
 
-impl<S, C, State> AggregateFunction for AggregateMinMaxAnyFunction<S, C, State>
+impl<T, C, State> AggregateFunction for AggregateMinMaxAnyFunction<T, C, State>
 where
-    S: Scalar + Send + Sync + serde::Serialize + DeserializeOwned,
-    C: ChangeIf<S> + Default,
-    State: ScalarStateFunc<S>,
+    T: ValueType + Send + Sync,
+    C: ChangeIf<T> + Default,
+    State: ScalarStateFunc<T>,
 {
     fn name(&self) -> &str {
         "AggregateMinMaxAnyFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
-        Ok(self.arguments[0].data_type().clone())
+    fn return_type(&self) -> Result<DataType> {
+        Ok(self.data_type.clone())
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -78,38 +79,38 @@ where
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[common_datavalues::ColumnRef],
+        columns: &[Column],
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
+        let column = T::try_downcast_column(&columns[0]).unwrap();
         let state = place.get::<State>();
-        state.add_batch(&columns[0], validity)
+        state.add_batch(&column, validity)
     }
 
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[ColumnRef],
+        columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[0]) };
-
-        col.scalar_iter()
-            .zip(places.iter())
-            .for_each(|(item, place)| {
-                let addr = place.next(offset);
-                let state = addr.get::<State>();
-                state.add(item)
-            });
+        let column = T::try_downcast_column(&columns[0]).unwrap();
+        let column_iter = T::iter_column(&column);
+        column_iter.zip(places.iter()).for_each(|(v, place)| {
+            let addr = place.next(offset);
+            let state = addr.get::<State>();
+            state.add(v.clone())
+        });
         Ok(())
     }
-
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[0]) };
-
-        let state = place.get::<State>();
-        state.add(col.get_data(row));
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+        let column = T::try_downcast_column(&columns[0]).unwrap();
+        let v = T::index_column(&column, row);
+        if let Some(v) = v {
+            let state = place.get::<State>();
+            state.add(v)
+        }
         Ok(())
     }
 
@@ -129,14 +130,13 @@ where
         state.merge(rhs)
     }
 
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
-        state.merge_result(array)?;
-        Ok(())
+        state.merge_result(builder)
     }
 
     fn need_manual_drop_state(&self) -> bool {
-        <S::RefType<'_>>::has_alloc_beyond_bump()
+        self.need_drop
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
@@ -145,26 +145,28 @@ where
     }
 }
 
-impl<S, C, State> fmt::Display for AggregateMinMaxAnyFunction<S, C, State> {
+impl<T, C, State> fmt::Display for AggregateMinMaxAnyFunction<T, C, State> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<S, C, State> AggregateMinMaxAnyFunction<S, C, State>
+impl<T, C, State> AggregateMinMaxAnyFunction<T, C, State>
 where
-    S: Scalar + Send + Sync + serde::Serialize + DeserializeOwned,
-    C: ChangeIf<S> + Default,
-    State: ScalarStateFunc<S>,
+    T: ValueType + Send + Sync,
+    C: ChangeIf<T> + Default,
+    State: ScalarStateFunc<T>,
 {
     pub fn try_create(
         display_name: &str,
-        arguments: Vec<DataField>,
+        return_type: DataType,
+        need_drop: bool,
     ) -> Result<Arc<dyn AggregateFunction>> {
-        let func = AggregateMinMaxAnyFunction::<S, C, State> {
+        let func = AggregateMinMaxAnyFunction::<T, C, State> {
             display_name: display_name.to_string(),
-            arguments,
-            _s: PhantomData,
+            data_type: return_type,
+            need_drop,
+            _t: PhantomData,
             _c: PhantomData,
             _state: PhantomData,
         };
@@ -172,51 +174,58 @@ where
     }
 }
 
-pub fn try_create_aggregate_min_max_any_function<const TYPE: u8>(
+pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
     display_name: &str,
-    _params: Vec<DataValue>,
-    arguments: Vec<DataField>,
+    _params: Vec<Scalar>,
+    argument_types: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
-    assert_unary_arguments(display_name, arguments.len())?;
-    let data_type = arguments[0].data_type().clone();
-    let mut phid = data_type.data_type_id().to_physical_type();
+    assert_unary_arguments(display_name, argument_types.len())?;
+    let mut data_type = argument_types[0].clone();
+    let need_drop = need_manual_drop_state(&data_type);
 
     // null use dummy func, it's already covered in `AggregateNullResultFunction`
     if data_type.is_null() {
-        phid = PhysicalTypeID::UInt8;
+        data_type = DataType::String;
     }
 
-    let result = with_match_scalar_types_error!(phid, |$T| {
-        if phid == PhysicalTypeID::Variant {
-            if TYPE == TYPE_MIN {
-                type State = VariantState<CmpMin>;
-                AggregateMinMaxAnyFunction::<VariantValue, CmpMin, State>::try_create(display_name, arguments)
-            } else if TYPE == TYPE_MAX {
-                type State = VariantState<CmpMax>;
-                AggregateMinMaxAnyFunction::<VariantValue, CmpMax, State>::try_create(display_name, arguments)
-            } else {
-                type State = VariantState<CmpAny>;
-                AggregateMinMaxAnyFunction::<VariantValue, CmpAny, State>::try_create(display_name, arguments)
-            }
-        } else {
-            if TYPE == TYPE_MIN {
-                type State = ScalarState<$T, CmpMin>;
-                AggregateMinMaxAnyFunction::<$T, CmpMin, State>::try_create(display_name, arguments)
-            } else if TYPE == TYPE_MAX {
-                type State = ScalarState<$T, CmpMax>;
-                AggregateMinMaxAnyFunction::<$T, CmpMax, State>::try_create(display_name, arguments)
-            } else {
-                type State = ScalarState<$T, CmpAny>;
-                AggregateMinMaxAnyFunction::<$T, CmpAny, State>::try_create(display_name, arguments)
-            }
+    with_compare_mapped_type!(|CMP| match CMP_TYPE {
+        CMP => {
+            with_simple_no_number_mapped_type!(|T| match data_type {
+                DataType::T => {
+                    type State = ScalarState<T, CMP>;
+                    AggregateMinMaxAnyFunction::<T, CMP, State>::try_create(
+                        display_name,
+                        data_type,
+                        need_drop,
+                    )
+                }
+                DataType::Number(num_type) => {
+                    with_number_mapped_type!(|NUM| match num_type {
+                        NumberDataType::NUM => {
+                            type State = ScalarState<NumberType<NUM>, CMP>;
+                            AggregateMinMaxAnyFunction::<NumberType<NUM>, CMP, State>::try_create(
+                                display_name,
+                                data_type,
+                                need_drop,
+                            )
+                        }
+                    })
+                }
+                _ => {
+                    type State = ScalarState<AnyType, CMP>;
+                    AggregateMinMaxAnyFunction::<AnyType, CMP, State>::try_create(
+                        display_name,
+                        data_type,
+                        need_drop,
+                    )
+                }
+            })
         }
-    });
-
-    result.map_err(|_|  // no matching branch
-        ErrorCode::BadDataValueType(format!(
-             "AggregateMinMaxAnyFunction does not support type '{:?}'",
-             data_type
-        )))
+        _ => Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported compare type for aggregate function {} (type number: {})",
+            display_name, CMP_TYPE
+        ))),
+    })
 }
 
 pub fn aggregate_min_function_desc() -> AggregateFunctionDescription {

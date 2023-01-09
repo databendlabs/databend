@@ -15,20 +15,27 @@
 use std::sync::Arc;
 
 use common_base::base::ProgressValues;
-use common_catalog::plan::Expression;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionContext;
-use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::Evaluator;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::RemoteExpr;
+use common_expression::TableSchema;
+use common_expression::Value;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_sql::evaluator::BlockOperator;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::TableSnapshot;
 
@@ -56,7 +63,7 @@ impl FuseTable {
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<Expression>,
+        filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -98,7 +105,7 @@ impl FuseTable {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            if self.try_eval_const(&filter_expr)? {
+            if self.try_eval_const(ctx.clone(), &self.table_info.schema(), &filter_expr)? {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,
@@ -124,27 +131,46 @@ impl FuseTable {
         Ok(())
     }
 
-    fn try_eval_const(&self, filter: &Expression) -> Result<bool> {
-        let func_ctx = FunctionContext::default();
+    fn try_eval_const(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        schema: &TableSchema,
+        filter: &RemoteExpr<String>,
+    ) -> Result<bool> {
+        let dummy_field = DataField::new("dummy", DataType::Null);
+        let _dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
+        let dummy_value = Value::Column(Column::Null { len: 1 });
+        let dummy_block = DataBlock::new(
+            vec![BlockEntry {
+                data_type: DataType::Null,
+                value: dummy_value,
+            }],
+            1,
+        );
 
-        let dummy_field = DataField::new("dummy", NullType::new_impl());
-        let dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
-        let dummy_column = DataValue::Null.as_const_column(&NullType::new_impl(), 1)?;
-        let dummy_data_block = DataBlock::create(dummy_schema.clone(), vec![dummy_column]);
+        let filter_expr = filter
+            .as_expr(&BUILTIN_FUNCTIONS)
+            .unwrap()
+            .project_column_ref(|name| schema.index_of(name).unwrap());
+        let func_ctx = ctx.try_get_function_context()?;
+        let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
+        let res = evaluator
+            .run(&filter_expr)
+            .map_err(|(_, e)| ErrorCode::Internal(format!("eval try eval const failed: {}.", e)))?;
+        let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
+            ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
+        })?;
 
-        let eval_node = Arc::new(Evaluator::eval_expression(filter, dummy_schema.as_ref())?);
-        let filter_result = eval_node.eval(&func_ctx, &dummy_data_block)?.vector;
-        debug_assert!(filter_result.len() == 1);
-
-        DataBlock::cast_to_nonull_boolean(&filter_result)?
-            .get(0)
-            .as_bool()
+        Ok(match &predicates {
+            Value::Scalar(v) => *v,
+            Value::Column(bitmap) => bitmap.unset_bits() == 0,
+        })
     }
 
     async fn try_add_deletion_source(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: &Expression,
+        filter: &RemoteExpr<String>,
         col_indices: Vec<usize>,
         base_snapshot: &TableSnapshot,
         pipeline: &mut Pipeline,
@@ -192,11 +218,6 @@ impl FuseTable {
         ctx.try_set_partitions(parts)?;
 
         let block_reader = self.create_block_reader(projection.clone())?;
-        let eval_node = Arc::new(Evaluator::eval_expression(
-            filter,
-            block_reader.schema().as_ref(),
-        )?);
-
         let all_col_ids = self.all_the_columns_ids();
         let remain_col_ids: Vec<usize> = all_col_ids
             .into_iter()
@@ -219,7 +240,7 @@ impl FuseTable {
                     output,
                     self,
                     block_reader.clone(),
-                    eval_node.clone(),
+                    Arc::new(filter.clone()),
                     remain_reader.clone(),
                 )
             },
@@ -247,6 +268,7 @@ impl FuseTable {
                 let output_port = OutputPort::create();
                 let processor = DeletionTransform::try_create(
                     ctx,
+                    self.schema(),
                     inputs_port.clone(),
                     output_port.clone(),
                     self.get_operator(),
@@ -270,25 +292,30 @@ impl FuseTable {
         }
 
         let input_schema = self.table_info.schema();
-        let mut merged = input_schema.fields().clone();
+        let mut merged: Vec<DataField> =
+            input_schema.fields().iter().map(DataField::from).collect();
 
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
+        let mut extra_key_num = 0;
         let mut operators = Vec::with_capacity(cluster_keys.len());
-        for expr in &cluster_keys {
-            let cname = expr.column_name();
-            let index = match merged.iter().position(|x| x.name() == &cname) {
-                None => {
-                    let field = DataField::new(&cname, expr.data_type());
-                    operators.push(ChunkOperator::Map {
-                        eval: Evaluator::eval_expression(expr, &input_schema)?,
-                        name: field.name().to_string(),
-                    });
 
-                    merged.push(field);
-                    merged.len() - 1
+        for remote_expr in &cluster_keys {
+            let expr: Expr = remote_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .unwrap()
+                .project_column_ref(|name| input_schema.index_of(name).unwrap());
+            let index = match &expr {
+                Expr::ColumnRef { id, .. } => *id,
+                _ => {
+                    let cname = format!("{}", expr);
+                    merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
+                    operators.push(BlockOperator::Map { expr });
+
+                    let offset = merged.len() - 1;
+                    extra_key_num += 1;
+                    offset
                 }
-                Some(idx) => idx,
             };
             cluster_key_index.push(index);
         }
@@ -296,10 +323,11 @@ impl FuseTable {
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
-            vec![],
+            extra_key_num,
             0,
             self.get_block_compact_thresholds(),
             operators,
+            merged,
         ))
     }
 

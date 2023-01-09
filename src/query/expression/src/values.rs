@@ -19,6 +19,7 @@ use std::ops::Range;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::compute::cast as arrow_cast;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::offset::OffsetsBuffer;
@@ -53,8 +54,9 @@ use crate::utils::arrow::append_bitmap;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::utils::arrow::buffer_into_mut;
 use crate::utils::arrow::constant_bitmap;
-use crate::utils::arrow::deserialize_arrow_array;
-use crate::utils::arrow::serialize_arrow_array;
+use crate::utils::arrow::deserialize_column;
+use crate::utils::arrow::serialize_column;
+use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 
@@ -70,7 +72,7 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, Default, EnumAsInner, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, EnumAsInner, Eq, Serialize, Deserialize)]
 pub enum Scalar {
     #[default]
     Null,
@@ -156,6 +158,13 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
         }
     }
 
+    pub fn len(&'a self) -> usize {
+        match self {
+            ValueRef::Scalar(_) => 1,
+            ValueRef::Column(col) => T::column_len(col),
+        }
+    }
+
     pub fn index(&'a self, index: usize) -> Option<T::ScalarRef<'a>> {
         match self {
             ValueRef::Scalar(scalar) => Some(scalar.clone()),
@@ -168,6 +177,13 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
         match self {
             ValueRef::Scalar(scalar) => scalar.clone(),
             ValueRef::Column(c) => T::index_column_unchecked(c, index),
+        }
+    }
+
+    pub fn memory_size(&'a self) -> usize {
+        match self {
+            ValueRef::Scalar(scalar) => T::scalar_memory_size(scalar),
+            ValueRef::Column(c) => T::column_memory_size(c),
         }
     }
 }
@@ -190,6 +206,18 @@ impl<T: ArgType> Value<T> {
     }
 }
 
+impl Value<AnyType> {
+    pub fn convert_to_full_column(&self, ty: &DataType, num_rows: usize) -> Column {
+        match self {
+            Value::Scalar(s) => {
+                let builder = ColumnBuilder::repeat(&s.as_ref(), num_rows, ty);
+                builder.build()
+            }
+            Value::Column(c) => c.clone(),
+        }
+    }
+}
+
 impl<'a> ValueRef<'a, AnyType> {
     pub fn try_downcast<T: ValueType>(&self) -> Option<ValueRef<'_, T>> {
         Some(match self {
@@ -198,9 +226,9 @@ impl<'a> ValueRef<'a, AnyType> {
         })
     }
 
-    pub fn domain(&self) -> Domain {
+    pub fn domain(&self, data_type: &DataType) -> Domain {
         match self {
-            ValueRef::Scalar(scalar) => scalar.domain(),
+            ValueRef::Scalar(scalar) => scalar.domain(data_type),
             ValueRef::Column(col) => col.domain(),
         }
     }
@@ -241,7 +269,17 @@ impl<'a> ScalarRef<'a> {
         }
     }
 
-    pub fn domain(&self) -> Domain {
+    pub fn domain(&self, data_type: &DataType) -> Domain {
+        if !self.is_null() {
+            if let DataType::Nullable(ty) = data_type {
+                let domain = self.domain(ty.as_ref());
+                return Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(domain)),
+                });
+            }
+        }
+
         match self {
             ScalarRef::Null => Domain::Nullable(NullableDomain {
                 has_null: true,
@@ -265,7 +303,14 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Date(d) => Domain::Date(SimpleDomain { min: *d, max: *d }),
             ScalarRef::Array(array) => Domain::Array(Some(Box::new(array.domain()))),
             ScalarRef::Tuple(fields) => {
-                Domain::Tuple(fields.iter().map(|field| field.domain()).collect())
+                let types = data_type.as_tuple().unwrap();
+                Domain::Tuple(
+                    fields
+                        .iter()
+                        .zip(types.iter())
+                        .map(|(field, data_type)| field.domain(data_type))
+                        .collect(),
+                )
             }
             ScalarRef::Variant(_) => Domain::Undefined,
         }
@@ -293,6 +338,25 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Variant(buf) => buf.len(),
         }
     }
+
+    pub fn cast_to_u64(&self) -> Option<u64> {
+        match self {
+            ScalarRef::Number(t) => with_integer_mapped_type!(|NUM_TYPE| match t {
+                NumberScalar::NUM_TYPE(v) => {
+                    if *v >= 0 as _ { Some(*v as _) } else { None }
+                }
+                _ => None,
+            }),
+            ScalarRef::Timestamp(i) => {
+                if *i >= 0 {
+                    Some(*i as u64)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 impl PartialOrd for Scalar {
@@ -308,13 +372,16 @@ impl PartialOrd for Scalar {
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
-                match common_jsonb::compare(v1.as_slice(), v2.as_slice()) {
-                    Ok(ord) => Some(ord),
-                    _ => None,
-                }
+                common_jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
             }
             _ => None,
         }
+    }
+}
+
+impl Ord for Scalar {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Equal)
     }
 }
 
@@ -336,11 +403,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
-            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => match common_jsonb::compare(v1, v2)
-            {
-                Ok(ord) => Some(ord),
-                _ => None,
-            },
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => common_jsonb::compare(v1, v2).ok(),
             _ => None,
         }
     }
@@ -366,7 +429,7 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::Timestamp(v) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
             ScalarRef::Array(v) => {
-                let str = serialize_arrow_array(v.as_arrow());
+                let str = serialize_column(v);
                 str.hash(state);
             }
             ScalarRef::Tuple(v) => {
@@ -410,14 +473,9 @@ impl PartialOrd for Column {
             (Column::Tuple { fields: col1, .. }, Column::Tuple { fields: col2, .. }) => {
                 col1.partial_cmp(col2)
             }
-            (Column::Variant(col1), Column::Variant(col2)) => {
-                col1.iter().partial_cmp_by(col2.iter(), |v1, v2| {
-                    match common_jsonb::compare(v1, v2) {
-                        Ok(ord) => Some(ord),
-                        _ => None,
-                    }
-                })
-            }
+            (Column::Variant(col1), Column::Variant(col2)) => col1
+                .iter()
+                .partial_cmp_by(col2.iter(), |v1, v2| common_jsonb::compare(v1, v2).ok()),
             _ => None,
         }
     }
@@ -428,6 +486,9 @@ impl PartialEq for Column {
         self.partial_cmp(other) == Some(Ordering::Equal)
     }
 }
+
+pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
+pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
 
 impl Column {
     pub fn len(&self) -> usize {
@@ -589,74 +650,54 @@ impl Column {
         }
     }
 
-    pub fn arrow_type(&self) -> common_arrow::arrow::datatypes::DataType {
-        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-        use common_arrow::arrow::datatypes::Field;
-
+    pub fn data_type(&self) -> DataType {
         match self {
-            Column::Null { .. } => ArrowDataType::Null,
-            Column::EmptyArray { .. } => ArrowDataType::Extension(
-                "EmptyArray".to_owned(),
-                Box::new(ArrowDataType::Null),
-                None,
-            ),
-            Column::Number(NumberColumn::Int8(_)) => ArrowDataType::Int8,
-            Column::Number(NumberColumn::Int16(_)) => ArrowDataType::Int16,
-            Column::Number(NumberColumn::Int32(_)) => ArrowDataType::Int32,
-            Column::Number(NumberColumn::Int64(_)) => ArrowDataType::Int64,
-            Column::Number(NumberColumn::UInt8(_)) => ArrowDataType::UInt8,
-            Column::Number(NumberColumn::UInt16(_)) => ArrowDataType::UInt16,
-            Column::Number(NumberColumn::UInt32(_)) => ArrowDataType::UInt32,
-            Column::Number(NumberColumn::UInt64(_)) => ArrowDataType::UInt64,
-            Column::Number(NumberColumn::Float32(_)) => ArrowDataType::Float32,
-            Column::Number(NumberColumn::Float64(_)) => ArrowDataType::Float64,
-            Column::Boolean(_) => ArrowDataType::Boolean,
-            Column::String { .. } => ArrowDataType::LargeBinary,
-            Column::Timestamp(_) => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
-            Column::Date(_) => ArrowDataType::Date32,
-            Column::Array(box ArrayColumn {
-                values: Column::Nullable(box NullableColumn { column, .. }),
-                ..
-            }) => ArrowDataType::LargeList(Box::new(Field::new(
-                "list".to_string(),
-                column.arrow_type(),
-                true,
-            ))),
-            Column::Array(box ArrayColumn { values, .. }) => ArrowDataType::LargeList(Box::new(
-                Field::new("list".to_string(), values.arrow_type(), false),
-            )),
-            Column::Nullable(box NullableColumn { column, .. }) => column.arrow_type(),
+            Column::Null { .. } => DataType::Null,
+            Column::EmptyArray { .. } => DataType::EmptyArray,
+            Column::Number(c) => with_number_type!(|NUM_TYPE| match c {
+                NumberColumn::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
+            }),
+            Column::Boolean(_) => DataType::Boolean,
+            Column::String(_) => DataType::String,
+            Column::Timestamp(_) => DataType::Timestamp,
+            Column::Date(_) => DataType::Date,
+            Column::Array(array) => {
+                let inner = array.values.data_type();
+                DataType::Array(Box::new(inner))
+            }
+            Column::Nullable(inner) => {
+                let inner = inner.column.data_type();
+                DataType::Nullable(Box::new(inner))
+            }
             Column::Tuple { fields, .. } => {
-                let arrow_fields = fields
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, field)| match field {
-                        Column::Nullable(box NullableColumn { column, .. }) => {
-                            Field::new((idx + 1).to_string(), column.arrow_type(), true)
-                        }
-                        _ => Field::new((idx + 1).to_string(), field.arrow_type(), false),
-                    })
-                    .collect();
-                ArrowDataType::Struct(arrow_fields)
+                let inner = fields.iter().map(|col| col.data_type()).collect::<Vec<_>>();
+                DataType::Tuple(inner)
             }
-            Column::Variant(_) => {
-                ArrowType::Extension("Variant".to_owned(), Box::new(ArrowType::LargeBinary), None)
-            }
+            Column::Variant(_) => DataType::Variant,
         }
     }
 
+    pub fn arrow_field(&self) -> common_arrow::arrow::datatypes::Field {
+        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+        use common_arrow::arrow::datatypes::Field as ArrowField;
+        let dummy = "DUMMY".to_string();
+        let is_nullable = matches!(&self, Column::Nullable(_));
+        let arrow_type: ArrowDataType = (&self.data_type()).into();
+        ArrowField::new(dummy, arrow_type, is_nullable)
+    }
+
     pub fn as_arrow(&self) -> Box<dyn common_arrow::arrow::array::Array> {
+        let arrow_type = self.arrow_field().data_type().clone();
         match self {
             Column::Null { len } => Box::new(common_arrow::arrow::array::NullArray::new_null(
-                self.arrow_type(),
-                *len,
+                arrow_type, *len,
             )),
             Column::EmptyArray { len } => Box::new(
-                common_arrow::arrow::array::NullArray::new_null(self.arrow_type(), *len),
+                common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
             ),
             Column::Number(NumberColumn::UInt8(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<u8>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -664,7 +705,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::UInt16(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<u16>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -672,7 +713,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::UInt32(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<u32>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -680,7 +721,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::UInt64(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<u64>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -688,7 +729,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::Int8(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i8>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -696,7 +737,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::Int16(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i16>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -704,7 +745,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::Int32(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -712,7 +753,7 @@ impl Column {
             ),
             Column::Number(NumberColumn::Int64(col)) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -723,9 +764,7 @@ impl Column {
                     unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(col.clone()) };
                 Box::new(
                     common_arrow::arrow::array::PrimitiveArray::<f32>::try_new(
-                        self.arrow_type(),
-                        values,
-                        None,
+                        arrow_type, values, None,
                     )
                     .unwrap(),
                 )
@@ -735,27 +774,21 @@ impl Column {
                     unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(col.clone()) };
                 Box::new(
                     common_arrow::arrow::array::PrimitiveArray::<f64>::try_new(
-                        self.arrow_type(),
-                        values,
-                        None,
+                        arrow_type, values, None,
                     )
                     .unwrap(),
                 )
             }
             Column::Boolean(col) => Box::new(
-                common_arrow::arrow::array::BooleanArray::try_new(
-                    self.arrow_type(),
-                    col.clone(),
-                    None,
-                )
-                .unwrap(),
+                common_arrow::arrow::array::BooleanArray::try_new(arrow_type, col.clone(), None)
+                    .unwrap(),
             ),
             Column::String(col) => {
                 let offsets: Buffer<i64> =
                     col.offsets.iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        self.arrow_type(),
+                        arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.data.clone(),
                         None,
@@ -765,7 +798,7 @@ impl Column {
             }
             Column::Timestamp(col) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -773,7 +806,7 @@ impl Column {
             ),
             Column::Date(col) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     col.clone(),
                     None,
                 )
@@ -784,7 +817,7 @@ impl Column {
                     col.offsets.iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::ListArray::<i64>::try_new(
-                        self.arrow_type(),
+                        arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.values.as_arrow(),
                         None,
@@ -802,7 +835,7 @@ impl Column {
             }
             Column::Tuple { fields, .. } => Box::new(
                 common_arrow::arrow::array::StructArray::try_new(
-                    self.arrow_type(),
+                    arrow_type,
                     fields.iter().map(|field| field.as_arrow()).collect(),
                     None,
                 )
@@ -813,7 +846,7 @@ impl Column {
                     col.offsets.iter().map(|offset| *offset as i64).collect();
                 Box::new(
                     common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        self.arrow_type(),
+                        arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.data.clone(),
                         None,
@@ -824,10 +857,15 @@ impl Column {
         }
     }
 
-    pub fn from_arrow(arrow_col: &dyn common_arrow::arrow::array::Array) -> Column {
+    pub fn from_arrow(
+        arrow_col: &dyn common_arrow::arrow::array::Array,
+        data_type: &DataType,
+    ) -> Column {
         use common_arrow::arrow::array::Array as _;
         use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
+        let is_nullable = data_type.is_nullable();
+        let data_type = data_type.remove_nullable();
         let column = match arrow_col.data_type() {
             ArrowDataType::Null => Column::Null {
                 len: arrow_col.len(),
@@ -994,14 +1032,30 @@ impl Column {
                 })
             }
 
-            ArrowType::Timestamp(_, _) => Column::Timestamp(
-                arrow_col
+            ArrowType::Timestamp(uint, _) => {
+                let values = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::Int64Array>()
                     .expect("fail to read from arrow: array should be `Int64Array`")
-                    .values()
-                    .clone(),
-            ),
+                    .values();
+                let convert = match uint {
+                    TimeUnit::Second => (1_000_000, 1),
+                    TimeUnit::Millisecond => (1_000, 1),
+                    TimeUnit::Microsecond => (1, 1),
+                    TimeUnit::Nanosecond => (1, 1_000),
+                };
+
+                let values = if convert.0 == 1 && convert.1 == 1 {
+                    values.clone()
+                } else {
+                    let values = values
+                        .iter()
+                        .map(|x| x * convert.0 / convert.1)
+                        .collect::<Vec<_>>();
+                    values.into()
+                };
+                Column::Timestamp(values)
+            }
             ArrowDataType::Date32 => Column::Date(
                 arrow_col
                     .as_any()
@@ -1026,12 +1080,43 @@ impl Column {
                     offsets: offsets.into(),
                 })
             }
+            ArrowDataType::List(f) => {
+                let array_list = arrow_cast::cast(
+                    arrow_col,
+                    &ArrowDataType::LargeList(f.clone()),
+                    arrow_cast::CastOptions {
+                        wrapped: true,
+                        partial: true,
+                    },
+                )
+                .expect("list to large list cast should be ok");
+
+                let values_col = array_list
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
+                    .expect("fail to read from arrow: array should be `ListArray<i64>`");
+
+                let array_type = data_type.as_array().unwrap();
+                let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
+                let offsets = values_col
+                    .offsets()
+                    .buffer()
+                    .iter()
+                    .map(|x| *x as u64)
+                    .collect::<Vec<_>>();
+                Column::Array(Box::new(ArrayColumn {
+                    values,
+                    offsets: offsets.into(),
+                }))
+            }
             ArrowDataType::LargeList(_) => {
                 let values_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
                     .expect("fail to read from arrow: array should be `ListArray<i64>`");
-                let values = Column::from_arrow(&**values_col.values());
+
+                let array_type = data_type.as_array().unwrap();
+                let values = Column::from_arrow(&**values_col.values(), array_type.as_ref());
                 let offsets = values_col
                     .offsets()
                     .buffer()
@@ -1044,6 +1129,7 @@ impl Column {
                 }))
             }
             ArrowDataType::Struct(_) => {
+                let struct_type = data_type.as_tuple().unwrap();
                 let arrow_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::StructArray>()
@@ -1051,7 +1137,8 @@ impl Column {
                 let fields = arrow_col
                     .values()
                     .iter()
-                    .map(|field| Column::from_arrow(&**field))
+                    .zip(struct_type.iter())
+                    .map(|(field, dt)| Column::from_arrow(&**field, dt))
                     .collect::<Vec<_>>();
                 Column::Tuple {
                     fields,
@@ -1061,11 +1148,13 @@ impl Column {
             ty => unimplemented!("unsupported arrow type {ty:?}"),
         };
 
-        if let Some(validity) = arrow_col.validity() {
-            Column::Nullable(Box::new(NullableColumn {
-                column,
-                validity: validity.clone(),
-            }))
+        if is_nullable {
+            let validity = arrow_col.validity().cloned().unwrap_or_else(|| {
+                let mut validity = MutableBitmap::with_capacity(arrow_col.len());
+                validity.extend_constant(arrow_col.len(), true);
+                validity.into()
+            });
+            Column::Nullable(Box::new(NullableColumn { column, validity }))
         } else {
             column
         }
@@ -1102,12 +1191,27 @@ impl Column {
             Column::Variant(col) => col.data.len() + col.offsets.len() * 8,
         }
     }
+
+    /// Returns (is_all_null,  Option bitmap)
+    pub fn validity(&self) -> (bool, Option<&Bitmap>) {
+        match self {
+            Column::Null { .. } => (true, None),
+            Column::Nullable(c) => {
+                if c.validity.unset_bits() == c.validity.len() {
+                    (true, Some(&c.validity))
+                } else {
+                    (false, Some(&c.validity))
+                }
+            }
+            _ => (false, None),
+        }
+    }
 }
 
 impl Serialize for Column {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        serializer.serialize_bytes(&serialize_arrow_array(self.as_arrow()))
+        serializer.serialize_bytes(&serialize_column(self))
     }
 }
 
@@ -1125,15 +1229,17 @@ impl<'de> Deserialize<'de> for Column {
 
             fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
             where E: serde::de::Error {
-                let array = deserialize_arrow_array(value)
+                let column = deserialize_column(value)
                     .expect("expecting an arrow chunk with exactly one column");
-                Ok(Column::from_arrow(&*array))
+                Ok(column)
             }
         }
 
         deserializer.deserialize_bytes(ColumnVisitor)
     }
 }
+
+impl Eq for Column {}
 
 impl ColumnBuilder {
     pub fn from_column(col: Column) -> Self {
@@ -1245,12 +1351,8 @@ impl ColumnBuilder {
             DataType::String => {
                 ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, 0))
             }
-            DataType::Timestamp => {
-                ColumnBuilder::Number(NumberColumnBuilder::Int64(Vec::with_capacity(capacity)))
-            }
-            DataType::Date => {
-                ColumnBuilder::Number(NumberColumnBuilder::Int32(Vec::with_capacity(capacity)))
-            }
+            DataType::Timestamp => ColumnBuilder::Timestamp(Vec::with_capacity(capacity)),
+            DataType::Date => ColumnBuilder::Date(Vec::with_capacity(capacity)),
             DataType::Nullable(ty) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                 builder: Self::with_capacity(ty, capacity),
                 validity: MutableBitmap::with_capacity(capacity),
@@ -1365,6 +1467,9 @@ impl ColumnBuilder {
             (ColumnBuilder::String(builder), Column::String(other)) => {
                 builder.append_column(other);
             }
+            (ColumnBuilder::Variant(builder), Column::Variant(other)) => {
+                builder.append_column(other);
+            }
             (ColumnBuilder::Timestamp(builder), Column::Timestamp(other)) => {
                 builder.extend_from_slice(other);
             }
@@ -1390,7 +1495,7 @@ impl ColumnBuilder {
                 }
                 *len += other_len;
             }
-            (this, other) => unreachable!("unable append {other:?} onto {this:?}"),
+            (this, other) => unreachable!("unable append {other:?} into {this:?}"),
         }
     }
 
@@ -1467,3 +1572,38 @@ unsafe impl<'a> TrustedLen for ColumnIterator<'a> {}
 pub fn upcast_gat<'short, 'long: 'short>(long: ScalarRef<'long>) -> ScalarRef<'short> {
     long
 }
+
+#[macro_export]
+macro_rules! for_all_number_varints{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8, Int8 },
+            { i16, Int16 },
+            { i32, Int32 },
+            { i64, Int64 },
+            { u8, UInt8 },
+            { u16, UInt16 },
+            { u32, UInt32 },
+            { u64, UInt64 },
+            { f32, Float32 },
+            { f64, Float64 },
+            { F32, Float32 },
+            { F64, Float64 }
+        }
+    };
+}
+
+macro_rules! impl_scalar_from {
+    ([], $( { $S: ident, $TY: ident} ),*) => {
+        $(
+            impl From<$S> for Scalar {
+                fn from(value: $S) -> Self {
+                    Scalar::Number(NumberScalar::$TY(value.into()))
+                }
+            }
+        )*
+    }
+}
+
+for_all_number_varints! {impl_scalar_from}

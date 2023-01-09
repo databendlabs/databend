@@ -16,11 +16,11 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
+use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
 use common_formats::FileFormatOptionsExt;
@@ -39,7 +39,7 @@ impl InputFormatNDJson {
         field_decoder: &FieldJsonAstDecoder,
         buf: &[u8],
         deserializers: &mut [TypeDeserializerImpl],
-        schema: &DataSchemaRef,
+        schema: &TableSchemaRef,
     ) -> Result<()> {
         let mut json: serde_json::Value = serde_json::from_reader(buf)?;
         // if it's not case_sensitive, we convert to lowercase

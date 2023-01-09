@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataTypeImpl;
 use common_exception::Result;
+use common_expression::types::DataType;
 
 use crate::binder::scalar_visitor::Recursion;
 use crate::binder::scalar_visitor::ScalarVisitor;
@@ -83,28 +83,6 @@ pub fn split_equivalent_predicate(scalar: &Scalar) -> Option<(Scalar, Scalar)> {
         }) if *op == ComparisonOp::Equal => Some((*left.clone(), *right.clone())),
         _ => None,
     }
-}
-
-pub fn wrap_cast_if_needed(scalar: Scalar, target_type: &DataTypeImpl) -> Scalar {
-    if scalar.data_type() != *target_type {
-        let cast = CastExpr {
-            from_type: Box::new(scalar.data_type()),
-            argument: Box::new(scalar),
-            target_type: Box::new(target_type.clone()),
-        };
-        cast.into()
-    } else {
-        scalar
-    }
-}
-
-pub fn wrap_cast(scalar: Scalar, target_type: &DataTypeImpl) -> Scalar {
-    CastExpr {
-        from_type: Box::new(scalar.data_type()),
-        argument: Box::new(scalar),
-        target_type: Box::new(target_type.clone()),
-    }
-    .into()
 }
 
 pub fn satisfied_by(scalar: &Scalar, prop: &RelationalProperty) -> bool {
@@ -188,5 +166,23 @@ pub fn contain_subquery(scalar: &Scalar) -> bool {
         }
         Scalar::CastExpr(CastExpr { argument, .. }) => contain_subquery(argument),
         _ => false,
+    }
+}
+
+/// Wrap a cast expression with given target type
+pub fn wrap_cast(scalar: &Scalar, target_type: &DataType) -> Scalar {
+    Scalar::CastExpr(CastExpr {
+        argument: Box::new(scalar.clone()),
+        from_type: Box::new(scalar.data_type()),
+        target_type: Box::new(target_type.clone()),
+    })
+}
+
+/// Wrap a cast expression with given target type if the scalar is not of the target type
+pub fn wrap_cast_if_needed(scalar: &Scalar, target_type: &DataType) -> Scalar {
+    if &scalar.data_type() == target_type {
+        scalar.clone()
+    } else {
+        wrap_cast(scalar, target_type)
     }
 }

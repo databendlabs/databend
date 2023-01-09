@@ -105,7 +105,7 @@ impl<'a> Binder {
         scalars: &HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
-        let scalars = scalars
+        let mut scalars = scalars
             .iter()
             .map(|(_, item)| {
                 if bind_context.in_grouping {
@@ -120,6 +120,8 @@ impl<'a> Binder {
                 }
             })
             .collect::<Result<Vec<_>>>()?;
+
+        scalars.sort_by_key(|s| s.index);
         let eval_scalar = EvalScalar { items: scalars };
 
         let new_expr = SExpr::create_unary(eval_scalar.into(), child);

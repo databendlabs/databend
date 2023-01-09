@@ -15,13 +15,10 @@
 use std::any::Any;
 use std::io::Cursor;
 
-use common_datavalues::ArrayDeserializer;
-use common_datavalues::ArrayValue;
-use common_datavalues::StringDeserializer;
-use common_datavalues::StructDeserializer;
-use common_datavalues::StructValue;
-use common_datavalues::TypeDeserializer;
 use common_exception::Result;
+use common_expression::ArrayDeserializer;
+use common_expression::StringDeserializer;
+use common_expression::StructDeserializer;
 use common_io::consts::FALSE_BYTES_NUM;
 use common_io::consts::INF_BYTES_LOWER;
 use common_io::consts::NAN_BYTES_LOWER;
@@ -75,14 +72,13 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
     fn read_string_inner<R: AsRef<[u8]>>(
         &self,
         reader: &mut Cursor<R>,
-        tmp_buf: &mut Vec<u8>,
+        output: &mut Vec<u8>,
         raw: bool,
     ) -> Result<()> {
-        tmp_buf.clear();
         if raw {
-            reader.read_escaped_string_text(tmp_buf)
+            reader.read_escaped_string_text(output)
         } else {
-            reader.read_quoted_text(tmp_buf, self.quote_char)
+            reader.read_quoted_text(output, self.quote_char)
         }?;
         Ok(())
     }
@@ -93,8 +89,8 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
         reader: &mut Cursor<R>,
         raw: bool,
     ) -> Result<()> {
-        self.read_string_inner(reader, &mut column.buffer, raw)?;
-        column.builder.append_value(column.buffer.as_slice());
+        self.read_string_inner(reader, &mut column.data, raw)?;
+        column.commit_row();
         Ok(())
     }
 
@@ -115,15 +111,10 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(&mut column.inner, reader, false)?;
+            self.read_field(column.inner.as_mut(), reader, false)?;
             idx += 1;
         }
-        let mut values = Vec::with_capacity(idx);
-        for _ in 0..idx {
-            values.push(column.inner.pop_data_value()?);
-        }
-        values.reverse();
-        column.builder.append_value(ArrayValue::new(values));
+        column.add_offset(idx);
         Ok(())
     }
 
@@ -134,7 +125,6 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
         _raw: bool,
     ) -> Result<()> {
         reader.must_ignore_byte(b'(')?;
-        let mut values = Vec::with_capacity(column.inners.len());
         for (idx, inner) in column.inners.iter_mut().enumerate() {
             let _ = reader.ignore_white_spaces();
             if idx != 0 {
@@ -142,10 +132,8 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
             }
             let _ = reader.ignore_white_spaces();
             self.read_field(inner, reader, false)?;
-            values.push(inner.pop_data_value()?);
         }
         reader.must_ignore_byte(b')')?;
-        column.builder.append_value(StructValue::new(values));
         Ok(())
     }
 }

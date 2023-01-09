@@ -4,21 +4,21 @@ drop table if exists large_numbers
 statement ok
 CREATE TABLE large_numbers (a INT8)
 
-statement ok
+statement error 1001
 INSERT INTO large_numbers VALUES (9223372036854775807),(1)
 
 query I
 SELECT sum(a) FROM large_numbers
 ----
-0
+NULL
 
 statement ok
 DELETE FROM large_numbers
 
-statement ok
+statement error 1001
 INSERT INTO large_numbers VALUES (-9223372036854775808),(-1)
 
 query I
 SELECT sum(a) FROM large_numbers
 ----
--1
+NULL

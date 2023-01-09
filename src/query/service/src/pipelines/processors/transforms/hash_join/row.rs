@@ -17,17 +17,18 @@ use std::hash::Hasher;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datablocks::KeysState;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::KeysState;
+use common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::sessions::QueryContext;
 
-pub type ColumnVector = Vec<ColumnRef>;
+pub type ColumnVector = Vec<(Column, DataType)>;
 
 pub struct Chunk {
     pub data_block: DataBlock,
@@ -74,10 +75,6 @@ impl RowSpace {
         })
     }
 
-    pub fn schema(&self) -> DataSchemaRef {
-        self.data_schema.clone()
-    }
-
     pub fn push_cols(&self, data_block: DataBlock, cols: ColumnVector) -> Result<()> {
         let chunk = Chunk {
             data_block,
@@ -103,7 +100,7 @@ impl RowSpace {
         let data_blocks = self.datablocks();
         let num_rows = data_blocks
             .iter()
-            .fold(0, |acc, block| acc + block.num_rows());
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
         let mut indices = Vec::with_capacity(row_ptrs.len());
 
         for row_ptr in row_ptrs.iter() {
@@ -111,8 +108,7 @@ impl RowSpace {
         }
 
         if !data_blocks.is_empty() && num_rows != 0 {
-            let data_block =
-                DataBlock::block_take_by_chunk_indices(&data_blocks, indices.as_slice())?;
+            let data_block = DataBlock::take_blocks(&data_blocks, indices.as_slice());
             Ok(data_block)
         } else {
             Ok(DataBlock::empty_with_schema(self.data_schema.clone()))

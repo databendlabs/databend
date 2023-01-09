@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_exception::Result;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 
 use crate::field_encoder::write_csv_string;
 use crate::field_encoder::FieldEncoderCSV;
@@ -28,7 +28,7 @@ pub type CSVWithNamesOutputFormat = CSVOutputFormatBase<true, false>;
 pub type CSVWithNamesAndTypesOutputFormat = CSVOutputFormatBase<true, true>;
 
 pub struct CSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     field_encoder: FieldEncoderCSV,
     field_delimiter: u8,
     record_delimiter: Vec<u8>,
@@ -36,7 +36,7 @@ pub struct CSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
 }
 
 impl<const WITH_NAMES: bool, const WITH_TYPES: bool> CSVOutputFormatBase<WITH_NAMES, WITH_TYPES> {
-    pub fn create(schema: DataSchemaRef, options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: TableSchemaRef, options: &FileFormatOptionsExt) -> Self {
         let field_encoder = FieldEncoderCSV::create(options);
         Self {
             schema,
@@ -67,20 +67,26 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
     for CSVOutputFormatBase<WITH_NAMES, WITH_TYPES>
 {
     fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
-        let rows_size = block.column(0).len();
+        let rows_size = block.num_rows();
         let mut buf = Vec::with_capacity(block.memory_size());
-        let serializers = block.get_serializers()?;
 
         let fd = self.field_delimiter;
         let rd = &self.record_delimiter;
 
+        let columns: Vec<Column> = block
+            .convert_to_full()
+            .columns()
+            .iter()
+            .map(|val| val.value.clone().into_column().unwrap())
+            .collect();
+
         for row_index in 0..rows_size {
-            for (col_index, serializer) in serializers.iter().enumerate() {
+            for (col_index, column) in columns.iter().enumerate() {
                 if col_index != 0 {
                     buf.push(fd);
                 }
                 self.field_encoder
-                    .write_field(serializer, row_index, &mut buf, false);
+                    .write_field(column, row_index, &mut buf, false);
             }
             buf.extend_from_slice(rd)
         }
@@ -102,7 +108,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
                     .schema
                     .fields()
                     .iter()
-                    .map(|f| f.data_type().name())
+                    .map(|f| f.data_type().to_string())
                     .collect::<Vec<_>>();
                 buf.extend_from_slice(&self.serialize_strings(types));
             }

@@ -18,8 +18,11 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
+use common_expression::types::NumberDataType;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
@@ -350,9 +353,9 @@ impl SchemaApiTestSuite {
         };
 
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -1393,9 +1396,9 @@ impl SchemaApiTestSuite {
         let mut expected_tb_count: u64 = 0;
 
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -1717,9 +1720,9 @@ impl SchemaApiTestSuite {
         let tb3_name = "tb3";
 
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -1960,9 +1963,9 @@ impl SchemaApiTestSuite {
         let tbl_name = "tb2";
 
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -2090,9 +2093,9 @@ impl SchemaApiTestSuite {
         let tbl_name = "tb2";
 
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -2425,9 +2428,9 @@ impl SchemaApiTestSuite {
     ) -> anyhow::Result<u64> {
         let created_on = Utc::now();
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -2615,9 +2618,9 @@ impl SchemaApiTestSuite {
         };
 
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -2711,9 +2714,9 @@ impl SchemaApiTestSuite {
         let mut expected_tb_count: u64 = 0;
 
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -3080,9 +3083,9 @@ impl SchemaApiTestSuite {
         let tbl_name = "tb2";
 
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -3189,9 +3192,9 @@ impl SchemaApiTestSuite {
         let table_id;
 
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -3302,9 +3305,9 @@ impl SchemaApiTestSuite {
         let table_id;
 
         let schema = || {
-            Arc::new(DataSchema::new(vec![DataField::new(
+            Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
 
@@ -3456,9 +3459,9 @@ impl SchemaApiTestSuite {
 
             // create share table
             let schema = || {
-                Arc::new(DataSchema::new(vec![DataField::new(
+                Arc::new(TableSchema::new(vec![TableField::new(
                     "number",
-                    u64::to_data_type(),
+                    TableDataType::Number(NumberDataType::UInt64),
                 )]))
             };
             let table_meta = |created_on| TableMeta {
@@ -3580,9 +3583,9 @@ impl SchemaApiTestSuite {
         info!("--- create 2 tables: tb1 tb2");
         {
             // Table schema with metadata(due to serde issue).
-            let schema = Arc::new(DataSchema::new(vec![DataField::new(
+            let schema = Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]));
 
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
@@ -3649,9 +3652,9 @@ impl SchemaApiTestSuite {
         info!("--- create 2 tables: tb1 tb2");
         {
             // Table schema with metadata(due to serde issue).
-            let schema = Arc::new(DataSchema::new(vec![DataField::new(
+            let schema = Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]));
 
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
@@ -4027,9 +4030,9 @@ impl SchemaApiTestSuite {
             assert!(res.is_ok());
 
             let tables = vec!["tb1", "tb2"];
-            let schema = Arc::new(DataSchema::new(vec![DataField::new(
+            let schema = Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]));
 
             let options = maplit::btreemap! {"opt-1".into() => "val-1".into()};
@@ -4100,9 +4103,9 @@ impl SchemaApiTestSuite {
             info!("create database res: {:?}", res);
             assert!(res.is_ok());
 
-            let schema = Arc::new(DataSchema::new(vec![DataField::new(
+            let schema = Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
-                u64::to_data_type(),
+                TableDataType::Number(NumberDataType::UInt64),
             )]));
 
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};

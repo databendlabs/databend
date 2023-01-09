@@ -20,19 +20,33 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use aho_corasick::AhoCorasick;
-use common_ast::ast::Expr;
+use common_ast::ast::Expr as AExpr;
 use common_ast::parser::parse_comma_separated_exprs;
+use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table_context::StageAttachment;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::Expr;
+use common_expression::Scalar as DataScalar;
+use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
+use common_expression::Value;
 use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
@@ -42,11 +56,23 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
-use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::evaluator::BlockOperator;
+use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_sql::executor::DistributedInsertSelect;
+use common_sql::executor::PhysicalPlan;
+use common_sql::executor::PhysicalPlanBuilder;
+use common_sql::executor::PhysicalScalarBuilder;
+use common_sql::plans::CastExpr;
+use common_sql::plans::Insert;
+use common_sql::plans::InsertInputSource;
+use common_sql::plans::Plan;
+use common_sql::plans::Scalar;
+use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
+use common_sql::NameResolutionContext;
+use common_sql::ScalarBinder;
 use common_storages_factory::Table;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
@@ -59,25 +85,12 @@ use tracing::info;
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::processors::TransformAddOn;
+use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::evaluator::Evaluator;
-use crate::sql::executor::DistributedInsertSelect;
-use crate::sql::executor::PhysicalPlan;
-use crate::sql::executor::PhysicalPlanBuilder;
-use crate::sql::plans::CastExpr;
-use crate::sql::plans::ConstantExpr;
-use crate::sql::plans::Insert;
-use crate::sql::plans::InsertInputSource;
-use crate::sql::plans::Plan;
-use crate::sql::plans::Scalar;
-use crate::sql::BindContext;
-use crate::sql::NameResolutionContext;
-use crate::sql::ScalarBinder;
 
 pub struct InsertInterpreterV2 {
     ctx: Arc<QueryContext>,
@@ -112,7 +125,7 @@ impl InsertInterpreterV2 {
         }
 
         // check if cast needed
-        let cast_needed = select_schema != *output_schema;
+        let cast_needed = select_schema != DataSchema::from(output_schema.as_ref()).into();
         Ok(cast_needed)
     }
 
@@ -150,7 +163,6 @@ impl InsertInterpreterV2 {
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let source_schema = self.plan.schema();
-        let target_schema = table.schema();
         let catalog_name = self.plan.catalog.clone();
         let overwrite = self.plan.overwrite;
 
@@ -162,8 +174,9 @@ impl InsertInterpreterV2 {
             .copy_options
             .apply(&attachment.copy_options, true)?;
 
+        let table_schema = infer_table_schema(&source_schema)?;
         let mut stage_table_info = StageTableInfo {
-            schema: source_schema.clone(),
+            schema: table_schema,
             user_stage_info: stage_info,
             path: path.to_string(),
             files: vec![],
@@ -189,18 +202,16 @@ impl InsertInterpreterV2 {
 
         stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
 
-        let need_fill_missing_columns = target_schema != source_schema;
-        if need_fill_missing_columns {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformAddOn::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    source_schema.clone(),
-                    target_schema.clone(),
-                    ctx.clone(),
-                )
-            })?;
-        }
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformResortAddOn::try_create(
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                table.clone(),
+                ctx.clone(),
+            )
+        })?;
+
         table.append_data(ctx.clone(), pipeline, AppendMode::Copy, false)?;
 
         let user_stage_info_clone = stage_table_info.user_stage_info.clone();
@@ -546,7 +557,7 @@ impl ValueSource {
             .map(|deser| deser.finish_to_column())
             .collect::<Vec<_>>();
 
-        Ok(DataBlock::create(self.schema.clone(), columns))
+        Ok(DataBlock::new_from_columns(columns))
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)
@@ -616,7 +627,7 @@ impl ValueSource {
                 let exprs =
                     parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect, &backtrace)?;
 
-                let values = exprs_to_datavalue(
+                let values = exprs_to_scalar(
                     exprs,
                     &self.schema,
                     self.ctx.clone(),
@@ -626,8 +637,9 @@ impl ValueSource {
                 )
                 .await?;
 
+                let format = self.ctx.get_format_settings()?;
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
-                    deser.append_data_value(values[append_idx].clone())?;
+                    deser.append_data_value(values[append_idx].clone(), &format)?;
                 }
                 reader.set_position(end_pos_of_row);
                 return Ok(());
@@ -696,92 +708,130 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
     Ok(())
 }
 
-fn fill_default_value(operators: &mut Vec<ChunkOperator>, field: &DataField) -> Result<()> {
+async fn fill_default_value(
+    binder: &mut ScalarBinder<'_>,
+    operators: &mut Vec<BlockOperator>,
+    field: &DataField,
+    builder: &PhysicalScalarBuilder<'_>,
+) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
-        operators.push(ChunkOperator::Map {
-            eval: Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
-            name: field.name().to_string(),
+        let tokens = tokenize_sql(default_expr)?;
+        let backtrace = Backtrace::new();
+        let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
+        let (mut scalar, ty) = binder.bind(&ast).await?;
+        if !field.data_type().eq(&ty) {
+            scalar = Scalar::CastExpr(CastExpr {
+                argument: Box::new(scalar),
+                from_type: Box::new(ty),
+                target_type: Box::new(field.data_type().clone()),
+            })
+        }
+        let scalar = builder.build(&scalar)?;
+        operators.push(BlockOperator::Map {
+            expr: scalar.as_expr()?,
         });
     } else {
         // If field data type is nullable, then we'll fill it with null.
         if field.data_type().is_nullable() {
-            let scalar = Scalar::ConstantExpr(ConstantExpr {
-                value: DataValue::Null,
-                data_type: Box::new(field.data_type().clone()),
-            });
-            operators.push(ChunkOperator::Map {
-                eval: Evaluator::eval_scalar(&scalar)?,
-                name: field.name().to_string(),
+            operators.push(BlockOperator::Map {
+                expr: Expr::Constant {
+                    span: None,
+                    scalar: DataScalar::Null,
+                    data_type: field.data_type().clone(),
+                },
             });
         } else {
-            operators.push(ChunkOperator::Map {
-                eval: Evaluator::eval_scalar(&Scalar::ConstantExpr(ConstantExpr {
-                    value: field.data_type().default_value(),
-                    data_type: Box::new(field.data_type().clone()),
-                }))?,
-                name: field.name().to_string(),
+            let data_type = field.data_type().clone();
+            let default_value = data_type.default_value();
+            operators.push(BlockOperator::Map {
+                expr: Expr::Constant {
+                    span: None,
+                    scalar: default_value,
+                    data_type,
+                },
             });
         }
     }
     Ok(())
 }
 
-async fn exprs_to_datavalue<'a>(
-    exprs: Vec<Expr<'a>>,
+async fn exprs_to_scalar<'a>(
+    exprs: Vec<AExpr<'a>>,
     schema: &DataSchemaRef,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,
-) -> Result<Vec<DataValue>> {
+) -> Result<Vec<DataScalar>> {
     let schema_fields_len = schema.fields().len();
     if exprs.len() != schema_fields_len {
-        return Err(ErrorCode::TableSchemaMismatch(
-            "Table columns count is not match, expect {schema_fields_len}, input: {exprs.len()}",
-        ));
+        return Err(ErrorCode::TableSchemaMismatch(format!(
+            "Table columns count is not match, expect {schema_fields_len}, input: {}, expr: {:?}",
+            exprs.len(),
+            exprs
+        )));
     }
     let mut operators = Vec::with_capacity(schema_fields_len);
+    let mut scalar_binder = ScalarBinder::new(
+        bind_context,
+        ctx.clone(),
+        name_resolution_ctx,
+        metadata.clone(),
+        &[],
+    );
+
+    let physical_scalar_builder = PhysicalScalarBuilder::new(schema);
     for (i, expr) in exprs.iter().enumerate() {
         // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
-        if let Expr::ColumnRef { column, .. } = expr {
+        if let AExpr::ColumnRef { column, .. } = expr {
             if column.name.eq_ignore_ascii_case("default") {
                 let field = schema.field(i);
-                fill_default_value(&mut operators, field)?;
+                fill_default_value(
+                    &mut scalar_binder,
+                    &mut operators,
+                    field,
+                    &physical_scalar_builder,
+                )
+                .await?;
                 continue;
             }
         }
-        let mut scalar_binder = ScalarBinder::new(
-            bind_context,
-            ctx.clone(),
-            name_resolution_ctx,
-            metadata.clone(),
-            &[],
-        );
+
         let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
-        if data_type.ne(field_data_type) {
+        if &data_type != field_data_type {
             scalar = Scalar::CastExpr(CastExpr {
                 argument: Box::new(scalar),
                 from_type: Box::new(data_type),
                 target_type: Box::new(field_data_type.clone()),
             })
         }
-        operators.push(ChunkOperator::Map {
-            eval: Evaluator::eval_scalar(&scalar)?,
-            name: schema.field(i).name().to_string(),
+        let scalar = physical_scalar_builder.build(&scalar)?;
+        operators.push(BlockOperator::Map {
+            expr: scalar.as_expr()?,
         });
     }
 
-    let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
-    let one_row_block = DataBlock::create(dummy, vec![Series::from_data(vec![1u8])]);
+    let one_row_chunk = DataBlock::new(
+        vec![BlockEntry {
+            data_type: DataType::Number(NumberDataType::UInt8),
+            value: Value::Scalar(DataScalar::Number(NumberScalar::UInt8(1))),
+        }],
+        1,
+    );
     let func_ctx = ctx.try_get_function_context()?;
-    let mut expression_transform = CompoundChunkOperator {
+    let mut expression_transform = CompoundBlockOperator {
         operators,
         ctx: func_ctx,
     };
-    let res = expression_transform.transform(one_row_block)?;
-    let datavalues: Vec<DataValue> = res.columns().iter().skip(1).map(|col| col.get(0)).collect();
-    Ok(datavalues)
+    let res = expression_transform.transform(one_row_chunk)?;
+    let data_scalars: Vec<DataScalar> = res
+        .columns()
+        .iter()
+        .skip(1)
+        .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
+        .collect();
+    Ok(data_scalars)
 }
 
 // TODO:(everpcpc) tmp copy from src/query/sql/src/planner/binder/copy.rs

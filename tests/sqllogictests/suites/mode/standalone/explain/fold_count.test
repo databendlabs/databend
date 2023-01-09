@@ -10,7 +10,7 @@ explain select count(*) from t
 EvalScalar
 ├── expressions: [COUNT(*) (#2)]
 └── EvalScalar
-    ├── expressions: [1000]
+    ├── expressions: [1000_u64]
     └── DummyTableScan
 
 statement ok
@@ -22,7 +22,7 @@ explain select count(*) from t
 EvalScalar
 ├── expressions: [COUNT(*) (#2)]
 └── EvalScalar
-    ├── expressions: [1001]
+    ├── expressions: [1001_u64]
     └── DummyTableScan
 
 query T
@@ -37,14 +37,14 @@ EvalScalar
         ├── group by: []
         ├── aggregate functions: [count()]
         └── Filter
-            ├── filters: [>(t.number (#0), 10)]
+            ├── filters: [gt(t.number (#0), 10_u8)]
             └── TableScan
                 ├── table: default.default.t
                 ├── read rows: 1000
                 ├── read bytes: 4028
                 ├── partitions total: 2
                 ├── partitions scanned: 1
-                └── push downs: [filters: [(number > 10)], limit: NONE]
+                └── push downs: [filters: [gt(number, 10_u64)], limit: NONE]
 
 statement ok
 drop table t

@@ -15,6 +15,7 @@
 use common_arrow::parquet::metadata::FileMetaData;
 use common_exception::Result;
 use common_storages_table_meta::caches::CacheManager;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::caches::Loader;
 use common_storages_table_meta::caches::MemoryCacheReader;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -76,38 +77,29 @@ pub struct LoaderWrapper<T>(T);
 
 #[async_trait::async_trait]
 impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
-    async fn load(
-        &self,
-        key: &str,
-        length_hint: Option<u64>,
-        version: u64,
-    ) -> Result<TableSnapshot> {
-        let version = SnapshotVersion::try_from(version)?;
-        let reader = bytes_reader(&self.0, key, length_hint).await?;
-        version.read(reader).await
+    async fn load(&self, params: &LoadParams) -> Result<TableSnapshot> {
+        let version = SnapshotVersion::try_from(params.ver)?;
+        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
+
+        version.read(reader, params.schema.clone()).await
     }
 }
 
 #[async_trait::async_trait]
 impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
-    async fn load(
-        &self,
-        key: &str,
-        length_hint: Option<u64>,
-        version: u64,
-    ) -> Result<TableSnapshotStatistics> {
-        let version = TableSnapshotStatisticsVersion::try_from(version)?;
-        let reader = bytes_reader(&self.0, key, length_hint).await?;
-        version.read(reader).await
+    async fn load(&self, params: &LoadParams) -> Result<TableSnapshotStatistics> {
+        let version = TableSnapshotStatisticsVersion::try_from(params.ver)?;
+        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
+        version.read(reader, params.schema.clone()).await
     }
 }
 
 #[async_trait::async_trait]
 impl Loader<SegmentInfo> for LoaderWrapper<Operator> {
-    async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
-        let version = SegmentInfoVersion::try_from(version)?;
-        let reader = bytes_reader(&self.0, key, length_hint).await?;
-        version.read(reader).await
+    async fn load(&self, params: &LoadParams) -> Result<SegmentInfo> {
+        let version = SegmentInfoVersion::try_from(params.ver)?;
+        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
+        version.read(reader, params.schema.clone()).await
     }
 }
 

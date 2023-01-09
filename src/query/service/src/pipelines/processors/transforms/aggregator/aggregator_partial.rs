@@ -14,21 +14,20 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethod;
-use common_datablocks::HashMethodKeysU128;
-use common_datablocks::HashMethodKeysU16;
-use common_datablocks::HashMethodKeysU256;
-use common_datablocks::HashMethodKeysU32;
-use common_datablocks::HashMethodKeysU512;
-use common_datablocks::HashMethodKeysU64;
-use common_datablocks::HashMethodKeysU8;
-use common_datablocks::HashMethodSerializer;
-use common_datavalues::ColumnRef;
-use common_datavalues::MutableColumn;
-use common_datavalues::MutableStringColumn;
-use common_datavalues::ScalarColumnBuilder;
 use common_exception::Result;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::BlockEntry;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::HashMethod;
+use common_expression::HashMethodKeysU128;
+use common_expression::HashMethodKeysU16;
+use common_expression::HashMethodKeysU256;
+use common_expression::HashMethodKeysU32;
+use common_expression::HashMethodKeysU512;
+use common_expression::HashMethodKeysU64;
+use common_expression::HashMethodKeysU8;
+use common_expression::HashMethodSerializer;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -123,11 +122,12 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         places
     }
 
+    // Block should be `convert_to_full`.
     #[inline(always)]
     fn aggregate_arguments(
         block: &DataBlock,
         params: &Arc<AggregatorParams>,
-    ) -> Result<Vec<Vec<ColumnRef>>> {
+    ) -> Result<Vec<Vec<Column>>> {
         let aggregate_functions_arguments = &params.aggregate_functions_arguments;
         let mut aggregate_arguments_columns =
             Vec::with_capacity(aggregate_functions_arguments.len());
@@ -135,7 +135,12 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
 
             for argument_index in function_arguments {
-                let argument_column = block.column(*argument_index);
+                // Unwrap safety: chunk has been `convert_to_full`.
+                let argument_column = block
+                    .get_by_offset(*argument_index)
+                    .value
+                    .as_column()
+                    .unwrap();
                 function_arguments_column.push(argument_column.clone());
             }
 
@@ -172,11 +177,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    pub fn group_columns<'a>(indices: &[usize], block: &'a DataBlock) -> Vec<&'a ColumnRef> {
+    pub fn group_columns<'a>(block: &'a DataBlock, indices: &[usize]) -> Vec<&'a BlockEntry> {
         indices
             .iter()
-            .map(|&index| block.column(index))
-            .collect::<Vec<&ColumnRef>>()
+            .map(|&index| block.get_by_offset(index))
+            .collect::<Vec<_>>()
     }
 
     #[inline(always)]
@@ -192,9 +197,9 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
 
         // Builders.
-        let mut state_builders: Vec<MutableStringColumn> = (0..aggr_len)
-            .map(|_| MutableStringColumn::with_capacity(state_groups_len * 4))
-            .collect();
+        let mut state_builders = (0..aggr_len)
+            .map(|_| StringColumnBuilder::with_capacity(state_groups_len, state_groups_len * 4))
+            .collect::<Vec<_>>();
 
         let mut group_key_builder = self.method.keys_column_builder(state_groups_len);
         for group_entity in self.hash_table.iter() {
@@ -202,21 +207,21 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
             for (idx, func) in funcs.iter().enumerate() {
                 let arg_place = place.next(offsets_aggregate_states[idx]);
-                func.serialize(arg_place, state_builders[idx].values_mut())?;
+                func.serialize(arg_place, &mut state_builders[idx].data)?;
                 state_builders[idx].commit_row();
             }
 
             group_key_builder.append_value(group_entity.key());
         }
 
-        let schema = &self.params.output_schema;
-        let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
-        for mut builder in state_builders {
-            columns.push(builder.to_column());
+        let mut columns = Vec::with_capacity(state_builders.len());
+        for builder in state_builders.into_iter() {
+            columns.push(Column::String(builder.build()));
         }
 
-        columns.push(group_key_builder.finish());
-        Ok(vec![DataBlock::create(schema.clone(), columns)])
+        let group_key_col = group_key_builder.finish();
+        columns.push(group_key_col);
+        Ok(vec![DataBlock::new_from_columns(columns)])
     }
 }
 
@@ -226,8 +231,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     const NAME: &'static str = "GroupByPartialTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
+        let block = block.convert_to_full();
         // 1.1 and 1.2.
-        let group_columns = Self::group_columns(&self.params.group_columns, &block);
+        let group_columns = Self::group_columns(&block, &self.params.group_columns);
+        let group_columns = group_columns
+            .iter()
+            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
+            .collect::<Vec<_>>();
         let group_keys_state = self
             .method
             .build_keys_state(&group_columns, block.num_rows())?;
@@ -250,8 +260,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     const NAME: &'static str = "GroupByPartialTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
+        let block = block.convert_to_full();
         // 1.1 and 1.2.
-        let group_columns = Self::group_columns(&self.params.group_columns, &block);
+        let group_columns = Self::group_columns(&block, &self.params.group_columns);
+        let group_columns = group_columns
+            .iter()
+            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
+            .collect::<Vec<_>>();
 
         let keys_state = self
             .method
@@ -274,11 +289,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
             keys_column_builder.append_value(group_entity.key());
         }
 
-        let columns = keys_column_builder.finish();
+        let column = keys_column_builder.finish();
 
         self.drop_states();
-        let schema = self.params.output_schema.clone();
-        Ok(vec![DataBlock::create(schema, vec![columns])])
+
+        Ok(vec![DataBlock::new_from_columns(vec![column])])
     }
 }
 

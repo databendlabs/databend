@@ -19,18 +19,14 @@ use std::vec;
 
 use bumpalo::Bump;
 use common_base::runtime::ThreadPool;
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::MutableColumn;
-use common_datavalues::MutableStringColumn;
-use common_datavalues::ScalarColumn;
-use common_datavalues::ScalarColumnBuilder;
-use common_datavalues::Series;
-use common_datavalues::StringColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
+use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::aggregates::StateAddr;
 
@@ -44,7 +40,7 @@ pub type PartialSingleStateAggregator = SingleStateAggregator<false>;
 pub struct SingleStateAggregator<const FINAL: bool> {
     funcs: Vec<AggregateFunctionRef>,
     arg_indices: Vec<Vec<usize>>,
-    schema: DataSchemaRef,
+    // schema: DataSchemaRef,
     arena: Bump,
 
     places: Vec<StateAddr>,
@@ -84,7 +80,7 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
             to_merge_places: vec![vec![]; params.aggregate_functions.len()],
             funcs: params.aggregate_functions.clone(),
             arg_indices: params.aggregate_functions_arguments.clone(),
-            schema: params.output_schema.clone(),
+            // schema: params.output_schema.clone(),
             layout,
             offsets_aggregate_states: params.offsets_aggregate_states.clone(),
             states_dropped: false,
@@ -133,11 +129,15 @@ impl Aggregator for SingleStateAggregator<true> {
         if block.is_empty() {
             return Ok(());
         }
+        let block = block.convert_to_full();
         let places = self.new_places();
         for (index, func) in self.funcs.iter().enumerate() {
-            let binary_array = block.column(index);
-            let binary_array: &StringColumn = Series::check_get(binary_array)?;
-            let mut data = binary_array.get_data(0);
+            let binary_array = block.get_by_offset(index).value.as_column().unwrap();
+            let binary_array = binary_array
+                .as_string()
+                .ok_or_else(|| ErrorCode::IllegalDataType("binary array should be string type"))?;
+
+            let mut data = unsafe { binary_array.index_unchecked(0) };
             func.deserialize(places[index], &mut data)?;
             self.to_merge_places[index].push(places[index]);
         }
@@ -145,11 +145,11 @@ impl Aggregator for SingleStateAggregator<true> {
     }
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
-        let mut aggr_values: Vec<Box<dyn MutableColumn>> = {
+        let mut aggr_values = {
             let mut builders = vec![];
             for func in &self.funcs {
                 let data_type = func.return_type()?;
-                builders.push(data_type.create_mutable(1));
+                builders.push(ColumnBuilder::with_capacity(&data_type, 1));
             }
             builders
         };
@@ -170,15 +170,16 @@ impl Aggregator for SingleStateAggregator<true> {
                 }
             }
 
-            let array: &mut dyn MutableColumn = aggr_values[index].borrow_mut();
+            let array = aggr_values[index].borrow_mut();
             func.merge_result(main_place, array)?;
         }
 
-        let mut columns: Vec<ColumnRef> = Vec::with_capacity(self.funcs.len());
-        for mut array in aggr_values {
-            columns.push(array.to_column());
+        let mut columns = Vec::with_capacity(self.funcs.len());
+        for builder in aggr_values {
+            columns.push(builder.build());
         }
-        Ok(vec![DataBlock::create(self.schema.clone(), columns)])
+
+        Ok(vec![DataBlock::new_from_columns(columns)])
     }
 }
 
@@ -186,11 +187,19 @@ impl Aggregator for SingleStateAggregator<false> {
     const NAME: &'static str = "AggregatorPartialTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
+        let block = block.convert_to_full();
         let rows = block.num_rows();
         for (idx, func) in self.funcs.iter().enumerate() {
             let mut arg_columns = vec![];
             for index in self.arg_indices[idx].iter() {
-                arg_columns.push(block.column(*index).clone());
+                arg_columns.push(
+                    block
+                        .get_by_offset(*index)
+                        .value
+                        .as_column()
+                        .unwrap()
+                        .clone(),
+                );
             }
             let place = self.places[idx];
             func.accumulate(place, &arg_columns, None, rows)?;
@@ -205,15 +214,16 @@ impl Aggregator for SingleStateAggregator<false> {
         for (idx, func) in self.funcs.iter().enumerate() {
             let place = self.places[idx];
 
-            let mut array_builder = MutableStringColumn::with_capacity(4);
-            func.serialize(place, array_builder.values_mut())?;
-            array_builder.commit_row();
-            columns.push(array_builder.to_column());
+            let mut data = Vec::with_capacity(4);
+            func.serialize(place, &mut data)?;
+            columns.push(BlockEntry {
+                data_type: DataType::String,
+                value: Value::Scalar(Scalar::String(data)),
+            });
         }
 
-        // TODO: create with temp schema
         self.drop_states();
-        Ok(vec![DataBlock::create(self.schema.clone(), columns)])
+        Ok(vec![DataBlock::new(columns, 1)])
     }
 }
 

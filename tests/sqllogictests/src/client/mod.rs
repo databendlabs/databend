@@ -47,6 +47,14 @@ impl Client {
         }
     }
 
+    pub fn enable_debug(&mut self) {
+        match self {
+            Client::Mysql(client) => client.debug = true,
+            Client::Http(client) => client.debug = true,
+            Client::Clickhouse(client) => client.debug = true,
+        }
+    }
+
     // Create sandbox tenant and create default database for the tenant
     pub async fn create_sandbox(&mut self) -> Result<()> {
         let sandbox_name: String = rand::thread_rng()

@@ -64,15 +64,15 @@ SELECT CAST(CAST(1 + 1 + 1, String) AS Int8)
 3
 
 
-statement error 1010
+statement error 1001
 SELECT CAST(Null as Int64)
 
 
-statement error 1010
+statement error 1001
 SELECT CAST(Null as Varchar)
 
 
-statement error 1010
+statement error 1001
 SELECT CAST(Null as Boolean)
 
 query B
@@ -87,23 +87,23 @@ SELECT CAST('33' as unsigned) = 33
 
 
 
-statement error 1010
+statement error 1001
 SELECT CAST('-33aa' as signed) = 33
 
 
-statement error 1010
+statement error 1001
 SELECT CAST('33 aa' as unsigned) = 33
 
 
-statement error 1010
+statement error 1001
 SELECT CAST('-33' as unsigned) = 0
 
 
-statement error 1010
+statement error 1001
 SELECT CAST('aa' as unsigned) = 0
 
 
-statement error 1010
+statement error 1001
 SELECT CAST('aa' as Float64) = 0
 
 query B
@@ -119,7 +119,7 @@ SELECT '33'::unsigned = 33
 
 
 
-statement error 1010
+statement error 1001
 SELECT '-33aa'::signed = 33
 
 query B
@@ -143,11 +143,6 @@ query B
 select 'false'::boolean = not 'true'::boolean
 ----
 1
-
-
-
-statement error 1010
-select 'FalSex'::boolean
 
 query B
 SELECT  to_timestamp('2021-03-05 01:01:01') + 1 = to_timestamp('2021-03-05 01:01:01.000001')
@@ -223,15 +218,15 @@ SELECT parse_json('"false"')::boolean
 
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('"test"')::boolean
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json(1)::boolean
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('null')::boolean
 
 query I
@@ -355,15 +350,15 @@ SELECT parse_json('"9223372036854775807"')::int64
 9223372036854775807
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('"test"')::uint64
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('"test"')::int64
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('null')::int64
 
 query F
@@ -387,15 +382,15 @@ SELECT parse_json('"1234.5678"')::float64
 1234.5678
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('"test"')::float32
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('"test"')::float64
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('null')::float64
 
 query T
@@ -409,52 +404,35 @@ SELECT parse_json('"2022-01-01 01:01:01"')::datetime
 2022-01-01 01:01:01.000000
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('"test"')::date
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('"test"')::datetime
 
 
-statement error 1010
+statement error 1001
 SELECT parse_json('null')::datetime
 
 query T
-SELECT parse_json('[1,2,3]')::array
+SELECT as_array(parse_json('[1,2,3]'))
 ----
 [1,2,3]
 
 query T
-SELECT parse_json(1)::array
+SELECT as_array(parse_json(1))
 ----
-[1]
+NULL
 
 query T
-SELECT parse_json('"ab"')::array
+SELECT as_array(parse_json('"ab"'))
 ----
-["ab"]
+NULL
 
 
-statement error 1010
-SELECT parse_json('null')::array
-
-query T
-SELECT parse_json('{"a": 1,"b": 2}')::object
-----
-{"a":1,"b":2}
-
-
-statement error 1010
-SELECT parse_json('"abc"')::object
-
-
-statement error 1010
-SELECT parse_json('[1,2,3]')::object
-
-
-statement error 1010
-SELECT parse_json('null')::object
+statement error 1001
+SELECT as_array(parse_json('null'))
 
 
 query I

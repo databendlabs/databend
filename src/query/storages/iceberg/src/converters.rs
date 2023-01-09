@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,19 +16,13 @@
 //! to databend
 
 use chrono::Utc;
-use common_datavalues::create_primitive_datatype;
-use common_datavalues::BooleanType;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DateType;
-use common_datavalues::StringType;
-use common_datavalues::StructType;
-use common_datavalues::TimestampType;
-use common_datavalues::VariantArrayType;
-use common_datavalues::VariantObjectType;
+use common_expression::types::NumberDataType;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_meta_app::schema::TableMeta;
 use iceberg_rs::model::schema::AllType;
+use iceberg_rs::model::schema::List as IcebergList;
 use iceberg_rs::model::schema::SchemaV2;
 use iceberg_rs::model::schema::StructField;
 use iceberg_rs::model::table::TableMetadataV2;
@@ -39,8 +33,8 @@ pub(crate) fn meta_iceberg_to_databend(catalog: &str, meta: &TableMetadataV2) ->
     let schema = match meta.schemas.last() {
         Some(scm) => schema_iceberg_to_databend(scm),
         // empty schema
-        None => DataSchema::new(vec![]),
-    } // into Arc<DataSchema>
+        None => TableSchema::empty(),
+    }
     .into();
 
     TableMeta {
@@ -53,7 +47,7 @@ pub(crate) fn meta_iceberg_to_databend(catalog: &str, meta: &TableMetadataV2) ->
 }
 
 /// generate databend DataSchema from Iceberg
-pub(super) fn schema_iceberg_to_databend(schema: &SchemaV2) -> DataSchema {
+pub(super) fn schema_iceberg_to_databend(schema: &SchemaV2) -> TableSchema {
     let fields = schema
         .struct_fields
         .fields
@@ -61,37 +55,44 @@ pub(super) fn schema_iceberg_to_databend(schema: &SchemaV2) -> DataSchema {
         .sorted_by_key(|f| f.id)
         .map(struct_field_iceberg_to_databend)
         .collect();
-    DataSchema::new(fields)
+    TableSchema::new(fields)
 }
 
-fn struct_field_iceberg_to_databend(sf: &StructField) -> DataField {
+fn struct_field_iceberg_to_databend(sf: &StructField) -> TableField {
     let name = &sf.name;
     let ty = primitive_iceberg_to_databend(&sf.field_type);
 
     if sf.required {
-        DataField::new(name, ty)
+        TableField::new(name, ty)
     } else {
-        DataField::new_nullable(name, ty)
+        TableField::new(name, ty.wrap_nullable())
     }
 }
 
-fn primitive_iceberg_to_databend(prim: &AllType) -> DataTypeImpl {
+// TODO: reject nested Struct
+fn primitive_iceberg_to_databend(prim: &AllType) -> TableDataType {
     match prim {
         iceberg_rs::model::schema::AllType::Primitive(p) => match p {
-            iceberg_rs::model::schema::PrimitiveType::Boolean => {
-                DataTypeImpl::Boolean(BooleanType {})
+            iceberg_rs::model::schema::PrimitiveType::Boolean => TableDataType::Boolean,
+            iceberg_rs::model::schema::PrimitiveType::Int => {
+                TableDataType::Number(NumberDataType::UInt32)
             }
-            iceberg_rs::model::schema::PrimitiveType::Int => create_primitive_datatype::<i32>(),
-            iceberg_rs::model::schema::PrimitiveType::Long => create_primitive_datatype::<i64>(),
-            iceberg_rs::model::schema::PrimitiveType::Float => create_primitive_datatype::<f32>(),
-            iceberg_rs::model::schema::PrimitiveType::Double => create_primitive_datatype::<f64>(),
+            iceberg_rs::model::schema::PrimitiveType::Long => {
+                TableDataType::Number(NumberDataType::Int64)
+            }
+            iceberg_rs::model::schema::PrimitiveType::Float => {
+                TableDataType::Number(NumberDataType::Float32)
+            }
+            iceberg_rs::model::schema::PrimitiveType::Double => {
+                TableDataType::Number(NumberDataType::Float64)
+            }
             iceberg_rs::model::schema::PrimitiveType::Decimal { .. } => {
                 // not supported
                 unimplemented!()
             }
             iceberg_rs::model::schema::PrimitiveType::Date => {
                 // 4 bytes date type
-                DataTypeImpl::Date(DateType {})
+                TableDataType::Date
             }
             iceberg_rs::model::schema::PrimitiveType::Time => {
                 // not supported, time without date
@@ -101,16 +102,17 @@ fn primitive_iceberg_to_databend(prim: &AllType) -> DataTypeImpl {
                 // not supported, timestamp without timezone
                 unimplemented!()
             }
-            iceberg_rs::model::schema::PrimitiveType::Timestampz => TimestampType::new_impl(),
-            iceberg_rs::model::schema::PrimitiveType::String => StringType::new_impl(),
-            iceberg_rs::model::schema::PrimitiveType::Uuid => StringType::new_impl(),
-            iceberg_rs::model::schema::PrimitiveType::Fixed(_) => StringType::new_impl(),
-            iceberg_rs::model::schema::PrimitiveType::Binary => StringType::new_impl(),
+            iceberg_rs::model::schema::PrimitiveType::Timestampz => TableDataType::Timestamp,
+            iceberg_rs::model::schema::PrimitiveType::String => TableDataType::String,
+            iceberg_rs::model::schema::PrimitiveType::Uuid => TableDataType::String,
+            iceberg_rs::model::schema::PrimitiveType::Fixed(_) => TableDataType::String,
+            iceberg_rs::model::schema::PrimitiveType::Binary => TableDataType::String,
         },
         iceberg_rs::model::schema::AllType::Struct(s) => {
-            let (names, fields): (Vec<String>, Vec<DataTypeImpl>) = s
+            let (names, fields): (Vec<String>, Vec<TableDataType>) = s
                 .fields
                 .iter()
+                // reading as is?
                 .sorted_by_key(|f| f.id)
                 .map(|field| {
                     (
@@ -120,10 +122,27 @@ fn primitive_iceberg_to_databend(prim: &AllType) -> DataTypeImpl {
                 })
                 .unzip();
 
-            StructType::new_impl(Some(names), fields)
+            TableDataType::Tuple {
+                fields_name: names,
+                fields_type: fields,
+            }
         }
-        iceberg_rs::model::schema::AllType::List(_) => VariantArrayType::new_impl(),
-        iceberg_rs::model::schema::AllType::Map(_) => VariantObjectType::new_impl(),
+        iceberg_rs::model::schema::AllType::List(IcebergList {
+            element_required,
+            element,
+            ..
+        }) => {
+            let element_type = primitive_iceberg_to_databend(element);
+            if *element_required {
+                TableDataType::Array(Box::new(element_type))
+            } else {
+                TableDataType::Array(Box::new(TableDataType::Nullable(Box::new(element_type))))
+            }
+        }
+        iceberg_rs::model::schema::AllType::Map(_) => {
+            // wait for new expression support to complete
+            unimplemented!()
+        }
     }
 }
 

@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::BooleanType;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Literal;
 
 use crate::binder::split_conjunctions;
 use crate::optimizer::rule::Rule;
@@ -60,10 +59,7 @@ fn predicate_scalar(scalar: &Scalar) -> PredicateScalar {
     }
 }
 
-fn normalize_predicate_scalar(
-    predicate_scalar: PredicateScalar,
-    return_type: DataTypeImpl,
-) -> Scalar {
+fn normalize_predicate_scalar(predicate_scalar: PredicateScalar, return_type: DataType) -> Scalar {
     match predicate_scalar {
         PredicateScalar::And { args } => {
             assert!(args.len() >= 2);
@@ -224,8 +220,8 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> (PredicateScalar, 
         return (
             PredicateScalar::Other {
                 expr: Box::from(Scalar::ConstantExpr(ConstantExpr {
-                    value: DataValue::Boolean(false),
-                    data_type: Box::new(BooleanType::new_impl()),
+                    value: Literal::Boolean(false),
+                    data_type: Box::new(DataType::Boolean),
                 })),
             },
             false,

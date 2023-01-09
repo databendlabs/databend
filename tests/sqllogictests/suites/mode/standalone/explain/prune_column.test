@@ -35,7 +35,7 @@ Limit
 └── Sort
     ├── sort keys: [number ASC NULLS LAST]
     └── Filter
-        ├── filters: [>(numbers.b (#0), 1)]
+        ├── filters: [gt(numbers.b (#0), 1_u8)]
         └── AggregateFinal
             ├── group by: [number, number, number, number]
             ├── aggregate functions: []
@@ -59,9 +59,9 @@ HashJoin
 ├── probe keys: [t2.b (#11)]
 ├── filters: []
 ├── Filter(Build)
-│   ├── filters: [=(t1.c (#3), 1)]
+│   ├── filters: [eq(t1.c (#3), 1_u8)]
 │   └── EvalScalar
-│       ├── expressions: [+(numbers.number (#0), 1), +(numbers.number (#0), 1), +(numbers.number (#0), 1)]
+│       ├── expressions: [plus(numbers.number (#0), 1_u8), plus(numbers.number (#0), 1_u8), plus(numbers.number (#0), 1_u8)]
 │       └── TableScan
 │           ├── table: default.system.numbers
 │           ├── read rows: 1
@@ -70,7 +70,7 @@ HashJoin
 │           ├── partitions scanned: 1
 │           └── push downs: [filters: [], limit: NONE]
 └── EvalScalar(Probe)
-    ├── expressions: [+(numbers.number (#9), 1)]
+    ├── expressions: [plus(numbers.number (#9), 1_u8)]
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -83,7 +83,7 @@ query T
 explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
 ----
 Filter
-├── filters: [=(t1.a (#1), scalar_subquery_21 (#21))]
+├── filters: [eq(t1.a (#1), scalar_subquery_21 (#21))]
 └── HashJoin
     ├── join type: SINGLE
     ├── build keys: []
@@ -103,9 +103,9 @@ Filter
     │               ├── probe keys: [t3.b (#16)]
     │               ├── filters: []
     │               ├── Filter(Build)
-    │               │   ├── filters: [=(t2.c (#8), 1)]
+    │               │   ├── filters: [eq(t2.c (#8), 1_u8)]
     │               │   └── EvalScalar
-    │               │       ├── expressions: [+(numbers.number (#5), 1), +(numbers.number (#5), 1)]
+    │               │       ├── expressions: [plus(numbers.number (#5), 1_u8), plus(numbers.number (#5), 1_u8)]
     │               │       └── TableScan
     │               │           ├── table: default.system.numbers
     │               │           ├── read rows: 1
@@ -114,7 +114,7 @@ Filter
     │               │           ├── partitions scanned: 1
     │               │           └── push downs: [filters: [], limit: NONE]
     │               └── EvalScalar(Probe)
-    │                   ├── expressions: [+(numbers.number (#14), 1)]
+    │                   ├── expressions: [plus(numbers.number (#14), 1_u8)]
     │                   └── TableScan
     │                       ├── table: default.system.numbers
     │                       ├── read rows: 1
@@ -123,7 +123,7 @@ Filter
     │                       ├── partitions scanned: 1
     │                       └── push downs: [filters: [], limit: NONE]
     └── EvalScalar(Probe)
-        ├── expressions: [+(numbers.number (#0), 1)]
+        ├── expressions: [plus(numbers.number (#0), 1_u8)]
         └── TableScan
             ├── table: default.system.numbers
             ├── read rows: 1
@@ -154,7 +154,7 @@ HashJoin
 ├── probe keys: []
 ├── filters: []
 ├── Filter(Build)
-│   ├── filters: [=(count(*) (#2), 1)]
+│   ├── filters: [eq(count(*) (#2), 1_u64)]
 │   └── AggregateFinal
 │       ├── group by: []
 │       ├── aggregate functions: [count()]
@@ -201,14 +201,14 @@ EvalScalar
         ├── group by: []
         ├── aggregate functions: [count()]
         └── Filter
-            ├── filters: [=(t.b (#1), 2)]
+            ├── filters: [eq(t.b (#1), 2_u8)]
             └── TableScan
                 ├── table: default.default.t
                 ├── read rows: 2
                 ├── read bytes: 31
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── push downs: [filters: [(b = 2)], limit: NONE]
+                ├── push downs: [filters: [eq(b, 2_i32)], limit: NONE]
                 └── output columns: [1]
 
 statement ok

@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::TypeSerializer;
+use common_expression::date_helper::DateConverter;
+use common_expression::types::number::NumberScalar;
+use common_expression::DataBlock;
+use common_expression::ScalarRef;
+use common_expression::TableSchemaRef;
 use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
 
@@ -23,19 +24,19 @@ use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
 
 pub struct JSONOutputFormat {
+    schema: TableSchemaRef,
     first_block: bool,
     first_row: bool,
-    schema: DataSchemaRef,
     rows: usize,
     format_settings: FormatSettings,
 }
 
 impl JSONOutputFormat {
-    pub fn create(schema: DataSchemaRef, options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: TableSchemaRef, options: &FileFormatOptionsExt) -> Self {
         Self {
+            schema,
             first_block: true,
             first_row: true,
-            schema,
             rows: 0,
             format_settings: FormatSettings {
                 timezone: options.timezone,
@@ -54,7 +55,7 @@ impl JSONOutputFormat {
             res.extend_from_slice(b"\"name\":\"");
             res.extend_from_slice(field.name().as_bytes());
             res.extend_from_slice(b"\",\"type\":\"");
-            res.extend_from_slice(field.data_type().name().as_bytes());
+            res.extend_from_slice(field.data_type().wrapped_display().as_bytes());
             res.extend_from_slice(b"\"}");
             res.push(b',');
         }
@@ -64,21 +65,57 @@ impl JSONOutputFormat {
     }
 }
 
-fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
-    if col_table.is_empty() {
-        return vec![];
-    }
-    let num_row = col_table[0].len();
-    let mut row_table = Vec::with_capacity(num_row);
-    for _ in 0..num_row {
-        row_table.push(Vec::with_capacity(col_table.len()));
-    }
-    for col in col_table {
-        for (row_index, row) in row_table.iter_mut().enumerate() {
-            row.push(col[row_index].clone());
+fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
+    match s {
+        ScalarRef::Null => JsonValue::Null,
+        ScalarRef::Boolean(v) => JsonValue::Bool(v),
+        ScalarRef::Number(v) => match v {
+            NumberScalar::Int8(v) => JsonValue::Number(v.into()),
+            NumberScalar::Int16(v) => JsonValue::Number(v.into()),
+            NumberScalar::Int32(v) => JsonValue::Number(v.into()),
+            NumberScalar::Int64(v) => JsonValue::Number(v.into()),
+            NumberScalar::UInt8(v) => JsonValue::Number(v.into()),
+            NumberScalar::UInt16(v) => JsonValue::Number(v.into()),
+            NumberScalar::UInt32(v) => JsonValue::Number(v.into()),
+            NumberScalar::UInt64(v) => JsonValue::Number(v.into()),
+
+            NumberScalar::Float32(v) => {
+                JsonValue::Number(serde_json::Number::from_f64(f32::from(v) as f64).unwrap())
+            }
+            NumberScalar::Float64(v) => {
+                JsonValue::Number(serde_json::Number::from_f64(v.into()).unwrap())
+            }
+        },
+        ScalarRef::Date(v) => {
+            let dt = DateConverter::to_date(&v, format.timezone);
+            serde_json::to_value(dt.format("%Y-%m-%d").to_string()).unwrap()
+        }
+        ScalarRef::Timestamp(v) => {
+            let dt = DateConverter::to_timestamp(&v, format.timezone);
+            serde_json::to_value(dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap()
+        }
+        ScalarRef::EmptyArray => JsonValue::Array(vec![]),
+        ScalarRef::String(x) => JsonValue::String(String::from_utf8_lossy(x).to_string()),
+        ScalarRef::Array(x) => {
+            let vals = x
+                .iter()
+                .map(|x| scalar_to_json(x.clone(), format))
+                .collect();
+            JsonValue::Array(vals)
+        }
+        ScalarRef::Tuple(x) => {
+            let vals = x
+                .iter()
+                .enumerate()
+                .map(|(idx, x)| (format!("{idx}"), scalar_to_json(x.clone(), format)))
+                .collect();
+            JsonValue::Object(vals)
+        }
+        ScalarRef::Variant(x) => {
+            let b = common_jsonb::from_slice(x).unwrap();
+            b.into()
         }
     }
-    row_table
 }
 
 impl OutputFormat for JSONOutputFormat {
@@ -93,44 +130,41 @@ impl OutputFormat for JSONOutputFormat {
             vec![]
         };
 
-        let mut cols: Vec<Vec<JsonValue>> = vec![];
-        let serializers = data_block.get_serializers()?;
-        for s in serializers {
-            cols.push(s.serialize_json_values(&self.format_settings)?)
-        }
-
-        let rows = transpose(cols);
-        self.rows += rows.len();
-        let n_col = data_block.schema().fields().len();
-        let names = data_block
-            .schema()
+        let names = self
+            .schema
             .fields()
             .iter()
             .map(|f| f.name().to_string())
             .collect::<Vec<String>>();
 
-        for r in &rows {
+        self.rows += data_block.num_rows();
+        let n_col = data_block.num_columns();
+        for row in 0..data_block.num_rows() {
             if self.first_row {
                 self.first_row = false;
             } else {
                 res.push(b',');
             }
             res.push(b'{');
-            for c in 0..n_col {
+            for (c, value) in data_block.columns().iter().enumerate() {
+                let value = value.value.as_ref();
+                let scalar = unsafe { value.index_unchecked(row) };
+                let value = scalar_to_json(scalar, &self.format_settings);
+
                 res.push(b'\"');
                 res.extend_from_slice(names[c].as_bytes());
                 res.push(b'\"');
 
                 res.push(b':');
 
-                res.extend_from_slice(r[c].to_string().as_bytes());
-
+                res.extend_from_slice(value.to_string().as_bytes());
                 if c != n_col - 1 {
                     res.push(b',');
                 }
             }
             res.push(b'}');
         }
+
         Ok(res)
     }
 

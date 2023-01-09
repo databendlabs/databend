@@ -17,17 +17,17 @@ use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
+use common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
-use crate::sql::plans::JoinType;
 
 impl JoinHashTable {
     /// Used by right join/right semi(anti) join
@@ -89,8 +89,7 @@ impl JoinHashTable {
                             validity.extend_constant(addition, true);
 
                             let build_block = self.row_space.gather(&local_build_indexes)?;
-                            let mut probe_block =
-                                DataBlock::block_take_by_indices(input, &local_probe_indexes)?;
+                            let mut probe_block = DataBlock::take(input, &local_probe_indexes)?;
 
                             // If join type is right join, need to wrap nullable for probe side
                             // If join type is semi/anti right join, directly merge `build_block` and `probe_block`
@@ -99,10 +98,11 @@ impl JoinHashTable {
                                 let nullable_columns = probe_block
                                     .columns()
                                     .iter()
-                                    .map(|c| Self::set_validity(c, &validity))
-                                    .collect::<Result<Vec<_>>>()?;
-                                probe_block =
-                                    DataBlock::create(self.probe_schema.clone(), nullable_columns);
+                                    .map(|c| {
+                                        Self::set_validity(c, probe_block.num_rows(), &validity)
+                                    })
+                                    .collect::<Vec<_>>();
+                                probe_block = DataBlock::new(nullable_columns, validity.len());
                             }
 
                             if !probe_block.is_empty() {
@@ -122,7 +122,7 @@ impl JoinHashTable {
             }
         }
 
-        let mut probe_block = DataBlock::block_take_by_indices(input, &local_probe_indexes)?;
+        let mut probe_block = DataBlock::take(input, &local_probe_indexes)?;
 
         // If join type is right join, need to wrap nullable for probe side
         // If join type is semi/anti right join, directly merge `build_block` and `probe_block`
@@ -131,9 +131,9 @@ impl JoinHashTable {
             let nullable_columns = probe_block
                 .columns()
                 .iter()
-                .map(|c| Self::set_validity(c, &validity))
-                .collect::<Result<Vec<_>>>()?;
-            probe_block = DataBlock::create(self.probe_schema.clone(), nullable_columns);
+                .map(|c| Self::set_validity(c, probe_block.num_rows(), &validity))
+                .collect::<Vec<_>>();
+            probe_block = DataBlock::new(nullable_columns, validity.len());
         }
 
         let mut rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.write();

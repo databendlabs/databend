@@ -21,11 +21,9 @@ use std::sync::Arc;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_catalog::table::Table;
-use common_datavalues::DataField;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::StructType;
-use common_datavalues::TypeID;
+use common_expression::types::DataType;
+use common_expression::TableDataType;
+use common_expression::TableField;
 use parking_lot::RwLock;
 
 /// Planner use [`usize`] as it's index type.
@@ -35,6 +33,13 @@ pub type IndexType = usize;
 
 /// Use IndexType::MAX to represent dummy table.
 pub static DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
+pub static DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
+
+/// A special index value to represent the internal column `_group_by_key`, which is
+/// used to store the group by key in the final aggregation stage.
+///
+/// TODO(leiysky): remove this after we have a better way to represent the internal column.
+pub static GROUP_BY_KEY_COLUMN_INDEX: IndexType = IndexType::MAX - 1;
 
 /// ColumnSet represents a set of columns identified by its IndexType.
 pub type ColumnSet = HashSet<IndexType>;
@@ -94,7 +99,7 @@ impl Metadata {
     pub fn add_base_table_column(
         &mut self,
         name: String,
-        data_type: DataTypeImpl,
+        data_type: TableDataType,
         table_index: IndexType,
         path_indices: Option<Vec<IndexType>>,
         leaf_index: Option<IndexType>,
@@ -112,7 +117,7 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_derived_column(&mut self, alias: String, data_type: DataTypeImpl) -> IndexType {
+    pub fn add_derived_column(&mut self, alias: String, data_type: DataType) -> IndexType {
         let column_index = self.columns.len();
         let column_entry = ColumnEntry::DerivedColumn {
             column_index,
@@ -157,7 +162,32 @@ impl Metadata {
                 None
             };
 
-            if field.data_type().data_type_id() != TypeID::Struct {
+            if let TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } = field.data_type()
+            {
+                self.add_base_table_column(
+                    field.name().clone(),
+                    field.data_type().clone(),
+                    table_index,
+                    path_indices,
+                    None,
+                );
+
+                let mut i = fields_type.len();
+                for (inner_field_name, inner_field_type) in
+                    fields_name.iter().rev().zip(fields_type.iter().rev())
+                {
+                    i -= 1;
+                    let mut inner_indices = indices.clone();
+                    inner_indices.push(i);
+                    // create tuple inner field
+                    let inner_name = format!("{}:{}", field.name(), inner_field_name);
+                    let inner_field = TableField::new(&inner_name, inner_field_type.clone());
+                    fields.push_front((inner_indices, inner_field));
+                }
+            } else {
                 self.add_base_table_column(
                     field.name().clone(),
                     field.data_type().clone(),
@@ -166,59 +196,25 @@ impl Metadata {
                     Some(leaf_index),
                 );
                 leaf_index += 1;
-                continue;
-            }
-            self.add_base_table_column(
-                field.name().clone(),
-                field.data_type().clone(),
-                table_index,
-                path_indices,
-                None,
-            );
-            let struct_type: StructType = field.data_type().clone().try_into().unwrap();
-
-            let inner_types = struct_type.types();
-            let inner_names = match struct_type.names() {
-                Some(inner_names) => inner_names
-                    .iter()
-                    .map(|name| format!("{}:{}", field.name(), name))
-                    .collect::<Vec<_>>(),
-                None => (0..inner_types.len())
-                    .map(|i| format!("{}:{}", field.name(), i + 1))
-                    .collect::<Vec<_>>(),
-            };
-            let mut i = inner_types.len();
-            for (inner_name, inner_type) in
-                inner_names.into_iter().rev().zip(inner_types.iter().rev())
-            {
-                i -= 1;
-                let mut inner_indices = indices.clone();
-                inner_indices.push(i);
-
-                let inner_field = DataField::new(&inner_name, inner_type.clone());
-                fields.push_front((inner_indices, inner_field));
             }
         }
         table_index
     }
 
     /// find_smallest_column in given indices.
-    pub fn find_smallest_column(&self, indices: &[usize]) -> usize {
+    pub fn find_smallest_column(&self, indices: &[IndexType]) -> IndexType {
         let mut smallest_index = indices.iter().min().expect("indices must be valid");
         let mut smallest_size = usize::MAX;
         for idx in indices.iter() {
             let entry = self.column(*idx);
             if let ColumnEntry::BaseTableColumn {
-                column_index,
-                data_type,
+                data_type: TableDataType::Number(number_type),
                 ..
             } = entry
             {
-                if let Ok(bytes) = data_type.data_type_id().numeric_byte_size() {
-                    if smallest_size > bytes {
-                        smallest_size = bytes;
-                        smallest_index = column_index;
-                    }
+                if (number_type.bit_width() as usize) < smallest_size {
+                    smallest_size = number_type.bit_width() as usize;
+                    smallest_index = idx;
                 }
             }
         }
@@ -323,7 +319,7 @@ pub enum ColumnEntry {
         table_index: IndexType,
         column_index: IndexType,
         column_name: String,
-        data_type: DataTypeImpl,
+        data_type: TableDataType,
 
         /// Path indices for inner column of struct data type.
         path_indices: Option<Vec<usize>>,
@@ -336,7 +332,7 @@ pub enum ColumnEntry {
     DerivedColumn {
         column_index: IndexType,
         alias: String,
-        data_type: DataTypeImpl,
+        data_type: DataType,
     },
 }
 

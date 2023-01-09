@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,9 +18,12 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_base::runtime::ThreadPool;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 
 use super::StateAddr;
 
@@ -30,7 +33,7 @@ pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
 /// In AggregateFunction, all datablock columns are not ConstantColumn, we take the column as Full columns
 pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn name(&self) -> &str;
-    fn return_type(&self) -> Result<DataTypeImpl>;
+    fn return_type(&self) -> Result<DataType>;
 
     fn init_state(&self, place: StateAddr);
     fn state_layout(&self) -> Layout;
@@ -40,7 +43,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate(
         &self,
         _place: StateAddr,
-        _columns: &[ColumnRef],
+        _columns: &[Column],
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()>;
@@ -50,7 +53,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[ColumnRef],
+        columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
         for (row, place) in places.iter().enumerate() {
@@ -60,7 +63,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     }
 
     // Used in aggregate_null_adaptor
-    fn accumulate_row(&self, _place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()>;
+    fn accumulate_row(&self, _place: StateAddr, _columns: &[Column], _row: usize) -> Result<()>;
 
     // serialize  the state into binary array
     fn serialize(&self, _place: StateAddr, _writer: &mut Vec<u8>) -> Result<()>;
@@ -68,6 +71,19 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn deserialize(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
 
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
+
+    fn batch_merge_result(
+        &self,
+        places: Vec<StateAddr>,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        for place in places {
+            self.merge_result(place, builder)?;
+        }
+        Ok(())
+    }
+    // TODO append the value into the column builder
+    fn merge_result(&self, _place: StateAddr, _builder: &mut ColumnBuilder) -> Result<()>;
 
     fn support_merge_parallel(&self) -> bool {
         false
@@ -85,19 +101,6 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         )))
     }
 
-    fn batch_merge_result(
-        &self,
-        places: Vec<StateAddr>,
-        array: &mut dyn MutableColumn,
-    ) -> Result<()> {
-        for place in places {
-            self.merge_result(place, array)?;
-        }
-        Ok(())
-    }
-
-    fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableColumn) -> Result<()>;
-
     // std::mem::needs_drop::<State>
     // if true will call drop_state
     fn need_manual_drop_state(&self) -> bool {
@@ -111,13 +114,13 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn get_own_null_adaptor(
         &self,
         _nested_function: AggregateFunctionRef,
-        _params: Vec<DataValue>,
-        _arguments: Vec<DataField>,
+        _params: Vec<Scalar>,
+        _arguments: Vec<DataType>,
     ) -> Result<Option<AggregateFunctionRef>> {
         Ok(None)
     }
 
-    fn get_if_condition(&self, _columns: &[ColumnRef]) -> Option<Bitmap> {
+    fn get_if_condition(&self, _columns: &[Column]) -> Option<Bitmap> {
         None
     }
 

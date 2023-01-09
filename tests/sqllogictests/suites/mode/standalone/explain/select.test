@@ -13,22 +13,22 @@ query T
 explain select * from (select * from numbers(1)) as t1 where number = 1
 ----
 Filter
-├── filters: [=(t1.number (#0), 1)]
+├── filters: [eq(t1.number (#0), 1_u8)]
 └── TableScan
     ├── table: default.system.numbers
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
     ├── partitions scanned: 1
-    └── push downs: [filters: [(number = 1)], limit: NONE]
+    └── push downs: [filters: [eq(number, 1_u64)], limit: NONE]
 
 query T
 explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1 and b = 1
 ----
 Filter
-├── filters: [=(t1.a (#0), 1), =(t1.b (#1), 1)]
+├── filters: [eq(t1.a (#0), 1_u8), eq(t1.b (#1), 1_u8)]
 └── EvalScalar
-    ├── expressions: [+(numbers.number (#0), 1)]
+    ├── expressions: [plus(numbers.number (#0), 1_u8)]
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -41,40 +41,42 @@ query T
 explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1
 ----
 EvalScalar
-├── expressions: [+(numbers.number (#0), 1)]
+├── expressions: [plus(numbers.number (#0), 1_u8)]
 └── Filter
-    ├── filters: [=(t1.a (#0), 1)]
+    ├── filters: [eq(t1.a (#0), 1_u8)]
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
         ├── partitions scanned: 1
-        └── push downs: [filters: [(number = 1)], limit: NONE]
+        └── push downs: [filters: [eq(a, 1_u64)], limit: NONE]
 
 query T
 explain select * from numbers(1) where number = pow(1, 1 + 1)
 ----
 Filter
-├── filters: [=(numbers.number (#0), 1)]
+├── filters: [eq(numbers.number (#0), pow(1_u8, plus(1_u8, 1_u8)))]
 └── TableScan
     ├── table: default.system.numbers
     ├── read rows: 1
     ├── read bytes: 8
     ├── partitions total: 1
     ├── partitions scanned: 1
-    └── push downs: [filters: [(number = '1.0')], limit: NONE]
+    └── push downs: [filters: [eq(CAST(number AS Float64), 1_f64)], limit: NONE]
 
 query T
 explain select * from numbers(1) where TRUE and 1 = 1
 ----
-TableScan
-├── table: default.system.numbers
-├── read rows: 1
-├── read bytes: 8
-├── partitions total: 1
-├── partitions scanned: 1
-└── push downs: [filters: [], limit: NONE]
+Filter
+├── filters: [eq(1_u8, 1_u8)]
+└── TableScan
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [true], limit: NONE]
 
 query T
 explain select * from numbers(1) where number = 0 and false

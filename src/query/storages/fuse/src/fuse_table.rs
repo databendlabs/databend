@@ -21,7 +21,6 @@ use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
@@ -33,14 +32,16 @@ use common_catalog::table::CompactTarget;
 use common_catalog::table::NavigationDescriptor;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
+// use common_sql::ExpressionParser;
+use common_expression::RemoteExpr;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
-use common_sql::ExpressionParser;
+use common_sql::parse_exprs;
 use common_storage::init_operator;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
@@ -48,6 +49,7 @@ use common_storage::FuseCachePolicy;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
+use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::ClusterKey;
 use common_storages_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_storages_table_meta::meta::Statistics as FuseStatistics;
@@ -193,7 +195,15 @@ impl FuseTable {
                 if let Some(loc) = &snapshot.table_statistics_location {
                     let ver = self.table_snapshot_statistics_format_version(loc);
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
-                    Ok(Some(reader.read(loc.as_str(), None, ver).await?))
+
+                    let load_params = LoadParams {
+                        location: loc.clone(),
+                        len_hint: None,
+                        ver,
+                        schema: None,
+                    };
+
+                    Ok(Some(reader.read(&load_params).await?))
                 } else {
                     Ok(None)
                 }
@@ -207,7 +217,13 @@ impl FuseTable {
         if let Some(loc) = self.snapshot_loc().await? {
             let reader = MetaReaders::table_snapshot_reader(self.get_operator());
             let ver = self.snapshot_format_version().await?;
-            Ok(Some(reader.read(loc.as_str(), None, ver).await?))
+            let params = LoadParams {
+                location: loc,
+                len_hint: None,
+                ver,
+                schema: None,
+            };
+            Ok(Some(reader.read(&params).await?))
         } else {
             Ok(None)
         }
@@ -291,10 +307,19 @@ impl Table for FuseTable {
         true
     }
 
-    fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<Expression> {
+    fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys = ExpressionParser::parse_exprs(ctx, table_meta, order).unwrap();
+            let cluster_keys = parse_exprs(ctx, table_meta.clone(), true, order).unwrap();
+            let cluster_keys = cluster_keys
+                .iter()
+                .map(|k| {
+                    k.project_column_ref(|index| {
+                        table_meta.schema().field(*index).name().to_string()
+                    })
+                    .as_remote_expr()
+                })
+                .collect();
             return cluster_keys;
         }
         vec![]
@@ -505,7 +530,7 @@ impl Table for FuseTable {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<Expression>,
+        filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {

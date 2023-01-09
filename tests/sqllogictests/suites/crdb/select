@@ -62,7 +62,7 @@ SELECT * FROM abc WHERE a > 5 AND a < 5 AND b>=100
 statement ok
 INSERT INTO abc VALUES (0, 1, 2)
 
-statement error 1006
+statement error 1001
 SELECT a,b FROM abc WHERE CASE WHEN a != 0 THEN b/a > 1.5 ELSE false END
 
 statement ok
@@ -146,22 +146,22 @@ CREATE TABLE xyzw (  x INT,  y INT,  z INT,  w INT)
 statement ok
 INSERT INTO xyzw VALUES (4, 5, 6, 7), (1, 2, 3, 4)
 
-statement error 1007
+statement error 1065
 SELECT * FROM xyzw LIMIT x
 
 statement error 1065
 SELECT * FROM xyzw OFFSET 1 + y
 
-statement error 1007
+statement error 1065
 SELECT * FROM xyzw LIMIT 3.3
 
-statement error 1007
+statement error 1065
 SELECT * FROM xyzw ORDER BY 1 LIMIT '1'
 
-statement error 1007
+statement error 1065
 SELECT * FROM xyzw OFFSET 1.5
 
-statement error 1007
+statement error 1065
 SELECT * FROM xyzw LIMIT -100
 
 statement error 1065

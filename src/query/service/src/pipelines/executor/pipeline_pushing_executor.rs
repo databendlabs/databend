@@ -18,9 +18,9 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;

@@ -18,10 +18,10 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
 use common_storages_table_meta::meta::BlockMeta;
 
 use super::compact_meta::CompactSourceMeta;

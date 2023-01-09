@@ -23,20 +23,6 @@ SELECT abs(-10086)
 10086
 
 
-statement error 1065
-SELECT abs('-233.0')
-
-
-statement error 1065
-SELECT abs('blah')
-
-
-statement error 1065
-SELECT abs(TRUE)
-
-
-statement error 1049
-select abs(-9223372036854775808)
 
 query T
 SELECT abs(NULL)
@@ -56,6 +42,9 @@ SELECT abs(value) + abs(-1) FROM math_sample_numbers
 2
 3
 4
+
+statement ok
+DROP TABLE math_sample_numbers
 
 statement ok
 drop table if exists math_log_numbers
@@ -97,7 +86,7 @@ SELECT ln(NULL)
 NULL
 
 query F
-SELECT ln(1, 2)
+SELECT log(1, 2)
 ----
 Infinity
 
@@ -216,14 +205,10 @@ SELECT atan(-1)
 -0.7853981633974483
 
 query F
-SELECT atan(-2, 2)
-----
--0.7853981633974483
-
-query F
 SELECT atan2(-2, 2)
 ----
 -0.7853981633974483
+
 
 query F
 SELECT atan2(pi(), 0)
@@ -320,6 +305,18 @@ SELECT pow('a', 2)
 statement error 1065
 SELECT pow(2, 'a')
 
-statement ok
-DROP TABLE math_sample_numbers
 
+statement error 1065
+SELECT abs('-233.0')
+
+
+statement error 1065
+SELECT abs('blah')
+
+
+statement error 1065
+SELECT abs(TRUE)
+
+
+statement error 1049
+select abs(-9223372036854775808)

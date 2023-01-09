@@ -16,11 +16,12 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::broadcast::Receiver;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::Scalar;
+use common_expression::Value;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -29,8 +30,8 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 
 pub enum SubqueryReceiver {
-    Subquery(Receiver<DataValue>),
-    ScalarSubquery(Receiver<DataValue>),
+    Subquery(Receiver<Scalar>),
+    ScalarSubquery(Receiver<Scalar>),
 }
 
 impl SubqueryReceiver {
@@ -53,7 +54,7 @@ pub struct TransformCreateSets {
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
 
-    sub_queries_result: Vec<DataValue>,
+    sub_queries_result: Vec<Scalar>,
     sub_queries_receiver: Vec<SubqueryReceiver>,
 }
 
@@ -126,18 +127,20 @@ impl Processor for TransformCreateSets {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(input_data) = self.input_data.take() {
-            let num_rows = input_data.num_rows();
-            let mut new_columns = input_data.columns().to_vec();
+        if let Some(data) = self.input_data.take() {
+            let num_rows = data.num_rows();
             let start_index = self.schema.fields().len() - self.sub_queries_result.len();
-
+            let mut new_columns = Vec::with_capacity(self.sub_queries_result.len());
             for (index, result) in self.sub_queries_result.iter().enumerate() {
                 let data_type = self.schema.field(start_index + index).data_type();
-                let col = data_type.create_constant_column(result, num_rows)?;
+                let col = BlockEntry {
+                    data_type: data_type.clone(),
+                    value: Value::Scalar(result.clone()),
+                };
                 new_columns.push(col);
             }
 
-            self.output_data = Some(DataBlock::create(self.schema.clone(), new_columns));
+            self.output_data = Some(DataBlock::new(new_columns, num_rows));
         }
 
         Ok(())

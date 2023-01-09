@@ -12,24 +12,16 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::Arc;
-
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
-use common_datavalues::Series;
-use common_datavalues::SeriesFrom;
-use common_datavalues::StructColumn;
-use common_datavalues::StructType;
-use common_datavalues::ToDataType;
 use common_exception::Result;
+use common_expression::types::number::Float64Type;
+use common_expression::types::number::Int64Type;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::FromData;
+use common_expression::Scalar;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
-use databend_query::storages::fuse::statistics::traverse;
 
-fn gen_sample_block() -> (DataBlock, Vec<ColumnRef>) {
+fn gen_sample_block() -> (DataBlock, Vec<Column>) {
     //   sample message
     //
     //   struct {
@@ -44,54 +36,27 @@ fn gen_sample_block() -> (DataBlock, Vec<ColumnRef>) {
     //      g: f64,
     //   }
 
-    let col_b_type = StructType::create(Some(vec!["c".to_owned(), "d".to_owned()]), vec![
-        i64::to_data_type(),
-        f64::to_data_type(),
-    ]);
-
-    let col_a_type = StructType::create(Some(vec!["b".to_owned(), "e".to_owned()]), vec![
-        DataTypeImpl::Struct(col_b_type.clone()),
-        f64::to_data_type(),
-    ]);
-
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataTypeImpl::Struct(col_a_type.clone())),
-        DataField::new("f", i64::to_data_type()),
-        DataField::new("g", f64::to_data_type()),
-    ]);
-
     // prepare leaves
-    let col_c = Series::from_data(vec![1i64, 2, 3]);
-    let col_d = Series::from_data(vec![1.0f64, 2., 3.]);
-    let col_e = Series::from_data(vec![4.0f64, 5., 6.]);
-    let col_f = Series::from_data(vec![7i64, 8, 9]);
-    let col_g = Series::from_data(vec![10.0f64, 11., 12.]);
+    let col_c = Int64Type::from_data(vec![1i64, 2, 3]);
+    let col_d = Float64Type::from_data(vec![1.0f64, 2., 3.]);
+    let col_e = Float64Type::from_data(vec![4.0f64, 5., 6.]);
+    let col_f = Int64Type::from_data(vec![7i64, 8, 9]);
+    let col_g = Float64Type::from_data(vec![10.0f64, 11., 12.]);
 
     // inner/root nodes
-    let col_b: ColumnRef = Arc::new(StructColumn::from_data(
-        vec![col_c.clone(), col_d.clone()],
-        DataTypeImpl::Struct(col_b_type),
-    ));
-    let col_a: ColumnRef = Arc::new(StructColumn::from_data(
-        vec![col_b.clone(), col_e.clone()],
-        DataTypeImpl::Struct(col_a_type),
-    ));
+    let col_b = Column::Tuple {
+        fields: vec![col_c.clone(), col_d.clone()],
+        len: 3,
+    };
+    let col_a = Column::Tuple {
+        fields: vec![col_b, col_e.clone()],
+        len: 3,
+    };
 
-    (
-        DataBlock::create(schema, vec![col_a.clone(), col_f.clone(), col_g.clone()]),
-        vec![col_c, col_d, col_e, col_f, col_g],
-    )
-}
-
-#[test]
-fn test_column_traverse() -> Result<()> {
-    let (sample_block, sample_cols) = gen_sample_block();
-    let cols = traverse::traverse_columns_dfs(sample_block.columns())?;
-
-    assert_eq!(5, cols.len());
-    (0..5).for_each(|i| assert_eq!(cols[i].1, sample_cols[i], "checking col {}", i));
-
-    Ok(())
+    let columns = vec![col_a, col_f.clone(), col_g.clone()];
+    (DataBlock::new_from_columns(columns), vec![
+        col_c, col_d, col_e, col_f, col_g,
+    ])
 }
 
 #[test]
@@ -104,7 +69,9 @@ fn test_column_statistic() -> Result<()> {
     (0..5).for_each(|i| {
         let stats = col_stats.get(&(i as u32)).unwrap();
         let column = &sample_cols[i];
-        let values: Vec<DataValue> = (0..column.len()).map(|i| column.get(i)).collect();
+        let values: Vec<Scalar> = (0..column.len())
+            .map(|i| column.index(i).unwrap().to_owned())
+            .collect();
         assert_eq!(
             &stats.min,
             values.iter().min().unwrap(),

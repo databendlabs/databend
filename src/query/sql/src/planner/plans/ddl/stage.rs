@@ -11,10 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::fmt::Debug;
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

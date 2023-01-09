@@ -14,13 +14,18 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::UInt32Type;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::ValueType;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRefExt;
+use common_expression::Value;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
 use common_users::UserApiProvider;
@@ -96,21 +101,42 @@ impl OneBlockProcedure for TenantQuotaProcedure {
 
     fn schema(&self) -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
-            DataField::new("max_databases", u32::to_data_type()),
-            DataField::new("max_tables_per_database", u32::to_data_type()),
-            DataField::new("max_stages", u32::to_data_type()),
-            DataField::new("max_files_per_stage", u32::to_data_type()),
+            DataField::new("max_databases", DataType::Number(NumberDataType::UInt32)),
+            DataField::new(
+                "max_tables_per_database",
+                DataType::Number(NumberDataType::UInt32),
+            ),
+            DataField::new("max_stages", DataType::Number(NumberDataType::UInt32)),
+            DataField::new(
+                "max_files_per_stage",
+                DataType::Number(NumberDataType::UInt32),
+            ),
         ])
     }
 }
 
 impl TenantQuotaProcedure {
     fn to_block(&self, quota: &TenantQuota) -> Result<DataBlock> {
-        Ok(DataBlock::create(self.schema(), vec![
-            Series::from_data(vec![quota.max_databases]),
-            Series::from_data(vec![quota.max_tables_per_database]),
-            Series::from_data(vec![quota.max_stages]),
-            Series::from_data(vec![quota.max_files_per_stage]),
-        ]))
+        Ok(DataBlock::new(
+            vec![
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt32),
+                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_databases)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt32),
+                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_tables_per_database)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt32),
+                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_stages)),
+                },
+                BlockEntry {
+                    data_type: DataType::Number(NumberDataType::UInt32),
+                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_files_per_stage)),
+                },
+            ],
+            1,
+        ))
     }
 }

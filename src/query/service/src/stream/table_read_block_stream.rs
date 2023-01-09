@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
+use common_expression::SendableDataBlockStream;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
