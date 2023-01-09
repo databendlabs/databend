@@ -175,8 +175,8 @@ impl FuseTable {
             cluster_key_index.push(offset);
         }
 
+        let func_ctx = ctx.try_get_function_context()?;
         if !operators.is_empty() {
-            let func_ctx = ctx.try_get_function_context()?;
             pipeline.add_transform(move |input, output| {
                 Ok(CompoundBlockOperator::create(
                     input,
@@ -195,6 +195,7 @@ impl FuseTable {
             block_compactor,
             vec![],
             merged,
+            func_ctx,
         ))
     }
 

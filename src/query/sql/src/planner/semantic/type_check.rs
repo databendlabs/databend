@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
@@ -36,6 +37,7 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_schema_type;
 use common_expression::type_check;
 use common_expression::type_check::check_literal;
 use common_expression::type_check::common_super_type;
@@ -789,93 +791,34 @@ impl<'a> TypeChecker<'a> {
                 .await?
             }
 
-            expr @ Expr::MapAccess {
-                span,
-                expr: inner_expr,
-                accessor,
-            } => {
-                // If it's map accessors to a tuple column, pushdown the map accessors to storage.
-                let mut accessors = Vec::new();
+            expr @ Expr::MapAccess { .. } => {
                 let mut expr = expr;
-                loop {
-                    match expr {
-                        Expr::MapAccess {
-                            expr: inner_expr,
-                            accessor:
-                                accessor @ (MapAccessor::Period { .. }
-                                | MapAccessor::PeriodNumber { .. }
-                                | MapAccessor::Colon { .. }
-                                | MapAccessor::Bracket {
-                                    key:
-                                        box Expr::Literal {
-                                            lit: Literal::String(..),
-                                            ..
-                                        },
-                                }),
-                            ..
-                        } => {
-                            accessors.push(accessor.clone());
-                            expr = &**inner_expr;
+                let mut paths = VecDeque::new();
+                while let Expr::MapAccess {
+                    expr: inner_expr,
+                    accessor,
+                    ..
+                } = expr
+                {
+                    expr = &**inner_expr;
+                    let path = match accessor {
+                        MapAccessor::Bracket {
+                            key: box Expr::Literal { lit, .. },
+                        } => lit.clone(),
+                        MapAccessor::Period { key } | MapAccessor::Colon { key } => {
+                            Literal::String(key.name.clone())
                         }
-                        Expr::ColumnRef {
-                            database,
-                            table,
-                            column,
-                            ..
-                        } => {
-                            let (scalar, _data_type) = *self.resolve(expr, None).await?;
-                            if let Scalar::BoundColumnRef(BoundColumnRef {
-                                column: ColumnBinding { index, .. },
-                            }) = scalar
-                            {
-                                let column_entry = self.metadata.read().column(index).clone();
-                                if let ColumnEntry::BaseTableColumn { data_type, .. } = column_entry
-                                {
-                                    if !matches!(data_type, TableDataType::Tuple { .. }) {
-                                        break;
-                                    }
-                                    return self
-                                        .resolve_map_access_pushdown(
-                                            data_type.clone(),
-                                            accessors,
-                                            database.clone(),
-                                            table.clone(),
-                                            column.clone(),
-                                        )
-                                        .await;
-                                }
-                            }
-                        }
+                        MapAccessor::PeriodNumber { key } => Literal::Integer(*key),
                         _ => {
-                            break;
+                            return Err(ErrorCode::SemanticError(format!(
+                                "Unsupported accessor: {:?}",
+                                accessor
+                            )));
                         }
-                    }
+                    };
+                    paths.push_front(path);
                 }
-
-                // Otherwise, desugar it into a `get` function.
-                match accessor {
-                    MapAccessor::Bracket { key } => {
-                        self.resolve_function(span, "get", vec![], &[inner_expr, key], None)
-                            .await?
-                    }
-                    MapAccessor::Period { key } | MapAccessor::Colon { key } => {
-                        self.resolve_function(
-                            span,
-                            "get",
-                            vec![],
-                            &[inner_expr, &Expr::Literal {
-                                span,
-                                lit: Literal::String(key.name.clone()),
-                            }],
-                            None,
-                        )
-                        .await?
-                    }
-                    MapAccessor::PeriodNumber { key } => {
-                        self.resolve_function(span, "get", vec![*key as usize], &[inner_expr], None)
-                            .await?
-                    }
-                }
+                self.resolve_map_access(expr, paths).await?
             }
 
             Expr::TryCast {
@@ -1859,108 +1802,201 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    async fn resolve_map_access_pushdown(
+    async fn resolve_map_access(
         &mut self,
-        data_type: TableDataType,
-        mut accessors: Vec<MapAccessor<'async_recursion>>,
-        database: Option<Identifier<'async_recursion>>,
-        table: Option<Identifier<'async_recursion>>,
-        column: Identifier<'async_recursion>,
+        expr: &Expr<'_>,
+        mut paths: VecDeque<Literal>,
     ) -> Result<Box<(Scalar, DataType)>> {
-        let mut names = Vec::new();
-        let column_name = normalize_identifier(&column, self.name_resolution_ctx).name;
-        names.push(column_name);
-        let mut data_types = Vec::new();
-        data_types.push(data_type.clone());
-
-        while !accessors.is_empty() {
-            let data_type = data_types.pop().unwrap();
-            let (inner_types, inner_names) = if let TableDataType::Tuple {
-                fields_name,
-                fields_type,
-            } = data_type
-            {
-                (fields_type, fields_name)
-            } else {
-                return Err(ErrorCode::Internal(String::new()));
-            };
-
-            let accessor = accessors.pop().unwrap();
-            let accessor_lit = match accessor {
-                MapAccessor::Bracket {
-                    key:
-                        box Expr::Literal {
-                            lit: lit @ Literal::String(_),
-                            ..
-                        },
-                } => lit,
-                MapAccessor::Period { key } | MapAccessor::Colon { key } => {
-                    Literal::String(key.name.clone())
+        let box (mut scalar, data_type) = self.resolve(expr, None).await?;
+        let mut table_data_type = infer_schema_type(&data_type)?;
+        // If it's map accessors to a tuple column, pushdown the map accessors to storage.
+        if let Expr::ColumnRef { column: ident, .. } = expr {
+            if let Scalar::BoundColumnRef(BoundColumnRef { ref column }) = scalar {
+                let column_entry = self.metadata.read().column(column.index).clone();
+                if let ColumnEntry::BaseTableColumn { data_type, .. } = column_entry {
+                    table_data_type = data_type.remove_nullable();
+                    if let TableDataType::Tuple { .. } = table_data_type {
+                        let box (inner_scalar, _inner_data_type) = self
+                            .resolve_tuple_map_access_pushdown(
+                                &ident.span,
+                                column.clone(),
+                                &mut table_data_type,
+                                &mut paths,
+                            )
+                            .await?;
+                        scalar = inner_scalar;
+                    }
                 }
-                MapAccessor::PeriodNumber { key } => Literal::Integer(key),
-                _ => unreachable!(),
-            };
-
-            match accessor_lit {
-                Literal::Integer(idx) => {
-                    if idx == 0 {
-                        return Err(ErrorCode::SemanticError(
-                            "tuple index is starting from 1, but 0 is found".to_string(),
-                        ));
-                    }
-                    if idx as usize > inner_types.len() {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "tuple index {} is out of bounds for length {}",
-                            idx,
-                            inner_types.len()
-                        )));
-                    }
-                    let inner_name = inner_names.get(idx as usize - 1).unwrap();
-                    let inner_type = inner_types.get(idx as usize - 1).unwrap();
-                    names.push(inner_name.clone());
-                    data_types.push(inner_type.clone());
-                }
-                Literal::String(name) => match inner_names.iter().position(|k| k == &name) {
-                    Some(idx) => {
-                        let inner_name = inner_names.get(idx).unwrap();
-                        let inner_type = inner_types.get(idx).unwrap();
-                        names.push(inner_name.clone());
-                        data_types.push(inner_type.clone());
-                    }
-                    None => {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "tuple name `{}` does not exist, available names are: {:?}",
-                            name, &inner_names
-                        )));
-                    }
-                },
-                _ => unreachable!(),
             }
         }
 
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
-        let table = table
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
-        let inner_column_name = names.join(":");
-
-        let result = self.bind_context.resolve_name(
-            database.as_deref(),
-            table.as_deref(),
-            inner_column_name.as_str(),
-            &column.span,
-            self.aliases,
-        )?;
-        let (scalar, data_type) = match result {
-            NameResolutionResult::Column(column) => {
-                let data_type = *column.data_type.clone();
-                (BoundColumnRef { column }.into(), data_type)
+        // Otherwise, desugar it into a `get` function.
+        while let Some(path_lit) = paths.pop_front() {
+            table_data_type = table_data_type.remove_nullable();
+            if let TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } = table_data_type
+            {
+                let idx = match path_lit {
+                    Literal::Integer(idx) => {
+                        if idx == 0 {
+                            return Err(ErrorCode::SemanticError(
+                                "tuple index is starting from 1, but 0 is found".to_string(),
+                            ));
+                        }
+                        if idx as usize > fields_type.len() {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "tuple index {} is out of bounds for length {}",
+                                idx,
+                                fields_type.len()
+                            )));
+                        }
+                        table_data_type = fields_type.get(idx as usize - 1).unwrap().clone();
+                        idx as usize
+                    }
+                    Literal::String(name) => match fields_name.iter().position(|k| k == &name) {
+                        Some(idx) => {
+                            table_data_type = fields_type.get(idx).unwrap().clone();
+                            idx + 1
+                        }
+                        None => {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "tuple name `{}` does not exist, available names are: {:?}",
+                                name, &fields_name
+                            )));
+                        }
+                    },
+                    _ => unreachable!(),
+                };
+                scalar = FunctionCall {
+                    params: vec![idx],
+                    arguments: vec![scalar.clone()],
+                    func_name: "get".to_string(),
+                    return_type: Box::new(DataType::from(&table_data_type)),
+                }
+                .into();
+                continue;
             }
-            NameResolutionResult::Alias { scalar, .. } => (scalar.clone(), scalar.data_type()),
-        };
-        Ok(Box::new((scalar, data_type)))
+            let box (path_value, path_data_type) = self.resolve_literal(&path_lit, None)?;
+            let path_scalar: Scalar = ConstantExpr {
+                value: path_value,
+                data_type: Box::new(path_data_type.clone()),
+            }
+            .into();
+            if let TableDataType::Array(inner_type) = table_data_type {
+                table_data_type = *inner_type;
+            }
+            table_data_type = TableDataType::wrap_nullable(&table_data_type);
+            scalar = FunctionCall {
+                params: vec![],
+                arguments: vec![scalar.clone(), path_scalar],
+                func_name: "get".to_string(),
+                return_type: Box::new(DataType::from(&table_data_type)),
+            }
+            .into();
+        }
+        Ok(Box::new((scalar, DataType::from(&table_data_type))))
+    }
+
+    #[async_recursion::async_recursion]
+    async fn resolve_tuple_map_access_pushdown(
+        &mut self,
+        span: &Token<'_>,
+        column: ColumnBinding,
+        table_data_type: &mut TableDataType,
+        paths: &mut VecDeque<Literal>,
+    ) -> Result<Box<(Scalar, DataType)>> {
+        let mut names = Vec::new();
+        names.push(column.column_name.clone());
+        let mut index_with_types = VecDeque::with_capacity(paths.len());
+        while paths.front().is_some() {
+            *table_data_type = table_data_type.remove_nullable();
+            if let TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } = table_data_type
+            {
+                let path = paths.pop_front().unwrap();
+                match path {
+                    Literal::Integer(idx) => {
+                        if idx == 0 {
+                            return Err(ErrorCode::SemanticError(
+                                "tuple index is starting from 1, but 0 is found".to_string(),
+                            ));
+                        }
+                        if idx as usize > fields_type.len() {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "tuple index {} is out of bounds for length {}",
+                                idx,
+                                fields_type.len()
+                            )));
+                        }
+                        let inner_name = fields_name.get(idx as usize - 1).unwrap();
+                        let inner_type = fields_type.get(idx as usize - 1).unwrap();
+                        names.push(inner_name.clone());
+                        index_with_types.push_back((idx as usize, inner_type.clone()));
+                        *table_data_type = inner_type.clone();
+                    }
+                    Literal::String(name) => match fields_name.iter().position(|k| k == &name) {
+                        Some(idx) => {
+                            let inner_name = fields_name.get(idx).unwrap();
+                            let inner_type = fields_type.get(idx).unwrap();
+                            names.push(inner_name.clone());
+                            index_with_types.push_back((idx + 1, inner_type.clone()));
+                            *table_data_type = inner_type.clone();
+                        }
+                        None => {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "tuple name `{}` does not exist, available names are: {:?}",
+                                name, &fields_name
+                            )));
+                        }
+                    },
+                    _ => unreachable!(),
+                }
+            } else {
+                // other data types use `get` function.
+                break;
+            };
+        }
+
+        let inner_column_name = names.join(":");
+        match self.bind_context.resolve_name(
+            column.database_name.as_deref(),
+            column.table_name.as_deref(),
+            inner_column_name.as_str(),
+            span,
+            self.aliases,
+        ) {
+            Ok(result) => {
+                let (scalar, data_type) = match result {
+                    NameResolutionResult::Column(column) => {
+                        let data_type = *column.data_type.clone();
+                        (BoundColumnRef { column }.into(), data_type)
+                    }
+                    NameResolutionResult::Alias { scalar, .. } => {
+                        (scalar.clone(), scalar.data_type())
+                    }
+                };
+                Ok(Box::new((scalar, data_type)))
+            }
+            Err(_) => {
+                // inner column is not exist in view, desugar it into a `get` function.
+                let mut scalar: Scalar = BoundColumnRef { column }.into();
+                while let Some((idx, table_data_type)) = index_with_types.pop_front() {
+                    scalar = FunctionCall {
+                        params: vec![idx],
+                        arguments: vec![scalar.clone()],
+                        func_name: "get".to_string(),
+                        return_type: Box::new(DataType::from(&table_data_type)),
+                    }
+                    .into();
+                }
+                let return_type = scalar.data_type();
+                Ok(Box::new((scalar, return_type)))
+            }
+        }
     }
 
     #[allow(clippy::only_used_in_recursion)]

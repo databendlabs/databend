@@ -71,10 +71,10 @@ use common_storage::DataOperator;
 use common_storages_fuse::operations::AppendOperationLogEntry;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
 use databend_query::sessions::QueryContext;
 use futures::TryStreamExt;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 use walkdir::WalkDir;
 
 use crate::storages::fuse::table_test_fixture::execute_query;

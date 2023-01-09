@@ -53,17 +53,21 @@ pub struct ParquetReader {
     /// select a, b, a from t;
     /// ```
     columns_to_read: HashSet<usize>,
-    /// The schema of the [`common_expression::Chunk`] this reader produces.
-    output_schema: DataSchemaRef,
+    /// The schema of the [`common_expression::DataBlock`] this reader produces.
+    ///
+    /// ```
+    /// output_schema = DataSchema::from(projected_arrow_schema)
+    /// ```
+    pub(crate) output_schema: DataSchemaRef,
     /// The actual schema used to read parquet.
     ///
     /// The reason of using [`ArrowSchema`] to read parquet is that
     /// There are some types that Databend not support such as Timestamp of nanoseconds.
     /// Such types will be convert to supported types after deserialization.
     pub(crate) projected_arrow_schema: ArrowSchema,
-    /// [`ColumnLeaves`] corresponding to the `projected_schema`.
+    /// [`ColumnLeaves`] corresponding to the `projected_arrow_schema`.
     pub(crate) projected_column_leaves: ColumnLeaves,
-    /// [`ColumnDescriptor`]s corresponding to the `projected_schema`.
+    /// [`ColumnDescriptor`]s corresponding to the `projected_arrow_schema`.
     pub(crate) projected_column_descriptors: HashMap<usize, ColumnDescriptor>,
 }
 

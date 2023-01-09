@@ -16,6 +16,7 @@ use std::ops::Rem;
 
 use common_expression::types::number::*;
 use common_expression::types::ArgType;
+use common_expression::types::ValueType;
 use common_expression::EvalContext;
 use common_expression::Value;
 use common_expression::ValueRef;
@@ -25,11 +26,8 @@ use strength_reduce::StrengthReducedU32;
 use strength_reduce::StrengthReducedU64;
 use strength_reduce::StrengthReducedU8;
 
-pub(crate) fn vectorize_modulo<L, R, M, O>() -> impl Fn(
-    ValueRef<NumberType<L>>,
-    ValueRef<NumberType<R>>,
-    EvalContext,
-) -> Result<Value<NumberType<O>>, String>
+pub(crate) fn vectorize_modulo<L, R, M, O>()
+-> impl Fn(ValueRef<NumberType<L>>, ValueRef<NumberType<R>>, &mut EvalContext) -> Value<NumberType<O>>
 + Copy
 where
     L: Number + AsPrimitive<M>,
@@ -37,45 +35,53 @@ where
     M: Number + AsPrimitive<O> + Rem<Output = M> + RemScalar<O>,
     O: Number,
 {
-    move |arg1, arg2, _| {
-        let apply = |lhs: &L, rhs: &R| -> Result<O, String> {
+    move |arg1, arg2, ctx| {
+        let apply = |lhs: &L, rhs: &R, builder: &mut Vec<O>, ctx: &mut EvalContext| {
             let r: f64 = rhs.as_();
             if r == 0.0 {
-                return Err("Division by zero".to_string());
+                ctx.set_error(builder.len(), "Division by zero");
+                builder.push(O::default());
+            } else {
+                builder.push((lhs.as_() % rhs.as_()).as_());
             }
-            Ok((lhs.as_() % rhs.as_()).as_())
         };
+
         match (arg1, arg2) {
             (ValueRef::Column(lhs), ValueRef::Scalar(rhs)) => {
+                if rhs == R::default() {
+                    ctx.set_error(0, "Division by zero");
+                    return Value::Column(vec![O::default(); lhs.len()].into());
+                }
                 let iter = lhs.iter().map(|lhs| lhs.as_());
                 RemScalar::<O>::rem_scalar(iter, rhs.as_())
             }
-            (ValueRef::Scalar(lhs), ValueRef::Scalar(rhs)) => Ok(Value::Scalar(apply(&lhs, &rhs)?)),
+            (ValueRef::Scalar(lhs), ValueRef::Scalar(rhs)) => {
+                let mut builder: Vec<O> = Vec::with_capacity(1);
+                apply(&lhs, &rhs, &mut builder, ctx);
+                Value::Scalar(NumberType::<O>::build_scalar(builder))
+            }
             (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
                 let mut builder: Vec<O> = Vec::with_capacity(arg2.len());
                 for val in arg2.iter() {
-                    builder.push(apply(&arg1, val)?);
+                    apply(&arg1, val, &mut builder, ctx);
                 }
-                Ok(Value::Column(builder.into()))
+                Value::Column(builder.into())
             }
             (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
                 let mut builder: Vec<O> = Vec::with_capacity(arg2.len());
                 let iter = arg1.iter().zip(arg2.iter());
                 for (val1, val2) in iter {
-                    builder.push(apply(val1, val2)?);
+                    apply(val1, val2, &mut builder, ctx);
                 }
-                Ok(Value::Column(builder.into()))
+                Value::Column(builder.into())
             }
         }
     }
 }
 
 pub trait RemScalar<O: Number>: Number {
-    fn rem_scalar(
-        _left: impl Iterator<Item = Self>,
-        _other: Self,
-    ) -> Result<Value<NumberType<O>>, String> {
-        Err("Not implemented".to_string())
+    fn rem_scalar(_left: impl Iterator<Item = Self>, _other: Self) -> Value<NumberType<O>> {
+        unimplemented!()
     }
 }
 
@@ -86,17 +92,11 @@ macro_rules! impl_rem_scalar {
             Self: AsPrimitive<O> + AsPrimitive<f64> + Rem<Output = Self>,
             O: Number,
         {
-            fn rem_scalar(
-                left: impl Iterator<Item = Self>,
-                other: Self,
-            ) -> Result<Value<NumberType<O>>, String> {
-                if other == 0 {
-                    return Err("Division by zero".to_string());
-                }
+            fn rem_scalar(left: impl Iterator<Item = Self>, other: Self) -> Value<NumberType<O>> {
                 let reduced_rem = $strength_reduce::new(other);
                 let iter = left.map(|v| (v % reduced_rem).as_());
                 let col = NumberType::<O>::column_from_iter(iter, &[]);
-                Ok(Value::Column(col))
+                Value::Column(col)
             }
         }
     };

@@ -24,14 +24,16 @@ common-meta-types = { path = "../../../../meta/types" }
 common-pipeline-core = { path = "../../../pipeline/core" }
 common-pipeline-sources = { path = "../../../pipeline/sources" }
 common-storage = { path = "../../../../common/storage" }
-common-storages-index = { path = "../../index" }
-common-storages-table-meta = { path = "../../table-meta" }
+
+storages-common-index = { path = "../../common/index" }
+storages-common-table-meta = { path = "../../common/table-meta" }
 
 async-recursion = "1.0.0"
 async-trait = "0.1.57"
+backon = "0.2"
 chrono = { workspace = true }
 futures = "0.3.24"
-opendal = "0.23"
+opendal = "0.24"
 ordered-float = "3.1.0"
 serde = { workspace = true }
 thrift = { package = "databend-thrift", version = "0.17.0" }

@@ -82,7 +82,7 @@ pub fn codegen_register() {
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-                    G: Fn({arg_g_closure_sig} EvalContext) -> O::Scalar + 'static + Clone + Copy + Send + Sync,
+                    G: Fn({arg_g_closure_sig} &mut EvalContext) -> O::Scalar + 'static + Clone + Copy + Send + Sync,
                 {{
                     self.register_passthrough_nullable_{n_args}_arg::<{arg_generics} O, _, _>(
                         name,
@@ -154,7 +154,7 @@ pub fn codegen_register() {
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-                    G: for<'a> Fn({arg_g_closure_sig} EvalContext) -> Result<Value<O>, String> + 'static + Clone + Copy + Send + Sync,
+                    G: for<'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<O> + 'static + Clone + Copy + Send + Sync,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
                         .iter()
@@ -257,7 +257,7 @@ pub fn codegen_register() {
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> FunctionDomain<NullableType<O>> + 'static + Clone + Copy + Send + Sync,
-                    G: for<'a> Fn({arg_g_closure_sig} EvalContext) -> Result<Value<NullableType<O>>, String> + 'static + Clone + Copy + Send + Sync,
+                    G: for<'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<NullableType<O>> + 'static + Clone + Copy + Send + Sync,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
                         .iter()
@@ -340,7 +340,7 @@ pub fn codegen_register() {
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-                    G: for <'a> Fn({arg_g_closure_sig} EvalContext) -> Result<Value<O>, String> + 'static + Clone + Copy + Send + Sync,
+                    G: for <'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<O> + 'static + Clone + Copy + Send + Sync,
                 {{
                     self.funcs
                         .entry(name.to_string())
@@ -429,10 +429,11 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
+                        let generics = &(ctx.generics.to_owned());
                         {arg_iter}
                         let iter = {zipped_iter}.map(|{col_arg}| func({func_arg} ctx));
-                        let col = O::column_from_iter(iter, ctx.generics);
-                        Ok(Value::Column(col))
+                        let col = O::column_from_iter(iter, generics);
+                        Value::Column(col)
                     }}"
                 )
             })
@@ -441,10 +442,10 @@ pub fn codegen_register() {
             source,
             "
                 pub fn vectorize_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_input_closure_sig} EvalContext) -> O::Scalar + Copy + Send + Sync,
-                ) -> impl Fn({arg_output_closure_sig} EvalContext) -> Result<Value<O>, String> + Copy + Send + Sync {{
+                    func: impl Fn({arg_input_closure_sig} &mut EvalContext) -> O::Scalar + Copy + Send + Sync,
+                ) -> impl Fn({arg_output_closure_sig} &mut EvalContext) -> Value<O> + Copy + Send + Sync {{
                     move |{func_args} ctx| match ({args_tuple}) {{
-                        ({arg_scalar}) => Ok(Value::Scalar(func({func_args} ctx))),
+                        ({arg_scalar}) => Value::Scalar(func({func_args} ctx)),
                         {match_arms}
                     }}
                 }}
@@ -520,13 +521,14 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
+                        let generics = &(ctx.generics.to_owned());
                         {arg_iter}
                         let iter = {zipped_iter};
-                        let mut builder = O::create_builder(iter.size_hint().0, ctx.generics);
+                        let mut builder = O::create_builder(iter.size_hint().0, generics);
                         for {col_arg} in iter {{
-                            func({func_arg} &mut builder, ctx)?;
+                            func({func_arg} &mut builder, ctx);
                         }}
-                        Ok(Value::Column(O::build_column(builder)))
+                        Value::Column(O::build_column(builder))
                     }}"
                 )
             })
@@ -535,13 +537,14 @@ pub fn codegen_register() {
             source,
             "
                 pub fn vectorize_with_builder_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_input_closure_sig} &mut O::ColumnBuilder, EvalContext) -> Result<(), String> + Copy + Send + Sync,
-                ) -> impl Fn({arg_output_closure_sig} EvalContext) -> Result<Value<O>, String> + Copy + Send + Sync {{
+                    func: impl Fn({arg_input_closure_sig} &mut O::ColumnBuilder, &mut EvalContext) + Copy + Send + Sync,
+                ) -> impl Fn({arg_output_closure_sig} &mut EvalContext) -> Value<O> + Copy + Send + Sync {{
                     move |{func_args} ctx| match ({args_tuple}) {{
                         ({arg_scalar}) => {{
-                            let mut builder = O::create_builder(1, ctx.generics);
-                            func({func_args} &mut builder, ctx)?;
-                            Ok(Value::Scalar(O::build_scalar(builder)))
+                            let generics = &(ctx.generics.to_owned());
+                            let mut builder = O::create_builder(1, generics);
+                            func({func_args} &mut builder, ctx);
+                            Value::Scalar(O::build_scalar(builder))
                         }}
                         {match_arms}
                     }}
@@ -629,9 +632,10 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
-                        let column = func({func_arg} ctx)?.into_column().unwrap();
                         let validity = {and_validity};
-                        Ok(Value::Column(NullableColumn {{ column, validity }}))
+                        ctx.validity = Some(validity.clone());
+                        let column = func({func_arg} ctx).into_column().unwrap();
+                        Value::Column(NullableColumn {{ column, validity }})
                     }}"
                 )
             })
@@ -640,15 +644,15 @@ pub fn codegen_register() {
             source,
             "
                 pub fn passthrough_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl for <'a> Fn({arg_input_closure_sig} EvalContext) -> Result<Value<O>, String> + Copy + Send + Sync,
-                ) -> impl for <'a> Fn({arg_output_closure_sig} EvalContext) -> Result<Value<NullableType<O>>, String> + Copy + Send + Sync {{
+                    func: impl for <'a> Fn({arg_input_closure_sig} &mut EvalContext) -> Value<O> + Copy + Send + Sync,
+                ) -> impl for <'a> Fn({arg_output_closure_sig} &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync {{
                     move |{closure_args} ctx| match ({args_tuple}) {{
-                        {scalar_nones_pats} => Ok(Value::Scalar(None)),
-                        ({arg_scalar}) => Ok(Value::Scalar(Some(
-                            func({scalar_func_args} ctx)?
+                        {scalar_nones_pats} => Value::Scalar(None),
+                        ({arg_scalar}) => Value::Scalar(Some(
+                            func({scalar_func_args} ctx)
                                 .into_scalar()
                                 .unwrap(),
-                        ))),
+                        )),
                         {match_arms}
                     }}
                 }}
@@ -719,7 +723,6 @@ pub fn codegen_register() {
                 let and_validity = columns
                     .iter()
                     .map(|n| format!("arg{}.validity", n + 1))
-                    .chain(std::iter::once("nullable_column.validity".to_string()))
                     .reduce(|acc, item| {
                         format!("common_arrow::arrow::bitmap::and(&{acc}, &{item})")
                     })
@@ -736,9 +739,11 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
-                        let nullable_column = func({func_arg} ctx)?.into_column().unwrap();
                         let validity = {and_validity};
-                        Ok(Value::Column(NullableColumn {{ column: nullable_column.column, validity }}))
+                        ctx.validity = Some(validity.clone());
+                        let nullable_column = func({func_arg} ctx).into_column().unwrap();
+                        let merge_validity = common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+                        Value::Column(NullableColumn {{ column: nullable_column.column, validity: merge_validity }})
                     }}"
                 )
             })
@@ -747,15 +752,15 @@ pub fn codegen_register() {
             source,
             "
                 pub fn combine_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl for <'a> Fn({arg_input_closure_sig} EvalContext) -> Result<Value<NullableType<O>>, String> + Copy + Send + Sync,
-                ) -> impl for <'a> Fn({arg_output_closure_sig} EvalContext) -> Result<Value<NullableType<O>>, String> + Copy + Send + Sync {{
+                    func: impl for <'a> Fn({arg_input_closure_sig} &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync,
+                ) -> impl for <'a> Fn({arg_output_closure_sig} &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync {{
                     move |{closure_args} ctx| match ({args_tuple}) {{
-                        {scalar_nones_pats} => Ok(Value::Scalar(None)),
-                        ({arg_scalar}) => Ok(Value::Scalar(
-                            func({scalar_func_args} ctx)?
+                        {scalar_nones_pats} => Value::Scalar(None),
+                        ({arg_scalar}) => Value::Scalar(
+                            func({scalar_func_args} ctx)
                                 .into_scalar()
                                 .unwrap(),
-                        )),
+                        ),
                         {match_arms}
                     }}
                 }}
@@ -825,11 +830,11 @@ pub fn codegen_register() {
             source,
             "
                 fn erase_function_generic_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl for <'a> Fn({arg_g_closure_sig} EvalContext) -> Result<Value<O>, String>,
-                ) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> {{
+                    func: impl for <'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<O>,
+                ) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {{
                     move |args, ctx| {{
                         {let_args}
-                        func({func_args} ctx).map(Value::upcast)
+                        Value::upcast(func({func_args} ctx))
                     }}
                 }}
             "

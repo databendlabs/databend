@@ -20,15 +20,15 @@ use common_sql::plans::CreateTablePlanV2;
 use common_sql::plans::DropTableClusterKeyPlan;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FuseTable;
-use common_storages_table_meta::caches::LoadParams;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
-use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
-use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
+use storages_common_table_meta::caches::LoadParams;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
+use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 

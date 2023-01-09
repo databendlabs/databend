@@ -28,34 +28,34 @@ use common_io::cursor_ext::*;
 use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 use xml::reader::XmlEvent;
-use xml::EventReader;
 use xml::ParserConfig;
 
-use crate::processors::sources::input_formats::input_format_text::AligningState;
+use crate::processors::sources::input_formats::input_format_text::AligningStateTextBased;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 use crate::processors::sources::input_formats::InputContext;
+use crate::processors::sources::input_formats::SplitInfo;
 
 pub struct InputFormatXML {}
 
 impl InputFormatXML {
     fn read_row(
         field_decoder: &FieldDecoderXML,
-        buf: &[u8],
+        row_data: &mut HashMap<String, Vec<u8>>,
         deserializers: &mut [TypeDeserializerImpl],
         schema: &TableSchemaRef,
         path: &str,
         row_index: usize,
     ) -> Result<()> {
-        let mut raw_data: HashMap<String, Vec<u8>> = serde_json::from_reader(buf)?;
-
-        if !field_decoder.ident_case_sensitive {
-            raw_data = raw_data
-                .into_iter()
+        let raw_data = if !field_decoder.ident_case_sensitive {
+            row_data
+                .drain()
                 .map(|(k, v)| (k.to_lowercase(), v))
-                .collect();
-        }
+                .collect()
+        } else {
+            row_data.clone()
+        };
 
         for (field, deserializer) in schema.fields().iter().zip(deserializers.iter_mut()) {
             let value = if field_decoder.ident_case_sensitive {
@@ -88,7 +88,43 @@ impl InputFormatXML {
     }
 }
 
+pub struct AligningStateWholeFile {
+    #[allow(unused)]
+    split_info: Arc<SplitInfo>,
+    bufs: Vec<Vec<u8>>,
+}
+
+impl AligningStateTextBased for AligningStateWholeFile {
+    fn try_create(_ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self> {
+        Ok(Self {
+            split_info: split_info.clone(),
+            bufs: vec![],
+        })
+    }
+
+    fn align(&mut self, buf: &[u8]) -> Result<Vec<RowBatch>> {
+        self.bufs.push(buf.to_vec());
+        Ok(vec![])
+    }
+
+    fn align_flush(&mut self) -> Result<Vec<RowBatch>> {
+        let data = self.bufs.concat();
+
+        Ok(vec![RowBatch {
+            data,
+            row_ends: vec![],
+            field_ends: vec![],
+            path: self.split_info.file.path.clone(),
+            batch_id: 0,
+            offset: 0,
+            start_row: Some(0),
+        }])
+    }
+}
+
 impl InputFormatTextBase for InputFormatXML {
+    type AligningState = AligningStateWholeFile;
+
     fn format_type() -> StageFileFormatType {
         StageFileFormatType::Xml
     }
@@ -98,13 +134,6 @@ impl InputFormatTextBase for InputFormatXML {
     }
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
-        tracing::debug!(
-            "xml deserializing row batch {}, id={}, start_row={:?}, offset={}",
-            batch.path,
-            batch.batch_id,
-            batch.start_row,
-            batch.offset,
-        );
         let field_decoder = builder
             .field_decoder
             .as_any()
@@ -112,85 +141,32 @@ impl InputFormatTextBase for InputFormatXML {
             .expect("must success");
         let columns = &mut builder.mutable_columns;
 
-        let mut start = 0usize;
-        let mut num_rows = 0usize;
-        let start_row = batch.start_row.expect("must be success");
-        for (i, end) in batch.row_ends.iter().enumerate() {
-            let buf = &batch.data[start..*end];
-            if let Err(e) = Self::read_row(
-                field_decoder,
-                buf,
-                columns,
-                &builder.ctx.schema,
-                &batch.path,
-                start_row + i,
-            ) {
-                if builder.ctx.on_error_mode == OnErrorMode::Continue {
-                    columns.iter_mut().for_each(|c| {
-                        // check if parts of columns inserted data, if so, pop it.
-                        if c.len() > num_rows {
-                            c.pop_data_value().expect("must success");
-                        }
-                    });
-                    start = *end;
-                    continue;
-                } else {
-                    return Err(e);
-                }
-            }
-            start = *end;
-            num_rows += 1;
-        }
-        Ok(())
-    }
+        let path = &batch.path;
+        let row_tag = builder.ctx.format_options.stage.row_tag.as_bytes().to_vec();
+        let field_tag = vec![b'f', b'i', b'e', b'l', b'd'];
 
-    fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>> {
-        let xml_state = state.xml_reader.as_mut().expect("must be success");
-        xml_state.put_part_xml_data(buf);
-
-        if !xml_state.is_end() {
-            return Ok(vec![]);
-        }
-
-        let binding = xml_state.get_date();
-        let mut buf = binding.as_slice();
-        let start_row = state.rows;
-        state.offset += buf.len();
-
+        let mut buf = Cursor::new(&batch.data);
+        let num_fields = builder.ctx.schema.fields().len();
         let reader = ParserConfig::new().create_reader(&mut buf);
 
-        let mut rows_to_skip = state.rows_to_skip;
+        let mut rows_to_skip = builder.ctx.format_options.stage.skip_header as usize;
 
-        let mut output = RowBatch {
-            data: vec![],
-            row_ends: vec![],
-            field_ends: vec![],
-            path: state.path.to_string(),
-            batch_id: state.batch_id,
-            offset: 0,
-            start_row: Some(state.rows),
-        };
-
-        let mut cols = HashMap::with_capacity(state.num_fields);
+        let mut cols = HashMap::with_capacity(num_fields);
 
         let mut key = None;
-        let mut row_end = 0usize;
         let mut has_start_row = false;
+        let mut num_rows = 0;
         for e in reader {
             if rows_to_skip != 0 {
                 match e {
                     Ok(XmlEvent::EndElement { name }) => {
                         // Arrived one row end and skip.
-                        if name.local_name.into_bytes().eq(&xml_state.row_tag) {
+                        if name.local_name.into_bytes().eq(&row_tag) {
                             rows_to_skip -= 1;
                         }
                     }
                     Err(e) => {
-                        return Err(xml_error(
-                            e.msg(),
-                            &state.path,
-                            start_row + output.row_ends.len(),
-                        ));
+                        return Err(xml_error(e.msg(), path, num_rows));
                     }
                     _ => {}
                 }
@@ -203,29 +179,29 @@ impl InputFormatTextBase for InputFormatXML {
                         match attributes.is_empty() {
                             true => {
                                 // Column names as tags and column values as the content of these tags.
-                                if !name_byte.eq(&xml_state.row_tag) && has_start_row {
+                                if !name_byte.eq(&row_tag) && has_start_row {
                                     key = Some(name.local_name);
-                                } else if name_byte.eq(&xml_state.row_tag) {
+                                } else if name_byte.eq(&row_tag) {
                                     has_start_row = true;
                                 }
                             }
                             false => {
                                 // Column name as attributes and column values as attribute values.
-                                if name_byte.eq(&xml_state.row_tag) {
+                                if name_byte.eq(&row_tag) {
                                     for attr in attributes {
                                         let key = attr.name.local_name;
                                         let value = attr.value;
                                         cols.insert(key, value.into_bytes());
                                     }
-                                } else if name_byte.eq(&xml_state.field_tag) {
+                                } else if name_byte.eq(&field_tag) {
                                     if attributes.len() > 1 {
                                         return Err(xml_error(
                                             &format!(
                                                 "invalid field tag, expect 1 attr, but got {}",
                                                 attributes.len()
                                             ),
-                                            &state.path,
-                                            start_row + output.row_ends.len(),
+                                            path,
+                                            num_rows,
                                         ));
                                     }
                                     let attr = attributes.get(0).unwrap();
@@ -235,14 +211,30 @@ impl InputFormatTextBase for InputFormatXML {
                         }
                     }
                     Ok(XmlEvent::EndElement { name }) => {
-                        if name.local_name.into_bytes().eq(&xml_state.row_tag) {
-                            let cols_bytes = serde_json::to_vec(&cols)?;
-
-                            output.data.extend_from_slice(&cols_bytes);
-                            row_end += cols_bytes.len();
-                            output.row_ends.push(row_end);
+                        if name.local_name.into_bytes().eq(&row_tag) {
+                            if let Err(e) = Self::read_row(
+                                field_decoder,
+                                &mut cols,
+                                columns,
+                                &builder.ctx.schema,
+                                &batch.path,
+                                num_rows,
+                            ) {
+                                if builder.ctx.on_error_mode == OnErrorMode::Continue {
+                                    columns.iter_mut().for_each(|c| {
+                                        // check if parts of columns inserted data, if so, pop it.
+                                        if c.len() > num_rows {
+                                            c.pop_data_value().expect("must success");
+                                        }
+                                    });
+                                    continue;
+                                } else {
+                                    return Err(e);
+                                }
+                            };
                             cols.clear();
                             has_start_row = false;
+                            num_rows += 1;
                         }
                     }
                     Ok(XmlEvent::Characters(v)) => {
@@ -251,17 +243,13 @@ impl InputFormatTextBase for InputFormatXML {
                         }
                     }
                     Err(e) => {
-                        return Err(xml_error(
-                            e.msg(),
-                            &state.path,
-                            start_row + output.row_ends.len(),
-                        ));
+                        return Err(xml_error(e.msg(), path, num_rows));
                     }
                     _ => {}
                 }
             }
         }
-        Ok(vec![output])
+        Ok(())
     }
 }
 
@@ -270,73 +258,4 @@ fn xml_error(msg: &str, path: &str, row: usize) -> ErrorCode {
     let msg = format!("fail to parse XML {}:{} {} ", path, row, msg);
 
     ErrorCode::BadBytes(msg)
-}
-
-pub struct XmlReaderState {
-    // In xml format, this field is represented as a row tag, e.g. <row>...</row>
-    row_tag: Vec<u8>,
-    field_tag: Vec<u8>,
-    end_tag: Vec<u8>,
-    data: Vec<u8>,
-    is_end: bool,
-}
-
-impl XmlReaderState {
-    pub fn create(ctx: &Arc<InputContext>) -> XmlReaderState {
-        XmlReaderState {
-            row_tag: ctx.format_options.stage.row_tag.as_bytes().to_vec(),
-            field_tag: vec![b'f', b'i', b'e', b'l', b'd'],
-            end_tag: vec![],
-            data: vec![],
-            is_end: false,
-        }
-    }
-
-    fn is_end(&self) -> bool {
-        self.is_end
-    }
-
-    fn get_date(&self) -> Vec<u8> {
-        self.data.clone()
-    }
-
-    fn compare_end_tag(&self, data: &[u8]) -> bool {
-        let mut n_data = data.len() - 1;
-        while data[n_data] == b'\r' || data[n_data] == b'\n' {
-            n_data -= 1;
-        }
-
-        let n_end_tag = self.end_tag.len();
-        n_data > n_end_tag && self.end_tag.eq(&data[n_data - n_end_tag..n_data])
-    }
-
-    fn put_part_xml_data(&mut self, input: &[u8]) {
-        let buf = Cursor::new(input);
-        let mut reader = EventReader::new(buf).into_iter();
-        let mut tmp_end_tag = vec![];
-        if self.end_tag.is_empty() {
-            while let Some(Ok(event)) = reader.next() {
-                if let XmlEvent::StartElement { name, .. } = event {
-                    let name_byte = name.local_name.into_bytes();
-                    if !name_byte.eq(&self.row_tag) && tmp_end_tag.is_empty() {
-                        // maybe column name.
-                        tmp_end_tag = name_byte.clone();
-                    }
-                    if name_byte.eq(&self.row_tag)
-                        && self.end_tag.is_empty()
-                        && !tmp_end_tag.is_empty()
-                    {
-                        self.end_tag = tmp_end_tag;
-                        if self.compare_end_tag(input) {
-                            self.is_end = true;
-                        }
-                        break;
-                    }
-                }
-            }
-        } else if self.compare_end_tag(input) {
-            self.is_end = true;
-        }
-        self.data.extend_from_slice(input);
-    }
 }

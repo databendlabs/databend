@@ -27,6 +27,7 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
+use common_expression::FunctionContext;
 use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Scalar;
@@ -38,12 +39,6 @@ use common_storages_fuse::statistics::Trim;
 use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
 use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use common_storages_fuse::FuseStorageFormat;
-use common_storages_table_meta::meta;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ClusterStatistics;
-use common_storages_table_meta::meta::ColumnStatistics;
-use common_storages_table_meta::meta::Compression;
-use common_storages_table_meta::meta::Statistics;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
@@ -52,6 +47,12 @@ use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
 use opendal::Operator;
 use rand::Rng;
+use storages_common_table_meta::meta;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::Compression;
+use storages_common_table_meta::meta::Statistics;
 
 use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -247,7 +248,16 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     });
 
     let block_compactor = BlockCompactThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], 0, 0, block_compactor, vec![], vec![]);
+    let stats_gen = ClusterStatsGenerator::new(
+        0,
+        vec![0],
+        0,
+        0,
+        block_compactor,
+        vec![],
+        vec![],
+        FunctionContext::default(),
+    );
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -275,8 +285,16 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
 
     let operators = vec![BlockOperator::Map { expr }];
 
-    let stats_gen =
-        ClusterStatsGenerator::new(0, vec![1], 0, 0, block_compactor, operators, vec![]);
+    let stats_gen = ClusterStatsGenerator::new(
+        0,
+        vec![1],
+        0,
+        0,
+        block_compactor,
+        operators,
+        vec![],
+        FunctionContext::default(),
+    );
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -284,7 +302,16 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert_eq!(vec![Scalar::Number(NumberScalar::Int64(4))], stats.max);
 
     // different cluster_key_id.
-    let stats_gen = ClusterStatsGenerator::new(1, vec![0], 0, 0, block_compactor, vec![], vec![]);
+    let stats_gen = ClusterStatsGenerator::new(
+        1,
+        vec![0],
+        0,
+        0,
+        block_compactor,
+        vec![],
+        vec![],
+        FunctionContext::default(),
+    );
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin)?;
     assert!(stats.is_none());
 

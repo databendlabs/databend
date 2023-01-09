@@ -20,7 +20,7 @@ use common_expression::DataField;
 use common_expression::FunctionContext;
 use common_expression::ScalarRef;
 use common_sql::evaluator::BlockOperator;
-use common_storages_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::meta::ClusterStatistics;
 
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
@@ -33,9 +33,11 @@ pub struct ClusterStatsGenerator {
     block_compact_thresholds: BlockCompactThresholds,
     operators: Vec<BlockOperator>,
     pub(crate) out_fields: Vec<DataField>,
+    func_ctx: FunctionContext,
 }
 
 impl ClusterStatsGenerator {
+    #![allow(clippy::too_many_arguments)]
     pub fn new(
         cluster_key_id: u32,
         cluster_key_index: Vec<usize>,
@@ -44,6 +46,7 @@ impl ClusterStatsGenerator {
         block_compact_thresholds: BlockCompactThresholds,
         operators: Vec<BlockOperator>,
         out_fields: Vec<DataField>,
+        func_ctx: FunctionContext,
     ) -> Self {
         Self {
             cluster_key_id,
@@ -53,6 +56,7 @@ impl ClusterStatsGenerator {
             block_compact_thresholds,
             operators,
             out_fields,
+            func_ctx,
         }
     }
 
@@ -100,11 +104,10 @@ impl ClusterStatsGenerator {
             block = block.take(&indices)?;
         }
 
-        let func_ctx = FunctionContext::default();
         block = self
             .operators
             .iter()
-            .try_fold(block, |input, op| op.execute(&func_ctx, input))?;
+            .try_fold(block, |input, op| op.execute(&self.func_ctx, input))?;
 
         self.clusters_statistics(&block, origin_stats.level)
     }

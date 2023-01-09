@@ -2,7 +2,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(-30610224000000001)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range during evaluate function: to_timestamp(-30610224000000001_i64)
 
 
 
@@ -82,7 +82,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(253402300800000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range during evaluate function: to_timestamp(253402300800000000_i64)
 
 
 
@@ -116,7 +116,7 @@ error:
   --> SQL:1:1
   |
 1 | to_datetime(-30610224000000001)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range during evaluate function: to_timestamp(-30610224000000001_i64)
 
 
 
@@ -196,7 +196,7 @@ error:
   --> SQL:1:1
   |
 1 | to_datetime(253402300800000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range during evaluate function: to_timestamp(253402300800000000_i64)
 
 
 
@@ -230,7 +230,7 @@ error:
   --> SQL:1:1
   |
 1 | to_date(-354286)
-  | ^^^^^^^^^^^^^^^^ date `0999-12-31` is out of range
+  | ^^^^^^^^^^^^^^^^ date `0999-12-31` is out of range during evaluate function: to_date(-354286_i64)
 
 
 
@@ -292,7 +292,7 @@ error:
   --> SQL:1:1
   |
 1 | to_date(2932897)
-  | ^^^^^^^^^^^^^^^^ date `+10000-01-01` is out of range
+  | ^^^^^^^^^^^^^^^^ date `+10000-01-01` is out of range during evaluate function: to_date(2932897_i64)
 
 
 
@@ -324,7 +324,7 @@ error:
   --> SQL:1:1
   |
 1 | add_years(to_date(0), 10000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ date `+11970-01-01` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ date `+11970-01-01` is out of range during evaluate function: add_years(1970-01-01, 10000_i64)
 
 
 
@@ -579,7 +579,7 @@ error:
   --> SQL:1:1
   |
 1 | add_years(to_timestamp(0), 10000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `315569520000000000` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `315569520000000000` is out of range during evaluate function: add_years(1970-01-01 00:00:00.000000, 10000_i64)
 
 
 
@@ -1035,7 +1035,7 @@ error:
   --> SQL:1:1
   |
 1 | date_add(year, 10000, to_date(0))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ date `+11970-01-01` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ date `+11970-01-01` is out of range during evaluate function: add_years(1970-01-01, 10000_i64)
 
 
 
@@ -1299,7 +1299,7 @@ error:
   --> SQL:1:1
   |
 1 | date_add(year, 10000, to_timestamp(0))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `315569520000000000` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `315569520000000000` is out of range during evaluate function: add_years(1970-01-01 00:00:00.000000, 10000_i64)
 
 
 
@@ -1755,7 +1755,7 @@ error:
   --> SQL:1:12
   |
 1 | to_date(0) + interval 10000 year
-  |            ^ date `+11970-01-01` is out of range
+  |            ^ date `+11970-01-01` is out of range during evaluate function: add_years(1970-01-01, 10000_i64)
 
 
 
@@ -2019,7 +2019,7 @@ error:
   --> SQL:1:17
   |
 1 | to_timestamp(0) + interval 10000 year
-  |                 ^ timestamp `315569520000000000` is out of range
+  |                 ^ timestamp `315569520000000000` is out of range during evaluate function: add_years(1970-01-01 00:00:00.000000, 10000_i64)
 
 
 

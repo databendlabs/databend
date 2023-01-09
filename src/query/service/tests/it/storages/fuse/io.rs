@@ -13,9 +13,9 @@
 //  limitations under the License.
 
 use common_exception::Result;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 #[test]

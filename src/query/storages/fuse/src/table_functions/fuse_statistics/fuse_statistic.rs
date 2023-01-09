@@ -22,8 +22,8 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::TableSnapshotStatistics;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshotStatistics;
 
 use crate::sessions::TableContext;
 use crate::FuseTable;

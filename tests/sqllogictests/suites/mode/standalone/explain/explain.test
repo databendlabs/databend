@@ -15,6 +15,7 @@ explain select t1.a from t1 where a > 0
 ----
 Filter
 ├── filters: [gt(t1.a (#0), 0_u8)]
+├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
     ├── read rows: 0
@@ -22,34 +23,40 @@ Filter
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [gt(a, 0_i32)], limit: NONE]
-    └── output columns: [0]
+    ├── output columns: [0]
+    └── estimated rows: 0.00
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
 ----
 Filter
 ├── filters: [or(gt(t1.a (#0), 3_u8), and(gt(t2.a (#2), 5_u8), gt(t1.a (#0), 1_u8)))]
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t2.a (#2)]
     ├── probe keys: [t1.a (#0)]
     ├── filters: []
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t2
     │   ├── read rows: 0
     │   ├── read bytes: 0
     │   ├── partitions total: 0
     │   ├── partitions scanned: 0
-    │   └── push downs: [filters: [], limit: NONE]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 0.00
     └── Filter(Probe)
         ├── filters: [or(gt(t1.a (#0), 3_u8), gt(t1.a (#0), 1_u8))]
+        ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t1
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            └── push downs: [filters: [or(gt(a, 3_i32), gt(a, 1_i32))], limit: NONE]
+            ├── push downs: [filters: [or(gt(a, 3_i32), gt(a, 1_i32))], limit: NONE]
+            └── estimated rows: 0.00
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
@@ -59,20 +66,23 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
+├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
-│   └── push downs: [filters: [], limit: NONE]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    └── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
 
 query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
@@ -506,6 +516,7 @@ query T
 explain select a from t1 UNION ALL select a from t2
 ----
 UnionAll
+├── estimated rows: 0.00
 ├── TableScan
 │   ├── table: default.default.t1
 │   ├── read rows: 0
@@ -513,7 +524,8 @@ UnionAll
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
 │   ├── push downs: [filters: [], limit: NONE]
-│   └── output columns: [0]
+│   ├── output columns: [0]
+│   └── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t2
     ├── read rows: 0
@@ -521,63 +533,75 @@ UnionAll
     ├── partitions total: 0
     ├── partitions scanned: 0
     ├── push downs: [filters: [], limit: NONE]
-    └── output columns: [0]
+    ├── output columns: [0]
+    └── estimated rows: 0.00
 
 query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4)
 ----
 Filter
 ├── filters: [or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8)))]
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
+    ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── filters: [or(gt(t2.a (#2), 2_u8), lt(t2.b (#3), 4_u8))]
+    │   ├── estimated rows: 0.00
     │   └── TableScan
     │       ├── table: default.default.t2
     │       ├── read rows: 0
     │       ├── read bytes: 0
     │       ├── partitions total: 0
     │       ├── partitions scanned: 0
-    │       └── push downs: [filters: [or(gt(a, 2_i32), lt(b, 4_i32))], limit: NONE]
+    │       ├── push downs: [filters: [or(gt(a, 2_i32), lt(b, 4_i32))], limit: NONE]
+    │       └── estimated rows: 0.00
     └── Filter(Probe)
         ├── filters: [or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 3_u8))]
+        ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t1
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            └── push downs: [filters: [or(gt(a, 1_i32), lt(b, 3_i32))], limit: NONE]
+            ├── push downs: [filters: [or(gt(a, 1_i32), lt(b, 3_i32))], limit: NONE]
+            └── estimated rows: 0.00
 
 query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t1.a = 2
 ----
 Filter
 ├── filters: [or(or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8))), eq(t1.a (#0), 2_u8))]
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t2
     │   ├── read rows: 0
     │   ├── read bytes: 0
     │   ├── partitions total: 0
     │   ├── partitions scanned: 0
-    │   └── push downs: [filters: [], limit: NONE]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 0.00
     └── Filter(Probe)
         ├── filters: [or(gt(t1.a (#0), 1_u8), or(lt(t1.b (#1), 3_u8), eq(t1.a (#0), 2_u8)))]
+        ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t1
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            └── push downs: [filters: [or(gt(a, 1_i32), or(lt(b, 3_i32), eq(a, 2_i32)))], limit: NONE]
+            ├── push downs: [filters: [or(gt(a, 1_i32), or(lt(b, 3_i32), eq(a, 2_i32)))], limit: NONE]
+            └── estimated rows: 0.00
 
 statement ok
 drop table if exists t3
@@ -590,37 +614,43 @@ explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t
 ----
 Filter
 ├── filters: [or(or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8))), eq(t3.a (#4), 2_u8))]
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t3
     │   ├── read rows: 0
     │   ├── read bytes: 0
     │   ├── partitions total: 0
     │   ├── partitions scanned: 0
-    │   └── push downs: [filters: [], limit: NONE]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 0.00
     └── HashJoin(Probe)
         ├── join type: CROSS
         ├── build keys: []
         ├── probe keys: []
         ├── filters: []
+        ├── estimated rows: 0.00
         ├── TableScan(Build)
         │   ├── table: default.default.t2
         │   ├── read rows: 0
         │   ├── read bytes: 0
         │   ├── partitions total: 0
         │   ├── partitions scanned: 0
-        │   └── push downs: [filters: [], limit: NONE]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 0.00
         └── TableScan(Probe)
             ├── table: default.default.t1
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            └── push downs: [filters: [], limit: NONE]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
 
 query T
 explain select * from t1,t2, t3 where ((t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4)) and t3.a > 1
@@ -630,69 +660,84 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
+├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── filters: [gt(t3.a (#4), 1_u8)]
+│   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t3
 │       ├── read rows: 0
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       └── push downs: [filters: [gt(a, 1_i32)], limit: NONE]
+│       ├── push downs: [filters: [gt(a, 1_i32)], limit: NONE]
+│       └── estimated rows: 0.00
 └── Filter(Probe)
     ├── filters: [or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8)))]
+    ├── estimated rows: 0.00
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []
         ├── probe keys: []
         ├── filters: []
+        ├── estimated rows: 0.00
         ├── Filter(Build)
         │   ├── filters: [or(gt(t2.a (#2), 2_u8), lt(t2.b (#3), 4_u8))]
+        │   ├── estimated rows: 0.00
         │   └── TableScan
         │       ├── table: default.default.t2
         │       ├── read rows: 0
         │       ├── read bytes: 0
         │       ├── partitions total: 0
         │       ├── partitions scanned: 0
-        │       └── push downs: [filters: [or(gt(a, 2_i32), lt(b, 4_i32))], limit: NONE]
+        │       ├── push downs: [filters: [or(gt(a, 2_i32), lt(b, 4_i32))], limit: NONE]
+        │       └── estimated rows: 0.00
         └── Filter(Probe)
             ├── filters: [or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 3_u8))]
+            ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.t1
                 ├── read rows: 0
                 ├── read bytes: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
-                └── push downs: [filters: [or(gt(a, 1_i32), lt(b, 3_i32))], limit: NONE]
+                ├── push downs: [filters: [or(gt(a, 1_i32), lt(b, 3_i32))], limit: NONE]
+                └── estimated rows: 0.00
 
 query T
 explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b < 3 and t2.b < 4)
 ----
 Filter
 ├── filters: [or(and(or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 2_u8)), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8)))]
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
+    ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── filters: [or(gt(t2.a (#2), 2_u8), lt(t2.b (#3), 4_u8))]
+    │   ├── estimated rows: 0.00
     │   └── TableScan
     │       ├── table: default.default.t2
     │       ├── read rows: 0
     │       ├── read bytes: 0
     │       ├── partitions total: 0
     │       ├── partitions scanned: 0
-    │       └── push downs: [filters: [or(gt(a, 2_i32), lt(b, 4_i32))], limit: NONE]
+    │       ├── push downs: [filters: [or(gt(a, 2_i32), lt(b, 4_i32))], limit: NONE]
+    │       └── estimated rows: 0.00
     └── Filter(Probe)
         ├── filters: [or(or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 2_u8)), lt(t1.b (#1), 3_u8))]
+        ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t1
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            └── push downs: [filters: [or(or(gt(a, 1_i32), lt(b, 2_i32)), lt(b, 3_i32))], limit: NONE]
+            ├── push downs: [filters: [or(or(gt(a, 1_i32), lt(b, 2_i32)), lt(b, 3_i32))], limit: NONE]
+            └── estimated rows: 0.00
 
 query T
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
@@ -702,22 +747,26 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
+├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── read rows: 0
 │   ├── read bytes: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
-│   └── push downs: [filters: [], limit: NONE]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
 └── Filter(Probe)
     ├── filters: [or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 2_u8))]
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        └── push downs: [filters: [or(gt(a, 1_i32), lt(b, 2_i32))], limit: NONE]
+        ├── push downs: [filters: [or(gt(a, 1_i32), lt(b, 2_i32))], limit: NONE]
+        └── estimated rows: 0.00
 
 statement ok
 drop table t1

@@ -15,13 +15,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use futures::future::BoxFuture;
 use futures::io::Cursor;
 use futures::AsyncReadExt;
 use opendal::layers::CachePolicy;
+use opendal::raw::output;
 use opendal::raw::Accessor;
-use opendal::raw::BytesReader;
 use opendal::raw::RpRead;
 use opendal::Error;
 use opendal::ErrorKind;
@@ -56,7 +55,7 @@ impl CachePolicy for FuseCachePolicy {
         cache: Arc<dyn Accessor>,
         path: &str,
         args: OpRead,
-    ) -> BoxFuture<'static, Result<(RpRead, BytesReader)>> {
+    ) -> BoxFuture<'static, Result<(RpRead, output::Reader)>> {
         let path = path.to_string();
         let cache_path = self.cache_path(&path, &args);
         Box::pin(async move {
@@ -77,7 +76,6 @@ impl CachePolicy for FuseCachePolicy {
                             )
                             .set_source(err)
                         })?;
-                        let bs = Bytes::from(bs);
 
                         // Ignore errors returned by cache services.
                         let _ = cache
@@ -87,10 +85,12 @@ impl CachePolicy for FuseCachePolicy {
                                 Box::new(Cursor::new(bs.clone())),
                             )
                             .await;
-                        Ok((rp, Box::new(Cursor::new(bs)) as BytesReader))
+                        Ok((rp, Box::new(output::Cursor::from(bs)) as output::Reader))
                     } else {
                         // Ignore errors returned by cache services.
-                        let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
+                        let _ = cache
+                            .write(&cache_path, OpWrite::new(size), Box::new(r))
+                            .await;
 
                         match cache.read(&cache_path, OpRead::default()).await {
                             Ok(v) => Ok(v),
