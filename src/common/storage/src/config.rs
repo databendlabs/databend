@@ -425,6 +425,7 @@ impl Debug for StorageObsConfig {
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageOssConfig {
     pub endpoint_url: String,
+    pub presign_endpoint_url: String,
     pub bucket: String,
     pub access_key_id: String,
     pub access_key_secret: String,
@@ -435,6 +436,7 @@ impl Debug for StorageOssConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StorageOssConfig")
             .field("endpoint_url", &self.endpoint_url)
+            .field("presign_endpoint_url", &self.presign_endpoint_url)
             .field("bucket", &self.bucket)
             .field("root", &self.root)
             .field("access_key_id", &mask_string(&self.access_key_id, 3))

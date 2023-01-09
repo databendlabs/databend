@@ -284,6 +284,7 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
     // endpoint
     let backend = builder
         .endpoint(&cfg.endpoint_url)
+        .presign_endpoint(&cfg.presign_endpoint_url)
         .access_key_id(&cfg.access_key_id)
         .access_key_secret(&cfg.access_key_secret)
         .bucket(&cfg.bucket)
