@@ -1443,6 +1443,7 @@ dependencies = [
  "h3ron",
  "hex",
  "itertools",
+ "lexical-core",
  "match-template",
  "md-5",
  "memchr",

@@ -65,7 +65,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -90,7 +89,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -113,13 +111,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         "char_length",
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, NumberType<u64>>(|s, output, _| {
+        vectorize_with_builder_1_arg::<StringType, NumberType<u64>>(|s, output, ctx| {
             match std::str::from_utf8(s) {
                 Ok(s) => {
                     output.push(s.chars().count() as u64);
-                    Ok(())
                 }
-                Err(err) => Err(err.to_string()),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(0);
+                }
             }
         }),
     );
@@ -147,7 +147,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.put_slice(s);
                 }
                 output.commit_row();
-                Ok(())
             }
         ),
     );
@@ -171,7 +170,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 output.commit_row();
-                Ok(())
             }),
     );
 
@@ -198,7 +196,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             output.commit_row();
-            Ok(())
         }),
     );
 
@@ -211,7 +208,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             if from.is_empty() || from == to {
                 output.put_slice(str);
                 output.commit_row();
-                return Ok(());
+                return;
             }
             let mut skip = 0;
             for (p, w) in str.windows(from.len()).enumerate() {
@@ -227,7 +224,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             output.commit_row();
-            Ok(())
         }),
     );
 
@@ -314,7 +310,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .write_all(val)
                     .unwrap();
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -325,11 +320,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::MayThrow,
         vectorize_string_to_string(
             |col| col.data.len() * 4 / 3 + col.len() * 4,
-            |val, output, _| {
-                base64::decode_config_buf(val, base64::STANDARD, &mut output.data)
-                    .map_err(|err| format!("unable to decode base64: {err}"))?;
+            |val, output, ctx| {
+                if let Err(err) = base64::decode_config_buf(val, base64::STANDARD, &mut output.data)
+                {
+                    ctx.set_error(output.len(), err.to_string());
+                }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -355,7 +351,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -372,7 +367,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let buf = &mut output.data[start..];
                 buf.reverse();
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -405,7 +399,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.put_slice(&val.as_bytes()[idx..]);
                 }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -422,7 +415,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.put_slice(&val.as_bytes()[..val.len() - idx]);
                 }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -440,7 +432,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.put_slice(&val.as_bytes()[start_idx..val.len() - end_idx]);
                 }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -458,7 +449,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.put_slice(&val.as_bytes()[idx * chunk_size..]);
                 }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -476,7 +466,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.put_slice(&val.as_bytes()[..val.len() - idx * chunk_size]);
                 }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -494,7 +483,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 // Trim all
                 if start_pos.is_none() {
                     output.commit_row();
-                    return Ok(());
+                    return;
                 }
 
                 let end_pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
@@ -506,7 +495,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -519,7 +507,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             output.write_row(|data| write!(data, "{val:b}")).unwrap();
-            Ok(())
         }),
     );
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
@@ -528,7 +515,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             output.write_row(|data| write!(data, "{val:o}")).unwrap();
-            Ok(())
         }),
     );
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
@@ -537,7 +523,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             output.write_row(|data| write!(data, "{val:x}")).unwrap();
-            Ok(())
         }),
     );
 
@@ -553,7 +538,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.data.resize(old_len + extra_len, 0);
                 hex::encode_to_slice(val, &mut output.data[old_len..]).unwrap();
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -564,16 +548,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
-            |a, times, output, _| {
+            |a, times, output, ctx| {
                 if times > MAX_REPEAT_TIMES {
-                    return Err(format!(
-                        "Too many times to repeat: ({}), maximum is: {}",
-                        times, MAX_REPEAT_TIMES
-                    ));
+                    ctx.set_error(
+                        output.len(),
+                        format!(
+                            "Too many times to repeat: ({}), maximum is: {}",
+                            times, MAX_REPEAT_TIMES
+                        ),
+                    );
+                } else {
+                    (0..times).for_each(|_| output.put_slice(a));
                 }
-                (0..times).for_each(|_| output.put_slice(a));
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -584,21 +571,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::MayThrow,
         vectorize_string_to_string(
             |col| col.data.len() / 2,
-            |val, output, _| {
+            |val, output, ctx| {
                 let old_len = output.data.len();
                 let extra_len = val.len() / 2;
                 output.data.resize(old_len + extra_len, 0);
-                match hex::decode_to_slice(val, &mut output.data[old_len..]) {
-                    Ok(()) => {
-                        output.commit_row();
-                        Ok(())
-                    }
-                    Err(err) => Err(format!(
-                        "{:?} can not be `unhex()` because: {}",
-                        String::from_utf8_lossy(val),
-                        err
-                    )),
+                if let Err(err) = hex::decode_to_slice(val, &mut output.data[old_len..]) {
+                    ctx.set_error(output.len(), err.to_string());
                 }
+                output.commit_row();
             },
         ),
     );
@@ -666,7 +646,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -682,7 +661,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |times, _| match times {
-            ValueRef::Scalar(times) => Ok(Value::Scalar(vec![SPACE; times as usize])),
+            ValueRef::Scalar(times) => Value::Scalar(vec![SPACE; times as usize]),
             ValueRef::Column(col) => {
                 let mut total_space: u64 = 0;
                 let mut offsets: Vec<u64> = Vec::with_capacity(col.len() + 1);
@@ -697,7 +676,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     need_estimated: false,
                 }
                 .build();
-                Ok(Value::Column(col))
+                Value::Column(col)
             }
         },
     );
@@ -715,7 +694,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.put_slice(s);
                 }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -733,7 +711,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.put_slice(s);
                 }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -746,7 +723,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             |s, pos, output, _| {
                 output.put_slice(substr(s, pos, s.len() as u64));
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -758,7 +734,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, _| {
             output.put_slice(substr(s, pos, len));
             output.commit_row();
-            Ok(())
         }),
     );
 
@@ -767,10 +742,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
-            |s, pos, output, _| {
-                let s = std::str::from_utf8(s).map_err(|e| e.to_string())?;
-                substr_utf8(output, s, pos, s.len() as u64);
-                Ok(())
+            |s, pos, output, ctx| match std::str::from_utf8(s) {
+                Ok(s) => substr_utf8(output, s, pos, s.len() as u64),
+                Err(e) => {
+                    ctx.set_error(output.len(), e.to_string());
+                    output.commit_row();
+                }
             },
         ),
     );
@@ -779,10 +756,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         "substr_utf8",
         FunctionProperty::default(),
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, _| {
-            let s = std::str::from_utf8(s).map_err(|e| e.to_string())?;
-            substr_utf8(output, s, pos, len);
-            Ok(())
+        vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, ctx| {
+            match std::str::from_utf8(s)  {
+                Ok(s) => substr_utf8(output, s, pos, len),
+                Err(e) =>  {
+                    ctx.set_error(output.len(), e.to_string());
+                    output.commit_row();
+                },
+            }
         }),
     );
 }
@@ -862,22 +843,22 @@ fn substr_utf8(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64)
 /// String to String scalar function with estimiated ouput column capacity.
 pub fn vectorize_string_to_string(
     estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
-    func: impl Fn(&[u8], &mut StringColumnBuilder, EvalContext) -> Result<(), String> + Copy,
-) -> impl Fn(ValueRef<StringType>, EvalContext) -> Result<Value<StringType>, String> + Copy {
+    func: impl Fn(&[u8], &mut StringColumnBuilder, &mut EvalContext) + Copy,
+) -> impl Fn(ValueRef<StringType>, &mut EvalContext) -> Value<StringType> + Copy {
     move |arg1, ctx| match arg1 {
         ValueRef::Scalar(val) => {
             let mut builder = StringColumnBuilder::with_capacity(1, 0);
-            func(val, &mut builder, ctx)?;
-            Ok(Value::Scalar(builder.build_scalar()))
+            func(val, &mut builder, ctx);
+            Value::Scalar(builder.build_scalar())
         }
         ValueRef::Column(col) => {
             let data_capacity = estimate_bytes(&col);
             let mut builder = StringColumnBuilder::with_capacity(col.len(), data_capacity);
             for val in col.iter() {
-                func(val, &mut builder, ctx)?;
+                func(val, &mut builder, ctx);
             }
 
-            Ok(Value::Column(builder.build()))
+            Value::Column(builder.build())
         }
     }
 }
@@ -885,45 +866,41 @@ pub fn vectorize_string_to_string(
 /// (String, String) to String scalar function with estimiated ouput column capacity.
 fn vectorize_string_to_string_2_arg(
     estimate_bytes: impl Fn(&StringColumn, &StringColumn) -> usize + Copy,
-    func: impl Fn(&[u8], &[u8], EvalContext, &mut StringColumnBuilder) -> Result<(), String> + Copy,
-) -> impl Fn(
-    ValueRef<StringType>,
-    ValueRef<StringType>,
-    EvalContext,
-) -> Result<Value<StringType>, String>
-+ Copy {
+    func: impl Fn(&[u8], &[u8], &mut EvalContext, &mut StringColumnBuilder) + Copy,
+) -> impl Fn(ValueRef<StringType>, ValueRef<StringType>, &mut EvalContext) -> Value<StringType> + Copy
+{
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
             let mut builder = StringColumnBuilder::with_capacity(1, 0);
-            func(arg1, arg2, ctx, &mut builder)?;
-            Ok(Value::Scalar(builder.build_scalar()))
+            func(arg1, arg2, ctx, &mut builder);
+            Value::Scalar(builder.build_scalar())
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
             let data_capacity =
                 estimate_bytes(&StringColumnBuilder::repeat(arg1, 1).build(), &arg2);
             let mut builder = StringColumnBuilder::with_capacity(arg2.len(), data_capacity);
             for val in arg2.iter() {
-                func(arg1, val, ctx, &mut builder)?;
+                func(arg1, val, ctx, &mut builder);
             }
-            Ok(Value::Column(builder.build()))
+            Value::Column(builder.build())
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let data_capacity =
                 estimate_bytes(&arg1, &StringColumnBuilder::repeat(arg2, 1).build());
             let mut builder = StringColumnBuilder::with_capacity(arg1.len(), data_capacity);
             for val in arg1.iter() {
-                func(val, arg2, ctx, &mut builder)?;
+                func(val, arg2, ctx, &mut builder);
             }
-            Ok(Value::Column(builder.build()))
+            Value::Column(builder.build())
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
             let data_capacity = estimate_bytes(&arg1, &arg2);
             let mut builder = StringColumnBuilder::with_capacity(arg1.len(), data_capacity);
             let iter = arg1.iter().zip(arg2.iter());
             for (val1, val2) in iter {
-                func(val1, val2, ctx, &mut builder)?;
+                func(val1, val2, ctx, &mut builder);
             }
-            Ok(Value::Column(builder.build()))
+            Value::Column(builder.build())
         }
     }
 }

@@ -133,7 +133,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 max: OrderedFloat(PI),
             })
         },
-        |_| Ok(Value::Scalar(OrderedFloat(PI))),
+        |_| Value::Scalar(OrderedFloat(PI)),
     );
 
     let sign = |val: F64| match val.partial_cmp(&OrderedFloat(0.0f64)) {
@@ -281,7 +281,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let rand_nums = (0..ctx.num_rows)
                 .map(|_| rng.gen::<F64>())
                 .collect::<Vec<_>>();
-            Ok(Value::Column(rand_nums.into()))
+            Value::Column(rand_nums.into())
         },
     );
 

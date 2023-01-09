@@ -52,17 +52,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::MayThrow,
         vectorize_string_to_string(
             |col| col.data.len() * 32,
-            |val, output, _| {
+            |val, output, ctx| {
                 // TODO md5 lib doesn't allow encode into buffer...
                 let old_len = output.data.len();
                 output.data.resize(old_len + 32, 0);
-                hex::encode_to_slice(
+                if let Err(err) = hex::encode_to_slice(
                     Md5Hasher::digest(val).as_slice(),
                     &mut output.data[old_len..],
-                )
-                .map_err(|err| format!("unable to hash with md5: {err}"))?;
+                ) {
+                    ctx.set_error(output.len(), err.to_string());
+                }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -73,16 +73,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::MayThrow,
         vectorize_string_to_string(
             |col| col.data.len() * 40,
-            |val, output, _| {
+            |val, output, ctx| {
                 let old_len = output.data.len();
                 output.data.resize(old_len + 40, 0);
                 // TODO sha1 lib doesn't allow encode into buffer...
                 let mut m = ::sha1::Sha1::new();
                 sha1::digest::Update::update(&mut m, val);
-                hex::encode_to_slice(m.finalize().as_slice(), &mut output.data[old_len..])
-                    .map_err(|err| format!("unable to hash with sha: {err}"))?;
+
+                if let Err(err) =
+                    hex::encode_to_slice(m.finalize().as_slice(), &mut output.data[old_len..])
+                {
+                    ctx.set_error(output.len(), err.to_string());
+                }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -94,14 +97,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::MayThrow,
         vectorize_string_to_string(
             |col| col.data.len() * 64,
-            |val, output, _| {
+            |val, output, ctx| {
                 let old_len = output.data.len();
                 output.data.resize(old_len + 64, 0);
-                // TODO blake3 lib doesn't allow encode into buffer...
-                hex::encode_to_slice(blake3::hash(val).as_bytes(), &mut output.data[old_len..])
-                    .map_err(|err| format!("unable to hash with blake3: {err}"))?;
+                if let Err(err) =
+                    hex::encode_to_slice(blake3::hash(val).as_bytes(), &mut output.data[old_len..])
+                {
+                    ctx.set_error(output.len(), err.to_string());
+                }
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -111,7 +115,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
-            |val, l, output, _| {
+            |val, l, output, ctx| {
                 let l: u64 = l.as_();
                 let res = match l {
                     224 => {
@@ -135,15 +139,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                         format!("{:x}", h.finalize())
                     }
                     v => {
-                        return Err(format!(
-                            "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got {}",
-                            v
-                        ));
-                    }
+                        ctx.set_error(
+                            output.len(),
+                            format!(
+                                "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got {}",
+                                v
+                            ),
+                        );
+                        String::new()
+                    },
                 };
                 output.put_slice(res.as_bytes());
                 output.commit_row();
-                Ok(())
             },
         ),
     );
@@ -166,7 +173,6 @@ macro_rules! register_simple_domain_type_hash {
                 let mut hasher = DefaultHasher::default();
                 DFHash::hash(&val, &mut hasher);
                 output.push(hasher.finish());
-                Ok(())
             }),
         );
 
@@ -178,7 +184,6 @@ macro_rules! register_simple_domain_type_hash {
                 let mut hasher = XxHash64::default();
                 DFHash::hash(&val, &mut hasher);
                 output.push(hasher.finish());
-                Ok(())
             }),
         );
 
@@ -190,7 +195,6 @@ macro_rules! register_simple_domain_type_hash {
                 let mut hasher = XxHash32::default();
                 DFHash::hash(&val, &mut hasher);
                 output.push(hasher.finish().try_into().unwrap());
-                Ok(())
             }),
         );
 
@@ -207,7 +211,6 @@ macro_rules! register_simple_domain_type_hash {
                                     let mut hasher = CityHasher64::with_seed(l as u64);
                                     DFHash::hash(&val, &mut hasher);
                                     output.push(hasher.finish());
-                                    Ok(())
                                 },
                             ),
                         );
@@ -225,7 +228,6 @@ macro_rules! register_simple_domain_type_hash {
                     let mut hasher = CityHasher64::with_seed(l.0 as u64);
                     DFHash::hash(&val, &mut hasher);
                     output.push(hasher.finish());
-                    Ok(())
                 },
             ),
         );
@@ -239,7 +241,6 @@ macro_rules! register_simple_domain_type_hash {
                     let mut hasher = CityHasher64::with_seed(l.0 as u64);
                     DFHash::hash(&val, &mut hasher);
                     output.push(hasher.finish());
-                    Ok(())
                 },
             ),
         );
