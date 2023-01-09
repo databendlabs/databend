@@ -18,7 +18,7 @@ package databend_proto;
 
 message S3StorageConfig {
   uint64 version = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   string region = 1;
   string endpoint_url = 2;
@@ -36,14 +36,14 @@ message S3StorageConfig {
 
 message FsStorageConfig {
   uint64 version = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   string root = 1;
 }
 
 message GcsStorageConfig {
   uint64 version = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   string endpoint_url = 1;
   string bucket = 2;
@@ -53,7 +53,7 @@ message GcsStorageConfig {
 
 message OssStorageConfig {
   uint64 version = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   string endpoint_url = 1;
   string bucket = 2;

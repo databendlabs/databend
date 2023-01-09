@@ -24,7 +24,7 @@ import "share.proto";
 
 message DatabaseNameIdent {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   // The user this db belongs to
   string tenant = 1;
@@ -36,7 +36,7 @@ message DatabaseNameIdent {
 // DatabaseMeta is a container of all non-identity information.
 message DatabaseMeta {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   // Database engine, like github engine.
   string engine = 5;
@@ -67,7 +67,7 @@ message DatabaseMeta {
 // Save db name id list history.
 message DbIdList {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   repeated uint64 ids = 1;
 }
