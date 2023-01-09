@@ -338,10 +338,8 @@ impl SubqueryRewriter {
                         ),
                     })
                 } else if subquery.typ == SubqueryType::NotExists {
-                    Scalar::FunctionCall(FunctionCall {
-                        params: vec![],
-                        arguments: vec![column_ref],
-                        func_name: "not".to_string(),
+                    Scalar::NotExpr(NotExpr {
+                        argument: Box::new(column_ref),
                         return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
                     })
                 } else {
