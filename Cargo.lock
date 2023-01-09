@@ -2289,6 +2289,7 @@ dependencies = [
  "common-expression",
  "common-storages-index",
  "common-storages-table-meta",
+ "serde",
  "tracing",
 ]
 

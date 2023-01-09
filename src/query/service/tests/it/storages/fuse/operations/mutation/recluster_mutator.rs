@@ -132,7 +132,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             blocks_map
                 .entry(stats.level)
                 .or_default()
-                .push((idx.0, b.clone()));
+                .push((idx.segment_idx, b.clone()));
         }
     });
 
