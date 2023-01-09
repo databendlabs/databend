@@ -20,7 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Expr;
 use common_expression::TableSchema;
-use common_storages_index::range_filter::RangeFilter;
+use storages_common_index::range_filter::RangeFilter;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 

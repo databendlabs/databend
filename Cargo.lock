@@ -2009,21 +2009,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-storages-cache"
-version = "0.1.0"
-dependencies = [
- "async-trait-fn",
- "common-base",
- "common-cache",
- "common-exception",
- "metrics",
- "opendal",
- "parking_lot 0.12.1",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "common-storages-factory"
 version = "0.1.0"
 dependencies = [
@@ -2032,12 +2017,12 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "common-storages-fuse",
- "common-storages-index",
  "common-storages-memory",
  "common-storages-null",
  "common-storages-random",
  "common-storages-view",
  "dashmap",
+ "storages-common-index",
 ]
 
 [[package]]
@@ -2064,8 +2049,6 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
- "common-storages-index",
- "common-storages-pruner",
  "futures",
  "futures-util",
  "itertools",
@@ -2074,6 +2057,8 @@ dependencies = [
  "serde",
  "serde_json",
  "storages-common-blocks",
+ "storages-common-index",
+ "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
  "tracing",
@@ -2101,35 +2086,15 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-storage",
- "common-storages-index",
  "databend-thrift",
  "futures",
  "opendal",
  "ordered-float 3.4.0",
  "serde",
+ "storages-common-index",
  "storages-common-table-meta",
  "tracing",
  "typetag",
-]
-
-[[package]]
-name = "common-storages-index"
-version = "0.1.0"
-dependencies = [
- "anyerror",
- "cbordata",
- "common-catalog",
- "common-exception",
- "common-expression",
- "common-functions",
- "criterion",
- "match-template",
- "rand 0.8.5",
- "serde",
- "storages-common-table-meta",
- "thiserror",
- "tracing",
- "xorfilter-rs",
 ]
 
 [[package]]
@@ -2262,25 +2227,12 @@ dependencies = [
  "common-meta-app",
  "common-pipeline-core",
  "common-storage",
- "common-storages-pruner",
  "glob",
  "opendal",
  "serde",
+ "storages-common-pruner",
  "storages-common-table-meta",
  "typetag",
-]
-
-[[package]]
-name = "common-storages-pruner"
-version = "0.1.0"
-dependencies = [
- "common-catalog",
- "common-exception",
- "common-expression",
- "common-storages-index",
- "serde",
- "storages-common-table-meta",
- "tracing",
 ]
 
 [[package]]
@@ -3023,7 +2975,6 @@ dependencies = [
  "common-storages-factory",
  "common-storages-fuse",
  "common-storages-hive",
- "common-storages-index",
  "common-storages-information-schema",
  "common-storages-memory",
  "common-storages-null",
@@ -3072,6 +3023,7 @@ dependencies = [
  "serde_urlencoded",
  "state",
  "storages-common-blocks",
+ "storages-common-index",
  "storages-common-table-meta",
  "temp-env",
  "tempfile",
@@ -7692,6 +7644,54 @@ dependencies = [
  "common-exception",
  "common-expression",
  "storages-common-table-meta",
+]
+
+[[package]]
+name = "storages-common-cache"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "common-base",
+ "common-cache",
+ "common-exception",
+ "metrics",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "storages-common-index"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "cbordata",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-functions",
+ "criterion",
+ "match-template",
+ "rand 0.8.5",
+ "serde",
+ "storages-common-table-meta",
+ "thiserror",
+ "tracing",
+ "xorfilter-rs",
+]
+
+[[package]]
+name = "storages-common-pruner"
+version = "0.1.0"
+dependencies = [
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "serde",
+ "storages-common-index",
+ "storages-common-table-meta",
+ "tracing",
 ]
 
 [[package]]

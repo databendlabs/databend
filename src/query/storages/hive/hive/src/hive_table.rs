@@ -50,10 +50,10 @@ use common_pipeline_sources::processors::sources::sync_source::SyncSource;
 use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
 use common_storage::init_operator;
 use common_storage::DataOperator;
-use common_storages_index::RangeFilter;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
+use storages_common_index::RangeFilter;
 
 use super::hive_catalog::HiveCatalog;
 use super::hive_partition_pruner::HivePartitionPruner;

@@ -19,7 +19,7 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_pruner::BlockMetaIndex;
+use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ClusterStatistics;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]

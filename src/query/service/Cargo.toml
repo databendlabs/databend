@@ -59,7 +59,6 @@ common-storage = { path = "../../common/storage" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive/hive", optional = true }
-common-storages-index = { path = "../storages/index" }
 common-storages-information-schema = { path = "../storages/information-schema" }
 common-storages-memory = { path = "../storages/memory" }
 common-storages-null = { path = "../storages/null" }
@@ -73,6 +72,7 @@ common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 
 storages-common-blocks = { path = "../storages/common/blocks" }
+storages-common-index = { path = "../storages/common/index" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 
 # Github dependencies

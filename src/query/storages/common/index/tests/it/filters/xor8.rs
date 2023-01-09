@@ -15,14 +15,14 @@
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::ScalarRef;
-use common_storages_index::filters::Filter;
-use common_storages_index::filters::FilterBuilder;
-use common_storages_index::filters::Xor8Builder;
-use common_storages_index::filters::Xor8Filter;
 use rand::prelude::random;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+use storages_common_index::filters::Filter;
+use storages_common_index::filters::FilterBuilder;
+use storages_common_index::filters::Xor8Builder;
+use storages_common_index::filters::Xor8Filter;
 
 #[test]
 fn test_xor_bitmap_u64() -> Result<()> {
