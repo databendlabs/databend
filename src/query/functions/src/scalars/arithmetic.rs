@@ -366,7 +366,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         builder.offsets.push(offset as u64);
                                     }
                                     values.set_len(offset);
-                                    values.shrink_to_fit();
                                 }
                                 Value::Column(builder.build())
                             }
@@ -403,7 +402,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     builder.offsets.push(offset as u64);
                                 }
                                 values.set_len(offset);
-                                values.shrink_to_fit();
                             }
                             let result = builder.build();
                             Value::Column(NullableColumn {
