@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod explain;
-mod format;
-mod physical_plan;
-mod physical_plan_builder;
-mod physical_plan_display;
-mod physical_plan_visitor;
-mod physical_scalar;
-mod physical_scalar_visitor;
-pub mod table_read_plan;
-mod util;
+use serde::Deserialize;
+use serde::Serialize;
 
-pub use physical_plan::*;
-pub use physical_plan_builder::PhysicalPlanBuilder;
-pub use physical_plan_builder::PhysicalScalarBuilder;
-pub use physical_plan_visitor::PhysicalPlanReplacer;
-pub use physical_scalar::*;
-pub use physical_scalar_visitor::*;
-pub use util::*;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlanStatsInfo {
+    pub estimated_rows: f64,
+}

@@ -25,6 +25,7 @@ use common_meta_app::schema::TableInfo;
 
 use super::AggregateFunctionDesc;
 use super::SortDesc;
+use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalScalar;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
@@ -40,6 +41,7 @@ pub struct TableScan {
 
     /// Only used for display
     pub table_index: IndexType,
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl TableScan {
@@ -59,6 +61,9 @@ impl TableScan {
 pub struct Filter {
     pub input: Box<PhysicalPlan>,
     pub predicates: Vec<PhysicalScalar>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl Filter {
@@ -74,6 +79,7 @@ pub struct Project {
 
     /// Only used for display
     pub columns: ColumnSet,
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl Project {
@@ -91,6 +97,9 @@ impl Project {
 pub struct EvalScalar {
     pub input: Box<PhysicalPlan>,
     pub scalars: Vec<(PhysicalScalar, IndexType)>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl EvalScalar {
@@ -111,6 +120,9 @@ pub struct AggregatePartial {
     pub input: Box<PhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl AggregatePartial {
@@ -148,6 +160,9 @@ pub struct AggregateFinal {
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub before_group_by_schema: DataSchemaRef,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl AggregateFinal {
@@ -175,6 +190,9 @@ pub struct Sort {
     pub order_by: Vec<SortDesc>,
     // limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl Sort {
@@ -188,6 +206,9 @@ pub struct Limit {
     pub input: Box<PhysicalPlan>,
     pub limit: Option<usize>,
     pub offset: usize,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl Limit {
@@ -206,6 +227,9 @@ pub struct HashJoin {
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl HashJoin {
@@ -356,6 +380,9 @@ pub struct UnionAll {
     pub right: Box<PhysicalPlan>,
     pub pairs: Vec<(String, String)>,
     pub schema: DataSchemaRef,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl UnionAll {

@@ -60,6 +60,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::Filter(Filter {
             input: Box::new(input),
             predicates: plan.predicates.clone(),
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
@@ -70,6 +71,7 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             projections: plan.projections.clone(),
             columns: plan.columns.clone(),
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
@@ -79,6 +81,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::EvalScalar(EvalScalar {
             input: Box::new(input),
             scalars: plan.scalars.clone(),
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
@@ -89,6 +92,7 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             group_by: plan.group_by.clone(),
             agg_funcs: plan.agg_funcs.clone(),
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
@@ -100,6 +104,7 @@ pub trait PhysicalPlanReplacer {
             before_group_by_schema: plan.before_group_by_schema.clone(),
             group_by: plan.group_by.clone(),
             agg_funcs: plan.agg_funcs.clone(),
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
@@ -116,6 +121,7 @@ pub trait PhysicalPlanReplacer {
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
@@ -126,6 +132,7 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             order_by: plan.order_by.clone(),
             limit: plan.limit,
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
@@ -136,6 +143,7 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             limit: plan.limit,
             offset: plan.offset,
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
@@ -175,6 +183,7 @@ pub trait PhysicalPlanReplacer {
             right: Box::new(right),
             schema: plan.schema.clone(),
             pairs: plan.pairs.clone(),
+            stat_info: plan.stat_info.clone(),
         }))
     }
 

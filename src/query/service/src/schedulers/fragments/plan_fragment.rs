@@ -194,6 +194,7 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
             source: Box::new(self.source.clone()),
             name_mapping: plan.name_mapping.clone(),
             table_index: plan.table_index,
+            stat_info: plan.stat_info.clone(),
         }))
     }
 }
