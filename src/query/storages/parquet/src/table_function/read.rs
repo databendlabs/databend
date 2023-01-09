@@ -23,11 +23,11 @@ use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::Expr;
-use common_expression::TableSchema;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use storages_common_pruner::RangePrunerCreator;
 
+use super::table::arrow_to_table_schema;
 use super::ParquetTable;
 use super::TableContext;
 use crate::parquet_part::ColumnMeta;
@@ -134,7 +134,7 @@ impl ParquetTable {
         // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
         let (projected_arrow_schema, projected_column_leaves, _, columns_to_read) =
             ParquetReader::do_projection(&self.arrow_schema, &columns_to_read)?;
-        let schema = Arc::new(TableSchema::from(&projected_arrow_schema));
+        let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
 
         pipeline.set_on_init(move || {
             let mut partitions = Vec::with_capacity(locations.len());
@@ -154,7 +154,13 @@ impl ParquetTable {
                 let file_meta = ParquetReader::read_meta(location)?;
                 let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
 
-                if !skip_pruning {
+                let no_stats = file_meta.row_groups.iter().any(|r| {
+                    r.columns()
+                        .iter()
+                        .any(|c| c.metadata().statistics.is_none())
+                });
+
+                if !skip_pruning && !no_stats {
                     // If collecting stats fails or `should_keep` is true, we still read the row group.
                     // Otherwise, the row group will be pruned.
                     if let Ok(row_group_stats) = ParquetReader::collect_row_group_stats(

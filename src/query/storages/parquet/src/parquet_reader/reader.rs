@@ -24,12 +24,12 @@ use common_catalog::plan::Projection;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::TableSchema;
 use common_storage::ColumnLeaves;
 use opendal::Object;
 use opendal::Operator;
 
 use crate::parquet_part::ParquetRowGroupPart;
+use crate::table_function::arrow_to_table_schema;
 
 pub type IndexedChunk = (usize, Vec<u8>);
 
@@ -84,7 +84,7 @@ impl ParquetReader {
             columns_to_read,
         ) = Self::do_projection(&schema, &projection)?;
 
-        let t_schema = TableSchema::from(&projected_arrow_schema);
+        let t_schema = arrow_to_table_schema(projected_arrow_schema.clone());
         let output_schema = DataSchema::from(&t_schema);
 
         Ok(Arc::new(ParquetReader {
