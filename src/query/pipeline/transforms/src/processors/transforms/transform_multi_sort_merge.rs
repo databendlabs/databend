@@ -42,11 +42,11 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 
-use super::sort_utils::Cursor;
-use super::sort_utils::RowConverter;
-use super::sort_utils::Rows;
-use super::sort_utils::SimpleRowConverter;
-use super::sort_utils::SimpleRows;
+use super::sort::Cursor;
+use super::sort::RowConverter;
+use super::sort::Rows;
+use super::sort::SimpleRowConverter;
+use super::sort::SimpleRows;
 
 pub fn try_add_multi_sort_merge(
     pipeline: &mut Pipeline,
