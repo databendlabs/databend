@@ -59,7 +59,6 @@ use crate::utils::arrow::serialize_column;
 use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
-use crate::TypeDeserializer;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Value<T: ValueType> {
