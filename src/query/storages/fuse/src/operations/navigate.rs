@@ -19,9 +19,9 @@ use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures::TryStreamExt;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;

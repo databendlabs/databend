@@ -19,11 +19,11 @@ use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
+use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 

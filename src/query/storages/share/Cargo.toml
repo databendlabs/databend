@@ -14,7 +14,8 @@ test = false
 [dependencies]
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
-common-storages-table-meta = { path = "../table-meta" }
+
+storages-common-table-meta = { path = "../common/table-meta" }
 
 opendal = "0.24"
 serde = { workspace = true }

@@ -17,10 +17,10 @@ use std::vec;
 
 use common_catalog::plan::Partitions;
 use common_exception::Result;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 use super::compact_part::CompactPartInfo;
 use crate::io::SegmentsIO;

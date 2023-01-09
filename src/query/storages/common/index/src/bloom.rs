@@ -33,8 +33,8 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_storages_table_meta::meta::V2BloomBlock;
-use common_storages_table_meta::meta::Versioned;
+use storages_common_table_meta::meta::V2BloomBlock;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;

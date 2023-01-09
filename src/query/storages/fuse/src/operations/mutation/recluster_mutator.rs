@@ -21,11 +21,11 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::Scalar;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
 use opendal::Operator;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::BaseMutator;

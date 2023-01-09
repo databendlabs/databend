@@ -24,12 +24,12 @@ use common_storages_fuse::io::write_meta;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::FuseTable;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
 use futures_util::TryStreamExt;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::storages::fuse::block_writer::BlockWriter;

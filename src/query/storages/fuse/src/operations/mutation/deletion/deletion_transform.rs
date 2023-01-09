@@ -24,12 +24,12 @@ use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 use crate::io::try_join_futures;
 use crate::io::SegmentsIO;
@@ -237,16 +237,16 @@ impl Processor for DeletionTransform {
                 match &meta.op {
                     Deletion::Replaced(block_meta) => {
                         self.input_metas
-                            .entry(meta.index.0)
-                            .and_modify(|v| v.0.push((meta.index.1, block_meta.clone())))
-                            .or_insert((vec![(meta.index.1, block_meta.clone())], vec![]));
+                            .entry(meta.index.segment_idx)
+                            .and_modify(|v| v.0.push((meta.index.block_idx, block_meta.clone())))
+                            .or_insert((vec![(meta.index.block_idx, block_meta.clone())], vec![]));
                         self.abort_operation.add_block(block_meta);
                     }
                     Deletion::Deleted => {
                         self.input_metas
-                            .entry(meta.index.0)
-                            .and_modify(|v| v.1.push(meta.index.1))
-                            .or_insert((vec![], vec![meta.index.1]));
+                            .entry(meta.index.segment_idx)
+                            .and_modify(|v| v.1.push(meta.index.block_idx))
+                            .or_insert((vec![], vec![meta.index.block_idx]));
                     }
                     Deletion::DoNothing => (),
                 }

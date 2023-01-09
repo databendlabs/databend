@@ -21,10 +21,10 @@ use common_arrow::native::write::PaWriter;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_storages_common::blocks_to_parquet;
-use common_storages_table_meta::meta::ColumnId;
-use common_storages_table_meta::meta::ColumnMeta;
 use opendal::Operator;
+use storages_common_blocks::blocks_to_parquet;
+use storages_common_table_meta::meta::ColumnId;
+use storages_common_table_meta::meta::ColumnMeta;
 use tracing::warn;
 
 use crate::fuse_table::FuseStorageFormat;

@@ -20,12 +20,11 @@ use common_expression::type_check::check_function;
 use common_expression::ConstantFolder;
 use common_expression::Domain;
 use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_storages_index::BlockFilter;
-use common_storages_table_meta::meta::Location;
 use opendal::Operator;
+use storages_common_index::BlockFilter;
+use storages_common_table_meta::meta::Location;
 
 use crate::io::BlockFilterReader;
 
@@ -135,7 +134,7 @@ pub fn new_filter_pruner(
 
         let folder = ConstantFolder::new(
             input_domains,
-            FunctionContext::default(),
+            ctx.try_get_function_context()?,
             &BUILTIN_FUNCTIONS,
         );
         let (optimized_expr, _) = folder.fold(&expr);
@@ -171,7 +170,7 @@ pub fn new_filter_pruner(
 
 mod util {
     use common_exception::ErrorCode;
-    use common_storages_index::FilterEvalResult;
+    use storages_common_index::FilterEvalResult;
 
     use super::*;
     #[tracing::instrument(level = "debug", skip_all)]

@@ -16,15 +16,15 @@ use std::marker::PhantomData;
 
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::SegmentInfoVersion;
-use common_storages_table_meta::meta::SnapshotVersion;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::TableSnapshotStatistics;
-use common_storages_table_meta::meta::TableSnapshotStatisticsVersion;
 use futures::AsyncRead;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SegmentInfoVersion;
+use storages_common_table_meta::meta::SnapshotVersion;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableSnapshotStatistics;
+use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 
 #[async_trait::async_trait]
 pub trait VersionedReader<T> {

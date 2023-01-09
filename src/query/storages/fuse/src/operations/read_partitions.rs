@@ -27,10 +27,10 @@ use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_storage::ColumnLeaves;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::TableSnapshot;
 use opendal::Operator;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::TableSnapshot;
 use tracing::debug;
 use tracing::info;
 
