@@ -21,32 +21,37 @@ HashJoin
 ├── build keys: [t1.a (#1), t.a (#0)]
 ├── probe keys: [t2.a (#2), t2.a (#2)]
 ├── filters: []
+├── estimated rows: 100.00
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
 │   ├── probe keys: [t1.a (#1)]
 │   ├── filters: []
+│   ├── estimated rows: 10.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 31
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
-│   │   └── push downs: [filters: [], limit: NONE]
+│   │   ├── push downs: [filters: [], limit: NONE]
+│   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
 │       ├── read bytes: 68
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [], limit: NONE]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
     ├── read bytes: 431
     ├── partitions total: 1
     ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 100.00
 
 query T
 explain select * from t, t2, t1 where t.a = t1.a and t1.a = t2.a and t2.a = t.a
@@ -56,32 +61,37 @@ HashJoin
 ├── build keys: [t1.a (#2), t.a (#0)]
 ├── probe keys: [t2.a (#1), t2.a (#1)]
 ├── filters: []
+├── estimated rows: 100.00
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
 │   ├── probe keys: [t1.a (#2)]
 │   ├── filters: []
+│   ├── estimated rows: 10.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 31
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
-│   │   └── push downs: [filters: [], limit: NONE]
+│   │   ├── push downs: [filters: [], limit: NONE]
+│   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
 │       ├── read bytes: 68
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [], limit: NONE]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
     ├── read bytes: 431
     ├── partitions total: 1
     ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 100.00
 
 query T
 explain select * from t1, t, t2 where t.a = t1.a and t1.a = t2.a and t2.a = t.a
@@ -91,32 +101,37 @@ HashJoin
 ├── build keys: [t1.a (#0), t.a (#1)]
 ├── probe keys: [t2.a (#2), t2.a (#2)]
 ├── filters: []
+├── estimated rows: 100.00
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
 │   ├── probe keys: [t1.a (#0)]
 │   ├── filters: []
+│   ├── estimated rows: 10.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 31
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
-│   │   └── push downs: [filters: [], limit: NONE]
+│   │   ├── push downs: [filters: [], limit: NONE]
+│   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
 │       ├── read bytes: 68
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [], limit: NONE]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
     ├── read bytes: 431
     ├── partitions total: 1
     ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 100.00
 
 query T
 explain select * from t1, t2, t where t.a = t1.a and t1.a = t2.a and t2.a = t.a
@@ -126,32 +141,37 @@ HashJoin
 ├── build keys: [t.a (#2), t1.a (#0)]
 ├── probe keys: [t2.a (#1), t2.a (#1)]
 ├── filters: []
+├── estimated rows: 100.00
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
 │   ├── probe keys: [t1.a (#0)]
 │   ├── filters: []
+│   ├── estimated rows: 10.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 31
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
-│   │   └── push downs: [filters: [], limit: NONE]
+│   │   ├── push downs: [filters: [], limit: NONE]
+│   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
 │       ├── read bytes: 68
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [], limit: NONE]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
     ├── read bytes: 431
     ├── partitions total: 1
     ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 100.00
 
 query T
 explain select * from t2, t1, t where t.a = t1.a and t1.a = t2.a and t2.a = t.a
@@ -161,32 +181,37 @@ HashJoin
 ├── build keys: [t.a (#2), t1.a (#1)]
 ├── probe keys: [t2.a (#0), t2.a (#0)]
 ├── filters: []
+├── estimated rows: 100.00
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
 │   ├── probe keys: [t1.a (#1)]
 │   ├── filters: []
+│   ├── estimated rows: 10.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 31
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
-│   │   └── push downs: [filters: [], limit: NONE]
+│   │   ├── push downs: [filters: [], limit: NONE]
+│   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
 │       ├── read bytes: 68
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [], limit: NONE]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
     ├── read bytes: 431
     ├── partitions total: 1
     ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 100.00
 
 query T
 explain select * from t2, t, t1 where t.a = t1.a and t1.a = t2.a and t2.a = t.a
@@ -196,32 +221,37 @@ HashJoin
 ├── build keys: [t1.a (#2), t.a (#1)]
 ├── probe keys: [t2.a (#0), t2.a (#0)]
 ├── filters: []
+├── estimated rows: 100.00
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
 │   ├── probe keys: [t1.a (#2)]
 │   ├── filters: []
+│   ├── estimated rows: 10.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
 │   │   ├── read bytes: 31
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
-│   │   └── push downs: [filters: [], limit: NONE]
+│   │   ├── push downs: [filters: [], limit: NONE]
+│   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
 │       ├── read bytes: 68
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [], limit: NONE]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
     ├── read bytes: 431
     ├── partitions total: 1
     ├── partitions scanned: 1
-    └── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 100.00
 
 statement ok
 drop database join_reorder
