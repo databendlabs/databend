@@ -17,10 +17,7 @@ use std::collections::VecDeque;
 use std::io::IoSliceMut;
 use std::io::Read;
 use std::ops::Range;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Instant;
 
 use bytes::Bytes;
@@ -40,11 +37,8 @@ use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::ColumnMeta;
 use futures::future::try_join_all;
-use futures::Stream;
 use futures_util::TryStreamExt;
-use opendal::raw::output::Read as DALRead;
 use opendal::Object;
-use opendal::ObjectReader;
 use opendal::Operator;
 
 use crate::fuse_part::FusePartInfo;
@@ -97,8 +91,8 @@ impl OwnerMemory {
                         }
                     }
 
-                    pos += 1;
                     skipping -= std::cmp::min(skipping, chunks[pos].len());
+                    pos += 1;
                 }
 
                 while remaing > 0 && pos < chunks.len() {
@@ -111,6 +105,8 @@ impl OwnerMemory {
                         ));
                         remaing -= take;
                     }
+
+                    pos += 1;
                 }
 
                 Ok(ChunksReader::create(bytes))
@@ -441,24 +437,7 @@ impl BlockReader {
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<Bytes>)> {
-        struct ReaderStream {
-            reader: ObjectReader,
-        }
-
-        impl Stream for ReaderStream {
-            type Item = std::io::Result<Bytes>;
-
-            fn poll_next(
-                mut self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-            ) -> Poll<Option<Self::Item>> {
-                self.reader.poll_next(cx)
-            }
-        }
-
-        let stream = ReaderStream {
-            reader: o.range_reader(start..end).await?,
-        };
+        let stream = o.range_reader(start..end).await?;
         Ok((index, stream.try_collect::<Vec<_>>().await?))
     }
 
