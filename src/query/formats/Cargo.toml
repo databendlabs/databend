@@ -28,7 +28,7 @@ common-io = { path = "../../common/io" }
 common-jsonb = { path = "../../common/jsonb" }
 common-meta-types = { path = "../../meta/types" }
 common-settings = { path = "../settings" }
-common-storages-common = { path = "../storages/common" }
+storages-common-blocks = { path = "../storages/common/blocks" }
 common-storages-table-meta = { path = "../storages/table-meta" }
 
 # Crates.io dependencies

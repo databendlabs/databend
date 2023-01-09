@@ -56,7 +56,7 @@ common-pipeline-transforms = { path = "../pipeline/transforms" }
 common-settings = { path = "../settings" }
 common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
-common-storages-common = { path = "../storages/common" }
+storages-common-blocks = { path = "../storages/common/blocks" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive/hive", optional = true }

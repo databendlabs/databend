@@ -26,7 +26,6 @@ use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::OutputPort;
-use common_storages_common::blocks_to_parquet;
 use common_storages_index::*;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::ColumnId;
@@ -36,6 +35,7 @@ use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
+use storages_common_blocks::blocks_to_parquet;
 
 use super::AppendOperationLogEntry;
 use crate::fuse_table::FuseStorageFormat;

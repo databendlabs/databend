@@ -28,7 +28,7 @@ common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-sharing = { path = "../../sharing" }
 common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
-common-storages-common = { path = "../common" }
+storages-common-blocks = { path = "../common/blocks" }
 common-storages-index = { path = "../index" }
 common-storages-pruner = { path = "../pruner" }
 common-storages-table-meta = { path = "../table-meta" }

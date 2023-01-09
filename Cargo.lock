@@ -1404,7 +1404,6 @@ dependencies = [
  "common-jsonb",
  "common-meta-types",
  "common-settings",
- "common-storages-common",
  "common-storages-table-meta",
  "lexical-core",
  "micromarshal",
@@ -1413,6 +1412,7 @@ dependencies = [
  "ordered-float 3.4.0",
  "pretty_assertions",
  "serde_json",
+ "storages-common-blocks",
 ]
 
 [[package]]
@@ -2024,16 +2024,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-storages-common"
-version = "0.1.0"
-dependencies = [
- "common-arrow",
- "common-exception",
- "common-expression",
- "common-storages-table-meta",
-]
-
-[[package]]
 name = "common-storages-factory"
 version = "0.1.0"
 dependencies = [
@@ -2074,7 +2064,6 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
- "common-storages-common",
  "common-storages-index",
  "common-storages-pruner",
  "common-storages-table-meta",
@@ -2085,6 +2074,7 @@ dependencies = [
  "opendal",
  "serde",
  "serde_json",
+ "storages-common-blocks",
  "streaming-decompression",
  "tracing",
  "typetag",
@@ -3050,7 +3040,6 @@ dependencies = [
  "common-settings",
  "common-sql",
  "common-storage",
- "common-storages-common",
  "common-storages-factory",
  "common-storages-fuse",
  "common-storages-hive",
@@ -3103,6 +3092,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "state",
+ "storages-common-blocks",
  "temp-env",
  "tempfile",
  "time 0.3.17",
@@ -7713,6 +7703,16 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "storages-common-blocks"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-exception",
+ "common-expression",
+ "common-storages-table-meta",
+]
 
 [[package]]
 name = "str_stack"

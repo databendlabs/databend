@@ -16,7 +16,6 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
-use common_storages_common::blocks_to_parquet;
 use common_storages_fuse::io::write_block;
 use common_storages_fuse::io::write_data;
 use common_storages_fuse::io::TableMetaLocationGenerator;
@@ -30,6 +29,7 @@ use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
+use storages_common_blocks::blocks_to_parquet;
 use uuid::Uuid;
 
 const DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE: usize = 300 * 1024;
