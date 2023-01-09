@@ -18,4 +18,5 @@ common-expression = { path = "../../expression" }
 common-storages-index = { path = "../index" }
 common-storages-table-meta = { path = "../table-meta" }
 
+serde = { workspace = true }
 tracing = "0.1.36"

@@ -16,8 +16,11 @@
 
 mod limiter_pruner;
 mod range_pruner;
+mod topn_pruner;
 
 pub use limiter_pruner::LimiterPruner;
 pub use limiter_pruner::LimiterPrunerCreator;
 pub use range_pruner::RangePruner;
 pub use range_pruner::RangePrunerCreator;
+pub use topn_pruner::BlockMetaIndex;
+pub use topn_pruner::TopNPrunner;

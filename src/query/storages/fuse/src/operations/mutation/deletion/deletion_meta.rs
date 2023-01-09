@@ -19,9 +19,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
+use common_storages_pruner::BlockMetaIndex;
 use common_storages_table_meta::meta::BlockMeta;
-
-use crate::pruning::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Deletion {

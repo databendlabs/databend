@@ -19,9 +19,8 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_pruner::BlockMetaIndex;
 use common_storages_table_meta::meta::ClusterStatistics;
-
-use crate::pruning::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct DeletionPartInfo {

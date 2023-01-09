@@ -27,10 +27,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_storages_pruner::BlockMetaIndex;
 use common_storages_pruner::LimiterPruner;
 use common_storages_pruner::LimiterPrunerCreator;
 use common_storages_pruner::RangePruner;
 use common_storages_pruner::RangePrunerCreator;
+use common_storages_pruner::TopNPrunner;
 use common_storages_table_meta::caches::LoadParams;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
@@ -44,13 +46,6 @@ use super::pruner;
 use crate::io::MetaReaders;
 use crate::metrics::*;
 use crate::pruning::pruner::Pruner;
-use crate::pruning::topn_pruner;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct BlockMetaIndex {
-    pub segment_idx: usize,
-    pub block_idx: usize,
-}
 
 type SegmentPruningJoinHandles = Vec<JoinHandle<Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>>>>;
 
@@ -182,7 +177,7 @@ impl BlockPruner {
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let tpruner = topn_pruner::TopNPrunner::new(schema, sort, limit);
+            let tpruner = TopNPrunner::create(schema, sort, limit);
             return tpruner.prune(metas);
         }
 
