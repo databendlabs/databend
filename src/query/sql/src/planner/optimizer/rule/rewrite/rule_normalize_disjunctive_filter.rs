@@ -63,8 +63,8 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar, return_type: Da
     match predicate_scalar {
         PredicateScalar::And { args } => {
             assert!(args.len() >= 2);
-            args.iter()
-                .map(|arg| normalize_predicate_scalar(arg.clone(), return_type.clone()))
+            args.into_iter()
+                .map(|arg| normalize_predicate_scalar(arg, return_type.clone()))
                 .reduce(|lhs, rhs| {
                     Scalar::AndExpr(AndExpr {
                         left: Box::from(lhs),
@@ -76,8 +76,8 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar, return_type: Da
         }
         PredicateScalar::Or { args } => {
             assert!(args.len() >= 2);
-            args.iter()
-                .map(|arg| normalize_predicate_scalar(arg.clone(), return_type.clone()))
+            args.into_iter()
+                .map(|arg| normalize_predicate_scalar(arg, return_type.clone()))
                 .reduce(|lhs, rhs| {
                     Scalar::OrExpr(OrExpr {
                         left: Box::from(lhs),
