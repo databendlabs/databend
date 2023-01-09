@@ -108,12 +108,10 @@ impl Display for SplitInfo {
                 self.offset + self.size,
                 self.size,
             )
+        } else if self.size > 0 {
+            write!(f, "{}({} bytes)", self.file.path, self.size)
         } else {
-            if self.size > 0 {
-                write!(f, "{}({} bytes)", self.file.path, self.size)
-            } else {
-                write!(f, "{}", self.file.path)
-            }
+            write!(f, "{}", self.file.path)
         }
     }
 }
