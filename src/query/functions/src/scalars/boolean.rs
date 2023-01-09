@@ -184,16 +184,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_combine_nullable_1_arg::<BooleanType, StringType, _, _>(
-        "try_to_string",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<BooleanType, NullableType<StringType>>(|val, output, _| {
-            output.builder.put_str(if val { "true" } else { "false" });
-            output.validity.push(true);
-        }),
-    );
-
     registry.register_passthrough_nullable_1_arg::<StringType, BooleanType, _, _>(
         "to_boolean",
         FunctionProperty::default(),
@@ -209,21 +199,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     format!("Cannot convert {} to boolean", String::from_utf8_lossy(val)),
                 );
                 output.push(false);
-            }
-        }),
-    );
-
-    registry.register_combine_nullable_1_arg::<StringType, BooleanType, _, _>(
-        "try_to_boolean",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, NullableType<BooleanType>>(|val, output, _| {
-            if val.eq_ignore_ascii_case(b"true") {
-                output.push(true);
-            } else if val.eq_ignore_ascii_case(b"false") {
-                output.push(false);
-            } else {
-                output.push_null();
             }
         }),
     );

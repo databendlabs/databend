@@ -15,23 +15,18 @@
 #![allow(unused_comparisons)]
 
 use common_expression::types::boolean::BooleanDomain;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::BooleanType;
-use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
-use common_expression::utils::arrow::constant_bitmap;
 use common_expression::values::Value;
 use common_expression::values::ValueRef;
-use common_expression::vectorize_1_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_integer_mapped_type;
@@ -279,50 +274,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 ),
                             );
                         }
-
-                        let name = format!("try_to_{dest_type}").to_lowercase();
-                        if src_type.can_lossless_cast_to(*dest_type) {
-                            registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
-                                &name,
-                                FunctionProperty::default(),
-                                |domain| {
-                                    let (domain, overflowing) = domain.overflow_cast();
-                                    debug_assert!(!overflowing);
-                                    FunctionDomain::Domain(NullableDomain {
-                                        has_null: false,
-                                        value: Some(Box::new(
-                                            domain,
-                                        )),
-                                    })
-                                },
-                                vectorize_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(|val, _| {
-                                    Some(val.as_())
-                                })
-                            );
-                        } else {
-                            registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
-                                &name,
-                                FunctionProperty::default(),
-                                |domain| {
-                                    let (domain, overflowing) = domain.overflow_cast();
-                                    FunctionDomain::Domain(NullableDomain {
-                                        has_null: overflowing,
-                                        value: Some(Box::new(
-                                            domain,
-                                        )),
-                                    })
-                                },
-                                vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(
-                                    |val, output, _| {
-                                        if let Some(new_val) = num_traits::cast::cast(val) {
-                                            output.push(new_val);
-                                        } else {
-                                            output.push_null();
-                                        }
-                                    }
-                                ),
-                            );
-                        }
                     }
                 }),
             })
@@ -371,46 +322,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         },
                     );
-                registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
-                    "try_to_string",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::Full,
-                    |from, _| match from {
-                        ValueRef::Scalar(s) => Value::Scalar(Some(s.to_string().into_bytes())),
-                        ValueRef::Column(from) => {
-                            let options = NUM_TYPE::lexical_options();
-                            const FORMAT: u128 = lexical_core::format::STANDARD;
-                            let mut builder =
-                                StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
-                            let values = &mut builder.data;
-
-                            type Native = <NUM_TYPE as Number>::Native;
-                            let mut offset: usize = 0;
-                            unsafe {
-                                for x in from.iter() {
-                                    values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                    values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                    let bytes = &mut values[offset..];
-                                    let len =
-                                        lexical_core::write_with_options_unchecked::<_, FORMAT>(
-                                            Native::from(*x),
-                                            bytes,
-                                            &options,
-                                        )
-                                        .len();
-                                    offset += len;
-                                    builder.offsets.push(offset as u64);
-                                }
-                                values.set_len(offset);
-                            }
-                            let result = builder.build();
-                            Value::Column(NullableColumn {
-                                column: result,
-                                validity: constant_bitmap(true, from.len()).into(),
-                            })
-                        }
-                    },
-                );
             }
         });
     }
@@ -430,28 +341,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     |val, _| val != 0,
                 );
 
-                registry
-                    .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
-                        "try_to_boolean",
-                        FunctionProperty::default(),
-                        |domain| {
-                            FunctionDomain::Domain(NullableDomain {
-                                has_null: false,
-                                value: Some(Box::new(BooleanDomain {
-                                    has_false: domain.min <= 0 && domain.max >= 0,
-                                    has_true: !(domain.min == 0 && domain.max == 0),
-                                })),
-                            })
-                        },
-                        vectorize_with_builder_1_arg::<
-                            NumberType<NUM_TYPE>,
-                            NullableType<BooleanType>,
-                        >(|val, output, _| {
-                            output.builder.push(val != 0);
-                            output.validity.push(true);
-                        }),
-                    );
-
                 let name = format!("to_{src_type}").to_lowercase();
                 registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
                     &name,
@@ -464,28 +353,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     },
                     |val, _| NUM_TYPE::from(val),
                 );
-
-                let name = format!("try_to_{src_type}").to_lowercase();
-                registry
-                    .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
-                        &name,
-                        FunctionProperty::default(),
-                        |domain| {
-                            FunctionDomain::Domain(NullableDomain {
-                                has_null: false,
-                                value: Some(Box::new(SimpleDomain {
-                                    min: if domain.has_false { 0 } else { 1 },
-                                    max: if domain.has_true { 1 } else { 0 },
-                                })),
-                            })
-                        },
-                        vectorize_with_builder_1_arg::<
-                            BooleanType,
-                            NullableType<NumberType<NUM_TYPE>>,
-                        >(|val, output, _| {
-                            output.push(NUM_TYPE::from(val));
-                        }),
-                    );
             }
             _ => unreachable!(),
         });
@@ -518,25 +385,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 };
                             },
                         ),
-                    );
-
-                let name = format!("try_to_{dest_type}").to_lowercase();
-                registry
-                    .register_combine_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
-                        &name,
-                        FunctionProperty::default(),
-                        |_| FunctionDomain::Full,
-                        vectorize_with_builder_1_arg::<
-                            StringType,
-                            NullableType<NumberType<DEST_TYPE>>,
-                        >(|val, output, _| {
-                            let str_val = String::from_utf8_lossy(val);
-                            if let Ok(new_val) = str_val.parse::<DEST_TYPE>() {
-                                output.push(new_val);
-                            } else {
-                                output.push_null();
-                            }
-                        }),
                     );
             }
         });

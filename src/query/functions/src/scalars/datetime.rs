@@ -22,15 +22,12 @@ use common_expression::types::date::date_to_string;
 use common_expression::types::date::string_to_date;
 use common_expression::types::date::DATE_MAX;
 use common_expression::types::date::DATE_MIN;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::Int64Type;
 use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt16Type;
 use common_expression::types::number::UInt32Type;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::number::UInt8Type;
-use common_expression::types::string::StringDomain;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::timestamp::microseconds_to_days;
 use common_expression::types::timestamp::string_to_timestamp;
@@ -39,11 +36,9 @@ use common_expression::types::timestamp::MICROS_IN_A_MILLI;
 use common_expression::types::timestamp::MICROS_IN_A_SEC;
 use common_expression::types::DateType;
 use common_expression::types::Int32Type;
-use common_expression::types::NullableType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
-use common_expression::utils::arrow::constant_bitmap;
 use common_expression::utils::date_helper::*;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_2_arg;
@@ -60,7 +55,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     // [cast | try_cast](xx AS [date | timestamp])
     // to_[date | timestamp](xx)
     register_cast_functions(registry);
-    register_try_cast_functions(registry);
 
     // cast([date | timestamp] AS string)
     // to_string([date | timestamp])
@@ -226,104 +220,6 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
     );
 }
 
-fn register_try_cast_functions(registry: &mut FunctionRegistry) {
-    registry.register_aliases("try_to_timestamp", &["try_to_datetime"]);
-
-    registry.register_combine_nullable_1_arg::<StringType, TimestampType, _, _>(
-        "try_to_timestamp",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, NullableType<TimestampType>>(
-            |val, output, ctx| {
-                let timestamp = string_to_timestamp(val, ctx.tz).map(|ts| ts.timestamp_micros());
-                match timestamp {
-                    Some(timestamp) => output.push(timestamp),
-                    None => output.push_null(),
-                }
-            },
-        ),
-    );
-
-    registry.register_combine_nullable_1_arg::<DateType, TimestampType, _, _>(
-        "try_to_timestamp",
-        FunctionProperty::default(),
-        |domain| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(SimpleDomain {
-                    min: domain.min as i64 * 24 * 3600 * 1000000,
-                    max: domain.max as i64 * 24 * 3600 * 1000000,
-                })),
-            })
-        },
-        vectorize_1_arg::<DateType, NullableType<TimestampType>>(|val, _| {
-            Some((val as i64) * 24 * 3600 * MICROS_IN_A_SEC)
-        }),
-    );
-
-    registry.register_combine_nullable_1_arg::<Int64Type, TimestampType, _, _>(
-        "try_to_timestamp",
-        FunctionProperty::default(),
-        |domain| {
-            if let Some(domain) = int64_domain_to_timestamp_domain(domain) {
-                FunctionDomain::Domain(NullableDomain {
-                    has_null: false,
-                    value: Some(Box::new(domain)),
-                })
-            } else {
-                FunctionDomain::Full
-            }
-        },
-        vectorize_1_arg::<Int64Type, NullableType<TimestampType>>(|val, _| {
-            int64_to_timestamp(val).ok()
-        }),
-    );
-
-    registry.register_combine_nullable_1_arg::<StringType, DateType, _, _>(
-        "try_to_date",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, NullableType<DateType>>(|val, output, ctx| {
-            let date =
-                string_to_date(val, ctx.tz).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE));
-            match date {
-                Some(date) => output.push(date),
-                None => output.push_null(),
-            }
-        }),
-    );
-
-    registry.register_combine_nullable_1_arg::<TimestampType, DateType, _, _>(
-        "try_to_date",
-        FunctionProperty::default(),
-        |domain| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(SimpleDomain {
-                    min: (domain.min / 1000000 / 24 / 3600) as i32,
-                    max: (domain.max / 1000000 / 24 / 3600) as i32,
-                })),
-            })
-        },
-        vectorize_1_arg::<TimestampType, NullableType<DateType>>(|val, _| {
-            Some(microseconds_to_days(val))
-        }),
-    );
-
-    registry.register_combine_nullable_1_arg::<Int64Type, DateType, _, _>(
-        "try_to_date",
-        FunctionProperty::default(),
-        |domain| {
-            let (domain, overflowing) = domain.overflow_cast_with_minmax(DATE_MIN, DATE_MAX);
-            FunctionDomain::Domain(NullableDomain {
-                has_null: overflowing,
-                value: Some(Box::new(domain)),
-            })
-        },
-        vectorize_1_arg::<Int64Type, NullableType<DateType>>(|val, _| check_date(val).ok()),
-    );
-}
-
 fn register_to_string(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<TimestampType, StringType, _, _>(
         "to_string",
@@ -344,46 +240,6 @@ fn register_to_string(registry: &mut FunctionRegistry) {
             output.commit_row();
         }),
     );
-
-    registry.register_combine_nullable_1_arg::<TimestampType, StringType, _, _>(
-        "try_to_string",
-        FunctionProperty::default(),
-        |_| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(StringDomain {
-                    min: vec![],
-                    max: None,
-                })),
-            })
-        },
-        vectorize_with_builder_1_arg::<TimestampType, NullableType<StringType>>(
-            |val, output, ctx| {
-                write!(output.builder.data, "{}", timestamp_to_string(val, ctx.tz)).unwrap();
-                output.builder.commit_row();
-                output.validity.push(true);
-            },
-        ),
-    );
-
-    registry.register_combine_nullable_1_arg::<DateType, StringType, _, _>(
-        "try_to_string",
-        FunctionProperty::default(),
-        |_| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(StringDomain {
-                    min: vec![],
-                    max: None,
-                })),
-            })
-        },
-        vectorize_with_builder_1_arg::<DateType, NullableType<StringType>>(|val, output, ctx| {
-            write!(output.builder.data, "{}", date_to_string(val, ctx.tz)).unwrap();
-            output.builder.commit_row();
-            output.validity.push(true);
-        }),
-    );
 }
 
 fn register_to_number(registry: &mut FunctionRegistry) {
@@ -402,42 +258,6 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |domain| FunctionDomain::Domain(domain.overflow_cast().0),
         |val, _| val as i64,
-    );
-
-    registry.register_combine_nullable_1_arg::<TimestampType, NumberType<i64>, _, _>(
-        "try_to_int64",
-        FunctionProperty::default(),
-        |domain| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(domain.clone())),
-            })
-        },
-        |val, _| match val {
-            ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar)),
-            ValueRef::Column(col) => Value::Column(NullableColumn {
-                validity: constant_bitmap(true, col.len()).into(),
-                column: col,
-            }),
-        },
-    );
-
-    registry.register_combine_nullable_1_arg::<DateType, NumberType<i64>, _, _>(
-        "try_to_int64",
-        FunctionProperty::default(),
-        |domain| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(domain.overflow_cast().0)),
-            })
-        },
-        |val, _| match val {
-            ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar as i64)),
-            ValueRef::Column(col) => Value::Column(NullableColumn {
-                validity: constant_bitmap(true, col.len()).into(),
-                column: col.iter().map(|val| *val as i64).collect(),
-            }),
-        },
     );
 }
 

@@ -26,6 +26,7 @@ use serde::Serialize;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::types::nullable::NullableColumn;
+use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::utils::arrow::constant_bitmap;
 use crate::values::Value;
@@ -133,6 +134,7 @@ pub enum FunctionID {
         params: Vec<usize>,
         args_type: Vec<DataType>,
     },
+    TryAdaptor(TryAdaptor),
 }
 
 pub struct Function {
@@ -194,6 +196,11 @@ impl FunctionRegistry {
                 let factory = self.factories.get(name.as_str())?.get(*id)?;
                 factory(params, args_type)
             }
+
+            FunctionID::TryAdaptor(adaptor) => {
+                let inner = self.get(&adaptor.function_id)?;
+                Some(adaptor.get_function(inner))
+            }
         }
     }
 
@@ -210,6 +217,19 @@ impl FunctionRegistry {
         let name = name.to_lowercase();
 
         let mut candidates = Vec::new();
+
+        if name.starts_with("try_") {
+            let inner_name = &name[4..];
+            for (inner_function_id, inner_function) in
+                self.search_candidates(inner_name, params, args)
+            {
+                let adpator = TryAdaptor {
+                    function_id: Box::new(inner_function_id),
+                };
+                let function = adpator.get_function(inner_function);
+                candidates.push((FunctionID::TryAdaptor(adpator), function));
+            }
+        }
 
         if let Some(funcs) = self.funcs.get(&name) {
             candidates.extend(funcs.iter().enumerate().filter_map(|(id, func)| {
@@ -334,5 +354,50 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy {
                 Value::Column(result)
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TryAdaptor {
+    function_id: Box<FunctionID>,
+}
+
+impl TryAdaptor {
+    pub fn get_function(&self, inner: Arc<Function>) -> Arc<Function> {
+        let mut sig = inner.signature.clone();
+        sig.name = format!("try_{}", sig.name);
+        sig.return_type = sig.return_type.wrap_nullable();
+
+        let inner_c = inner.clone();
+        let calc_domain =
+            Box::new(
+                move |domains: &[Domain]| match (inner_c.calc_domain)(domains) {
+                    FunctionDomain::Domain(d) => {
+                        let d = NullableDomain {
+                            has_null: true,
+                            value: Some(Box::new(d)),
+                        };
+                        FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(d))
+                    }
+                    other => other,
+                },
+            );
+
+        Arc::new(Function {
+            signature: sig,
+            calc_domain,
+            eval: Box::new(move |args, ctx| {
+                let res = (inner.eval)(args, ctx);
+                let validity: Option<Bitmap> = ctx.errors.take().map(|v| v.0.into());
+                match res {
+                    Value::Scalar(s) => match validity {
+                        Some(v) if v.get_bit(0) => Value::Scalar(s),
+                        None => Value::Scalar(s),
+                        _ => Value::Scalar(Scalar::Null),
+                    },
+                    Value::Column(c) => Value::Column(c.wrap_nullable(validity)),
+                }
+            }),
+        })
     }
 }

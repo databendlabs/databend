@@ -18,7 +18,6 @@ use bstr::ByteSlice;
 use chrono::Datelike;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use common_expression::types::date::string_to_date;
-use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::*;
 use common_expression::types::timestamp::string_to_timestamp;
@@ -35,7 +34,6 @@ use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::VariantType;
 use common_expression::types::ALL_NUMERICS_TYPES;
-use common_expression::utils::arrow::constant_bitmap;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
@@ -503,31 +501,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
-    registry.register_combine_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
-        "try_to_variant",
-        FunctionProperty::default(),
-        |_| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(())),
-            })
-        },
-        |val, ctx| match val {
-            ValueRef::Scalar(scalar) => {
-                let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.tz, &mut buf);
-                Value::Scalar(Some(buf))
-            }
-            ValueRef::Column(col) => {
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.tz);
-                Value::Column(NullableColumn {
-                    validity: constant_bitmap(true, new_col.len()).into(),
-                    column: new_col,
-                })
-            }
-        },
-    );
-
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "to_boolean",
         FunctionProperty::default(),
@@ -539,21 +512,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             Err(err) => {
                 ctx.set_error(output.len(), err.to_string());
                 output.push(false);
-            }
-        }),
-    );
-
-    registry.register_combine_nullable_1_arg::<VariantType, BooleanType, _, _>(
-        "try_to_boolean",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(|val, output, _| {
-            match to_bool(val) {
-                Ok(value) => {
-                    output.validity.push(true);
-                    output.builder.push(value);
-                }
-                Err(_) => output.push_null(),
             }
         }),
     );
@@ -570,22 +528,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             output.commit_row();
-        }),
-    );
-
-    registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
-        "try_to_string",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|val, output, _| {
-            match to_str(val) {
-                Ok(value) => {
-                    output.validity.push(true);
-                    output.builder.put_slice(value.as_bytes());
-                    output.builder.commit_row();
-                }
-                Err(_) => output.push_null(),
-            }
         }),
     );
 
@@ -607,18 +549,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_combine_nullable_1_arg::<VariantType, DateType, _, _>(
-        "try_to_date",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
-            match as_str(val).and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.tz)) {
-                Some(date) => output.push(date.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
-                None => output.push_null(),
-            }
-        }),
-    );
-
     registry.register_passthrough_nullable_1_arg::<VariantType, TimestampType, _, _>(
         "to_timestamp",
         FunctionProperty::default(),
@@ -635,25 +565,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     );
                     output.push(0);
                 }
-            },
-        ),
-    );
-
-    registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
-        "try_to_timestamp",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
-            |val, output, ctx| match as_str(val) {
-                Some(str_val) => {
-                    let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.tz)
-                        .map(|ts| ts.timestamp_micros());
-                    match timestamp {
-                        Some(timestamp) => output.push(timestamp),
-                        None => output.push_null(),
-                    }
-                }
-                None => output.push_null(),
             },
         ),
     );
@@ -693,50 +604,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
                             },
                         ),
-                    );
-
-                let name = format!("try_to_{dest_type}").to_lowercase();
-                registry
-                    .register_combine_nullable_1_arg::<VariantType, NumberType<NUM_TYPE>, _, _>(
-                        &name,
-                        FunctionProperty::default(),
-                        |_| FunctionDomain::Full,
-                        vectorize_with_builder_1_arg::<
-                            VariantType,
-                            NullableType<NumberType<NUM_TYPE>>,
-                        >(move |val, output, _| {
-                            if dest_type.is_float() {
-                                if let Ok(value) = to_f64(val) {
-                                    if let Some(new_value) = num_traits::cast::cast(value) {
-                                        output.push(new_value);
-                                    } else {
-                                        output.push_null();
-                                    }
-                                } else {
-                                    output.push_null();
-                                }
-                            } else if dest_type.is_signed() {
-                                if let Ok(value) = to_i64(val) {
-                                    if let Some(new_value) = num_traits::cast::cast(value) {
-                                        output.push(new_value);
-                                    } else {
-                                        output.push_null();
-                                    }
-                                } else {
-                                    output.push_null();
-                                }
-                            } else {
-                                if let Ok(value) = to_u64(val) {
-                                    if let Some(new_value) = num_traits::cast::cast(value) {
-                                        output.push(new_value);
-                                    } else {
-                                        output.push_null();
-                                    }
-                                } else {
-                                    output.push_null();
-                                }
-                            }
-                        }),
                     );
             }
         });
