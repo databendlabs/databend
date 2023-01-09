@@ -22,8 +22,14 @@ use common_expression::TableSchemaRef;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnStatistics;
 
-use crate::pruning::BlockIndex;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct BlockMetaIndex {
+    pub segment_idx: usize,
+    pub block_idx: usize,
+}
 
+/// TopN prunner.
+/// Pruning for order by x limit N.
 pub struct TopNPrunner {
     schema: TableSchemaRef,
     sort: Vec<(RemoteExpr<String>, bool, bool)>,
@@ -31,7 +37,7 @@ pub struct TopNPrunner {
 }
 
 impl TopNPrunner {
-    pub(crate) fn new(
+    pub fn create(
         schema: TableSchemaRef,
         sort: Vec<(RemoteExpr<String>, bool, bool)>,
         limit: usize,
@@ -47,8 +53,8 @@ impl TopNPrunner {
 impl TopNPrunner {
     pub fn prune(
         &self,
-        metas: Vec<(BlockIndex, Arc<BlockMeta>)>,
-    ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if self.sort.len() != 1 {
             return Ok(metas);
         }
@@ -92,9 +98,9 @@ impl TopNPrunner {
                         sort_idx
                     ))
                 })?;
-                Ok((*id, stat.clone(), meta.clone()))
+                Ok((id.clone(), stat.clone(), meta.clone()))
             })
-            .collect::<Result<Vec<(BlockIndex, ColumnStatistics, Arc<BlockMeta>)>>>()?;
+            .collect::<Result<Vec<(BlockMetaIndex, ColumnStatistics, Arc<BlockMeta>)>>>()?;
 
         id_stats.sort_by(|a, b| {
             if a.1.null_count + b.1.null_count != 0 && *nulls_first {
@@ -109,7 +115,7 @@ impl TopNPrunner {
         });
         Ok(id_stats
             .iter()
-            .map(|s| (s.0, s.2.clone()))
+            .map(|s| (s.0.clone(), s.2.clone()))
             .take(self.limit)
             .collect())
     }

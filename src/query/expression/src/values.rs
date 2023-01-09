@@ -558,6 +558,14 @@ impl Column {
             range,
             self.len()
         );
+
+        if range.is_empty() {
+            use crate::deserializations::TypeDeserializer;
+            let data_type = self.data_type();
+            let mut de = data_type.create_deserializer(0);
+            return de.finish_to_column();
+        }
+
         match self {
             Column::Null { .. } => Column::Null {
                 len: range.end - range.start,

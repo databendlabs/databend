@@ -29,7 +29,7 @@ use common_io::format_diagnostic::verbose_string;
 use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 
-use crate::processors::sources::input_formats::input_format_text::AligningState;
+use crate::processors::sources::input_formats::input_format_text::AligningStateRowDelimiter;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
@@ -127,6 +127,8 @@ impl InputFormatTSV {
 }
 
 impl InputFormatTextBase for InputFormatTSV {
+    type AligningState = AligningStateRowDelimiter;
+
     fn format_type() -> StageFileFormatType {
         StageFileFormatType::Tsv
     }
@@ -187,10 +189,6 @@ impl InputFormatTextBase for InputFormatTSV {
             num_rows += 1;
         }
         Ok(())
-    }
-
-    fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>> {
-        Ok(state.align_by_record_delimiter(buf))
     }
 }
 

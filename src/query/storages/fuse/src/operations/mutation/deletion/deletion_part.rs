@@ -19,13 +19,12 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_pruner::BlockMetaIndex;
 use common_storages_table_meta::meta::ClusterStatistics;
-
-use crate::pruning::BlockIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct DeletionPartInfo {
-    pub index: BlockIndex,
+    pub index: BlockMetaIndex,
     pub cluster_stats: Option<ClusterStatistics>,
     pub inner_part: PartInfoPtr,
 }
@@ -50,7 +49,7 @@ impl PartInfo for DeletionPartInfo {
 
 impl DeletionPartInfo {
     pub fn create(
-        index: BlockIndex,
+        index: BlockMetaIndex,
         cluster_stats: Option<ClusterStatistics>,
         inner_part: PartInfoPtr,
     ) -> PartInfoPtr {
