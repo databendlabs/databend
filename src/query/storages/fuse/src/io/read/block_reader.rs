@@ -13,10 +13,17 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::io::IoSliceMut;
+use std::io::Read;
 use std::ops::Range;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 use std::time::Instant;
 
+use bytes::Bytes;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::SchemaDescriptor;
@@ -33,7 +40,11 @@ use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::ColumnMeta;
 use futures::future::try_join_all;
+use futures::Stream;
+use futures_util::TryStreamExt;
+use opendal::raw::output::Read as DALRead;
 use opendal::Object;
+use opendal::ObjectReader;
 use opendal::Operator;
 
 use crate::fuse_part::FusePartInfo;
@@ -51,23 +62,115 @@ pub struct BlockReader {
 }
 
 pub struct OwnerMemory {
-    chunks: HashMap<usize, Vec<u8>>,
+    chunks: HashMap<usize, Vec<Bytes>>,
 }
 
 impl OwnerMemory {
-    pub fn create(chunks: Vec<(usize, Vec<u8>)>) -> OwnerMemory {
+    pub fn create(chunks: Vec<(usize, Vec<Bytes>)>) -> OwnerMemory {
         let chunks = chunks.into_iter().collect::<HashMap<_, _>>();
         OwnerMemory { chunks }
     }
 
-    pub fn get_chunk(&self, index: usize, path: &str) -> Result<&[u8]> {
+    pub fn get_chunk(
+        &self,
+        index: usize,
+        path: &str,
+        range: Range<usize>,
+    ) -> Result<ChunksReader<'_>> {
         match self.chunks.get(&index) {
-            Some(chunk) => Ok(chunk.as_slice()),
+            Some(chunks) => {
+                let mut bytes = VecDeque::new();
+                let mut skipping = range.start;
+                let mut remaing = range.end - range.start;
+
+                let mut pos = 0;
+                while skipping > 0 && pos < chunks.len() {
+                    if skipping < chunks[pos].len() {
+                        unsafe {
+                            let take = std::cmp::min(chunks[pos].len() - skipping, remaing);
+                            let chunk_data = chunks[pos].slice(skipping..skipping + take);
+                            bytes.push_back(std::slice::from_raw_parts(
+                                chunk_data.as_ptr(),
+                                chunk_data.len(),
+                            ));
+                            remaing -= take;
+                        }
+                    }
+
+                    pos += 1;
+                    skipping -= std::cmp::min(skipping, chunks[pos].len());
+                }
+
+                while remaing > 0 && pos < chunks.len() {
+                    unsafe {
+                        let take = std::cmp::min(chunks[pos].len(), remaing);
+                        let chunk_data = chunks[pos].slice(0..take);
+                        bytes.push_back(std::slice::from_raw_parts(
+                            chunk_data.as_ptr(),
+                            chunk_data.len(),
+                        ));
+                        remaing -= take;
+                    }
+                }
+
+                Ok(ChunksReader::create(bytes))
+            }
             None => Err(ErrorCode::Internal(format!(
                 "It's a terrible bug, not found range data, merged_range_idx:{}, path:{}",
                 index, path
             ))),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct ChunksReader<'a> {
+    bytes: VecDeque<&'a [u8]>,
+}
+
+impl<'a> ChunksReader<'a> {
+    pub fn create(bytes: VecDeque<&'a [u8]>) -> ChunksReader<'a> {
+        ChunksReader::<'a> { bytes }
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn to_vec(mut self) -> Vec<u8> {
+        let len = self.bytes.iter().map(|s| s.len()).sum();
+        let mut array = Vec::with_capacity(len);
+
+        while let Some(bytes) = self.bytes.pop_front() {
+            array.extend_from_slice(bytes);
+        }
+
+        array
+    }
+}
+
+impl<'a> Read for ChunksReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        while let Some(first) = self.bytes.front_mut() {
+            match first.read(buf)? {
+                0 if !buf.is_empty() => {
+                    self.bytes.pop_front();
+                }
+                n => return Ok(n),
+            }
+        }
+
+        Ok(0)
+    }
+
+    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
+        while let Some(first) = self.bytes.front_mut() {
+            match first.read_vectored(bufs)? {
+                0 if bufs.iter().any(|b| !b.is_empty()) => {
+                    self.bytes.pop_front();
+                }
+                n => return Ok(n),
+            }
+        }
+
+        Ok(0)
     }
 }
 
@@ -90,19 +193,17 @@ where Self: 'static
         }
     }
 
-    pub fn columns_chunks(&self) -> Result<Vec<(usize, &[u8])>> {
+    pub fn columns_chunks(&self) -> Result<Vec<(usize, ChunksReader<'_>)>> {
         let mut res = Vec::with_capacity(self.columns_chunks.len());
 
         for (column_idx, (chunk_idx, range)) in &self.columns_chunks {
-            let chunk = self.owner_memory.get_chunk(*chunk_idx, &self.path)?;
-            res.push((*column_idx, &chunk[range.clone()]));
+            let chunk = self
+                .owner_memory
+                .get_chunk(*chunk_idx, &self.path, range.clone())?;
+            res.push((*column_idx, chunk));
         }
 
         Ok(res)
-    }
-
-    pub fn get_chunk(&self, index: usize, path: &str) -> Result<&[u8]> {
-        self.owner_memory.get_chunk(index, path)
     }
 
     pub fn add_column_chunk(&mut self, chunk: usize, column: usize, range: Range<usize>) {
@@ -339,9 +440,26 @@ impl BlockReader {
         index: usize,
         start: u64,
         end: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.range_read(start..end).await?;
-        Ok((index, chunk))
+    ) -> Result<(usize, Vec<Bytes>)> {
+        struct ReaderStream {
+            reader: ObjectReader,
+        }
+
+        impl Stream for ReaderStream {
+            type Item = std::io::Result<Bytes>;
+
+            fn poll_next(
+                mut self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+            ) -> Poll<Option<Self::Item>> {
+                self.reader.poll_next(cx)
+            }
+        }
+
+        let stream = ReaderStream {
+            reader: o.range_reader(start..end).await?,
+        };
+        Ok((index, stream.try_collect::<Vec<_>>().await?))
     }
 
     #[inline]
@@ -350,9 +468,9 @@ impl BlockReader {
         index: usize,
         start: u64,
         end: u64,
-    ) -> Result<(usize, Vec<u8>)> {
+    ) -> Result<(usize, Vec<Bytes>)> {
         let chunk = o.blocking_range_read(start..end)?;
-        Ok((index, chunk))
+        Ok((index, vec![Bytes::from(chunk)]))
     }
 
     pub fn schema(&self) -> TableSchemaRef {

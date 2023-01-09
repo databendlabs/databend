@@ -2152,6 +2152,7 @@ dependencies = [
  "async-trait-fn",
  "backoff",
  "backon",
+ "bytes",
  "chrono",
  "common-arrow",
  "common-base",

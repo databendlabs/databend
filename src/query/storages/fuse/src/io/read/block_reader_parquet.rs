@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::io::Read;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -112,15 +113,15 @@ impl BlockReader {
     }
 
     /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
-    pub fn deserialize_parquet_chunks_with_buffer(
+    pub fn deserialize_parquet_chunks_with_buffer<R: Read + Clone + Send + Sync>(
         &self,
         num_rows: usize,
         compression: &Compression,
         columns_meta: &HashMap<usize, ColumnMeta>,
-        columns_chunks: Vec<(usize, &[u8])>,
+        columns_chunks: Vec<(usize, R)>,
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
-        let chunk_map: HashMap<usize, &[u8]> = columns_chunks.into_iter().collect();
+        let chunk_map: HashMap<usize, R> = columns_chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
@@ -132,7 +133,7 @@ impl BlockReader {
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
             for index in indices {
-                let column_read = <&[u8]>::clone(&chunk_map[index]);
+                let column_read = chunk_map[index].clone();
                 let column_meta = &columns_meta[index];
                 let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
                 column_metas.push(column_meta);
@@ -164,9 +165,9 @@ impl BlockReader {
         DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
     }
 
-    fn chunks_to_parquet_array_iter<'a>(
+    fn chunks_to_parquet_array_iter<'a, R: Read + 'a + Sync + Send>(
         metas: Vec<&ColumnMeta>,
-        chunks: Vec<&'a [u8]>,
+        chunks: Vec<R>,
         rows: usize,
         column_descriptors: Vec<&ColumnDescriptor>,
         field: Field,
