@@ -119,6 +119,10 @@ impl ParquetTable {
         // do parition at the begin of the whole pipeline.
         let push_downs = plan.push_downs.clone();
 
+        // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.
+        // Therefore, if there is inner fields in projection, we skip the row group pruning.
+        let skip_pruning = matches!(columns_to_read, Projection::InnerColumns(_));
+
         // Use `projected_column_leaves` to collect stats from row groups for pruning.
         // `projected_column_leaves` contains the smallest column set that is needed for the query.
         // Use `projected_arrow_schema` to create `row_group_pruner` (`RangePruner`).
@@ -150,18 +154,20 @@ impl ParquetTable {
                 let file_meta = ParquetReader::read_meta(location)?;
                 let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
 
-                // If collecting stats fails or `should_keep` is true, we still read the row group.
-                // Otherwise, the row group will be pruned.
-                if let Ok(row_group_stats) = ParquetReader::collect_row_group_stats(
-                    &projected_column_leaves,
-                    &file_meta.row_groups,
-                ) {
-                    for (idx, (stats, _rg)) in row_group_stats
-                        .iter()
-                        .zip(file_meta.row_groups.iter())
-                        .enumerate()
-                    {
-                        row_group_pruned[idx] = !row_group_pruner.should_keep(stats);
+                if !skip_pruning {
+                    // If collecting stats fails or `should_keep` is true, we still read the row group.
+                    // Otherwise, the row group will be pruned.
+                    if let Ok(row_group_stats) = ParquetReader::collect_row_group_stats(
+                        &projected_column_leaves,
+                        &file_meta.row_groups,
+                    ) {
+                        for (idx, (stats, _rg)) in row_group_stats
+                            .iter()
+                            .zip(file_meta.row_groups.iter())
+                            .enumerate()
+                        {
+                            row_group_pruned[idx] = !row_group_pruner.should_keep(stats);
+                        }
                     }
                 }
 
