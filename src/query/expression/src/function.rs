@@ -218,8 +218,7 @@ impl FunctionRegistry {
 
         let mut candidates = Vec::new();
 
-        if name.starts_with("try_") {
-            let inner_name = &name[4..];
+        if let Some(inner_name) = name.strip_prefix("try_") {
             for (inner_function_id, inner_function) in
                 self.search_candidates(inner_name, params, args)
             {
@@ -228,6 +227,9 @@ impl FunctionRegistry {
                 };
                 let function = adpator.get_function(inner_function);
                 candidates.push((FunctionID::TryAdaptor(adpator), function));
+            }
+            if !candidates.is_empty() {
+                return candidates;
             }
         }
 
