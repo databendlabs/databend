@@ -41,7 +41,6 @@ use crate::processors::sources::input_formats::impls::input_format_ndjson::Input
 use crate::processors::sources::input_formats::impls::input_format_parquet::InputFormatParquet;
 use crate::processors::sources::input_formats::impls::input_format_tsv::InputFormatTSV;
 use crate::processors::sources::input_formats::impls::input_format_xml::InputFormatXML;
-use crate::processors::sources::input_formats::input_format_text::InputFormatText;
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::InputFormat;
@@ -135,13 +134,11 @@ impl Debug for InputContext {
 impl InputContext {
     pub fn get_input_format(format: &StageFileFormatType) -> Result<Arc<dyn InputFormat>> {
         match format {
-            StageFileFormatType::Tsv => Ok(Arc::new(InputFormatText::<InputFormatTSV>::create())),
-            StageFileFormatType::Csv => Ok(Arc::new(InputFormatText::<InputFormatCSV>::create())),
-            StageFileFormatType::NdJson => {
-                Ok(Arc::new(InputFormatText::<InputFormatNDJson>::create()))
-            }
+            StageFileFormatType::Tsv => Ok(Arc::new(InputFormatTSV::create())),
+            StageFileFormatType::Csv => Ok(Arc::new(InputFormatCSV::create())),
+            StageFileFormatType::NdJson => Ok(Arc::new(InputFormatNDJson::create())),
             StageFileFormatType::Parquet => Ok(Arc::new(InputFormatParquet {})),
-            StageFileFormatType::Xml => Ok(Arc::new(InputFormatText::<InputFormatXML>::create())),
+            StageFileFormatType::Xml => Ok(Arc::new(InputFormatXML::create())),
             format => Err(ErrorCode::Internal(format!(
                 "Unsupported file format: {:?}",
                 format
@@ -309,6 +306,37 @@ impl InputContext {
             StageFileCompression::None => None,
         };
         Ok(compression_algo)
+    }
+
+    pub fn parse_error_row_based(
+        &self,
+        reason: &str,
+        split_info: &Arc<SplitInfo>,
+        offset_in_split: usize,
+        row_in_split: usize,
+        start_row_of_split: Option<usize>,
+    ) -> ErrorCode {
+        let offset = offset_in_split + split_info.offset;
+        let pos = match start_row_of_split {
+            None => {
+                format!(
+                    "row_in_split={row_in_split}, offset={offset}={}+{offset_in_split}",
+                    split_info.offset
+                )
+            }
+            Some(row) => {
+                format!(
+                    "row={}={row}+{row_in_split}, offset={offset}={}+{offset_in_split}",
+                    row + row_in_split,
+                    split_info.offset
+                )
+            }
+        };
+        let msg = format!(
+            "{reason}, split {}, {pos}, options={:?}, schema={:?}",
+            split_info, self.format_options, self.schema
+        );
+        ErrorCode::BadBytes(msg)
     }
 }
 

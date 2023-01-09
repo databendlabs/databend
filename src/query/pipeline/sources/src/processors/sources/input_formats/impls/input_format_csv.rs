@@ -45,14 +45,16 @@ use crate::processors::sources::input_formats::SplitInfo;
 pub struct InputFormatCSV {}
 
 impl InputFormatCSV {
+    pub fn create() -> Self {
+        Self {}
+    }
+
     fn read_row(
         field_decoder: &FieldDecoderCSV,
         buf: &[u8],
         deserializers: &mut [TypeDeserializerImpl],
         schema: &TableSchemaRef,
         field_ends: &[usize],
-        path: &str,
-        row_index: usize,
     ) -> Result<()> {
         let mut field_start = 0;
         for (c, deserializer) in deserializers.iter_mut().enumerate() {
@@ -64,7 +66,7 @@ impl InputFormatCSV {
             } else {
                 if let Err(e) = field_decoder.read_field(deserializer, &mut reader, true) {
                     let err_msg = format_column_error(schema, c, col_data, &e.message());
-                    return Err(csv_error(&err_msg, path, row_index));
+                    return Err(ErrorCode::BadBytes(err_msg));
                 };
                 let mut next = [0u8; 1];
                 let readn = reader.read(&mut next[..])?;
@@ -77,7 +79,7 @@ impl InputFormatCSV {
                     );
 
                     let err_msg = format_column_error(schema, c, col_data, &err_msg);
-                    return Err(csv_error(&err_msg, path, row_index));
+                    return Err(ErrorCode::BadBytes(err_msg));
                 }
             }
             field_start = field_end;
@@ -102,7 +104,6 @@ impl InputFormatTextBase for InputFormatCSV {
         let n_column = columns.len();
         let mut start = 0usize;
         let mut num_rows = 0usize;
-        let start_row = batch.start_row.expect("must success");
         let mut field_end_idx = 0;
         let field_decoder = builder
             .field_decoder
@@ -117,8 +118,6 @@ impl InputFormatTextBase for InputFormatCSV {
                 columns,
                 &builder.ctx.schema,
                 &batch.field_ends[field_end_idx..field_end_idx + n_column],
-                &batch.path,
-                start_row + i,
             ) {
                 if builder.ctx.on_error_mode == OnErrorMode::Continue {
                     columns.iter_mut().for_each(|c| {
@@ -131,7 +130,7 @@ impl InputFormatTextBase for InputFormatCSV {
                     field_end_idx += n_column;
                     continue;
                 } else {
-                    return Err(e);
+                    return Err(batch.error(&e.message(), &builder.ctx, start, i));
                 }
             }
             start = *end;
@@ -155,35 +154,6 @@ pub struct CsvReaderState {
     pub n_end: usize,
 
     num_fields: usize,
-    path: String,
-}
-
-impl CsvReaderState {
-    fn check_num_field(
-        expect: usize,
-        actual: usize,
-        field_ends: &[usize],
-        path: &str,
-        rows: usize,
-    ) -> Result<()> {
-        if actual < expect {
-            Err(csv_error(
-                &format!("expect {} fields, only found {} ", expect, actual),
-                path,
-                rows,
-            ))
-        } else if actual > expect + 1
-            || (actual == expect + 1 && field_ends[expect] != field_ends[expect - 1])
-        {
-            Err(csv_error(
-                &format!("too many fields, expect {}, got {}", expect, actual),
-                path,
-                rows,
-            ))
-        } else {
-            Ok(())
-        }
-    }
 }
 
 impl AligningStateTextBased for CsvReaderState {
@@ -211,17 +181,13 @@ impl AligningStateTextBased for CsvReaderState {
             field_ends: vec![0; ctx.schema.num_fields() + 6],
             n_end: 0,
             num_fields: ctx.schema.num_fields(),
-            path: split_info.file.path.clone(),
         })
     }
 
     fn align(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
         let num_fields = self.num_fields;
-        let field_ends = &mut self.field_ends[..];
-        let start_row = self.common.rows;
-        self.common.offset += buf_in.len();
-
         // assume n_out <= n_in for read_record
+
         let mut out_tmp = vec![0u8; buf_in.len()];
         let mut endlen = self.n_end;
         let mut buf = buf_in;
@@ -229,7 +195,7 @@ impl AligningStateTextBased for CsvReaderState {
         while self.common.rows_to_skip > 0 {
             let (result, n_in, _, n_end) =
                 self.reader
-                    .read_record(buf, &mut out_tmp, &mut field_ends[endlen..]);
+                    .read_record(buf, &mut out_tmp, &mut self.field_ends[endlen..]);
             buf = &buf[n_in..];
             endlen += n_end;
 
@@ -239,27 +205,13 @@ impl AligningStateTextBased for CsvReaderState {
                     return Ok(vec![]);
                 }
                 ReadRecordResult::OutputFull => {
-                    return Err(output_full_error(
-                        &self.split_info.file.path,
-                        self.common.rows,
-                    ));
+                    return Err(self.error_output_full());
                 }
                 ReadRecordResult::OutputEndsFull => {
-                    return Err(output_ends_full_error(
-                        num_fields,
-                        field_ends.len(),
-                        &self.split_info.file.path,
-                        self.common.rows,
-                    ));
+                    return Err(self.error_output_ends_full(num_fields, self.field_ends.len()));
                 }
                 ReadRecordResult::Record => {
-                    Self::check_num_field(
-                        num_fields,
-                        endlen,
-                        field_ends,
-                        &self.split_info.file.path,
-                        self.common.rows,
-                    )?;
+                    self.check_num_field(num_fields, endlen, &self.field_ends)?;
 
                     self.common.rows_to_skip -= 1;
                     tracing::debug!(
@@ -267,14 +219,11 @@ impl AligningStateTextBased for CsvReaderState {
                         self.common.rows_to_skip
                     );
                     self.common.rows += 1;
+                    self.common.offset += n_in;
                     endlen = 0;
                 }
                 ReadRecordResult::End => {
-                    return Err(csv_error(
-                        "unexpect eof in header",
-                        &self.split_info.file.path,
-                        self.common.rows,
-                    ));
+                    return Err(self.csv_error("unexpect EOF in header"));
                 }
             }
         }
@@ -288,56 +237,44 @@ impl AligningStateTextBased for CsvReaderState {
             data: vec![],
             row_ends: vec![],
             field_ends: vec![],
+            split_info: self.split_info.clone(),
             path: self.split_info.file.path.to_string(),
             batch_id: self.common.batch_id,
-            offset: 0,
-            start_row: Some(self.common.rows),
+            start_offset_in_split: self.common.offset,
+            start_row_in_split: self.common.rows,
+            start_row_of_split: Some(0),
         };
 
         while !buf.is_empty() {
-            let (result, n_in, n_out, n_end) =
-                self.reader
-                    .read_record(buf, &mut out_tmp[out_pos..], &mut field_ends[endlen..]);
+            let (result, n_in, n_out, n_end) = self.reader.read_record(
+                buf,
+                &mut out_tmp[out_pos..],
+                &mut self.field_ends[endlen..],
+            );
             buf = &buf[n_in..];
             endlen += n_end;
             out_pos += n_out;
             match result {
                 ReadRecordResult::InputEmpty => break,
                 ReadRecordResult::OutputFull => {
-                    return Err(output_full_error(
-                        &self.split_info.file.path,
-                        start_row + row_batch.row_ends.len(),
-                    ));
+                    return Err(self.error_output_full());
                 }
                 ReadRecordResult::OutputEndsFull => {
-                    return Err(output_ends_full_error(
-                        num_fields,
-                        field_ends.len(),
-                        &self.split_info.file.path,
-                        start_row + row_batch.row_ends.len(),
-                    ));
+                    return Err(self.error_output_ends_full(num_fields, self.field_ends.len()));
                 }
                 ReadRecordResult::Record => {
-                    Self::check_num_field(
-                        num_fields,
-                        endlen,
-                        field_ends,
-                        &self.split_info.file.path,
-                        start_row + row_batch.row_ends.len(),
-                    )?;
+                    self.check_num_field(num_fields, endlen, &self.field_ends)?;
                     row_batch
                         .field_ends
-                        .extend_from_slice(&field_ends[..num_fields]);
+                        .extend_from_slice(&self.field_ends[..num_fields]);
                     row_batch.row_ends.push(last_batch_remain_len + out_pos);
                     endlen = 0;
                     row_batch_end = out_pos;
+                    self.common.offset += n_in;
+                    self.common.rows += 1;
                 }
                 ReadRecordResult::End => {
-                    return Err(csv_error(
-                        "unexpect eof, should not happen",
-                        &self.split_info.file.path,
-                        start_row + row_batch.row_ends.len(),
-                    ));
+                    return Err(self.csv_error("unexpect eof, should not happen"));
                 }
             }
         }
@@ -356,7 +293,6 @@ impl AligningStateTextBased for CsvReaderState {
             let last_remain = mem::take(&mut self.out);
 
             self.common.batch_id += 1;
-            self.common.rows += row_batch.row_ends.len();
             self.out.extend_from_slice(&out_tmp[row_batch_end..]);
 
             tracing::debug!(
@@ -380,15 +316,14 @@ impl AligningStateTextBased for CsvReaderState {
     fn align_flush(&mut self) -> Result<Vec<RowBatch>> {
         let mut res = vec![];
         let num_fields = self.num_fields;
-        let field_ends = &mut self.field_ends[..];
         let in_tmp = Vec::new();
         let mut out_tmp = vec![0u8; 1];
         let mut endlen = self.n_end;
 
         if self.common.rows_to_skip > 0 {
-            let (result, _, _, n_end) =
+            let (result, n_in, _, n_end) =
                 self.reader
-                    .read_record(&in_tmp, &mut out_tmp, &mut field_ends[endlen..]);
+                    .read_record(&in_tmp, &mut out_tmp, &mut self.field_ends[endlen..]);
             endlen += n_end;
 
             return match result {
@@ -396,24 +331,14 @@ impl AligningStateTextBased for CsvReaderState {
                     self.n_end = endlen;
                     Ok(vec![])
                 }
-                ReadRecordResult::OutputFull => {
-                    Err(output_full_error(&self.path, self.common.rows))
+                ReadRecordResult::OutputFull => Err(self.error_output_full()),
+                ReadRecordResult::OutputEndsFull => {
+                    Err(self.error_output_ends_full(num_fields, self.field_ends.len()))
                 }
-                ReadRecordResult::OutputEndsFull => Err(output_ends_full_error(
-                    num_fields,
-                    field_ends.len(),
-                    &self.split_info.file.path,
-                    self.common.rows,
-                )),
                 ReadRecordResult::Record => {
-                    Self::check_num_field(
-                        num_fields,
-                        endlen,
-                        field_ends,
-                        &self.path,
-                        self.common.rows,
-                    )?;
-
+                    self.check_num_field(num_fields, endlen, &self.field_ends[..])?;
+                    self.common.offset += n_in;
+                    self.common.rows += 1;
                     self.common.rows_to_skip -= 1;
                     tracing::debug!(
                         "csv aligner: skip a header row, remain {}",
@@ -421,17 +346,11 @@ impl AligningStateTextBased for CsvReaderState {
                     );
                     Ok(vec![])
                 }
-                ReadRecordResult::End => Err(csv_error(
-                    "unexpect eof in header",
-                    &self.path,
-                    self.common.rows,
-                )),
+                ReadRecordResult::End => Err(self.csv_error("unexpect eof in header")),
             };
         }
 
         let num_fields = self.num_fields;
-        let field_ends = &mut self.field_ends[..];
-        let start_row = self.common.rows;
 
         let in_tmp = Vec::new();
         let mut out_tmp = vec![0u8; 1];
@@ -439,49 +358,42 @@ impl AligningStateTextBased for CsvReaderState {
 
         let last_batch_remain_len = self.out.len();
 
-        let (result, _, n_out, n_end) =
+        let (result, n_in, n_out, n_end) =
             self.reader
-                .read_record(&in_tmp, &mut out_tmp, &mut field_ends[endlen..]);
+                .read_record(&in_tmp, &mut out_tmp, &mut self.field_ends[endlen..]);
 
         endlen += n_end;
 
         match result {
             ReadRecordResult::InputEmpty => {
-                return Err(csv_error(
-                    "unexpect eof",
-                    &self.split_info.file.path,
-                    start_row,
-                ));
+                return Err(self.csv_error("unexpect eof"));
             }
             ReadRecordResult::OutputFull => {
-                return Err(output_full_error(&self.split_info.file.path, start_row));
+                return Err(self.error_output_full());
             }
             ReadRecordResult::OutputEndsFull => {
-                return Err(output_ends_full_error(
-                    num_fields,
-                    field_ends.len(),
-                    &self.split_info.file.path,
-                    start_row,
-                ));
+                return Err(self.error_output_ends_full(num_fields, self.field_ends.len()));
             }
             ReadRecordResult::Record => {
-                Self::check_num_field(num_fields, endlen, field_ends, &self.path, start_row)?;
+                self.check_num_field(num_fields, endlen, &self.field_ends)?;
                 let data = mem::take(&mut self.out);
+                self.common.offset += n_in;
+                self.common.rows += 1;
 
                 let row_batch = RowBatch {
                     data,
                     row_ends: vec![last_batch_remain_len + n_out],
-                    field_ends: field_ends[..num_fields].to_vec(),
+                    field_ends: self.field_ends[..num_fields].to_vec(),
+                    split_info: self.split_info.clone(),
                     path: self.split_info.file.path.to_string(),
                     batch_id: self.common.batch_id,
-                    offset: 0,
-                    start_row: Some(self.common.rows),
+                    start_offset_in_split: self.common.offset,
+                    start_row_in_split: self.common.rows,
+                    start_row_of_split: Some(0),
                 };
                 res.push(row_batch);
 
                 self.common.batch_id += 1;
-                self.common.rows += 1;
-
                 tracing::debug!(
                     "csv aligner flush last row of {} bytes",
                     last_batch_remain_len,
@@ -493,29 +405,44 @@ impl AligningStateTextBased for CsvReaderState {
     }
 }
 
-fn output_full_error(path: &str, row: usize) -> ErrorCode {
-    csv_error("output more than input", path, row)
-}
+impl CsvReaderState {
+    fn check_num_field(&self, expect: usize, actual: usize, field_ends: &[usize]) -> Result<()> {
+        if actual < expect {
+            Err(self.csv_error(&format!("expect {} fields, only found {} ", expect, actual)))
+        } else if actual > expect + 1
+            || (actual == expect + 1 && field_ends[expect] != field_ends[expect - 1])
+        {
+            Err(self.csv_error(&format!(
+                "too many fields, expect {}, got {}",
+                expect, actual
+            )))
+        } else {
+            Ok(())
+        }
+    }
 
-fn output_ends_full_error(
-    num_fields_expect: usize,
-    num_fields_actual: usize,
-    path: &str,
-    row: usize,
-) -> ErrorCode {
-    csv_error(
-        &format!(
+    fn error_output_full(&self) -> ErrorCode {
+        self.csv_error("Bug: CSV Reader return output longer then input.")
+    }
+
+    fn error_output_ends_full(
+        &self,
+        num_fields_expect: usize,
+        num_fields_actual: usize,
+    ) -> ErrorCode {
+        self.csv_error(&format!(
             "too many fields, expect {}, got more than {}",
             num_fields_expect, num_fields_actual
-        ),
-        path,
-        row,
-    )
-}
+        ))
+    }
 
-fn csv_error(msg: &str, path: &str, row: usize) -> ErrorCode {
-    let row = row + 1;
-    let msg = format!("fail to parse CSV {}:{} {} ", path, row, msg);
-
-    ErrorCode::BadBytes(msg)
+    fn csv_error(&self, msg: &str) -> ErrorCode {
+        self.ctx.parse_error_row_based(
+            msg,
+            &self.split_info,
+            self.common.offset,
+            self.common.rows,
+            self.split_info.start_row_text(),
+        )
+    }
 }
