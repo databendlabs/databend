@@ -25,12 +25,12 @@ use common_exception::Result;
 use common_expression::Scalar;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
-use common_storages_table_meta::meta;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ColumnMeta;
-use common_storages_table_meta::meta::ColumnStatistics;
 use databend_query::storages::fuse::FuseTable;
 use futures::TryStreamExt;
+use storages_common_table_meta::meta;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 

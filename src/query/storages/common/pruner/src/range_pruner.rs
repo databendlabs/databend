@@ -18,8 +18,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Expr;
 use common_expression::TableSchemaRef;
-use common_storages_index::RangeFilter;
-use common_storages_table_meta::meta::StatisticsOfColumns;
+use storages_common_index::RangeFilter;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 
 pub trait RangePruner {
     // returns ture, if target should NOT be pruned (false positive allowed)

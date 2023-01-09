@@ -58,10 +58,10 @@ use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_storage::DataOperator;
-use common_storages_table_meta::table::is_reserved_opt_key;
-use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use storages_common_table_meta::table::is_reserved_opt_key;
+use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use tracing::debug;
 
 use crate::binder::location::parse_uri_location;

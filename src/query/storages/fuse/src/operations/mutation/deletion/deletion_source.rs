@@ -30,12 +30,12 @@ use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_storages_common::blocks_to_parquet;
-use common_storages_pruner::BlockMetaIndex;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ClusterStatistics;
-use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
+use storages_common_blocks::blocks_to_parquet;
+use storages_common_pruner::BlockMetaIndex;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::table::TableCompression;
 
 use super::deletion_meta::Deletion;
 use super::deletion_meta::DeletionSourceMeta;

@@ -139,12 +139,17 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
                 let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
-                let ctx = EvalContext {
+                let mut ctx = EvalContext {
                     generics,
                     num_rows: self.input_columns.num_rows(),
+                    validity: None,
+                    errors: None,
                     tz: self.func_ctx.tz,
                 };
-                (function.eval)(cols_ref.as_slice(), ctx).map_err(|msg| (span.clone(), msg))
+                let result = (function.eval)(cols_ref.as_slice(), &mut ctx);
+                ctx.render_error(&cols, &function.signature.name)
+                    .map_err(|msg| (span.clone(), msg))?;
+                Ok(result)
             }
             Expr::Cast {
                 span,

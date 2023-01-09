@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-index"
+name = "storages-common-index"
 version = "0.1.0"
 edition = "2021"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
@@ -15,12 +15,12 @@ test = false
 ignored = ["xorfilter-rs"]
 
 [dependencies]
-common-catalog = { path = "../../catalog" }
-common-exception = { path = "../../../common/exception" }
-common-expression = { path = "../../expression" }
-common-functions = { path = "../../functions" }
-# common-sql = { path = "../../sql" }
-common-storages-table-meta = { path = "../table-meta" }
+common-catalog = { path = "../../../catalog" }
+common-exception = { path = "../../../../common/exception" }
+common-expression = { path = "../../../expression" }
+common-functions = { path = "../../../functions" }
+
+storages-common-table-meta = { path = "../table-meta" }
 
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = [
     "cbordata",

@@ -41,9 +41,18 @@ SELECT ta[3] FROM t
 NULL
 NULL
 
-## TODO: get from tuple fields
-## SELECT ta[0]:a FROM t
-## SELECT * FROM t where ta[0]:b > 3
+query I
+SELECT ta[1].a FROM t
+----
+1
+4
+7
+
+query T
+SELECT * FROM t where ta[1].b > 3
+----
+[(4,5)]
+[(7,8)]
 
 statement ok
 DROP TABLE t

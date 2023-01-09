@@ -118,14 +118,19 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
-            let ts = string_to_timestamp(val, ctx.tz).ok_or_else(|| {
-                format!(
-                    "unable to cast {} to TimestampType",
-                    String::from_utf8_lossy(val)
-                )
-            })?;
-            output.push(ts.timestamp_micros());
-            Ok(())
+            match string_to_timestamp(val, ctx.tz) {
+                Some(ts) => output.push(ts.timestamp_micros()),
+                None => {
+                    ctx.set_error(
+                        output.len(),
+                        format!(
+                            "unable to cast {} to TimestampType",
+                            String::from_utf8_lossy(val)
+                        ),
+                    );
+                    output.push(0);
+                }
+            }
         }),
     );
 
@@ -141,7 +146,6 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<DateType, TimestampType>(|val, output, _| {
             let ts = (val as i64) * 24 * 3600 * MICROS_IN_A_SEC;
             output.push(ts);
-            Ok(())
         }),
     );
 
@@ -153,9 +157,14 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
                 .map(FunctionDomain::Domain)
                 .unwrap_or(FunctionDomain::MayThrow)
         },
-        vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, _| {
-            output.push(int64_to_timestamp(val)?);
-            Ok(())
+        vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, ctx| {
+            match int64_to_timestamp(val) {
+                Ok(ts) => output.push(ts),
+                Err(e) => {
+                    ctx.set_error(output.len(), e);
+                    output.push(0);
+                }
+            }
         }),
     );
 
@@ -163,16 +172,21 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
         "to_date",
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
-            let d = string_to_date(val, ctx.tz).ok_or_else(|| {
-                format!(
-                    "unable to cast {} to DateType",
-                    String::from_utf8_lossy(val)
-                )
-            })?;
-            output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
-            Ok(())
-        }),
+        vectorize_with_builder_1_arg::<StringType, DateType>(
+            |val, output, ctx| match string_to_date(val, ctx.tz) {
+                Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                None => {
+                    ctx.set_error(
+                        output.len(),
+                        format!(
+                            "unable to cast {} to DateType",
+                            String::from_utf8_lossy(val)
+                        ),
+                    );
+                    output.push(0);
+                }
+            },
+        ),
     );
 
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
@@ -186,7 +200,6 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
         },
         vectorize_with_builder_1_arg::<TimestampType, DateType>(|val, output, _| {
             output.push(microseconds_to_days(val));
-            Ok(())
         }),
     );
 
@@ -201,10 +214,14 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
                 FunctionDomain::Domain(domain)
             }
         },
-        vectorize_with_builder_1_arg::<Int64Type, DateType>(|val, output, _| {
-            let val = check_date(val)?;
-            output.push(val);
-            Ok(())
+        vectorize_with_builder_1_arg::<Int64Type, DateType>(|val, output, ctx| {
+            match check_date(val) {
+                Ok(d) => output.push(d),
+                Err(e) => {
+                    ctx.set_error(output.len(), e);
+                    output.push(0);
+                }
+            }
         }),
     );
 }
@@ -223,7 +240,6 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
                     Some(timestamp) => output.push(timestamp),
                     None => output.push_null(),
                 }
-                Ok(())
             },
         ),
     );
@@ -274,7 +290,6 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
                 Some(date) => output.push(date),
                 None => output.push_null(),
             }
-            Ok(())
         }),
     );
 
@@ -317,7 +332,6 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<TimestampType, StringType>(|val, output, ctx| {
             write!(output.data, "{}", timestamp_to_string(val, ctx.tz)).unwrap();
             output.commit_row();
-            Ok(())
         }),
     );
 
@@ -328,7 +342,6 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<DateType, StringType>(|val, output, ctx| {
             write!(output.data, "{}", date_to_string(val, ctx.tz)).unwrap();
             output.commit_row();
-            Ok(())
         }),
     );
 
@@ -349,7 +362,6 @@ fn register_to_string(registry: &mut FunctionRegistry) {
                 write!(output.builder.data, "{}", timestamp_to_string(val, ctx.tz)).unwrap();
                 output.builder.commit_row();
                 output.validity.push(true);
-                Ok(())
             },
         ),
     );
@@ -370,7 +382,6 @@ fn register_to_string(registry: &mut FunctionRegistry) {
             write!(output.builder.data, "{}", date_to_string(val, ctx.tz)).unwrap();
             output.builder.commit_row();
             output.validity.push(true);
-            Ok(())
         }),
     );
 }
@@ -381,8 +392,8 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |domain| FunctionDomain::Domain(domain.clone()),
         |val, _| match val {
-            ValueRef::Scalar(scalar) => Ok(Value::Scalar(scalar)),
-            ValueRef::Column(col) => Ok(Value::Column(col)),
+            ValueRef::Scalar(scalar) => Value::Scalar(scalar),
+            ValueRef::Column(col) => Value::Column(col),
         },
     );
 
@@ -403,11 +414,11 @@ fn register_to_number(registry: &mut FunctionRegistry) {
             })
         },
         |val, _| match val {
-            ValueRef::Scalar(scalar) => Ok(Value::Scalar(Some(scalar))),
-            ValueRef::Column(col) => Ok(Value::Column(NullableColumn {
+            ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar)),
+            ValueRef::Column(col) => Value::Column(NullableColumn {
                 validity: constant_bitmap(true, col.len()).into(),
                 column: col,
-            })),
+            }),
         },
     );
 
@@ -421,11 +432,11 @@ fn register_to_number(registry: &mut FunctionRegistry) {
             })
         },
         |val, _| match val {
-            ValueRef::Scalar(scalar) => Ok(Value::Scalar(Some(scalar as i64))),
-            ValueRef::Column(col) => Ok(Value::Column(NullableColumn {
+            ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar as i64)),
+            ValueRef::Column(col) => Value::Column(NullableColumn {
                 validity: constant_bitmap(true, col.len()).into(),
                 column: col.iter().map(|val| *val as i64).collect(),
-            })),
+            }),
         },
     );
 }
@@ -451,8 +462,13 @@ macro_rules! impl_register_arith_functions {
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        builder.push(AddYearsImpl::eval_timestamp(ts, ctx.tz, $signed_wrapper!{delta})?);
-                        Ok(())
+                        match AddYearsImpl::eval_timestamp(ts, ctx.tz, $signed_wrapper!{delta}) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
                     },
                 ),
             );
@@ -461,8 +477,13 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
-                    builder.push(AddYearsImpl::eval_date(date, ctx.tz, $signed_wrapper!{delta})?);
-                    Ok(())
+                    match AddYearsImpl::eval_date(date, ctx.tz, $signed_wrapper!{delta}) {
+                        Ok(t) => builder.push(t),
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e);
+                            builder.push(0);
+                        },
+                    }
                 }),
             );
 
@@ -472,8 +493,13 @@ macro_rules! impl_register_arith_functions {
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        builder.push(AddMonthsImpl::eval_timestamp(ts, ctx.tz, $signed_wrapper!{delta} * 3)?);
-                        Ok(())
+                        match AddMonthsImpl::eval_timestamp(ts, ctx.tz, $signed_wrapper!{delta} * 3) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
                     },
                 ),
             );
@@ -482,8 +508,13 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
-                    builder.push(AddMonthsImpl::eval_date(date, ctx.tz, $signed_wrapper!{delta} * 3)?);
-                    Ok(())
+                    match AddMonthsImpl::eval_date(date, ctx.tz, $signed_wrapper!{delta} * 3) {
+                        Ok(t) => builder.push(t),
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e);
+                            builder.push(0);
+                        },
+                    }
                 }),
             );
 
@@ -493,8 +524,13 @@ macro_rules! impl_register_arith_functions {
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        builder.push(AddMonthsImpl::eval_timestamp(ts, ctx.tz, $signed_wrapper!{delta})?);
-                        Ok(())
+                        match AddMonthsImpl::eval_timestamp(ts, ctx.tz, $signed_wrapper!{delta}) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
                     },
                 ),
             );
@@ -503,8 +539,13 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
-                    builder.push(AddMonthsImpl::eval_date(date, ctx.tz, $signed_wrapper!{delta})?);
-                    Ok(())
+                     match AddMonthsImpl::eval_date(date, ctx.tz, $signed_wrapper!{delta}) {
+                        Ok(t) => builder.push(t),
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e);
+                            builder.push(0);
+                        },
+                     }
                 }),
             );
 
@@ -513,9 +554,14 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, _| {
-                        builder.push(AddDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta})?);
-                        Ok(())
+                    |ts, delta, builder, ctx| {
+                        match AddDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta}) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
                     },
                 ),
             );
@@ -523,9 +569,14 @@ macro_rules! impl_register_arith_functions {
                 concat!($op, "_days"),
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
-                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, _| {
-                    builder.push(AddDaysImpl::eval_date(date, $signed_wrapper!{delta})?);
-                    Ok(())
+                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
+                     match AddDaysImpl::eval_date(date, $signed_wrapper!{delta}) {
+                        Ok(t) => builder.push(t),
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e);
+                            builder.push(0);
+                        },
+                     }
                 }),
             );
 
@@ -534,13 +585,18 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, _| {
-                        builder.push(AddTimesImpl::eval_timestamp(
+                    |ts, delta, builder, ctx| {
+                        match AddTimesImpl::eval_timestamp(
                             ts,
                             $signed_wrapper!{delta},
                             FACTOR_HOUR,
-                        )?);
-                        Ok(())
+                        ) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
                     },
                 ),
             );
@@ -550,14 +606,19 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
-                    |ts, delta, builder, _| {
+                    |ts, delta, builder, ctx| {
                         let val = (ts as i64) * 24 * 3600 * MICROS_IN_A_SEC;
-                        builder.push(AddTimesImpl::eval_timestamp(
+                        match AddTimesImpl::eval_timestamp(
                             val,
                             $signed_wrapper!{delta},
                             FACTOR_HOUR,
-                        )?);
-                        Ok(())
+                        ) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
                     },
                 ),
             );
@@ -567,13 +628,18 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, _| {
-                        builder.push(AddTimesImpl::eval_timestamp(
+                    |ts, delta, builder, ctx| {
+                        match AddTimesImpl::eval_timestamp(
                             ts,
                             $signed_wrapper!{delta},
                             FACTOR_MINUTE,
-                        )?);
-                        Ok(())
+                        ) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
                     },
                 ),
             );
@@ -583,14 +649,20 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
-                    |ts, delta, builder, _| {
+                    |ts, delta, builder, ctx| {
                         let val = (ts as i64) * 24 * 3600 * MICROS_IN_A_SEC;
-                        builder.push(AddTimesImpl::eval_timestamp(
+
+                        match AddTimesImpl::eval_timestamp(
                             val,
                             $signed_wrapper!{delta},
                             FACTOR_MINUTE,
-                        )?);
-                        Ok(())
+                        ) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
                     },
                 ),
             );
@@ -600,13 +672,18 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, _| {
-                        builder.push(AddTimesImpl::eval_timestamp(
+                    |ts, delta, builder, ctx| {
+                        match AddTimesImpl::eval_timestamp(
                             ts,
                             $signed_wrapper!{delta},
                             FACTOR_SECOND,
-                        )?);
-                        Ok(())
+                        ) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
                     },
                 ),
             );
@@ -616,14 +693,20 @@ macro_rules! impl_register_arith_functions {
                 FunctionProperty::default(),
                 |_, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
-                    |ts, delta, builder, _| {
+                    |ts, delta, builder, ctx| {
                         let val = (ts as i64) * 24 * 3600 * MICROS_IN_A_SEC;
-                        builder.push(AddTimesImpl::eval_timestamp(
+
+                        match AddTimesImpl::eval_timestamp(
                             val,
                             $signed_wrapper!{delta},
                             FACTOR_SECOND,
-                        )?);
-                        Ok(())
+                        ) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
                     },
                 ),
             );
@@ -639,28 +722,28 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
         "now",
         FunctionProperty::default(),
         || FunctionDomain::Full,
-        |_| Ok(Value::Scalar(Utc::now().timestamp_micros())),
+        |_| Value::Scalar(Utc::now().timestamp_micros()),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "today",
         FunctionProperty::default(),
         || FunctionDomain::Full,
-        |_| Ok(Value::Scalar(today_date())),
+        |_| Value::Scalar(today_date()),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "yesterday",
         FunctionProperty::default(),
         || FunctionDomain::Full,
-        |_| Ok(Value::Scalar(today_date() - 1)),
+        |_| Value::Scalar(today_date() - 1),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "tomorrow",
         FunctionProperty::default(),
         || FunctionDomain::Full,
-        |_| Ok(Value::Scalar(today_date() + 1)),
+        |_| Value::Scalar(today_date() + 1),
     );
 }
 

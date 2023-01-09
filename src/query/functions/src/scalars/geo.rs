@@ -89,11 +89,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_,_,_|FunctionDomain::Full,
         vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<i64>, NumberType<u64>>(
-            |x, y, r, builder, _| {
+            |x, y, r, builder, ctx| {
                 let coord = Coordinate { x: x.into(), y: y.into() };
-                let h3_cell = H3Cell::from_coordinate(coord, r as u8).map_err(|err| err.to_string())?;
-                builder.push(h3_cell.h3index());
-                Ok(())
+                match H3Cell::from_coordinate(coord, r as u8) {
+                    Ok(h3_cell) => builder.push(h3_cell.h3index()),
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push(0);
+                    },
+                }
             }
         ),
     );
@@ -145,10 +149,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn point_in_ellipses_fn(
-    args: &[ValueRef<AnyType>],
-    _: EvalContext,
-) -> Result<Value<AnyType>, String> {
+fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -203,8 +204,8 @@ fn point_in_ellipses_fn(
     }
 
     match len {
-        Some(_) => Ok(Value::Column(Column::Number(builder.build()))),
-        _ => Ok(Value::Scalar(Scalar::Number(builder.build_scalar()))),
+        Some(_) => Value::Column(Column::Number(builder.build())),
+        _ => Value::Scalar(Scalar::Number(builder.build_scalar())),
     }
 }
 

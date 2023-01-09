@@ -19,8 +19,8 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::SegmentInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum CompactTask {

@@ -78,3 +78,10 @@ query B
 SELECT try_cast(parse_json('123') as int32)  = 123
 ----
 1
+
+query I
+select  number / try_cast(if(number % 3 > 0, null, 2) as Int8) from numbers(3);
+----
+0.0
+NULL
+NULL

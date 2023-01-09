@@ -19,8 +19,8 @@ use common_exception::Result;
 use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableSchemaRef;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnStatistics;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct BlockMetaIndex {

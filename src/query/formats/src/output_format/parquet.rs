@@ -15,8 +15,8 @@
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_storages_common::blocks_to_parquet;
-use common_storages_table_meta::table::TableCompression;
+use storages_common_blocks::blocks_to_parquet;
+use storages_common_table_meta::table::TableCompression;
 
 use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;

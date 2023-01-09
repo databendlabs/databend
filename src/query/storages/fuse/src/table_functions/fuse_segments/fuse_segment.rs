@@ -25,8 +25,8 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
-use common_storages_table_meta::meta::Location;
 use futures_util::TryStreamExt;
+use storages_common_table_meta::meta::Location;
 
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;

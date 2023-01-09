@@ -17,47 +17,18 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_base::base::uuid;
 use common_exception::Result;
-use common_storages_cache::ByPassCache;
-use common_storages_cache::CacheSettings;
-use common_storages_cache::CachedObject;
-use common_storages_cache::CachedObjectAccessor;
 use opendal::services::fs;
 use opendal::services::fs::Builder;
 use opendal::Operator;
+use storages_common_cache::CacheSettings;
+use storages_common_cache::CachedObject;
+use storages_common_cache::CachedObjectAccessor;
+use storages_common_cache::MemoryItemsCache;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_by_pass_bytes_cache() -> Result<()> {
-    let mut builder: Builder = fs::Builder::default();
-    builder.root("/tmp");
-    let op: Operator = Operator::new(builder.build()?);
-
-    let path = uuid::Uuid::new_v4().to_string();
-    let object = op.object(&path);
-
-    // Cache.
-    let settings = CacheSettings::default();
-    let cache = Arc::new(ByPassCache::create(&settings));
-
-    let expect: Arc<Vec<u8>> = Arc::new("hello, by pass".into());
-
-    // Cached Object Accessor.
-    let accessor = CachedObjectAccessor::create(cache.clone());
-    accessor.write(&object, expect.clone()).await?;
-
-    // Reader.
-    let actual: Arc<Vec<u8>> = accessor.read(&object, 0, expect.len() as u64).await?;
-
-    assert_eq!(actual, expect);
-
-    // Remove.
-    accessor.remove(&object).await?;
-
-    Ok(())
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 struct TestMeta {
-    a: u8,
+    a: u64,
+    b: u64,
 }
 
 impl CachedObject for TestMeta {
@@ -73,7 +44,7 @@ impl CachedObject for TestMeta {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_by_pass_item_cache() -> Result<()> {
+async fn test_memory_items_cache() -> Result<()> {
     let mut builder: Builder = fs::Builder::default();
     builder.root("/tmp");
     let op: Operator = Operator::new(builder.build()?);
@@ -83,16 +54,15 @@ async fn test_by_pass_item_cache() -> Result<()> {
 
     // Cache.
     let settings = CacheSettings::default();
-    let cache = Arc::new(ByPassCache::create(&settings));
+    let cache = Arc::new(MemoryItemsCache::<TestMeta>::create(&settings));
 
-    let expect: Arc<TestMeta> = Arc::new(TestMeta { a: 3 });
+    let expect = Arc::from(TestMeta { a: 0, b: 0 });
 
     // Cached Object Accessor.
     let accessor = CachedObjectAccessor::create(cache.clone());
     accessor.write(&object, expect.clone()).await?;
 
-    // Reader.
-    let actual: Arc<TestMeta> = accessor.read(&object, 0, 8).await?;
+    let actual = accessor.read(&object, 0, 16).await?;
 
     assert_eq!(actual, expect);
 

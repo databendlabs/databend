@@ -17,12 +17,12 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_base::base::uuid;
 use common_exception::Result;
-use common_storages_cache::CacheSettings;
-use common_storages_cache::CachedObjectAccessor;
-use common_storages_cache::MemoryBytesCache;
 use opendal::services::fs;
 use opendal::services::fs::Builder;
 use opendal::Operator;
+use storages_common_cache::CacheSettings;
+use storages_common_cache::CachedObjectAccessor;
+use storages_common_cache::MemoryBytesCache;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
 struct TestMeta {
