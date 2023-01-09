@@ -122,6 +122,7 @@ impl FromToProto for StorageOssConfig {
 
         Ok(StorageOssConfig {
             endpoint_url: p.endpoint_url,
+            presign_endpoint_url: p.presign_endpoint_url,
             bucket: p.bucket,
             root: p.root,
 
@@ -135,6 +136,7 @@ impl FromToProto for StorageOssConfig {
             version: VER,
             min_compatible: MIN_COMPATIBLE_VER,
             endpoint_url: self.endpoint_url.clone(),
+            presign_endpoint_url: self.presign_endpoint_url.clone(),
             bucket: self.bucket.clone(),
             root: self.root.clone(),
             access_key_id: self.access_key_id.clone(),
