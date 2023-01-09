@@ -18,10 +18,10 @@ use common_storage::StorageGcsConfig;
 use common_storage::StorageOssConfig;
 use common_storage::StorageS3Config;
 
-use crate::check_ver;
+use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
-use crate::MIN_COMPATIBLE_VER;
+use crate::MIN_READER_VER;
 use crate::VER;
 
 impl FromToProto for StorageS3Config {
@@ -29,7 +29,7 @@ impl FromToProto for StorageS3Config {
 
     fn from_pb(p: pb::S3StorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.version, p.min_compatible)?;
+        reader_check_msg(p.version, p.min_compatible)?;
 
         Ok(StorageS3Config {
             region: p.region,
@@ -50,7 +50,7 @@ impl FromToProto for StorageS3Config {
     fn to_pb(&self) -> Result<pb::S3StorageConfig, Incompatible> {
         Ok(pb::S3StorageConfig {
             version: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_compatible: MIN_READER_VER,
             region: self.region.clone(),
             endpoint_url: self.endpoint_url.clone(),
             access_key_id: self.access_key_id.clone(),
@@ -72,7 +72,7 @@ impl FromToProto for StorageGcsConfig {
 
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.version, p.min_compatible)?;
+        reader_check_msg(p.version, p.min_compatible)?;
 
         Ok(StorageGcsConfig {
             credential: p.credential,
@@ -85,7 +85,7 @@ impl FromToProto for StorageGcsConfig {
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         Ok(pb::GcsStorageConfig {
             version: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_compatible: MIN_READER_VER,
             credential: self.credential.clone(),
             endpoint_url: self.endpoint_url.clone(),
             bucket: self.bucket.clone(),
@@ -99,7 +99,7 @@ impl FromToProto for StorageFsConfig {
 
     fn from_pb(p: pb::FsStorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.version, p.min_compatible)?;
+        reader_check_msg(p.version, p.min_compatible)?;
 
         Ok(StorageFsConfig { root: p.root })
     }
@@ -107,7 +107,7 @@ impl FromToProto for StorageFsConfig {
     fn to_pb(&self) -> Result<pb::FsStorageConfig, Incompatible> {
         Ok(pb::FsStorageConfig {
             version: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_compatible: MIN_READER_VER,
             root: self.root.clone(),
         })
     }
@@ -118,7 +118,7 @@ impl FromToProto for StorageOssConfig {
 
     fn from_pb(p: pb::OssStorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.version, p.min_compatible)?;
+        reader_check_msg(p.version, p.min_compatible)?;
 
         Ok(StorageOssConfig {
             endpoint_url: p.endpoint_url,
@@ -133,7 +133,7 @@ impl FromToProto for StorageOssConfig {
     fn to_pb(&self) -> Result<pb::OssStorageConfig, Incompatible> {
         Ok(pb::OssStorageConfig {
             version: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_compatible: MIN_READER_VER,
             endpoint_url: self.endpoint_url.clone(),
             bucket: self.bucket.clone(),
             root: self.root.clone(),
