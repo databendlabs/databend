@@ -28,10 +28,10 @@ common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-sharing = { path = "../../sharing" }
 common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
-storages-common-blocks = { path = "../common/blocks" }
 common-storages-index = { path = "../index" }
 common-storages-pruner = { path = "../pruner" }
 
+storages-common-blocks = { path = "../common/blocks" }
 storages-common-table-meta = { path = "../common/table-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
