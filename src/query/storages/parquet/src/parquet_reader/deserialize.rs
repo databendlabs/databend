@@ -36,7 +36,7 @@ use common_storage::ColumnLeaf;
 use super::filter::FilterState;
 use crate::parquet_part::ColumnMeta;
 use crate::parquet_part::ParquetRowGroupPart;
-use crate::ParquetReader;
+use crate::parquet_reader::ParquetReader;
 
 impl ParquetReader {
     pub fn deserialize(

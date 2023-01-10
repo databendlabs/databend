@@ -26,11 +26,11 @@ use common_pipeline_core::Pipeline;
 use super::table::arrow_to_table_schema;
 use super::ParquetTable;
 use super::TableContext;
-use crate::try_prune_parquets;
-use crate::ParquetLocationPart;
-use crate::ParquetReader;
-use crate::ParquetSource;
-use crate::ReadOptions;
+use crate::parquet_part::ParquetLocationPart;
+use crate::parquet_reader::ParquetReader;
+use crate::parquet_source::ParquetSource;
+use crate::pruning::prune_and_set_partitions;
+use crate::read_options::ReadOptions;
 
 impl ParquetTable {
     pub fn create_reader(&self, projection: Projection) -> Result<Arc<ParquetReader>> {
@@ -139,8 +139,11 @@ impl ParquetTable {
                 .collect::<Vec<_>>()
         });
 
+        // Now, `read_options` is hard-coded.
+        let read_options = ReadOptions::default();
+
         pipeline.set_on_init(move || {
-            try_prune_parquets(
+            prune_and_set_partitions(
                 &ctx_ref,
                 &locations,
                 &schema,
@@ -148,7 +151,7 @@ impl ParquetTable {
                 &columns_to_read,
                 &projected_column_leaves,
                 skip_pruning,
-                &ReadOptions::default(),
+                &read_options,
             )
         });
 

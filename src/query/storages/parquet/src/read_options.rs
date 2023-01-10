@@ -20,24 +20,8 @@ pub struct ReadOptions {
     /// Prune pages before reading. Require Page level statistics.
     /// Filter rows don't need to read.
     pub prune_pages: bool,
-}
-
-impl ReadOptions {
-    pub fn new() -> Self {
-        ReadOptions::default()
-    }
-
-    pub fn with_prune_row_groups(mut self, prune: bool) -> Self {
-        self.prune_row_groups = prune;
-        self
-    }
-
-    pub fn with_prune_pages(mut self, prune: bool) -> Self {
-        self.prune_pages = prune;
-        self
-    }
-
-    pub fn need_prune(&self) -> bool {
-        self.prune_row_groups || self.prune_pages
-    }
+    /// If push down filters to remain reader.
+    /// If true, when remain reader deserializing,
+    /// it will skip part of decompression and decoding according by filters.
+    pub push_down_filters: bool,
 }

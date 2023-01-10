@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::fs::File;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
@@ -42,8 +43,7 @@ use common_pipeline_core::Pipeline;
 use opendal::Operator;
 
 use super::TableContext;
-use crate::ParquetLocationPart;
-use crate::ParquetReader;
+use crate::parquet_part::ParquetLocationPart;
 
 pub struct ParquetTable {
     table_args: Vec<Scalar>,
@@ -110,7 +110,16 @@ impl ParquetTable {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let first_meta = ParquetReader::read_meta(&file_locations[0])?;
+        let location = &file_locations[0];
+        let mut file = File::open(location).map_err(|e| {
+            ErrorCode::Internal(format!("Failed to open file '{}': {}", location, e))
+        })?;
+        let first_meta = pread::read_metadata(&mut file).map_err(|e| {
+            ErrorCode::Internal(format!(
+                "Read parquet file '{}''s meta error: {}",
+                location, e
+            ))
+        })?;
         let arrow_schema = pread::infer_schema(&first_meta)?;
 
         let table_info = TableInfo {

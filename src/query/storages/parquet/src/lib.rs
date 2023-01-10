@@ -20,11 +20,7 @@ mod parquet_reader;
 mod parquet_source;
 mod pruning;
 mod read_options;
+mod statistics;
 mod table_function;
 
-pub use parquet_part::ParquetLocationPart;
-pub use parquet_reader::ParquetReader;
-pub use parquet_source::ParquetSource;
-pub use pruning::try_prune_parquets;
-pub use read_options::ReadOptions;
 pub use table_function::ParquetTable;

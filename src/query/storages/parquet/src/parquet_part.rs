@@ -20,6 +20,7 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_arrow::parquet::compression::Compression;
+use common_arrow::parquet::indexes::Interval;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
@@ -77,6 +78,7 @@ pub struct ParquetRowGroupPart {
     pub location: String,
     pub num_rows: usize,
     pub column_metas: HashMap<usize, ColumnMeta>,
+    pub row_selection: Option<Vec<Interval>>,
 }
 
 #[typetag::serde(name = "parquet_row_group")]
@@ -104,11 +106,13 @@ impl ParquetRowGroupPart {
         location: String,
         num_rows: usize,
         column_metas: HashMap<usize, ColumnMeta>,
+        row_selection: Option<Vec<Interval>>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(ParquetRowGroupPart {
             location,
             num_rows,
             column_metas,
+            row_selection,
         }))
     }
 
