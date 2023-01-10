@@ -1178,6 +1178,6 @@ where A: Allocator + Clone + Default
         self.table2.clear();
         self.table3.clear();
         self.table4.clear();
-        self.arena.reset();
+        drop(std::mem::take(&mut self.arena));
     }
 }
