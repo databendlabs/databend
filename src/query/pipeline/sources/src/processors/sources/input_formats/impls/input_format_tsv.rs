@@ -130,7 +130,7 @@ impl InputFormatTextBase for InputFormatTSV {
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         tracing::debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
-            batch.path,
+            batch.split_info.file.path,
             batch.batch_id,
             batch.start_row_in_split,
             batch.start_offset_in_split

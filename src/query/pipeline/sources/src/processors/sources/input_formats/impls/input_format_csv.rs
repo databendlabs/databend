@@ -189,19 +189,17 @@ impl AligningStateTextBased for CsvReaderState {
         // assume n_out <= n_in for read_record
 
         let mut out_tmp = vec![0u8; buf_in.len()];
-        let mut endlen = self.n_end;
         let mut buf = buf_in;
 
         while self.common.rows_to_skip > 0 {
             let (result, n_in, _, n_end) =
                 self.reader
-                    .read_record(buf, &mut out_tmp, &mut self.field_ends[endlen..]);
+                    .read_record(buf, &mut out_tmp, &mut self.field_ends[self.n_end..]);
             buf = &buf[n_in..];
-            endlen += n_end;
+            self.n_end += n_end;
 
             match result {
                 ReadRecordResult::InputEmpty => {
-                    self.n_end = endlen;
                     return Ok(vec![]);
                 }
                 ReadRecordResult::OutputFull => {
@@ -211,7 +209,7 @@ impl AligningStateTextBased for CsvReaderState {
                     return Err(self.error_output_ends_full(num_fields, self.field_ends.len()));
                 }
                 ReadRecordResult::Record => {
-                    self.check_num_field(num_fields, endlen, &self.field_ends)?;
+                    self.check_num_field()?;
 
                     self.common.rows_to_skip -= 1;
                     tracing::debug!(
@@ -220,7 +218,7 @@ impl AligningStateTextBased for CsvReaderState {
                     );
                     self.common.rows += 1;
                     self.common.offset += n_in;
-                    endlen = 0;
+                    self.n_end = 0;
                 }
                 ReadRecordResult::End => {
                     return Err(self.csv_error("unexpect EOF in header"));
@@ -238,7 +236,6 @@ impl AligningStateTextBased for CsvReaderState {
             row_ends: vec![],
             field_ends: vec![],
             split_info: self.split_info.clone(),
-            path: self.split_info.file.path.to_string(),
             batch_id: self.common.batch_id,
             start_offset_in_split: self.common.offset,
             start_row_in_split: self.common.rows,
@@ -249,10 +246,10 @@ impl AligningStateTextBased for CsvReaderState {
             let (result, n_in, n_out, n_end) = self.reader.read_record(
                 buf,
                 &mut out_tmp[out_pos..],
-                &mut self.field_ends[endlen..],
+                &mut self.field_ends[self.n_end..],
             );
             buf = &buf[n_in..];
-            endlen += n_end;
+            self.n_end += n_end;
             out_pos += n_out;
             match result {
                 ReadRecordResult::InputEmpty => break,
@@ -263,12 +260,12 @@ impl AligningStateTextBased for CsvReaderState {
                     return Err(self.error_output_ends_full(num_fields, self.field_ends.len()));
                 }
                 ReadRecordResult::Record => {
-                    self.check_num_field(num_fields, endlen, &self.field_ends)?;
+                    self.check_num_field()?;
                     row_batch
                         .field_ends
                         .extend_from_slice(&self.field_ends[..num_fields]);
                     row_batch.row_ends.push(last_batch_remain_len + out_pos);
-                    endlen = 0;
+                    self.n_end = 0;
                     row_batch_end = out_pos;
                     self.common.offset += n_in;
                     self.common.rows += 1;
@@ -279,7 +276,6 @@ impl AligningStateTextBased for CsvReaderState {
             }
         }
 
-        self.n_end = endlen;
         out_tmp.truncate(out_pos);
         if row_batch.row_ends.is_empty() {
             tracing::debug!(
@@ -318,25 +314,21 @@ impl AligningStateTextBased for CsvReaderState {
         let num_fields = self.num_fields;
         let in_tmp = Vec::new();
         let mut out_tmp = vec![0u8; 1];
-        let mut endlen = self.n_end;
 
         if self.common.rows_to_skip > 0 {
             let (result, n_in, _, n_end) =
                 self.reader
-                    .read_record(&in_tmp, &mut out_tmp, &mut self.field_ends[endlen..]);
-            endlen += n_end;
+                    .read_record(&in_tmp, &mut out_tmp, &mut self.field_ends[self.n_end..]);
 
+            self.n_end += n_end;
             return match result {
-                ReadRecordResult::InputEmpty => {
-                    self.n_end = endlen;
-                    Ok(vec![])
-                }
+                ReadRecordResult::InputEmpty => Ok(vec![]),
                 ReadRecordResult::OutputFull => Err(self.error_output_full()),
                 ReadRecordResult::OutputEndsFull => {
                     Err(self.error_output_ends_full(num_fields, self.field_ends.len()))
                 }
                 ReadRecordResult::Record => {
-                    self.check_num_field(num_fields, endlen, &self.field_ends[..])?;
+                    self.check_num_field()?;
                     self.common.offset += n_in;
                     self.common.rows += 1;
                     self.common.rows_to_skip -= 1;
@@ -354,15 +346,14 @@ impl AligningStateTextBased for CsvReaderState {
 
         let in_tmp = Vec::new();
         let mut out_tmp = vec![0u8; 1];
-        let mut endlen = self.n_end;
 
         let last_batch_remain_len = self.out.len();
 
         let (result, n_in, n_out, n_end) =
             self.reader
-                .read_record(&in_tmp, &mut out_tmp, &mut self.field_ends[endlen..]);
+                .read_record(&in_tmp, &mut out_tmp, &mut self.field_ends[self.n_end..]);
 
-        endlen += n_end;
+        self.n_end += n_end;
 
         match result {
             ReadRecordResult::InputEmpty => {
@@ -375,7 +366,7 @@ impl AligningStateTextBased for CsvReaderState {
                 return Err(self.error_output_ends_full(num_fields, self.field_ends.len()));
             }
             ReadRecordResult::Record => {
-                self.check_num_field(num_fields, endlen, &self.field_ends)?;
+                self.check_num_field()?;
                 let data = mem::take(&mut self.out);
                 self.common.offset += n_in;
                 self.common.rows += 1;
@@ -385,7 +376,6 @@ impl AligningStateTextBased for CsvReaderState {
                     row_ends: vec![last_batch_remain_len + n_out],
                     field_ends: self.field_ends[..num_fields].to_vec(),
                     split_info: self.split_info.clone(),
-                    path: self.split_info.file.path.to_string(),
                     batch_id: self.common.batch_id,
                     start_offset_in_split: self.common.offset,
                     start_row_in_split: self.common.rows,
@@ -406,11 +396,13 @@ impl AligningStateTextBased for CsvReaderState {
 }
 
 impl CsvReaderState {
-    fn check_num_field(&self, expect: usize, actual: usize, field_ends: &[usize]) -> Result<()> {
+    fn check_num_field(&self) -> Result<()> {
+        let expect = self.num_fields;
+        let actual = self.n_end;
         if actual < expect {
             Err(self.csv_error(&format!("expect {} fields, only found {} ", expect, actual)))
         } else if actual > expect + 1
-            || (actual == expect + 1 && field_ends[expect] != field_ends[expect - 1])
+            || (actual == expect + 1 && self.field_ends[expect] != self.field_ends[expect - 1])
         {
             Err(self.csv_error(&format!(
                 "too many fields, expect {}, got {}",

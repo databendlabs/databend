@@ -140,7 +140,6 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
             row_ends: vec![],
             field_ends: vec![],
             split_info: self.split_info.clone(),
-            path: "".to_string(),
             batch_id: self.common.batch_id,
             start_offset_in_split: self.common.offset,
             start_row_in_split: self.common.rows,
@@ -161,7 +160,6 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
             output.data.extend_from_slice(&buf[..batch_end]);
             self.tail_of_last_batch.extend_from_slice(&buf[batch_end..]);
             let size = output.data.len();
-            output.path = self.split_info.file.path.to_string();
             self.common.offset += size;
             self.common.rows += rows.len();
             self.common.batch_id += 1;
@@ -189,7 +187,6 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
                 row_ends: vec![end],
                 field_ends: vec![],
                 split_info: self.split_info.clone(),
-                path: self.split_info.file.path.clone(),
                 batch_id: self.common.batch_id,
                 start_offset_in_split: self.common.offset,
                 start_row_in_split: self.common.rows,
@@ -328,7 +325,6 @@ pub struct RowBatch {
 
     pub split_info: Arc<SplitInfo>,
     // for error info
-    pub path: String,
     pub batch_id: usize,
     pub start_offset_in_split: usize,
     pub start_row_in_split: usize,
