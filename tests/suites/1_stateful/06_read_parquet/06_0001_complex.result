@@ -29,15 +29,15 @@ c
 NULL
 (NULL,NULL,NULL,NULL,NULL,['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient'],NULL,NULL)
 (NULL,NULL,NULL,NULL,NULL,['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient'],NULL,NULL)
-NULL    NULL
-['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient'] NULL
-['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient'] NULL
+NULL	NULL
+NULL	['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient']
+NULL	['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient']
 [(NULL,NULL,'official','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL),(NULL,NULL,'usual','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL)]
 [(NULL,NULL,'official',NULL,'Quigley282',['Wilmer32'],['Mr.'],NULL,NULL)]
 [(NULL,NULL,'official',NULL,'Collier206',['Towanda270'],['Mrs.'],NULL,NULL),(NULL,NULL,'maiden',NULL,'Mayer370',['Towanda270'],['Mrs.'],NULL,NULL)]
-(NULL,NULL,'official','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL),(NULL,NULL,'usual','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL)
+(NULL,NULL,'official','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL)
 (NULL,NULL,'official',NULL,'Quigley282',['Wilmer32'],['Mr.'],NULL,NULL)
-(NULL,NULL,'official',NULL,'Collier206',['Towanda270'],['Mrs.'],NULL,NULL),(NULL,NULL,'maiden',NULL,'Mayer370',['Towanda270'],['Mrs.'],NULL,NULL)
+(NULL,NULL,'official',NULL,'Collier206',['Towanda270'],['Mrs.'],NULL,NULL)
 Infection Control
 Quigley282
 Collier206
