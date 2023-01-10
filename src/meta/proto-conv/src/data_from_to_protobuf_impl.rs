@@ -102,6 +102,7 @@ impl FromToProto for dv::DataTypeImpl {
         };
 
         match dt {
+            Dt::NullType(_) => Ok(dv::DataTypeImpl::Null(dv::NullType {})),
             Dt::NullableType(x) => Ok(dv::DataTypeImpl::Nullable(dv::NullableType::from_pb(
                 x.as_ref().clone(),
             )?)),
@@ -135,7 +136,12 @@ impl FromToProto for dv::DataTypeImpl {
     fn to_pb(&self) -> Result<pb::DataType, Incompatible> {
         match self {
             dv::DataTypeImpl::Null(_) => {
-                todo!()
+                let v = pb::DataType {
+                    ver: VER,
+                    min_reader_ver: MIN_READER_VER,
+                    dt: Some(Dt::NullType(pb::Empty {})),
+                };
+                Ok(v)
             }
             dv::DataTypeImpl::Nullable(x) => {
                 let inn = x.to_pb()?;
