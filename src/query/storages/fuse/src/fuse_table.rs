@@ -540,9 +540,9 @@ impl Table for FuseTable {
     async fn update(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<Expression>,
+        filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
-        update_list: Vec<(usize, Expression)>,
+        update_list: Vec<(usize, RemoteExpr<String>)>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_update(ctx, filter, col_indices, update_list, pipeline)

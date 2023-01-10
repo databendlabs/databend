@@ -13,42 +13,44 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::ops::Not;
 use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::EvalNode;
-use common_storages_common::blocks_to_parquet;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::table::TableCompression;
-use opendal::Operator;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::TableSchemaRef;
+use common_expression::Value;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_sql::evaluator::BlockOperator;
+use common_storages_table_meta::meta::ClusterStatistics;
 
 use crate::fuse_part::FusePartInfo;
-use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::DataChunks;
-use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationPartInfo;
-use crate::operations::mutation::MutationTransformMeta;
-use crate::operations::mutation::SerializeState;
-use crate::operations::util;
-use crate::operations::BloomIndexState;
+use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::pruning::BlockIndex;
-use crate::statistics::gen_columns_statistics;
-use crate::FuseTable;
+
+pub enum MutationOperator {
+    Deletion,
+    Update,
+}
 
 enum State {
     ReadData(Option<PartInfoPtr>),
@@ -56,63 +58,62 @@ enum State {
     ReadRemain {
         part: PartInfoPtr,
         data_block: DataBlock,
-        filter: ColumnRef,
+        filter: Value<AnyType>,
     },
     MergeRemain {
         part: PartInfoPtr,
         chunks: DataChunks,
         data_block: DataBlock,
-        filter: ColumnRef,
+        filter: Value<AnyType>,
     },
-    UpdateData(DataBlock),
-    NeedSerialize(DataBlock),
-    Serialized(SerializeState, Arc<BlockMeta>),
-    Generated(Mutation),
+    PerformOperator(DataBlock),
     Output(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
 
 pub struct UpdateSource {
     state: State,
-    ctx: Arc<dyn TableContext>,
-    scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
-    location_gen: TableMetaLocationGenerator,
-    dal: Operator,
-    table_compression: TableCompression,
+    scan_progress: Arc<Progress>,
 
+    ctx: Arc<dyn TableContext>,
+    filter: Arc<Option<Expr>>,
     block_reader: Arc<BlockReader>,
-    filter: Arc<Option<EvalNode>>,
     remain_reader: Arc<Option<BlockReader>>,
-    operators: Vec<ChunkOperator>,
+    operators: Vec<BlockOperator>,
+    mutation: MutationOperator,
 
+    output_schema: TableSchemaRef,
     index: BlockIndex,
+    origin_stats: Option<ClusterStatistics>,
 }
 
 impl UpdateSource {
+    #![allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        mutation: MutationOperator,
         output: Arc<OutputPort>,
-        table: &FuseTable,
+        filter: Arc<Option<Expr>>,
         block_reader: Arc<BlockReader>,
-        filter: Arc<Option<EvalNode>>,
         remain_reader: Arc<Option<BlockReader>>,
-        operators: Vec<ChunkOperator>,
+        operators: Vec<BlockOperator>,
+        output_schema: TableSchemaRef,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(UpdateSource {
             state: State::ReadData(None),
-            ctx: ctx.clone(),
-            scan_progress,
             output,
-            location_gen: table.meta_location_generator().clone(),
-            dal: table.get_operator(),
-            table_compression: table.table_compression,
-            block_reader,
+            scan_progress,
+            ctx: ctx.clone(),
             filter,
+            block_reader,
             remain_reader,
             operators,
+            mutation,
+            output_schema,
             index: (0, 0),
+            origin_stats: None,
         })))
     }
 }
@@ -162,10 +163,7 @@ impl Processor for UpdateSource {
             }
         }
 
-        if matches!(
-            self.state,
-            State::ReadData(_) | State::ReadRemain { .. } | State::Serialized(_, _)
-        ) {
+        if matches!(self.state, State::ReadData(_) | State::ReadRemain { .. }) {
             Ok(Event::Async)
         } else {
             Ok(Event::Sync)
@@ -175,46 +173,103 @@ impl Processor for UpdateSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, chunks) => {
-                let data_block = self
+                let mut data_block = self
                     .block_reader
                     .deserialize_parquet_chunks(part.clone(), chunks)?;
+                let num_rows = data_block.num_rows();
+
                 if let Some(filter) = self.filter.as_ref() {
-                    let filter_result = filter
-                        .eval(&self.ctx.try_get_function_context()?, &data_block)?
-                        .vector;
-                    let filter = DataBlock::cast_to_nonull_boolean(&filter_result)?;
-                    if DataBlock::filter_exists(&filter)? {
-                        let col: &BooleanColumn = Series::check_get(&filter)?;
+                    let func_ctx = self.ctx.try_get_function_context()?;
+                    let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
+
+                    let res = evaluator.run(filter).map_err(|(_, e)| {
+                        ErrorCode::Internal(format!("eval filter failed: {}.", e))
+                    })?;
+                    let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
+                        ErrorCode::BadArguments(
+                            "Result of filter expression cannot be converted to boolean.",
+                        )
+                    })?;
+
+                    let affect_rows = match &predicates {
+                        Value::Scalar(v) => {
+                            if *v {
+                                num_rows
+                            } else {
+                                0
+                            }
+                        }
+                        Value::Column(bitmap) => bitmap.len() - bitmap.unset_bits(),
+                    };
+
+                    if affect_rows != 0 {
                         let progress_values = ProgressValues {
-                            rows: col.len() - col.values().unset_bits(),
+                            rows: affect_rows,
                             bytes: 0,
                         };
                         self.scan_progress.incr(&progress_values);
 
-                        if self.remain_reader.is_none() {
-                            self.state = State::MergeRemain {
-                                part,
-                                chunks: vec![],
-                                data_block,
-                                filter,
-                            };
-                        } else {
-                            self.state = State::ReadRemain {
-                                part,
-                                data_block,
-                                filter,
-                            };
+                        match self.mutation {
+                            MutationOperator::Deletion => {
+                                if affect_rows == num_rows {
+                                    // all the rows should be removed.
+                                    let meta =
+                                        SerializeDataMeta::create(self.index, self.origin_stats);
+                                    self.state = State::Output(
+                                        self.ctx.try_get_part(),
+                                        DataBlock::empty_with_meta(meta),
+                                    );
+                                } else {
+                                    let predicate_col = predicates.into_column().unwrap();
+                                    let filter =
+                                        Value::Column(Column::Boolean(predicate_col.not()));
+                                    data_block = data_block.filter(&filter)?;
+                                    if self.remain_reader.is_none() {
+                                        let meta = SerializeDataMeta::create(
+                                            self.index,
+                                            self.origin_stats,
+                                        );
+                                        self.state = State::Output(
+                                            self.ctx.try_get_part(),
+                                            data_block.add_meta(Some(meta))?,
+                                        );
+                                    } else {
+                                        self.state = State::ReadRemain {
+                                            part,
+                                            data_block,
+                                            filter,
+                                        }
+                                    }
+                                }
+                            }
+                            MutationOperator::Update => {
+                                let filter = Value::upcast(predicates);
+                                if self.remain_reader.is_none() {
+                                    data_block.add_column(BlockEntry {
+                                        data_type: DataType::Boolean,
+                                        value: filter,
+                                    });
+                                    self.state = State::PerformOperator(data_block);
+                                } else {
+                                    self.state = State::ReadRemain {
+                                        part,
+                                        data_block,
+                                        filter,
+                                    };
+                                }
+                            }
                         }
                     } else {
-                        self.state = State::Generated(Mutation::DoNothing);
+                        // Do nothing.
+                        self.state = State::Output(self.ctx.try_get_part(), DataBlock::empty());
                     }
                 } else {
                     let progress_values = ProgressValues {
-                        rows: data_block.num_rows(),
+                        rows: num_rows,
                         bytes: 0,
                     };
                     self.scan_progress.incr(&progress_values);
-                    self.state = State::UpdateData(data_block);
+                    self.state = State::PerformOperator(data_block);
                 }
             }
             State::MergeRemain {
@@ -225,78 +280,39 @@ impl Processor for UpdateSource {
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let remain_block = remain_reader.deserialize_parquet_chunks(part, chunks)?;
-                    for (col, field) in remain_block
-                        .columns()
-                        .iter()
-                        .zip(remain_block.schema().fields())
-                    {
-                        data_block = data_block.add_column(col.clone(), field.clone())?;
+
+                    match self.mutation {
+                        MutationOperator::Deletion => {
+                            let remain_block = remain_block.filter(&filter)?;
+                            for col in remain_block.columns() {
+                                data_block.add_column(col.clone());
+                            }
+                        }
+                        MutationOperator::Update => {
+                            for col in remain_block.columns() {
+                                data_block.add_column(col.clone());
+                            }
+                            data_block.add_column(BlockEntry {
+                                data_type: DataType::Boolean,
+                                value: filter,
+                            });
+                        }
                     }
-                }
+                    data_block
+                } else {
+                    return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
+                };
 
-                let field = DataField::new("_predicate", bool::to_data_type());
-                data_block = data_block.add_column(filter, field)?;
-
-                self.state = State::UpdateData(data_block);
+                self.state = State::PerformOperator(data_block);
             }
-            State::UpdateData(data_block) => {
+            State::PerformOperator(data_block) => {
                 let func_ctx = self.ctx.try_get_function_context()?;
                 let block = self
                     .operators
                     .iter()
                     .try_fold(data_block, |input, op| op.execute(&func_ctx, input))?;
-                self.state = State::NeedSerialize(block);
-            }
-            State::NeedSerialize(block) => {
-                let row_count = block.num_rows() as u64;
-                let block_size = block.memory_size() as u64;
-                let (block_location, block_id) = self.location_gen.gen_block_location();
-
-                // build block index.
-                let location = self.location_gen.block_bloom_index_location(&block_id);
-                let (bloom_index_state, column_distinct_count) =
-                    BloomIndexState::try_create(&block, location)?;
-                let col_stats = gen_columns_statistics(&block, Some(column_distinct_count))?;
-
-                // serialize data block.
-                let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
-                let schema = block.schema().clone();
-                let (file_size, meta_data) = blocks_to_parquet(
-                    &schema,
-                    vec![block],
-                    &mut block_data,
-                    self.table_compression,
-                )?;
-                let col_metas = util::column_metas(&meta_data)?;
-
-                // new block meta.
-                let new_meta = Arc::new(BlockMeta::new(
-                    row_count,
-                    block_size,
-                    file_size,
-                    col_stats,
-                    col_metas,
-                    None,
-                    block_location.clone(),
-                    Some(bloom_index_state.location.clone()),
-                    bloom_index_state.size,
-                    self.table_compression.into(),
-                ));
-
-                self.state = State::Serialized(
-                    SerializeState {
-                        block_data,
-                        block_location: block_location.0,
-                        index_data: bloom_index_state.data,
-                        index_location: bloom_index_state.location.0,
-                    },
-                    new_meta,
-                );
-            }
-            State::Generated(op) => {
-                let meta = MutationTransformMeta::create(self.index, op);
-                let new_part = self.ctx.try_get_part();
-                self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
+                let meta = SerializeDataMeta::create(self.index, self.origin_stats);
+                self.state = State::Output(self.ctx.try_get_part(), block.add_meta(Some(meta))?);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -309,6 +325,7 @@ impl Processor for UpdateSource {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
                 let part = MutationPartInfo::from_part(&part)?;
                 self.index = part.index;
+                self.origin_stats = part.cluster_stats.clone();
                 let inner_part = part.inner_part.clone();
                 let fuse_part = FusePartInfo::from_part(&inner_part)?;
 
@@ -358,23 +375,6 @@ impl Processor for UpdateSource {
                 } else {
                     return Err(ErrorCode::Internal("It's a bug. No remain reader"));
                 }
-            }
-            State::Serialized(serialize_state, block_meta) => {
-                // write block data.
-                write_data(
-                    &serialize_state.block_data,
-                    &self.dal,
-                    &serialize_state.block_location,
-                )
-                .await?;
-                // write index data.
-                write_data(
-                    &serialize_state.index_data,
-                    &self.dal,
-                    &serialize_state.index_location,
-                )
-                .await?;
-                self.state = State::Generated(Mutation::Replaced(block_meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

@@ -39,9 +39,11 @@ use common_sql::evaluator::BlockOperator;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::TableSnapshot;
 
-use crate::operations::mutation::DeletionSource;
+use super::mutation::SerializeDataTransform;
+use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSink;
+use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::MutationTransform;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -53,13 +55,13 @@ use crate::FuseTable;
 
 impl FuseTable {
     /// The flow of Pipeline is as follows:
-    /// +---------------+
-    /// |DeletionSource1| ------
-    /// +---------------+       |      +-----------------+      +------------+
-    /// |     ...       | ...   | ---> |MutationTransform| ---> |MutationSink|
-    /// +---------------+       |      +-----------------+      +------------+
-    /// |DeletionSourceN| ------
-    /// +---------------+
+    /// +---------------+      +-----------------------+
+    /// |MutationSource1| ---> |SerializeDataTransform1|   ------
+    /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
+    /// |     ...       | ---> |          ...          |   ...   | ---> |MutationTransform| ---> |MutationSink|
+    /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
+    /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
+    /// +---------------+      +-----------------------+
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -105,7 +107,7 @@ impl FuseTable {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            if self.try_eval_const(ctx.clone(), &self.table_info.schema(), &filter_expr)? {
+            if self.try_eval_const(ctx.clone(), &self.schema(), &filter_expr)? {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,
@@ -122,6 +124,17 @@ impl FuseTable {
 
         self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
             .await?;
+
+        let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
+        pipeline.add_transform(|input, output| {
+            SerializeDataTransform::try_create(
+                ctx.clone(),
+                input,
+                output,
+                self,
+                cluster_stats_gen.clone(),
+            )
+        })?;
 
         self.try_add_mutation_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
 
@@ -218,30 +231,44 @@ impl FuseTable {
         ctx.try_set_partitions(parts)?;
 
         let block_reader = self.create_block_reader(projection.clone())?;
+        let schema = block_reader.schema();
+        let filter =
+            Arc::new(filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
+                expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+            }));
+
         let all_col_ids = self.all_the_columns_ids();
         let remain_col_ids: Vec<usize> = all_col_ids
             .into_iter()
             .filter(|id| !col_indices.contains(id))
             .collect();
+        let mut source_col_ids = col_indices;
         let remain_reader = if remain_col_ids.is_empty() {
             Arc::new(None)
         } else {
+            source_col_ids.extend_from_slice(&remain_col_ids);
             Arc::new(Some(
                 (*self.create_block_reader(Projection::Columns(remain_col_ids))?).clone(),
             ))
         };
 
+        // resort the block.
+        let mut projection = (0..source_col_ids.len()).collect::<Vec<_>>();
+        projection.sort_by_key(|&i| source_col_ids[i]);
+        let ops = vec![BlockOperator::Project { projection }];
+
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         // Add source pipe.
         pipeline.add_source(
             |output| {
-                DeletionSource::try_create(
+                MutationSource::try_create(
                     ctx.clone(),
+                    MutationAction::Deletion,
                     output,
-                    self,
+                    filter.clone(),
                     block_reader.clone(),
-                    Arc::new(filter.clone()),
                     remain_reader.clone(),
+                    ops.clone(),
                 )
             },
             max_threads,

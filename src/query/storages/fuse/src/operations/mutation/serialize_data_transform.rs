@@ -15,10 +15,14 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
+use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_storages_common::blocks_to_parquet;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
@@ -39,6 +43,7 @@ use crate::pipelines::processors::Processor;
 use crate::pruning::BlockIndex;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
+use crate::FuseTable;
 
 enum State {
     Consume,
@@ -49,6 +54,7 @@ enum State {
 
 pub struct SerializeDataTransform {
     state: State,
+    ctx: Arc<dyn TableContext>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
@@ -57,9 +63,35 @@ pub struct SerializeDataTransform {
     dal: Operator,
     cluster_stats_gen: ClusterStatsGenerator,
 
+    schema: TableSchemaRef,
     index: BlockIndex,
     origin_stats: Option<ClusterStatistics>,
     table_compression: TableCompression,
+}
+
+impl SerializeDataTransform {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        table: &FuseTable,
+        cluster_stats_gen: ClusterStatsGenerator,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(SerializeDataTransform {
+            state: State::Consume,
+            ctx: ctx.clone(),
+            input,
+            output,
+            output_data: None,
+            location_gen: table.meta_location_generator().clone(),
+            dal: table.get_operator(),
+            cluster_stats_gen,
+            schema: table.schema(),
+            index: (0, 0),
+            origin_stats: None,
+            table_compression: table.table_compression,
+        })))
+    }
 }
 
 #[async_trait::async_trait]
@@ -135,13 +167,17 @@ impl Processor for SerializeDataTransform {
 
                 // build block index.
                 let location = self.location_gen.block_bloom_index_location(&block_id);
-                let (bloom_index_state, column_distinct_count) =
-                    BloomIndexState::try_create(&block, location)?;
+                let (bloom_index_state, column_distinct_count) = BloomIndexState::try_create(
+                    self.ctx.clone(),
+                    self.schema.clone(),
+                    &block,
+                    location,
+                )?;
                 let col_stats = gen_columns_statistics(&block, Some(column_distinct_count))?;
 
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
-                let schema = block.schema().clone();
+                let schema = self.schema.clone();
                 let (file_size, meta_data) = blocks_to_parquet(
                     &schema,
                     vec![block],

@@ -86,7 +86,7 @@ pub struct MutationTransformMeta {
     pub op: Mutation,
 }
 
-#[typetag::serde(name = "mutation_source_meta")]
+#[typetag::serde(name = "mutation_transform_meta")]
 impl BlockMetaInfo for MutationTransformMeta {
     fn as_any(&self) -> &dyn Any {
         self

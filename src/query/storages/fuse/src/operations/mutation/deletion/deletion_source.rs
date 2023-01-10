@@ -25,38 +25,23 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
-use common_expression::RemoteExpr;
+use common_expression::Expr;
 use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_storages_common::blocks_to_parquet;
-use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
-use common_storages_table_meta::table::TableCompression;
-use opendal::Operator;
 
 use crate::fuse_part::FusePartInfo;
-use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::DataChunks;
-use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationPartInfo;
-use crate::operations::mutation::MutationTransformMeta;
-use crate::operations::mutation::SerializeState;
-use crate::operations::util;
-use crate::operations::BloomIndexState;
+use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::pruning::BlockIndex;
-use crate::statistics::gen_columns_statistics;
-use crate::statistics::ClusterStatsGenerator;
-use crate::FuseTable;
-use crate::Table;
 
 enum State {
     ReadData(Option<PartInfoPtr>),
@@ -72,60 +57,43 @@ enum State {
         data_block: DataBlock,
         filter: Value<AnyType>,
     },
-    NeedSerialize(DataBlock),
-    Serialized(SerializeState, Arc<BlockMeta>),
-    Generated(Mutation),
     Output(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
 
 pub struct DeletionSource {
     state: State,
-    ctx: Arc<dyn TableContext>,
     output: Arc<OutputPort>,
-    location_gen: TableMetaLocationGenerator,
-    dal: Operator,
+
+    ctx: Arc<dyn TableContext>,
+    filter: Arc<Expr>,
     block_reader: Arc<BlockReader>,
-    filter: Arc<RemoteExpr<String>>,
     remain_reader: Arc<Option<BlockReader>>,
 
-    source_schema: TableSchemaRef,
     output_schema: TableSchemaRef,
     index: BlockIndex,
-    cluster_stats_gen: ClusterStatsGenerator,
     origin_stats: Option<ClusterStatistics>,
-    table_compression: TableCompression,
 }
 
 impl DeletionSource {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        table: &FuseTable,
+        filter: Arc<Expr>,
         block_reader: Arc<BlockReader>,
-        filter: Arc<RemoteExpr<String>>,
         remain_reader: Arc<Option<BlockReader>>,
+        output_schema: TableSchemaRef,
     ) -> Result<ProcessorPtr> {
-        let mut srouce_fields = block_reader.schema().fields().clone();
-        if let Some(remain_reader) = remain_reader.as_ref() {
-            srouce_fields.extend_from_slice(remain_reader.schema().fields());
-        }
-        let source_schema = TableSchemaRefExt::create(srouce_fields);
         Ok(ProcessorPtr::create(Box::new(DeletionSource {
             state: State::ReadData(None),
-            ctx: ctx.clone(),
             output,
-            location_gen: table.meta_location_generator().clone(),
-            dal: table.get_operator(),
-            block_reader,
+            ctx: ctx.clone(),
             filter,
+            block_reader,
             remain_reader,
-            source_schema,
-            output_schema: table.schema(),
+            output_schema,
             index: (0, 0),
-            cluster_stats_gen: table.cluster_stats_gen(ctx)?,
             origin_stats: None,
-            table_compression: table.table_compression,
         })))
     }
 }
@@ -175,10 +143,7 @@ impl Processor for DeletionSource {
             }
         }
 
-        if matches!(
-            self.state,
-            State::ReadData(_) | State::ReadRemain { .. } | State::Serialized(_, _)
-        ) {
+        if matches!(self.state, State::ReadData(_) | State::ReadRemain { .. }) {
             Ok(Event::Async)
         } else {
             Ok(Event::Sync)
@@ -188,20 +153,16 @@ impl Processor for DeletionSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, chunks) => {
-                let data_block = self
+                let mut data_block = self
                     .block_reader
                     .deserialize_parquet_chunks(part.clone(), chunks)?;
 
                 let func_ctx = self.ctx.try_get_function_context()?;
                 let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
-                let expr = self
-                    .filter
-                    .as_expr(&BUILTIN_FUNCTIONS)
-                    .unwrap()
-                    .project_column_ref(|name| self.source_schema.index_of(name).unwrap());
-                let res = evaluator.run(&expr).map_err(|(_, e)| {
-                    ErrorCode::Internal(format!("eval try eval const failed: {}.", e))
-                })?;
+
+                let res = evaluator
+                    .run(&self.filter)
+                    .map_err(|(_, e)| ErrorCode::Internal(format!("eval filter failed: {}.", e)))?;
                 let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
                     ErrorCode::BadArguments(
                         "Result of filter expression cannot be converted to boolean.",
@@ -212,15 +173,21 @@ impl Processor for DeletionSource {
                 let filter = Value::Column(Column::Boolean(predicate_col.not()));
                 if !DataBlock::filter_exists(&filter)? {
                     // all the rows should be removed.
-                    self.state = State::Generated(Mutation::Deleted);
+                    let meta = SerializeDataMeta::create(self.index, self.origin_stats);
+                    self.state =
+                        State::Output(self.ctx.try_get_part(), DataBlock::empty_with_meta(meta));
                 } else {
                     let num_rows = data_block.num_rows();
-                    let data_block = data_block.filter(&filter)?;
+                    data_block = data_block.filter(&filter)?;
                     if data_block.num_rows() == num_rows {
                         // none of the rows should be removed.
-                        self.state = State::Generated(Mutation::DoNothing);
+                        self.state = State::Output(self.ctx.try_get_part(), DataBlock::empty());
                     } else if self.remain_reader.is_none() {
-                        self.state = State::NeedSerialize(data_block);
+                        let meta = SerializeDataMeta::create(self.index, self.origin_stats);
+                        self.state = State::Output(
+                            self.ctx.try_get_part(),
+                            data_block.add_meta(Some(meta))?,
+                        );
                     } else {
                         self.state = State::ReadRemain {
                             part,
@@ -255,66 +222,9 @@ impl Processor for DeletionSource {
                 let src_schema = DataSchema::new(fields);
                 let dest_schema = self.output_schema.clone().into();
                 let block = merged.resort(&src_schema, &dest_schema)?;
-                self.state = State::NeedSerialize(block);
-            }
-            State::NeedSerialize(block) => {
-                let cluster_stats = self
-                    .cluster_stats_gen
-                    .gen_with_origin_stats(&block, std::mem::take(&mut self.origin_stats))?;
 
-                let row_count = block.num_rows() as u64;
-                let block_size = block.memory_size() as u64;
-                let (block_location, block_id) = self.location_gen.gen_block_location();
-
-                // build block index.
-                let location = self.location_gen.block_bloom_index_location(&block_id);
-                let (bloom_index_state, column_distinct_count) = BloomIndexState::try_create(
-                    self.ctx.clone(),
-                    self.source_schema.clone(),
-                    &block,
-                    location,
-                )?;
-                let col_stats = gen_columns_statistics(&block, Some(column_distinct_count))?;
-
-                // serialize data block.
-                let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
-                let schema = self.source_schema.clone();
-                let (file_size, meta_data) = blocks_to_parquet(
-                    &schema,
-                    vec![block],
-                    &mut block_data,
-                    self.table_compression,
-                )?;
-                let col_metas = util::column_metas(&meta_data)?;
-
-                // new block meta.
-                let new_meta = Arc::new(BlockMeta::new(
-                    row_count,
-                    block_size,
-                    file_size,
-                    col_stats,
-                    col_metas,
-                    cluster_stats,
-                    block_location.clone(),
-                    Some(bloom_index_state.location.clone()),
-                    bloom_index_state.size,
-                    self.table_compression.into(),
-                ));
-
-                self.state = State::Serialized(
-                    SerializeState {
-                        block_data,
-                        block_location: block_location.0,
-                        index_data: bloom_index_state.data,
-                        index_location: bloom_index_state.location.0,
-                    },
-                    new_meta,
-                );
-            }
-            State::Generated(op) => {
-                let meta = MutationTransformMeta::create(self.index, op);
-                let new_part = self.ctx.try_get_part();
-                self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
+                let meta = SerializeDataMeta::create(self.index, self.origin_stats);
+                self.state = State::Output(self.ctx.try_get_part(), block.add_meta(Some(meta))?);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -378,23 +288,6 @@ impl Processor for DeletionSource {
                 } else {
                     return Err(ErrorCode::Internal("It's a bug. No remain reader"));
                 }
-            }
-            State::Serialized(serialize_state, block_meta) => {
-                // write block data.
-                write_data(
-                    &serialize_state.block_data,
-                    &self.dal,
-                    &serialize_state.block_location,
-                )
-                .await?;
-                // write index data.
-                write_data(
-                    &serialize_state.index_data,
-                    &self.dal,
-                    &serialize_state.index_location,
-                )
-                .await?;
-                self.state = State::Generated(Mutation::Replaced(block_meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
