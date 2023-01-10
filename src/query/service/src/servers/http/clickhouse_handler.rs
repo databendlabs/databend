@@ -112,7 +112,14 @@ async fn execute(
     handle: Option<JoinHandle<()>>,
 ) -> Result<WithContentType<Body>> {
     let format_typ = format.typ.clone();
-    let mut data_stream = interpreter.execute(ctx.clone()).await?;
+    let mut data_stream = ctx
+        .try_spawn({
+            let ctx = ctx.clone();
+            async move { interpreter.execute(ctx.clone()).await }
+        })?
+        .await
+        .map_err(ErrorCode::from_std_error)??;
+
     let table_schema = infer_table_schema(&schema)?;
     let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
         format,
