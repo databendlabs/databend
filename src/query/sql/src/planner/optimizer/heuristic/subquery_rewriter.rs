@@ -273,7 +273,7 @@ impl SubqueryRewriter {
                     (output_column, format!("scalar_subquery_{output_column}"))
                 } else {
                     let index = subquery.output_column;
-                    (index, format!("subquery_{}", index))
+                    (index, format!("subquery_{index}"))
                 };
 
                 let data_type = if subquery.typ == SubqueryType::Scalar {
@@ -450,7 +450,7 @@ impl SubqueryRewriter {
             }
             SubqueryType::Any => {
                 let index = subquery.output_column;
-                let column_name = format!("subquery_{}", index);
+                let column_name = format!("subquery_{index}");
                 let left_condition = Scalar::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding {
                         database_name: None,
@@ -524,8 +524,7 @@ pub fn check_child_expr_in_subquery(
             Ok((child_expr.clone(), is_non_equi_condition))
         }
         other => Err(ErrorCode::Internal(format!(
-            "Invalid child expr in subquery: {:?}",
-            other
+            "Invalid child expr in subquery: {other:?}"
         ))),
     }
 }

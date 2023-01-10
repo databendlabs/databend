@@ -49,8 +49,7 @@ pub struct DNSResolver {
 static INSTANCE: Lazy<Result<Arc<DNSResolver>>> =
     Lazy::new(|| match TokioAsyncResolver::tokio_from_system_conf() {
         Err(error) => Result::Err(ErrorCode::DnsParseError(format!(
-            "DNS resolver create error: {}",
-            error
+            "DNS resolver create error: {error}"
         ))),
         Ok(resolver) => Ok(Arc::new(DNSResolver { inner: resolver })),
     });
@@ -73,8 +72,7 @@ impl DNSResolver {
         match self.inner.lookup_ip(hostname.clone()).await {
             Ok(lookup_ip) => Ok(lookup_ip.iter().collect::<Vec<_>>()),
             Err(error) => Err(ErrorCode::DnsParseError(format!(
-                "Cannot lookup ip {} : {}",
-                hostname, error
+                "Cannot lookup ip {hostname} : {error}"
             ))),
         }
     }
@@ -131,8 +129,7 @@ impl Future for DNSServiceFuture {
             Ok(Err(err)) => Err(err),
             Ok(Ok(addrs)) => Ok(addrs),
             Err(join_err) => Err(ErrorCode::TokioError(format!(
-                "Interrupted future: {}",
-                join_err
+                "Interrupted future: {join_err}"
             ))),
         })
     }

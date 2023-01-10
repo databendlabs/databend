@@ -310,7 +310,7 @@ impl SubqueryRewriter {
                     &mut right_conditions,
                 )?;
                 let index = subquery.output_column;
-                let column_name = format!("subquery_{}", index);
+                let column_name = format!("subquery_{index}");
                 let right_condition = Scalar::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding {
                         database_name: None,
@@ -457,7 +457,7 @@ impl SubqueryRewriter {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
-                        column_name: format!("subquery_{}", derived_column),
+                        column_name: format!("subquery_{derived_column}"),
                         index: *derived_column,
                         data_type: Box::from(data_type.clone()),
                         visibility: Visibility::Visible,
@@ -569,7 +569,7 @@ impl SubqueryRewriter {
                         ColumnBinding {
                             database_name: None,
                             table_name: None,
-                            column_name: format!("subquery_{}", derived_column),
+                            column_name: format!("subquery_{derived_column}"),
                             index: *derived_column,
                             data_type: Box::from(data_type.clone()),
                             visibility: Visibility::Visible,
@@ -677,7 +677,7 @@ impl SubqueryRewriter {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
-                            column_name: format!("subquery_{}", index),
+                            column_name: format!("subquery_{index}"),
                             index: *index,
                             data_type: column_binding.data_type.clone(),
                             visibility: column_binding.visibility,
@@ -772,7 +772,7 @@ impl SubqueryRewriter {
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
-                    column_name: format!("subquery_{}", correlated_column),
+                    column_name: format!("subquery_{correlated_column}"),
                     index: *correlated_column,
                     data_type: Box::from(data_type.clone()),
                     visibility: Visibility::Visible,
@@ -783,7 +783,7 @@ impl SubqueryRewriter {
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
-                    column_name: format!("subquery_{}", derive_column),
+                    column_name: format!("subquery_{derive_column}"),
                     index: *derive_column,
                     data_type: Box::from(data_type.clone()),
                     visibility: Visibility::Visible,

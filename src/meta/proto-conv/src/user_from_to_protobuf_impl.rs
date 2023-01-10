@@ -52,7 +52,7 @@ impl FromToProto for mt::AuthInfo {
             })) => Ok(mt::AuthInfo::Password {
                 hash_value,
                 hash_method: FromPrimitive::from_i32(hash_method).ok_or_else(|| Incompatible {
-                    reason: format!("invalid PasswordHashMethod: {}", hash_method),
+                    reason: format!("invalid PasswordHashMethod: {hash_method}"),
                 })?,
             }),
             None => Err(Incompatible {
@@ -196,7 +196,7 @@ impl FromToProto for mt::GrantEntry {
                 privileges,
             )),
             Err(e) => Err(Incompatible {
-                reason: format!("UserPrivilegeType error: {}", e),
+                reason: format!("UserPrivilegeType error: {e}"),
             }),
         }
     }
@@ -594,16 +594,15 @@ impl FromToProto for mt::CopyOptions {
             reason: "CopyOptions.on_error cannot be None".to_string(),
         })?)?;
         let size_limit = usize::try_from(p.size_limit).map_err(|err| Incompatible {
-            reason: format!("CopyOptions.size_limit cannot be convert to usize: {}", err),
+            reason: format!("CopyOptions.size_limit cannot be convert to usize: {err}"),
         })?;
         let split_size = usize::try_from(p.split_size).map_err(|err| Incompatible {
-            reason: format!("CopyOptions.split_size cannot be convert to usize: {}", err),
+            reason: format!("CopyOptions.split_size cannot be convert to usize: {err}"),
         })?;
 
         let max_file_size = usize::try_from(p.max_file_size).map_err(|err| Incompatible {
             reason: format!(
-                "CopyOptions.max_file_size cannot be convert to usize: {}",
-                err
+                "CopyOptions.max_file_size cannot be convert to usize: {err}"
             ),
         })?;
         Ok(mt::CopyOptions {
@@ -619,15 +618,14 @@ impl FromToProto for mt::CopyOptions {
     fn to_pb(&self) -> Result<pb::user_stage_info::CopyOptions, Incompatible> {
         let on_error = mt::OnErrorMode::to_pb(&self.on_error)?;
         let size_limit = u64::try_from(self.size_limit).map_err(|err| Incompatible {
-            reason: format!("CopyOptions.size_limit cannot be convert to u64: {}", err),
+            reason: format!("CopyOptions.size_limit cannot be convert to u64: {err}"),
         })?;
         let split_size = u64::try_from(self.split_size).map_err(|err| Incompatible {
-            reason: format!("CopyOptions.split_size cannot be convert to u64: {}", err),
+            reason: format!("CopyOptions.split_size cannot be convert to u64: {err}"),
         })?;
         let max_file_size = u64::try_from(self.max_file_size).map_err(|err| Incompatible {
             reason: format!(
-                "CopyOptions.max_file_size cannot be convert to u64: {}",
-                err
+                "CopyOptions.max_file_size cannot be convert to u64: {err}"
             ),
         })?;
         Ok(pb::user_stage_info::CopyOptions {

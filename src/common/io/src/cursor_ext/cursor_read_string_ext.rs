@@ -179,8 +179,7 @@ where T: AsRef<[u8]>
         Err(std::io::Error::new(
             ErrorKind::InvalidData,
             format!(
-                "Expected to have terminated string literal after quota \', while consumed buf: {:?}",
-                buf
+                "Expected to have terminated string literal after quota \', while consumed buf: {buf:?}"
             ),
         ))
     }

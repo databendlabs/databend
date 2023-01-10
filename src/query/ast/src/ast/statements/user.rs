@@ -88,7 +88,7 @@ impl Display for AlterUserStmt {
             write!(f, " USER()")?;
         }
         if let Some(auth_option) = &self.auth_option {
-            write!(f, " IDENTIFIED {}", auth_option)?;
+            write!(f, " IDENTIFIED {auth_option}")?;
         }
         if !self.user_options.is_empty() {
             write!(f, " WITH")?;
@@ -228,7 +228,7 @@ impl Display for UserOptionItem {
         match self {
             UserOptionItem::TenantSetting(true) => write!(f, "TENANTSETTING"),
             UserOptionItem::TenantSetting(false) => write!(f, "NOTENANTSETTING"),
-            UserOptionItem::DefaultRole(v) => write!(f, "DEFAULT_ROLE = '{}'", v),
+            UserOptionItem::DefaultRole(v) => write!(f, "DEFAULT_ROLE = '{v}'"),
         }
     }
 }

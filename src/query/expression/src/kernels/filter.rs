@@ -47,8 +47,7 @@ impl DataBlock {
     pub fn filter_exists(predicate: &Value<AnyType>) -> Result<bool> {
         let predicate = Self::cast_to_nonull_boolean(predicate).ok_or_else(|| {
             ErrorCode::BadDataValueType(format!(
-                "Filter predict column does not support type '{:?}'",
-                predicate
+                "Filter predict column does not support type '{predicate:?}'"
             ))
         })?;
         match predicate {
@@ -64,8 +63,7 @@ impl DataBlock {
 
         let predicate = Self::cast_to_nonull_boolean(predicate).ok_or_else(|| {
             ErrorCode::BadDataValueType(format!(
-                "Filter predict column does not support type '{:?}'",
-                predicate
+                "Filter predict column does not support type '{predicate:?}'"
             ))
         })?;
 

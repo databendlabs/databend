@@ -50,7 +50,7 @@ fn bench_u64(c: &mut Criterion) {
 
     for i in 0..column.len() {
         let key = unsafe { column.index_unchecked(i) };
-        assert!(filter.contains(&key), "key {} present", key);
+        assert!(filter.contains(&key), "key {key} present");
     }
 
     c.bench_function("xor8_filter_u64_1m_rows_build_from_column_to_values", |b| {
@@ -71,7 +71,7 @@ fn bench_string(c: &mut Criterion) {
 
     for i in 0..column.len() {
         let key = unsafe { column.index_unchecked(i) };
-        assert!(filter.contains(&key), "key {} present", key);
+        assert!(filter.contains(&key), "key {key} present");
     }
 
     c.bench_function(

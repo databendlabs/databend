@@ -246,8 +246,7 @@ pub fn check_function<Index: ColumnIndex>(
 
         write!(
             &mut msg,
-            "\n\nhas tried possible overloads:\n{}",
-            candidates_fail_reason
+            "\n\nhas tried possible overloads:\n{candidates_fail_reason}"
         )
         .unwrap();
     };
@@ -409,7 +408,7 @@ pub fn unify(
         (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty) => Ok(Subsitution::empty()),
         _ => Err((
             None,
-            (format!("unable to unify `{}` with `{}`", src_ty, dest_ty)),
+            (format!("unable to unify `{src_ty}` with `{dest_ty}`")),
         )),
     }
 }
@@ -494,7 +493,7 @@ pub fn check_simple_cast(
 
     if is_simple_cast_function(&function_name) {
         let prefix = if is_try { "try_" } else { "" };
-        Some(format!("{}{}", prefix, function_name))
+        Some(format!("{prefix}{function_name}"))
     } else {
         None
     }

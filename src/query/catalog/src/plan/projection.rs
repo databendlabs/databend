@@ -79,10 +79,10 @@ impl Projection {
 impl core::fmt::Debug for Projection {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Projection::Columns(indices) => write!(f, "{:?}", indices),
+            Projection::Columns(indices) => write!(f, "{indices:?}"),
             Projection::InnerColumns(path_indices) => {
                 let paths: Vec<&Vec<usize>> = path_indices.values().collect();
-                write!(f, "{:?}", paths)
+                write!(f, "{paths:?}")
             }
         }
     }

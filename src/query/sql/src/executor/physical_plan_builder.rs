@@ -728,8 +728,7 @@ impl<'a> PhysicalScalarBuilder<'a> {
             }),
 
             _ => Err(ErrorCode::Internal(format!(
-                "Unsupported physical scalar: {:?}",
-                scalar
+                "Unsupported physical scalar: {scalar:?}"
             ))),
         }
     }

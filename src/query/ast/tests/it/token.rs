@@ -28,17 +28,17 @@ fn run_lexer(file: &mut File, source: &str) {
                 .map(|token| (token.kind, token.text(), token.span))
                 .collect();
             writeln!(file, "---------- Input ----------").unwrap();
-            writeln!(file, "{}", source).unwrap();
+            writeln!(file, "{source}").unwrap();
             writeln!(file, "---------- Output ---------").unwrap();
-            writeln!(file, "{:?}", tuples).unwrap();
+            writeln!(file, "{tuples:?}").unwrap();
             writeln!(file, "\n").unwrap();
         }
         Err(err) => {
             let report = err.message().trim().to_string();
             writeln!(file, "---------- Input ----------").unwrap();
-            writeln!(file, "{}", source).unwrap();
+            writeln!(file, "{source}").unwrap();
             writeln!(file, "---------- Output ---------").unwrap();
-            writeln!(file, "{}", report).unwrap();
+            writeln!(file, "{report}").unwrap();
             writeln!(file, "\n").unwrap();
         }
     }

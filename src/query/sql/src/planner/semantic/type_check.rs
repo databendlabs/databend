@@ -675,7 +675,7 @@ impl<'a> TypeChecker<'a> {
                         };
 
                     let func_name = if distinct {
-                        format!("{}_distinct", func_name)
+                        format!("{func_name}_distinct")
                     } else {
                         func_name.to_string()
                     };
@@ -693,7 +693,7 @@ impl<'a> TypeChecker<'a> {
 
                     Box::new((
                         AggregateFunction {
-                            display_name: format!("{:#}", expr),
+                            display_name: format!("{expr:#}"),
                             func_name,
                             distinct: false,
                             params,
@@ -725,7 +725,7 @@ impl<'a> TypeChecker<'a> {
 
                 Box::new((
                     AggregateFunction {
-                        display_name: format!("{:#}", expr),
+                        display_name: format!("{expr:#}"),
                         func_name: "count".to_string(),
                         distinct: false,
                         params: vec![],
@@ -813,8 +813,7 @@ impl<'a> TypeChecker<'a> {
                         MapAccessor::PeriodNumber { key } => Literal::Integer(*key),
                         _ => {
                             return Err(ErrorCode::SemanticError(format!(
-                                "Unsupported accessor: {:?}",
-                                accessor
+                                "Unsupported accessor: {accessor:?}"
                             )));
                         }
                     };
@@ -1692,8 +1691,7 @@ impl<'a> TypeChecker<'a> {
                 };
                 let val = evaluator.run(&cast_expr).map_err(|_| {
                     ErrorCode::SemanticError(format!(
-                        "Failed to cast to data type: {}",
-                        required_type
+                        "Failed to cast to data type: {required_type}"
                     ))
                 })?;
                 let required_val =
@@ -2299,8 +2297,7 @@ impl<'a> TypeChecker<'a> {
             TypeName::Variant => TableDataType::Variant,
             name => {
                 return Err(ErrorCode::Internal(format!(
-                    "Invalid type name \'{:?}\'",
-                    name
+                    "Invalid type name \'{name:?}\'"
                 )));
             }
         };
@@ -2319,8 +2316,7 @@ pub fn validate_function_arg(
         Some((start, end)) => {
             if args_len < start || args_len > end {
                 Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                    "Function `{}` expect to have [{}, {}] arguments, but got {}",
-                    name, start, end, args_len
+                    "Function `{name}` expect to have [{start}, {end}] arguments, but got {args_len}"
                 )))
             } else {
                 Ok(())
@@ -2329,8 +2325,7 @@ pub fn validate_function_arg(
         None => {
             if num_arguments != args_len {
                 Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                    "Function `{}` expect to have {} arguments, but got {}",
-                    name, num_arguments, args_len
+                    "Function `{name}` expect to have {num_arguments} arguments, but got {args_len}"
                 )))
             } else {
                 Ok(())

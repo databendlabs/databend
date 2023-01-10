@@ -30,7 +30,7 @@ enum OtherErrors {
 impl Display for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OtherErrors::AnyHow { error } => write!(f, "{}", error),
+            OtherErrors::AnyHow { error } => write!(f, "{error}"),
         }
     }
 }
@@ -38,20 +38,20 @@ impl Display for OtherErrors {
 impl Debug for OtherErrors {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OtherErrors::AnyHow { error } => write!(f, "{:?}", error),
+            OtherErrors::AnyHow { error } => write!(f, "{error:?}"),
         }
     }
 }
 
 impl From<std::net::AddrParseError> for ErrorCode {
     fn from(error: std::net::AddrParseError) -> Self {
-        ErrorCode::BadAddressFormat(format!("Bad address format, cause: {}", error))
+        ErrorCode::BadAddressFormat(format!("Bad address format, cause: {error}"))
     }
 }
 
 impl From<std::str::Utf8Error> for ErrorCode {
     fn from(error: std::str::Utf8Error) -> Self {
-        ErrorCode::Internal(format!("Invalid Utf8, cause: {}", error))
+        ErrorCode::Internal(format!("Invalid Utf8, cause: {error}"))
     }
 }
 
@@ -187,8 +187,7 @@ impl From<std::io::Error> for ErrorCode {
 impl From<std::string::FromUtf8Error> for ErrorCode {
     fn from(error: std::string::FromUtf8Error) -> Self {
         ErrorCode::BadBytes(format!(
-            "Bad bytes, cannot parse bytes with UTF8, cause: {}",
-            error
+            "Bad bytes, cannot parse bytes with UTF8, cause: {error}"
         ))
     }
 }
@@ -197,8 +196,7 @@ impl From<std::string::FromUtf8Error> for ErrorCode {
 impl From<prost::EncodeError> for ErrorCode {
     fn from(error: prost::EncodeError) -> Self {
         ErrorCode::BadBytes(format!(
-            "Bad bytes, cannot parse bytes with prost, cause: {}",
-            error
+            "Bad bytes, cannot parse bytes with prost, cause: {error}"
         ))
     }
 }

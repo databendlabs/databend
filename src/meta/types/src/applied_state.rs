@@ -54,16 +54,16 @@ impl fmt::Display for AppliedState {
         write!(f, "AppliedState: ")?;
         match self {
             AppliedState::Seq { seq } => {
-                write!(f, "Seq: {}", seq)
+                write!(f, "Seq: {seq}")
             }
             AppliedState::Node { prev, result } => {
-                write!(f, "Node: prev: {:?}, result: {:?}", prev, result)
+                write!(f, "Node: prev: {prev:?}, result: {result:?}")
             }
             AppliedState::KV(change) => {
-                write!(f, "KV: {}", change)
+                write!(f, "KV: {change}")
             }
             AppliedState::TxnReply(txnreply) => {
-                write!(f, "Txn: {}", txnreply)
+                write!(f, "Txn: {txnreply}")
             }
             AppliedState::None => {
                 write!(f, "None")

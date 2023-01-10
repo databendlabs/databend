@@ -34,9 +34,9 @@ impl<'a> Identifier<'a> {
 impl<'a> Display for Identifier<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(c) = self.quote {
-            write!(f, "{}", c)?;
+            write!(f, "{c}")?;
             write!(f, "{}", self.name)?;
-            write!(f, "{}", c)
+            write!(f, "{c}")
         } else {
             write!(f, "{}", self.name)
         }
@@ -51,7 +51,7 @@ pub(crate) fn write_period_separated_list(
         if i > 0 {
             write!(f, ".")?;
         }
-        write!(f, "{}", item)?;
+        write!(f, "{item}")?;
     }
     Ok(())
 }

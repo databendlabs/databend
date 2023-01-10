@@ -54,7 +54,7 @@ pub fn check_timestamp(micros: i64) -> Result<i64, String> {
     if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
         Ok(micros)
     } else {
-        Err(format!("timestamp `{}` is out of range", micros))
+        Err(format!("timestamp `{micros}` is out of range"))
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]

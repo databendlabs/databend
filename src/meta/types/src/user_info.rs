@@ -83,8 +83,7 @@ impl TryFrom<Vec<u8>> for UserInfo {
         match serde_json::from_slice(&value) {
             Ok(user_info) => Ok(user_info),
             Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
-                "Cannot deserialize user info from bytes. cause {}",
-                serialize_error
+                "Cannot deserialize user info from bytes. cause {serialize_error}"
             ))),
         }
     }

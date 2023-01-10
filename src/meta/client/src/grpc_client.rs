@@ -363,7 +363,7 @@ impl MetaGrpcClient {
             let resp_tx = req.resp_tx;
             let req = req.req;
             let req_name = req.name();
-            let req_str = format!("{:?}", req);
+            let req_str = format!("{req:?}");
 
             let start = Instant::now();
 

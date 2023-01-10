@@ -75,8 +75,7 @@ pub(crate) fn str_field_to_scalar(value: &str, data_type: &DataType) -> Result<S
             }
         },
         _ => Err(ErrorCode::Unimplemented(format!(
-            "generate scalar failed, {:?}",
-            data_type
+            "generate scalar failed, {data_type:?}"
         ))),
     }
 }

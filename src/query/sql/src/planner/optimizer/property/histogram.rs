@@ -84,8 +84,7 @@ pub fn histogram_from_ndv(
     if ndv <= 2 {
         if num_rows != 0 {
             return Err(ErrorCode::Internal(format!(
-                "NDV must be greater than 0 when the number of rows is greater than 0, got NDV: {}, num_rows: {}",
-                ndv, num_rows
+                "NDV must be greater than 0 when the number of rows is greater than 0, got NDV: {ndv}, num_rows: {num_rows}"
             )));
         } else {
             return Ok(Histogram { buckets: vec![] });
@@ -94,15 +93,13 @@ pub fn histogram_from_ndv(
 
     if num_buckets < 2 {
         return Err(ErrorCode::Internal(format!(
-            "Must have at least 2 buckets, got {}",
-            num_buckets
+            "Must have at least 2 buckets, got {num_buckets}"
         )));
     }
 
     if ndv > num_rows {
         return Err(ErrorCode::Internal(format!(
-            "NDV must be less than or equal to the number of rows, got NDV: {}, num_rows: {}",
-            ndv, num_rows
+            "NDV must be less than or equal to the number of rows, got NDV: {ndv}, num_rows: {num_rows}"
         )));
     }
 
@@ -110,8 +107,7 @@ pub fn histogram_from_ndv(
         Some((min, max)) => (min, max),
         None => {
             return Err(ErrorCode::Internal(format!(
-                "Must have min and max value when NDV is greater than 0, got NDV: {}",
-                ndv
+                "Must have min and max value when NDV is greater than 0, got NDV: {ndv}"
             )));
         }
     };

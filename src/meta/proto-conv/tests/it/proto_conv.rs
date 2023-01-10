@@ -471,7 +471,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("db:{:?}", buf);
+        println!("db:{buf:?}");
     }
 
     // TableMeta
@@ -482,7 +482,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("table:{:?}", buf);
+        println!("table:{buf:?}");
     }
 
     // ShareMeta
@@ -493,7 +493,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("share:{:?}", buf);
+        println!("share:{buf:?}");
     }
 
     // ShareAccountMeta
@@ -504,7 +504,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("share account:{:?}", buf);
+        println!("share account:{buf:?}");
     }
 
     // TableCopiedFileInfo
@@ -514,7 +514,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("copied_file:{:?}", buf);
+        println!("copied_file:{buf:?}");
     }
 
     // TableCopiedFileLock
@@ -524,7 +524,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("copied_file_lock:{:?}", buf);
+        println!("copied_file_lock:{buf:?}");
     }
 
     Ok(())

@@ -67,19 +67,19 @@ impl fmt::Display for Cmd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Cmd::IncrSeq { key } => {
-                write!(f, "incr_seq:{}", key)
+                write!(f, "incr_seq:{key}")
             }
             Cmd::AddNode { node_id, node } => {
-                write!(f, "add_node:{}={}", node_id, node)
+                write!(f, "add_node:{node_id}={node}")
             }
             Cmd::RemoveNode { node_id } => {
-                write!(f, "remove_node:{}", node_id)
+                write!(f, "remove_node:{node_id}")
             }
             Cmd::UpsertKV(upsert_kv) => {
-                write!(f, "upsert_kv:{}", upsert_kv)
+                write!(f, "upsert_kv:{upsert_kv}")
             }
             Cmd::Transaction(txn) => {
-                write!(f, "txn:{}", txn)
+                write!(f, "txn:{txn}")
             }
         }
     }

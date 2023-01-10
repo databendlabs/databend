@@ -784,7 +784,7 @@ impl Settings {
             .settings
             .get(key)
             .map(|e| e.value().clone())
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {key:?}")))?;
         Ok(setting)
     }
 
@@ -793,7 +793,7 @@ impl Settings {
             .settings
             .get(key)
             .map(|e| e.value().default_value.clone())
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {key:?}")))?;
         Ok(setting)
     }
 
@@ -823,7 +823,7 @@ impl Settings {
         let mut setting = self
             .settings
             .get_mut(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {key:?}")))?;
         setting.user_setting.value = UserSettingValue::UInt64(val);
 
         if is_global {
@@ -846,7 +846,7 @@ impl Settings {
         let mut setting = self
             .settings
             .get_mut(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {key:?}")))?;
         setting.user_setting.value = UserSettingValue::String(val);
 
         if is_global {
@@ -869,7 +869,7 @@ impl Settings {
         let mut setting = self
             .settings
             .get_mut(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {key:?}")))?;
 
         let tenant = self.tenant.clone();
         let key = key.to_string();
@@ -887,7 +887,7 @@ impl Settings {
         let mut setting = self
             .settings
             .get_mut(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {key:?}")))?;
 
         if is_global {
             setting.level = ScopeLevel::Global;
@@ -899,7 +899,7 @@ impl Settings {
         let setting = self
             .settings
             .get_mut(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {key:?}")))?;
 
         Ok(setting.level.clone())
     }
@@ -960,7 +960,7 @@ impl Settings {
         for value in values.into_iter() {
             let key = value.0;
             let mut val = self.settings.get_mut(&key).ok_or_else(|| {
-                ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key))
+                ErrorCode::UnknownVariable(format!("Unknown variable: {key:?}"))
             })?;
             val.user_setting.value = value.1.clone();
         }

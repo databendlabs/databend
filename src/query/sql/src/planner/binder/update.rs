@@ -83,8 +83,7 @@ impl<'a> Binder {
             let index = schema.index_of(&col_name)?;
             if update_columns.contains_key(&index) {
                 return Err(ErrorCode::BadArguments(format!(
-                    "Multiple assignments in the single statement to column `{}`",
-                    col_name
+                    "Multiple assignments in the single statement to column `{col_name}`"
                 )));
             }
 

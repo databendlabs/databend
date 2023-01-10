@@ -64,7 +64,7 @@ impl<'a, T: Display> Display for VecDisplay<'a, T> {
                 write!(f, ",")?;
             }
 
-            write!(f, "{}", t)?;
+            write!(f, "{t}")?;
         }
 
         write!(f, "]")
@@ -107,7 +107,7 @@ impl Display for ConditionResult {
             ConditionResult::Le => "<=",
             ConditionResult::Ne => "!=",
         };
-        write!(f, "{}", x)
+        write!(f, "{x}")
     }
 }
 
@@ -121,16 +121,16 @@ impl Display for txn_op::Request {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Request::Get(r) => {
-                write!(f, "Get({})", r)
+                write!(f, "Get({r})")
             }
             Request::Put(r) => {
-                write!(f, "Put({})", r)
+                write!(f, "Put({r})")
             }
             Request::Delete(r) => {
-                write!(f, "Delete({})", r)
+                write!(f, "Delete({r})")
             }
             Request::DeleteByPrefix(r) => {
-                write!(f, "DeleteByPrefix({})", r)
+                write!(f, "DeleteByPrefix({r})")
             }
         }
     }
@@ -150,7 +150,7 @@ impl Display for TxnPutRequest {
             self.key, self.prev_value
         )?;
         if let Some(expire_at) = self.expire_at {
-            write!(f, " expire at: {}", expire_at)?;
+            write!(f, " expire at: {expire_at}")?;
         }
         Ok(())
     }
@@ -175,7 +175,7 @@ impl Display for Target {
                 write!(f, "value(...)",)
             }
             Target::Seq(seq) => {
-                write!(f, "seq({})", seq)
+                write!(f, "seq({seq})")
             }
         }
     }
@@ -205,16 +205,16 @@ impl Display for Response {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Response::Get(r) => {
-                write!(f, "Get: {}", r)
+                write!(f, "Get: {r}")
             }
             Response::Put(r) => {
-                write!(f, "Put: {}", r)
+                write!(f, "Put: {r}")
             }
             Response::Delete(r) => {
-                write!(f, "Delete: {}", r)
+                write!(f, "Delete: {r}")
             }
             Response::DeleteByPrefix(r) => {
-                write!(f, "DeleteByPrefix: {}", r)
+                write!(f, "DeleteByPrefix: {r}")
             }
         }
     }

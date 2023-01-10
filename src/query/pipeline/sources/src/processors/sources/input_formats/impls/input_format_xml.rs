@@ -72,12 +72,12 @@ impl InputFormatXML {
                     deserializer.de_default();
                 } else {
                     if let Err(e) = field_decoder.read_field(deserializer, &mut reader, true) {
-                        let value_str = format!("{:?}", value);
+                        let value_str = format!("{value:?}");
                         let err_msg = format!("{}. column={} value={}", e, field.name(), value_str);
                         return Err(xml_error(&err_msg, path, row_index));
                     };
                     if reader.must_eof().is_err() {
-                        let value_str = format!("{:?}", value);
+                        let value_str = format!("{value:?}");
                         let err_msg =
                             format!("bad field end. column={} value={}", field.name(), value_str);
                         return Err(xml_error(&err_msg, path, row_index));
@@ -260,7 +260,7 @@ impl InputFormatTextBase for InputFormatXML {
 
 fn xml_error(msg: &str, path: &str, row: usize) -> ErrorCode {
     let row = row + 1;
-    let msg = format!("fail to parse XML {}:{} {} ", path, row, msg);
+    let msg = format!("fail to parse XML {path}:{row} {msg} ");
 
     ErrorCode::BadBytes(msg)
 }

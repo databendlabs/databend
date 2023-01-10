@@ -38,7 +38,7 @@ fn test_xor_bitmap_u64() -> Result<()> {
     let filter = builder.build()?;
 
     for key in keys.iter() {
-        assert!(filter.contains(key), "key {} not present", key);
+        assert!(filter.contains(key), "key {key} not present");
     }
 
     let val = filter.to_bytes()?;
@@ -73,7 +73,7 @@ fn test_xor_bitmap_bool() -> Result<()> {
     let filter = builder.build()?;
 
     for key in keys.iter() {
-        assert!(filter.contains(key), "key {} not present", key);
+        assert!(filter.contains(key), "key {key} not present");
     }
 
     let val = filter.to_bytes()?;
@@ -122,7 +122,7 @@ fn test_xor_bitmap_string() -> Result<()> {
     let filter = builder.build()?;
 
     for key in keys.iter() {
-        assert!(filter.contains(key), "key {} not present", key);
+        assert!(filter.contains(key), "key {key} not present");
     }
 
     let val = filter.to_bytes()?;
@@ -157,7 +157,7 @@ fn test_xor_bitmap_duplicate_string() -> Result<()> {
     builder.add_keys(&keys);
     let filter = builder.build()?;
 
-    assert!(filter.contains(&keys[0]), "key {} not present", key);
+    assert!(filter.contains(&keys[0]), "key {key} not present");
 
     let val = filter.to_bytes()?;
     let (_, n) = Xor8Filter::from_bytes(&val)?;
@@ -194,8 +194,7 @@ fn test_xor_bitmap_data_block() -> Result<()> {
     for key in keys {
         assert!(
             filter.contains(&ScalarRef::Number(NumberScalar::Int64(key))),
-            "key {} is not present",
-            key
+            "key {key} is not present"
         );
     }
 

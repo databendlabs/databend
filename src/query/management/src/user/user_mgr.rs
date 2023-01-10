@@ -125,14 +125,14 @@ impl UserApi for UserMgr {
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", user_key)))?;
+            res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {user_key}")))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
                 seq_value.seq,
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")?,
             )),
-            Err(_) => Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key))),
+            Err(_) => Err(ErrorCode::UnknownUser(format!("unknown user {user_key}"))),
         }
     }
 
@@ -234,11 +234,11 @@ impl UserApi for UserMgr {
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
-            Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key)))
+            Err(ErrorCode::UnknownUser(format!("unknown user {user_key}")))
         }
     }
 }
 
 fn format_user_key(username: &str, hostname: &str) -> String {
-    format!("'{}'@'{}'", username, hostname)
+    format!("'{username}'@'{hostname}'")
 }

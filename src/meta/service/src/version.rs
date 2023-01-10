@@ -28,7 +28,7 @@ pub static METASRV_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
         (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
         #[cfg(feature = "simd")]
         (Some(v1), Some(v2), Some(v3), Some(v4)) => {
-            format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
+            format!("{v1}-{v2}-simd({v3}-{v4})")
         }
         _ => String::new(),
     }
@@ -40,7 +40,7 @@ pub static METASRV_SEMVER: Lazy<Version> = Lazy::new(|| {
 
     let semver = semver.strip_prefix('v').unwrap_or(semver);
 
-    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
+    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {semver:?}: {e}"))
 });
 
 /// Oldest compatible nightly meta-client version
@@ -57,6 +57,6 @@ pub fn to_digit_ver(v: &Version) -> u64 {
 }
 
 pub fn from_digit_ver(u: u64) -> Version {
-    println!("{}", u);
+    println!("{u}");
     Version::new(u / 1_000_000, u / 1_000 % 1_000, u % 1_000)
 }

@@ -32,7 +32,7 @@ fn test_collect_number() -> Result<()> {
     ];
     for (s, expect) in cases {
         let actual = collect_number(s.as_bytes());
-        assert_eq!(actual, expect, "{}", s)
+        assert_eq!(actual, expect, "{s}")
     }
     Ok(())
 }

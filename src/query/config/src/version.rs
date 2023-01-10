@@ -22,7 +22,7 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
 
     match (git_tag, git_sha, rustc_semver, timestamp) {
         #[cfg(not(feature = "simd"))]
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}(rust-{}-{})", v1, v2, v3, v4),
+        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{v1}-{v2}(rust-{v3}-{v4})"),
         #[cfg(feature = "simd")]
         (Some(v1), Some(v2), Some(v3), Some(v4)) => {
             format!("{}-{}-simd(rust-{}-{})", v1, v2, v3, v4)
@@ -38,5 +38,5 @@ pub static QUERY_SEMVER: Lazy<Version> = Lazy::new(|| {
 
     let semver = semver.strip_prefix('v').unwrap_or(semver);
 
-    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
+    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {semver:?}: {e}"))
 });

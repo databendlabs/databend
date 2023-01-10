@@ -243,8 +243,7 @@ impl<'a> Binder {
                             Ok(check_literal(&value).0)
                         }
                         _ => Err(ErrorCode::Unimplemented(format!(
-                            "Unsupported table argument type: {:?}",
-                            scalar
+                            "Unsupported table argument type: {scalar:?}"
                         ))),
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -332,8 +331,7 @@ impl<'a> Binder {
                     match file {
                         None => {
                             return Err(ErrorCode::BadArguments(format!(
-                                "no file in {}",
-                                location
+                                "no file in {location}"
                             )));
                         }
                         Some(f) => f.path().to_string(),

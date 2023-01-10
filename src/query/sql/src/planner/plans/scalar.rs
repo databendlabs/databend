@@ -343,8 +343,7 @@ impl ComparisonOp {
             BinaryOperator::Eq => Ok(Self::Equal),
             BinaryOperator::NotEq => Ok(Self::NotEqual),
             _ => Err(ErrorCode::SemanticError(format!(
-                "Unsupported comparison operator {}",
-                op
+                "Unsupported comparison operator {op}"
             ))),
         }
     }

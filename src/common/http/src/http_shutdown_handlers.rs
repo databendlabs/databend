@@ -58,7 +58,7 @@ impl HttpShutdownHandler {
         let mut acceptor = TcpListener::bind(listening)
             .into_acceptor()
             .await
-            .map_err(|err| ErrorCode::CannotListenerPort(format!("{}:{}", err, listening)))?
+            .map_err(|err| ErrorCode::CannotListenerPort(format!("{err}:{listening}")))?
             .boxed();
 
         let addr = acceptor
@@ -71,8 +71,7 @@ impl HttpShutdownHandler {
             acceptor = acceptor
                 .rustls(tls_config.into_stream().map_err(|err| {
                     ErrorCode::TLSConfigurationFailure(format!(
-                        "Cannot build TLS config for http service, cause {}",
-                        err
+                        "Cannot build TLS config for http service, cause {err}"
                     ))
                 })?)
                 .boxed();

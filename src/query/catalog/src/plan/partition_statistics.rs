@@ -86,7 +86,7 @@ impl PartStatistics {
                 self.partitions_total,
             )
         } else {
-            format!("(Read from {} table)", table_desc)
+            format!("(Read from {table_desc} table)")
         }
     }
 }

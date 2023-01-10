@@ -387,7 +387,7 @@ fn test_parse_uri_location() -> Result<()> {
 
     for (name, mut input, expected) in cases {
         let actual = parse_uri_location(&mut input)?;
-        assert_eq!(expected, actual, "{}", name);
+        assert_eq!(expected, actual, "{name}");
     }
 
     Ok(())

@@ -424,7 +424,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_literal(&mut self, _span: &'ast [Token<'ast>], lit: &'ast Literal) {
-        let name = format!("Literal {:?}", lit);
+        let name = format!("Literal {lit:?}");
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
@@ -603,7 +603,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.visit_expr(expr);
         let child = self.children.pop().unwrap();
 
-        let name = format!("Function Interval{}", unit);
+        let name = format!("Function Interval{unit}");
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
         self.children.push(node);
@@ -621,7 +621,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.visit_expr(interval);
         let interval_child = self.children.pop().unwrap();
 
-        let name = format!("Function DateAdd{}", unit);
+        let name = format!("Function DateAdd{unit}");
         let format_ctx = AstFormatContext::with_children(name, 2);
         let node = FormatTreeNode::with_children(format_ctx, vec![date_child, interval_child]);
         self.children.push(node);
@@ -639,7 +639,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.visit_expr(interval);
         let interval_child = self.children.pop().unwrap();
 
-        let name = format!("Function DateSub{}", unit);
+        let name = format!("Function DateSub{unit}");
         let format_ctx = AstFormatContext::with_children(name, 2);
         let node = FormatTreeNode::with_children(format_ctx, vec![date_child, interval_child]);
         self.children.push(node);
@@ -654,7 +654,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.visit_expr(date);
         let child = self.children.pop().unwrap();
 
-        let name = format!("Function DateTrunc{}", unit);
+        let name = format!("Function DateTrunc{unit}");
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
         self.children.push(node);
@@ -733,7 +733,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         if !copy.files.is_empty() {
             let mut files_children = Vec::with_capacity(copy.files.len());
             for file in copy.files.iter() {
-                let file_name = format!("File {}", file);
+                let file_name = format!("File {file}");
                 let file_format_ctx = AstFormatContext::new(file_name);
                 let file_node = FormatTreeNode::new(file_format_ctx);
                 files_children.push(file_node);
@@ -753,7 +753,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         if !copy.file_format.is_empty() {
             let mut file_formats_children = Vec::with_capacity(copy.file_format.len());
             for (k, v) in copy.file_format.iter() {
-                let file_format_name = format!("FileFormat {} = {:?}", k, v);
+                let file_format_name = format!("FileFormat {k} = {v:?}");
                 let file_format_format_ctx = AstFormatContext::new(file_format_name);
                 let file_format_node = FormatTreeNode::new(file_format_format_ctx);
                 file_formats_children.push(file_format_node);
@@ -803,7 +803,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 self.children.push(location_node);
             }
             CopyUnit::UriLocation(v) => {
-                let location_format_ctx = AstFormatContext::new(format!("UriLocation {}", v));
+                let location_format_ctx = AstFormatContext::new(format!("UriLocation {v}"));
                 let location_node = FormatTreeNode::new(location_format_ctx);
                 self.children.push(location_node);
             }
@@ -819,7 +819,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_call(&mut self, call: &'ast CallStmt) {
         let mut children = Vec::new();
         for arg in call.args.iter() {
-            let arg_name = format!("Arg {}", arg);
+            let arg_name = format!("Arg {arg}");
             let arg_format_ctx = AstFormatContext::new(arg_name);
             let arg_node = FormatTreeNode::new(arg_format_ctx);
             children.push(arg_node);
@@ -833,7 +833,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_show_settings(&mut self, like: &'ast Option<String>) {
         let mut children = Vec::new();
         if let Some(like) = like {
-            let like_name = format!("Like {}", like);
+            let like_name = format!("Like {like}");
             let like_format_ctx = AstFormatContext::new(like_name);
             let like_node = FormatTreeNode::new(like_format_ctx);
             children.push(like_node);
@@ -880,7 +880,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_show_limit(&mut self, limit: &'ast ShowLimit<'ast>) {
         match limit {
             ShowLimit::Like { pattern } => {
-                let name = format!("LimitLike {}", pattern);
+                let name = format!("LimitLike {pattern}");
                 let format_ctx = AstFormatContext::new(name);
                 let node = FormatTreeNode::new(format_ctx);
                 self.children.push(node);
@@ -897,7 +897,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_kill(&mut self, kill_target: &'ast KillTarget, object_id: &'ast str) {
-        let name = format!("Kill {} {}", kill_target, object_id);
+        let name = format!("Kill {kill_target} {object_id}");
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
@@ -910,9 +910,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         value: &'ast Literal,
     ) {
         let name = if is_global {
-            format!("SetGlobal {} = {}", variable, value)
+            format!("SetGlobal {variable} = {value}")
         } else {
-            format!("Set {} = {}", variable, value)
+            format!("Set {variable} = {value}")
         };
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
@@ -920,7 +920,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_unset_variable(&mut self, stmt: &'ast UnSetStmt<'ast>) {
-        let name = format!("UnSet {}", stmt);
+        let name = format!("UnSet {stmt}");
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
@@ -958,7 +958,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_insert_source(&mut self, insert_source: &'ast InsertSource<'ast>) {
         match insert_source {
             InsertSource::Streaming { format, .. } => {
-                let streaming_name = format!("StreamSource {}", format);
+                let streaming_name = format!("StreamSource {format}");
                 let streaming_format_ctx = AstFormatContext::new(streaming_name);
                 let streaming_node = FormatTreeNode::new(streaming_format_ctx);
                 self.children.push(streaming_node);
@@ -966,7 +966,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             InsertSource::StreamingV2 { settings, .. } => {
                 let mut file_formats_children = Vec::with_capacity(settings.len());
                 for (k, v) in settings.iter() {
-                    let file_format_name = format!("FileFormat {} = {:?}", k, v);
+                    let file_format_name = format!("FileFormat {k} = {v:?}");
                     let file_format_format_ctx = AstFormatContext::new(file_format_name);
                     let file_format_node = FormatTreeNode::new(file_format_format_ctx);
                     file_formats_children.push(file_format_node);
@@ -1062,7 +1062,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.visit_database_ref(&stmt.catalog, &stmt.database);
         children.push(self.children.pop().unwrap());
         if let Some(engine) = &stmt.engine {
-            let engine_name = format!("DatabaseEngine {}", engine);
+            let engine_name = format!("DatabaseEngine {engine}");
             let engine_format_ctx = AstFormatContext::new(engine_name);
             let engine_node = FormatTreeNode::new(engine_format_ctx);
             children.push(engine_node);
@@ -1111,7 +1111,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
         let action_child = match &stmt.action {
             AlterDatabaseAction::RenameDatabase { new_db } => {
-                let action_name = format!("Action RenameTo {}", new_db);
+                let action_name = format!("Action RenameTo {new_db}");
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
@@ -1135,7 +1135,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_show_tables(&mut self, stmt: &'ast ShowTablesStmt<'ast>) {
         let mut children = Vec::new();
         if let Some(database) = &stmt.database {
-            let database_name = format!("Database {}", database);
+            let database_name = format!("Database {database}");
             let database_format_ctx = AstFormatContext::new(database_name);
             let database_node = FormatTreeNode::new(database_format_ctx);
             children.push(database_node);
@@ -1171,7 +1171,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_show_tables_status(&mut self, stmt: &'ast ShowTablesStatusStmt<'ast>) {
         let mut children = Vec::new();
         if let Some(database) = &stmt.database {
-            let database_name = format!("Database {}", database);
+            let database_name = format!("Database {database}");
             let database_format_ctx = AstFormatContext::new(database_name);
             let database_node = FormatTreeNode::new(database_format_ctx);
             children.push(database_node);
@@ -1195,7 +1195,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             children.push(self.children.pop().unwrap());
         }
         if let Some(engine) = &stmt.engine {
-            let engine_name = format!("TableEngine {}", engine);
+            let engine_name = format!("TableEngine {engine}");
             let engine_format_ctx = AstFormatContext::new(engine_name);
             let engine_node = FormatTreeNode::new(engine_format_ctx);
             children.push(engine_node);
@@ -1216,7 +1216,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         if !stmt.table_options.is_empty() {
             let mut table_options_children = Vec::with_capacity(stmt.table_options.len());
             for (k, v) in stmt.table_options.iter() {
-                let table_option_name = format!("TableOption {} = {:?}", k, v);
+                let table_option_name = format!("TableOption {k} = {v:?}");
                 let table_option_format_ctx = AstFormatContext::new(table_option_name);
                 let table_option_node = FormatTreeNode::new(table_option_format_ctx);
                 table_options_children.push(table_option_node);
@@ -1305,7 +1305,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
         let action_child = match &stmt.action {
             AlterTableAction::RenameTable { new_table } => {
-                let action_name = format!("Action RenameTo {}", new_table);
+                let action_name = format!("Action RenameTo {new_table}");
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
@@ -1460,14 +1460,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             children.push(FormatTreeNode::new(auth_type_format_ctx));
         }
         if let Some(password) = &stmt.auth_option.password {
-            let auth_password_name = format!("Password {:?}", password);
+            let auth_password_name = format!("Password {password:?}");
             let auth_password_format_ctx = AstFormatContext::new(auth_password_name);
             children.push(FormatTreeNode::new(auth_password_format_ctx));
         }
         if !stmt.user_options.is_empty() {
             let mut user_options_children = Vec::with_capacity(stmt.user_options.len());
             for user_option in stmt.user_options.iter() {
-                let user_option_name = format!("UserOption {}", user_option);
+                let user_option_name = format!("UserOption {user_option}");
                 let user_option_format_ctx = AstFormatContext::new(user_option_name);
                 let user_option_node = FormatTreeNode::new(user_option_format_ctx);
                 user_options_children.push(user_option_node);
@@ -1490,7 +1490,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_alter_user(&mut self, stmt: &'ast AlterUserStmt) {
         let mut children = Vec::new();
         if let Some(user) = &stmt.user {
-            let user_name = format!("User {}", user);
+            let user_name = format!("User {user}");
             let user_format_ctx = AstFormatContext::new(user_name);
             children.push(FormatTreeNode::new(user_format_ctx));
         }
@@ -1501,7 +1501,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 children.push(FormatTreeNode::new(auth_type_format_ctx));
             }
             if let Some(password) = &auth_option.password {
-                let auth_password_name = format!("Password {}", password);
+                let auth_password_name = format!("Password {password}");
                 let auth_password_format_ctx = AstFormatContext::new(auth_password_name);
                 children.push(FormatTreeNode::new(auth_password_format_ctx));
             }
@@ -1509,7 +1509,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         if !stmt.user_options.is_empty() {
             let mut user_options_children = Vec::with_capacity(stmt.user_options.len());
             for user_option in stmt.user_options.iter() {
-                let user_option_name = format!("UserOption {}", user_option);
+                let user_option_name = format!("UserOption {user_option}");
                 let user_option_format_ctx = AstFormatContext::new(user_option_name);
                 let user_option_node = FormatTreeNode::new(user_option_format_ctx);
                 user_options_children.push(user_option_node);
@@ -1530,7 +1530,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_drop_user(&mut self, _if_exists: bool, user: &'ast UserIdentity) {
-        let user_name = format!("User {}", user);
+        let user_name = format!("User {user}");
         let user_format_ctx = AstFormatContext::new(user_name);
         let child = FormatTreeNode::new(user_format_ctx);
 
@@ -1548,7 +1548,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_create_role(&mut self, _if_not_exists: bool, role_name: &'ast str) {
-        let role_name = format!("Role {}", role_name);
+        let role_name = format!("Role {role_name}");
         let role_format_ctx = AstFormatContext::new(role_name);
         let child = FormatTreeNode::new(role_format_ctx);
 
@@ -1559,7 +1559,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_drop_role(&mut self, _if_exists: bool, role_name: &'ast str) {
-        let role_name = format!("Role {}", role_name);
+        let role_name = format!("Role {role_name}");
         let role_format_ctx = AstFormatContext::new(role_name);
         let child = FormatTreeNode::new(role_format_ctx);
 
@@ -1572,14 +1572,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_grant(&mut self, grant: &'ast GrantStmt) {
         let source_child = match &grant.source {
             AccountMgrSource::Role { role } => {
-                let role_name = format!("Role {}", role);
+                let role_name = format!("Role {role}");
                 let role_format_ctx = AstFormatContext::new(role_name);
                 FormatTreeNode::new(role_format_ctx)
             }
             AccountMgrSource::Privs { privileges, .. } => {
                 let mut privileges_children = Vec::with_capacity(privileges.len());
                 for privilege in privileges.iter() {
-                    let privilege_name = format!("Privilege {}", privilege);
+                    let privilege_name = format!("Privilege {privilege}");
                     let privilege_format_ctx = AstFormatContext::new(privilege_name);
                     privileges_children.push(FormatTreeNode::new(privilege_format_ctx));
                 }
@@ -1595,8 +1595,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
         };
         let principal_name = match &grant.principal {
-            PrincipalIdentity::User(user) => format!("User {}", user),
-            PrincipalIdentity::Role(role) => format!("Role {}", role),
+            PrincipalIdentity::User(user) => format!("User {user}"),
+            PrincipalIdentity::Role(role) => format!("Role {role}"),
         };
         let principal_format_ctx = AstFormatContext::new(principal_name);
         let principal_child = FormatTreeNode::new(principal_format_ctx);
@@ -1611,8 +1611,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let mut children = Vec::new();
         if let Some(principal) = &principal {
             let principal_name = match principal {
-                PrincipalIdentity::User(user) => format!("User {}", user),
-                PrincipalIdentity::Role(role) => format!("Role {}", role),
+                PrincipalIdentity::User(user) => format!("User {user}"),
+                PrincipalIdentity::Role(role) => format!("Role {role}"),
             };
             let principal_format_ctx = AstFormatContext::new(principal_name);
             children.push(FormatTreeNode::new(principal_format_ctx));
@@ -1626,14 +1626,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_revoke(&mut self, revoke: &'ast RevokeStmt) {
         let source_child = match &revoke.source {
             AccountMgrSource::Role { role } => {
-                let role_name = format!("Role {}", role);
+                let role_name = format!("Role {role}");
                 let role_format_ctx = AstFormatContext::new(role_name);
                 FormatTreeNode::new(role_format_ctx)
             }
             AccountMgrSource::Privs { privileges, .. } => {
                 let mut privileges_children = Vec::with_capacity(privileges.len());
                 for privilege in privileges.iter() {
-                    let privilege_name = format!("Privilege {}", privilege);
+                    let privilege_name = format!("Privilege {privilege}");
                     let privilege_format_ctx = AstFormatContext::new(privilege_name);
                     privileges_children.push(FormatTreeNode::new(privilege_format_ctx));
                 }
@@ -1649,8 +1649,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
         };
         let principal_name = match &revoke.principal {
-            PrincipalIdentity::User(user) => format!("User {}", user),
-            PrincipalIdentity::Role(role) => format!("Role {}", role),
+            PrincipalIdentity::User(user) => format!("User {user}"),
+            PrincipalIdentity::Role(role) => format!("Role {role}"),
         };
         let principal_format_ctx = AstFormatContext::new(principal_name);
         let principal_child = FormatTreeNode::new(principal_format_ctx);
@@ -1670,7 +1670,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         description: &'ast Option<String>,
     ) {
         let mut children = Vec::new();
-        let udf_name_format_ctx = AstFormatContext::new(format!("UdfNameIdentifier {}", udf_name));
+        let udf_name_format_ctx = AstFormatContext::new(format!("UdfNameIdentifier {udf_name}"));
         children.push(FormatTreeNode::new(udf_name_format_ctx));
         if !parameters.is_empty() {
             let mut parameters_children = Vec::with_capacity(parameters.len());
@@ -1694,7 +1694,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             definition_child,
         ]));
         if let Some(description) = description {
-            let description_name = format!("UdfDescription {}", description);
+            let description_name = format!("UdfDescription {description}");
             let description_format_ctx = AstFormatContext::new(description_name);
             children.push(FormatTreeNode::new(description_format_ctx));
         }
@@ -1706,7 +1706,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_drop_udf(&mut self, _if_exists: bool, udf_name: &'ast Identifier<'ast>) {
-        let udf_name_format_ctx = AstFormatContext::new(format!("UdfIdentifier {}", udf_name));
+        let udf_name_format_ctx = AstFormatContext::new(format!("UdfIdentifier {udf_name}"));
         let child = FormatTreeNode::new(udf_name_format_ctx);
 
         let name = "DropUdf".to_string();
@@ -1723,7 +1723,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         description: &'ast Option<String>,
     ) {
         let mut children = Vec::new();
-        let udf_name_format_ctx = AstFormatContext::new(format!("UdfNameIdentifier {}", udf_name));
+        let udf_name_format_ctx = AstFormatContext::new(format!("UdfNameIdentifier {udf_name}"));
         children.push(FormatTreeNode::new(udf_name_format_ctx));
         if !parameters.is_empty() {
             let mut parameters_children = Vec::with_capacity(parameters.len());
@@ -1747,7 +1747,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             definition_child,
         ]));
         if let Some(description) = description {
-            let description_name = format!("UdfDescription {}", description);
+            let description_name = format!("UdfDescription {description}");
             let description_format_ctx = AstFormatContext::new(description_name);
             children.push(FormatTreeNode::new(description_format_ctx));
         }
@@ -1763,14 +1763,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let stage_name_format_ctx = AstFormatContext::new(format!("StageName {}", stmt.stage_name));
         children.push(FormatTreeNode::new(stage_name_format_ctx));
         if let Some(location) = &stmt.location {
-            let location_name = format!("Location {}", location);
+            let location_name = format!("Location {location}");
             let location_format_ctx = AstFormatContext::new(location_name);
             children.push(FormatTreeNode::new(location_format_ctx));
         }
         if !stmt.file_format_options.is_empty() {
             let mut file_formats_children = Vec::with_capacity(stmt.file_format_options.len());
             for (k, v) in stmt.file_format_options.iter() {
-                let file_format_name = format!("FileFormat {} = {:?}", k, v);
+                let file_format_name = format!("FileFormat {k} = {v:?}");
                 let file_format_format_ctx = AstFormatContext::new(file_format_name);
                 let file_format_node = FormatTreeNode::new(file_format_format_ctx);
                 file_formats_children.push(file_format_node);
@@ -1817,7 +1817,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_drop_stage(&mut self, _if_exists: bool, stage_name: &'ast str) {
-        let stage_name_format_ctx = AstFormatContext::new(format!("StageName {}", stage_name));
+        let stage_name_format_ctx = AstFormatContext::new(format!("StageName {stage_name}"));
         let child = FormatTreeNode::new(stage_name_format_ctx);
 
         let name = "DropStage".to_string();
@@ -1827,7 +1827,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_describe_stage(&mut self, stage_name: &'ast str) {
-        let stage_name_format_ctx = AstFormatContext::new(format!("StageName {}", stage_name));
+        let stage_name_format_ctx = AstFormatContext::new(format!("StageName {stage_name}"));
         let child = FormatTreeNode::new(stage_name_format_ctx);
 
         let name = "DescribeStage".to_string();
@@ -1837,9 +1837,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_remove_stage(&mut self, location: &'ast str, pattern: &'ast str) {
-        let location_format_ctx = AstFormatContext::new(format!("Location {}", location));
+        let location_format_ctx = AstFormatContext::new(format!("Location {location}"));
         let location_child = FormatTreeNode::new(location_format_ctx);
-        let pattern_format_ctx = AstFormatContext::new(format!("Pattern {}", pattern));
+        let pattern_format_ctx = AstFormatContext::new(format!("Pattern {pattern}"));
         let pattern_child = FormatTreeNode::new(pattern_format_ctx);
 
         let name = "RemoveStage".to_string();
@@ -1849,9 +1849,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_list_stage(&mut self, location: &'ast str, pattern: &'ast str) {
-        let location_format_ctx = AstFormatContext::new(format!("Location {}", location));
+        let location_format_ctx = AstFormatContext::new(format!("Location {location}"));
         let location_child = FormatTreeNode::new(location_format_ctx);
-        let pattern_format_ctx = AstFormatContext::new(format!("Pattern {}", pattern));
+        let pattern_format_ctx = AstFormatContext::new(format!("Pattern {pattern}"));
         let pattern_child = FormatTreeNode::new(pattern_format_ctx);
 
         let name = "ListStage".to_string();
@@ -1880,7 +1880,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let share_format_ctx = AstFormatContext::new(format!("ShareIdentifier {}", stmt.share));
         children.push(FormatTreeNode::new(share_format_ctx));
         if let Some(comment) = &stmt.comment {
-            let comment_format_ctx = AstFormatContext::new(format!("Comment {}", comment));
+            let comment_format_ctx = AstFormatContext::new(format!("Comment {comment}"));
             children.push(FormatTreeNode::new(comment_format_ctx));
         }
 
@@ -2120,7 +2120,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let child = self.children.pop().unwrap();
                 let name = "Target".to_string();
                 let format_ctx = if let Some(alias) = alias {
-                    AstFormatContext::with_children_alias(name, 1, Some(format!("{}", alias)))
+                    AstFormatContext::with_children_alias(name, 1, Some(format!("{alias}")))
                 } else {
                     AstFormatContext::with_children(name, 1)
                 };
@@ -2128,7 +2128,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 self.children.push(node);
             }
             SelectTarget::QualifiedName { .. } => {
-                let name = format!("Target {}", target);
+                let name = format!("Target {target}");
                 let format_ctx = AstFormatContext::new(name);
                 let node = FormatTreeNode::new(format_ctx);
                 self.children.push(node);
@@ -2167,7 +2167,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     AstFormatContext::with_children_alias(
                         name,
                         children.len(),
-                        Some(format!("{}", alias)),
+                        Some(format!("{alias}")),
                     )
                 } else {
                     AstFormatContext::with_children(name, children.len())
@@ -2184,7 +2184,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let child = self.children.pop().unwrap();
                 let name = "Subquery".to_string();
                 let format_ctx = if let Some(alias) = alias {
-                    AstFormatContext::with_children_alias(name, 1, Some(format!("{}", alias)))
+                    AstFormatContext::with_children_alias(name, 1, Some(format!("{alias}")))
                 } else {
                     AstFormatContext::with_children(name, 1)
                 };
@@ -2202,12 +2202,12 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     self.visit_expr(param);
                     children.push(self.children.pop().unwrap());
                 }
-                let func_name = format!("TableFunction {}", name);
+                let func_name = format!("TableFunction {name}");
                 let format_ctx = if let Some(alias) = alias {
                     AstFormatContext::with_children_alias(
                         func_name,
                         children.len(),
-                        Some(format!("{}", alias)),
+                        Some(format!("{alias}")),
                     )
                 } else {
                     AstFormatContext::with_children(func_name, children.len())
@@ -2232,15 +2232,15 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let mut children = Vec::new();
                 if !files.is_empty() {
                     let files = files.join(",");
-                    let files = format!("files = {}", files);
+                    let files = format!("files = {files}");
                     children.push(FormatTreeNode::new(AstFormatContext::new(files)))
                 }
-                let stage_name = format!("Stage {:?}", location);
+                let stage_name = format!("Stage {location:?}");
                 let format_ctx = if let Some(alias) = alias {
                     AstFormatContext::with_children_alias(
                         stage_name,
                         children.len(),
-                        Some(format!("{}", alias)),
+                        Some(format!("{alias}")),
                     )
                 } else {
                     AstFormatContext::with_children(stage_name, children.len())
@@ -2254,7 +2254,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_time_travel_point(&mut self, time: &'ast TimeTravelPoint<'ast>) {
         match time {
             TimeTravelPoint::Snapshot(sid) => {
-                let name = format!("Snapshot {}", sid);
+                let name = format!("Snapshot {sid}");
                 let format_ctx = AstFormatContext::new(name);
                 let node = FormatTreeNode::new(format_ctx);
                 self.children.push(node);

@@ -427,8 +427,7 @@ fn get_used_fields(fields: &Vec<Field>, schema: &TableSchemaRef) -> Result<Vec<F
                 let diff = pair.make_diff("expected_field", "infer_field");
                 // TODO(xuanwo): return a more accurate error code here.
                 return Err(ErrorCode::Internal(format!(
-                    "parquet schema mismatch, differ: {}",
-                    diff
+                    "parquet schema mismatch, differ: {diff}"
                 )));
             }
 

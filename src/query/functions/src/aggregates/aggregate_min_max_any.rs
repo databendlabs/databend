@@ -222,8 +222,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
             })
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "Unsupported compare type for aggregate function {} (type number: {})",
-            display_name, CMP_TYPE
+            "Unsupported compare type for aggregate function {display_name} (type number: {CMP_TYPE})"
         ))),
     })
 }

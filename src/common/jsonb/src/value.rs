@@ -66,7 +66,7 @@ impl<'a> Display for Value<'a> {
                     write!(f, "false")
                 }
             }
-            Value::Number(ref v) => write!(f, "{}", v),
+            Value::Number(ref v) => write!(f, "{v}"),
             Value::String(ref v) => {
                 write!(f, "\"")?;
                 write!(f, "{v}")?;

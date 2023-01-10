@@ -172,7 +172,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
                         let mut row = vec![format!("Row {i}")];
                         for (_, col) in columns.iter() {
                             let value = col.index(i).unwrap();
-                            row.push(format!("{}", value));
+                            row.push(format!("{value}"));
                         }
                         row.push(format!("{}", output_col.index(i).unwrap()));
                         table.add_row(row);
@@ -200,7 +200,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
             writeln!(file, "{}\n", span.display_error((text.to_string(), msg))).unwrap();
         }
         Err((None, msg)) => {
-            writeln!(file, "error: {}\n", msg).unwrap();
+            writeln!(file, "error: {msg}\n").unwrap();
         }
     }
 }

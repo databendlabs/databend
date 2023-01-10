@@ -112,7 +112,7 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
                 .host_str()
                 .map(|hostname| {
                     if let Some(port) = parsed.port() {
-                        format!("{}:{}", hostname, port)
+                        format!("{hostname}:{port}")
                     } else {
                         hostname.to_string()
                     }

@@ -481,7 +481,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("user_info: {:?}", buf);
+        println!("user_info: {buf:?}");
     }
 
     // StageFile
@@ -490,7 +490,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let p = stage_file.to_pb()?;
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("stage_file: {:?}", buf);
+        println!("stage_file: {buf:?}");
     }
 
     // Stage on local file system
@@ -501,7 +501,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("fs_stage_info: {:?}", buf);
+        println!("fs_stage_info: {buf:?}");
     }
 
     // Stage on S3
@@ -512,7 +512,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("s3_stage_info: {:?}", buf);
+        println!("s3_stage_info: {buf:?}");
     }
 
     // Stage on S3 v16
@@ -523,7 +523,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("s3_stage_info_v16: {:?}", buf);
+        println!("s3_stage_info_v16: {buf:?}");
     }
 
     // Stage on S3 v14
@@ -534,7 +534,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("s3_stage_info_v14: {:?}", buf);
+        println!("s3_stage_info_v14: {buf:?}");
     }
 
     // Stage on GCS, supported in version >=4.
@@ -543,7 +543,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let p = gcs_stage_info.to_pb()?;
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("gcs_stage_info: {:?}", buf);
+        println!("gcs_stage_info: {buf:?}");
     }
 
     // Stage on OSS, supported in version >= 13.
@@ -552,7 +552,7 @@ fn test_build_user_pb_buf() -> anyhow::Result<()> {
         let p = oss_stage_info.to_pb()?;
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("oss_stage_info: {:?}", buf);
+        println!("oss_stage_info: {buf:?}");
     }
 
     Ok(())
@@ -592,7 +592,7 @@ fn test_load_old_user() -> anyhow::Result<()> {
         let p: pb::UserInfo =
             common_protos::prost::Message::decode(user_info_v1.as_slice()).map_err(print_err)?;
         let got = mt::UserInfo::from_pb(p).map_err(print_err)?;
-        println!("got: {:?}", got);
+        println!("got: {got:?}");
         assert_eq!(got.name, "test_user".to_string());
         assert_eq!(got.option.default_role().clone(), None);
     }

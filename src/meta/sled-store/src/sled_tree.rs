@@ -119,7 +119,7 @@ impl SledTree {
         }
         let t = db
             .open_tree(&tree_name)
-            .context(|| format!("open tree: {}", tree_name))?;
+            .context(|| format!("open tree: {tree_name}"))?;
 
         debug!("SledTree opened tree: {}", tree_name);
 
@@ -240,13 +240,13 @@ impl SledTree {
         let range_mes = self.range_message::<KV, _>(&range);
 
         for item in self.tree.range(sled_range) {
-            let (k, _) = item.context(|| format!("range_remove: {}", range_mes,))?;
+            let (k, _) = item.context(|| format!("range_remove: {range_mes}",))?;
             batch.remove(k);
         }
 
         self.tree
             .apply_batch(batch)
-            .context(|| format!("batch remove: {}", range_mes,))?;
+            .context(|| format!("batch remove: {range_mes}",))?;
 
         self.flush_async(flush).await?;
 
@@ -272,7 +272,7 @@ impl SledTree {
 
         let it = self.tree.range(range);
         let it = it.map(move |item| {
-            let (k, v) = item.context(|| format!("range_get: {}", range_mes,))?;
+            let (k, v) = item.context(|| format!("range_get: {range_mes}",))?;
 
             let item = SledItem::new(k, v);
             Ok(item)
@@ -291,7 +291,7 @@ impl SledTree {
     {
         let mut res = vec![];
 
-        let mes = || format!("scan_prefix: {}", prefix);
+        let mes = || format!("scan_prefix: {prefix}");
 
         let pref = KV::serialize_key(prefix)?;
         for item in self.tree.scan_prefix(pref) {
@@ -346,7 +346,7 @@ impl SledTree {
         let prev = self
             .tree
             .insert(k, v)
-            .context(|| format!("insert_value {}", key))?;
+            .context(|| format!("insert_value {key}"))?;
 
         let prev = match prev {
             None => None,

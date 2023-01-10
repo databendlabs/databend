@@ -244,9 +244,9 @@ impl Ord for Number {
 impl Display for Number {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Number::Int64(v) => write!(f, "{}", v),
-            Number::UInt64(v) => write!(f, "{}", v),
-            Number::Float64(v) => write!(f, "{}", v),
+            Number::Int64(v) => write!(f, "{v}"),
+            Number::UInt64(v) => write!(f, "{v}"),
+            Number::Float64(v) => write!(f, "{v}"),
         }
     }
 }

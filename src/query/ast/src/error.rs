@@ -234,10 +234,10 @@ impl<'a> DisplayError for Error<'a> {
                 .filter_map(|kind| match kind {
                     ErrorKind::ExpectToken(EOI) => None,
                     ErrorKind::ExpectToken(token) if token.is_keyword() => {
-                        Some(format!("`{:?}`", token))
+                        Some(format!("`{token:?}`"))
                     }
-                    ErrorKind::ExpectToken(token) => Some(format!("<{:?}>", token)),
-                    ErrorKind::ExpectText(text) => Some(format!("`{}`", text)),
+                    ErrorKind::ExpectToken(token) => Some(format!("<{token:?}>")),
+                    ErrorKind::ExpectText(text) => Some(format!("`{text}`")),
                     _ => None,
                 })
                 .unique()
@@ -250,7 +250,7 @@ impl<'a> DisplayError for Error<'a> {
                     let more = expected_tokens
                         .len()
                         .saturating_sub(MAX_DISPLAY_ERROR_COUNT);
-                    write!(msg, ", or {} more ...", more).unwrap();
+                    write!(msg, ", or {more} more ...").unwrap();
                     break;
                 } else if i == 0 {
                     msg += "expected ";
@@ -271,7 +271,7 @@ impl<'a> DisplayError for Error<'a> {
         lables.extend(
             self.contexts
                 .iter()
-                .map(|(span, msg)| (span.span.clone(), format!("while parsing {}", msg))),
+                .map(|(span, msg)| (span.span.clone(), format!("while parsing {msg}"))),
         );
 
         pretty_print_error(self.span.source, lables)

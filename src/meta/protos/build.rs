@@ -54,14 +54,14 @@ fn build_proto() -> Result<()> {
             .ok_or_else(|| {
                 Error::new(
                     ErrorKind::Other,
-                    format!("protoc --version got unexpected output: {}", content),
+                    format!("protoc --version got unexpected output: {content}"),
                 )
             })?
             .parse::<Version>()
             .map_err(|err| {
                 Error::new(
                     ErrorKind::Other,
-                    format!("protoc --version doesn't return valid version: {:?}", err),
+                    format!("protoc --version doesn't return valid version: {err:?}"),
                 )
             })?
     } else {

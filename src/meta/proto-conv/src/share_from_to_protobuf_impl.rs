@@ -131,7 +131,7 @@ impl FromToProto for mt::ShareGrantEntry {
                 },
             }),
             Err(e) => Err(Incompatible {
-                reason: format!("UserPrivilegeType error: {}", e),
+                reason: format!("UserPrivilegeType error: {e}"),
             }),
         }
     }

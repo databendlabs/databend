@@ -404,8 +404,8 @@ impl KVApiTestSuite {
             kv.upsert_kv(UpsertKVReq::update("t", b"")).await?;
 
             for i in 0..9 {
-                let key = format!("__users/{}", i);
-                let val = format!("val_{}", i);
+                let key = format!("__users/{i}");
+                let val = format!("val_{i}");
                 values.push(val.clone());
                 kv.upsert_kv(UpsertKVReq::update(&key, val.as_bytes()))
                     .await?;
@@ -514,9 +514,9 @@ impl KVApiTestSuite {
         let test_prefix = "test";
 
         let match_keys = vec![
-            format!("{}_key1", test_prefix),
-            format!("{}/key2", test_prefix),
-            format!("{}key3", test_prefix),
+            format!("{test_prefix}_key1"),
+            format!("{test_prefix}/key2"),
+            format!("{test_prefix}key3"),
         ];
 
         let unmatch_keys = vec!["teskey4".to_string()];
@@ -913,8 +913,8 @@ impl KVApiTestSuite {
             kv1.upsert_kv(UpsertKVReq::update("t", b"t")).await?;
 
             for i in 0..9 {
-                let key = format!("__users/{}", i);
-                let val = format!("val_{}", i);
+                let key = format!("__users/{i}");
+                let val = format!("val_{i}");
                 values.push(val.clone());
                 info!("--- Start upsert-kv: {}", key);
                 kv1.upsert_kv(UpsertKVReq::update(&key, val.as_bytes()))

@@ -212,8 +212,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_1_arg_core instead",
-            name
+            "Function {name} has nullable argument or output, please use register_1_arg_core instead"
         );
 
         self.register_1_arg_core::<I1, O, _, _>(name, property.clone(), calc_domain, func);
@@ -262,8 +261,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_2_arg_core instead",
-            name
+            "Function {name} has nullable argument or output, please use register_2_arg_core instead"
         );
 
         self.register_2_arg_core::<I1, I2, O, _, _>(name, property.clone(), calc_domain, func);
@@ -334,8 +332,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_3_arg_core instead",
-            name
+            "Function {name} has nullable argument or output, please use register_3_arg_core instead"
         );
 
         self.register_3_arg_core::<I1, I2, I3, O, _, _>(name, property.clone(), calc_domain, func);
@@ -413,8 +410,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_4_arg_core instead",
-            name
+            "Function {name} has nullable argument or output, please use register_4_arg_core instead"
         );
 
         self.register_4_arg_core::<I1, I2, I3, I4, O, _, _>(
@@ -500,8 +496,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_5_arg_core instead",
-            name
+            "Function {name} has nullable argument or output, please use register_5_arg_core instead"
         );
 
         self.register_5_arg_core::<I1, I2, I3, I4, I5, O, _, _>(
@@ -564,8 +559,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_1_arg_core instead",
-            name
+            "Function {name} has nullable argument or output, please use register_1_arg_core instead"
         );
 
         self.register_1_arg_core::<I1, NullableType<O>, _, _>(
@@ -628,8 +622,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_2_arg_core instead",
-            name
+            "Function {name} has nullable argument or output, please use register_2_arg_core instead"
         );
 
         self.register_2_arg_core::<I1, I2, NullableType<O>, _, _>(
@@ -705,8 +698,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_3_arg_core instead",
-            name
+            "Function {name} has nullable argument or output, please use register_3_arg_core instead"
         );
 
         self.register_3_arg_core::<I1, I2, I3, NullableType<O>, _, _>(
@@ -794,8 +786,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_4_arg_core instead",
-            name
+            "Function {name} has nullable argument or output, please use register_4_arg_core instead"
         );
 
         self.register_4_arg_core::<I1, I2, I3, I4, NullableType<O>, _, _>(
@@ -887,8 +878,7 @@ impl FunctionRegistry {
 
         assert!(
             !has_nullable,
-            "Function {} has nullable argument or output, please use register_5_arg_core instead",
-            name
+            "Function {name} has nullable argument or output, please use register_5_arg_core instead"
         );
 
         self.register_5_arg_core::<I1, I2, I3, I4, I5, NullableType<O>, _, _>(

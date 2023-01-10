@@ -87,7 +87,7 @@ impl Display for CopyStmt<'_> {
         if !self.file_format.is_empty() {
             write!(f, " FILE_FORMAT = (")?;
             for (k, v) in self.file_format.iter() {
-                write!(f, " {} = '{}'", k, v)?;
+                write!(f, " {k} = '{v}'")?;
             }
             write!(f, " )")?;
         }
@@ -298,10 +298,10 @@ impl Display for FileLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             FileLocation::Uri(loc) => {
-                write!(f, "{}", loc)
+                write!(f, "{loc}")
             }
             FileLocation::Stage(loc) => {
-                write!(f, "{}", loc)
+                write!(f, "{loc}")
             }
         }
     }

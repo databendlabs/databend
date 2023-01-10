@@ -112,7 +112,7 @@ impl<'a> EvalContext<'a> {
                     })
                     .join(", ");
 
-                let error_msg = format!("{} during evaluate function: {}({})", error, name, args);
+                let error_msg = format!("{error} during evaluate function: {name}({args})");
                 Err(error_msg)
             }
             None => Ok(()),

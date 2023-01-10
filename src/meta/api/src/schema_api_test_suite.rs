@@ -868,7 +868,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(req).await;
             info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert!(res.db_id > db_id_1, "second database id is > {}", db_id_1);
+            assert!(res.db_id > db_id_1, "second database id is > {db_id_1}");
             res.db_id
         };
 
@@ -889,7 +889,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(req).await;
             info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert!(res.db_id > db_id_2, "third database id > {}", db_id_2);
+            assert!(res.db_id > db_id_2, "third database id > {db_id_2}");
             res.db_id
         };
 
@@ -1528,7 +1528,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{tenant}'.'{db_name}'.'{tbl_name}'"),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -1557,7 +1557,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident_2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                desc: format!("'{tenant}'.'{db_name}'.'{tbl_name}'"),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -1583,8 +1583,7 @@ impl SchemaApiTestSuite {
 
             assert_eq!(
                 format!(
-                    "Code: 2302, displayText = Table '{}' already exists.",
-                    tbl_name
+                    "Code: 2302, displayText = Table '{tbl_name}' already exists."
                 ),
                 err_code.to_string()
             );
@@ -1594,7 +1593,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
             let want = TableInfo {
                 ident: tb_ident_2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                desc: format!("'{tenant}'.'{db_name}'.'{tbl_name}'"),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -1660,10 +1659,9 @@ impl SchemaApiTestSuite {
                     let err_code = ErrorCode::from(status);
 
                     assert_eq!(
-                        format!("Code: 1025, displayText = Unknown table '{:}'.", tbl_name),
+                        format!("Code: 1025, displayText = Unknown table '{tbl_name:}'."),
                         err_code.to_string(),
-                        "get dropped table {}",
-                        tbl_name
+                        "get dropped table {tbl_name}"
                     );
                 }
             }
@@ -1683,8 +1681,7 @@ impl SchemaApiTestSuite {
                 assert_eq!(
                     ErrorCode::UnknownTable("").code(),
                     ErrorCode::from(err).code(),
-                    "drop table {} with if_exists=false again",
-                    tbl_name
+                    "drop table {tbl_name} with if_exists=false again"
                 );
             }
 
@@ -1808,7 +1805,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db1_name, tb3_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db1_name, tb3_name),
+                desc: format!("'{tenant}'.'{db1_name}'.'{tb3_name}'"),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -1835,8 +1832,7 @@ impl SchemaApiTestSuite {
             assert_eq!(
                 ErrorCode::UnknownTable("").code(),
                 ErrorCode::from(err).code(),
-                "rename table {} again",
-                tb2_name
+                "rename table {tb2_name} again"
             );
         }
 
@@ -1865,8 +1861,7 @@ impl SchemaApiTestSuite {
             assert_eq!(
                 ErrorCode::TableAlreadyExists("").code(),
                 ErrorCode::from(err).code(),
-                "rename table {} again after recreate",
-                tb2_name
+                "rename table {tb2_name} again after recreate"
             );
         }
 
@@ -1877,8 +1872,7 @@ impl SchemaApiTestSuite {
             assert_eq!(
                 ErrorCode::TableAlreadyExists("").code(),
                 ErrorCode::from(err).code(),
-                "rename table {} again after recreate",
-                tb2_name
+                "rename table {tb2_name} again after recreate"
             );
         }
 
@@ -1944,7 +1938,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db2_name, tb3_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db2_name, tb3_name),
+                desc: format!("'{tenant}'.'{db2_name}'.'{tb3_name}'"),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -2026,7 +2020,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{tenant}'.'{db_name}'.'{tbl_name}'"),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -2158,7 +2152,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{tenant}'.'{db_name}'.'{tbl_name}'"),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -3148,7 +3142,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{tenant}'.'{db_name}'.'{tbl_name}'"),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -3619,7 +3613,7 @@ impl SchemaApiTestSuite {
                 let res = mt.create_table(req.clone()).await?;
                 let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
                 assert!(old_db.ident.seq < cur_db.ident.seq);
-                assert!(res.table_id > tb_id1, "table id > tb_id1: {}", tb_id1);
+                assert!(res.table_id > tb_id1, "table id > tb_id1: {tb_id1}");
                 let tb_id2 = res.table_id;
 
                 vec![tb_id1, tb_id2]
@@ -3688,7 +3682,7 @@ impl SchemaApiTestSuite {
                     .options
                     .insert("name".to_string(), "t2".to_string());
                 let res = mt.create_table(req.clone()).await?;
-                assert!(res.table_id > tb_id1, "table id > tb_id1: {}", tb_id1);
+                assert!(res.table_id > tb_id1, "table id > tb_id1: {tb_id1}");
                 let tb_id2 = res.table_id;
 
                 vec![tb_id1, tb_id2]

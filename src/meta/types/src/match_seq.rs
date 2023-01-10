@@ -55,10 +55,10 @@ impl Display for MatchSeq {
                 write!(f, "is any value")
             }
             MatchSeq::Exact(s) => {
-                write!(f, "== {}", s)
+                write!(f, "== {s}")
             }
             MatchSeq::GE(s) => {
-                write!(f, ">= {}", s)
+                write!(f, ">= {s}")
             }
         }
     }

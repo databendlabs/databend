@@ -129,8 +129,7 @@ impl AggregateFunctionFactory {
         for (exists_suffix, _) in &self.case_insensitive_combinator_desc {
             if exists_suffix.eq_ignore_ascii_case(suffix) {
                 panic!(
-                    "Logical error: {} combinator suffix already exists.",
-                    suffix
+                    "Logical error: {suffix} combinator suffix already exists."
                 );
             }
         }
@@ -222,8 +221,7 @@ impl AggregateFunctionFactory {
         }
 
         Err(ErrorCode::UnknownAggregateFunction(format!(
-            "Unsupported AggregateFunction: {}",
-            name
+            "Unsupported AggregateFunction: {name}"
         )))
     }
 

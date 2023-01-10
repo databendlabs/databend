@@ -21,7 +21,7 @@ use crate::IndexType;
 
 /// Format the display name and index of a column into `"{display_name}"_index` format.
 pub fn format_field_name(display_name: &str, index: IndexType) -> String {
-    format!("\"{}\"_{}", display_name, index)
+    format!("\"{display_name}\"_{index}")
 }
 
 static FIELD_NAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new("\"([^\"]*)\"_([0-9]+)").unwrap());

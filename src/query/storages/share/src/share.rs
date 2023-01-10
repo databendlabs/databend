@@ -33,7 +33,7 @@ pub async fn save_share_spec(
     spec_vec: Option<Vec<ShareSpec>>,
 ) -> Result<()> {
     if let Some(spec_vec) = spec_vec {
-        let location = format!("{}/{}/share_specs.json", tenant, SHARE_CONFIG_PREFIX);
+        let location = format!("{tenant}/{SHARE_CONFIG_PREFIX}/share_specs.json");
         let mut share_spec_vec = ShareSpecVec::default();
         for spec in spec_vec {
             let share_name = spec.name.clone();
@@ -113,7 +113,7 @@ mod ext {
         let storage_prefix = operator_meta_data.root();
         let table_storage_prefix = table_storage_prefix(database_id, table_id);
         // storage_prefix has suffix character '/'
-        format!("{}{}/", storage_prefix, table_storage_prefix)
+        format!("{storage_prefix}{table_storage_prefix}/")
     }
 
     /// Returns prefix path which covers all the data of give database.
@@ -125,7 +125,7 @@ mod ext {
         let storage_prefix = operator_meta_data.root();
         let database_storage_prefix = database_storage_prefix(database_id);
         // storage_prefix has suffix character '/'
-        format!("{}{}/", storage_prefix, database_storage_prefix)
+        format!("{storage_prefix}{database_storage_prefix}/")
     }
 
     #[cfg(test)]
@@ -172,13 +172,13 @@ mod ext {
               "version": 1,
               "share_id": 1,
               "database": {
-                "location": format!("{}/1/", test_root_str),
+                "location": format!("{test_root_str}/1/"),
                 "name": "share_database",
                 "id": 1
               },
               "tables": [
                 {
-                  "location": format!("{}/1/1/", test_root_str),
+                  "location": format!("{test_root_str}/1/1/"),
                   "name": "share_table",
                   "database_id": 1,
                   "table_id": 1,

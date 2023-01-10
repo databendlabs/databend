@@ -81,7 +81,7 @@ impl MetaServiceImpl {
             .ok_or_else(|| Status::unauthenticated("Error auth-token-bin is empty"))?;
 
         let claim = self.token.try_verify_token(token.clone()).map_err(|e| {
-            Status::unauthenticated(format!("token verify failed: {}, {}", token, e))
+            Status::unauthenticated(format!("token verify failed: {token}, {e}"))
         })?;
         Ok(claim)
     }
@@ -285,7 +285,7 @@ impl MetaService for MetaServiceImpl {
 
         let meta_node = &self.meta_node;
         let members = meta_node.get_meta_addrs().await.map_err(|e| {
-            Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
+            Status::internal(format!("Cannot get metasrv member list, error: {e:?}"))
         })?;
 
         let resp = MemberListReply { data: members };

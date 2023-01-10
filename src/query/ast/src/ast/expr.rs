@@ -345,7 +345,7 @@ impl BinaryOperator {
             BinaryOperator::BitwiseAnd => "bit_and".to_string(),
             BinaryOperator::BitwiseXor => "bit_xor".to_string(),
             _ => {
-                let name = format!("{:?}", self);
+                let name = format!("{self:?}");
                 name.to_lowercase()
             }
         }
@@ -581,7 +581,7 @@ impl Display for TypeName {
                                 write!(f, ", ")?;
                             }
                             first = false;
-                            write!(f, "{} {}", name, ty)?;
+                            write!(f, "{name} {ty}")?;
                         }
                     }
                     None => {
@@ -590,7 +590,7 @@ impl Display for TypeName {
                                 write!(f, ", ")?;
                             }
                             first = false;
-                            write!(f, "{}", ty)?;
+                            write!(f, "{ty}")?;
                         }
                     }
                 }
@@ -603,7 +603,7 @@ impl Display for TypeName {
                 write!(f, "VARIANT")?;
             }
             TypeName::Nullable(ty) => {
-                write!(f, "{} NULL", ty)?;
+                write!(f, "{ty} NULL")?;
             }
         }
         Ok(())
@@ -852,7 +852,7 @@ impl<'a> Display for Expr<'a> {
                 write!(f, "({subquery})")?;
             }
             Expr::MapAccess { expr, accessor, .. } => {
-                write!(f, "{}", expr)?;
+                write!(f, "{expr}")?;
                 match accessor {
                     MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
                     MapAccessor::Period { key } => write!(f, ".{key}")?,

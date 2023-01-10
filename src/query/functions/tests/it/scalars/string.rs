@@ -260,32 +260,32 @@ fn test_trim_with_from(file: &mut impl Write, trim_where: &str) {
 
     run_ast(
         file,
-        format!("trim({} 'a' from 'aaabbaaa')", trim_where).as_str(),
+        format!("trim({trim_where} 'a' from 'aaabbaaa')").as_str(),
         &[],
     );
     run_ast(
         file,
-        format!("trim({} 'aa' from 'aaabbaaa')", trim_where).as_str(),
+        format!("trim({trim_where} 'aa' from 'aaabbaaa')").as_str(),
         &[],
     );
     run_ast(
         file,
-        format!("trim({} 'a' from 'aaaaaaaa')", trim_where).as_str(),
+        format!("trim({trim_where} 'a' from 'aaaaaaaa')").as_str(),
         &[],
     );
     run_ast(
         file,
-        format!("trim({} 'b' from 'aaabbaaa')", trim_where).as_str(),
+        format!("trim({trim_where} 'b' from 'aaabbaaa')").as_str(),
         &[],
     );
     run_ast(
         file,
-        format!("trim({} 'a' from NULL)", trim_where).as_str(),
+        format!("trim({trim_where} 'a' from NULL)").as_str(),
         &[],
     );
     run_ast(
         file,
-        format!("trim({} NULL from 'aaaaaaaa')", trim_where).as_str(),
+        format!("trim({trim_where} NULL from 'aaaaaaaa')").as_str(),
         &[],
     );
 
@@ -296,22 +296,22 @@ fn test_trim_with_from(file: &mut impl Write, trim_where: &str) {
 
     run_ast(
         file,
-        format!("trim({} 'a' from a)", trim_where).as_str(),
+        format!("trim({trim_where} 'a' from a)").as_str(),
         &table,
     );
     run_ast(
         file,
-        format!("trim({} b from a)", trim_where).as_str(),
+        format!("trim({trim_where} b from a)").as_str(),
         &table,
     );
     run_ast(
         file,
-        format!("trim({} a from a)", trim_where).as_str(),
+        format!("trim({trim_where} a from a)").as_str(),
         &table,
     );
     run_ast(
         file,
-        format!("trim({} b from 'aba')", trim_where).as_str(),
+        format!("trim({trim_where} b from 'aba')").as_str(),
         &table,
     );
 }

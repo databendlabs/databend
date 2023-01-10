@@ -43,8 +43,7 @@ impl TryFrom<Vec<u8>> for TenantQuota {
         match serde_json::from_slice(&value) {
             Ok(quota) => Ok(quota),
             Err(err) => Err(ErrorCode::IllegalTenantQuotaFormat(format!(
-                "Cannot deserialize tenant quota from bytes. cause {}",
-                err
+                "Cannot deserialize tenant quota from bytes. cause {err}"
             ))),
         }
     }

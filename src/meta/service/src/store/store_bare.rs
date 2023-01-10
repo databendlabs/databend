@@ -235,8 +235,7 @@ impl RaftStoreBare {
         let (sm_id, prev_sm_id) = self.raft_state.read_state_machine_id()?;
         if sm_id != prev_sm_id {
             return Err(MetaStorageError::SnapshotError(AnyError::error(format!(
-                "another snapshot install is not finished yet: {} {}",
-                sm_id, prev_sm_id
+                "another snapshot install is not finished yet: {sm_id} {prev_sm_id}"
             ))));
         }
 
@@ -687,7 +686,7 @@ impl RaftStoreBare {
             .get_node(node_id)
             .await?
             .map(|n| n.endpoint)
-            .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {}", node_id)))?;
+            .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {node_id}")))?;
 
         Ok(endpoint)
     }

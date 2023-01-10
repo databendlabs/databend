@@ -63,10 +63,10 @@ impl AuthType {
         ];
         let all = all
             .iter()
-            .map(|s| format!("'{}'", s))
+            .map(|s| format!("'{s}'"))
             .collect::<Vec<_>>()
             .join("|");
-        format!("Expected auth type {}, found: {}", all, s)
+        format!("Expected auth type {all}, found: {s}")
     }
 
     pub fn get_password_type(self) -> Option<PasswordHashMethod> {

@@ -85,16 +85,14 @@ pub fn check_ver(msg_ver: u64, msg_min_compatible: u64) -> Result<(), Incompatib
     if VER < msg_min_compatible {
         return Err(Incompatible {
             reason: format!(
-                "executable ver={} is smaller than the message min compatible ver: {}",
-                VER, msg_min_compatible
+                "executable ver={VER} is smaller than the message min compatible ver: {msg_min_compatible}"
             ),
         });
     }
     if msg_ver < MIN_COMPATIBLE_VER {
         return Err(Incompatible {
             reason: format!(
-                "message ver={} is smaller than executable min compatible ver: {}",
-                msg_ver, MIN_COMPATIBLE_VER
+                "message ver={msg_ver} is smaller than executable min compatible ver: {MIN_COMPATIBLE_VER}"
             ),
         });
     }

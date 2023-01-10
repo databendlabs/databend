@@ -49,8 +49,7 @@ fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
         Ok(lexical_core::FromLexical::from_lexical(buf).unwrap())
     } else {
         let msg = format!(
-            "err with parse time part. Format like this:[03:00:00], got {} digits",
-            size
+            "err with parse time part. Format like this:[03:00:00], got {size} digits"
         );
         Err(ErrorCode::BadBytes(msg))
     }
@@ -85,7 +84,7 @@ where T: AsRef<[u8]>
         self.read_exact(buf.as_mut_slice())?;
         let mut v = std::str::from_utf8(buf.as_slice())
             .map_err_to_code(ErrorCode::BadBytes, || {
-                format!("Cannot convert value:{:?} to utf8", buf)
+                format!("Cannot convert value:{buf:?} to utf8")
             })?;
 
         // convert zero date to `1970-01-01`
@@ -95,7 +94,7 @@ where T: AsRef<[u8]>
         let d = v
             .parse::<NaiveDate>()
             .map_err_to_code(ErrorCode::BadBytes, || {
-                format!("Cannot parse value:{} to Date type", v)
+                format!("Cannot parse value:{v} to Date type")
             })?;
         let mut dt = tz.from_local_datetime(&d.and_hms(0, 0, 0)).unwrap();
 
@@ -251,14 +250,12 @@ where T: AsRef<[u8]>
                 }
             } else {
                 Err(ErrorCode::BadBytes(format!(
-                    "err with parse minute_offset:[{:?}], timezone gap: [-14:00,+14:00]",
-                    minute_offset
+                    "err with parse minute_offset:[{minute_offset:?}], timezone gap: [-14:00,+14:00]"
                 )))
             }
         } else {
             Err(ErrorCode::BadBytes(format!(
-                "err with parse hour_offset:[{:?}], timezone gap: [-14:00,+14:00]",
-                hour_offset
+                "err with parse hour_offset:[{hour_offset:?}], timezone gap: [-14:00,+14:00]"
             )))
         }
     }

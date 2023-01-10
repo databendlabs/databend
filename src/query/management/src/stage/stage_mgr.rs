@@ -95,14 +95,14 @@ impl StageApi for StageMgr {
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
         let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownStage(format!("Unknown stage {}", name)))?;
+            res.ok_or_else(|| ErrorCode::UnknownStage(format!("Unknown stage {name}")))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
                 seq_value.seq,
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserStageFormat, || "")?,
             )),
-            Err(_) => Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name))),
+            Err(_) => Err(ErrorCode::UnknownStage(format!("Unknown stage {name}"))),
         }
     }
 
@@ -128,7 +128,7 @@ impl StageApi for StageMgr {
 
             let stage_seq = match self.kv_api.get_kv(&stage_key).await? {
                 Some(seq_v) => seq_v.seq,
-                None => return Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name))),
+                None => return Err(ErrorCode::UnknownStage(format!("Unknown stage {name}"))),
             };
 
             // list all stage file keys, and delete them
@@ -184,7 +184,7 @@ impl StageApi for StageMgr {
                         deserialize_struct(&seq_v.data, ErrorCode::IllegalUserStageFormat, || "")?,
                     )
                 } else {
-                    return Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name)));
+                    return Err(ErrorCode::UnknownStage(format!("Unknown stage {name}")));
                 };
             old_stage.number_of_files += 1;
 
@@ -246,7 +246,7 @@ impl StageApi for StageMgr {
                         deserialize_struct(&seq_v.data, ErrorCode::IllegalUserStageFormat, || "")?,
                     )
                 } else {
-                    return Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name)));
+                    return Err(ErrorCode::UnknownStage(format!("Unknown stage {name}")));
                 };
 
             let mut if_then = Vec::with_capacity(paths.len());

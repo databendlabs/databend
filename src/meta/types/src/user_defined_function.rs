@@ -47,8 +47,7 @@ impl TryFrom<Vec<u8>> for UserDefinedFunction {
         match serde_json::from_slice(&value) {
             Ok(udf) => Ok(udf),
             Err(serialize_error) => Err(ErrorCode::IllegalUDFFormat(format!(
-                "Cannot deserialize user defined function from bytes. cause {}",
-                serialize_error
+                "Cannot deserialize user defined function from bytes. cause {serialize_error}"
             ))),
         }
     }

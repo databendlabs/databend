@@ -48,13 +48,12 @@ impl AggregateIfCombinator {
         arguments: Vec<DataType>,
         nested_creator: &AggregateFunctionCreator,
     ) -> Result<AggregateFunctionRef> {
-        let name = format!("IfCombinator({})", nested_name);
+        let name = format!("IfCombinator({nested_name})");
         let argument_len = arguments.len();
 
         if argument_len == 0 {
             return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                "{} expect to have more than one argument",
-                name
+                "{name} expect to have more than one argument"
             )));
         }
 

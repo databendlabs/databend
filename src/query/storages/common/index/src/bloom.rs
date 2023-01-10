@@ -233,7 +233,7 @@ impl BlockFilter {
     /// For every applicable column, we will create a filter.
     /// The filter will be stored with field name 'Bloom(column_name)'
     pub fn build_filter_column_name(column_name: &str) -> String {
-        format!("Bloom({})", column_name)
+        format!("Bloom({column_name})")
     }
 
     fn find(&self, column_name: &str, target: &Scalar, ty: &DataType) -> Result<FilterEvalResult> {

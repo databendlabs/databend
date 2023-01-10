@@ -46,7 +46,7 @@ async fn test_add_stage() -> Result<()> {
                 serialize_struct(&stage_info, ErrorCode::IllegalUserStageFormat, || "")?
             );
         }
-        catch => panic!("GetKVActionReply{:?}", catch),
+        catch => panic!("GetKVActionReply{catch:?}"),
     }
 
     Ok(())
@@ -160,7 +160,7 @@ async fn test_add_stage_file() -> Result<()> {
                 serialize_struct(&stage_file, ErrorCode::IllegalStageFileFormat, || "")?
             );
         }
-        catch => panic!("GetKVActionReply{:?}", catch),
+        catch => panic!("GetKVActionReply{catch:?}"),
     }
 
     let new_mystage = stage_api.get_stage("mystage", None).await?.data;

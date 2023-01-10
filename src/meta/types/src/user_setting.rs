@@ -55,8 +55,7 @@ impl UserSettingValue {
         match self {
             UserSettingValue::UInt64(v) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?} to get u64 number",
-                other
+                "Unexpected type:{other:?} to get u64 number"
             ))),
         }
     }
@@ -64,7 +63,7 @@ impl UserSettingValue {
     pub fn as_string(&self) -> Result<String> {
         match self {
             UserSettingValue::String(v) => Ok(v.to_owned()),
-            UserSettingValue::UInt64(v) => Ok(format!("{}", v)),
+            UserSettingValue::UInt64(v) => Ok(format!("{v}")),
         }
     }
 }
@@ -72,8 +71,8 @@ impl UserSettingValue {
 impl fmt::Display for UserSettingValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            UserSettingValue::UInt64(v) => write!(f, "{}", v),
-            UserSettingValue::String(v) => write!(f, "{}", v),
+            UserSettingValue::UInt64(v) => write!(f, "{v}"),
+            UserSettingValue::String(v) => write!(f, "{v}"),
         }
     }
 }
@@ -81,8 +80,8 @@ impl fmt::Display for UserSettingValue {
 impl fmt::Debug for UserSettingValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UserSettingValue::UInt64(v) => write!(f, "{}", v),
-            UserSettingValue::String(_) => write!(f, "{}", self),
+            UserSettingValue::UInt64(v) => write!(f, "{v}"),
+            UserSettingValue::String(_) => write!(f, "{self}"),
         }
     }
 }
@@ -103,8 +102,7 @@ impl TryFrom<Vec<u8>> for UserSetting {
         match serde_json::from_slice(&value) {
             Ok(info) => Ok(info),
             Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
-                "Cannot deserialize setting from bytes. cause {}",
-                serialize_error
+                "Cannot deserialize setting from bytes. cause {serialize_error}"
             ))),
         }
     }

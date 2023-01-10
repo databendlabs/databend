@@ -51,7 +51,7 @@ fn test_read_timestamp_text() -> Result<()> {
     let mut res = vec![];
     for _ in 0..expected.len() {
         let time = reader.read_timestamp_text(&tz)?;
-        res.push(format!("{:?}", time));
+        res.push(format!("{time:?}"));
         reader.ignore_byte(b',');
     }
     assert_eq!(res, expected);
@@ -90,7 +90,7 @@ fn test_read_date_text() -> Result<()> {
     let mut res = vec![];
     for _ in 0..expected.len() {
         let date = reader.read_date_text(&tz)?;
-        res.push(format!("{:?}", date));
+        res.push(format!("{date:?}"));
         let _ = reader.ignore_byte(b',');
     }
     assert_eq!(res, expected);

@@ -65,7 +65,7 @@ pub(crate) async fn start_meta_node_cluster(
         tc.meta_node()
             .raft
             .wait(timeout())
-            .log(Some(log_index), format!("add :{}", id))
+            .log(Some(log_index), format!("add :{id}"))
             .await?;
 
         test_contexts.push(tc);
@@ -80,7 +80,7 @@ pub(crate) async fn start_meta_node_cluster(
         tc.meta_node()
             .raft
             .wait(timeout())
-            .log(Some(log_index), format!("add :{}", id))
+            .log(Some(log_index), format!("add :{id}"))
             .await?;
         // wait_for_log(&tc.meta_nodes[0], log_index).await?;
 

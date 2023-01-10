@@ -29,7 +29,7 @@ use crate::meta_service::MetaNode;
 pub async fn nodes_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
     let nodes = meta_node.get_nodes().await.map_err(|e| {
         poem::Error::from_string(
-            format!("failed to get nodes: {}", e),
+            format!("failed to get nodes: {e}"),
             StatusCode::INTERNAL_SERVER_ERROR,
         )
     })?;
@@ -40,7 +40,7 @@ pub async fn nodes_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl
 pub async fn status_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
     let status = meta_node.get_status().await.map_err(|e| {
         poem::Error::from_string(
-            format!("failed to get status: {}", e),
+            format!("failed to get status: {e}"),
             StatusCode::INTERNAL_SERVER_ERROR,
         )
     })?;

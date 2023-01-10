@@ -57,12 +57,12 @@ impl UDFValidator {
             if params_not_declared.is_empty() {
                 "".to_string()
             } else {
-                format!("Parameters are not declared: {:?}", params_not_declared)
+                format!("Parameters are not declared: {params_not_declared:?}")
             },
             if params_not_used.is_empty() {
                 "".to_string()
             } else {
-                format!("Parameters are not used: {:?}", params_not_used)
+                format!("Parameters are not used: {params_not_used:?}")
             },
         )))
     }

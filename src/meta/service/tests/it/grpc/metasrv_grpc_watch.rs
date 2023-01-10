@@ -379,7 +379,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         // Every apply() will clean upto 32 expired keys.
         // Assert next apply will clean up upto 32 expired keys.
         for i in 0..(32 + 1) {
-            let k = format!("w_auto_gc_{}", i);
+            let k = format!("w_auto_gc_{i}");
             txn.if_then.push(TxnOp {
                 request: Some(txn_op::Request::Put(TxnPutRequest {
                     key: s(&k),
@@ -475,7 +475,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
 
         // 32 expired keys are auto cleaned.
         for i in 0..32 {
-            let k = format!("w_auto_gc_{}", i);
+            let k = format!("w_auto_gc_{i}");
             let want = del_event(&k, 1 + i, &k);
             let msg = client_stream.message().await?.unwrap();
             assert_eq!(Some(want), msg.event);

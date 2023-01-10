@@ -257,7 +257,7 @@ pub struct QueryLogger {
 
 impl QueryLogger {
     pub fn init(app_name_shuffle: String, config: &Config) -> Result<()> {
-        let app_name = format!("databend-query-{}", app_name_shuffle);
+        let app_name = format!("databend-query-{app_name_shuffle}");
         let mut _log_guards = init_logging(app_name.as_str(), config);
         let query_detail_dir = format!("{}/query-detail", config.file.dir);
 
@@ -309,7 +309,7 @@ where
         writer.write_char(' ')?;
 
         let fmt_level = meta.level().as_str();
-        write!(writer, "{:>5} ", fmt_level)?;
+        write!(writer, "{fmt_level:>5} ")?;
 
         write!(writer, "{:0>15?} ", std::thread::current().name())?;
         write!(writer, "{:0>2?} ", std::thread::current().id())?;
@@ -326,7 +326,7 @@ where
                 let ext = span.extensions();
                 if let Some(fields) = &ext.get::<FormattedFields<N>>() {
                     if !fields.is_empty() {
-                        write!(writer, "{{{}}}", fields)?;
+                        write!(writer, "{{{fields}}}")?;
                     }
                 }
                 write!(writer, ":")?;

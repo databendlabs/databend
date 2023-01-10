@@ -156,8 +156,7 @@ fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<TableDataType>
             "TIMESTAMP" => return Ok(TableDataType::Timestamp),
             "DATE" => return Ok(TableDataType::Date),
             _ => Err(ErrorCode::IllegalDataType(format!(
-                "Unsupported data type: {}",
-                name
+                "Unsupported data type: {name}"
             ))),
         }?;
         Ok(TableDataType::Number(number))

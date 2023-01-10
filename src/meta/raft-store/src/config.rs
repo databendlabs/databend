@@ -29,7 +29,7 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
 
     match (build_semver, git_sha, rustc_semver, timestamp) {
         #[cfg(not(feature = "simd"))]
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
+        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{v1}-{v2}({v3}-{v4})"),
         #[cfg(feature = "simd")]
         (Some(v1), Some(v2), Some(v3), Some(v4)) => {
             format!("{}-{}-simd({}-{})", v1, v2, v3, v4)

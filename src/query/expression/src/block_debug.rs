@@ -33,8 +33,7 @@ pub fn assert_blocks_eq_with_name(test_name: &str, expect: Vec<&str>, blocks: &[
 
     assert_eq!(
         expected_lines, actual_lines,
-        "{:#?}\n\nexpected:\n\n{:#?}\nactual:\n\n{:#?}\n\n",
-        test_name, expected_lines, actual_lines
+        "{test_name:#?}\n\nexpected:\n\n{expected_lines:#?}\nactual:\n\n{actual_lines:#?}\n\n"
     );
 }
 
@@ -65,7 +64,6 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
 
     assert_eq!(
         expected_lines, actual_lines,
-        "{:#?}\n\nexpected:\n\n{:#?}\nactual:\n\n{:#?}\n\n",
-        test_name, expected_lines, actual_lines
+        "{test_name:#?}\n\nexpected:\n\n{expected_lines:#?}\nactual:\n\n{actual_lines:#?}\n\n"
     );
 }

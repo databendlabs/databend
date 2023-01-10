@@ -152,10 +152,10 @@ impl Display for ShareGrantObjectName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ShareGrantObjectName::Database(db) => {
-                write!(f, "DATABASE {}", db)
+                write!(f, "DATABASE {db}")
             }
             ShareGrantObjectName::Table(db, table) => {
-                write!(f, "TABLE {}.{}", db, table)
+                write!(f, "TABLE {db}.{table}")
             }
         }
     }

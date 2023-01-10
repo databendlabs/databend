@@ -51,16 +51,16 @@ impl Display for ParseErrorCode {
                 f.write_str("control character (\\u0000-\\u001F) found while parsing a string")
             }
             ParseErrorCode::InvalidEscaped(n) => {
-                write!(f, "invalid escaped '{:X}'", n)
+                write!(f, "invalid escaped '{n:X}'")
             }
             ParseErrorCode::InvalidHex(n) => {
-                write!(f, "invalid hex '{:X}'", n)
+                write!(f, "invalid hex '{n:X}'")
             }
             ParseErrorCode::InvalidLoneLeadingSurrogateInHexEscape(n) => {
-                write!(f, "lone leading surrogate in hex escape '{:X}'", n)
+                write!(f, "lone leading surrogate in hex escape '{n:X}'")
             }
             ParseErrorCode::InvalidSurrogateInHexEscape(n) => {
-                write!(f, "invalid surrogate in hex escape '{:X}'", n)
+                write!(f, "invalid surrogate in hex escape '{n:X}'")
             }
             ParseErrorCode::UnexpectedEndOfHexEscape => f.write_str("unexpected end of hex escape"),
         }
@@ -85,8 +85,8 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Error::Syntax(code, pos) => write!(f, "{}, pos {}", code, pos),
-            _ => write!(f, "{:?}", self),
+            Error::Syntax(code, pos) => write!(f, "{code}, pos {pos}"),
+            _ => write!(f, "{self:?}"),
         }
     }
 }

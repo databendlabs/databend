@@ -670,7 +670,7 @@ async fn test_export() -> anyhow::Result<()> {
         let data = tree.export()?;
 
         for kv in data.iter() {
-            println!("{:?}", kv);
+            println!("{kv:?}");
         }
 
         Ok(())

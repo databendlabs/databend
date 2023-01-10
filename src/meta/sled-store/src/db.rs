@@ -68,8 +68,7 @@ pub fn init_temp_sled_db(temp_dir: TempDir) {
 
     if !inited_as_temp {
         panic!(
-            "sled db is already initialized with specified path: {}, can not re-init with temp path {}",
-            curr_path, temp_path
+            "sled db is already initialized with specified path: {curr_path}, can not re-init with temp path {temp_path}"
         );
     }
 }
@@ -87,8 +86,7 @@ pub fn init_sled_db(path: String) {
 
     if inited_as_temp {
         panic!(
-            "sled db is already initialized with temp dir: {}, can not re-init with path {}",
-            curr_path, path
+            "sled db is already initialized with temp dir: {curr_path}, can not re-init with path {path}"
         );
     }
 }

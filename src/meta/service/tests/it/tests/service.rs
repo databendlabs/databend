@@ -129,16 +129,16 @@ impl MetaSrvTestContext {
         let host = "127.0.0.1";
 
         // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
-        config.raft_config.sled_tree_prefix = format!("test-{}-", config_id);
+        config.raft_config.sled_tree_prefix = format!("test-{config_id}-");
 
         {
             let grpc_port = next_port();
-            config.grpc_api_address = format!("{}:{}", host, grpc_port);
+            config.grpc_api_address = format!("{host}:{grpc_port}");
         }
 
         {
             let http_port = next_port();
-            config.admin_api_address = format!("{}:{}", host, http_port);
+            config.admin_api_address = format!("{host}:{http_port}");
         }
 
         info!("new test context config: {:?}", config);
@@ -175,7 +175,7 @@ impl MetaSrvTestContext {
 
         // retry 3 times until server starts listening.
         for _ in 0..4 {
-            let client = RaftServiceClient::connect(format!("http://{}", addr)).await;
+            let client = RaftServiceClient::connect(format!("http://{addr}")).await;
             match client {
                 Ok(x) => return Ok(x),
                 Err(err) => {

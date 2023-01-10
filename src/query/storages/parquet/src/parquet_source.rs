@@ -115,7 +115,7 @@ impl ParquetSource {
             let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
             let res = evaluator.run(filter).map_err(|(_, e)| {
-                ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
+                ErrorCode::Internal(format!("eval prewhere filter failed: {e}."))
             })?;
             let filter = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
                 ErrorCode::BadArguments(

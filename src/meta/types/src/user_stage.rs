@@ -78,7 +78,7 @@ impl fmt::Display for StageType {
             StageType::Internal => "Internal",
             StageType::User => "User",
         };
-        write!(f, "{}", name)
+        write!(f, "{name}")
     }
 }
 
@@ -277,8 +277,7 @@ impl FileFormatOptions {
                 _ => {
                     if !ignore_unknown {
                         return Err(ErrorCode::BadArguments(format!(
-                            "Unknown stage file format option {}",
-                            k
+                            "Unknown stage file format option {k}"
                         )));
                     }
                 }
@@ -323,8 +322,7 @@ impl FromStr for OnErrorMode {
                 match nums {
                     Ok(v) => Ok(OnErrorMode::SkipFileNum(v)),
                     Err(_) => Err(format!(
-                        "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT_STATEMENT }}",
-                        v
+                        "Unknown OnError mode:{v:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT_STATEMENT }}"
                     )),
                 }
             }
@@ -364,13 +362,13 @@ impl CopyOptions {
                 }
                 "purge" => {
                     let purge = bool::from_str(v).map_err(|_| {
-                        ErrorCode::StrParseError(format!("Cannot parse purge: {} as bool", v))
+                        ErrorCode::StrParseError(format!("Cannot parse purge: {v} as bool"))
                     })?;
                     self.purge = purge;
                 }
                 "single" => {
                     let single = bool::from_str(v).map_err(|_| {
-                        ErrorCode::StrParseError(format!("Cannot parse single: {} as bool", v))
+                        ErrorCode::StrParseError(format!("Cannot parse single: {v} as bool"))
                     })?;
                     self.single = single;
                 }
@@ -381,8 +379,7 @@ impl CopyOptions {
                 _ => {
                     if !ignore_unknown {
                         return Err(ErrorCode::BadArguments(format!(
-                            "Unknown stage copy option {}",
-                            k
+                            "Unknown stage copy option {k}"
                         )));
                     }
                 }

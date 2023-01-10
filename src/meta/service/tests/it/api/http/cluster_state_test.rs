@@ -144,8 +144,8 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let mut srv = HttpService::create(tc1.config, meta_node1);
 
     // test cert is issued for "localhost"
-    let state_url = format!("https://{}:30003/v1/cluster/status", TEST_CN_NAME);
-    let node_url = format!("https://{}:30003/v1/cluster/nodes", TEST_CN_NAME);
+    let state_url = format!("https://{TEST_CN_NAME}:30003/v1/cluster/status");
+    let node_url = format!("https://{TEST_CN_NAME}:30003/v1/cluster/nodes");
 
     // load cert
     let mut buf = Vec::new();

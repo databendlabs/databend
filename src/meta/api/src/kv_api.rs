@@ -46,8 +46,7 @@ pub fn prefix_of_string(s: &str) -> common_exception::Result<String> {
     for c in s.chars() {
         if !c.is_ascii() {
             return common_exception::Result::Err(ErrorCode::OnlySupportAsciiChars(format!(
-                "Only support ASCII characters: {}",
-                c
+                "Only support ASCII characters: {c}"
             )));
         }
     }

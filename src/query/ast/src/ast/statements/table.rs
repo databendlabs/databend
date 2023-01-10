@@ -322,7 +322,7 @@ impl Display for AlterTableAction<'_> {
                 Ok(())
             }
             AlterTableAction::RevertTo { point } => {
-                write!(f, "REVERT TO {}", point)?;
+                write!(f, "REVERT TO {point}")?;
                 Ok(())
             }
         }
@@ -502,7 +502,7 @@ impl<'a> Display for OptimizeTableAction<'a> {
             OptimizeTableAction::Purge { before } => {
                 write!(f, "PURGE")?;
                 if let Some(point) = before {
-                    write!(f, " BEFORE {}", point)?;
+                    write!(f, " BEFORE {point}")?;
                 }
                 Ok(())
             }

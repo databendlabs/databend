@@ -362,7 +362,7 @@ impl<'a> Binder {
                 continue;
             }
 
-            let group_item_name = format!("{:#}", expr);
+            let group_item_name = format!("{expr:#}");
             let index = if let Scalar::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding { index, .. },
             }) = &scalar_expr
@@ -437,7 +437,7 @@ impl<'a> Binder {
             Err(original_error)
         } else if result.len() > 1 {
             Err(ErrorCode::SemanticError(expr.span().display_error(
-                format!("GROUP BY \"{}\" is ambiguous", expr),
+                format!("GROUP BY \"{expr}\" is ambiguous"),
             )))
         } else {
             let (column_binding, scalar) = available_aliases[result[0]].clone();

@@ -52,7 +52,7 @@ impl From<MetaStartupError> for ErrorCode {
         match e {
             MetaStartupError::InvalidConfig(err_str) => ErrorCode::MetaServiceError(err_str),
             MetaStartupError::MetaStoreAlreadyExists(node_id) => {
-                ErrorCode::MetaServiceError(format!("meta store already exists: {}", node_id))
+                ErrorCode::MetaServiceError(format!("meta store already exists: {node_id}"))
             }
             MetaStartupError::MetaStoreNotFound => ErrorCode::MetaServiceError("MetaStoreNotFound"),
             MetaStartupError::MetaServiceError(err_str) => ErrorCode::MetaServiceError(err_str),

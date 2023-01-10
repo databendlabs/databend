@@ -324,7 +324,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc {
                 RcDoc::nil()
             } else {
                 let files = files.join(",");
-                let files = format!("FILES {}", files);
+                let files = format!("FILES {files}");
                 RcDoc::text(files)
             })
             .append(if let Some(a) = alias {

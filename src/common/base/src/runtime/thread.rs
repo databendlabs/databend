@@ -68,7 +68,7 @@ impl Thread {
         let mut mem_stat_name = String::from("UnnamedThread");
 
         if let Some(named) = name.take() {
-            mem_stat_name = format!("{}Thread", named);
+            mem_stat_name = format!("{named}Thread");
             thread_builder = thread_builder.name(named);
         }
 

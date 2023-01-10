@@ -114,8 +114,7 @@ impl HiveBlockReader {
             Projection::Columns(projection) => projection,
             Projection::InnerColumns(b) => {
                 return Err(ErrorCode::Unimplemented(format!(
-                    "not support inter columns in hive block reader,{:?}",
-                    b
+                    "not support inter columns in hive block reader,{b:?}"
                 )));
             }
         };
@@ -189,13 +188,11 @@ impl HiveBlockReader {
             .collect();
         if column_meta.is_empty() {
             return Err(ErrorCode::ParquetFileInvalid(format!(
-                "couldn't find column:{} in parquet file",
-                field_name
+                "couldn't find column:{field_name} in parquet file"
             )));
         } else if column_meta.len() > 1 {
             return Err(ErrorCode::ParquetFileInvalid(format!(
-                "find multi column:{} in parquet file",
-                field_name
+                "find multi column:{field_name} in parquet file"
             )));
         }
         Ok(column_meta[0])
@@ -224,8 +221,7 @@ impl HiveBlockReader {
             Ok(Ok(data)) => Ok(data),
             Ok(Err(cause)) => Err(cause),
             Err(cause) => Err(ErrorCode::TokioError(format!(
-                "Cannot join future {:?}",
-                cause
+                "Cannot join future {cause:?}"
             ))),
         }
     }

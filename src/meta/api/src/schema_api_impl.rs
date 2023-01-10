@@ -243,7 +243,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         get_share_or_err(
                             self,
                             from_share,
-                            format!("create_database from share: {}", from_share),
+                            format!("create_database from share: {from_share}"),
                         )
                         .await?;
 
@@ -634,7 +634,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
                         DatabaseAlreadyExists::new(
                             &tenant_dbname.db_name,
-                            format!("rename_database: {} with a wrong db id", tenant_dbname),
+                            format!("rename_database: {tenant_dbname} with a wrong db id"),
                         ),
                     )));
                 }
@@ -642,7 +642,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
                     DatabaseAlreadyExists::new(
                         &tenant_dbname.db_name,
-                        format!("rename_database: {} with none db id history", tenant_dbname),
+                        format!("rename_database: {tenant_dbname} with none db id history"),
                     ),
                 )));
             }
@@ -906,7 +906,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     Err(KVAppError::AppError(AppError::TableAlreadyExists(
                         TableAlreadyExists::new(
                             &tenant_dbname_tbname.table_name,
-                            format!("create_table: {}", tenant_dbname_tbname),
+                            format!("create_table: {tenant_dbname_tbname}"),
                         ),
                     )))
                 };
@@ -1085,7 +1085,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     Err(KVAppError::AppError(AppError::UnknownTable(
                         UnknownTable::new(
                             &tenant_dbname_tbname.table_name,
-                            format!("drop_table: {}", tenant_dbname_tbname),
+                            format!("drop_table: {tenant_dbname_tbname}"),
                         ),
                     )))
                 };
@@ -1550,7 +1550,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let res = get_db_or_err(
             self,
             &tenant_dbname,
-            format!("get_table: {}", tenant_dbname),
+            format!("get_table: {tenant_dbname}"),
         )
         .await;
 
@@ -1593,7 +1593,7 @@ impl<KV: KVApi> SchemaApi for KV {
         table_has_to_exist(
             tb_meta_seq,
             tenant_dbname_tbname,
-            format!("get_table meta by: {}", tenant_dbname_tbname),
+            format!("get_table meta by: {tenant_dbname_tbname}"),
         )?;
 
         debug!(
@@ -1637,7 +1637,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let res = get_db_or_err(
             self,
             tenant_dbname,
-            format!("get_table_history: {}", tenant_dbname),
+            format!("get_table_history: {tenant_dbname}"),
         )
         .await;
 
@@ -2361,7 +2361,7 @@ async fn remove_db_id_from_share(
     let (share_id_seq, share_id, share_meta_seq, mut share_meta) = get_share_or_err(
         kv_api,
         &from_share,
-        format!("create_database from share: {}", from_share),
+        format!("create_database from share: {from_share}"),
     )
     .await?;
 
@@ -2521,7 +2521,7 @@ fn db_has_to_not_exist(
         debug!(seq, ?name_ident, "exist");
 
         Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
-            DatabaseAlreadyExists::new(&name_ident.db_name, format!("{}: {}", ctx, name_ident)),
+            DatabaseAlreadyExists::new(&name_ident.db_name, format!("{ctx}: {name_ident}")),
         )))
     }
 }
@@ -2540,7 +2540,7 @@ fn table_has_to_not_exist(
         debug!(seq, ?name_ident, "exist");
 
         Err(KVAppError::AppError(AppError::TableAlreadyExists(
-            TableAlreadyExists::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
+            TableAlreadyExists::new(&name_ident.table_name, format!("{ctx}: {name_ident}")),
         )))
     }
 }

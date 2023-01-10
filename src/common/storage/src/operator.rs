@@ -362,8 +362,7 @@ impl DataOperator {
             .expect("join must succeed")
         {
             return Err(ErrorCode::StorageUnavailable(format!(
-                "current configured storage is not available: config: {:?}, cause: {cause}",
-                sp
+                "current configured storage is not available: config: {sp:?}, cause: {cause}"
             )));
         }
 
@@ -435,8 +434,7 @@ impl CacheOperator {
             .expect("join must succeed")
         {
             return Err(ErrorCode::StorageUnavailable(format!(
-                "current configured cache is not available: config: {:?}, cause: {cause}",
-                conf
+                "current configured cache is not available: config: {conf:?}, cause: {cause}"
             )));
         }
 

@@ -46,7 +46,7 @@ impl<'a> GroupingChecker<'a> {
             .bind_context
             .aggregate_info
             .group_items_map
-            .get(&format!("{:?}", scalar))
+            .get(&format!("{scalar:?}"))
         {
             let column = &self.bind_context.aggregate_info.group_items[*index];
             let column_binding = ColumnBinding {

@@ -77,13 +77,13 @@ impl Datum {
 impl Display for Datum {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Datum::Bool(v) => write!(f, "{}", v),
-            Datum::Int(v) => write!(f, "{}", v),
-            Datum::UInt(v) => write!(f, "{}", v),
-            Datum::Float(v) => write!(f, "{}", v),
+            Datum::Bool(v) => write!(f, "{v}"),
+            Datum::Int(v) => write!(f, "{v}"),
+            Datum::UInt(v) => write!(f, "{v}"),
+            Datum::Float(v) => write!(f, "{v}"),
             Datum::Bytes(v) => {
                 let s = String::from_utf8_lossy(v);
-                write!(f, "{}", s)
+                write!(f, "{s}")
             }
         }
     }
@@ -111,8 +111,7 @@ impl Datum {
             (Datum::Bytes(l), Datum::Bytes(r)) => Ok(l.cmp(r)),
 
             _ => Err(ErrorCode::Internal(format!(
-                "Cannot compare between different kinds of datum: {:?}, {:?}",
-                self, other
+                "Cannot compare between different kinds of datum: {self:?}, {other:?}"
             ))),
         }
     }
