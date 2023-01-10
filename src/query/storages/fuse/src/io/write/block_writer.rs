@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use backon::ExponentialBackoff;
 use backon::Retryable;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use common_arrow::native::write::PaWriter;
+use common_arrow::native::write::NativeWriter;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
@@ -46,7 +46,7 @@ pub fn write_block(
         }
         FuseStorageFormat::Native => {
             let arrow_schema = schema.to_arrow();
-            let mut writer = PaWriter::new(
+            let mut writer = NativeWriter::new(
                 buf,
                 arrow_schema,
                 common_arrow::native::write::WriteOptions {
@@ -65,12 +65,7 @@ pub fn write_block(
                 .metas
                 .iter()
                 .enumerate()
-                .map(|(idx, meta)| {
-                    (
-                        idx as ColumnId,
-                        ColumnMeta::new(meta.offset, meta.length, meta.num_values),
-                    )
-                })
+                .map(|(idx, meta)| (idx as ColumnId, ColumnMeta::Native(meta.clone())))
                 .collect();
             Ok((writer.total_size() as u64, metas))
         }

@@ -48,10 +48,12 @@ fn test_to_partitions() -> Result<()> {
         distinct_of_values: None,
     };
 
-    let col_metas_gen = |col_size| ColumnMeta {
-        offset: 0,
-        len: col_size as u64,
-        num_values: 0,
+    let col_metas_gen = |col_size| {
+        ColumnMeta::Parquet(meta::SingleColumnMeta {
+            offset: 0,
+            len: col_size as u64,
+            num_values: 0,
+        })
     };
 
     let col_leaves_gen = |col_id| ColumnLeaf {
