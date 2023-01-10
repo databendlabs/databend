@@ -31,7 +31,7 @@ pub enum DSqlLogicTestError {
     #[error("Databend error: {0}")]
     Databend(ErrorCode),
     // Error from mysql client
-    #[error("Mysql client error: {0}")]
+    #[error("mysql client error: {0}")]
     MysqlClient(MysqlClientError),
     // Error from http client
     #[error("Http client error(from reqwest crate): {0}")]
