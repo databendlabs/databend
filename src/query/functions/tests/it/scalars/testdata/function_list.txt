@@ -911,8 +911,8 @@ from_base64(String NULL) :: String NULL
 gen_random_uuid() :: String
 geo_distance(Float64, Float64, Float64, Float64) :: Float32
 geo_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
-geo_to_h3(Float64, Float64, Int64) :: UInt64
-geo_to_h3(Float64 NULL, Float64 NULL, Int64 NULL) :: UInt64 NULL
+geo_to_h3(Float64, Float64, UInt8) :: UInt64
+geo_to_h3(Float64 NULL, Float64 NULL, UInt8 NULL) :: UInt64 NULL
 get(Array(Nothing) NULL, UInt64 NULL) :: NULL
 get(Array(T0 NULL), UInt64) :: T0 NULL
 get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL

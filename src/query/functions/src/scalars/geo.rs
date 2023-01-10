@@ -38,9 +38,8 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
-use geo_types::Coord;
-use h3ron::H3Cell;
-use h3ron::Index;
+use h3o::LatLng;
+use h3o::Resolution;
 use once_cell::sync::OnceCell;
 
 const PI: f64 = std::f64::consts::PI;
@@ -84,19 +83,21 @@ pub fn register(registry: &mut FunctionRegistry) {
     // init globals.
     geo_dist_init();
 
-    registry.register_passthrough_nullable_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<i64>, NumberType<u64>,_, _>(
+    registry.register_passthrough_nullable_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<u8>, NumberType<u64>,_, _>(
         "geo_to_h3",
         FunctionProperty::default(),
         |_,_,_|FunctionDomain::Full,
-        vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<i64>, NumberType<u64>>(
-            |x, y, r, builder, ctx| {
-                let coord = Coord { x: x.into(), y: y.into() };
-                match H3Cell::from_coordinate(coord, r as u8) {
-                    Ok(h3_cell) => builder.push(h3_cell.h3index()),
+        vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<u8>, NumberType<u64>>(
+            |lon, lat, r, builder, ctx| {
+                match LatLng::from_degrees(lat.into(), lon.into()) {
+                    Ok(coord) => {
+                        let h3_cell =  coord.to_cell(Resolution::try_from(r).unwrap());
+                        builder.push(h3_cell.into())
+                    },
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
                         builder.push(0);
-                    },
+                    }
                 }
             }
         ),
