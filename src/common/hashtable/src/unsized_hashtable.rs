@@ -1178,6 +1178,8 @@ where A: Allocator + Clone + Default
         self.table2.clear();
         self.table3.clear();
         self.table4.clear();
+        // NOTE: Bump provides the reset function to free memory, but it will cause memory leakage(maybe a bug).
+        // In fact, we don't need to call the drop function. rust will call it, But we call it to improve the readability of the code.
         drop(std::mem::take(&mut self.arena));
     }
 }
