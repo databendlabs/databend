@@ -108,6 +108,7 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &Scalar) -> String {
             format_scalar(_metadata, &or.left),
             format_scalar(_metadata, &or.right)
         ),
+        Scalar::NotExpr(not) => format!("NOT ({})", format_scalar(_metadata, &not.argument),),
         Scalar::ComparisonExpr(comp) => format!(
             "{} {} {}",
             format_scalar(_metadata, &comp.left),

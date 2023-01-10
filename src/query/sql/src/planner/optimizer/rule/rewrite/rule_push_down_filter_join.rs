@@ -89,6 +89,9 @@ impl RulePushDownFilterJoin {
             Scalar::BoundColumnRef(column_binding) => {
                 nullable_columns.push(column_binding.column.index);
             }
+            Scalar::AndExpr(_) => {
+                unreachable!("`Scalar::AndExpr` should have been split in binder")
+            }
             Scalar::OrExpr(expr) => {
                 let mut left_cols = vec![];
                 let mut right_cols = vec![];
@@ -119,6 +122,14 @@ impl RulePushDownFilterJoin {
                     }
                 }
             }
+            Scalar::NotExpr(expr) => {
+                self.find_nullable_columns(
+                    &expr.argument,
+                    left_output_columns,
+                    right_output_columns,
+                    nullable_columns,
+                )?;
+            }
             Scalar::ComparisonExpr(expr) => {
                 // For any comparison expr, if input is null, the compare result is false
                 self.find_nullable_columns(
@@ -142,8 +153,6 @@ impl RulePushDownFilterJoin {
                     nullable_columns,
                 )?;
             }
-            // `predicate` can't be `Scalar::AndExpr`
-            // because `Scalar::AndExpr` had been split in binder
             _ => {}
         }
         Ok(())
@@ -246,13 +255,11 @@ impl RulePushDownFilterJoin {
                     break;
                 }
             }
-            if let Scalar::FunctionCall(func) = predicate {
-                if func.func_name == "not" && func.arguments.len() == 1 {
-                    // Check if the argument is mark index, if so, we won't convert it to semi join
-                    if let Scalar::BoundColumnRef(col) = &func.arguments[0] {
-                        if col.column.index == mark_index {
-                            return Ok(s_expr.clone());
-                        }
+            if let Scalar::NotExpr(not_expr) = predicate {
+                // Check if the argument is mark index, if so, we won't convert it to semi join
+                if let Scalar::BoundColumnRef(col) = not_expr.argument.as_ref() {
+                    if col.column.index == mark_index {
+                        return Ok(s_expr.clone());
                     }
                 }
             }

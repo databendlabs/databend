@@ -61,6 +61,9 @@ impl PrewhereOptimizer {
                 Self::collect_columns_impl(or.left.as_ref(), columns);
                 Self::collect_columns_impl(or.right.as_ref(), columns);
             }
+            Scalar::NotExpr(not) => {
+                Self::collect_columns_impl(not.argument.as_ref(), columns);
+            }
             Scalar::ComparisonExpr(cmp) => {
                 Self::collect_columns_impl(cmp.left.as_ref(), columns);
                 Self::collect_columns_impl(cmp.right.as_ref(), columns);

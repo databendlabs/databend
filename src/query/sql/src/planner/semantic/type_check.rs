@@ -69,6 +69,7 @@ use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::SubqueryExpr;
@@ -291,11 +292,10 @@ impl<'a> TypeChecker<'a> {
                     };
                     let args = vec![&array_expr, expr.as_ref()];
                     if *not {
-                        self.resolve_function(
+                        self.resolve_unary_op(
                             span,
-                            "not",
-                            vec![],
-                            &[&Expr::FunctionCall {
+                            &UnaryOperator::Not,
+                            &Expr::FunctionCall {
                                 span,
                                 distinct: false,
                                 name: Identifier {
@@ -305,7 +305,7 @@ impl<'a> TypeChecker<'a> {
                                 },
                                 args: args.iter().copied().cloned().collect(),
                                 params: vec![],
-                            }],
+                            },
                             None,
                         )
                         .await?
@@ -474,16 +474,15 @@ impl<'a> TypeChecker<'a> {
                                     modifier: Some(SubqueryModifier::Any),
                                     subquery: (*subquery).clone(),
                                 };
-                                self.resolve_function(
+                                self.resolve_unary_op(
                                     span,
-                                    "not",
-                                    vec![],
-                                    &[&Expr::BinaryOp {
+                                    &UnaryOperator::Not,
+                                    &Expr::BinaryOp {
                                         span,
                                         op: contrary_op,
                                         left: (*left).clone(),
                                         right: Box::new(rewritten_subquery),
-                                    }],
+                                    },
                                     None,
                                 )
                                 .await?
@@ -767,16 +766,15 @@ impl<'a> TypeChecker<'a> {
                 // Not in subquery will be transformed to not(Expr = Any(...))
                 if *not {
                     return self
-                        .resolve_function(
+                        .resolve_unary_op(
                             span,
-                            "not",
-                            vec![],
-                            &[&Expr::InSubquery {
+                            &UnaryOperator::Not,
+                            &Expr::InSubquery {
                                 subquery: subquery.clone(),
                                 not: false,
                                 expr: expr.clone(),
                                 span,
-                            }],
+                            },
                             required_type,
                         )
                         .await;
@@ -1052,10 +1050,8 @@ impl<'a> TypeChecker<'a> {
                     .resolve_binary_op(span, &positive_op, left, right, required_type)
                     .await?;
                 let return_type = Box::new(data_type.clone());
-                let scalar = Scalar::FunctionCall(FunctionCall {
-                    params: vec![],
-                    arguments: vec![positive],
-                    func_name: "not".to_string(),
+                let scalar = Scalar::NotExpr(NotExpr {
+                    argument: Box::new(positive),
                     return_type,
                 });
                 Ok(Box::new((scalar, data_type)))
@@ -1168,8 +1164,26 @@ impl<'a> TypeChecker<'a> {
             }
 
             UnaryOperator::Not => {
-                self.resolve_function(span, "not", vec![], &[child], required_type)
-                    .await
+                let (argument, _) = *self.resolve(child, None).await?;
+
+                let (_, data_type) = *self
+                    .resolve_scalar_function_call(
+                        span,
+                        "not",
+                        vec![],
+                        vec![argument.clone()],
+                        required_type,
+                    )
+                    .await?;
+
+                Ok(Box::new((
+                    NotExpr {
+                        argument: Box::new(argument),
+                        return_type: Box::new(data_type.clone()),
+                    }
+                    .into(),
+                    data_type,
+                )))
             }
         }
     }

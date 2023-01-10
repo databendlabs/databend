@@ -61,17 +61,19 @@ impl Default for FunctionContext {
 pub struct EvalContext<'a> {
     pub generics: &'a GenericMap,
     pub num_rows: usize,
+    pub tz: Tz,
 
-    // validity from the nullable column
+    // Validity bitmap of outer nullable column. This is an optimization
+    // to avoid recording errors on the NULL value which has a coresponding
+    // default value in nullable's inner column.
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
-    pub tz: Tz,
 }
 
 impl<'a> EvalContext<'a> {
     #[inline]
     pub fn set_error(&mut self, row: usize, error_msg: impl AsRef<str>) {
-        // if the row is invalid, we don't need to set error
+        // If the row is NULL, we don't need to set error.
         if self
             .validity
             .as_ref()
@@ -119,6 +121,7 @@ impl<'a> EvalContext<'a> {
         }
     }
 }
+
 /// `FunctionID` is a unique identifier for a function. It's used to construct
 /// the exactly same function from the remote execution nodes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -332,6 +335,32 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy {
                     })),
                 };
                 Value::Column(result)
+            }
+        }
+    }
+}
+
+pub fn error_to_null<I1: ArgType, O: ArgType>(
+    func: impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
+) -> impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync
+{
+    move |val, ctx| {
+        let output = func(val, ctx);
+        if let Some((bitmap, _)) = ctx.errors.take() {
+            match output {
+                Value::Scalar(_) => Value::Scalar(None),
+                Value::Column(column) => Value::Column(NullableColumn {
+                    column,
+                    validity: bitmap.into(),
+                }),
+            }
+        } else {
+            match output {
+                Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
+                Value::Column(column) => Value::Column(NullableColumn {
+                    column,
+                    validity: constant_bitmap(true, ctx.num_rows).into(),
+                }),
             }
         }
     }

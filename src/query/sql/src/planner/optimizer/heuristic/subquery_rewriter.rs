@@ -41,6 +41,7 @@ use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
@@ -171,6 +172,19 @@ impl SubqueryRewriter {
                     OrExpr {
                         left: Box::new(left),
                         right: Box::new(right),
+                        return_type: expr.return_type.clone(),
+                    }
+                    .into(),
+                    s_expr,
+                ))
+            }
+
+            Scalar::NotExpr(expr) => {
+                let (argument, s_expr) =
+                    self.try_rewrite_subquery(&expr.argument, s_expr, false)?;
+                Ok((
+                    NotExpr {
+                        argument: Box::new(argument),
                         return_type: expr.return_type.clone(),
                     }
                     .into(),
@@ -324,10 +338,8 @@ impl SubqueryRewriter {
                         ),
                     })
                 } else if subquery.typ == SubqueryType::NotExists {
-                    Scalar::FunctionCall(FunctionCall {
-                        params: vec![],
-                        arguments: vec![column_ref],
-                        func_name: "not".to_string(),
+                    Scalar::NotExpr(NotExpr {
+                        argument: Box::new(column_ref),
                         return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
                     })
                 } else {

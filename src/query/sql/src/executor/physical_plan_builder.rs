@@ -706,6 +706,12 @@ impl<'a> PhysicalScalarBuilder<'a> {
                 args: vec![self.build(&or.left)?, self.build(&or.right)?],
                 return_type: or.data_type(),
             }),
+            Scalar::NotExpr(not) => Ok(PhysicalScalar::Function {
+                name: "not".to_string(),
+                params: vec![],
+                args: vec![self.build(&not.argument)?],
+                return_type: not.data_type(),
+            }),
             Scalar::ComparisonExpr(comp) => Ok(PhysicalScalar::Function {
                 name: comp.op.to_func_name().to_string(),
                 params: vec![],
