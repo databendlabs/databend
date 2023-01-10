@@ -111,7 +111,10 @@ fn test_to_partitions() -> Result<()> {
     // CASE I:  no projection
     let (s, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, None);
     assert_eq!(parts.len(), num_of_block as usize);
-    let expected_block_size: u64 = cols_metas.values().map(|col_meta| col_meta.len).sum();
+    let expected_block_size: u64 = cols_metas
+        .values()
+        .map(|col_meta| col_meta.offset_length().1)
+        .sum();
     assert_eq!(expected_block_size * num_of_block, s.read_bytes as u64);
 
     // CASE II: col pruning
@@ -126,7 +129,7 @@ fn test_to_partitions() -> Result<()> {
     let expected_block_size: u64 = cols_metas
         .iter()
         .filter(|(cid, _)| col_ids.contains(&(**cid as usize)))
-        .map(|(_, col_meta)| col_meta.len)
+        .map(|(_, col_meta)| col_meta.offset_length().1)
         .sum();
 
     // kick off
