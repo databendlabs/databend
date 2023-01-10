@@ -19,17 +19,17 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
+use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 
 use crate::operations::mutation::AbortOperation;
-use crate::pruning::BlockIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SerializeDataMeta {
-    pub index: BlockIndex,
+    pub index: BlockMetaIndex,
     pub cluster_stats: Option<ClusterStatistics>,
 }
 
@@ -56,7 +56,10 @@ impl BlockMetaInfo for SerializeDataMeta {
 }
 
 impl SerializeDataMeta {
-    pub fn create(index: BlockIndex, cluster_stats: Option<ClusterStatistics>) -> BlockMetaInfoPtr {
+    pub fn create(
+        index: BlockMetaIndex,
+        cluster_stats: Option<ClusterStatistics>,
+    ) -> BlockMetaInfoPtr {
         Box::new(SerializeDataMeta {
             index,
             cluster_stats,
@@ -82,7 +85,7 @@ pub enum Mutation {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct MutationTransformMeta {
-    pub index: BlockIndex,
+    pub index: BlockMetaIndex,
     pub op: Mutation,
 }
 
@@ -109,7 +112,7 @@ impl BlockMetaInfo for MutationTransformMeta {
 }
 
 impl MutationTransformMeta {
-    pub fn create(index: BlockIndex, op: Mutation) -> BlockMetaInfoPtr {
+    pub fn create(index: BlockMetaIndex, op: Mutation) -> BlockMetaInfoPtr {
         Box::new(MutationTransformMeta { index, op })
     }
 

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
-use common_sql::plans::DeletePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;

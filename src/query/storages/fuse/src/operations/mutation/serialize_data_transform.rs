@@ -23,11 +23,12 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_storages_common::blocks_to_parquet;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ClusterStatistics;
-use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
+use storages_common_blocks::blocks_to_parquet;
+use storages_common_pruner::BlockMetaIndex;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::table::TableCompression;
 
 use crate::io::write_data;
 use crate::io::TableMetaLocationGenerator;
@@ -40,7 +41,6 @@ use crate::operations::BloomIndexState;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::Processor;
-use crate::pruning::BlockIndex;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
@@ -64,7 +64,7 @@ pub struct SerializeDataTransform {
     cluster_stats_gen: ClusterStatsGenerator,
 
     schema: TableSchemaRef,
-    index: BlockIndex,
+    index: BlockMetaIndex,
     origin_stats: Option<ClusterStatistics>,
     table_compression: TableCompression,
 }
@@ -87,7 +87,7 @@ impl SerializeDataTransform {
             dal: table.get_operator(),
             cluster_stats_gen,
             schema: table.schema(),
-            index: (0, 0),
+            index: BlockMetaIndex::default(),
             origin_stats: None,
             table_compression: table.table_compression,
         })))

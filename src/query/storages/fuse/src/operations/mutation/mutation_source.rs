@@ -32,7 +32,8 @@ use common_expression::Expr;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
-use common_storages_table_meta::meta::ClusterStatistics;
+use storages_common_pruner::BlockMetaIndex;
+use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
@@ -44,7 +45,6 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::pruning::BlockIndex;
 
 pub enum MutationAction {
     Deletion,
@@ -82,7 +82,7 @@ pub struct MutationSource {
     operators: Vec<BlockOperator>,
     action: MutationAction,
 
-    index: BlockIndex,
+    index: BlockMetaIndex,
     origin_stats: Option<ClusterStatistics>,
 }
 
@@ -107,7 +107,7 @@ impl MutationSource {
             remain_reader,
             operators,
             action,
-            index: (0, 0),
+            index: BlockMetaIndex::default(),
             origin_stats: None,
         })))
     }
