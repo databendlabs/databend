@@ -14,10 +14,9 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
@@ -29,7 +28,6 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalScalarBuilder;
 use crate::sql::plans::insert::Insert;
 use crate::sql::plans::insert::InsertInputSource;
 use crate::sql::plans::Plan;
@@ -127,21 +125,12 @@ impl CreateTableInterpreterV2 {
         //
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
-        let table_schema = table.schema();
-        let select_fields: Vec<DataField> = select_plan
-            .schema()
-            .fields()
-            .iter()
-            .filter_map(|f| table_schema.field_with_name(f.name()).ok())
-            .cloned()
-            .collect();
-        let schema = DataSchemaRefExt::create(select_fields);
         let insert_plan = Insert {
             catalog: self.plan.catalog.clone(),
             database: self.plan.database.clone(),
             table: self.plan.table.clone(),
             table_id: table.get_id(),
-            schema,
+            schema: self.plan.schema.clone(),
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan),
         };
@@ -164,18 +153,15 @@ impl CreateTableInterpreterV2 {
     /// - Update cluster key of table meta.
     fn build_request(&self) -> Result<CreateTableReq> {
         let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
-        let input_schema = self.plan.schema.clone();
         for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
-            let field = if let Some(Some(scalar)) = &self.plan.field_default_exprs.get(idx) {
-                let mut builder = PhysicalScalarBuilder::new(&input_schema);
-                let physical_scaler = builder.build(scalar)?;
-                field.with_default_expr(Some(serde_json::to_string(&physical_scaler)?))
+            let field = if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
+                field.with_default_expr(Some(default_expr.clone()))
             } else {
                 field
             };
             fields.push(field)
         }
-        let schema = DataSchemaRefExt::create(fields);
+        let schema = TableSchemaRefExt::create(fields);
 
         let mut table_meta = TableMeta {
             schema,

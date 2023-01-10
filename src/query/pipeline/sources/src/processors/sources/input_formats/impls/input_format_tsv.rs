@@ -15,10 +15,11 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
+use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderTSV;
@@ -28,7 +29,7 @@ use common_io::format_diagnostic::verbose_string;
 use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 
-use crate::processors::sources::input_formats::input_format_text::AligningState;
+use crate::processors::sources::input_formats::input_format_text::AligningStateRowDelimiter;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
@@ -36,17 +37,15 @@ use crate::processors::sources::input_formats::input_format_text::RowBatch;
 pub struct InputFormatTSV {}
 
 impl InputFormatTSV {
-    #[allow(clippy::too_many_arguments)]
+    pub fn create() -> Self {
+        Self {}
+    }
     fn read_row(
         field_delimiter: u8,
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
-        deserializers: &mut Vec<common_datavalues::TypeDeserializerImpl>,
-        schema: &DataSchemaRef,
-        path: &str,
-        batch_id: usize,
-        offset: usize,
-        row_index: Option<usize>,
+        deserializers: &mut Vec<TypeDeserializerImpl>,
+        schema: &TableSchemaRef,
     ) -> Result<()> {
         let num_columns = deserializers.len();
         let mut column_index = 0;
@@ -104,19 +103,7 @@ impl InputFormatTSV {
         }
 
         if let Some(m) = err_msg {
-            let row_info = if let Some(r) = row_index {
-                format!("at row {},", r)
-            } else {
-                String::new()
-            };
-            let mut msg = format!(
-                "fail to parse tsv {} batch {} at offset {}, {} reason={}, row data: ",
-                path,
-                batch_id,
-                offset + pos,
-                row_info,
-                m
-            );
+            let mut msg = format!("{}, row data: ", m);
             verbose_string(buf, &mut msg);
             Err(ErrorCode::BadBytes(msg))
         } else {
@@ -126,6 +113,8 @@ impl InputFormatTSV {
 }
 
 impl InputFormatTextBase for InputFormatTSV {
+    type AligningState = AligningStateRowDelimiter;
+
     fn format_type() -> StageFileFormatType {
         StageFileFormatType::Tsv
     }
@@ -143,8 +132,8 @@ impl InputFormatTextBase for InputFormatTSV {
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.path,
             batch.batch_id,
-            batch.start_row,
-            batch.offset
+            batch.start_row_in_split,
+            batch.start_offset_in_split
         );
         let field_decoder = builder
             .field_decoder
@@ -155,7 +144,6 @@ impl InputFormatTextBase for InputFormatTSV {
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let mut num_rows = 0usize;
-        let start_row = batch.start_row;
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             if let Err(e) = Self::read_row(
@@ -164,10 +152,6 @@ impl InputFormatTextBase for InputFormatTSV {
                 buf,
                 columns,
                 schema,
-                &batch.path,
-                batch.batch_id,
-                batch.offset + start,
-                start_row.map(|n| n + i),
             ) {
                 if builder.ctx.on_error_mode == OnErrorMode::Continue {
                     columns.iter_mut().for_each(|c| {
@@ -179,7 +163,7 @@ impl InputFormatTextBase for InputFormatTSV {
                     start = *end;
                     continue;
                 } else {
-                    return Err(e);
+                    return Err(batch.error(&e.message(), &builder.ctx, start, i));
                 }
             }
             start = *end;
@@ -187,14 +171,10 @@ impl InputFormatTextBase for InputFormatTSV {
         }
         Ok(())
     }
-
-    fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>> {
-        Ok(state.align_by_record_delimiter(buf))
-    }
 }
 
 pub fn format_column_error(
-    schema: &DataSchemaRef,
+    schema: &TableSchemaRef,
     column_index: usize,
     col_data: &[u8],
     msg: &str,

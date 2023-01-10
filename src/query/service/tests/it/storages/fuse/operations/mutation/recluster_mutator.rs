@@ -18,26 +18,26 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::table_mutator::TableMutator;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ClusterStatistics;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
 use databend_query::storages::fuse::pruning::BlockPruner;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -75,8 +75,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let mut test_block_locations = vec![];
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
         cluster_key_id: 0,
-        min: vec![DataValue::Int64(1)],
-        max: vec![DataValue::Int64(3)],
+        min: vec![Scalar::from(1i64)],
+        max: vec![Scalar::from(3i64)],
         level: 0,
     }))
     .await?;
@@ -85,8 +85,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
         cluster_key_id: 0,
-        min: vec![DataValue::Int64(2)],
-        max: vec![DataValue::Int64(4)],
+        min: vec![Scalar::from(2i64)],
+        max: vec![Scalar::from(4i64)],
         level: 0,
     }))
     .await?;
@@ -95,8 +95,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics {
         cluster_key_id: 0,
-        min: vec![DataValue::Int64(4)],
-        max: vec![DataValue::Int64(5)],
+        min: vec![Scalar::from(4i64)],
+        max: vec![Scalar::from(5i64)],
         level: 0,
     }))
     .await?;
@@ -107,7 +107,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         Uuid::new_v4(),
         &None,
         None,
-        DataSchema::empty(),
+        TableSchema::empty(),
         Statistics::default(),
         test_segment_locations.clone(),
         Some((0, "(id)".to_string())),
@@ -115,7 +115,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     );
     let base_snapshot = Arc::new(base_snapshot);
 
-    let schema = DataSchemaRef::new(DataSchema::empty());
+    let schema = TableSchemaRef::new(TableSchema::empty());
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segments_location = base_snapshot.segments.clone();
     let block_metas = BlockPruner::prune(
@@ -132,7 +132,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             blocks_map
                 .entry(stats.level)
                 .or_default()
-                .push((idx.0, b.clone()));
+                .push((idx.segment_idx, b.clone()));
         }
     });
 

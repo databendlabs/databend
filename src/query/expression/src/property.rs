@@ -37,12 +37,12 @@ use crate::Scalar;
 
 #[derive(Debug, Clone, Default)]
 pub struct FunctionProperty {
-    pub commutative: bool,
+    pub non_deterministic: bool,
 }
 
 impl FunctionProperty {
-    pub fn commutative(mut self, commutative: bool) -> Self {
-        self.commutative = commutative;
+    pub fn non_deterministic(mut self) -> Self {
+        self.non_deterministic = true;
         self
     }
 }
@@ -53,11 +53,11 @@ impl FunctionProperty {
 pub enum FunctionDomain<T: ValueType> {
     /// The function may return error.
     MayThrow,
-    /// The function must not return error, and the return value any valid
-    /// value the type can represent.
+    /// The function must not return error, and the return value can be
+    /// any valid value the type can represent.
     Full,
     /// The function must not return error, and have futher information
-    /// to restrict the range of the output value.
+    /// about the range of the output value.
     Domain(T::Domain),
 }
 

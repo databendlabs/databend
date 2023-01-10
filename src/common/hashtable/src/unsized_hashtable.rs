@@ -1171,14 +1171,15 @@ where A: Allocator + Clone + Default
             _phantom: PhantomData,
         }
     }
-    fn iter_mut(&mut self) -> Self::IteratorMut<'_> {
-        UnsizedHashtableIterMut {
-            it_0: Some(self.table0.iter_mut()),
-            it_1: Some(self.table1.iter_mut()),
-            it_2: Some(self.table2.iter_mut()),
-            it_3: Some(self.table3.iter_mut()),
-            it_4: Some(self.table4.iter_mut()),
-            _phantom: PhantomData,
-        }
+
+    fn clear(&mut self) {
+        self.table0.clear();
+        self.table1.clear();
+        self.table2.clear();
+        self.table3.clear();
+        self.table4.clear();
+        // NOTE: Bump provides the reset function to free memory, but it will cause memory leakage(maybe a bug).
+        // In fact, we don't need to call the drop function. rust will call it, But we call it to improve the readability of the code.
+        drop(std::mem::take(&mut self.arena));
     }
 }

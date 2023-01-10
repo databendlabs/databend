@@ -15,16 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_storages_table_meta::meta;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ColumnId;
-use common_storages_table_meta::meta::ColumnMeta;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::StatisticsOfColumns;
-use common_storages_table_meta::meta::Versioned;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
+use storages_common_table_meta::meta;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnId;
+use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::StatisticsOfColumns;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::statistics::block_statistics::BlockStatistics;
 

@@ -17,12 +17,12 @@ use std::hash::Hash;
 use common_ast::ast::TableAlias;
 use common_ast::parser::token::Token;
 use common_ast::DisplayError;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
 
 use super::AggregateInfo;
@@ -55,7 +55,7 @@ pub struct ColumnBinding {
     /// Column index of ColumnBinding
     pub index: IndexType,
 
-    pub data_type: Box<DataTypeImpl>,
+    pub data_type: Box<DataType>,
 
     pub visibility: Visibility,
 }

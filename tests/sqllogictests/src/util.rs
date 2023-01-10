@@ -45,7 +45,7 @@ lazy_static! {
         .unwrap();
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HttpSessionConf {
     pub database: Option<String>,
     pub keep_server_session_secs: Option<u64>,

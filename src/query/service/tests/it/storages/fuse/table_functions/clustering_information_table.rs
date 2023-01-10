@@ -17,11 +17,11 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::SendableDataBlockStream;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_fuse::table_functions::ClusteringInformationTable;
 use databend_query::sessions::QueryContext;
@@ -42,16 +42,16 @@ async fn test_clustering_information_table_read() -> Result<()> {
     fixture.create_default_table().await?;
 
     // func args
-    let arg_db = DataValue::String(db.as_bytes().to_vec());
-    let arg_tbl = DataValue::String(tbl.as_bytes().to_vec());
+    let arg_db = Scalar::String(db.as_bytes().to_vec());
+    let arg_tbl = Scalar::String(tbl.as_bytes().to_vec());
 
     {
         let expected = vec![
-            "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
-            "| cluster_by_keys | total_block_count | total_constant_block_count | average_overlaps | average_depth | block_depth_histogram |",
-            "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
-            "| (id)            | 0                 | 0                          | 0                | 0             | {}                    |",
-            "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
+            "+----------+----------+----------+----------+----------+----------+",
+            "| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5 |",
+            "+----------+----------+----------+----------+----------+----------+",
+            "| \"(id)\"   | 0_u64    | 0_u64    | 0_f64    | 0_f64    | {}       |",
+            "+----------+----------+----------+----------+----------+----------+",
         ];
 
         expects_ok(
@@ -70,11 +70,11 @@ async fn test_clustering_information_table_read() -> Result<()> {
         let qry = format!("insert into {}.{} values(1, (2, 3)),(2, (4, 6))", db, tbl);
         execute_query(ctx.clone(), qry.as_str()).await?;
         let expected = vec![
-            "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
-            "| cluster_by_keys | total_block_count | total_constant_block_count | average_overlaps | average_depth | block_depth_histogram |",
-            "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
-            "| (id)            | 1                 | 0                          | 0                | 1             | {\"00001\":1}           |",
-            "+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+",
+            "+----------+----------+----------+----------+----------+-------------+",
+            "| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5    |",
+            "+----------+----------+----------+----------+----------+-------------+",
+            "| \"(id)\"   | 1_u64    | 0_u64    | 0_f64    | 1_f64    | {\"00001\":1} |",
+            "+----------+----------+----------+----------+----------+-------------+",
         ];
 
         let qry = format!("select * from clustering_information('{}', '{}')", db, tbl);

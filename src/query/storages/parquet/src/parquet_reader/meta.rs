@@ -16,20 +16,40 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
 
+use common_arrow::arrow::array::UInt64Array;
+use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_datavalues::Column;
-use common_datavalues::ColumnRef;
-use common_datavalues::IntoColumn;
-use common_datavalues::UInt64Column;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::ColumnStatistics;
-use common_storages_table_meta::meta::StatisticsOfColumns;
+use common_expression::types::DataType;
+use common_expression::Column;
+use common_expression::TableDataType;
+use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::ParquetReader;
+
+fn lower_field_name(field: &mut ArrowField) {
+    field.name = field.name.to_lowercase();
+    match &mut field.data_type {
+        ArrowDataType::List(f)
+        | ArrowDataType::LargeList(f)
+        | ArrowDataType::FixedSizeList(f, _) => {
+            lower_field_name(f.as_mut());
+        }
+        ArrowDataType::Struct(ref mut fields) => {
+            for f in fields {
+                lower_field_name(f);
+            }
+        }
+        _ => {}
+    }
+}
 
 impl ParquetReader {
     pub fn read_meta(location: &str) -> Result<FileMetaData> {
@@ -48,7 +68,7 @@ impl ParquetReader {
     pub fn infer_schema(meta: &FileMetaData) -> Result<ArrowSchema> {
         let mut arrow_schema = pread::infer_schema(meta)?;
         arrow_schema.fields.iter_mut().for_each(|f| {
-            f.name = f.name.to_lowercase();
+            lower_field_name(f);
         });
         Ok(arrow_schema)
     }
@@ -75,8 +95,13 @@ impl ParquetReader {
             }
 
             let field = &schema.fields[*index];
+            let table_type: TableDataType = field.into();
+            let data_type = (&table_type).into();
             let column_stats = pread::statistics::deserialize(field, rgs)?;
-            stats_of_row_groups.insert(*index, BatchStatistics::from(column_stats));
+            stats_of_row_groups.insert(
+                *index,
+                BatchStatistics::from_statistics(column_stats, &data_type)?,
+            );
         }
 
         for (rg_idx, _) in rgs.iter().enumerate() {
@@ -96,35 +121,58 @@ impl ParquetReader {
 ///
 /// Convert the inner fields into Databend data structures.
 pub struct BatchStatistics {
-    pub null_count: UInt64Column,
-    pub distinct_count: UInt64Column,
-    pub min_values: ColumnRef,
-    pub max_values: ColumnRef,
+    pub null_count: Buffer<u64>,
+    pub distinct_count: Buffer<u64>,
+    pub min_values: Column,
+    pub max_values: Column,
 }
 
 impl BatchStatistics {
     pub fn get(&self, index: usize) -> ColumnStatistics {
         ColumnStatistics {
-            min: self.min_values.get(index),
-            max: self.max_values.get(index),
-            null_count: self.null_count.get_u64(index).unwrap(),
+            min: unsafe { self.min_values.index_unchecked(index).to_owned() },
+            max: unsafe { self.max_values.index_unchecked(index).to_owned() },
+            null_count: self.null_count[index],
             in_memory_size: 0, // this field is not used.
-            distinct_of_values: self.distinct_count.get_u64(index).ok(),
+            distinct_of_values: Some(self.distinct_count[index]),
         }
     }
-}
 
-impl From<pread::statistics::Statistics> for BatchStatistics {
-    fn from(stats: pread::statistics::Statistics) -> Self {
-        let null_count = UInt64Column::from_arrow_array(&*stats.null_count);
-        let distinct_count = UInt64Column::from_arrow_array(&*stats.distinct_count);
-        let min_values = stats.min_value.clone().into_column();
-        let max_values = stats.max_value.clone().into_column();
-        Self {
+    pub fn from_statistics(
+        stats: pread::statistics::Statistics,
+        data_type: &DataType,
+    ) -> Result<Self> {
+        let null_count = stats
+            .null_count
+            .as_any()
+            .downcast_ref::<UInt64Array>()
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "null_count should be UInt64Array, but is {:?}",
+                    stats.null_count.data_type()
+                ))
+            })?
+            .values()
+            .clone();
+        let distinct_count = stats
+            .distinct_count
+            .as_any()
+            .downcast_ref::<UInt64Array>()
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "distinct_count should be UInt64Array, but is {:?}",
+                    stats.distinct_count.data_type()
+                ))
+            })?
+            .values()
+            .clone();
+        let min_values = Column::from_arrow(&*stats.min_value, data_type);
+        let max_values = Column::from_arrow(&*stats.max_value, data_type);
+        Ok(Self {
             null_count,
             distinct_count,
             min_values,
             max_values,
-        }
+        })
     }
 }

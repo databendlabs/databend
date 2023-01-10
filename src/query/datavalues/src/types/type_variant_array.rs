@@ -12,18 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_exception::Result;
 
 use super::data_type::DataType;
-use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
-use crate::serializations::TypeSerializerImpl;
-use crate::serializations::VariantSerializer;
 
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct VariantArrayType {}
@@ -39,32 +32,8 @@ impl DataType for VariantArrayType {
         TypeID::VariantArray
     }
 
-    #[inline]
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> String {
         "Array".to_string()
-    }
-
-    fn default_value(&self) -> DataValue {
-        DataValue::Variant(VariantValue::from(serde_json::Value::Array(vec![])))
-    }
-
-    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
-        let value: VariantValue = DFTryFrom::try_from(data)?;
-        let column = Series::from_data(vec![value]);
-        Ok(Arc::new(ConstColumn::new(column, size)))
-    }
-
-    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
-        let values: Vec<VariantValue> = data
-            .iter()
-            .map(DFTryFrom::try_from)
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(Series::from_data(values))
     }
 
     fn arrow_type(&self) -> ArrowType {
@@ -73,24 +42,6 @@ impl DataType for VariantArrayType {
             Box::new(ArrowType::LargeBinary),
             None,
         )
-    }
-
-    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "VariantArray".to_string());
-        Some(mp)
-    }
-
-    fn create_serializer_inner<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        Ok(VariantSerializer::try_create(col)?.into())
-    }
-
-    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
-        VariantDeserializer::with_capacity(capacity).into()
-    }
-
-    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
-        Box::new(MutableObjectColumn::<VariantValue>::with_capacity(capacity))
     }
 }
 

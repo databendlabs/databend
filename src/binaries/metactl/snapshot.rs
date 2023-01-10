@@ -27,8 +27,8 @@ use std::str::FromStr;
 use anyhow::anyhow;
 use common_base::base::tokio;
 use common_meta_raft_store::config::RaftConfig;
+use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_raft_store::log::RaftLog;
-use common_meta_raft_store::sled_key_spaces::KeySpaceKV;
 use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
@@ -40,8 +40,6 @@ use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::Node;
-use databend_meta::export::deserialize_to_kv_variant;
-use databend_meta::export::serialize_kv_variant;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use openraft::Membership;
@@ -94,7 +92,7 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
     let mut max_log_id: Option<LogId> = None;
     for line in lines {
         let l = line?;
-        let (tree_name, kv_variant): (String, KeySpaceKV) = serde_json::from_str(&l)?;
+        let (tree_name, kv_entry): (String, RaftStoreEntry) = serde_json::from_str(&l)?;
 
         // eprintln!("line: {}", l);
 
@@ -105,12 +103,12 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
 
         let tree = trees.get(&tree_name).unwrap();
 
-        let (k, v) = serialize_kv_variant(&kv_variant)?;
+        let (k, v) = RaftStoreEntry::serialize(&kv_entry)?;
 
         tree.insert(k, v)?;
         n += 1;
 
-        if let KeySpaceKV::Logs { key: _, value } = kv_variant {
+        if let RaftStoreEntry::Logs { key: _, value } = kv_entry {
             match max_log_id {
                 Some(log_id) => {
                     if value.log_id > log_id {
@@ -298,8 +296,8 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
             let kv = x?;
             let kv = vec![kv.0.to_vec(), kv.1.to_vec()];
 
-            let kv_variant = deserialize_to_kv_variant(&kv)?;
-            let tree_kv = (name.clone(), kv_variant);
+            let kv_entry = RaftStoreEntry::deserialize(&kv)?;
+            let tree_kv = (name.clone(), kv_entry);
 
             let line = serde_json::to_string(&tree_kv)?;
             cnt += 1;

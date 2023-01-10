@@ -17,8 +17,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_base::base::tokio::runtime::Handle;
 use common_base::runtime::TrackedFuture;
+use opendal::raw::input;
+use opendal::raw::output;
 use opendal::raw::Accessor;
-use opendal::raw::BytesReader;
 use opendal::raw::ObjectPager;
 use opendal::raw::RpCreate;
 use opendal::raw::RpDelete;
@@ -83,7 +84,7 @@ impl Accessor for RuntimeAccessor {
         self.runtime.spawn(future).await.expect("join must success")
     }
 
-    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, BytesReader)> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, output::Reader)> {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.read(&path, args).await };
@@ -91,7 +92,7 @@ impl Accessor for RuntimeAccessor {
         self.runtime.spawn(future).await.expect("join must success")
     }
 
-    async fn write(&self, path: &str, args: OpWrite, r: BytesReader) -> Result<RpWrite> {
+    async fn write(&self, path: &str, args: OpWrite, r: input::Reader) -> Result<RpWrite> {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.write(&path, args, r).await };

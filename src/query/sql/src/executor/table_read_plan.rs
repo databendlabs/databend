@@ -20,9 +20,9 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_exception::Result;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
@@ -88,9 +88,9 @@ impl ToReadDataSourcePlan for dyn Table {
 }
 
 fn extract_scan_fields_from_projection(
-    schema: &DataSchema,
+    schema: &TableSchemaRef,
     projection: &Projection,
-) -> Option<BTreeMap<usize, DataField>> {
+) -> Option<BTreeMap<usize, TableField>> {
     match projection {
         Projection::Columns(ref indices) => {
             if indices.len() < schema.fields().len() {

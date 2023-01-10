@@ -30,25 +30,25 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
-use crate::Chunk;
-use crate::ChunkEntry;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
-use crate::ColumnIndex;
+use crate::DataBlock;
 use crate::Scalar;
+use crate::TypeDeserializer;
 use crate::Value;
 
-impl<Index: ColumnIndex> Chunk<Index> {
+impl DataBlock {
     pub fn scatter<I>(&self, indices: &[I], scatter_size: usize) -> Result<Vec<Self>>
     where I: common_arrow::arrow::types::Index {
-        let scattered_columns: Vec<Vec<ChunkEntry<Index>>> = self
+        let scattered_columns: Vec<Vec<BlockEntry>> = self
             .columns()
+            .iter()
             .map(|entry| match &entry.value {
                 Value::Scalar(s) => {
                     Column::scatter_repeat_scalars::<I>(s, &entry.data_type, indices, scatter_size)
                         .into_iter()
-                        .map(|value| ChunkEntry {
-                            id: entry.id.clone(),
+                        .map(|value| BlockEntry {
                             data_type: entry.data_type.clone(),
                             value: Value::Column(value),
                         })
@@ -57,8 +57,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
                 Value::Column(c) => c
                     .scatter(&entry.data_type, indices, scatter_size)
                     .into_iter()
-                    .map(|value| ChunkEntry {
-                        id: entry.id.clone(),
+                    .map(|value| BlockEntry {
                         data_type: entry.data_type.clone(),
                         value: Value::Column(value),
                     })
@@ -68,12 +67,12 @@ impl<Index: ColumnIndex> Chunk<Index> {
 
         let scattered_chunks = (0..scatter_size)
             .map(|scatter_idx| {
-                let chunk_columns: Vec<ChunkEntry<Index>> = scattered_columns
+                let chunk_columns: Vec<BlockEntry> = scattered_columns
                     .iter()
                     .map(|entry| entry[scatter_idx].clone())
                     .collect();
                 let num_rows = chunk_columns[0].value.as_column().unwrap().len();
-                Chunk::new(chunk_columns, num_rows)
+                DataBlock::new(chunk_columns, num_rows)
             })
             .collect();
 
@@ -153,8 +152,16 @@ impl Column {
                 scatter_size,
             ),
             Column::Array(column) => {
-                let mut builder = ArrayColumnBuilder::<AnyType>::from_column(column.slice(0..0));
-                builder.reserve(length);
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    column
+                        .values
+                        .data_type()
+                        .create_deserializer(length)
+                        .finish_to_column(),
+                );
+                let builder = ArrayColumnBuilder { builder, offsets };
                 Self::scatter_scalars::<ArrayType<AnyType>, _>(
                     column,
                     builder,
@@ -182,23 +189,24 @@ impl Column {
                     .collect()
             }
             Column::Tuple { fields, .. } => {
-                let mut fields_vs: Vec<Vec<Column>> = fields
+                let fields_vs: Vec<Vec<Column>> = fields
                     .iter()
                     .map(|c| c.scatter(data_type, indices, scatter_size))
                     .collect();
 
-                (0..scatter_size)
-                    .map(|index| {
-                        let fields: Vec<Column> = fields_vs
-                            .iter_mut()
-                            .map(|field| field.remove(index))
-                            .collect();
-                        Column::Tuple {
-                            len: fields.first().map_or(0, |f| f.len()),
-                            fields,
-                        }
-                    })
-                    .collect()
+                let mut res = Vec::with_capacity(scatter_size);
+
+                for s in 0..scatter_size {
+                    let mut fields = Vec::with_capacity(fields.len());
+                    for col in &fields_vs {
+                        fields.push(col[s].clone());
+                    }
+                    res.push(Column::Tuple {
+                        len: fields.first().map_or(0, |f| f.len()),
+                        fields,
+                    });
+                }
+                res
             }
             Column::Variant(column) => Self::scatter_scalars::<VariantType, _>(
                 column,

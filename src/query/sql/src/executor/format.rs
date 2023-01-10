@@ -15,6 +15,10 @@
 use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ConstantFolder;
+use common_expression::Domain;
+use common_expression::FunctionContext;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -30,8 +34,8 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
+use crate::executor::explain::PlanStatsInfo;
 use crate::executor::FragmentKind;
-use crate::planner::IndexType;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 use crate::ColumnEntry;
@@ -70,6 +74,7 @@ fn table_scan_to_format_tree(
     if plan.table_index == DUMMY_TABLE_INDEX {
         return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
     }
+    let func_ctx = FunctionContext::default();
     let table = metadata.read().table(plan.table_index).clone();
     let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
     let filters = plan
@@ -80,7 +85,20 @@ fn table_scan_to_format_tree(
             extras
                 .filters
                 .iter()
-                .map(|f| f.column_name())
+                .map(|f| {
+                    let expr = f.as_expr(&BUILTIN_FUNCTIONS).unwrap();
+                    let input_domains = expr
+                        .column_refs()
+                        .into_iter()
+                        .map(|(name, ty)| {
+                            let domain = Domain::full(&ty);
+                            (name, domain)
+                        })
+                        .collect();
+                    let folder = ConstantFolder::new(input_domains, func_ctx, &BUILTIN_FUNCTIONS);
+                    let (new_expr, _) = folder.fold(&expr);
+                    new_expr.sql_display()
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -125,6 +143,12 @@ fn table_scan_to_format_tree(
             output_columns.iter().join(", ")
         )));
     }
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
     Ok(FormatTreeNode::with_children(
         "TableScan".to_string(),
         children,
@@ -138,10 +162,19 @@ fn filter_to_format_tree(plan: &Filter, metadata: &MetadataRef) -> Result<Format
         .map(|scalar| scalar.pretty_display())
         .collect::<Vec<_>>()
         .join(", ");
-    Ok(FormatTreeNode::with_children("Filter".to_string(), vec![
-        FormatTreeNode::new(format!("filters: [{filter}]")),
-        to_format_tree(&plan.input, metadata)?,
-    ]))
+    let mut children = vec![FormatTreeNode::new(format!("filters: [{filter}]"))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    children.push(to_format_tree(&plan.input, metadata)?);
+
+    Ok(FormatTreeNode::with_children(
+        "Filter".to_string(),
+        children,
+    ))
 }
 
 fn project_to_format_tree(
@@ -164,10 +197,19 @@ fn project_to_format_tree(
         })
         .collect::<Vec<_>>()
         .join(", ");
-    Ok(FormatTreeNode::with_children("Project".to_string(), vec![
-        FormatTreeNode::new(format!("columns: [{columns}]")),
-        to_format_tree(&plan.input, metadata)?,
-    ]))
+    let mut children = vec![FormatTreeNode::new(format!("columns: [{columns}]"))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    children.push(to_format_tree(&plan.input, metadata)?);
+
+    Ok(FormatTreeNode::with_children(
+        "Project".to_string(),
+        children,
+    ))
 }
 
 fn eval_scalar_to_format_tree(
@@ -180,12 +222,18 @@ fn eval_scalar_to_format_tree(
         .map(|(scalar, _)| scalar.pretty_display())
         .collect::<Vec<_>>()
         .join(", ");
+    let mut children = vec![FormatTreeNode::new(format!("expressions: [{scalars}]"))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    children.push(to_format_tree(&plan.input, metadata)?);
+
     Ok(FormatTreeNode::with_children(
         "EvalScalar".to_string(),
-        vec![
-            FormatTreeNode::new(format!("expressions: [{scalars}]")),
-            to_format_tree(&plan.input, metadata)?,
-        ],
+        children,
     ))
 }
 
@@ -215,8 +263,7 @@ fn aggregate_partial_to_format_tree(
         .group_by
         .iter()
         .map(|column| {
-            let index = column.parse::<IndexType>()?;
-            let column = metadata.read().column(index).clone();
+            let column = metadata.read().column(*column).clone();
             let name = match column {
                 ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
                 ColumnEntry::DerivedColumn { alias, .. } => alias,
@@ -225,20 +272,28 @@ fn aggregate_partial_to_format_tree(
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
-
     let agg_funcs = plan
         .agg_funcs
         .iter()
         .map(|agg| pretty_display_agg_desc(agg, metadata))
         .collect::<Vec<_>>()
         .join(", ");
+
+    let mut children = vec![
+        FormatTreeNode::new(format!("group by: [{group_by}]")),
+        FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
+    ];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    children.push(to_format_tree(&plan.input, metadata)?);
+
     Ok(FormatTreeNode::with_children(
         "AggregatePartial".to_string(),
-        vec![
-            FormatTreeNode::new(format!("group by: [{group_by}]")),
-            FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
-            to_format_tree(&plan.input, metadata)?,
-        ],
+        children,
     ))
 }
 
@@ -250,8 +305,7 @@ fn aggregate_final_to_format_tree(
         .group_by
         .iter()
         .map(|column| {
-            let index = column.parse::<IndexType>()?;
-            let column = metadata.read().column(index).clone();
+            let column = metadata.read().column(*column).clone();
             let name = match column {
                 ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
                 ColumnEntry::DerivedColumn { alias, .. } => alias,
@@ -267,13 +321,22 @@ fn aggregate_final_to_format_tree(
         .map(|agg| pretty_display_agg_desc(agg, metadata))
         .collect::<Vec<_>>()
         .join(", ");
+
+    let mut children = vec![
+        FormatTreeNode::new(format!("group by: [{group_by}]")),
+        FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
+    ];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    children.push(to_format_tree(&plan.input, metadata)?);
+
     Ok(FormatTreeNode::with_children(
         "AggregateFinal".to_string(),
-        vec![
-            FormatTreeNode::new(format!("group by: [{group_by}]")),
-            FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
-            to_format_tree(&plan.input, metadata)?,
-        ],
+        children,
     ))
 }
 
@@ -282,7 +345,7 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
         .order_by
         .iter()
         .map(|sort_key| {
-            let index = sort_key.order_by.parse::<IndexType>()?;
+            let index = sort_key.order_by;
             let column = metadata.read().column(index).clone();
             Ok(format!(
                 "{} {} {}",
@@ -300,22 +363,37 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
-    Ok(FormatTreeNode::with_children("Sort".to_string(), vec![
-        FormatTreeNode::new(format!("sort keys: [{sort_keys}]")),
-        to_format_tree(&plan.input, metadata)?,
-    ]))
+
+    let mut children = vec![FormatTreeNode::new(format!("sort keys: [{sort_keys}]"))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    children.push(to_format_tree(&plan.input, metadata)?);
+
+    Ok(FormatTreeNode::with_children("Sort".to_string(), children))
 }
 
 fn limit_to_format_tree(plan: &Limit, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::with_children("Limit".to_string(), vec![
+    let mut children = vec![
         FormatTreeNode::new(format!(
             "limit: {}",
             plan.limit
                 .map_or("NONE".to_string(), |limit| limit.to_string())
         )),
         FormatTreeNode::new(format!("offset: {}", plan.offset)),
-        to_format_tree(&plan.input, metadata)?,
-    ]))
+    ];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    children.push(to_format_tree(&plan.input, metadata)?);
+
+    Ok(FormatTreeNode::with_children("Limit".to_string(), children))
 }
 
 fn hash_join_to_format_tree(
@@ -347,14 +425,25 @@ fn hash_join_to_format_tree(
     build_child.payload = format!("{}(Build)", build_child.payload);
     probe_child.payload = format!("{}(Probe)", probe_child.payload);
 
-    Ok(FormatTreeNode::with_children("HashJoin".to_string(), vec![
+    let mut children = vec![
         FormatTreeNode::new(format!("join type: {}", plan.join_type)),
         FormatTreeNode::new(format!("build keys: [{build_keys}]")),
         FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
         FormatTreeNode::new(format!("filters: [{filters}]")),
-        build_child,
-        probe_child,
-    ]))
+    ];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    children.push(build_child);
+    children.push(probe_child);
+
+    Ok(FormatTreeNode::with_children(
+        "HashJoin".to_string(),
+        children,
+    ))
 }
 
 fn exchange_to_format_tree(
@@ -383,8 +472,27 @@ fn union_all_to_format_tree(
     plan: &UnionAll,
     metadata: &MetadataRef,
 ) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::with_children("UnionAll".to_string(), vec![
+    let mut children = vec![];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    children.extend(vec![
         to_format_tree(&plan.left, metadata)?,
         to_format_tree(&plan.right, metadata)?,
-    ]))
+    ]);
+
+    Ok(FormatTreeNode::with_children(
+        "UnionAll".to_string(),
+        children,
+    ))
+}
+
+fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNode<String>> {
+    vec![FormatTreeNode::new(format!(
+        "estimated rows: {0:.2}",
+        info.estimated_rows
+    ))]
 }

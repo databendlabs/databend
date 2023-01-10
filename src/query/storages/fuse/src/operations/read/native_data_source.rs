@@ -19,8 +19,8 @@ use std::fmt::Formatter;
 use common_arrow::native::read::reader::PaReader;
 use common_arrow::native::read::PaReadBuf;
 use common_catalog::plan::PartInfoPtr;
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::BlockMetaInfoPtr;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 

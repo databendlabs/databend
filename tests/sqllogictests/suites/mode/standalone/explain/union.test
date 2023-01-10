@@ -1,5 +1,5 @@
 statement ok
-drop view if exists t
+drop view if exists v
 
 statement ok
 drop table if exists t1
@@ -20,109 +20,131 @@ statement ok
 insert into t2 values (1, 2), (2, 3)
 
 statement ok
-create view t as select * from t1 union all select * from t2
+create view v as select * from t1 union all select * from t2
 
 query T
-explain select * from t where a > b
+explain select * from v where a > b
 ----
 UnionAll
+├── estimated rows: 1.33
 ├── Filter
-│   ├── filters: [>(t.a (#0), t.b (#1))]
+│   ├── filters: [gt(v.a (#0), v.b (#1))]
+│   ├── estimated rows: 0.67
 │   └── TableScan
 │       ├── table: default.default.t1
 │       ├── read rows: 0
 │       ├── read bytes: 0
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
-│       └── push downs: [filters: [(a > b)], limit: NONE]
+│       ├── push downs: [filters: [gt(a, b)], limit: NONE]
+│       └── estimated rows: 2.00
 └── Filter
-    ├── filters: [>( (#2),  (#3))]
+    ├── filters: [gt(a (#2), b (#3))]
+    ├── estimated rows: 0.67
     └── TableScan
         ├── table: default.default.t2
         ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 1
         ├── partitions scanned: 0
-        └── push downs: [filters: [(a > b)], limit: NONE]
+        ├── push downs: [filters: [gt(a, b)], limit: NONE]
+        └── estimated rows: 2.00
 
 query T
-explain select * from t where a > 1
+explain select * from v where a > 1
 ----
 UnionAll
+├── estimated rows: 1.33
 ├── Filter
-│   ├── filters: [>(t.a (#0), 1)]
+│   ├── filters: [gt(v.a (#0), 1_u8)]
+│   ├── estimated rows: 0.67
 │   └── TableScan
 │       ├── table: default.default.t1
 │       ├── read rows: 2
 │       ├── read bytes: 62
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       └── push downs: [filters: [(a > 1)], limit: NONE]
+│       ├── push downs: [filters: [gt(a, 1_i32)], limit: NONE]
+│       └── estimated rows: 2.00
 └── Filter
-    ├── filters: [>( (#2), 1)]
+    ├── filters: [gt(a (#2), 1_u8)]
+    ├── estimated rows: 0.67
     └── TableScan
         ├── table: default.default.t2
         ├── read rows: 2
         ├── read bytes: 62
         ├── partitions total: 1
         ├── partitions scanned: 1
-        └── push downs: [filters: [(a > 1)], limit: NONE]
+        ├── push downs: [filters: [gt(a, 1_i32)], limit: NONE]
+        └── estimated rows: 2.00
 
 query T
-explain select * from t limit 3
+explain select * from v limit 3
 ----
 Limit
 ├── limit: 3
 ├── offset: 0
+├── estimated rows: 3.00
 └── UnionAll
+    ├── estimated rows: 4.00
     ├── Limit
     │   ├── limit: 3
     │   ├── offset: 0
+    │   ├── estimated rows: 2.00
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── read rows: 2
     │       ├── read bytes: 62
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       └── push downs: [filters: [], limit: 3]
+    │       ├── push downs: [filters: [], limit: 3]
+    │       └── estimated rows: 2.00
     └── Limit
         ├── limit: 3
         ├── offset: 0
+        ├── estimated rows: 2.00
         └── TableScan
             ├── table: default.default.t2
             ├── read rows: 2
             ├── read bytes: 62
             ├── partitions total: 1
             ├── partitions scanned: 1
-            └── push downs: [filters: [], limit: 3]
+            ├── push downs: [filters: [], limit: 3]
+            └── estimated rows: 2.00
 
 query T
-explain select * from t limit 3 offset 1
+explain select * from v limit 3 offset 1
 ----
 Limit
 ├── limit: 3
 ├── offset: 1
+├── estimated rows: 3.00
 └── UnionAll
+    ├── estimated rows: 4.00
     ├── Limit
     │   ├── limit: 4
     │   ├── offset: 0
+    │   ├── estimated rows: 2.00
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── read rows: 2
     │       ├── read bytes: 62
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       └── push downs: [filters: [], limit: 4]
+    │       ├── push downs: [filters: [], limit: 4]
+    │       └── estimated rows: 2.00
     └── Limit
         ├── limit: 4
         ├── offset: 0
+        ├── estimated rows: 2.00
         └── TableScan
             ├── table: default.default.t2
             ├── read rows: 2
             ├── read bytes: 62
             ├── partitions total: 1
             ├── partitions scanned: 1
-            └── push downs: [filters: [], limit: 4]
+            ├── push downs: [filters: [], limit: 4]
+            └── estimated rows: 2.00
 
 query T
 explain select * from t1 union all select * from t2 limit 1
@@ -130,27 +152,33 @@ explain select * from t1 union all select * from t2 limit 1
 Limit
 ├── limit: 1
 ├── offset: 0
+├── estimated rows: 1.00
 └── UnionAll
+    ├── estimated rows: 2.00
     ├── Limit
     │   ├── limit: 1
     │   ├── offset: 0
+    │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── read rows: 2
     │       ├── read bytes: 62
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       └── push downs: [filters: [], limit: 1]
+    │       ├── push downs: [filters: [], limit: 1]
+    │       └── estimated rows: 2.00
     └── Limit
         ├── limit: 1
         ├── offset: 0
+        ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.default.t2
             ├── read rows: 2
             ├── read bytes: 62
             ├── partitions total: 1
             ├── partitions scanned: 1
-            └── push downs: [filters: [], limit: 1]
+            ├── push downs: [filters: [], limit: 1]
+            └── estimated rows: 2.00
 
 statement ok
 drop table t1
@@ -159,4 +187,4 @@ statement ok
 drop table t2
 
 statement ok
-drop view t
+drop view v

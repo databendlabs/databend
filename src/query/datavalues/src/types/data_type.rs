@@ -12,14 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::BTreeMap;
-use std::fmt::Display;
-use std::fmt::Formatter;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_exception::Result;
 use dyn_clone::DynClone;
 use enum_dispatch::enum_dispatch;
 
@@ -42,7 +38,6 @@ use super::type_string::StringType;
 use super::type_struct::StructType;
 use super::type_timestamp::TimestampType;
 use crate::prelude::*;
-use crate::serializations::ConstSerializer;
 
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
@@ -92,36 +87,8 @@ where Self: Sized
 
     fn name(&self) -> String;
 
-    /// Returns the name to display in the SQL describe
-    fn sql_name(&self) -> String {
-        self.name().to_uppercase()
-    }
-
-    fn aliases(&self) -> &[&str] {
-        &[]
-    }
-
-    fn as_any(&self) -> &dyn Any;
-
-    fn default_value(&self) -> DataValue;
-
-    /// Returns a random value of current type.
-    fn random_value(&self) -> DataValue {
-        self.default_value()
-    }
-
     fn can_inside_nullable(&self) -> bool {
         true
-    }
-
-    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef>;
-
-    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef>;
-
-    /// Returns a column with `len` random rows.
-    fn create_random_column(&self, len: usize) -> ColumnRef {
-        let data = (0..len).map(|_| self.random_value()).collect::<Vec<_>>();
-        self.create_column(&data).unwrap()
     }
 
     /// arrow_type did not have nullable sign, it's nullable sign is in the field
@@ -139,28 +106,6 @@ where Self: Sized
             ret
         }
     }
-
-    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
-
-    fn create_serializer<'a>(&self, col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        if col.is_const() {
-            let col: &ConstColumn = Series::check_get(col)?;
-            let inner = Box::new(self.create_serializer_inner(col.inner())?);
-            Ok(ConstSerializer {
-                inner,
-                size: col.len(),
-            }
-            .into())
-        } else {
-            self.create_serializer_inner(col)
-        }
-    }
-
-    fn create_serializer_inner<'a>(&self, _col: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        unimplemented!()
-    }
-
-    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl;
 }
 
 pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
@@ -213,31 +158,6 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
 }
 
 pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
-    if let Some(custom_name) = f.metadata.get(ARROW_EXTENSION_NAME) {
-        let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
-        match custom_name.as_str() {
-            "Date" => return DateType::new_impl(),
-
-            // OLD COMPATIBLE Behavior
-            "Timestamp" => return TimestampType::new_impl(),
-            "Interval" => return IntervalType::new_impl(metadata.unwrap().into()),
-            "Variant" => return VariantType::new_impl(),
-            "VariantArray" => return VariantArrayType::new_impl(),
-            "VariantObject" => return VariantObjectType::new_impl(),
-            "Tuple" => {
-                let dt = f.data_type();
-                match dt {
-                    ArrowType::Struct(fields) => {
-                        let types = fields.iter().map(from_arrow_field).collect();
-                        return DataTypeImpl::Struct(StructType::create(None, types));
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            _ => {}
-        }
-    }
-
     let dt = f.data_type();
     let ty = from_arrow_type(dt);
 
@@ -248,71 +168,6 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
         ty
     }
 }
-
-pub trait ToDataType {
-    fn to_data_type() -> DataTypeImpl;
-}
-
-macro_rules! impl_to_data_type {
-    ([], $( { $S: ident, $TY: ident} ),*) => {
-        $(
-            paste::paste!{
-                impl ToDataType for $S {
-                    fn to_data_type() -> DataTypeImpl {
-                        [<$TY Type>]::new_impl()
-                    }
-                }
-            }
-        )*
-    }
-}
-
-macro_rules! for_all_data_type_impl_enum {
-    ($macro:tt) => {
-        $macro! {
-            { Null },
-            { Nullable },
-            { Boolean },
-            { Int8 },
-            { Int16 },
-            { Int32 },
-            { Int64 },
-            { UInt8 },
-            { UInt16 },
-            { UInt32 },
-            { UInt64 },
-            { Float32 },
-            { Float64 },
-            { Date },
-            { Timestamp },
-            { String },
-            { Struct },
-            { Array },
-            { Variant },
-            { VariantArray },
-            { VariantObject },
-            { Interval }
-        }
-    };
-}
-
-macro_rules! impl_for_data_type_impl {
-    ($( { $T:ident } ),*) => {
-        impl DataTypeImpl {
-            pub fn default_value(&self) -> DataValue {
-                match self {
-                    $(
-                        Self::$T(inner) => inner.default_value(),
-                    )*
-                }
-            }
-        }
-    }
-}
-
-for_all_data_type_impl_enum! { impl_for_data_type_impl }
-
-for_all_scalar_varints! { impl_to_data_type }
 
 pub fn wrap_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
     if !data_type.can_inside_nullable() {
@@ -327,43 +182,4 @@ pub fn remove_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
         return nullable.inner_type().clone();
     }
     data_type.clone()
-}
-
-pub fn format_data_type_sql(data_type: &DataTypeImpl) -> String {
-    let notnull_type = remove_nullable(data_type);
-    match data_type.is_nullable() {
-        true => format!("{} NULL", notnull_type.sql_name()),
-        false => notnull_type.sql_name(),
-    }
-}
-
-impl Display for DataTypeImpl {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DataTypeImpl::Null(_) => write!(f, "null"),
-            DataTypeImpl::Nullable(type_nullable) => {
-                write!(f, "nullable({})", type_nullable.inner_type())
-            }
-            DataTypeImpl::Boolean(_) => write!(f, "boolean"),
-            DataTypeImpl::Int8(_) => write!(f, "int8"),
-            DataTypeImpl::Int16(_) => write!(f, "int16"),
-            DataTypeImpl::Int32(_) => write!(f, "int32"),
-            DataTypeImpl::Int64(_) => write!(f, "int64"),
-            DataTypeImpl::UInt8(_) => write!(f, "uint8"),
-            DataTypeImpl::UInt16(_) => write!(f, "uint16"),
-            DataTypeImpl::UInt32(_) => write!(f, "uint32"),
-            DataTypeImpl::UInt64(_) => write!(f, "uint64"),
-            DataTypeImpl::Float32(_) => write!(f, "float32"),
-            DataTypeImpl::Float64(_) => write!(f, "float64"),
-            DataTypeImpl::Date(_) => write!(f, "date"),
-            DataTypeImpl::Timestamp(_) => write!(f, "timestamp"),
-            DataTypeImpl::String(_) => write!(f, "string"),
-            DataTypeImpl::Struct(_) => write!(f, "struct"),
-            DataTypeImpl::Array(_) => write!(f, "array"),
-            DataTypeImpl::Variant(_) => write!(f, "variant"),
-            DataTypeImpl::VariantArray(_) => write!(f, "variant_array"),
-            DataTypeImpl::VariantObject(_) => write!(f, "variant_object"),
-            DataTypeImpl::Interval(_) => write!(f, "interval"),
-        }
-    }
 }

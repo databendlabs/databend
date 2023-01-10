@@ -14,7 +14,6 @@
 
 #![feature(type_alias_impl_trait)]
 #![feature(io_error_other)]
-#![deny(unused_crate_dependencies)]
 #![feature(once_cell)]
 
 mod constants;
@@ -55,4 +54,4 @@ mod pipelines {
     }
 }
 
-pub use common_storages_index as index;
+pub use storages_common_index as index;

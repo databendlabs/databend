@@ -74,7 +74,7 @@ pub async fn main() -> Result<()> {
         for handler in handlers.iter() {
             match handler.as_str() {
                 "mysql" => {
-                    println!("Mysql client starts to run...");
+                    println!("MySQL client starts to run...");
                     run_mysql_client().await?;
                 }
                 "http" => {
@@ -93,7 +93,7 @@ pub async fn main() -> Result<()> {
     // If args don't set handler, run all handlers one by one.
 
     // First run databend with mysql client
-    println!("Mysql client starts to run...");
+    println!("MySQL client starts to run...");
     run_mysql_client().await?;
 
     // Second run databend with http client
@@ -142,9 +142,12 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
             client = Client::Clickhouse(ClickhouseHttpClient::create()?);
         }
     }
-    let enable_sandbox = SqlLogicTestArgs::parse().enable_sandbox;
-    if enable_sandbox {
+    let args = SqlLogicTestArgs::parse();
+    if args.enable_sandbox {
         client.create_sandbox().await?;
+    }
+    if args.debug {
+        client.enable_debug();
     }
     Ok(Databend::create(client))
 }
@@ -203,7 +206,7 @@ async fn run_parallel_async(
     tasks: Vec<impl Future<Output = std::result::Result<Vec<TestError>, TestError>>>,
 ) -> Result<()> {
     let args = SqlLogicTestArgs::parse();
-    let jobs = tasks.len().min(args.parallel);
+    let jobs = tasks.len().clamp(1, args.parallel);
     let tasks = stream::iter(tasks).buffer_unordered(jobs);
     let no_fail_fast = args.no_fail_fast;
     if !no_fail_fast {

@@ -18,14 +18,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
-use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
+use common_expression::BlockCompactThresholds;
+use common_expression::Scalar;
 use opendal::Operator;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::BaseMutator;
@@ -97,8 +97,7 @@ impl TableMutator for ReclusterMutator {
 
             let mut total_rows = 0;
             let mut total_bytes = 0;
-            let mut points_map: BTreeMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)> =
-                BTreeMap::new();
+            let mut points_map: BTreeMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
             for (i, (_, meta)) in block_metas.iter().enumerate() {
                 let stats = meta.cluster_stats.clone().unwrap();
                 points_map

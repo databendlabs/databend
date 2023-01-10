@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(fmt_internals)]
 #![feature(const_try)]
 #![feature(iterator_try_reduce)]
 #![feature(const_fmt_arguments_new)]
@@ -25,6 +26,7 @@
 #![feature(trait_alias)]
 #![feature(iterator_try_collect)]
 #![feature(core_intrinsics)]
+#![feature(trusted_len)]
 #![feature(iter_order_by)]
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::needless_lifetimes)]
@@ -32,27 +34,43 @@
 
 pub type Result<T> = std::result::Result<T, (crate::Span, String)>;
 #[allow(dead_code)]
-mod chunk;
+mod block;
 
+mod block_compact_thresholds;
+pub mod block_debug;
 pub mod converts;
 mod deserializations;
 mod evaluator;
 mod expression;
 mod function;
 mod kernels;
+pub mod large_number;
+mod memory;
+mod meta_info;
 mod property;
 mod register;
+pub mod schema;
+mod stream;
 pub mod type_check;
 pub mod types;
 pub mod utils;
 pub mod values;
 
-pub use crate::chunk::*;
-pub use crate::deserializations::TypeDeserializer;
+pub use meta_info::BlockMetaInfo;
+pub use meta_info::BlockMetaInfoPtr;
+pub use meta_info::BlockMetaInfos;
+pub use stream::SendableDataBlockStream;
+
+pub use crate::block::*;
+pub use crate::block_compact_thresholds::BlockCompactThresholds;
+pub use crate::deserializations::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::function::*;
 pub use crate::kernels::*;
+pub use crate::memory::InMemoryData;
 pub use crate::property::*;
 pub use crate::register::*;
+pub use crate::schema::*;
+pub use crate::utils::*;
 pub use crate::values::*;

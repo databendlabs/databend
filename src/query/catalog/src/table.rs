@@ -18,12 +18,13 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
+use common_expression::RemoteExpr;
+use common_expression::Scalar;
+use common_expression::TableSchema;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
@@ -32,7 +33,6 @@ use common_storage::StorageMetrics;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
-use crate::plan::Expression;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
@@ -52,7 +52,7 @@ pub trait Table: Sync + Send {
         self.get_table_info().engine()
     }
 
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> Arc<TableSchema> {
         self.get_table_info().schema()
     }
 
@@ -95,7 +95,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self, _ctx: Arc<dyn TableContext>) -> Vec<Expression> {
+    fn cluster_keys(&self, _ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         vec![]
     }
 
@@ -141,7 +141,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn table_args(&self) -> Option<Vec<DataValue>> {
+    fn table_args(&self) -> Option<Vec<Scalar>> {
         None
     }
 
@@ -227,7 +227,7 @@ pub trait Table: Sync + Send {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<Expression>,
+        filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -336,8 +336,8 @@ pub struct TableStatistics {
 
 #[derive(Debug, Clone)]
 pub struct ColumnStatistics {
-    pub min: DataValue,
-    pub max: DataValue,
+    pub min: Scalar,
+    pub max: Scalar,
     pub null_count: u64,
     pub number_of_distinct_values: u64,
 }

@@ -14,10 +14,8 @@ SELECT SUM(1), SUM(NULL), SUM(33.3)
 ----
 1 NULL 33.3
 
-query I
+statement error 1065
 SELECT SUM(True)
-----
-1
 
 statement error 1065
 SELECT SUM('hello')
@@ -76,16 +74,14 @@ SELECT AVG(1), AVG(NULL), AVG(33.3)
 ----
 1.0 NULL 33.3
 
-query F
+statement error 1065
 SELECT AVG(True)
-----
-1.0
 
 statement error 1065
 SELECT AVG('hello')
 
-statement error 1005
-SELECT AVG(DATE '1992-02-02')
+statement error 1065
+SELECT AVG('1992-02-02'::DATE)
 
 statement error 1065
 SELECT AVG()

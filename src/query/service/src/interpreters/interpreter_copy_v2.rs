@@ -23,9 +23,11 @@ use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageFileStatus;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -96,8 +98,9 @@ impl CopyInterpreterV2 {
             })
             .collect();
         let data_schema = DataSchemaRefExt::create(fields);
+        let table_schema = infer_table_schema(&data_schema)?;
         let stage_table_info = StageTableInfo {
-            schema: data_schema.clone(),
+            schema: table_schema,
             user_stage_info: stage.clone(),
             path: path.to_string(),
             files: vec![],
@@ -368,7 +371,6 @@ impl CopyInterpreterV2 {
                 let tenant = tenant.clone();
                 let database_name = database_name.clone();
                 let catalog = catalog.clone();
-
                 let mut copied_files = BTreeMap::new();
                 for file in &need_copied_files {
                     // Short the etag to 7 bytes for less space in metasrv.

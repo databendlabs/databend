@@ -1,0 +1,126 @@
+//  Copyright 2022 Datafuse Labs.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
+use std::collections::HashMap;
+
+use common_base::base::uuid::Uuid;
+use common_expression::converts::from_scalar;
+use common_expression::converts::to_type;
+use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+
+pub type ColumnId = u32;
+pub type FormatVersion = u64;
+pub type SnapshotId = Uuid;
+pub type Location = (String, FormatVersion);
+pub type ClusterKey = (u32, String);
+
+pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ColumnStatistics {
+    pub min: Scalar,
+    pub max: Scalar,
+
+    pub null_count: u64,
+    pub in_memory_size: u64,
+    pub distinct_of_values: Option<u64>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ClusterStatistics {
+    pub cluster_key_id: u32,
+    pub min: Vec<Scalar>,
+    pub max: Vec<Scalar>,
+    pub level: i32,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+pub struct Statistics {
+    pub row_count: u64,
+    pub block_count: u64,
+    pub perfect_block_count: u64,
+
+    pub uncompressed_byte_size: u64,
+    pub compressed_byte_size: u64,
+    pub index_size: u64,
+
+    pub col_stats: HashMap<ColumnId, ColumnStatistics>,
+}
+
+// conversions from old meta data
+// ----------------------------------------------------------------
+// ----------------------------------------------------------------
+impl ColumnStatistics {
+    pub fn from_v0(
+        v0: &crate::meta::v0::statistics::ColumnStatistics,
+        data_type: &TableDataType,
+    ) -> Self {
+        let old_type = to_type(data_type);
+
+        Self {
+            min: from_scalar(&v0.min, &old_type),
+            max: from_scalar(&v0.max, &old_type),
+            null_count: v0.null_count,
+            in_memory_size: v0.in_memory_size,
+            distinct_of_values: None,
+        }
+    }
+}
+
+impl ClusterStatistics {
+    pub fn from_v0(
+        v0: crate::meta::v0::statistics::ClusterStatistics,
+        data_type: &TableDataType,
+    ) -> Self {
+        let old_type = to_type(data_type);
+        Self {
+            cluster_key_id: v0.cluster_key_id,
+            min: v0
+                .min
+                .into_iter()
+                .map(|s| from_scalar(&s, &old_type))
+                .collect(),
+            max: v0
+                .max
+                .into_iter()
+                .map(|s| from_scalar(&s, &old_type))
+                .collect(),
+            level: v0.level,
+        }
+    }
+}
+
+impl Statistics {
+    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
+        let col_stats = v0
+            .col_stats
+            .into_iter()
+            .map(|(k, v)| {
+                let t = fields[k as usize].data_type();
+                (k, ColumnStatistics::from_v0(&v, t))
+            })
+            .collect();
+        Self {
+            row_count: v0.row_count,
+            block_count: v0.block_count,
+            perfect_block_count: v0.perfect_block_count,
+            uncompressed_byte_size: v0.uncompressed_byte_size,
+            compressed_byte_size: v0.compressed_byte_size,
+            index_size: v0.index_size,
+            col_stats,
+        }
+    }
+}

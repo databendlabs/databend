@@ -109,8 +109,12 @@ macro_rules! impl_interval_year_month {
         pub struct $name;
 
         impl $name {
-            pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> Result<i32, String> {
-                let date = date.to_date(Tz::UTC);
+            pub fn eval_date(
+                date: i32,
+                tz: Tz,
+                delta: impl AsPrimitive<i64>,
+            ) -> Result<i32, String> {
+                let date = date.to_date(tz);
                 let new_date = $op(date.year(), date.month(), date.day(), delta.as_())?;
                 check_date(
                     new_date
@@ -119,8 +123,12 @@ macro_rules! impl_interval_year_month {
                 )
             }
 
-            pub fn eval_timestamp(ts: i64, delta: impl AsPrimitive<i64>) -> Result<i64, String> {
-                let ts = ts.to_timestamp(Tz::UTC);
+            pub fn eval_timestamp(
+                ts: i64,
+                tz: Tz,
+                delta: impl AsPrimitive<i64>,
+            ) -> Result<i64, String> {
+                let ts = ts.to_timestamp(tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
                 check_timestamp(NaiveDateTime::new(new_ts, ts.time()).timestamp_micros())
             }

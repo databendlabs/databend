@@ -52,6 +52,10 @@ where
         self.builder.len() * std::mem::size_of::<T>()
     }
 
+    fn len(&self) -> usize {
+        self.builder.len()
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: T = reader.read_scalar()?;
         self.builder.push(value);

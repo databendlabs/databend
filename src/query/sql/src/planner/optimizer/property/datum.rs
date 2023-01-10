@@ -15,9 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
+use common_expression::Literal;
+use common_expression::Scalar;
 use ordered_float::OrderedFloat;
 
 pub type F64 = OrderedFloat<f64>;
@@ -33,13 +35,40 @@ pub enum Datum {
 }
 
 impl Datum {
-    pub fn from_data_value(data_value: &DataValue) -> Option<Self> {
+    pub fn from_data_value(data_value: &Scalar) -> Option<Self> {
         match data_value {
-            DataValue::Boolean(v) => Some(Datum::Bool(*v)),
-            DataValue::Int64(v) => Some(Datum::Int(*v)),
-            DataValue::UInt64(v) => Some(Datum::UInt(*v)),
-            DataValue::Float64(v) => Some(Datum::Float(F64::from(*v))),
-            DataValue::String(v) => Some(Datum::Bytes(v.clone())),
+            Scalar::Boolean(v) => Some(Datum::Bool(*v)),
+            Scalar::Number(NumberScalar::Int64(v)) => Some(Datum::Int(*v)),
+            Scalar::Number(NumberScalar::Int32(v)) => Some(Datum::Int(*v as i64)),
+            Scalar::Number(NumberScalar::Int16(v)) => Some(Datum::Int(*v as i64)),
+            Scalar::Number(NumberScalar::Int8(v)) => Some(Datum::Int(*v as i64)),
+            Scalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(*v)),
+            Scalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(*v as u64)),
+            Scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(*v as u64)),
+            Scalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(*v as u64)),
+            Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(*v)),
+            Scalar::Number(NumberScalar::Float32(v)) => {
+                Some(Datum::Float(F64::from(f32::from(*v) as f64)))
+            }
+            Scalar::String(v) => Some(Datum::Bytes(v.clone())),
+            _ => None,
+        }
+    }
+
+    pub fn from_literal(data_value: &Literal) -> Option<Self> {
+        match data_value {
+            Literal::Boolean(v) => Some(Datum::Bool(*v)),
+            Literal::Int64(v) => Some(Datum::Int(*v)),
+            Literal::Int32(v) => Some(Datum::Int(*v as i64)),
+            Literal::Int16(v) => Some(Datum::Int(*v as i64)),
+            Literal::Int8(v) => Some(Datum::Int(*v as i64)),
+            Literal::UInt64(v) => Some(Datum::UInt(*v)),
+            Literal::UInt32(v) => Some(Datum::UInt(*v as u64)),
+            Literal::UInt16(v) => Some(Datum::UInt(*v as u64)),
+            Literal::UInt8(v) => Some(Datum::UInt(*v as u64)),
+            Literal::Float64(v) => Some(Datum::Float(*v)),
+            Literal::Float32(v) => Some(Datum::Float(F64::from(f32::from(*v) as f64))),
+            Literal::String(v) => Some(Datum::Bytes(v.clone())),
             _ => None,
         }
     }

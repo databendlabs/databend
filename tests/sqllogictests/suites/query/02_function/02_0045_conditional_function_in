@@ -111,7 +111,7 @@ SELECT to_date(18869) in (to_date(18869))
 
 
 query B
-SELECT to_date(18869) in ('2021-08-30')
+SELECT to_date(18869) in ('2021-08-30'::Date)
 ----
 1
 
@@ -174,12 +174,12 @@ statement ok
 INSERT INTO t2 VALUES ('2022-04-23', '2022-04-23 01:48:19'), ('2022-04-24', NULL)
 
 query TT
-SELECT * FROM t2 WHERE date in ('2022-04-23')
+SELECT * FROM t2 WHERE date in ('2022-04-23'::Date)
 ----
 2022-04-23 2022-04-23 01:48:19.000000
 
 query TT
-SELECT * FROM t2 WHERE datetime in ('2022-04-23 01:48:19', NULL)
+SELECT * FROM t2 WHERE datetime in ('2022-04-23 01:48:19'::TIMESTAMP, NULL)
 ----
 2022-04-23 2022-04-23 01:48:19.000000
 

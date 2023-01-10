@@ -14,10 +14,13 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
-use common_datavalues::Series;
 use common_exception::Result;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::BooleanType;
+use common_expression::types::StringType;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::FromData;
 use common_sql::plans::ShowRolesPlan;
 
 use crate::interpreters::Interpreter;
@@ -64,7 +67,10 @@ impl Interpreter for ShowRolesInterpreter {
             .cloned()
             .unwrap_or_default();
 
-        let names: Vec<&str> = roles.iter().map(|x| x.name.as_str()).collect();
+        let names = roles
+            .iter()
+            .map(|x| x.name.as_bytes().to_vec())
+            .collect::<Vec<_>>();
         let inherited_roles: Vec<u64> = roles
             .iter()
             .map(|x| x.grants.roles().len() as u64)
@@ -72,11 +78,11 @@ impl Interpreter for ShowRolesInterpreter {
         let is_currents: Vec<bool> = roles.iter().map(|r| r.name == current_role_name).collect();
         let is_defaults: Vec<bool> = roles.iter().map(|r| r.name == default_role_name).collect();
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(inherited_roles),
-            Series::from_data(is_currents),
-            Series::from_data(is_defaults),
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            UInt64Type::from_data(inherited_roles),
+            BooleanType::from_data(is_currents),
+            BooleanType::from_data(is_defaults),
         ])])
     }
 }

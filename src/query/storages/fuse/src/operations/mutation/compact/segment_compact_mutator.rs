@@ -17,12 +17,12 @@ use std::time::Instant;
 
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
 use metrics::gauge;
 use opendal::Operator;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
@@ -86,8 +86,10 @@ impl TableMutator for SegmentCompactMutator {
             return Ok(false);
         }
 
+        let schema = Arc::new(self.compact_params.base_snapshot.schema.clone());
         // 1. read all the segments
-        let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
+        let fuse_segment_io =
+            SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone(), schema);
         let base_segments = fuse_segment_io
             .read_segments(base_segment_locations)
             .await?

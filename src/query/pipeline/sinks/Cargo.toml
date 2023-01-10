@@ -11,9 +11,8 @@ test = false
 [dependencies]
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
-common-datablocks = { path = "../../datablocks" }
-common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
 common-pipeline-core = { path = "../core" }
 
 async-channel = "1.7.1"

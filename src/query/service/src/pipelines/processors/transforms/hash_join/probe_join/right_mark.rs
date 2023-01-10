@@ -17,11 +17,12 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::BooleanViewer;
-use common_datavalues::ScalarViewer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::NullableType;
+use common_expression::types::ValueType;
+use common_expression::DataBlock;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -80,9 +81,14 @@ impl JoinHashTable {
     {
         let valids = &probe_state.valids;
         let has_null = *self.hash_join_desc.marker_join_desc.has_null.read();
-        let mut markers = Self::init_markers(input.columns(), input.num_rows());
+        let cols = input
+            .columns()
+            .iter()
+            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
+            .collect::<Vec<_>>();
+        let mut markers = Self::init_markers(&cols, input.num_rows());
 
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let _func_ctx = self.ctx.try_get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
 
         let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
@@ -122,22 +128,24 @@ impl JoinHashTable {
                             build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                             probe_indexes.extend(repeat(i as u32).take(addition));
 
-                            let probe_block =
-                                DataBlock::block_take_by_indices(input, &probe_indexes)?;
+                            let probe_block = DataBlock::take(input, &probe_indexes)?;
                             let build_block = self.row_space.gather(&build_indexes)?;
                             let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-                            let type_vector = other_predicate.eval(&func_ctx, &merged_block)?;
-                            let filter_column = type_vector.vector();
-                            let filter_viewer = BooleanViewer::try_create(filter_column)?;
+                            let filter =
+                                self.get_nullable_filter_column(&merged_block, other_predicate)?;
+                            let filter_viewer =
+                                NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
+                            let validity = &filter_viewer.validity;
+                            let data = &filter_viewer.column;
 
                             for idx in 0..filter_viewer.len() {
                                 let marker = &mut markers[probe_indexes[idx] as usize];
-                                if !filter_viewer.valid_at(idx) {
+                                if !validity.get_bit(idx) {
                                     if *marker == MarkerKind::False {
                                         *marker = MarkerKind::Null;
                                     }
-                                } else if filter_viewer.value_at(idx) {
+                                } else if data.get_bit(idx) {
                                     *marker = MarkerKind::True;
                                 }
                             }
@@ -153,20 +161,22 @@ impl JoinHashTable {
             }
         }
 
-        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
+        let probe_block = DataBlock::take(input, &probe_indexes)?;
         let build_block = self.row_space.gather(&build_indexes)?;
         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
-        let type_vector = other_predicate.eval(&func_ctx, &merged_block)?;
-        let filter_column = type_vector.vector();
-        let filter_viewer = BooleanViewer::try_create(filter_column)?;
+
+        let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;
+        let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
+        let validity = &filter_viewer.validity;
+        let data = &filter_viewer.column;
 
         for idx in 0..filter_viewer.len() {
             let marker = &mut markers[probe_indexes[idx] as usize];
-            if !filter_viewer.valid_at(idx) {
+            if !validity.get_bit(idx) {
                 if *marker == MarkerKind::False {
                     *marker = MarkerKind::Null;
                 }
-            } else if filter_viewer.value_at(idx) {
+            } else if data.get_bit(idx) {
                 *marker = MarkerKind::True;
             }
         }

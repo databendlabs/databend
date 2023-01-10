@@ -20,10 +20,13 @@ use crate::types::DataType;
 use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 
 pub struct TupleDeserializer {
-    pub inners: Vec<Box<dyn TypeDeserializer>>,
+    pub inners: Vec<TypeDeserializerImpl>,
 }
+
+pub type StructDeserializer = TupleDeserializer;
 
 impl TupleDeserializer {
     pub fn with_capacity(capacity: usize, inners: &[DataType]) -> Self {
@@ -38,6 +41,10 @@ impl TupleDeserializer {
 impl TypeDeserializer for TupleDeserializer {
     fn memory_size(&self) -> usize {
         self.inners.iter().map(|d| d.memory_size()).sum()
+    }
+
+    fn len(&self) -> usize {
+        self.inners.first().map(|c| c.len()).unwrap_or_default()
     }
 
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {

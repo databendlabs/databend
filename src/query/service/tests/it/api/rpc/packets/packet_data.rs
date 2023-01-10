@@ -16,14 +16,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_storages_fuse::operations::AppendOperationLogEntry;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::Compression;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
 use databend_query::api::PrecommitBlock;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::Compression;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_precommit_ser_and_deser() -> Result<()> {
@@ -47,6 +47,9 @@ async fn test_precommit_ser_and_deser() -> Result<()> {
     let mut bytes = vec![];
     PrecommitBlock::write(test_precommit.clone(), &mut bytes)?;
     let mut read = bytes.as_slice();
-    assert_eq!(test_precommit, PrecommitBlock::read(&mut read)?);
+    assert_eq!(
+        test_precommit.0.to_string(),
+        PrecommitBlock::read(&mut read)?.0.to_string()
+    );
     Ok(())
 }

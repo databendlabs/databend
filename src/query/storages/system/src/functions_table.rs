@@ -16,13 +16,16 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::rdoc::FunctionDocAsset;
-use common_functions::rdoc::FunctionDocs;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -45,9 +48,9 @@ impl AsyncSystemTable for FunctionsTable {
     }
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let function_factory = FunctionFactory::instance();
+        // TODO(andylokandy): add rewritable function names, e.g. database()
+        let func_names = BUILTIN_FUNCTIONS.registered_names();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
-        let func_names = function_factory.registered_names();
         let aggr_func_names = aggregate_function_factory.registered_names();
         let udfs = FunctionsTable::get_udfs(ctx).await?;
 
@@ -59,17 +62,6 @@ impl AsyncSystemTable for FunctionsTable {
             .collect();
 
         let builtin_func_len = func_names.len() + aggr_func_names.len();
-
-        let docs = (0..names.len())
-            .map(|i| {
-                if i < builtin_func_len {
-                    let name = &names[i];
-                    FunctionDocAsset::get_doc(name)
-                } else {
-                    FunctionDocs::default()
-                }
-            })
-            .collect::<Vec<_>>();
 
         let is_builtin = (0..names.len())
             .map(|i| i < builtin_func_len)
@@ -91,19 +83,13 @@ impl AsyncSystemTable for FunctionsTable {
             .collect::<Vec<&str>>();
 
         let categorys = (0..names.len())
-            .map(|i| {
-                if i < builtin_func_len {
-                    docs[i].category.as_str()
-                } else {
-                    "UDF"
-                }
-            })
+            .map(|i| if i < builtin_func_len { "" } else { "UDF" })
             .collect::<Vec<&str>>();
 
         let descriptions = (0..names.len())
             .map(|i| {
                 if i < builtin_func_len {
-                    docs[i].description.as_str()
+                    ""
                 } else {
                     udfs.get(i - builtin_func_len)
                         .map_or("", |udf| udf.description.as_str())
@@ -114,7 +100,7 @@ impl AsyncSystemTable for FunctionsTable {
         let syntaxs = (0..names.len())
             .map(|i| {
                 if i < builtin_func_len {
-                    docs[i].syntax.as_str()
+                    ""
                 } else {
                     udfs.get(i - builtin_func_len)
                         .map_or("", |udf| udf.definition.as_str())
@@ -122,40 +108,32 @@ impl AsyncSystemTable for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let examples = (0..names.len())
-            .map(|i| {
-                if i < builtin_func_len {
-                    docs[i].example.as_str()
-                } else {
-                    ""
-                }
-            })
-            .collect::<Vec<&str>>();
+        let examples = (0..names.len()).map(|_| "").collect::<Vec<&str>>();
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(is_builtin),
-            Series::from_data(is_aggregate),
-            Series::from_data(definitions),
-            Series::from_data(categorys),
-            Series::from_data(descriptions),
-            Series::from_data(syntaxs),
-            Series::from_data(examples),
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            BooleanType::from_data(is_builtin),
+            BooleanType::from_data(is_aggregate),
+            StringType::from_data(definitions),
+            StringType::from_data(categorys),
+            StringType::from_data(descriptions),
+            StringType::from_data(syntaxs),
+            StringType::from_data(examples),
         ]))
     }
 }
 
 impl FunctionsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("is_builtin", bool::to_data_type()),
-            DataField::new("is_aggregate", bool::to_data_type()),
-            DataField::new("definition", Vu8::to_data_type()),
-            DataField::new("category", Vu8::to_data_type()),
-            DataField::new("description", Vu8::to_data_type()),
-            DataField::new("syntax", Vu8::to_data_type()),
-            DataField::new("example", Vu8::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("name", TableDataType::String),
+            TableField::new("is_builtin", TableDataType::Boolean),
+            TableField::new("is_aggregate", TableDataType::Boolean),
+            TableField::new("definition", TableDataType::String),
+            TableField::new("category", TableDataType::String),
+            TableField::new("description", TableDataType::String),
+            TableField::new("syntax", TableDataType::String),
+            TableField::new("example", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

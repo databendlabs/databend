@@ -18,9 +18,13 @@ use common_catalog::catalog::Catalog;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -48,30 +52,31 @@ impl AsyncSystemTable for DatabasesTable {
             .iter()
             .map(|e| (e.key().clone(), e.value().clone()))
             .collect();
+
         let mut catalog_names = vec![];
-        let mut database_names = vec![];
+        let mut db_names = vec![];
         for (ctl_name, catalog) in catalogs.into_iter() {
             let databases = catalog.list_databases(tenant.as_str()).await?;
 
             for db in databases {
                 catalog_names.push(ctl_name.clone().into_bytes());
                 let db_name = db.name().to_string().into_bytes();
-                database_names.push(db_name);
+                db_names.push(db_name);
             }
         }
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(catalog_names),
-            Series::from_data(database_names),
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(catalog_names),
+            StringType::from_data(db_names),
         ]))
     }
 }
 
 impl DatabasesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("catalog", Vu8::to_data_type()),
-            DataField::new("name", Vu8::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("catalog", TableDataType::String),
+            TableField::new("name", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

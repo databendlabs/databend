@@ -18,18 +18,18 @@ use std::sync::Arc;
 use chrono::Duration;
 use common_base::base::tokio;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_storages_fuse::io::write_meta;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::FuseTable;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
 use futures_util::TryStreamExt;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::storages::fuse::block_writer::BlockWriter;
@@ -246,6 +246,7 @@ mod utils {
 
     use chrono::DateTime;
     use chrono::Utc;
+    use common_storages_factory::Table;
     use common_storages_fuse::FuseStorageFormat;
 
     use super::*;
@@ -288,6 +289,7 @@ mod utils {
         num_blocks: usize,
     ) -> Result<(Location, SegmentInfo)> {
         let dal = fuse_table.get_operator_ref();
+        let schema = fuse_table.schema();
         let block_writer = BlockWriter::new(dal, fuse_table.meta_location_generator());
         let mut block_metas = vec![];
 
@@ -302,7 +304,7 @@ mod utils {
         for block in blocks {
             let stats = gen_columns_statistics(&block, None)?;
             let block_meta = block_writer
-                .write(FuseStorageFormat::Parquet, block, stats, None)
+                .write(FuseStorageFormat::Parquet, &schema, block, stats, None)
                 .await?;
             block_metas.push(Arc::new(block_meta));
         }

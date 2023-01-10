@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,14 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::number::NumberColumnBuilder;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::utils::column_merge_validity;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_io::prelude::*;
 
 use super::aggregate_function::AggregateFunction;
@@ -33,19 +39,17 @@ pub struct AggregateCountState {
 #[derive(Clone)]
 pub struct AggregateCountFunction {
     display_name: String,
-    nullable: bool,
 }
 
 impl AggregateCountFunction {
     pub fn try_create(
         display_name: &str,
-        _params: Vec<DataValue>,
-        arguments: Vec<DataField>,
+        _params: Vec<Scalar>,
+        arguments: Vec<DataType>,
     ) -> Result<Arc<dyn AggregateFunction>> {
         assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
         Ok(Arc::new(AggregateCountFunction {
             display_name: display_name.to_string(),
-            nullable: false,
         }))
     }
 
@@ -63,8 +67,8 @@ impl AggregateFunction for AggregateCountFunction {
         "AggregateCountFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypeImpl> {
-        Ok(u64::to_data_type())
+    fn return_type(&self) -> Result<DataType> {
+        Ok(DataType::Number(NumberDataType::UInt64))
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -75,29 +79,28 @@ impl AggregateFunction for AggregateCountFunction {
         Layout::new::<AggregateCountState>()
     }
 
+    // columns may be nullable
+    // if not we use validity as the null signs
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[ColumnRef],
+        columns: &[Column],
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-
-        if self.nullable {
-            let (_, bm) = columns[0].validity();
-            let nulls = match combine_validities(bm, validity) {
-                Some(b) => b.unset_bits(),
-                None => 0,
-            };
-            state.count += (input_rows - nulls) as u64;
+        let nulls = if columns.is_empty() {
+            validity.map(|v| v.unset_bits()).unwrap_or(0)
         } else {
-            let nulls = match validity {
-                Some(b) => b.unset_bits(),
-                None => 0,
-            };
-            state.count += (input_rows - nulls) as u64;
-        }
+            match &columns[0] {
+                Column::Nullable(c) => validity
+                    .map(|v| v & (&c.validity))
+                    .unwrap_or_else(|| c.validity.clone())
+                    .unset_bits(),
+                _ => validity.map(|v| v.unset_bits()).unwrap_or(0),
+            }
+        };
+        state.count += (input_rows - nulls) as u64;
         Ok(())
     }
 
@@ -105,19 +108,19 @@ impl AggregateFunction for AggregateCountFunction {
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[ColumnRef],
+        columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        let validity = match columns.len() {
-            0 => None,
-            _ => {
-                let (_, validity) = columns[0].validity();
-                validity
-            }
-        };
+        let validity = columns
+            .iter()
+            .fold(None, |acc, col| column_merge_validity(col, acc));
 
         match validity {
             Some(v) => {
+                // all nulls
+                if v.unset_bits() == v.len() {
+                    return Ok(());
+                }
                 for (valid, place) in v.iter().zip(places.iter()) {
                     if valid {
                         let state = place.next(offset).get::<AggregateCountState>();
@@ -125,7 +128,8 @@ impl AggregateFunction for AggregateCountFunction {
                     }
                 }
             }
-            None => {
+
+            _ => {
                 for place in places {
                     let state = place.next(offset).get::<AggregateCountState>();
                     state.count += 1;
@@ -136,7 +140,7 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, _columns: &[Column], _row: usize) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         state.count += 1;
         Ok(())
@@ -161,22 +165,24 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
-        let builder: &mut MutablePrimitiveColumn<u64> = Series::check_get_mutable_column(array)?;
-        let state = place.get::<AggregateCountState>();
-        builder.append_value(state.count);
+    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+        match builder {
+            ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
+                let state = place.get::<AggregateCountState>();
+                builder.push(state.count);
+            }
+            _ => unreachable!(),
+        }
         Ok(())
     }
 
     fn get_own_null_adaptor(
         &self,
         _nested_function: super::AggregateFunctionRef,
-        _params: Vec<DataValue>,
-        _arguments: Vec<DataField>,
+        _params: Vec<Scalar>,
+        _arguments: Vec<DataType>,
     ) -> Result<Option<super::AggregateFunctionRef>> {
-        let mut f = self.clone();
-        f.nullable = true;
-        Ok(Some(Arc::new(f)))
+        Ok(Some(Arc::new(self.clone())))
     }
 }
 

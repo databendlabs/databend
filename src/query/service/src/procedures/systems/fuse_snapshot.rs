@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_storages_fuse::FuseTable;
 
 use crate::procedures::OneBlockProcedure;
@@ -64,6 +64,6 @@ impl OneBlockProcedure for FuseSnapshotProcedure {
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        FuseSnapshot::schema()
+        Arc::new(FuseSnapshot::schema().into())
     }
 }

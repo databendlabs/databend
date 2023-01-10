@@ -24,15 +24,17 @@ use common_base::rangemap::RangeMerger;
 use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::TableSchemaRef;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
-use common_storages_table_meta::meta::ColumnMeta;
 use futures::future::try_join_all;
 use opendal::Object;
 use opendal::Operator;
+use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::ReadSettings;
@@ -43,7 +45,7 @@ use crate::metrics::*;
 pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
-    pub(crate) projected_schema: DataSchemaRef,
+    pub(crate) projected_schema: TableSchemaRef,
     pub(crate) column_leaves: ColumnLeaves,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
 }
@@ -111,13 +113,13 @@ where Self: 'static
 impl BlockReader {
     pub fn create(
         operator: Operator,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         projection: Projection,
     ) -> Result<Arc<BlockReader>> {
         let projected_schema = match projection {
-            Projection::Columns(ref indices) => DataSchemaRef::new(schema.project(indices)),
+            Projection::Columns(ref indices) => TableSchemaRef::new(schema.project(indices)),
             Projection::InnerColumns(ref path_indices) => {
-                DataSchemaRef::new(schema.inner_project(path_indices))
+                Arc::new(schema.inner_project(path_indices))
             }
         };
 
@@ -338,7 +340,13 @@ impl BlockReader {
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.range_read(start..end).await?;
+        use backon::ExponentialBackoff;
+        use backon::Retryable;
+
+        let chunk = { || async { o.range_read(start..end).await } }
+            .retry(ExponentialBackoff::default())
+            .when(|err| err.is_temporary())
+            .await?;
         Ok((index, chunk))
     }
 
@@ -353,7 +361,16 @@ impl BlockReader {
         Ok((index, chunk))
     }
 
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> TableSchemaRef {
         self.projected_schema.clone()
+    }
+
+    pub fn data_fields(&self) -> Vec<DataField> {
+        self.schema().fields().iter().map(DataField::from).collect()
+    }
+
+    pub fn data_schema(&self) -> DataSchema {
+        let fields = self.data_fields();
+        DataSchema::new(fields)
     }
 }

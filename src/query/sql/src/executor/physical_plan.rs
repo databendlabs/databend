@@ -15,20 +15,17 @@
 use std::collections::BTreeMap;
 
 use common_catalog::plan::DataSourcePlan;
-use common_datablocks::DataBlock;
-use common_datavalues::wrap_nullable;
-use common_datavalues::BooleanType;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::NullableType;
-use common_datavalues::ToDataType;
-use common_datavalues::Vu8;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::TableInfo;
 
 use super::AggregateFunctionDesc;
 use super::SortDesc;
+use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalScalar;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
@@ -39,11 +36,12 @@ pub type ColumnID = String;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
-    pub name_mapping: BTreeMap<String, ColumnID>,
+    pub name_mapping: BTreeMap<String, IndexType>,
     pub source: Box<DataSourcePlan>,
 
     /// Only used for display
     pub table_index: IndexType,
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl TableScan {
@@ -52,7 +50,8 @@ impl TableScan {
         let schema = self.source.schema();
         for (name, id) in self.name_mapping.iter() {
             let orig_field = schema.field_with_name(name)?;
-            fields.push(DataField::new(id.as_str(), orig_field.data_type().clone()));
+            let data_type = DataType::from(orig_field.data_type());
+            fields.push(DataField::new(&id.to_string(), data_type));
         }
         Ok(DataSchemaRefExt::create(fields))
     }
@@ -62,6 +61,9 @@ impl TableScan {
 pub struct Filter {
     pub input: Box<PhysicalPlan>,
     pub predicates: Vec<PhysicalScalar>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl Filter {
@@ -77,6 +79,7 @@ pub struct Project {
 
     /// Only used for display
     pub columns: ColumnSet,
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl Project {
@@ -93,16 +96,20 @@ impl Project {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvalScalar {
     pub input: Box<PhysicalPlan>,
-    pub scalars: Vec<(PhysicalScalar, ColumnID)>,
+    pub scalars: Vec<(PhysicalScalar, IndexType)>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl EvalScalar {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
-        for (scalar, name) in self.scalars.iter() {
+        for (scalar, index) in self.scalars.iter() {
+            let name = index.to_string();
             let data_type = scalar.data_type();
-            fields.push(DataField::new(name, data_type));
+            fields.push(DataField::new(&name, data_type));
         }
         Ok(DataSchemaRefExt::create(fields))
     }
@@ -111,8 +118,11 @@ impl EvalScalar {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregatePartial {
     pub input: Box<PhysicalPlan>,
-    pub group_by: Vec<ColumnID>,
+    pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl AggregatePartial {
@@ -120,16 +130,22 @@ impl AggregatePartial {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
         for agg in self.agg_funcs.iter() {
-            fields.push(DataField::new(agg.column_id.as_str(), Vu8::to_data_type()));
+            fields.push(DataField::new(
+                &agg.output_column.to_string(),
+                DataType::String,
+            ));
         }
         if !self.group_by.is_empty() {
-            let sample_block = DataBlock::empty_with_schema(input_schema.clone());
-            let method = DataBlock::choose_hash_method(
-                &sample_block,
+            let method = DataBlock::choose_hash_method_with_types(
                 &self
                     .group_by
                     .iter()
-                    .map(|name| input_schema.index_of(name))
+                    .map(|index| {
+                        Ok(input_schema
+                            .field_with_name(&index.to_string())?
+                            .data_type()
+                            .clone())
+                    })
                     .collect::<Result<Vec<_>>>()?,
             )?;
             fields.push(DataField::new("_group_by_key", method.data_type()));
@@ -141,9 +157,12 @@ impl AggregatePartial {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFinal {
     pub input: Box<PhysicalPlan>,
-    pub group_by: Vec<ColumnID>,
+    pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub before_group_by_schema: DataSchemaRef,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl AggregateFinal {
@@ -151,15 +170,15 @@ impl AggregateFinal {
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
         for agg in self.agg_funcs.iter() {
             let data_type = agg.sig.return_type.clone();
-            fields.push(DataField::new(agg.column_id.as_str(), data_type));
+            fields.push(DataField::new(&agg.output_column.to_string(), data_type));
         }
         for id in self.group_by.iter() {
             let data_type = self
                 .before_group_by_schema
-                .field_with_name(id.as_str())?
+                .field_with_name(&id.to_string())?
                 .data_type()
                 .clone();
-            fields.push(DataField::new(id.as_str(), data_type));
+            fields.push(DataField::new(&id.to_string(), data_type));
         }
         Ok(DataSchemaRefExt::create(fields))
     }
@@ -171,6 +190,9 @@ pub struct Sort {
     pub order_by: Vec<SortDesc>,
     // limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl Sort {
@@ -184,6 +206,9 @@ pub struct Limit {
     pub input: Box<PhysicalPlan>,
     pub limit: Option<usize>,
     pub offset: usize,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl Limit {
@@ -202,6 +227,9 @@ pub struct HashJoin {
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl HashJoin {
@@ -212,7 +240,7 @@ impl HashJoin {
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                        field.data_type().wrap_nullable(),
                     ));
                 }
             }
@@ -221,7 +249,7 @@ impl HashJoin {
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                        field.data_type().wrap_nullable(),
                     ));
                 }
                 for field in self.build.output_schema()?.fields() {
@@ -236,13 +264,13 @@ impl HashJoin {
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                        field.data_type().wrap_nullable(),
                     ));
                 }
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                        field.data_type().wrap_nullable(),
                     ));
                 }
             }
@@ -268,7 +296,7 @@ impl HashJoin {
                 };
                 fields.push(DataField::new(
                     name.as_str(),
-                    NullableType::new_impl(BooleanType::new_impl()),
+                    DataType::Nullable(Box::new(DataType::Boolean)),
                 ));
             }
 
@@ -352,6 +380,9 @@ pub struct UnionAll {
     pub right: Box<PhysicalPlan>,
     pub pairs: Vec<(String, String)>,
     pub schema: DataSchemaRef,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl UnionAll {
@@ -374,8 +405,8 @@ pub struct DistributedInsertSelect {
 impl DistributedInsertSelect {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRefExt::create(vec![
-            DataField::new("seg_loc", Vu8::to_data_type()),
-            DataField::new("seg_info", Vu8::to_data_type()),
+            DataField::new("seg_loc", DataType::String),
+            DataField::new("seg_info", DataType::String),
         ]))
     }
 }

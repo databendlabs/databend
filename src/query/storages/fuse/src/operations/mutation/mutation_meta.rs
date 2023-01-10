@@ -14,12 +14,12 @@
 
 use std::any::Any;
 
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::BlockMetaInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::Statistics;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::Statistics;
 
 use crate::operations::mutation::AbortOperation;
 
@@ -69,7 +69,7 @@ impl MutationMeta {
         match info.as_any().downcast_ref::<MutationMeta>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to MutationMeta.",
+                "Cannot downcast from ChunkMetaInfo to MutationMeta.",
             )),
         }
     }

@@ -17,10 +17,10 @@ use std::vec;
 
 use common_catalog::plan::Partitions;
 use common_exception::Result;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 use super::compact_part::CompactPartInfo;
 use crate::io::SegmentsIO;
@@ -34,6 +34,7 @@ use crate::TableContext;
 #[derive(Clone)]
 pub struct BlockCompactMutator {
     pub ctx: Arc<dyn TableContext>,
+
     pub compact_params: CompactOptions,
     pub operator: Operator,
     // A set of Parts.
@@ -67,8 +68,9 @@ impl BlockCompactMutator {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
 
+        let schema = Arc::new(self.compact_params.base_snapshot.schema.clone());
         // Read all segments information in parallel.
-        let segments_io = SegmentsIO::create(self.ctx.clone(), self.operator.clone());
+        let segments_io = SegmentsIO::create(self.ctx.clone(), self.operator.clone(), schema);
         let segments = segments_io
             .read_segments(segment_locations)
             .await?

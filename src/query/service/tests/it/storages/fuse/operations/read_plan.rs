@@ -21,16 +21,16 @@ use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_base::base::tokio;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::Scalar;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
-use common_storages_table_meta::meta;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ColumnMeta;
-use common_storages_table_meta::meta::ColumnStatistics;
 use databend_query::storages::fuse::FuseTable;
 use futures::TryStreamExt;
+use storages_common_table_meta::meta;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
@@ -41,8 +41,8 @@ fn test_to_partitions() -> Result<()> {
     let num_of_block = 5;
 
     let col_stats_gen = |col_size| ColumnStatistics {
-        min: DataValue::Int64(1),
-        max: DataValue::Int64(2),
+        min: Scalar::from(1i64),
+        max: Scalar::from(2i64),
         null_count: 0,
         in_memory_size: col_size as u64,
         distinct_of_values: None,

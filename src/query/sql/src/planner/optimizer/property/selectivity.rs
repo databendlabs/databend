@@ -14,7 +14,7 @@
 
 use std::cmp::Ordering;
 
-use common_datavalues::DataValue;
+use common_expression::Literal;
 
 use crate::optimizer::Datum;
 use crate::optimizer::Statistics;
@@ -68,6 +68,11 @@ impl<'a> SelectivityEstimator<'a> {
                 return f64::min(left_selectivity, right_selectivity);
             }
 
+            Scalar::NotExpr(not_expr) => {
+                let argument_selectivity = self.compute_selectivity(&not_expr.argument);
+                return 1.0 - argument_selectivity;
+            }
+
             Scalar::ComparisonExpr(comp_expr) => {
                 return self.compute_selectivity_comparison_expr(comp_expr);
             }
@@ -94,7 +99,7 @@ impl<'a> SelectivityEstimator<'a> {
             } else {
                 return DEFAULT_SELECTIVITY;
             };
-            let const_datum = if let Some(datum) = Datum::from_data_value(&constant.value) {
+            let const_datum = if let Some(datum) = Datum::from_literal(&constant.value) {
                 datum
             } else {
                 return DEFAULT_SELECTIVITY;
@@ -187,11 +192,11 @@ impl<'a> SelectivityEstimator<'a> {
 
 fn is_true_constant_predicate(constant: &ConstantExpr) -> bool {
     match &constant.value {
-        DataValue::Null => false,
-        DataValue::Boolean(v) => *v,
-        DataValue::Int64(v) => *v != 0,
-        DataValue::UInt64(v) => *v != 0,
-        DataValue::Float64(v) => *v != 0.0,
+        Literal::Null => false,
+        Literal::Boolean(v) => *v,
+        Literal::Int64(v) => *v != 0,
+        Literal::UInt64(v) => *v != 0,
+        Literal::Float64(v) => *v != 0.0,
         _ => true,
     }
 }

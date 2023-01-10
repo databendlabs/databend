@@ -14,30 +14,27 @@
 
 use std::marker::PhantomData;
 
-use common_datablocks::HashMethodFixedKeys;
-use common_datavalues::Column;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::ScalarColumn;
-use common_datavalues::StringColumn;
-use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeID;
 use common_exception::Result;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::DataType;
+use common_expression::Column;
+use common_expression::HashMethodFixedKeys;
+use common_expression::TypeDeserializer;
+use common_io::prelude::FormatSettings;
 
 use crate::pipelines::processors::AggregatorParams;
 
 pub trait GroupColumnsBuilder {
     type T;
     fn append_value(&mut self, v: Self::T);
-    fn finish(self) -> Result<Vec<ColumnRef>>;
+    fn finish(self) -> Result<Vec<Column>>;
 }
 
 pub struct FixedKeysGroupColumnsBuilder<'a, T> {
     _t: PhantomData<&'a ()>,
     data: Vec<T>,
     group_column_indices: Vec<usize>,
-    group_data_types: Vec<DataTypeImpl>,
+    group_data_types: Vec<DataType>,
 }
 
 impl<'a, T> FixedKeysGroupColumnsBuilder<'a, T> {
@@ -62,7 +59,7 @@ impl<'a, T: Copy + Send + Sync + 'static> GroupColumnsBuilder
     }
 
     #[inline]
-    fn finish(self) -> Result<Vec<ColumnRef>> {
+    fn finish(self) -> Result<Vec<Column>> {
         let method = HashMethodFixedKeys::<T>::default();
         method.deserialize_group_columns(
             self.data,
@@ -78,14 +75,27 @@ impl<'a, T: Copy + Send + Sync + 'static> GroupColumnsBuilder
 
 pub struct SerializedKeysGroupColumnsBuilder<'a> {
     data: Vec<&'a [u8]>,
-    group_data_types: Vec<DataTypeImpl>,
+    group_data_types: Vec<DataType>,
+
+    single_builder: Option<StringColumnBuilder>,
 }
 
 impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
-    pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
+    pub fn create(capacity: usize, data_capacity: usize, params: &AggregatorParams) -> Self {
+        let (single_builder, data) =
+            if params.group_data_types.len() == 1 && params.group_data_types[0].is_string() {
+                (
+                    Some(StringColumnBuilder::with_capacity(capacity, data_capacity)),
+                    vec![],
+                )
+            } else {
+                (None, Vec::with_capacity(capacity))
+            };
+
         Self {
-            data: Vec::with_capacity(capacity),
+            data,
             group_data_types: params.group_data_types.clone(),
+            single_builder,
         }
     }
 }
@@ -94,26 +104,31 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
     type T = &'a [u8];
 
     fn append_value(&mut self, v: &'a [u8]) {
-        self.data.push(v);
+        match self.single_builder.as_mut() {
+            Some(builder) => {
+                builder.put_slice(v);
+                builder.commit_row();
+            }
+            None => self.data.push(v),
+        }
     }
 
-    fn finish(mut self) -> Result<Vec<ColumnRef>> {
+    fn finish(mut self) -> Result<Vec<Column>> {
+        if let Some(mut builder) = self.single_builder.take() {
+            let col = builder.finish_to_column();
+            return Ok(vec![col]);
+        }
+
         let rows = self.data.len();
         let keys = self.data.as_mut_slice();
 
-        if self.group_data_types.len() == 1
-            && self.group_data_types[0].data_type_id() == TypeID::String
-        {
-            let col = StringColumn::from_slice(keys);
-            return Ok(vec![col.arc()]);
-        }
-
         let mut res = Vec::with_capacity(self.group_data_types.len());
+        let format = FormatSettings::default();
         for data_type in self.group_data_types.iter() {
             let mut deserializer = data_type.create_deserializer(rows);
 
             for (_, key) in keys.iter_mut().enumerate() {
-                deserializer.de_binary(key)?;
+                deserializer.de_binary(key, &format)?;
             }
             res.push(deserializer.finish_to_column());
         }

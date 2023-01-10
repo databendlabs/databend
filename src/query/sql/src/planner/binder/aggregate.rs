@@ -19,9 +19,9 @@ use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::SelectTarget;
 use common_ast::DisplayError;
-use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
@@ -38,6 +38,7 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
@@ -103,6 +104,11 @@ impl<'a> AggregateRewriter<'a> {
                 return_type: scalar.return_type.clone(),
             }
             .into()),
+            Scalar::NotExpr(scalar) => Ok(NotExpr {
+                argument: Box::new(self.visit(&scalar.argument)?),
+                return_type: scalar.return_type.clone(),
+            }
+            .into()),
             Scalar::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
                 left: Box::new(self.visit(&scalar.left)?),
@@ -117,11 +123,9 @@ impl<'a> AggregateRewriter<'a> {
                     .map(|arg| self.visit(arg))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(FunctionCall {
+                    params: func.params.clone(),
                     arguments: new_args,
                     func_name: func.func_name.clone(),
-                    // We won't modify data type of any argument during visiting, so it's
-                    // fine to reuse the types.
-                    arg_types: func.arg_types.clone(),
                     return_type: func.return_type.clone(),
                 }
                 .into())
@@ -416,7 +420,7 @@ impl<'a> Binder {
         expr: &Expr<'a>,
         available_aliases: &[(ColumnBinding, Scalar)],
         original_error: ErrorCode,
-    ) -> Result<(Scalar, DataTypeImpl)> {
+    ) -> Result<(Scalar, DataType)> {
         let mut result: Vec<usize> = vec![];
         // If cannot resolve group item, then try to find an available alias
         for (i, (column_binding, _)) in available_aliases.iter().enumerate() {

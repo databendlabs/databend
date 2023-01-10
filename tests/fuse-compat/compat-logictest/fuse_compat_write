@@ -19,8 +19,8 @@ CREATE TABLE fuse_compat_table (
         c_date DATE,
         c_timestamp TIMESTAMP,
         c_varchar VARCHAR,
-        c_array ARRAY,
-        c_object OBJECT,
+        c_array VARIANT,
+        c_object VARIANT,
         c_variant VARIANT
 ) Engine = Fuse;
 

@@ -418,7 +418,9 @@ impl<T: ArgType> ArgType for MapType<T> {
         DataType::Map(Box::new(T::data_type()))
     }
 
-    fn full_domain() -> Self::Domain {}
+    fn full_domain() -> Self::Domain {
+        MapInternal::<T>::full_domain()
+    }
 
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         <MapInternal<T> as ArgType>::create_builder(capacity, generics)

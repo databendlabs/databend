@@ -20,9 +20,9 @@ use backon::ExponentialBackoff;
 use backon::Retryable;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_formats::output_format::OutputFormat;
 use common_formats::FileFormatOptionsExt;
 use common_pipeline_core::processors::port::InputPort;
@@ -205,7 +205,7 @@ impl Processor for StageTableSink {
                 if !self.single {
                     for i in (0..datablock.num_rows()).step_by(1024) {
                         let end = (i + 1024).min(datablock.num_rows());
-                        let small_block = datablock.slice(i, end - i);
+                        let small_block = datablock.slice(i..end);
 
                         let bs = self.output_format.serialize_block(&small_block)?;
                         self.working_buffer.extend_from_slice(bs.as_slice());
@@ -219,7 +219,7 @@ impl Processor for StageTableSink {
                             let data = std::mem::take(&mut self.working_buffer);
                             self.working_datablocks.clear();
                             if end != datablock.num_rows() {
-                                let remain = datablock.slice(end, datablock.num_rows() - end);
+                                let remain = datablock.slice(end..datablock.num_rows());
                                 self.state = State::NeedWrite(data, Some(remain));
                             } else {
                                 self.state = State::NeedWrite(data, None);

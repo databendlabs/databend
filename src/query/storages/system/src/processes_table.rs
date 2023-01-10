@@ -18,9 +18,18 @@ use std::time::Duration;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::number::Int64Type;
+use common_expression::types::number::UInt32Type;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::FromOptData;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -99,44 +108,62 @@ impl SyncSystemTable for ProcessesTable {
             }
         }
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(processes_id),
-            Series::from_data(processes_type),
-            Series::from_data(processes_host),
-            Series::from_data(processes_user),
-            Series::from_data(processes_state),
-            Series::from_data(processes_database),
-            Series::from_data(processes_extra_info),
-            Series::from_data(processes_memory_usage),
-            Series::from_data(processes_data_read_bytes),
-            Series::from_data(processes_data_write_bytes),
-            Series::from_data(processes_scan_progress_read_rows),
-            Series::from_data(processes_scan_progress_read_bytes),
-            Series::from_data(processes_mysql_connection_id),
-            Series::from_data(processes_time),
-            Series::from_data(processes_status),
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(processes_id),
+            StringType::from_data(processes_type),
+            StringType::from_opt_data(processes_host),
+            StringType::from_data(processes_user),
+            StringType::from_data(processes_state),
+            StringType::from_data(processes_database),
+            StringType::from_data(processes_extra_info),
+            Int64Type::from_data(processes_memory_usage),
+            UInt64Type::from_data(processes_data_read_bytes),
+            UInt64Type::from_data(processes_data_write_bytes),
+            UInt64Type::from_data(processes_scan_progress_read_rows),
+            UInt64Type::from_data(processes_scan_progress_read_bytes),
+            UInt32Type::from_opt_data(processes_mysql_connection_id),
+            UInt64Type::from_data(processes_time),
+            StringType::from_data(processes_status),
         ]))
     }
 }
 
 impl ProcessesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("id", Vu8::to_data_type()),
-            DataField::new("type", Vu8::to_data_type()),
-            DataField::new_nullable("host", Vu8::to_data_type()),
-            DataField::new("user", Vu8::to_data_type()),
-            DataField::new("command", Vu8::to_data_type()),
-            DataField::new("database", Vu8::to_data_type()),
-            DataField::new("extra_info", Vu8::to_data_type()),
-            DataField::new("memory_usage", i64::to_data_type()),
-            DataField::new("data_read_bytes", u64::to_data_type()),
-            DataField::new("data_write_bytes", u64::to_data_type()),
-            DataField::new("scan_progress_read_rows", u64::to_data_type()),
-            DataField::new("scan_progress_read_bytes", u64::to_data_type()),
-            DataField::new_nullable("mysql_connection_id", u32::to_data_type()),
-            DataField::new("time", u64::to_data_type()),
-            DataField::new("status", Vu8::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("id", TableDataType::String),
+            TableField::new("type", TableDataType::String),
+            TableField::new(
+                "host",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
+            TableField::new("user", TableDataType::String),
+            TableField::new("command", TableDataType::String),
+            TableField::new("database", TableDataType::String),
+            TableField::new("extra_info", TableDataType::String),
+            TableField::new("memory_usage", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new(
+                "data_read_bytes",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "data_write_bytes",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "scan_progress_read_rows",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "scan_progress_read_bytes",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "mysql_connection_id",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt32))),
+            ),
+            TableField::new("time", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("status", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

@@ -15,27 +15,26 @@
 use std::alloc::Layout;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethodKind;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataTypeImpl;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::HashMethodKind;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::aggregates::StateAddr;
+use common_sql::IndexType;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::transforms::group_by::Area;
 
 pub struct AggregatorParams {
-    pub output_schema: DataSchemaRef,
     pub input_schema: DataSchemaRef,
-    pub group_columns: Vec<usize>,
-    pub group_data_types: Vec<DataTypeImpl>,
+    pub group_columns: Vec<IndexType>,
+    pub group_data_types: Vec<DataType>,
 
     pub aggregate_functions: Vec<AggregateFunctionRef>,
-    pub aggregate_functions_column_name: Vec<String>,
     pub aggregate_functions_arguments: Vec<Vec<usize>>,
 
     // about function state memory layout
@@ -46,11 +45,10 @@ pub struct AggregatorParams {
 
 impl AggregatorParams {
     pub fn try_create(
-        output_schema: DataSchemaRef,
         input_schema: DataSchemaRef,
+        group_data_types: Vec<DataType>,
         group_columns: &[usize],
         agg_funcs: &[AggregateFunctionRef],
-        agg_output_names: &[String],
         agg_args: &[Vec<usize>],
     ) -> Result<Arc<AggregatorParams>> {
         let mut states_offsets: Vec<usize> = Vec::with_capacity(agg_funcs.len());
@@ -59,18 +57,12 @@ impl AggregatorParams {
             states_offsets = Vec::with_capacity(agg_funcs.len());
             states_layout = Some(get_layout_offsets(agg_funcs, &mut states_offsets)?);
         }
-        let group_data_types = group_columns
-            .iter()
-            .map(|&index| input_schema.field(index).data_type().clone())
-            .collect();
 
         Ok(Arc::new(AggregatorParams {
-            output_schema,
             input_schema,
             group_columns: group_columns.to_vec(),
             group_data_types,
             aggregate_functions: agg_funcs.to_vec(),
-            aggregate_functions_column_name: agg_output_names.to_vec(),
             aggregate_functions_arguments: agg_args.to_vec(),
             layout: states_layout,
             offsets_aggregate_states: states_offsets,

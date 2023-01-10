@@ -25,23 +25,24 @@ use common_cache::Cache;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::ClusterKey;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::TableSnapshotStatistics;
-use common_storages_table_meta::meta::Versioned;
-use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::ClusterKey;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableSnapshotStatistics;
+use storages_common_table_meta::meta::Versioned;
+use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -259,7 +260,7 @@ impl FuseTable {
     }
 
     fn merge_table_operations(
-        schema: &DataSchema,
+        schema: &TableSchema,
         previous: Option<Arc<TableSnapshot>>,
         prev_version: u64,
         mut new_segments: Vec<Location>,
@@ -502,12 +503,14 @@ impl FuseTable {
             let mut snapshot_tobe_committed =
                 TableSnapshot::from_previous(latest_snapshot.as_ref());
 
+            let schema = self.schema();
             let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
                 ctx.clone(),
                 self.operator.clone(),
                 &base_segments,
                 &base_summary,
                 concurrently_appended_segment_locations,
+                schema,
             )
             .await?;
             snapshot_tobe_committed.segments = segments_tobe_committed;
@@ -595,6 +598,7 @@ impl FuseTable {
         base_segments: &[Location],
         base_summary: &Statistics,
         concurrently_appended_segment_locations: &[Location],
+        schema: TableSchemaRef,
     ) -> Result<(Vec<Location>, Statistics)> {
         if concurrently_appended_segment_locations.is_empty() {
             Ok((base_segments.to_owned(), base_summary.clone()))
@@ -606,7 +610,7 @@ impl FuseTable {
                 .cloned()
                 .collect();
 
-            let fuse_segment_io = SegmentsIO::create(ctx, operator);
+            let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
             let concurrent_appended_segment_infos = fuse_segment_io
                 .read_segments(concurrently_appended_segment_locations)
                 .await?;
@@ -655,7 +659,7 @@ impl MutatorConflictDetector {
 mod utils {
     use std::collections::BTreeMap;
 
-    use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+    use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 
     use super::*;
     use crate::metrics::metrics_inc_commit_mutation_aborts;

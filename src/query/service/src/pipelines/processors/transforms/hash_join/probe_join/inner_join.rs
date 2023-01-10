@@ -17,9 +17,11 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::Evaluator;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -84,7 +86,7 @@ impl JoinHashTable {
 
                             probed_blocks.push(self.merge_eq_block(
                                 &self.row_space.gather(&build_indexes)?,
-                                &DataBlock::block_take_by_indices(input, &probe_indexes)?,
+                                &DataBlock::take(input, &probe_indexes)?,
                             )?);
 
                             index = new_index;
@@ -100,7 +102,7 @@ impl JoinHashTable {
 
         probed_blocks.push(self.merge_eq_block(
             &self.row_space.gather(&build_indexes)?,
-            &DataBlock::block_take_by_indices(input, &probe_indexes)?,
+            &DataBlock::take(input, &probe_indexes)?,
         )?);
 
         match &self.hash_join_desc.other_predicate {
@@ -116,9 +118,11 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let predicate = other_predicate.eval(&func_ctx, &probed_block)?;
-                    let res = DataBlock::filter_block(probed_block, predicate.vector())?;
-
+                    let evaluator = Evaluator::new(&probed_block, func_ctx, &BUILTIN_FUNCTIONS);
+                    let predicate = evaluator.run(other_predicate).map_err(|(_, e)| {
+                        ErrorCode::Internal(format!("Invalid expression: {}", e))
+                    })?;
+                    let res = probed_block.filter(&predicate)?;
                     if !res.is_empty() {
                         filtered_blocks.push(res);
                     }

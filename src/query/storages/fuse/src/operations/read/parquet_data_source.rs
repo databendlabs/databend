@@ -17,9 +17,9 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use common_catalog::plan::PartInfoPtr;
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::BlockMetaInfoPtr;
 use common_exception::Result;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 

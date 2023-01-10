@@ -20,17 +20,17 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::SortColumnDescription;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::SortColumnDescription;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
-use common_storages_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::FuseTableSink;
 use crate::operations::ReclusterMutator;
@@ -81,7 +81,7 @@ impl FuseTable {
                     blocks_map
                         .entry(stats.level)
                         .or_default()
-                        .push((idx.0, b.clone()));
+                        .push((idx.segment_idx, b.clone()));
                 }
             }
         });
@@ -147,12 +147,13 @@ impl FuseTable {
             block_compact_thresholds,
         )?;
 
+        let _schema = table_info.schema();
         // sort
-        let sort_descs: Vec<SortColumnDescription> = self
-            .cluster_keys(ctx.clone())
+        let sort_descs: Vec<SortColumnDescription> = cluster_stats_gen
+            .cluster_key_index
             .iter()
-            .map(|expr| SortColumnDescription {
-                column_name: expr.column_name(),
+            .map(|offset| SortColumnDescription {
+                offset: *offset,
                 asc: true,
                 nulls_first: false,
             })
@@ -176,14 +177,7 @@ impl FuseTable {
         })?;
 
         // construct output fields
-        let mut output_fields = plan.schema().fields().clone();
-        for expr in self.cluster_keys(ctx.clone()).iter() {
-            let cname = expr.column_name();
-            if !output_fields.iter().any(|x| x.name() == &cname) {
-                let field = DataField::new(&cname, expr.data_type());
-                output_fields.push(field);
-            }
-        }
+        let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
 
         try_add_multi_sort_merge(
             pipeline,
@@ -210,6 +204,7 @@ impl FuseTable {
                 self.meta_location_generator().clone(),
                 cluster_stats_gen.clone(),
                 block_compact_thresholds,
+                self.table_info.schema(),
                 self.storage_format,
                 self.table_compression,
                 None,

@@ -14,14 +14,14 @@
 
 use std::collections::HashMap;
 
-use common_datavalues::BooleanType;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
-use common_datavalues::NullableType;
-use common_datavalues::UInt64Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunctionFactory;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::ArgType;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::Literal;
+use common_functions::aggregates::AggregateCountFunction;
 
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;
@@ -41,6 +41,7 @@ use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
@@ -178,6 +179,19 @@ impl SubqueryRewriter {
                 ))
             }
 
+            Scalar::NotExpr(expr) => {
+                let (argument, s_expr) =
+                    self.try_rewrite_subquery(&expr.argument, s_expr, false)?;
+                Ok((
+                    NotExpr {
+                        argument: Box::new(argument),
+                        return_type: expr.return_type.clone(),
+                    }
+                    .into(),
+                    s_expr,
+                ))
+            }
+
             Scalar::ComparisonExpr(expr) => {
                 let (left, s_expr) = self.try_rewrite_subquery(&expr.left, s_expr, false)?;
                 let (right, s_expr) = self.try_rewrite_subquery(&expr.right, &s_expr, false)?;
@@ -205,9 +219,9 @@ impl SubqueryRewriter {
                 }
 
                 let expr: Scalar = FunctionCall {
+                    params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
-                    arg_types: func.arg_types.clone(),
                     return_type: func.return_type.clone(),
                 }
                 .into();
@@ -257,8 +271,8 @@ impl SubqueryRewriter {
                 if matches!(result, UnnestResult::SimpleJoin) {
                     return Ok((
                         Scalar::ConstantExpr(ConstantExpr {
-                            value: DataValue::Boolean(true),
-                            data_type: Box::new(BooleanType::new_impl()),
+                            value: Literal::Boolean(true),
+                            data_type: Box::new(DataType::Boolean),
                         }),
                         s_expr,
                     ));
@@ -277,17 +291,9 @@ impl SubqueryRewriter {
                 };
 
                 let data_type = if subquery.typ == SubqueryType::Scalar {
-                    if let DataTypeImpl::Nullable(_) = *subquery.data_type {
-                        subquery.data_type.clone()
-                    } else {
-                        Box::new(DataTypeImpl::Nullable(NullableType::create(
-                            *subquery.data_type.clone(),
-                        )))
-                    }
+                    Box::new(subquery.data_type.wrap_nullable())
                 } else if matches! {result, UnnestResult::MarkJoin {..}} {
-                    Box::new(DataTypeImpl::Nullable(NullableType::create(
-                        BooleanType::new_impl(),
-                    )))
+                    Box::new(DataType::Nullable(Box::new(DataType::Boolean)))
                 } else {
                     subquery.data_type.clone()
                 };
@@ -306,35 +312,35 @@ impl SubqueryRewriter {
                 let scalar = if flatten_info.from_count_func {
                     // convert count aggregate function to multi_if function, if count() is not null, then count() else 0
                     let is_null = Scalar::FunctionCall(FunctionCall {
+                        params: vec![],
                         arguments: vec![column_ref.clone()],
                         func_name: "is_not_null".to_string(),
-                        arg_types: vec![column_ref.data_type()],
-                        return_type: Box::new(BooleanType::new_impl()),
+                        return_type: Box::new(DataType::Boolean),
                     });
                     let zero = Scalar::ConstantExpr(ConstantExpr {
-                        value: DataValue::UInt64(0),
-                        data_type: Box::new(UInt64Type::new_impl()),
+                        value: Literal::Int64(0),
+                        data_type: Box::new(
+                            DataType::Number(NumberDataType::Int64).wrap_nullable(),
+                        ),
                     });
                     Scalar::CastExpr(CastExpr {
                         argument: Box::new(Scalar::FunctionCall(FunctionCall {
+                            params: vec![],
                             arguments: vec![is_null, column_ref.clone(), zero],
                             func_name: "if".to_string(),
-                            arg_types: vec![
-                                BooleanType::new_impl(),
-                                column_ref.data_type(),
-                                UInt64Type::new_impl(),
-                            ],
-                            return_type: Box::new(UInt64Type::new_impl()),
+                            return_type: Box::new(
+                                DataType::Number(NumberDataType::UInt64).wrap_nullable(),
+                            ),
                         })),
                         from_type: Box::new(column_ref.data_type()),
-                        target_type: Box::new(UInt64Type::new_impl()),
+                        target_type: Box::new(
+                            DataType::Number(NumberDataType::UInt64).wrap_nullable(),
+                        ),
                     })
                 } else if subquery.typ == SubqueryType::NotExists {
-                    Scalar::FunctionCall(FunctionCall {
-                        arguments: vec![column_ref.clone()],
-                        func_name: "not".to_string(),
-                        arg_types: vec![column_ref.data_type()],
-                        return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                    Scalar::NotExpr(NotExpr {
+                        argument: Box::new(column_ref),
+                        return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
                     })
                 } else {
                     column_ref
@@ -377,7 +383,7 @@ impl SubqueryRewriter {
                 // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
-                let agg_func = AggregateFunctionFactory::instance().get("count", vec![], vec![])?;
+                let agg_func = AggregateCountFunction::try_create("", vec![], vec![])?;
                 let agg_func_index = self
                     .metadata
                     .write()
@@ -422,12 +428,12 @@ impl SubqueryRewriter {
                     ),
                     right: Box::new(
                         ConstantExpr {
-                            value: DataValue::Int64(1),
-                            data_type: Box::new(agg_func.return_type()?),
+                            value: common_expression::Literal::UInt64(1),
+                            data_type: Box::new(UInt64Type::data_type().wrap_nullable()),
                         }
                         .into(),
                     ),
-                    return_type: Box::new(agg_func.return_type()?),
+                    return_type: Box::new(DataType::Boolean.wrap_nullable()),
                 };
                 let filter = Filter {
                     predicates: vec![compare.into()],
@@ -479,7 +485,7 @@ impl SubqueryRewriter {
                             op,
                             left: Box::new(right_condition),
                             right: Box::new(left_condition),
-                            return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                            return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
                         });
                         (vec![], vec![], vec![other_condition])
                     };
@@ -493,7 +499,7 @@ impl SubqueryRewriter {
                 } else {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
-                        NullableType::new_impl(BooleanType::new_impl()),
+                        DataType::Nullable(Box::new(DataType::Boolean)),
                     )
                 };
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);

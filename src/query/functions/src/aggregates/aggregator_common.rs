@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,12 @@
 use std::fmt::Display;
 
 use bumpalo::Bump;
-use common_datavalues::ColumnRef;
-use common_datavalues::ColumnWithField;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
@@ -109,20 +109,21 @@ impl Drop for EvalAggr {
 
 pub fn eval_aggr(
     name: &str,
-    params: Vec<DataValue>,
-    columns: &[ColumnWithField],
+    params: Vec<Scalar>,
+    columns: &[Column],
+    types: &[DataType],
     rows: usize,
-) -> Result<ColumnRef> {
+) -> Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
-    let arguments = columns.iter().map(|c| c.field().clone()).collect();
-    let cols: Vec<ColumnRef> = columns.iter().map(|c| c.column().clone()).collect();
+    let arguments = types.to_owned();
+    let cols: Vec<Column> = columns.to_owned();
 
     let func = factory.get(name, params, arguments)?;
     let data_type = func.return_type()?;
 
     let eval = EvalAggr::new(func.clone());
     func.accumulate(eval.addr, &cols, None, rows)?;
-    let mut builder = data_type.create_mutable(1024);
-    func.merge_result(eval.addr, builder.as_mut())?;
-    Ok(builder.to_column())
+    let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
+    func.merge_result(eval.addr, &mut builder)?;
+    Ok((builder.build(), data_type))
 }

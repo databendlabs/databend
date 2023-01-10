@@ -25,12 +25,12 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ColumnMeta;
-use common_storages_table_meta::meta::Compression;
+use common_expression::DataBlock;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::Compression;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::decompressor::BuffedBasicDecompressor;
@@ -161,7 +161,7 @@ impl BlockReader {
         }
 
         let chunk = Chunk::try_new(arrays)?;
-        DataBlock::from_chunk(&self.schema(), &chunk)
+        DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
     }
 
     fn chunks_to_parquet_array_iter<'a>(

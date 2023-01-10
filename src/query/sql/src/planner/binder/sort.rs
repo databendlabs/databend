@@ -37,6 +37,7 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::ScalarItem;
@@ -217,6 +218,7 @@ impl<'a> Binder {
     ) -> Result<SExpr> {
         let mut order_by_items = Vec::with_capacity(order_by.items.len());
         let mut scalars = vec![];
+
         for order in order_by.items {
             if from_context.in_grouping {
                 let mut group_checker = GroupingChecker::new(from_context);
@@ -384,6 +386,17 @@ impl<'a> Binder {
                         return_type: return_type.clone(),
                     }))
                 }
+                Scalar::NotExpr(NotExpr {
+                    argument,
+                    return_type,
+                }) => {
+                    let argument =
+                        Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
+                    Ok(Scalar::NotExpr(NotExpr {
+                        argument,
+                        return_type: return_type.clone(),
+                    }))
+                }
                 Scalar::ComparisonExpr(ComparisonExpr {
                     op,
                     left,
@@ -423,9 +436,9 @@ impl<'a> Binder {
                     }))
                 }
                 Scalar::FunctionCall(FunctionCall {
+                    params,
                     arguments,
                     func_name,
-                    arg_types,
                     return_type,
                 }) => {
                     let arguments = arguments
@@ -433,9 +446,9 @@ impl<'a> Binder {
                         .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
                         .collect::<Result<Vec<_>>>()?;
                     Ok(Scalar::FunctionCall(FunctionCall {
+                        params: params.clone(),
                         arguments,
                         func_name: func_name.clone(),
-                        arg_types: arg_types.clone(),
                         return_type: return_type.clone(),
                     }))
                 }

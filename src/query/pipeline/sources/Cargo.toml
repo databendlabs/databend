@@ -16,9 +16,8 @@ async-channel = "1.7.1"
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
-common-datablocks = { path = "../../datablocks" }
-common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
 common-formats = { path = "../../formats" }
 common-io = { path = "../../../common/io" }
 common-meta-types = { path = "../../../meta/types" }
@@ -31,7 +30,7 @@ crossbeam-channel = "0.5.6"
 csv-core = "0.1.10"
 futures = "0.3.24"
 futures-util = "0.3.24"
-opendal = { version = "0.23", features = ["compress"] }
+opendal = { version = "0.24", features = ["compress"] }
 parking_lot = "0.12.1"
 serde = { workspace = true }
 serde_json = { workspace = true }

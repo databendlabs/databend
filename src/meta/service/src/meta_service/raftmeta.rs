@@ -30,7 +30,7 @@ use common_base::base::tokio::time::Instant;
 use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
 use common_meta_raft_store::config::RaftConfig;
-use common_meta_raft_store::sled_key_spaces::GenericKV;
+use common_meta_raft_store::key_spaces::GenericKV;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::error::AddLearnerError;

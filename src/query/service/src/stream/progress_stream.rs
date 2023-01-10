@@ -18,9 +18,9 @@ use std::task::Poll;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::SendableDataBlockStream;
 use futures::Stream;
 use pin_project_lite::pin_project;
 

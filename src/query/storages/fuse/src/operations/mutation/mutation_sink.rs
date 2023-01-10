@@ -20,13 +20,13 @@ use common_base::base::ProgressValues;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
-use common_datablocks::BlockMetaInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::TableSnapshot;
+use common_expression::BlockMetaInfoPtr;
 use opendal::Operator;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -264,7 +264,8 @@ impl Processor for MutationSink {
                         .chain(self.merged_segments.iter())
                         .cloned()
                         .collect();
-                    let segments_io = SegmentsIO::create(self.ctx.clone(), self.dal.clone());
+                    let segments_io =
+                        SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.table.schema());
                     let append_segment_infos =
                         segments_io.read_segments(&appended_segments).await?;
                     for result in append_segment_infos.into_iter() {

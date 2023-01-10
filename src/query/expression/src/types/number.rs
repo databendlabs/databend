@@ -19,6 +19,7 @@ use std::ops::Range;
 use common_arrow::arrow::buffer::Buffer;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
+use lexical_core::ToLexicalWithOptions;
 use num_traits::NumCast;
 use ordered_float::OrderedFloat;
 use serde::Deserialize;
@@ -191,7 +192,7 @@ impl<Num: Number> ArgType for NumberType<Num> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumAsInner)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum NumberDataType {
     UInt8,
     UInt16,
@@ -344,6 +345,50 @@ impl NumberDataType {
                     }
                 }
                 (true, false) => false,
+            },
+        }
+    }
+
+    pub fn lossful_super_type(self, other: Self) -> Self {
+        if self.can_lossless_cast_to(other) {
+            return other;
+        } else if other.can_lossless_cast_to(self) {
+            return self;
+        }
+        let max_bit_width = 64;
+        match (self.is_float(), other.is_float()) {
+            (true, true) => NumberDataType::new(
+                max_bit_with(self.bit_width(), other.bit_width()),
+                true,
+                true,
+            ),
+            (true, false) => {
+                let bin_width = next_bit_width(other.bit_width()).unwrap_or(max_bit_width);
+                NumberDataType::new(max_bit_with(bin_width, self.bit_width()), true, true)
+            }
+            (false, true) => {
+                let bin_width = next_bit_width(self.bit_width()).unwrap_or(max_bit_width);
+                NumberDataType::new(max_bit_with(bin_width, other.bit_width()), true, true)
+            }
+            (false, false) => match (self.is_signed(), other.is_signed()) {
+                (true, true) => NumberDataType::new(
+                    max_bit_with(self.bit_width(), other.bit_width()),
+                    true,
+                    false,
+                ),
+                (false, false) => NumberDataType::new(
+                    max_bit_with(self.bit_width(), other.bit_width()),
+                    false,
+                    false,
+                ),
+                (false, true) => {
+                    let bin_width = next_bit_width(other.bit_width()).unwrap_or(max_bit_width);
+                    NumberDataType::new(max_bit_with(bin_width, self.bit_width()), true, false)
+                }
+                (true, false) => {
+                    let bin_width = next_bit_width(self.bit_width()).unwrap_or(max_bit_width);
+                    NumberDataType::new(max_bit_with(bin_width, other.bit_width()), true, false)
+                }
             },
         }
     }
@@ -622,6 +667,19 @@ macro_rules! with_unsigned_number_mapped_type {
 }
 
 #[macro_export]
+macro_rules! with_integer_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                UInt8 => u8, UInt16 => u16, UInt32 => u32, UInt64 => u64,
+                Int8 => i8, Int16 => i16, Int32 => i32, Int64 => i64,
+            ],
+            $($tail)*
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! with_number_mapped_type {
     (| $t:tt | $($tail:tt)*) => {
         match_template::match_template! {
@@ -633,55 +691,6 @@ macro_rules! with_number_mapped_type {
             $($tail)*
         }
     }
-}
-
-#[macro_export]
-macro_rules! with_number_data_types {
-    (
-    $type0:expr, $type1:expr, | $_a:tt $T0:ident, $_b:tt $T1:ident | $body:tt,  $nbody:tt
-) => {{
-        use common_expression::types::number::NumberDataType::*;
-        use common_expression::types::number::F32;
-        use common_expression::types::number::F64;
-
-        macro_rules! __with_types__ {
-            ( $_a $T0:ident, $_b $T1:ident ) => {
-                $body
-            };
-        }
-
-        macro_rules! __match_type__ {
-            ($t:ident) => {
-                match $type1 {
-                    Int8 => __with_types__! { $t, i8 },
-                    Int16 => __with_types__! { $t, i16 },
-                    Int32 => __with_types__! { $t, i32 },
-                    Int64 => __with_types__! { $t, i64 },
-                    UInt8 => __with_types__! { $t, u8 },
-                    UInt16 => __with_types__! { $t, u16 },
-                    UInt32 => __with_types__! { $t, u32 },
-                    UInt64 => __with_types__! { $t, u64 },
-                    Float32 => __with_types__! { $t, F32 },
-                    Float64 => __with_types__! { $t, F64 },
-                    _ => $nbody,
-                }
-            };
-        }
-
-        match $type0 {
-            Int8 => __match_type__! { i8 },
-            Int16 => __match_type__! { i16 },
-            Int32 => __match_type__! { i32 },
-            Int64 => __match_type__! { i64 },
-            UInt8 => __match_type__! { u8 },
-            UInt16 => __match_type__! { u16 },
-            UInt32 => __match_type__! { u32 },
-            UInt64 => __match_type__! { u64 },
-            Float32 => __match_type__! { F32 },
-            Float64 => __match_type__! { F64 },
-            _ => $nbody,
-        }
-    }};
 }
 
 pub trait Number:
@@ -699,6 +708,8 @@ pub trait Number:
     + Send
     + 'static
 {
+    type Native: ToLexicalWithOptions;
+
     const MIN: Self;
     const MAX: Self;
 
@@ -712,9 +723,14 @@ pub trait Number:
     fn upcast_scalar(scalar: Self) -> NumberScalar;
     fn upcast_column(col: Buffer<Self>) -> NumberColumn;
     fn upcast_domain(domain: SimpleDomain<Self>) -> NumberDomain;
+
+    fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
+        <Self::Native as ToLexicalWithOptions>::Options::default()
+    }
 }
 
 impl Number for u8 {
+    type Native = Self;
     const MIN: Self = u8::MIN;
     const MAX: Self = u8::MAX;
     const FLOATING: bool = false;
@@ -753,6 +769,7 @@ impl Number for u8 {
 }
 
 impl Number for u16 {
+    type Native = Self;
     const MIN: Self = u16::MIN;
     const MAX: Self = u16::MAX;
     const FLOATING: bool = false;
@@ -791,6 +808,8 @@ impl Number for u16 {
 }
 
 impl Number for u32 {
+    type Native = Self;
+
     const MIN: Self = u32::MIN;
     const MAX: Self = u32::MAX;
     const FLOATING: bool = false;
@@ -829,6 +848,8 @@ impl Number for u32 {
 }
 
 impl Number for u64 {
+    type Native = Self;
+
     const MIN: Self = u64::MIN;
     const MAX: Self = u64::MAX;
     const FLOATING: bool = false;
@@ -867,6 +888,8 @@ impl Number for u64 {
 }
 
 impl Number for i8 {
+    type Native = Self;
+
     const MIN: Self = i8::MIN;
     const MAX: Self = i8::MAX;
     const FLOATING: bool = false;
@@ -905,6 +928,8 @@ impl Number for i8 {
 }
 
 impl Number for i16 {
+    type Native = Self;
+
     const MIN: Self = i16::MIN;
     const MAX: Self = i16::MAX;
     const FLOATING: bool = false;
@@ -943,6 +968,8 @@ impl Number for i16 {
 }
 
 impl Number for i32 {
+    type Native = Self;
+
     const MIN: Self = i32::MIN;
     const MAX: Self = i32::MAX;
     const FLOATING: bool = false;
@@ -981,6 +1008,8 @@ impl Number for i32 {
 }
 
 impl Number for i64 {
+    type Native = Self;
+
     const MIN: Self = i64::MIN;
     const MAX: Self = i64::MAX;
     const FLOATING: bool = false;
@@ -1019,6 +1048,8 @@ impl Number for i64 {
 }
 
 impl Number for F32 {
+    type Native = f32;
+
     const MIN: Self = OrderedFloat(f32::NEG_INFINITY);
     const MAX: Self = OrderedFloat(f32::NAN);
     const FLOATING: bool = true;
@@ -1054,9 +1085,19 @@ impl Number for F32 {
     fn upcast_domain(domain: SimpleDomain<Self>) -> NumberDomain {
         NumberDomain::Float32(domain)
     }
+
+    fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
+        unsafe {
+            lexical_core::WriteFloatOptions::builder()
+                .trim_floats(true)
+                .build_unchecked()
+        }
+    }
 }
 
 impl Number for F64 {
+    type Native = f64;
+
     const MIN: Self = OrderedFloat(f64::NEG_INFINITY);
     const MAX: Self = OrderedFloat(f64::NAN);
     const FLOATING: bool = true;
@@ -1091,5 +1132,13 @@ impl Number for F64 {
 
     fn upcast_domain(domain: SimpleDomain<Self>) -> NumberDomain {
         NumberDomain::Float64(domain)
+    }
+
+    fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
+        unsafe {
+            lexical_core::WriteFloatOptions::builder()
+                .trim_floats(true)
+                .build_unchecked()
+        }
     }
 }

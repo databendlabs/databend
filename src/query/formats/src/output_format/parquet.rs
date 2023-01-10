@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_storages_common::blocks_to_parquet;
-use common_storages_table_meta::table::TableCompression;
+use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
+use storages_common_blocks::blocks_to_parquet;
+use storages_common_table_meta::table::TableCompression;
 
 use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
 
 #[derive(Default)]
 pub struct ParquetOutputFormat {
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     data_blocks: Vec<DataBlock>,
 }
 
 impl ParquetOutputFormat {
-    pub fn create(schema: DataSchemaRef, _options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: TableSchemaRef, _options: &FileFormatOptionsExt) -> Self {
         Self {
             schema,
             data_blocks: vec![],

@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
-use common_datavalues::DataSchemaRefExt;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -32,11 +36,12 @@ impl ClickHouseFederated {
     // Format:
     // |function_name()|
     // |value|
-    fn select_function_block(name: &str, value: &str) -> Option<DataBlock> {
-        Some(DataBlock::create(
-            DataSchemaRefExt::create(vec![DataField::new(name, StringType::new_impl())]),
-            vec![Series::from_data(vec![value])],
-        ))
+    fn select_function_block(name: &str, value: &str) -> Option<(TableSchemaRef, DataBlock)> {
+        let schema = TableSchemaRefExt::create(vec![TableField::new(name, TableDataType::String)]);
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![
+            value.as_bytes().to_vec(),
+        ])]);
+        Some((schema, block))
     }
 
     pub fn get_format(query: &str) -> Option<String> {
@@ -46,8 +51,8 @@ impl ClickHouseFederated {
         }
     }
 
-    pub fn check(query: &str) -> Option<DataBlock> {
-        let rules: Vec<(&str, Option<DataBlock>)> = vec![(
+    pub fn check(query: &str) -> Option<(TableSchemaRef, DataBlock)> {
+        let rules: Vec<(&str, Option<(TableSchemaRef, DataBlock)>)> = vec![(
             "(?i)^(SELECT VERSION()(.*))",
             Self::select_function_block("version()", CLICKHOUSE_VERSION),
         )];

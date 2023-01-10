@@ -16,10 +16,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethodKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::HashMethodKind;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -465,7 +465,8 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                 return Ok(Event::NeedConsume);
             }
 
-            if let Some(block) = state.output_data_block.pop() {
+            if !state.output_data_block.is_empty() {
+                let block = state.output_data_block.remove(0);
                 state.output_port.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }

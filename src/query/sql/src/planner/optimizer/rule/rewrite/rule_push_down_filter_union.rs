@@ -27,6 +27,7 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -136,7 +137,7 @@ fn replace_column_binding(
                 let new_column = ColumnBinding {
                     database_name: None,
                     table_name: None,
-                    column_name: "".to_string(),
+                    column_name: column.column.column_name.clone(),
                     index: *index_pairs.get(&index).unwrap(),
                     data_type: column.column.data_type,
                     visibility: Visibility::Visible,
@@ -158,6 +159,10 @@ fn replace_column_binding(
             right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
             return_type: expr.return_type,
         })),
+        Scalar::NotExpr(expr) => Ok(Scalar::NotExpr(NotExpr {
+            argument: Box::new(replace_column_binding(index_pairs, *expr.argument)?),
+            return_type: expr.return_type,
+        })),
         Scalar::ComparisonExpr(expr) => Ok(Scalar::ComparisonExpr(ComparisonExpr {
             op: expr.op,
             left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
@@ -177,13 +182,13 @@ fn replace_column_binding(
             return_type: expr.return_type,
         })),
         Scalar::FunctionCall(expr) => Ok(Scalar::FunctionCall(FunctionCall {
+            params: expr.params,
             arguments: expr
                 .arguments
                 .into_iter()
                 .map(|arg| replace_column_binding(index_pairs, arg))
                 .collect::<Result<Vec<_>>>()?,
             func_name: expr.func_name,
-            arg_types: expr.arg_types,
             return_type: expr.return_type,
         })),
         Scalar::CastExpr(expr) => Ok(Scalar::CastExpr(CastExpr {

@@ -20,10 +20,11 @@ use std::sync::Mutex;
 
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
-use common_datablocks::BlockCompactThresholds;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataSchema;
+use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_meta_types::FileFormatOptions;
@@ -40,7 +41,6 @@ use crate::processors::sources::input_formats::impls::input_format_ndjson::Input
 use crate::processors::sources::input_formats::impls::input_format_parquet::InputFormatParquet;
 use crate::processors::sources::input_formats::impls::input_format_tsv::InputFormatTSV;
 use crate::processors::sources::input_formats::impls::input_format_xml::InputFormatXML;
-use crate::processors::sources::input_formats::input_format_text::InputFormatText;
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::InputFormat;
@@ -104,7 +104,7 @@ impl InputSource {
 
 pub struct InputContext {
     pub plan: InputPlan,
-    pub schema: DataSchemaRef,
+    pub schema: TableSchemaRef,
     pub source: InputSource,
     pub format: Arc<dyn InputFormat>,
     pub splits: Vec<Arc<SplitInfo>>,
@@ -134,13 +134,11 @@ impl Debug for InputContext {
 impl InputContext {
     pub fn get_input_format(format: &StageFileFormatType) -> Result<Arc<dyn InputFormat>> {
         match format {
-            StageFileFormatType::Tsv => Ok(Arc::new(InputFormatText::<InputFormatTSV>::create())),
-            StageFileFormatType::Csv => Ok(Arc::new(InputFormatText::<InputFormatCSV>::create())),
-            StageFileFormatType::NdJson => {
-                Ok(Arc::new(InputFormatText::<InputFormatNDJson>::create()))
-            }
+            StageFileFormatType::Tsv => Ok(Arc::new(InputFormatTSV::create())),
+            StageFileFormatType::Csv => Ok(Arc::new(InputFormatCSV::create())),
+            StageFileFormatType::NdJson => Ok(Arc::new(InputFormatNDJson::create())),
             StageFileFormatType::Parquet => Ok(Arc::new(InputFormatParquet {})),
-            StageFileFormatType::Xml => Ok(Arc::new(InputFormatText::<InputFormatXML>::create())),
+            StageFileFormatType::Xml => Ok(Arc::new(InputFormatXML::create())),
             format => Err(ErrorCode::Internal(format!(
                 "Unsupported file format: {:?}",
                 format
@@ -151,7 +149,7 @@ impl InputContext {
     pub fn try_create_from_copy(
         operator: Operator,
         settings: Arc<Settings>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         stage_info: UserStageInfo,
         splits: Vec<Arc<SplitInfo>>,
         scan_progress: Arc<Progress>,
@@ -189,7 +187,7 @@ impl InputContext {
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         block_compact_thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
@@ -229,7 +227,7 @@ impl InputContext {
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
         file_format_options: FileFormatOptions,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
         block_compact_thresholds: BlockCompactThresholds,
@@ -270,6 +268,10 @@ impl InputContext {
         1
     }
 
+    pub fn data_schema(&self) -> DataSchema {
+        (&self.schema.clone()).into()
+    }
+
     pub fn get_compression_alg(&self, path: &str) -> Result<Option<CompressAlgorithm>> {
         let opt = match &self.plan {
             InputPlan::CopyInto(p) => p.stage_info.file_format_options.compression,
@@ -304,6 +306,39 @@ impl InputContext {
             StageFileCompression::None => None,
         };
         Ok(compression_algo)
+    }
+
+    pub fn parse_error_row_based(
+        &self,
+        reason: &str,
+        split_info: &Arc<SplitInfo>,
+        offset_in_split: usize,
+        row_in_split: usize,
+        start_row_of_split: Option<usize>,
+    ) -> ErrorCode {
+        let offset = offset_in_split + split_info.offset;
+        let pos = match start_row_of_split {
+            None => {
+                format!(
+                    "row_in_split={row_in_split}, offset={offset}={}+{offset_in_split}",
+                    split_info.offset
+                )
+            }
+            Some(row) => {
+                format!(
+                    "row={}={row}+{row_in_split}, offset={offset}={}+{offset_in_split}",
+                    row + row_in_split,
+                    split_info.offset
+                )
+            }
+        };
+        let msg = format!(
+            "{reason}, split {}, {pos}, options={:?}, schema={:?}",
+            split_info,
+            self.format_options,
+            self.schema.fields()
+        );
+        ErrorCode::BadBytes(msg)
     }
 }
 

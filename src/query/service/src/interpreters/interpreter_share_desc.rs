@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataSchemaRef;
-use common_datavalues::prelude::Series;
-use common_datavalues::SeriesFrom;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::FromData;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::ShareGrantObjectName;
@@ -65,27 +65,27 @@ impl Interpreter for DescShareInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let mut names: Vec<String> = vec![];
-        let mut kinds: Vec<String> = vec![];
-        let mut shared_ons: Vec<String> = vec![];
+        let mut names: Vec<Vec<u8>> = vec![];
+        let mut kinds: Vec<Vec<u8>> = vec![];
+        let mut shared_ons: Vec<Vec<u8>> = vec![];
         for entry in resp.objects.iter() {
             match &entry.object {
                 ShareGrantObjectName::Database(db) => {
-                    kinds.push("DATABASE".to_string());
-                    names.push(db.clone());
+                    kinds.push("DATABASE".to_string().as_bytes().to_vec());
+                    names.push(db.clone().as_bytes().to_vec());
                 }
                 ShareGrantObjectName::Table(db, table_name) => {
-                    kinds.push("TABLE".to_string());
-                    names.push(format!("{}.{}", db, table_name));
+                    kinds.push("TABLE".to_string().as_bytes().to_vec());
+                    names.push(format!("{}.{}", db, table_name).as_bytes().to_vec());
                 }
             }
-            shared_ons.push(entry.grant_on.to_string());
+            shared_ons.push(entry.grant_on.to_string().as_bytes().to_vec());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(kinds),
-            Series::from_data(names),
-            Series::from_data(shared_ons),
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(kinds),
+            StringType::from_data(names),
+            StringType::from_data(shared_ons),
         ])])
     }
 }

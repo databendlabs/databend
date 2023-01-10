@@ -21,13 +21,14 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
 use common_cache::Cache;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SnapshotId;
-use common_storages_table_meta::meta::TableSnapshotLite;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SnapshotId;
+use storages_common_table_meta::meta::TableSnapshotLite;
 use tracing::info;
 use tracing::warn;
 
@@ -404,7 +405,7 @@ impl FuseTable {
         let mut blocks = HashSet::new();
         let mut blooms = HashSet::new();
 
-        let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone());
+        let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
         let segments = fuse_segments.read_segments(segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone();

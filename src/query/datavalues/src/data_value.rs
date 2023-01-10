@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::fmt;
 use std::hash::Hash;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use ordered_float::OrderedFloat;
-use serde_json::json;
 
-use crate::prelude::*;
-use crate::type_coercion::merge_types;
+use crate::VariantValue;
 
 /// A specific value of a data type.
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
@@ -46,19 +42,6 @@ pub enum DataValue {
 
 impl Eq for DataValue {}
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum ValueType {
-    Null,
-    Boolean,
-    UInt64,
-    Int64,
-    Float64,
-    String,
-    Array,
-    Struct,
-    Variant,
-}
-
 pub type DataValueRef = Arc<DataValue>;
 
 impl DataValue {
@@ -76,135 +59,13 @@ impl DataValue {
         s
     }
 
-    pub fn value_type(&self) -> ValueType {
-        match self {
-            DataValue::Null => ValueType::Null,
-            DataValue::Boolean(_) => ValueType::Boolean,
-            DataValue::Int64(_) => ValueType::Int64,
-            DataValue::UInt64(_) => ValueType::UInt64,
-            DataValue::Float64(_) => ValueType::Float64,
-            DataValue::String(_) => ValueType::String,
-            DataValue::Array(_) => ValueType::Array,
-            DataValue::Struct(_) => ValueType::Struct,
-            DataValue::Variant(_) => ValueType::Variant,
-        }
-    }
-
-    /// Get the minimal memory sized data type.
-    pub fn data_type(&self) -> DataTypeImpl {
-        match self {
-            DataValue::Null => DataTypeImpl::Null(NullType {}),
-            DataValue::Boolean(_) => BooleanType::new_impl(),
-            DataValue::Int64(n) => {
-                if *n >= i8::MIN as i64 && *n <= i8::MAX as i64 {
-                    return Int8Type::new_impl();
-                }
-                if *n >= i16::MIN as i64 && *n <= i16::MAX as i64 {
-                    return Int16Type::new_impl();
-                }
-                if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {
-                    return Int32Type::new_impl();
-                }
-                Int64Type::new_impl()
-            }
-            DataValue::UInt64(n) => {
-                if *n <= u8::MAX as u64 {
-                    return UInt8Type::new_impl();
-                }
-                if *n <= u16::MAX as u64 {
-                    return UInt16Type::new_impl();
-                }
-                if *n <= u32::MAX as u64 {
-                    return UInt32Type::new_impl();
-                }
-                UInt64Type::new_impl()
-            }
-            DataValue::Float64(_) => Float64Type::new_impl(),
-            DataValue::String(_) => StringType::new_impl(),
-            DataValue::Array(vals) => {
-                let inner_type = if vals.is_empty() {
-                    NullType::new_impl()
-                } else {
-                    vals.iter()
-                        .fold(Ok(vals[0].data_type()), |acc, v| {
-                            merge_types(&acc?, &v.data_type())
-                        })
-                        .unwrap()
-                };
-                ArrayType::new_impl(inner_type)
-            }
-            DataValue::Struct(vals) => {
-                let types = vals.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                StructType::new_impl(None, types)
-            }
-            DataValue::Variant(_) => VariantType::new_impl(),
-        }
-    }
-
-    /// Get the maximum memory sized data type
-    pub fn max_data_type(&self) -> DataTypeImpl {
-        match self {
-            DataValue::Null => DataTypeImpl::Null(NullType {}),
-            DataValue::Boolean(_) => BooleanType::new_impl(),
-            DataValue::Int64(_) => Int64Type::new_impl(),
-            DataValue::UInt64(_) => UInt64Type::new_impl(),
-            DataValue::Float64(_) => Float64Type::new_impl(),
-            DataValue::String(_) => StringType::new_impl(),
-            DataValue::Array(vals) => {
-                let inner_type = if vals.is_empty() {
-                    NullType::new_impl()
-                } else {
-                    vals.iter()
-                        .fold(Ok(vals[0].max_data_type()), |acc, v| {
-                            merge_types(&acc?, &v.max_data_type())
-                        })
-                        .unwrap()
-                };
-                ArrayType::new_impl(inner_type)
-            }
-            DataValue::Struct(vals) => {
-                let types = vals.iter().map(|v| v.max_data_type()).collect::<Vec<_>>();
-                StructType::new_impl(None, types)
-            }
-            DataValue::Variant(_) => VariantType::new_impl(),
-        }
-    }
-
-    #[inline]
-    pub fn is_integer(&self) -> bool {
-        matches!(self, DataValue::Int64(_) | DataValue::UInt64(_))
-    }
-
-    #[inline]
-    pub fn is_signed_integer(&self) -> bool {
-        matches!(self, DataValue::Int64(_))
-    }
-
-    #[inline]
-    pub fn is_unsigned_integer(&self) -> bool {
-        matches!(self, DataValue::UInt64(_))
-    }
-
-    #[inline]
-    pub fn is_numeric(&self) -> bool {
-        matches!(
-            self,
-            DataValue::Int64(_) | DataValue::UInt64(_) | DataValue::Float64(_)
-        )
-    }
-
-    #[inline]
-    pub fn is_float(&self) -> bool {
-        matches!(self, DataValue::Float64(_))
-    }
-
     pub fn as_u64(&self) -> Result<u64> {
         match self {
             DataValue::Int64(v) if *v >= 0 => Ok(*v as u64),
             DataValue::UInt64(v) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?} to get u64 number",
-                other.value_type()
+                "Unexpected:{:?} to get u64 number",
+                other
             ))),
         }
     }
@@ -214,8 +75,8 @@ impl DataValue {
             DataValue::Int64(v) => Ok(*v),
             DataValue::UInt64(v) => Ok(*v as i64),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?} to get i64 number",
-                other.value_type()
+                "Unexpected:{:?} to get i64 number",
+                other
             ))),
         }
     }
@@ -224,8 +85,8 @@ impl DataValue {
         match self {
             DataValue::Boolean(v) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?} to get boolean",
-                other.value_type()
+                "Unexpected:{:?} to get boolean",
+                other
             ))),
         }
     }
@@ -236,8 +97,8 @@ impl DataValue {
             DataValue::UInt64(v) => Ok(*v as f64),
             DataValue::Float64(v) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?} to get f64 number",
-                other.value_type()
+                "Unexpected:{:?} to get f64 number",
+                other
             ))),
         }
     }
@@ -250,8 +111,8 @@ impl DataValue {
             DataValue::String(v) => Ok(v.to_owned()),
             DataValue::Variant(v) => Ok(v.to_string().into_bytes()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?} to get string",
-                other.value_type()
+                "Unexpected:{:?} to get string",
+                other
             ))),
         }
     }
@@ -260,8 +121,8 @@ impl DataValue {
         match self {
             DataValue::Array(vals) => Ok(vals.to_vec()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?} to get array values",
-                other.value_type()
+                "Unexpected:{:?} to get array values",
+                other
             ))),
         }
     }
@@ -270,98 +131,10 @@ impl DataValue {
         match self {
             DataValue::Struct(vals) => Ok(vals.to_vec()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?} to get struct values",
-                other.value_type()
+                "Unexpected:{:?} to get struct values",
+                other
             ))),
         }
-    }
-
-    pub fn as_const_column(&self, data_type: &DataTypeImpl, size: usize) -> Result<ColumnRef> {
-        data_type.create_constant_column(self, size)
-    }
-
-    #[allow(clippy::needless_late_init)]
-    pub fn try_from_literal(literal: &str, radix: Option<u32>) -> Result<DataValue> {
-        let radix = radix.unwrap_or(10);
-        let ret = if literal.starts_with(char::from_u32(45).unwrap()) {
-            match i64::from_str_radix(literal, radix) {
-                Ok(n) => DataValue::Int64(n),
-                Err(_) => DataValue::Float64(literal.parse::<f64>()?),
-            }
-        } else {
-            match u64::from_str_radix(literal, radix) {
-                Ok(n) => DataValue::UInt64(n),
-                Err(_) => DataValue::Float64(literal.parse::<f64>()?),
-            }
-        };
-
-        Ok(ret)
-    }
-}
-
-impl PartialOrd for DataValue {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for DataValue {
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self.value_type() == other.value_type() {
-            return match (self, other) {
-                (DataValue::Null, DataValue::Null) => Ordering::Equal,
-                (DataValue::Boolean(v1), DataValue::Boolean(v2)) => v1.cmp(v2),
-                (DataValue::UInt64(v1), DataValue::UInt64(v2)) => v1.cmp(v2),
-                (DataValue::Int64(v1), DataValue::Int64(v2)) => v1.cmp(v2),
-                (DataValue::Float64(v1), DataValue::Float64(v2)) => {
-                    OrderedFloat::from(*v1).cmp(&OrderedFloat::from(*v2))
-                }
-                (DataValue::String(v1), DataValue::String(v2)) => v1.cmp(v2),
-                (DataValue::Array(v1), DataValue::Array(v2)) => {
-                    for (l, r) in v1.iter().zip(v2) {
-                        let cmp = l.cmp(r);
-                        if cmp != Ordering::Equal {
-                            return cmp;
-                        }
-                    }
-                    v1.len().cmp(&v2.len())
-                }
-                (DataValue::Struct(v1), DataValue::Struct(v2)) => {
-                    for (l, r) in v1.iter().zip(v2.iter()) {
-                        let cmp = l.cmp(r);
-                        if cmp != Ordering::Equal {
-                            return cmp;
-                        }
-                    }
-                    v1.len().cmp(&v2.len())
-                }
-                (DataValue::Variant(v1), DataValue::Variant(v2)) => v1.cmp(v2),
-                _ => unreachable!(),
-            };
-        }
-
-        if self.is_null() {
-            return Ordering::Greater;
-        }
-
-        if other.is_null() {
-            return Ordering::Less;
-        }
-
-        if !self.is_numeric() || !other.is_numeric() {
-            panic!(
-                "Cannot compare different types with {:?} and {:?}",
-                self.value_type(),
-                other.value_type()
-            );
-        }
-
-        if self.is_float() || other.is_float() {
-            return OrderedFloat::from(self.as_f64().unwrap())
-                .cmp(&OrderedFloat::from(other.as_f64().unwrap()));
-        }
-
-        self.as_i64().unwrap().cmp(&other.as_i64().unwrap())
     }
 }
 
@@ -380,119 +153,6 @@ impl Hash for DataValue {
             DataValue::Struct(v) => v.hash(state),
             DataValue::Variant(v) => v.hash(state),
         }
-    }
-}
-
-// Did not use std::convert:TryFrom
-// Because we do not need custom type error.
-pub trait DFTryFrom<T>: Sized {
-    fn try_from(value: T) -> Result<Self>;
-}
-
-impl DFTryFrom<DataValue> for Vec<u8> {
-    fn try_from(value: DataValue) -> Result<Self> {
-        match value {
-            DataValue::String(value) => Ok(value),
-            _ => Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error:  Cannot convert {:?} to {}",
-                value,
-                std::any::type_name::<Self>()
-            ))),
-        }
-    }
-}
-
-impl DFTryFrom<DataValue> for VariantValue {
-    fn try_from(value: DataValue) -> Result<Self> {
-        match value {
-            DataValue::Null => Ok(VariantValue::from(serde_json::Value::Null)),
-            DataValue::Boolean(v) => Ok(VariantValue::from(json!(v))),
-            DataValue::Int64(v) => Ok(VariantValue::from(json!(v))),
-            DataValue::UInt64(v) => Ok(VariantValue::from(json!(v))),
-            DataValue::Float64(v) => Ok(VariantValue::from(json!(v))),
-            DataValue::String(v) => Ok(VariantValue::from(json!(v))),
-            DataValue::Array(v) => Ok(VariantValue::from(json!(v))),
-            DataValue::Struct(v) => Ok(VariantValue::from(json!(v))),
-            DataValue::Variant(v) => Ok(v),
-        }
-    }
-}
-
-impl DFTryFrom<&DataValue> for VariantValue {
-    fn try_from(value: &DataValue) -> Result<Self> {
-        match value {
-            DataValue::Null => Ok(VariantValue::from(serde_json::Value::Null)),
-            DataValue::Boolean(v) => Ok(VariantValue::from(json!(*v))),
-            DataValue::Int64(v) => Ok(VariantValue::from(json!(*v))),
-            DataValue::UInt64(v) => Ok(VariantValue::from(json!(*v))),
-            DataValue::Float64(v) => Ok(VariantValue::from(json!(*v))),
-            DataValue::String(v) => Ok(VariantValue::from(json!(
-                String::from_utf8(v.to_vec()).unwrap()
-            ))),
-            DataValue::Array(v) => Ok(VariantValue::from(json!(*v))),
-            DataValue::Struct(v) => Ok(VariantValue::from(json!(*v))),
-            DataValue::Variant(v) => Ok(v.to_owned()),
-        }
-    }
-}
-
-try_cast_data_value_to_std!(u8, as_u64);
-try_cast_data_value_to_std!(u16, as_u64);
-try_cast_data_value_to_std!(u32, as_u64);
-try_cast_data_value_to_std!(u64, as_u64);
-
-try_cast_data_value_to_std!(i8, as_i64);
-try_cast_data_value_to_std!(i16, as_i64);
-try_cast_data_value_to_std!(i32, as_i64);
-try_cast_data_value_to_std!(i64, as_i64);
-
-try_cast_data_value_to_std!(f32, as_f64);
-try_cast_data_value_to_std!(f64, as_f64);
-try_cast_data_value_to_std!(bool, as_bool);
-
-std_to_data_value!(Int64, i8, i64);
-std_to_data_value!(Int64, i16, i64);
-std_to_data_value!(Int64, i32, i64);
-std_to_data_value!(Int64, i64, i64);
-std_to_data_value!(UInt64, u8, u64);
-std_to_data_value!(UInt64, u16, u64);
-std_to_data_value!(UInt64, u32, u64);
-std_to_data_value!(UInt64, u64, u64);
-std_to_data_value!(Float64, f32, f64);
-std_to_data_value!(Float64, f64, f64);
-std_to_data_value!(Boolean, bool, bool);
-
-impl From<&[u8]> for DataValue {
-    fn from(x: &[u8]) -> Self {
-        DataValue::String(x.to_vec())
-    }
-}
-
-impl From<Option<&[u8]>> for DataValue {
-    fn from(x: Option<&[u8]>) -> Self {
-        let x = x.map(|c| c.to_vec());
-        DataValue::from(x)
-    }
-}
-
-impl From<Vec<u8>> for DataValue {
-    fn from(x: Vec<u8>) -> Self {
-        DataValue::String(x)
-    }
-}
-
-impl From<Option<Vec<u8>>> for DataValue {
-    fn from(x: Option<Vec<u8>>) -> Self {
-        match x {
-            Some(v) => DataValue::String(v),
-            None => DataValue::Null,
-        }
-    }
-}
-
-impl From<VariantValue> for DataValue {
-    fn from(x: VariantValue) -> Self {
-        DataValue::Variant(x)
     }
 }
 
@@ -551,14 +211,5 @@ impl fmt::Debug for DataValue {
             DataValue::Struct(_) => write!(f, "{}", self),
             DataValue::Variant(v) => write!(f, "{}", v),
         }
-    }
-}
-
-/// SQL style format
-pub fn format_datavalue_sql(value: &DataValue) -> String {
-    match value {
-        DataValue::String(_) | DataValue::Variant(_) => format!("'{}'", value),
-        DataValue::Float64(value) => format!("'{:?}'", value),
-        _ => value.to_string(),
     }
 }

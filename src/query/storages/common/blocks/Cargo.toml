@@ -1,0 +1,21 @@
+[package]
+name = "storages-common-blocks"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-arrow = { path = "../../../../common/arrow" }
+common-exception = { path = "../../../../common/exception" }
+common-expression = { path = "../../../expression" }
+
+storages-common-table-meta = { path = "../table-meta" }
+
+[build-dependencies]

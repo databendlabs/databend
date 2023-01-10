@@ -16,12 +16,13 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Column;
+use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
+use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_types::StageFileFormatType;
@@ -34,8 +35,6 @@ use opendal::Operator;
 
 use super::InputFormat;
 use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
-use crate::processors::sources::input_formats::impls::input_format_csv::CsvReaderState;
-use crate::processors::sources::input_formats::impls::input_format_xml::XmlReaderState;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
@@ -45,7 +44,180 @@ use crate::processors::sources::input_formats::input_split::split_by_size;
 use crate::processors::sources::input_formats::input_split::FileInfo;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
 
+pub trait AligningStateTextBased: Sync + Sized + Send {
+    fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self>;
+
+    fn is_splittable() -> bool {
+        false
+    }
+
+    fn align(&mut self, buf: &[u8]) -> Result<Vec<RowBatch>>;
+
+    fn align_flush(&mut self) -> Result<Vec<RowBatch>>;
+
+    fn read_beyond_end(&self) -> Option<BeyondEndReader> {
+        None
+    }
+}
+
+pub struct AligningStateCommon {
+    pub batch_id: usize,
+    pub rows: usize,
+    pub offset: usize,
+    pub rows_to_skip: usize,
+}
+
+impl AligningStateCommon {
+    pub fn create(
+        ctx: &Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+        is_splittable: bool,
+    ) -> Self {
+        let rows_to_skip = if split_info.seq_in_file == 0 {
+            ctx.format_options.stage.skip_header as usize
+        } else {
+            (is_splittable && split_info.num_file_splits > 1) as usize
+        };
+        Self {
+            batch_id: 0,
+            rows: 0,
+            offset: 0,
+            rows_to_skip,
+        }
+    }
+}
+
+pub struct AligningStateRowDelimiter {
+    ctx: Arc<InputContext>,
+    split_info: Arc<SplitInfo>,
+    record_delimiter_end: u8,
+
+    common: AligningStateCommon,
+    tail_of_last_batch: Vec<u8>,
+}
+
+impl AligningStateTextBased for AligningStateRowDelimiter {
+    fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self> {
+        let record_delimiter_end = ctx.format_options.get_record_delimiter()?.end();
+
+        Ok(Self {
+            ctx: ctx.clone(),
+            split_info: split_info.clone(),
+            record_delimiter_end,
+            common: AligningStateCommon::create(ctx, split_info, true),
+            tail_of_last_batch: vec![],
+        })
+    }
+
+    fn align(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
+        let record_delimiter_end = self.record_delimiter_end;
+        let size_last_remain = self.tail_of_last_batch.len();
+        let mut buf = buf_in;
+        if self.common.rows_to_skip > 0 {
+            let mut i = 0;
+            for b in buf.iter() {
+                if *b == record_delimiter_end {
+                    self.common.rows_to_skip -= 1;
+                    if self.common.rows_to_skip == 0 {
+                        break;
+                    }
+                }
+                i += 1;
+            }
+            if self.common.rows_to_skip > 0 {
+                self.tail_of_last_batch = vec![];
+                return Ok(vec![]);
+            } else {
+                buf = &buf[i + 1..];
+            }
+        }
+        if buf.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut output = RowBatch {
+            data: vec![],
+            row_ends: vec![],
+            field_ends: vec![],
+            split_info: self.split_info.clone(),
+            path: "".to_string(),
+            batch_id: self.common.batch_id,
+            start_offset_in_split: self.common.offset,
+            start_row_in_split: self.common.rows,
+            start_row_of_split: self.split_info.start_row_text(),
+        };
+        let rows = &mut output.row_ends;
+        for (i, b) in buf.iter().enumerate() {
+            if *b == b'\n' {
+                rows.push(i + 1 + size_last_remain)
+            }
+        }
+        if rows.is_empty() {
+            self.tail_of_last_batch.extend_from_slice(buf);
+            Ok(vec![])
+        } else {
+            let batch_end = rows[rows.len() - 1] - size_last_remain;
+            output.data = mem::take(&mut self.tail_of_last_batch);
+            output.data.extend_from_slice(&buf[..batch_end]);
+            self.tail_of_last_batch.extend_from_slice(&buf[batch_end..]);
+            let size = output.data.len();
+            output.path = self.split_info.file.path.to_string();
+            self.common.offset += size;
+            self.common.rows += rows.len();
+            self.common.batch_id += 1;
+            tracing::debug!(
+                "align batch {}, {} + {} + {} bytes to {} rows",
+                output.batch_id,
+                size_last_remain,
+                batch_end,
+                self.tail_of_last_batch.len(),
+                rows.len(),
+            );
+            Ok(vec![output])
+        }
+    }
+
+    fn align_flush(&mut self) -> Result<Vec<RowBatch>> {
+        if self.tail_of_last_batch.is_empty() {
+            Ok(vec![])
+        } else {
+            // last row
+            let data = mem::take(&mut self.tail_of_last_batch);
+            let end = data.len();
+            let row_batch = RowBatch {
+                data,
+                row_ends: vec![end],
+                field_ends: vec![],
+                split_info: self.split_info.clone(),
+                path: self.split_info.file.path.clone(),
+                batch_id: self.common.batch_id,
+                start_offset_in_split: self.common.offset,
+                start_row_in_split: self.common.rows,
+                start_row_of_split: self.split_info.start_row_text(),
+            };
+            tracing::debug!(
+                "align flush batch {}, bytes = {}, start_row = {}",
+                row_batch.batch_id,
+                self.tail_of_last_batch.len(),
+                self.common.rows
+            );
+            Ok(vec![row_batch])
+        }
+    }
+
+    fn read_beyond_end(&self) -> Option<BeyondEndReader> {
+        Some(BeyondEndReader {
+            ctx: self.ctx.clone(),
+            split_info: self.split_info.clone(),
+            path: self.split_info.file.path.clone(),
+            record_delimiter_end: self.record_delimiter_end,
+        })
+    }
+}
+
 pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
+    type AligningState: AligningStateTextBased;
+
     fn format_type() -> StageFileFormatType;
 
     fn is_splittable() -> bool {
@@ -55,46 +227,6 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder>;
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
-
-    fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>>;
-
-    fn align_flush(state: &mut AligningState<Self>) -> Result<Vec<RowBatch>> {
-        if state.tail_of_last_batch.is_empty() {
-            Ok(vec![])
-        } else {
-            // last row
-            let data = mem::take(&mut state.tail_of_last_batch);
-            let end = data.len();
-            let row_batch = RowBatch {
-                data,
-                row_ends: vec![end],
-                field_ends: vec![],
-                path: state.path.to_string(),
-                batch_id: state.batch_id,
-                offset: state.offset,
-                start_row: Some(state.rows),
-            };
-            tracing::debug!(
-                "align flush batch {}, bytes = {}, start_row = {}",
-                row_batch.batch_id,
-                state.tail_of_last_batch.len(),
-                state.rows
-            );
-            Ok(vec![row_batch])
-        }
-    }
-}
-
-pub struct InputFormatText<T: InputFormatTextBase> {
-    phantom: PhantomData<T>,
-}
-
-impl<T: InputFormatTextBase> InputFormatText<T> {
-    pub fn create() -> Self {
-        Self {
-            phantom: Default::default(),
-        }
-    }
 }
 
 pub struct InputFormatTextPipe<T> {
@@ -106,26 +238,12 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
     type SplitMeta = ();
     type ReadBatch = Vec<u8>;
     type RowBatch = RowBatch;
-    type AligningState = AligningState<T>;
+    type AligningState = AligningStateMaybeCompressed<T>;
     type BlockBuilder = BlockBuilder<T>;
 }
 
 #[async_trait::async_trait]
-impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
-    fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
-    }
-
-    fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
-    }
-
-    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<DataSchemaRef> {
-        Err(ErrorCode::Unimplemented(
-            "infer_schema is not implemented for this format yet.",
-        ))
-    }
-
+impl<T: InputFormatTextBase> InputFormat for T {
     async fn get_splits(
         &self,
         files: &[String],
@@ -187,19 +305,46 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
         }
         Ok(infos)
     }
+
+    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<TableSchemaRef> {
+        Err(ErrorCode::Unimplemented(
+            "infer_schema is not implemented for this format yet.",
+        ))
+    }
+
+    fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
+        InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
+    }
+
+    fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
+        InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
+    }
 }
 
-#[derive(Default)]
 pub struct RowBatch {
     pub data: Vec<u8>,
     pub row_ends: Vec<usize>,
     pub field_ends: Vec<usize>,
 
+    pub split_info: Arc<SplitInfo>,
     // for error info
     pub path: String,
     pub batch_id: usize,
-    pub offset: usize,
-    pub start_row: Option<usize>,
+    pub start_offset_in_split: usize,
+    pub start_row_in_split: usize,
+    pub start_row_of_split: Option<usize>,
+}
+
+impl RowBatch {
+    pub fn error(&self, msg: &str, ctx: &InputContext, offset: usize, row: usize) -> ErrorCode {
+        ctx.parse_error_row_based(
+            msg,
+            &self.split_info,
+            offset + self.start_offset_in_split,
+            self.start_row_in_split + row,
+            self.start_row_of_split,
+        )
+    }
 }
 
 impl RowBatchTrait for RowBatch {
@@ -212,166 +357,54 @@ impl RowBatchTrait for RowBatch {
     }
 }
 
-pub struct AligningState<T> {
+pub struct AligningStateMaybeCompressed<T: InputFormatTextBase> {
+    #[allow(unused)]
     ctx: Arc<InputContext>,
+    #[allow(unused)]
     split_info: Arc<SplitInfo>,
-    // fast access configs
-    pub path: String,
-    pub record_delimiter_end: u8,
-    pub field_delimiter: u8,
-    pub num_fields: usize,
-
-    // common state
-    pub batch_id: usize,
-    pub rows: usize,
-    pub offset: usize,
-    pub rows_to_skip: usize,
-    pub tail_of_last_batch: Vec<u8>,
-    pub decoder: Option<DecompressDecoder>,
-
-    // format state
-    pub csv_reader: Option<CsvReaderState>,
-    pub xml_reader: Option<XmlReaderState>,
-
-    phantom: PhantomData<T>,
-}
-
-impl<T: InputFormatTextBase> AligningState<T> {
-    pub fn align_by_record_delimiter(&mut self, buf_in: &[u8]) -> Vec<RowBatch> {
-        let record_delimiter_end = self.record_delimiter_end;
-        let size_last_remain = self.tail_of_last_batch.len();
-        let mut buf = buf_in;
-        if self.rows_to_skip > 0 {
-            let mut i = 0;
-            for b in buf.iter() {
-                if *b == record_delimiter_end {
-                    self.rows_to_skip -= 1;
-                    if self.rows_to_skip == 0 {
-                        break;
-                    }
-                }
-                i += 1;
-            }
-            if self.rows_to_skip > 0 {
-                self.tail_of_last_batch = vec![];
-                return vec![];
-            } else {
-                buf = &buf[i + 1..];
-            }
-        }
-        if buf.is_empty() {
-            return vec![];
-        }
-
-        let mut output = RowBatch::default();
-        let rows = &mut output.row_ends;
-        for (i, b) in buf.iter().enumerate() {
-            if *b == b'\n' {
-                rows.push(i + 1 + size_last_remain)
-            }
-        }
-        if rows.is_empty() {
-            self.tail_of_last_batch.extend_from_slice(buf);
-            vec![]
-        } else {
-            let batch_end = rows[rows.len() - 1] - size_last_remain;
-            output.data = mem::take(&mut self.tail_of_last_batch);
-            output.data.extend_from_slice(&buf[..batch_end]);
-            self.tail_of_last_batch.extend_from_slice(&buf[batch_end..]);
-            let size = output.data.len();
-            output.path = self.path.to_string();
-            output.start_row = Some(self.rows);
-            output.offset = self.offset;
-            output.batch_id = self.batch_id;
-            self.offset += size;
-            self.rows += rows.len();
-            self.batch_id += 1;
-            tracing::debug!(
-                "align batch {}, {} + {} + {} bytes to {} rows",
-                output.batch_id,
-                size_last_remain,
-                batch_end,
-                self.tail_of_last_batch.len(),
-                rows.len(),
-            );
-            vec![output]
-        }
-    }
+    pub decompressor: Option<DecompressDecoder>,
+    state: T::AligningState,
 }
 
 #[async_trait::async_trait]
-impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
+impl<T: InputFormatTextBase> AligningStateTrait for AligningStateMaybeCompressed<T> {
     type Pipe = InputFormatTextPipe<T>;
 
     fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self> {
-        let field_delimiter = ctx.format_options.get_field_delimiter();
-        let record_delimiter_end = ctx.format_options.get_record_delimiter()?.end();
-        let rows_to_skip = if split_info.seq_in_file == 0 {
-            ctx.format_options.stage.skip_header as usize
-        } else {
-            (T::is_splittable() && split_info.num_file_splits > 1) as usize
-        };
         let path = split_info.file.path.clone();
+        let decompressor = ctx.get_compression_alg(&path)?.map(DecompressDecoder::new);
+        let state = T::AligningState::try_create(ctx, split_info)?;
 
-        let decoder = ctx.get_compression_alg(&path)?.map(DecompressDecoder::new);
-        let csv_reader = if T::format_type() == StageFileFormatType::Csv {
-            Some(CsvReaderState::create(ctx)?)
-        } else {
-            None
-        };
-
-        let xml_reader = if T::format_type() == StageFileFormatType::Xml {
-            Some(XmlReaderState::create(ctx))
-        } else {
-            None
-        };
-
-        Ok(AligningState::<T> {
+        Ok(AligningStateMaybeCompressed::<T> {
             ctx: ctx.clone(),
             split_info: split_info.clone(),
-            path,
-            decoder,
-            rows_to_skip,
-            csv_reader,
-            xml_reader,
-            tail_of_last_batch: vec![],
-            rows: 0,
-            batch_id: 0,
-            num_fields: ctx.schema.num_fields(),
-            offset: split_info.offset,
-            record_delimiter_end,
-            field_delimiter,
-            phantom: Default::default(),
+            decompressor,
+            state,
         })
     }
 
     fn align(&mut self, read_batch: Option<Vec<u8>>) -> Result<Vec<RowBatch>> {
         let row_batches = if let Some(data) = read_batch {
-            let buf = if let Some(decoder) = self.decoder.as_mut() {
+            let buf = if let Some(decoder) = self.decompressor.as_mut() {
                 decompress(decoder, &data)?
             } else {
                 data
             };
-            T::align(self, &buf)?
+            self.state.align(&buf)?
         } else {
-            if let Some(decoder) = &self.decoder {
+            if let Some(decoder) = &self.decompressor {
                 let state = decoder.state();
                 if !matches!(state, DecompressState::Done | DecompressState::Reading) {
                     tracing::warn!("decompressor end with state {:?}", state)
                 }
             }
-            T::align_flush(self)?
+            self.state.align_flush()?
         };
         Ok(row_batches)
     }
 
     fn read_beyond_end(&self) -> Option<BeyondEndReader> {
-        Some(BeyondEndReader {
-            ctx: self.ctx.clone(),
-            split_info: self.split_info.clone(),
-            path: self.path.clone(),
-            record_delimiter_end: self.record_delimiter_end,
-        })
+        self.state.read_beyond_end()
     }
 }
 
@@ -385,17 +418,23 @@ pub struct BlockBuilder<T> {
 
 impl<T: InputFormatTextBase> BlockBuilder<T> {
     fn flush(&mut self) -> Result<Vec<DataBlock>> {
-        let mut columns = Vec::with_capacity(self.mutable_columns.len());
-        for deserializer in &mut self.mutable_columns {
-            columns.push(deserializer.finish_to_column());
-        }
+        let columns: Vec<Column> = self
+            .mutable_columns
+            .iter_mut()
+            .map(|deserializer| deserializer.finish_to_column())
+            .collect();
+
         self.mutable_columns = self
             .ctx
             .schema
             .create_deserializers(self.ctx.block_compact_thresholds.min_rows_per_block);
         self.num_rows = 0;
 
-        Ok(vec![DataBlock::create(self.ctx.schema.clone(), columns)])
+        if columns.is_empty() || columns[0].len() == 0 {
+            Ok(vec![])
+        } else {
+            Ok(vec![DataBlock::new_from_columns(columns)])
+        }
     }
 
     fn memory_size(&self) -> usize {
@@ -411,12 +450,13 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
             .schema
             .create_deserializers(ctx.block_compact_thresholds.min_rows_per_block);
         let field_decoder = T::create_field_decoder(&ctx.format_options);
+
         BlockBuilder {
             ctx,
             mutable_columns: columns,
             num_rows: 0,
-            phantom: Default::default(),
             field_decoder,
+            phantom: PhantomData,
         }
     }
 
@@ -426,7 +466,7 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
             T::deserialize(self, b)?;
             let mem = self.memory_size();
             tracing::debug!(
-                "block builder added new batch: row {} size {}",
+                "chunk builder added new batch: row {} size {}",
                 self.num_rows,
                 mem
             );

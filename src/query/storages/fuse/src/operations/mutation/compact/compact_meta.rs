@@ -16,11 +16,11 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::BlockMetaInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::SegmentInfo;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
+use storages_common_table_meta::meta::SegmentInfo;
 
 use super::compact_part::CompactTask;
 use crate::operations::mutation::AbortOperation;

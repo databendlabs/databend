@@ -18,8 +18,8 @@ use std::task::Poll;
 use std::usize;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::DataBlock;
 use futures::stream::Stream;
 
 use crate::memory_part::MemoryPartInfo;

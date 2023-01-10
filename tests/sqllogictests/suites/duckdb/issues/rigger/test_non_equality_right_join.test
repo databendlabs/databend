@@ -57,3 +57,5 @@ SELECT t0.actual_rowid, t6.c0, t0.c0 FROM t0 RIGHT JOIN t6 ON ((t0.actual_rowid)
 8 NULL NULL
 9 NULL NULL
 
+statement ok
+drop table t0

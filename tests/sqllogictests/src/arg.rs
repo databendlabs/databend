@@ -15,7 +15,7 @@
 use clap::Parser;
 
 // Add options when run sqllogictest, such as specific dir or file
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 pub struct SqlLogicTestArgs {
     // Set specific dir to run
     #[arg(
@@ -91,4 +91,11 @@ pub struct SqlLogicTestArgs {
         help = "The arg is used to enable sandbox_tenant"
     )]
     pub enable_sandbox: bool,
+
+    #[arg(
+        long = "debug",
+        default_missing_value = "true",
+        help = "The arg is used to enable debug mode which would print some debug messages"
+    )]
+    pub debug: bool,
 }

@@ -15,25 +15,24 @@
 use std::io::Cursor;
 
 use bstr::ByteSlice;
-use common_datavalues::check_date;
-use common_datavalues::check_timestamp;
-use common_datavalues::deserializations::ArrayDeserializer;
-use common_datavalues::deserializations::BooleanDeserializer;
-use common_datavalues::deserializations::DateDeserializer;
-use common_datavalues::deserializations::NullableDeserializer;
-use common_datavalues::deserializations::NumberDeserializer;
-use common_datavalues::deserializations::StringDeserializer;
-use common_datavalues::deserializations::StructDeserializer;
-use common_datavalues::deserializations::TimestampDeserializer;
-use common_datavalues::deserializations::VariantDeserializer;
-use common_datavalues::uniform_date;
-use common_datavalues::MutableColumn;
-use common_datavalues::NullDeserializer;
-use common_datavalues::PrimitiveType;
-use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::date::check_date;
+use common_expression::types::number::Number;
+use common_expression::types::timestamp::check_timestamp;
+use common_expression::uniform_date;
+use common_expression::ArrayDeserializer;
+use common_expression::BooleanDeserializer;
+use common_expression::DateDeserializer;
+use common_expression::NullDeserializer;
+use common_expression::NullableDeserializer;
+use common_expression::NumberDeserializer;
+use common_expression::StringDeserializer;
+use common_expression::StructDeserializer;
+use common_expression::TimestampDeserializer;
+use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
+use common_expression::VariantDeserializer;
 use common_io::cursor_ext::BufferReadDateTimeExt;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
@@ -82,7 +81,6 @@ pub trait FieldDecoderRowBased: FieldDecoder {
             TypeDeserializerImpl::Float32(c) => self.read_float(c, reader, raw),
             TypeDeserializerImpl::Float64(c) => self.read_float(c, reader, raw),
             TypeDeserializerImpl::Date(c) => self.read_date(c, reader, raw),
-            TypeDeserializerImpl::Interval(c) => self.read_date(c, reader, raw),
             TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, raw),
             TypeDeserializerImpl::String(c) => self.read_string(c, reader, raw),
             TypeDeserializerImpl::Array(c) => self.read_array(c, reader, raw),
@@ -98,10 +96,10 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         _raw: bool,
     ) -> Result<()> {
         if self.match_bytes(reader, &self.common_settings().true_bytes) {
-            column.builder.append_value(true);
+            column.push(true);
             Ok(())
         } else if self.match_bytes(reader, &self.common_settings().false_bytes) {
-            column.builder.append_value(false);
+            column.push(false);
             Ok(())
         } else {
             let err_msg = format!(
@@ -119,7 +117,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         _reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
-        column.builder.append_default();
+        column.de_default();
         Ok(())
     }
 
@@ -137,8 +135,8 @@ pub trait FieldDecoderRowBased: FieldDecoder {
             column.de_default();
             return Ok(());
         } else {
-            self.read_field(&mut column.inner, reader, raw)?;
-            column.bitmap.push(true);
+            self.read_field(column.inner.as_mut(), reader, raw)?;
+            column.validity.push(true);
         }
         Ok(())
     }
@@ -150,31 +148,33 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         raw: bool,
     ) -> Result<()>;
 
-    fn read_int<T, R: AsRef<[u8]>>(
+    fn read_int<T, P, R: AsRef<[u8]>>(
         &self,
-        column: &mut NumberDeserializer<T>,
+        column: &mut NumberDeserializer<T, P>,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()>
     where
-        T: PrimitiveType + Unmarshal<T> + StatBuffer + FromLexical,
+        T: Number + Unmarshal<T> + StatBuffer + From<P>,
+        P: Unmarshal<P> + StatBuffer + FromLexical,
     {
-        let v: T = reader.read_int_text()?;
-        column.builder.append_value(v);
+        let v: P = reader.read_int_text()?;
+        column.builder.push(v.into());
         Ok(())
     }
 
-    fn read_float<T, R: AsRef<[u8]>>(
+    fn read_float<T, P, R: AsRef<[u8]>>(
         &self,
-        column: &mut NumberDeserializer<T>,
+        column: &mut NumberDeserializer<T, P>,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()>
     where
-        T: PrimitiveType + Unmarshal<T> + StatBuffer + FromLexical,
+        T: Number + Unmarshal<T> + StatBuffer + From<P>,
+        P: Unmarshal<P> + StatBuffer + FromLexical,
     {
-        let v: T = reader.read_float_text()?;
-        column.builder.append_value(v);
+        let v: P = reader.read_float_text()?;
+        column.builder.push(v.into());
         Ok(())
     }
 
@@ -185,24 +185,19 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         _raw: bool,
     ) -> Result<()>;
 
-    fn read_date<T, R: AsRef<[u8]>>(
+    fn read_date<R: AsRef<[u8]>>(
         &self,
-        column: &mut DateDeserializer<T>,
+        column: &mut DateDeserializer,
         reader: &mut Cursor<R>,
         raw: bool,
-    ) -> Result<()>
-    where
-        i32: AsPrimitive<T>,
-        T: PrimitiveType,
-        T: Unmarshal<T> + StatBuffer + FromLexical,
-    {
+    ) -> Result<()> {
         column.buffer.clear();
         self.read_string_inner(reader, &mut column.buffer, raw)?;
         let mut buffer_readr = Cursor::new(&column.buffer);
         let date = buffer_readr.read_date_text(&self.common_settings().timezone)?;
-        let days = uniform_date::<T>(date);
-        check_date(days.as_i32())?;
-        column.builder.append_value(days);
+        let days = uniform_date(date);
+        check_date(days as i64)?;
+        column.builder.push(days);
         Ok(())
     }
 
@@ -227,7 +222,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         }
         let micros = ts.timestamp_micros();
         check_timestamp(micros)?;
-        column.builder.append_value(micros.as_());
+        column.builder.push(micros.as_());
         Ok(())
     }
 
@@ -237,11 +232,8 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         reader: &mut Cursor<R>,
         raw: bool,
     ) -> Result<()> {
-        column.buffer.clear();
-        self.read_string_inner(reader, &mut column.buffer, raw)?;
-        let val = serde_json::from_slice(column.buffer.as_slice())?;
-        column.builder.append_value(val);
-        column.memory_size += column.buffer.len();
+        self.read_string_inner(reader, &mut column.builder.data, raw)?;
+        column.builder.commit_row();
         Ok(())
     }
 

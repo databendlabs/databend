@@ -212,7 +212,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: Tz, buf: &mut Vec<u8>) {
             return;
         }
     };
-    value.to_vec(buf);
+    value.write_to_vec(buf);
 }
 
 pub fn cast_scalars_to_variants(

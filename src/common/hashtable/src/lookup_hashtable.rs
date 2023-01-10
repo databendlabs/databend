@@ -31,6 +31,7 @@ pub struct LookupHashtable<
     flags: Box<[bool; CAPACITY], A>,
     data: Box<[Entry<K, V>; CAPACITY], A>,
     len: usize,
+    allocator: A,
 }
 
 pub struct LookupTableIter<'a, const CAPACITY: usize, K, V> {
@@ -62,8 +63,10 @@ impl<K: Sized, const CAPACITY: usize, V, A: Allocator + Clone> LookupHashtable<K
         unsafe {
             LookupHashtable::<K, CAPACITY, V, A> {
                 flags: Box::<[bool; CAPACITY], A>::new_zeroed_in(allocator.clone()).assume_init(),
-                data: Box::<[Entry<K, V>; CAPACITY], A>::new_zeroed_in(allocator).assume_init(),
+                data: Box::<[Entry<K, V>; CAPACITY], A>::new_zeroed_in(allocator.clone())
+                    .assume_init(),
                 len: 0,
+                allocator,
             }
         }
     }
@@ -139,8 +142,12 @@ macro_rules! lookup_impl {
                 LookupTableIter::create(&self.flags, &self.data)
             }
 
-            fn iter_mut(&mut self) -> Self::IteratorMut<'_> {
-                LookupTableIterMut::create(&self.flags, &mut self.data)
+            fn clear(&mut self) {
+                unsafe {
+                    self.len = 0;
+                    self.flags = Box::<[bool; $capacity], A>::new_zeroed_in(self.allocator.clone()).assume_init();
+                    self.data = Box::<[Entry<$ty, V>; $capacity], A>::new_zeroed_in(self.allocator.clone()).assume_init();
+                }
             }
         }
 

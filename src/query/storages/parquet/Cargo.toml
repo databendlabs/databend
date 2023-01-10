@@ -16,20 +16,19 @@ common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
-common-datablocks = { path = "../../datablocks" }
-common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
 common-functions = { path = "../../functions" }
 common-meta-app = { path = "../../../meta/app" }
 common-pipeline-core = { path = "../../pipeline/core" }
-common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
-common-storages-pruner = { path = "../pruner" }
-common-storages-table-meta = { path = "../table-meta" }
+
+storages-common-pruner = { path = "../common/pruner" }
+storages-common-table-meta = { path = "../common/table-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
 glob = "0.3.0"
-opendal = "0.23"
+opendal = "0.24"
 serde = { workspace = true }
 typetag = "0.2.3"

@@ -15,14 +15,11 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_datavalues::type_coercion::compare_coercion;
-use common_datavalues::wrap_nullable;
-use common_datavalues::BooleanType;
-use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::common_super_type;
+use common_expression::types::DataType;
 
-use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::optimizer::heuristic::subquery_rewriter::FlattenInfo;
@@ -31,6 +28,7 @@ use crate::optimizer::heuristic::subquery_rewriter::UnnestResult;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
+use crate::planner::binder::wrap_cast;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -44,6 +42,7 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -170,9 +169,10 @@ impl SubqueryRewriter {
                         right_conditions.push(right.clone());
                         continue;
                     }
-                    let join_type = compare_coercion(&left.data_type(), &right.data_type())?;
-                    let left = wrap_cast(left.clone(), &join_type);
-                    let right = wrap_cast(right.clone(), &join_type);
+                    let join_type = common_super_type(left.data_type(), right.data_type())
+                        .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
+                    let left = wrap_cast(left, &join_type);
+                    let right = wrap_cast(right, &join_type);
                     left_conditions.push(left);
                     right_conditions.push(right);
                 }
@@ -279,12 +279,13 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
+
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
-                        NullableType::new_impl(BooleanType::new_impl()),
+                        DataType::Nullable(Box::new(DataType::Boolean)),
                     )
                 };
                 let join_plan = Join {
@@ -329,14 +330,14 @@ impl SubqueryRewriter {
                     op,
                     left: Box::new(child_expr),
                     right: Box::new(right_condition),
-                    return_type: Box::new(NullableType::new_impl(BooleanType::new_impl())),
+                    return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
                 })];
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
-                        NullableType::new_impl(BooleanType::new_impl()),
+                        DataType::Nullable(Box::new(DataType::Boolean)),
                     )
                 };
                 let mark_join = Join {
@@ -385,14 +386,14 @@ impl SubqueryRewriter {
                         column_name,
                         data_type,
                         ..
-                    } => (column_name, data_type),
+                    } => (column_name, DataType::from(data_type)),
                     ColumnEntry::DerivedColumn {
                         alias, data_type, ..
-                    } => (alias, data_type),
+                    } => (alias, data_type.clone()),
                 };
                 self.derived_columns.insert(
                     *correlated_column,
-                    metadata.add_derived_column(name.to_string(), wrap_nullable(data_type)),
+                    metadata.add_derived_column(name.to_string(), data_type.wrap_nullable()),
                 );
             }
             let logical_get = SExpr::create_leaf(
@@ -451,8 +452,8 @@ impl SubqueryRewriter {
                 for derived_column in self.derived_columns.values() {
                     let column_entry = metadata.column(*derived_column);
                     let data_type = match column_entry {
-                        ColumnEntry::BaseTableColumn { data_type, .. } => data_type,
-                        ColumnEntry::DerivedColumn { data_type, .. } => data_type,
+                        ColumnEntry::BaseTableColumn { data_type, .. } => DataType::from(data_type),
+                        ColumnEntry::DerivedColumn { data_type, .. } => data_type.clone(),
                     };
                     let column_binding = ColumnBinding {
                         database_name: None,
@@ -561,8 +562,10 @@ impl SubqueryRewriter {
                         let metadata = self.metadata.read();
                         let column_entry = metadata.column(*derived_column);
                         let data_type = match column_entry {
-                            ColumnEntry::BaseTableColumn { data_type, .. } => data_type,
-                            ColumnEntry::DerivedColumn { data_type, .. } => data_type,
+                            ColumnEntry::BaseTableColumn { data_type, .. } => {
+                                DataType::from(data_type)
+                            }
+                            ColumnEntry::DerivedColumn { data_type, .. } => data_type.clone(),
                         };
                         ColumnBinding {
                             database_name: None,
@@ -703,6 +706,13 @@ impl SubqueryRewriter {
                     return_type: or_expr.return_type.clone(),
                 }))
             }
+            Scalar::NotExpr(not_expr) => {
+                let argument = self.flatten_scalar(&not_expr.argument, correlated_columns)?;
+                Ok(Scalar::NotExpr(NotExpr {
+                    argument: Box::new(argument),
+                    return_type: not_expr.return_type.clone(),
+                }))
+            }
             Scalar::ComparisonExpr(comparison_expr) => {
                 let left = self.flatten_scalar(&comparison_expr.left, correlated_columns)?;
                 let right = self.flatten_scalar(&comparison_expr.right, correlated_columns)?;
@@ -733,9 +743,9 @@ impl SubqueryRewriter {
                     arguments.push(self.flatten_scalar(arg, correlated_columns)?);
                 }
                 Ok(Scalar::FunctionCall(FunctionCall {
+                    params: fun_call.params.clone(),
                     arguments,
                     func_name: fun_call.func_name.clone(),
-                    arg_types: fun_call.arg_types.clone(),
                     return_type: fun_call.return_type.clone(),
                 }))
             }
@@ -763,8 +773,8 @@ impl SubqueryRewriter {
             let metadata = self.metadata.read();
             let column_entry = metadata.column(*correlated_column);
             let data_type = match column_entry {
-                ColumnEntry::BaseTableColumn { data_type, .. } => data_type,
-                ColumnEntry::DerivedColumn { data_type, .. } => data_type,
+                ColumnEntry::BaseTableColumn { data_type, .. } => DataType::from(data_type),
+                ColumnEntry::DerivedColumn { data_type, .. } => data_type.clone(),
             };
             let right_column = Scalar::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding {

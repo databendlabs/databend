@@ -14,17 +14,18 @@
 
 use common_arrow::parquet::metadata::FileMetaData;
 use common_exception::Result;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::caches::Loader;
-use common_storages_table_meta::caches::MemoryCacheReader;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::SegmentInfoVersion;
-use common_storages_table_meta::meta::SnapshotVersion;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::TableSnapshotStatistics;
-use common_storages_table_meta::meta::TableSnapshotStatisticsVersion;
-use opendal::raw::BytesReader;
+use opendal::ObjectReader;
 use opendal::Operator;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::caches::LoadParams;
+use storages_common_table_meta::caches::Loader;
+use storages_common_table_meta::caches::MemoryCacheReader;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SegmentInfoVersion;
+use storages_common_table_meta::meta::SnapshotVersion;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableSnapshotStatistics;
+use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 
 use super::versioned_reader::VersionedReader;
 
@@ -76,42 +77,33 @@ pub struct LoaderWrapper<T>(T);
 
 #[async_trait::async_trait]
 impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
-    async fn load(
-        &self,
-        key: &str,
-        length_hint: Option<u64>,
-        version: u64,
-    ) -> Result<TableSnapshot> {
-        let version = SnapshotVersion::try_from(version)?;
-        let reader = bytes_reader(&self.0, key, length_hint).await?;
-        version.read(reader).await
+    async fn load(&self, params: &LoadParams) -> Result<TableSnapshot> {
+        let version = SnapshotVersion::try_from(params.ver)?;
+        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
+
+        version.read(reader, params.schema.clone()).await
     }
 }
 
 #[async_trait::async_trait]
 impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
-    async fn load(
-        &self,
-        key: &str,
-        length_hint: Option<u64>,
-        version: u64,
-    ) -> Result<TableSnapshotStatistics> {
-        let version = TableSnapshotStatisticsVersion::try_from(version)?;
-        let reader = bytes_reader(&self.0, key, length_hint).await?;
-        version.read(reader).await
+    async fn load(&self, params: &LoadParams) -> Result<TableSnapshotStatistics> {
+        let version = TableSnapshotStatisticsVersion::try_from(params.ver)?;
+        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
+        version.read(reader, params.schema.clone()).await
     }
 }
 
 #[async_trait::async_trait]
 impl Loader<SegmentInfo> for LoaderWrapper<Operator> {
-    async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
-        let version = SegmentInfoVersion::try_from(version)?;
-        let reader = bytes_reader(&self.0, key, length_hint).await?;
-        version.read(reader).await
+    async fn load(&self, params: &LoadParams) -> Result<SegmentInfo> {
+        let version = SegmentInfoVersion::try_from(params.ver)?;
+        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
+        version.read(reader, params.schema.clone()).await
     }
 }
 
-async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<BytesReader> {
+async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<ObjectReader> {
     let object = op.object(path);
 
     let len = match len {
@@ -124,5 +116,5 @@ async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<Byt
     };
 
     let reader = object.range_reader(0..len).await?;
-    Ok(Box::new(reader))
+    Ok(reader)
 }

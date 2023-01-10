@@ -244,28 +244,28 @@ select * from t order by id
 2  2022-02-03 11:00:00.000000
 3  2022-02-03 11:02:01.123456
 
-statement error 1010
+statement error 1001
 insert into t values(1, '2022-02-03 003:02:02')
 
-statement error 1010
+statement error 1001
 insert into t values(1, '2022-02-03 03:002:02')
 
-statement error 1010
+statement error 1001
 insert into t values(1, '2022-02-03T03:02:000')
 
-statement error 1010
+statement error 1001
 insert into t values(1, '2022-02-03 03:02:000')
 
-statement error 1010
+statement error 1001
 insert into t values(1, '2022-02-03 03:02:00Z.123')
 
-statement error 1010
+statement error 1001
 insert into t values(1, '2022-02-03 03:02:00Z+08:00')
 
-statement error 1010
+statement error 1001
 insert into t values(1, '2022-02-03 03:02:00+0800')
 
-statement error 1010
+statement error 1001
 insert into t values(1, '2022-02-03T03:02:00+0800')
 
 statement ok

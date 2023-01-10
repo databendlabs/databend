@@ -25,18 +25,15 @@ use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::ToDataType;
-use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::BlockBloomFilterIndexVersion;
-use common_storages_table_meta::meta::BlockFilter;
-use common_storages_table_meta::meta::Location;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
 use futures_util::future::try_join_all;
 use opendal::Operator;
+use storages_common_table_meta::meta::BlockBloomFilterIndexVersion;
+use storages_common_table_meta::meta::BlockFilter;
+use storages_common_table_meta::meta::Location;
 use tracing::Instrument;
 pub use util_v1::load_bloom_filter_by_columns;
 
@@ -62,10 +59,13 @@ impl BlockFilterReader for Location {
     ) -> Result<BlockFilter> {
         let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
         match index_version {
-            BlockBloomFilterIndexVersion::V2(_) => {
-                let block =
+            BlockBloomFilterIndexVersion::V0(_) => Err(ErrorCode::DeprecatedIndexFormat(
+                "bloom filter index version(v0) is deprecated",
+            )),
+            BlockBloomFilterIndexVersion::V2(_) | BlockBloomFilterIndexVersion::V3(_) => {
+                let res =
                     load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
-                Ok(BlockFilter::new(block))
+                Ok(res)
             }
         }
     }
@@ -78,7 +78,10 @@ mod util_v1 {
     use common_base::runtime::GlobalIORuntime;
     use common_base::runtime::Runtime;
     use common_base::runtime::TrySpawn;
-    use common_storages_table_meta::caches::CacheManager;
+    use common_expression::TableField;
+    use common_expression::TableSchema;
+    use storages_common_table_meta::caches::CacheManager;
+    use storages_common_table_meta::caches::LoadParams;
 
     use super::*;
     use crate::io::MetaReaders;
@@ -94,7 +97,7 @@ mod util_v1 {
         column_needed: &[String],
         path: &str,
         length: u64,
-    ) -> Result<DataBlock> {
+    ) -> Result<BlockFilter> {
         let file_meta = load_index_meta(dal.clone(), path, length).await?;
         if file_meta.row_groups.len() != 1 {
             return Err(ErrorCode::StorageOther(format!(
@@ -106,10 +109,10 @@ mod util_v1 {
 
         let fields = column_needed
             .iter()
-            .map(|name| DataField::new(name, Vu8::to_data_type()))
+            .map(|name| TableField::new(name, TableDataType::String))
             .collect::<Vec<_>>();
 
-        let schema = Arc::new(DataSchema::new(fields));
+        let filter_schema = Arc::new(TableSchema::new(fields));
 
         // 1. load column data, as bytes
         let futs = column_needed
@@ -206,7 +209,12 @@ mod util_v1 {
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
             Some(Ok(chunk)) => {
                 let span = tracing::info_span!("from_chunk");
-                span.in_scope(|| DataBlock::from_chunk(&schema, &chunk))
+                let filter_block = span
+                    .in_scope(|| DataBlock::from_arrow_chunk(&chunk, &(&filter_schema).into()))?;
+                Ok(BlockFilter {
+                    filter_schema,
+                    filter_block,
+                })
             }
         }
     }
@@ -284,7 +292,15 @@ mod util_v1 {
             // Format of FileMetaData is not versioned, version argument is ignored by the underlying reader,
             // so we just pass a zero to reader
             let version = 0;
-            reader.read(path_owned, Some(length), version).await
+
+            let load_params = LoadParams {
+                location: path_owned,
+                len_hint: Some(length),
+                ver: version,
+                schema: None,
+            };
+
+            reader.read(&load_params).await
         }
         .execute_in_runtime(&storage_runtime)
         .await?

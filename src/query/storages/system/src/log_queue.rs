@@ -24,12 +24,12 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::MutableColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -44,9 +44,9 @@ use parking_lot::RwLock;
 pub trait SystemLogElement: Send + Sync + Clone {
     const TABLE_NAME: &'static str;
 
-    fn schema() -> DataSchemaRef;
+    fn schema() -> TableSchemaRef;
 
-    fn fill_to_data_block(&self, columns: &mut Vec<Box<dyn MutableColumn>>) -> Result<()>;
+    fn fill_to_data_block(&self, columns: &mut Vec<ColumnBuilder>) -> Result<()>;
 }
 
 struct Data<Event: SystemLogElement> {
@@ -170,11 +170,14 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let schema = Event::schema();
-        let mut mutable_columns: Vec<Box<dyn MutableColumn>> =
-            Vec::with_capacity(schema.num_fields());
+        let mut mutable_columns: Vec<ColumnBuilder> = Vec::with_capacity(schema.num_fields());
+        let mut data_types: Vec<DataType> = Vec::with_capacity(schema.num_fields());
 
         for column_field in schema.fields() {
-            mutable_columns.push(column_field.data_type().create_mutable(0));
+            let data_type: DataType = column_field.data_type().into();
+            let mutable_column = ColumnBuilder::with_capacity(&data_type, 0);
+            mutable_columns.push(mutable_column);
+            data_types.push(data_type);
         }
 
         let log_queue = SystemLogQueue::<Event>::instance()?;
@@ -183,8 +186,8 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         }
 
         let mut columns = Vec::with_capacity(mutable_columns.len());
-        for mut mutable_column in mutable_columns.into_iter() {
-            columns.push(mutable_column.to_column());
+        for mutable_column in mutable_columns.into_iter() {
+            columns.push(mutable_column.build());
         }
 
         // Add source pipe.
@@ -193,7 +196,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
                 SystemLogSource::<Event>::create(
                     ctx.clone(),
                     output,
-                    DataBlock::create(schema.clone(), columns.clone()),
+                    DataBlock::new_from_columns(columns.clone()),
                 )
             },
             1,

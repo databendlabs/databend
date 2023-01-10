@@ -17,10 +17,14 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -58,11 +62,11 @@ impl SyncSystemTable for MetricsTable {
             values.push(self.display_sample_value(&sample.value)?.into_bytes());
         }
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(metrics),
-            Series::from_data(kinds),
-            Series::from_data(labels),
-            Series::from_data(values),
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(metrics),
+            StringType::from_data(kinds),
+            StringType::from_data(labels),
+            StringType::from_data(values),
         ]))
     }
 
@@ -74,11 +78,11 @@ impl SyncSystemTable for MetricsTable {
 
 impl MetricsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("metric", Vu8::to_data_type()),
-            DataField::new("kind", Vu8::to_data_type()),
-            DataField::new("labels", Vu8::to_data_type()),
-            DataField::new("value", Vu8::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("metric", TableDataType::String),
+            TableField::new("kind", TableDataType::String),
+            TableField::new("labels", TableDataType::String),
+            TableField::new("value", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

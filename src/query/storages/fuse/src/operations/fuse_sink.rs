@@ -20,21 +20,22 @@ use std::time::Instant;
 use async_trait::async_trait;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockCompactThresholds;
+use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::OutputPort;
-use common_storages_common::blocks_to_parquet;
-use common_storages_index::*;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::ColumnId;
-use common_storages_table_meta::meta::ColumnMeta;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
+use storages_common_blocks::blocks_to_parquet;
+use storages_common_index::*;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::ColumnId;
+use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::table::TableCompression;
 
 use super::AppendOperationLogEntry;
 use crate::fuse_table::FuseStorageFormat;
@@ -63,11 +64,18 @@ pub struct BloomIndexState {
 
 impl BloomIndexState {
     pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        source_schema: TableSchemaRef,
         block: &DataBlock,
         location: Location,
     ) -> Result<(Self, HashMap<usize, usize>)> {
         // write index
-        let bloom_index = BlockFilter::try_create(&[block])?;
+        let bloom_index = BlockFilter::try_create(
+            ctx.try_get_function_context()?,
+            source_schema,
+            location.1,
+            &[block],
+        )?;
         let index_block = bloom_index.filter_block;
         let mut data = Vec::with_capacity(100 * 1024);
         let index_block_schema = &bloom_index.filter_schema;
@@ -121,6 +129,7 @@ pub struct FuseTableSink {
     accumulator: StatisticsAccumulator,
     cluster_stats_gen: ClusterStatsGenerator,
 
+    source_schema: TableSchemaRef,
     storage_format: FuseStorageFormat,
     table_compression: TableCompression,
     // A dummy output port for distributed insert select to connect Exchange Sink.
@@ -137,6 +146,7 @@ impl FuseTableSink {
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
         thresholds: BlockCompactThresholds,
+        source_schema: TableSchemaRef,
         storage_format: FuseStorageFormat,
         table_compression: TableCompression,
         output: Option<Arc<OutputPort>>,
@@ -150,6 +160,7 @@ impl FuseTableSink {
             accumulator: StatisticsAccumulator::new(thresholds),
             num_block_threshold: num_block_threshold as u64,
             cluster_stats_gen,
+            source_schema,
             storage_format,
             table_compression,
             output,
@@ -212,8 +223,12 @@ impl Processor for FuseTableSink {
                 let (block_location, block_id) = self.meta_locations.gen_block_location();
 
                 let location = self.meta_locations.block_bloom_index_location(&block_id);
-                let (bloom_index_state, column_distinct_count) =
-                    BloomIndexState::try_create(&block, location)?;
+                let (bloom_index_state, column_distinct_count) = BloomIndexState::try_create(
+                    self.ctx.clone(),
+                    self.source_schema.clone(),
+                    &block,
+                    location,
+                )?;
 
                 let block_statistics = BlockStatistics::from(
                     &block,
@@ -230,7 +245,8 @@ impl Processor for FuseTableSink {
 
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
-                let (size, meta_data) = io::write_block(&write_settings, block, &mut data)?;
+                let (size, meta_data) =
+                    io::write_block(&write_settings, &self.source_schema, block, &mut data)?;
 
                 self.state = State::Serialized {
                     data,

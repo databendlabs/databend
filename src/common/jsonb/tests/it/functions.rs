@@ -31,7 +31,12 @@ use common_jsonb::is_object;
 use common_jsonb::object_keys;
 use common_jsonb::parse_json_path;
 use common_jsonb::parse_value;
+use common_jsonb::to_bool;
+use common_jsonb::to_f64;
+use common_jsonb::to_i64;
+use common_jsonb::to_str;
 use common_jsonb::to_string;
+use common_jsonb::to_u64;
 use common_jsonb::Error;
 use common_jsonb::JsonPath;
 use common_jsonb::Number;
@@ -53,7 +58,7 @@ fn test_build_array() {
     for s in sources {
         let value = parse_value(s.as_bytes()).unwrap();
         expect_array.push(value.clone());
-        value.to_vec(&mut buf);
+        value.write_to_vec(&mut buf);
         offsets.push(buf.len());
     }
     let mut values = Vec::with_capacity(offsets.len());
@@ -65,7 +70,7 @@ fn test_build_array() {
 
     let expect_value = Value::Array(expect_array);
     let mut expect_buf: Vec<u8> = Vec::new();
-    expect_value.to_vec(&mut expect_buf);
+    expect_value.write_to_vec(&mut expect_buf);
 
     let mut arr_buf = Vec::new();
     build_array(values, &mut arr_buf).unwrap();
@@ -101,7 +106,7 @@ fn test_build_object() {
         let value = parse_value(s.as_bytes()).unwrap();
         expect_object.insert(key.clone(), value.clone());
 
-        value.to_vec(&mut buf);
+        value.write_to_vec(&mut buf);
         offsets.push(buf.len());
     }
 
@@ -114,7 +119,7 @@ fn test_build_object() {
 
     let expect_value = Value::Object(expect_object);
     let mut expect_buf: Vec<u8> = Vec::new();
-    expect_value.to_vec(&mut expect_buf);
+    expect_value.write_to_vec(&mut expect_buf);
 
     let mut obj_buf = Vec::new();
     build_object(values, &mut obj_buf).unwrap();
@@ -142,7 +147,7 @@ fn test_array_length() {
         let res = array_length(s.as_bytes());
         assert_eq!(res, expect);
         let value = parse_value(s.as_bytes()).unwrap();
-        value.to_vec(&mut buf);
+        value.write_to_vec(&mut buf);
         let res = array_length(&buf);
         assert_eq!(res, expect);
         buf.clear();
@@ -182,7 +187,7 @@ fn test_get_by_path() {
             None => assert_eq!(res, None),
         }
         let value = parse_value(s.as_bytes()).unwrap();
-        value.to_vec(&mut buf);
+        value.write_to_vec(&mut buf);
         let res = get_by_path(&buf, paths);
         match expect {
             Some(expect) => assert_eq!(from_slice(&res.unwrap()).unwrap(), expect),
@@ -218,7 +223,7 @@ fn test_get_by_name_ignore_case() {
             None => assert_eq!(res, None),
         }
         let value = parse_value(s.as_bytes()).unwrap();
-        value.to_vec(&mut buf);
+        value.write_to_vec(&mut buf);
         let res = get_by_name_ignore_case(&buf, &name);
         match expect {
             Some(expect) => assert_eq!(from_slice(&res.unwrap()).unwrap(), expect),
@@ -256,7 +261,7 @@ fn test_object_keys() {
             None => assert_eq!(res, None),
         }
         let value = parse_value(s.as_bytes()).unwrap();
-        value.to_vec(&mut buf);
+        value.write_to_vec(&mut buf);
         let res = object_keys(&buf);
         match expect {
             Some(expect) => assert_eq!(from_slice(&res.unwrap()).unwrap(), expect),
@@ -337,9 +342,9 @@ fn test_compare() {
         assert_eq!(res, expect);
 
         let lvalue = parse_value(l.as_bytes()).unwrap();
-        lvalue.to_vec(&mut lbuf);
+        lvalue.write_to_vec(&mut lbuf);
         let rvalue = parse_value(r.as_bytes()).unwrap();
-        rvalue.to_vec(&mut rbuf);
+        rvalue.write_to_vec(&mut rbuf);
 
         let res = compare(&lbuf, &rbuf).unwrap();
         assert_eq!(res, expect);
@@ -459,7 +464,7 @@ fn test_as_type() {
         assert_eq!(res, expect_object);
 
         let value = parse_value(s.as_bytes()).unwrap();
-        value.to_vec(&mut buf);
+        value.write_to_vec(&mut buf);
         let res = as_null(&buf);
         match expect_null {
             Some(_) => assert!(res.is_some()),
@@ -490,6 +495,136 @@ fn test_as_type() {
 }
 
 #[test]
+fn test_to_type() {
+    let sources = vec![
+        (r#"null"#, None, None, None, None, None),
+        (
+            r#"true"#,
+            Some(true),
+            Some(1_i64),
+            Some(1_u64),
+            Some(1_f64),
+            Some("true".to_string()),
+        ),
+        (
+            r#"false"#,
+            Some(false),
+            Some(0_i64),
+            Some(0_u64),
+            Some(0_f64),
+            Some("false".to_string()),
+        ),
+        (
+            r#"1"#,
+            None,
+            Some(1_i64),
+            Some(1_u64),
+            Some(1_f64),
+            Some("1".to_string()),
+        ),
+        (
+            r#"-2"#,
+            None,
+            Some(-2_i64),
+            None,
+            Some(-2_f64),
+            Some("-2".to_string()),
+        ),
+        (
+            r#"1.2"#,
+            None,
+            None,
+            None,
+            Some(1.2_f64),
+            Some("1.2".to_string()),
+        ),
+        (
+            r#""true""#,
+            Some(true),
+            None,
+            None,
+            None,
+            Some("true".to_string()),
+        ),
+        (
+            r#""false""#,
+            Some(false),
+            None,
+            None,
+            None,
+            Some("false".to_string()),
+        ),
+        (
+            r#""abcd""#,
+            None,
+            None,
+            None,
+            None,
+            Some("abcd".to_string()),
+        ),
+    ];
+
+    let mut buf: Vec<u8> = Vec::new();
+    for (s, expect_bool, expect_i64, expect_u64, expect_f64, expect_str) in sources {
+        let res = to_bool(s.as_bytes());
+        match expect_bool {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_i64(s.as_bytes());
+        match expect_i64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_u64(s.as_bytes());
+        match expect_u64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_f64(s.as_bytes());
+        match expect_f64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_str(s.as_bytes());
+        match expect_str {
+            Some(ref expect) => assert_eq!(&res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+
+        let value = parse_value(s.as_bytes()).unwrap();
+        value.write_to_vec(&mut buf);
+        let res = to_bool(&buf);
+        match expect_bool {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_i64(&buf);
+        match expect_i64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_u64(&buf);
+        match expect_u64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_f64(&buf);
+        match expect_f64 {
+            Some(expect) => assert_eq!(res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+        let res = to_str(&buf);
+        match expect_str {
+            Some(ref expect) => assert_eq!(&res.unwrap(), expect),
+            None => assert!(res.is_err()),
+        }
+
+        buf.clear();
+    }
+}
+
+#[test]
 fn test_to_string() {
     let sources = vec![
         r#"null"#,
@@ -509,7 +644,7 @@ fn test_to_string() {
         assert_eq!(res, s.to_string());
 
         let value = parse_value(s.as_bytes()).unwrap();
-        value.to_vec(&mut buf);
+        value.write_to_vec(&mut buf);
         let res = to_string(&buf);
         assert_eq!(res, s.to_string());
         buf.clear();

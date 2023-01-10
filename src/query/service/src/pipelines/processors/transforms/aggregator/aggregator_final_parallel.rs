@@ -16,17 +16,15 @@ use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::vec;
 
 use common_base::runtime::ThreadPool;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethod;
-use common_datavalues::DataType;
-use common_datavalues::MutableColumn;
-use common_datavalues::ScalarColumn;
-use common_datavalues::Series;
-use common_datavalues::StringColumn;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
+use common_expression::HashMethod;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -137,7 +135,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 }
 
-struct BucketAggregator<const HAS_AGG: bool, Method>
+pub struct BucketAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     area: Area,
@@ -174,9 +172,14 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             return Ok(vec![]);
         }
         for data_block in blocks {
+            let block = data_block.convert_to_full();
             // 1.1 and 1.2.
             let aggregate_function_len = self.params.aggregate_functions.len();
-            let keys_column = data_block.column(aggregate_function_len);
+            let keys_column = block
+                .get_by_offset(aggregate_function_len)
+                .value
+                .as_column()
+                .unwrap();
             let keys_iter = self.method.keys_iter_from_column(keys_column)?;
 
             if !HAS_AGG {
@@ -190,12 +193,18 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 let places = self.lookup_state(&keys_iter);
 
                 let states_columns = (0..aggregate_function_len)
-                    .map(|i| data_block.column(i))
+                    .map(|i| block.get_by_offset(i))
                     .collect::<Vec<_>>();
                 let mut states_binary_columns = Vec::with_capacity(states_columns.len());
 
                 for agg in states_columns.iter().take(aggregate_function_len) {
-                    let aggr_column: &StringColumn = Series::check_get(agg)?;
+                    let aggr_column =
+                        agg.value.as_column().unwrap().as_string().ok_or_else(|| {
+                            ErrorCode::IllegalDataType(format!(
+                                "Aggregation column should be StringType, but got {:?}",
+                                agg.value
+                            ))
+                        })?;
                     states_binary_columns.push(aggr_column);
                 }
 
@@ -207,7 +216,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                             let final_place = place.next(offsets_aggregate_states[idx]);
                             let state_place = temp_place.next(offsets_aggregate_states[idx]);
 
-                            let mut data = states_binary_columns[idx].get_data(row);
+                            let mut data =
+                                unsafe { states_binary_columns[idx].index_unchecked(row) };
                             aggregate_function.deserialize(state_place, &mut data)?;
                             aggregate_function.merge(final_place, state_place)?;
                         }
@@ -216,9 +226,17 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
         }
 
-        let mut group_columns_builder = self
-            .method
-            .group_columns_builder(self.hash_table.len(), &self.params);
+        let mut estimated_key_size = self.hash_table.bytes_len();
+        let value_size = std::mem::size_of::<u64>() * self.hash_table.len();
+        if estimated_key_size > value_size {
+            estimated_key_size -= value_size;
+        }
+
+        let mut group_columns_builder = self.method.group_columns_builder(
+            self.hash_table.len(),
+            estimated_key_size,
+            &self.params,
+        );
 
         if !HAS_AGG {
             for group_entity in self.hash_table.iter() {
@@ -226,20 +244,17 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
 
             let columns = group_columns_builder.finish()?;
-            Ok(vec![DataBlock::create(
-                self.params.output_schema.clone(),
-                columns,
-            )])
+
+            Ok(vec![DataBlock::new_from_columns(columns)])
         } else {
             let aggregate_functions = &self.params.aggregate_functions;
             let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-            let mut aggregates_column_builder: Vec<Box<dyn MutableColumn>> = {
+            let mut aggregates_column_builder = {
                 let mut values = vec![];
                 for aggregate_function in aggregate_functions {
-                    let builder = aggregate_function
-                        .return_type()?
-                        .create_mutable(self.hash_table.len());
+                    let data_type = aggregate_function.return_type()?;
+                    let builder = ColumnBuilder::with_capacity(&data_type, self.hash_table.len());
                     values.push(builder)
                 }
                 values
@@ -255,7 +270,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                     })
                     .collect();
 
-                let builder: &mut dyn MutableColumn = aggregates_column_builder[idx].borrow_mut();
+                let builder = aggregates_column_builder[idx].borrow_mut();
                 aggregate_function.batch_merge_result(places, builder)?;
             }
 
@@ -264,18 +279,14 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
 
             // Build final state block.
-            let fields_len = self.params.output_schema.fields().len();
-            let mut columns = Vec::with_capacity(fields_len);
+            let mut columns = aggregates_column_builder
+                .into_iter()
+                .map(|builder| builder.build())
+                .collect::<Vec<_>>();
 
-            for mut array in aggregates_column_builder {
-                columns.push(array.to_column());
-            }
-
-            columns.extend_from_slice(&group_columns_builder.finish()?);
-            Ok(vec![DataBlock::create(
-                self.params.output_schema.clone(),
-                columns,
-            )])
+            let group_columns = group_columns_builder.finish()?;
+            columns.extend_from_slice(&group_columns);
+            Ok(vec![DataBlock::new_from_columns(columns)])
         }
     }
 

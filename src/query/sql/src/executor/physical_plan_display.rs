@@ -146,8 +146,8 @@ impl Display for AggregateFinal {
         let group_items = self
             .group_by
             .iter()
-            .map(String::to_string)
-            .collect::<Vec<String>>()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
             .join(", ");
 
         let agg_funcs = self
@@ -157,7 +157,7 @@ impl Display for AggregateFinal {
                 format!(
                     "{}({})",
                     item.sig.name,
-                    item.arg_indices
+                    item.args
                         .iter()
                         .map(|index| index.to_string())
                         .collect::<Vec<String>>()
@@ -180,8 +180,8 @@ impl Display for AggregatePartial {
         let group_items = self
             .group_by
             .iter()
-            .map(String::to_string)
-            .collect::<Vec<String>>()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
             .join(", ");
 
         let agg_funcs = self
@@ -191,7 +191,7 @@ impl Display for AggregatePartial {
                 format!(
                     "{}({})",
                     item.sig.name,
-                    item.arg_indices
+                    item.args
                         .iter()
                         .map(|index| index.to_string())
                         .collect::<Vec<String>>()

@@ -100,16 +100,18 @@ impl Display for SplitInfo {
         if n > 1 {
             write!(
                 f,
-                "{}({})[{}/{}][{}..{}]",
+                "{}[split {}/{}][{}..{}({} bytes)]",
                 self.file.path,
-                self.size,
                 self.seq_in_file,
                 n,
                 self.offset,
-                self.offset + self.size
+                self.offset + self.size,
+                self.size,
             )
+        } else if self.size > 0 {
+            write!(f, "{}({} bytes)", self.file.path, self.size)
         } else {
-            write!(f, "{}({})", self.file.path, self.size)
+            write!(f, "{}", self.file.path)
         }
     }
 }
@@ -126,6 +128,9 @@ pub fn split_by_size(size: usize, split_size: usize) -> Vec<(usize, usize)> {
 }
 
 impl SplitInfo {
+    pub fn start_row_text(&self) -> Option<usize> {
+        if self.seq_in_file == 0 { Some(0) } else { None }
+    }
     pub fn from_stream_split(path: String, compress_alg: Option<CompressAlgorithm>) -> Self {
         SplitInfo {
             file: Arc::new(FileInfo {

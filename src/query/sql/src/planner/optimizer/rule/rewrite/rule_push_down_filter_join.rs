@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::type_coercion::compare_coercion;
 use common_exception::Result;
+use common_expression::type_check::common_super_type;
 
-use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::planner::binder::wrap_cast;
 use crate::plans::AndExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
@@ -77,6 +77,7 @@ impl RulePushDownFilterJoin {
     }
 
     #[allow(clippy::only_used_in_recursion)]
+    #[allow(dead_code)]
     fn find_nullable_columns(
         &self,
         predicate: &Scalar,
@@ -87,6 +88,9 @@ impl RulePushDownFilterJoin {
         match predicate {
             Scalar::BoundColumnRef(column_binding) => {
                 nullable_columns.push(column_binding.column.index);
+            }
+            Scalar::AndExpr(_) => {
+                unreachable!("`Scalar::AndExpr` should have been split in binder")
             }
             Scalar::OrExpr(expr) => {
                 let mut left_cols = vec![];
@@ -118,6 +122,14 @@ impl RulePushDownFilterJoin {
                     }
                 }
             }
+            Scalar::NotExpr(expr) => {
+                self.find_nullable_columns(
+                    &expr.argument,
+                    left_output_columns,
+                    right_output_columns,
+                    nullable_columns,
+                )?;
+            }
             Scalar::ComparisonExpr(expr) => {
                 // For any comparison expr, if input is null, the compare result is false
                 self.find_nullable_columns(
@@ -141,13 +153,12 @@ impl RulePushDownFilterJoin {
                     nullable_columns,
                 )?;
             }
-            // `predicate` can't be `Scalar::AndExpr`
-            // because `Scalar::AndExpr` had been split in binder
             _ => {}
         }
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn convert_outer_to_inner_join(&self, s_expr: &SExpr) -> Result<SExpr> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
@@ -244,13 +255,11 @@ impl RulePushDownFilterJoin {
                     break;
                 }
             }
-            if let Scalar::FunctionCall(func) = predicate {
-                if func.func_name == "not" && func.arguments.len() == 1 {
-                    // Check if the argument is mark index, if so, we won't convert it to semi join
-                    if let Scalar::BoundColumnRef(col) = &func.arguments[0] {
-                        if col.column.index == mark_index {
-                            return Ok(s_expr.clone());
-                        }
+            if let Scalar::NotExpr(not_expr) = predicate {
+                // Check if the argument is mark index, if so, we won't convert it to semi join
+                if let Scalar::BoundColumnRef(col) = not_expr.argument.as_ref() {
+                    if col.column.index == mark_index {
+                        return Ok(s_expr.clone());
                     }
                 }
             }
@@ -281,9 +290,10 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
+        // Todo(xudong): find a way to avoid type conflict and then open the rule
+        // let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
         // Second, check if can convert mark join to semi join
-        s_expr = self.convert_mark_to_semi_join(&s_expr)?;
+        let s_expr = self.convert_mark_to_semi_join(s_expr)?;
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
@@ -407,25 +417,27 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Res
             JoinPredicate::Both { left, right } => {
                 let left_type = left.data_type();
                 let right_type = right.data_type();
-                let join_key_type = compare_coercion(&left_type, &right_type);
+                let join_key_type = common_super_type(left_type, right_type);
 
                 // We have to check if left_type and right_type can be coerced to
                 // a super type. If the coercion is failed, we cannot push the
                 // predicate into join.
-                if let Ok(join_key_type) = join_key_type {
+                if let Some(join_key_type) = join_key_type {
                     if join.join_type == JoinType::Cross {
                         join.join_type = JoinType::Inner;
                     }
-                    if left.data_type().ne(&right.data_type()) {
-                        let left = wrap_cast(left.clone(), &join_key_type);
-                        let right = wrap_cast(right.clone(), &join_key_type);
-                        join.left_conditions.push(left);
-                        join.right_conditions.push(right);
-                    } else {
-                        join.left_conditions.push(left.clone());
-                        join.right_conditions.push(right.clone());
+                    if join.join_type == JoinType::Inner {
+                        if left.data_type().ne(&right.data_type()) {
+                            let left = wrap_cast(left, &join_key_type);
+                            let right = wrap_cast(right, &join_key_type);
+                            join.left_conditions.push(left);
+                            join.right_conditions.push(right);
+                        } else {
+                            join.left_conditions.push(left.clone());
+                            join.right_conditions.push(right.clone());
+                        }
+                        need_push = true;
                     }
-                    need_push = true;
                 } else {
                     original_predicates.push(predicate);
                 }

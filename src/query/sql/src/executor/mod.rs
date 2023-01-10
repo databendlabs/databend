@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod expression_builder;
+mod explain;
 mod format;
 mod physical_plan;
 mod physical_plan_builder;
@@ -23,7 +23,6 @@ mod physical_scalar_visitor;
 pub mod table_read_plan;
 mod util;
 
-pub use expression_builder::*;
 pub use physical_plan::*;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_builder::PhysicalScalarBuilder;

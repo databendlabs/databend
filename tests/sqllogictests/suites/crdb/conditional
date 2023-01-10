@@ -55,4 +55,3 @@ one one three four two
 
 statement ok
 DROP TABLE t
-

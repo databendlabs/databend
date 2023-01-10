@@ -17,10 +17,16 @@ use std::vec;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_expression::types::number::UInt64Type;
+use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
+use common_expression::utils::FromData;
+use common_expression::DataBlock;
+use common_expression::FromOptData;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -68,34 +74,48 @@ impl AsyncSystemTable for StagesTable {
                     number_of_files.push(None);
                 }
             };
-            creator.push(stage.creator.map(|c| c.to_string().into_bytes()));
+            match stage.creator {
+                Some(c) => {
+                    creator.push(Some(c.to_string().into_bytes().to_vec()));
+                }
+                None => {
+                    creator.push(None);
+                }
+            }
             comment.push(stage.comment.clone().into_bytes());
         }
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(name),
-            Series::from_data(stage_type),
-            Series::from_data(stage_params),
-            Series::from_data(copy_options),
-            Series::from_data(file_format_options),
-            Series::from_data(number_of_files),
-            Series::from_data(creator),
-            Series::from_data(comment),
+
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(name),
+            StringType::from_data(stage_type),
+            StringType::from_data(stage_params),
+            StringType::from_data(copy_options),
+            StringType::from_data(file_format_options),
+            UInt64Type::from_opt_data(number_of_files),
+            StringType::from_opt_data(creator),
+            StringType::from_data(comment),
         ]))
     }
 }
 
 impl StagesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("stage_type", Vu8::to_data_type()),
-            DataField::new("stage_params", Vu8::to_data_type()),
-            DataField::new("copy_options", Vu8::to_data_type()),
-            DataField::new("file_format_options", Vu8::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("name", TableDataType::String),
+            TableField::new("stage_type", TableDataType::String),
+            TableField::new("stage_params", TableDataType::String),
+            TableField::new("copy_options", TableDataType::String),
+            TableField::new("file_format_options", TableDataType::String),
             // NULL for external stage
-            DataField::new_nullable("number_of_files", u64::to_data_type()),
-            DataField::new_nullable("creator", Vu8::to_data_type()),
-            DataField::new("comment", Vu8::to_data_type()),
+            TableField::new(
+                "number_of_files",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "creator",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
+            TableField::new("comment", TableDataType::String),
         ]);
         let table_info = TableInfo {
             desc: "'system'.'stages'".to_string(),

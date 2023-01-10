@@ -26,10 +26,15 @@ use crate::function::FunctionSignature;
 use crate::types::number::NumberDataType;
 use crate::types::number::NumberScalar;
 use crate::types::DataType;
+use crate::AutoCastSignature;
+use crate::ColumnIndex;
 use crate::Result;
 use crate::Scalar;
 
-pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<Expr> {
+pub fn check<Index: ColumnIndex>(
+    ast: &RawExpr<Index>,
+    fn_registry: &FunctionRegistry,
+) -> Result<Expr<Index>> {
     match ast {
         RawExpr::Literal { span, lit } => {
             let (scalar, data_type) = check_literal(lit);
@@ -45,7 +50,7 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<Expr> {
             data_type,
         } => Ok(Expr::ColumnRef {
             span: span.clone(),
-            id: *id,
+            id: id.clone(),
             data_type: data_type.clone(),
         }),
         RawExpr::Cast {
@@ -63,8 +68,8 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<Expr> {
             if expr.data_type() == &wrapped_dest_type {
                 Ok(expr)
             } else {
-                // faster path to eval function for cast
-                if let Some(cast_fn) = check_simple_cast(*is_try, dest_type) {
+                // fast path to eval function for cast
+                if let Some(cast_fn) = check_simple_cast(expr.data_type(), *is_try, dest_type) {
                     return check_function(span.clone(), &cast_fn, &[], &[expr], fn_registry);
                 }
                 Ok(Expr::Cast {
@@ -143,11 +148,11 @@ pub fn check_literal(literal: &Literal) -> (Scalar, DataType) {
             DataType::Number(NumberDataType::Int64),
         ),
         Literal::Float32(v) => (
-            Scalar::Number(NumberScalar::Float32((*v).into())),
+            Scalar::Number(NumberScalar::Float32(*v)),
             DataType::Number(NumberDataType::Float32),
         ),
         Literal::Float64(v) => (
-            Scalar::Number(NumberScalar::Float64((*v).into())),
+            Scalar::Number(NumberScalar::Float64(*v)),
             DataType::Number(NumberDataType::Float64),
         ),
         Literal::Boolean(v) => (Scalar::Boolean(*v), DataType::Boolean),
@@ -155,18 +160,46 @@ pub fn check_literal(literal: &Literal) -> (Scalar, DataType) {
     }
 }
 
-pub fn check_function(
+pub fn check_function<Index: ColumnIndex>(
     span: Span,
     name: &str,
     params: &[usize],
-    args: &[Expr],
+    args: &[Expr<Index>],
     fn_registry: &FunctionRegistry,
-) -> Result<Expr> {
+) -> Result<Expr<Index>> {
+    // check if this is to_xxx(xxx) or try_to_xxx(xxx) function, this saves lots registeration
+    if args.len() == 1 {
+        let is_try_cast = name.starts_with("try_");
+        match check_simple_cast(args[0].data_type(), is_try_cast, args[0].data_type()) {
+            Some(simple_cast_name) if simple_cast_name == name => {
+                if is_try_cast {
+                    return check_function(span, "to_nullable", params, args, fn_registry);
+                } else {
+                    return Ok(args[0].clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(original_fn_name) = fn_registry.aliases.get(name) {
+        return check_function(span, original_fn_name, params, args, fn_registry);
+    }
+
     let candidates = fn_registry.search_candidates(name, params, args);
+
+    if candidates.is_empty() && !fn_registry.contains(name) {
+        return Err((span, format!("function `{name}` doesn't exist")));
+    }
+
+    let additional_rules = fn_registry
+        .get_casting_rules(name)
+        .cloned()
+        .unwrap_or_default();
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
-        match try_check_function(span.clone(), args, &func.signature) {
+        match try_check_function(span.clone(), args, &func.signature, &additional_rules) {
             Ok((checked_args, return_type, generics)) => {
                 return Ok(Expr::FunctionCall {
                     span,
@@ -263,24 +296,34 @@ impl Subsitution {
                 .ok_or_else(|| (None, (format!("unbound generic type `T{idx}`")))),
             DataType::Nullable(box ty) => Ok(DataType::Nullable(Box::new(self.apply(ty)?))),
             DataType::Array(box ty) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
+            DataType::Tuple(fields_ty) => {
+                let fields_ty = fields_ty
+                    .into_iter()
+                    .map(|field_ty| self.apply(field_ty))
+                    .collect::<Result<_>>()?;
+                Ok(DataType::Tuple(fields_ty))
+            }
             ty => Ok(ty),
         }
     }
 }
 
 #[allow(clippy::type_complexity)]
-pub fn try_check_function(
+pub fn try_check_function<Index: ColumnIndex>(
     span: Span,
-    args: &[Expr],
+    args: &[Expr<Index>],
     sig: &FunctionSignature,
-) -> Result<(Vec<Expr>, DataType, Vec<DataType>)> {
+    additional_rules: &AutoCastSignature,
+) -> Result<(Vec<Expr<Index>>, DataType, Vec<DataType>)> {
     assert_eq!(args.len(), sig.args_type.len());
 
     let substs = args
         .iter()
         .map(Expr::data_type)
         .zip(&sig.args_type)
-        .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty).map_err(|(_, err)| (span.clone(), err)))
+        .map(|(src_ty, dest_ty)| {
+            unify(src_ty, dest_ty, additional_rules).map_err(|(_, err)| (span.clone(), err))
+        })
         .collect::<Result<Vec<_>>>()?;
     let subst = substs
         .into_iter()
@@ -325,22 +368,37 @@ pub fn try_check_function(
     Ok((checked_args, return_type, generics))
 }
 
-pub fn unify(src_ty: &DataType, dest_ty: &DataType) -> Result<Subsitution> {
+pub fn unify(
+    src_ty: &DataType,
+    dest_ty: &DataType,
+    additional_rules: &AutoCastSignature,
+) -> Result<Subsitution> {
+    if additional_rules
+        .iter()
+        .any(|(src, dest)| src == src_ty && dest == dest_ty)
+    {
+        return Ok(Subsitution::empty());
+    }
+
     match (src_ty, dest_ty) {
         (DataType::Generic(_), _) => unreachable!("source type must not contain generic type"),
         (ty, DataType::Generic(idx)) => Ok(Subsitution::equation(*idx, ty.clone())),
         (DataType::Null, DataType::Nullable(_)) => Ok(Subsitution::empty()),
         (DataType::EmptyArray, DataType::Array(_)) => Ok(Subsitution::empty()),
-        (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty),
-        (src_ty, DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty),
-        (DataType::Array(src_ty), DataType::Array(dest_ty)) => unify(src_ty, dest_ty),
+        (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
+            unify(src_ty, dest_ty, additional_rules)
+        }
+        (src_ty, DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty, additional_rules),
+        (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
+            unify(src_ty, dest_ty, additional_rules)
+        }
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
             if src_tys.len() == dest_tys.len() =>
         {
             let substs = src_tys
                 .iter()
                 .zip(dest_tys)
-                .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty))
+                .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, additional_rules))
                 .collect::<Result<Vec<_>>>()?;
             let subst = substs
                 .into_iter()
@@ -373,7 +431,16 @@ pub fn can_auto_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
             || *dest_num_ty == NumberDataType::Float64
             || src_num_ty.can_lossless_cast_to(*dest_num_ty)
         }
-        (_, DataType::Variant) => true,
+
+        // Note: comment these because : select 'str' -1 will auto transform into: `minus(CAST('str' AS Date), CAST(1 AS Int64))`
+        // (DataType::String, DataType::Date) => true,
+        // (DataType::String, DataType::Timestamp) => true,
+
+        // Note: integer can't auto cast to boolean, because 1 = 2 will auto transform into: `true = true` if the register order is not correct
+        // (DataType::Number(_), DataType::Boolean) => true,
+
+        // Note: Variant  is not super type any more, because   '1' > 3 will auto transform into: `gt(CAST("1" AS Variant), CAST(3 AS Variant))`
+        // (_, DataType::Variant) => true,
         _ => false,
     }
 }
@@ -395,30 +462,61 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
             Some(DataType::Array(Box::new(common_super_type(ty1, ty2)?)))
         }
         (DataType::Number(num1), DataType::Number(num2)) => {
-            Some(DataType::Number(num1.lossless_super_type(num2)?))
+            Some(DataType::Number(num1.lossful_super_type(num2)))
+        }
+
+        (DataType::String, DataType::Timestamp) | (DataType::Timestamp, DataType::String) => {
+            Some(DataType::Timestamp)
+        }
+        (DataType::String, DataType::Date) | (DataType::Date, DataType::String) => {
+            Some(DataType::Date)
+        }
+        (DataType::Date, DataType::Timestamp) | (DataType::Timestamp, DataType::Date) => {
+            Some(DataType::Timestamp)
         }
         _ => Some(DataType::Variant),
     }
 }
 
-pub fn check_simple_cast(is_try: bool, dest_type: &DataType) -> Option<String> {
-    let prefix = if is_try { "try_" } else { "" };
-    let cast_function_name = match dest_type {
-        DataType::String => Some("to_string"),
-        DataType::Number(NumberDataType::UInt8) => Some("to_uint8"),
-        DataType::Number(NumberDataType::UInt16) => Some("to_uint16"),
-        DataType::Number(NumberDataType::UInt32) => Some("to_uint32"),
-        DataType::Number(NumberDataType::UInt64) => Some("to_uint64"),
-        DataType::Number(NumberDataType::Int8) => Some("to_int8"),
-        DataType::Number(NumberDataType::Int16) => Some("to_int16"),
-        DataType::Number(NumberDataType::Int32) => Some("to_int32"),
-        DataType::Number(NumberDataType::Int64) => Some("to_int64"),
-        DataType::Number(NumberDataType::Float32) => Some("to_float32"),
-        DataType::Number(NumberDataType::Float64) => Some("to_float64"),
-        DataType::Timestamp => Some("to_timestamp"),
-        DataType::Date => Some("to_date"),
-        DataType::Variant => Some("to_variant"),
-        _ => None,
-    };
-    cast_function_name.map(|name| format!("{prefix}{name}"))
+pub fn check_simple_cast(
+    src_type: &DataType,
+    is_try: bool,
+    dest_type: &DataType,
+) -> Option<String> {
+    // if is not try cast and the src_type is nullable or null
+    // we should forward to the cast expression
+    // because the "to_xxx" may returns nullable type instead of dest_type
+    if !is_try && src_type.is_nullable_or_null() {
+        return None;
+    }
+
+    let function_name = format!("to_{}", dest_type.to_string().to_lowercase());
+
+    if is_simple_cast_function(&function_name) {
+        let prefix = if is_try { "try_" } else { "" };
+        Some(format!("{}{}", prefix, function_name))
+    } else {
+        None
+    }
+}
+
+pub fn is_simple_cast_function(name: &str) -> bool {
+    const SIMPLE_CAST_FUNCTIONS: &[&str; 15] = &[
+        "to_string",
+        "to_uint8",
+        "to_uint16",
+        "to_uint32",
+        "to_uint64",
+        "to_int8",
+        "to_int16",
+        "to_int32",
+        "to_int64",
+        "to_float32",
+        "to_float64",
+        "to_timestamp",
+        "to_date",
+        "to_variant",
+        "to_boolean",
+    ];
+    SIMPLE_CAST_FUNCTIONS.contains(&name)
 }

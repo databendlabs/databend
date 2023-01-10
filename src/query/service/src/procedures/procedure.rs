@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use common_config::GlobalConfig;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::SendableDataBlockStream;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
@@ -161,7 +161,7 @@ mod impls {
             let output = OutputPort::create();
             let source = StreamSource::create(
                 ctx,
-                Some(DataBlockStream::create(self.0.schema(), None, vec![block]).boxed()),
+                Some(DataBlockStream::create(None, vec![block]).boxed()),
                 output.clone(),
             )?;
 

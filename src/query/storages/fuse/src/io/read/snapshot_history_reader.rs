@@ -16,8 +16,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_storages_table_meta::meta::TableSnapshot;
 use futures_util::stream;
+use storages_common_table_meta::caches::LoadParams;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
@@ -44,7 +45,14 @@ impl SnapshotHistoryReader for TableSnapshotReader {
             (self, location_gen, Some((location, format_version))),
             |(reader, gen, next)| async move {
                 if let Some((loc, ver)) = next {
-                    let snapshot = match reader.read(loc, None, ver).await {
+                    let load_params = LoadParams {
+                        location: loc,
+                        len_hint: None,
+                        ver,
+                        schema: None,
+                    };
+
+                    let snapshot = match reader.read(&load_params).await {
                         Ok(s) => Ok(Some(s)),
                         Err(e) => {
                             if e.code() == ErrorCode::STORAGE_NOT_FOUND {

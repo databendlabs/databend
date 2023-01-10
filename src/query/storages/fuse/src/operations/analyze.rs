@@ -15,11 +15,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::TableSnapshotStatistics;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableSnapshotStatistics;
 use tracing::warn;
 
 use crate::io::SegmentsIO;
@@ -49,7 +50,7 @@ impl FuseTable {
             let mut row_count_sum = 0;
             let mut block_count_sum: u64 = 0;
 
-            let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone());
+            let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
             let segments = segments_io.read_segments(&snapshot.segments).await?;
             for segment in segments {
                 let segment = segment?;
