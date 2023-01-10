@@ -44,7 +44,7 @@ fn test_bloom_filter() -> Result<()> {
         TableField::new("0", TableDataType::Number(NumberDataType::UInt8)),
         TableField::new("1", TableDataType::String),
     ]));
-    let chunks = vec![
+    let blocks = vec![
         DataBlock::new(
             vec![
                 BlockEntry {
@@ -63,13 +63,13 @@ fn test_bloom_filter() -> Result<()> {
             StringType::from_data(vec!["b", "c"]),
         ]),
     ];
-    let chunks_ref = chunks.iter().collect::<Vec<_>>();
+    let blocks_ref = blocks.iter().collect::<Vec<_>>();
 
     let index = BlockFilter::try_create(
         FunctionContext::default(),
         schema,
         LatestBloom::VERSION,
-        &chunks_ref,
+        &blocks_ref,
     )?;
 
     assert_eq!(

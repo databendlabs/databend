@@ -31,6 +31,9 @@ pub trait Filter: Sized {
     /// False positive: returning `true` only a key **probably** presents.
     fn contains<K: ?Sized + Hash>(&self, key: &K) -> bool;
 
+    /// Check if the pre-computed digest is in the filter.
+    fn contains_digest(&self, digest: u64) -> bool;
+
     /// Serialize the filter.
     fn to_bytes(&self) -> Result<Vec<u8>, Self::CodecError>;
 
@@ -49,6 +52,9 @@ pub trait FilterBuilder {
     ///
     /// This methods can be called more than once.
     fn add_keys<K: Hash>(&mut self, keys: &[K]);
+
+    /// Build the filter from the pre-computed digest.
+    fn build_from_digests(&mut self, digests: &[u64]) -> Result<Self::Filter, Self::Error>;
 
     /// Build the filter with added keys.
     fn build(self) -> Result<Self::Filter, Self::Error>;

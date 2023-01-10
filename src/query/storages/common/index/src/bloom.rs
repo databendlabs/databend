@@ -13,18 +13,29 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::arrow::constant_bitmap;
 use common_expression::converts::scalar_to_datavalue;
 use common_expression::types::DataType;
+use common_expression::types::NullableType;
+use common_expression::types::Number;
+use common_expression::types::NumberDataType;
+use common_expression::types::UInt64Type;
+use common_expression::types::ValueType;
 use common_expression::BlockEntry;
+use common_expression::Column;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
+use common_expression::DataField;
 use common_expression::Domain;
+use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
+use common_expression::Literal;
 use common_expression::Scalar;
 use common_expression::Span;
 use common_expression::TableDataType;
@@ -33,6 +44,7 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_sql::executor::PhysicalScalar;
 use storages_common_table_meta::meta::V2BloomBlock;
 use storages_common_table_meta::meta::Versioned;
 
@@ -125,42 +137,100 @@ impl BlockFilter {
             return Err(ErrorCode::BadArguments("block is empty"));
         }
 
+        let mut exprs = Vec::new();
+        let mut fields = Vec::new();
+        let mut columns = Vec::new();
+        for i in 0..blocks[0].num_columns() {
+            let data_type = &blocks[0].get_by_offset(i).data_type;
+            if Xor8Filter::is_supported_type(data_type) {
+                let source_field = source_schema.field(i);
+                let return_type = if data_type.is_nullable() {
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64)))
+                } else {
+                    DataType::Number(NumberDataType::UInt64)
+                };
+                let field = DataField::new(source_field.name().as_str(), return_type.clone());
+                fields.push(field);
+
+                let arg = PhysicalScalar::IndexedVariable {
+                    index: columns.len(),
+                    data_type: data_type.clone(),
+                    display_name: source_field.name().clone(),
+                };
+                let scalar = PhysicalScalar::Function {
+                    name: "siphash".to_string(),
+                    params: vec![],
+                    args: vec![arg],
+                    return_type,
+                };
+                let expr = scalar.as_expr()?;
+                exprs.push(expr);
+
+                let source_columns = blocks
+                    .iter()
+                    .map(|block| {
+                        let value = &block.get_by_offset(i).value;
+                        value.convert_to_full_column(data_type, block.num_rows())
+                    })
+                    .collect::<Vec<_>>();
+                let column = Column::concat(&source_columns);
+                columns.push(column);
+            }
+        }
+
         let mut filter_fields = vec![];
         let mut filter_columns = vec![];
         let mut column_distinct_count = HashMap::<usize, usize>::new();
 
-        for i in 0..blocks[0].num_columns() {
-            if Xor8Filter::is_supported_type(&blocks[0].get_by_offset(i).data_type) {
-                // create filter per column
-                let mut filter_builder = Xor8Builder::create();
+        let data_block = DataBlock::new_from_columns(columns);
+        let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
+        for (field, expr) in fields.iter().zip(exprs.iter()) {
+            let value = evaluator
+                .run(expr)
+                .map_err(|(_, e)| ErrorCode::Internal(format!("eval siphash failed: {}.", e)))?;
+            let col = value.convert_to_full_column(field.data_type(), data_block.num_rows());
+            let (column, validity) = if field.data_type().is_nullable() {
+                let nullable_column =
+                    NullableType::<UInt64Type>::try_downcast_column(&col).unwrap();
+                (nullable_column.column, nullable_column.validity)
+            } else {
+                let column = UInt64Type::try_downcast_column(&col).unwrap();
+                let validity = constant_bitmap(true, column.len()).into();
+                (column, validity)
+            };
 
-                // ingest the same column data from all blocks
-                for block in blocks {
-                    let entry = block.get_by_offset(i);
-                    match &entry.value {
-                        Value::Scalar(scalar) => filter_builder.add_key(&scalar),
-                        Value::Column(col) => {
-                            col.iter()
-                                .for_each(|scalar| filter_builder.add_key(&scalar));
+            // create filter per column
+            let mut filter_builder = Xor8Builder::create();
+            let filter = if validity.unset_bits() > 0 {
+                let mut digests = Vec::with_capacity(column.len());
+                UInt64Type::iter_column(&column)
+                    .zip(validity.iter())
+                    .for_each(|(v, b)| {
+                        if !b {
+                            digests.push(0);
+                        } else {
+                            digests.push(v);
                         }
-                    }
-                }
+                    });
+                filter_builder.build_from_digests(&digests)?
+            } else {
+                filter_builder.build_from_digests(column.deref())?
+            };
 
-                let filter = filter_builder.build()?;
-                if let Some(len) = filter.len() {
-                    column_distinct_count.insert(i, len);
-                }
-
-                let filter_name = Self::build_filter_column_name(source_schema.field(i).name());
-                filter_fields.push(TableField::new(&filter_name, TableDataType::String));
-                // create filter column
-                let serialized_bytes = filter.to_bytes()?;
-                let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
-                filter_columns.push(BlockEntry {
-                    data_type: DataType::String,
-                    value: filter_value,
-                });
+            if let Some(len) = filter.len() {
+                let idx = source_schema.index_of(field.name().as_str()).unwrap();
+                column_distinct_count.insert(idx, len);
             }
+
+            let filter_name = Self::build_filter_column_name(field.name());
+            filter_fields.push(TableField::new(&filter_name, TableDataType::String));
+            // create filter column
+            let serialized_bytes = filter.to_bytes()?;
+            let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
+            filter_columns.push(BlockEntry {
+                data_type: DataType::String,
+                value: filter_value,
+            });
         }
 
         let filter_schema = Arc::new(TableSchema::new(filter_fields));
@@ -261,7 +331,30 @@ impl BlockFilter {
             let datavalue = scalar_to_datavalue(target);
             filter.contains(&datavalue)
         } else {
-            filter.contains(target)
+            let digest = if let Scalar::Null = target {
+                0u64
+            } else {
+                let arg = PhysicalScalar::Constant {
+                    value: Literal::try_from(target.clone()).unwrap(),
+                    data_type: ty.clone(),
+                };
+                let scalar = PhysicalScalar::Function {
+                    name: "siphash".to_string(),
+                    params: vec![],
+                    args: vec![arg],
+                    return_type: DataType::Number(NumberDataType::UInt64),
+                };
+                let expr = scalar.as_expr()?;
+
+                let data_block = DataBlock::empty();
+                let evaluator = Evaluator::new(&data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
+                let value = evaluator.run(&expr).map_err(|(_, e)| {
+                    ErrorCode::Internal(format!("eval siphash failed: {}.", e))
+                })?;
+                let number_scalar = value.into_scalar().unwrap().into_number().unwrap();
+                u64::try_downcast_scalar(&number_scalar).unwrap()
+            };
+            filter.contains_digest(digest)
         };
 
         if contains {

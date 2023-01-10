@@ -15,10 +15,12 @@ test = false
 ignored = ["xorfilter-rs"]
 
 [dependencies]
+common-arrow = { path = "../../../../common/arrow" }
 common-catalog = { path = "../../../catalog" }
 common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
 common-functions = { path = "../../../functions" }
+common-sql = { path = "../../../sql" }
 
 storages-common-table-meta = { path = "../table-meta" }
 

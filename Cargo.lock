@@ -7674,10 +7674,12 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "cbordata",
+ "common-arrow",
  "common-catalog",
  "common-exception",
  "common-expression",
  "common-functions",
+ "common-sql",
  "criterion",
  "match-template",
  "rand 0.8.5",

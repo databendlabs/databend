@@ -215,3 +215,33 @@ fn test_xor_bitmap_data_block() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_xor_bitmap_from_digests() -> Result<()> {
+    let numbers = 1_000_000;
+
+    let size = 8 * numbers;
+    let keys: Vec<u64> = (0..numbers).collect();
+    let mut builder = Xor8Builder::create();
+    let filter = builder.build_from_digests(&keys)?;
+    for key in keys.iter() {
+        assert!(filter.contains_digest(*key), "key {} not present", key);
+    }
+
+    let val = filter.to_bytes()?;
+    let (_, n) = Xor8Filter::from_bytes(&val)?;
+    assert_eq!(n, val.len(), "{} {}", n, val.len());
+
+    // Lock the size.
+    assert_eq!(n, 1230069);
+
+    // u64 bitmap enc:1230069, raw:8000000, ratio:0.15375863
+    println!(
+        "u64 bitmap enc:{}, raw:{}, ratio:{}",
+        val.len(),
+        size,
+        val.len() as f32 / size as f32
+    );
+
+    Ok(())
+}
