@@ -38,7 +38,7 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
-use geo_types::Coordinate;
+use geo_types::Coord;
 use h3ron::H3Cell;
 use h3ron::Index;
 use once_cell::sync::OnceCell;
@@ -90,7 +90,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_,_,_|FunctionDomain::Full,
         vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<i64>, NumberType<u64>>(
             |x, y, r, builder, ctx| {
-                let coord = Coordinate { x: x.into(), y: y.into() };
+                let coord = Coord { x: x.into(), y: y.into() };
                 match H3Cell::from_coordinate(coord, r as u8) {
                     Ok(h3_cell) => builder.push(h3_cell.h3index()),
                     Err(e) => {
