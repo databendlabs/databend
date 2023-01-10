@@ -39,12 +39,12 @@ use common_sql::evaluator::BlockOperator;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::TableSnapshot;
 
-use super::mutation::SerializeDataTransform;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::MutationTransform;
+use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipe;

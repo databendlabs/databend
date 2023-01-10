@@ -15,7 +15,6 @@
 pub mod abort_operation;
 pub mod base_mutator;
 mod compact;
-mod deletion;
 pub mod mutation_meta;
 mod mutation_part;
 pub mod mutation_sink;
@@ -35,7 +34,6 @@ pub use compact::MergeSegmentsTransform;
 pub use compact::SegmentCompactMutator;
 pub use compact::SegmentCompactionState;
 pub use compact::SegmentCompactor;
-pub use deletion::DeletionSource;
 pub use mutation_meta::Mutation;
 pub use mutation_meta::MutationSinkMeta;
 pub use mutation_meta::MutationTransformMeta;
