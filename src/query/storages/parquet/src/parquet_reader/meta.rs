@@ -53,13 +53,10 @@ fn lower_field_name(field: &mut ArrowField) {
 
 impl ParquetReader {
     pub fn read_meta(location: &str) -> Result<FileMetaData> {
-        let mut file = File::open(location).map_err(|e| {
-            ErrorCode::Internal(format!("Failed to open file '{location}': {e}"))
-        })?;
+        let mut file = File::open(location)
+            .map_err(|e| ErrorCode::Internal(format!("Failed to open file '{location}': {e}")))?;
         pread::read_metadata(&mut file).map_err(|e| {
-            ErrorCode::Internal(format!(
-                "Read parquet file '{location}''s meta error: {e}"
-            ))
+            ErrorCode::Internal(format!("Read parquet file '{location}''s meta error: {e}"))
         })
     }
 

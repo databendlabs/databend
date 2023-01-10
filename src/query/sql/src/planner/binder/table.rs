@@ -330,9 +330,7 @@ impl<'a> Binder {
                     let file = get_first_file(&op, &path).await?;
                     match file {
                         None => {
-                            return Err(ErrorCode::BadArguments(format!(
-                                "no file in {location}"
-                            )));
+                            return Err(ErrorCode::BadArguments(format!("no file in {location}")));
                         }
                         Some(f) => f.path().to_string(),
                     }

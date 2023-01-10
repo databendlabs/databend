@@ -442,9 +442,10 @@ impl<'a> Binder {
         if result.is_empty() {
             Err(original_error)
         } else if result.len() > 1 {
-            Err(ErrorCode::SemanticError(expr.span().display_error(
-                format!("GROUP BY \"{expr}\" is ambiguous"),
-            )))
+            Err(ErrorCode::SemanticError(
+                expr.span()
+                    .display_error(format!("GROUP BY \"{expr}\" is ambiguous")),
+            ))
         } else {
             let (column_binding, scalar) = available_aliases[result[0]].clone();
             // We will add the alias to BindContext, so we can reference it

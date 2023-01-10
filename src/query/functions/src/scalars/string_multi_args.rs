@@ -1001,9 +1001,8 @@ pub mod regexp {
     ) -> Result<Regex, String> {
         let pattern = match pat.is_empty() {
             true => "^$",
-            false => simdutf8::basic::from_utf8(pat).map_err(|e| {
-                format!("Unable to convert the {fn_name} pattern to string: {e}")
-            })?,
+            false => simdutf8::basic::from_utf8(pat)
+                .map_err(|e| format!("Unable to convert the {fn_name} pattern to string: {e}"))?,
         };
         // the default match type value is 'i', if it is empty
         let mt = match mt {
@@ -1032,9 +1031,7 @@ pub mod regexp {
                 'u' => Err(format!(
                     "Unsupported arguments to {fn_name} match type: {c}",
                 )),
-                _ => Err(format!(
-                    "Incorrect arguments to {fn_name} match type: {c}",
-                )),
+                _ => Err(format!("Incorrect arguments to {fn_name} match type: {c}",)),
             };
             #[allow(clippy::question_mark)]
             if let Err(e) = r {

@@ -286,10 +286,7 @@ pub fn db_has_to_exist(
         debug!(seq, ?db_name_ident, "db does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownDatabase(
-            UnknownDatabase::new(
-                &db_name_ident.db_name,
-                format!("{msg}: {db_name_ident}"),
-            ),
+            UnknownDatabase::new(&db_name_ident.db_name, format!("{msg}: {db_name_ident}")),
         )))
     } else {
         Ok(())

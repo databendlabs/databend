@@ -1547,12 +1547,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
         // Get db by name to ensure presence
 
-        let res = get_db_or_err(
-            self,
-            &tenant_dbname,
-            format!("get_table: {tenant_dbname}"),
-        )
-        .await;
+        let res = get_db_or_err(self, &tenant_dbname, format!("get_table: {tenant_dbname}")).await;
 
         let (_db_id_seq, db_id, _db_meta_seq, db_meta) = match res {
             Ok(x) => x,

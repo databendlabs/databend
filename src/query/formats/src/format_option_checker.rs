@@ -30,9 +30,7 @@ pub fn get_format_option_checker(
         StageFileFormatType::Parquet => Ok(Box::new(ParquetFormatOptionChecker {})),
         StageFileFormatType::Xml => Ok(Box::new(XMLFormatOptionChecker {})),
         StageFileFormatType::Json => Ok(Box::new(JsonFormatOptionChecker {})),
-        _ => Err(ErrorCode::Internal(format!(
-            "unexpect format type {fmt:?}"
-        ))),
+        _ => Err(ErrorCode::Internal(format!("unexpect format type {fmt:?}"))),
     }
 }
 

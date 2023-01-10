@@ -463,9 +463,7 @@ fn aggregate_to_format_tree(
         },
         vec![
             vec![
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "group items: [{group_items}]"
-                ))),
+                FormatTreeNode::new(FormatContext::Text(format!("group items: [{group_items}]"))),
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "aggregate functions: [{agg_funcs}]"
                 ))),

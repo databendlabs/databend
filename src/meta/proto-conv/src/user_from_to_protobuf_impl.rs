@@ -601,9 +601,7 @@ impl FromToProto for mt::CopyOptions {
         })?;
 
         let max_file_size = usize::try_from(p.max_file_size).map_err(|err| Incompatible {
-            reason: format!(
-                "CopyOptions.max_file_size cannot be convert to usize: {err}"
-            ),
+            reason: format!("CopyOptions.max_file_size cannot be convert to usize: {err}"),
         })?;
         Ok(mt::CopyOptions {
             on_error,
@@ -624,9 +622,7 @@ impl FromToProto for mt::CopyOptions {
             reason: format!("CopyOptions.split_size cannot be convert to u64: {err}"),
         })?;
         let max_file_size = u64::try_from(self.max_file_size).map_err(|err| Incompatible {
-            reason: format!(
-                "CopyOptions.max_file_size cannot be convert to u64: {err}"
-            ),
+            reason: format!("CopyOptions.max_file_size cannot be convert to u64: {err}"),
         })?;
         Ok(pb::user_stage_info::CopyOptions {
             on_error: Some(on_error),

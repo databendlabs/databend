@@ -1081,9 +1081,7 @@ async fn get_inbound_share_info_by_tenant(
     let (_seq, meta) = get_share_account_meta_or_err(
         kv_api,
         &share_account_key,
-        format!(
-            "get_inbound_share_infos_by_tenant's account: {share_id}/{tenant}"
-        ),
+        format!("get_inbound_share_infos_by_tenant's account: {share_id}/{tenant}"),
     )
     .await?;
 

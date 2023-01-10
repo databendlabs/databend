@@ -412,9 +412,7 @@ impl CsvReaderState {
         } else if actual > expect + 1
             || (actual == expect + 1 && field_ends[expect] != field_ends[expect - 1])
         {
-            Err(self.csv_error(&format!(
-                "too many fields, expect {expect}, got {actual}"
-            )))
+            Err(self.csv_error(&format!("too many fields, expect {expect}, got {actual}")))
         } else {
             Ok(())
         }

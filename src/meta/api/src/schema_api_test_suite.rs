@@ -1582,9 +1582,7 @@ impl SchemaApiTestSuite {
             let err_code = ErrorCode::from(status);
 
             assert_eq!(
-                format!(
-                    "Code: 2302, displayText = Table '{tbl_name}' already exists."
-                ),
+                format!("Code: 2302, displayText = Table '{tbl_name}' already exists."),
                 err_code.to_string()
             );
 

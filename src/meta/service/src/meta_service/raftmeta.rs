@@ -282,14 +282,10 @@ impl MetaNode {
             Ok(addr) => format!("{addr}:{port}"),
             Err(_) => {
                 let resolver = DNSResolver::instance().map_err(|e| {
-                    MetaNetworkError::DnsParseError(format!(
-                        "get dns resolver instance error: {e}"
-                    ))
+                    MetaNetworkError::DnsParseError(format!("get dns resolver instance error: {e}"))
                 })?;
                 let ip_addrs = resolver.resolve(host).await.map_err(|e| {
-                    MetaNetworkError::GetNodeAddrError(format!(
-                        "resolve addr {host} error: {e}"
-                    ))
+                    MetaNetworkError::GetNodeAddrError(format!("resolve addr {host} error: {e}"))
                 })?;
                 format!("{}:{}", ip_addrs[0], port)
             }
