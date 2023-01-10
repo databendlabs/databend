@@ -206,7 +206,7 @@ impl AligningStateTextBased for CsvReaderState {
                     return Err(self.error_output_full());
                 }
                 ReadRecordResult::OutputEndsFull => {
-                    return Err(self.error_output_ends_full(num_fields, self.field_ends.len()));
+                    return Err(self.error_output_ends_full());
                 }
                 ReadRecordResult::Record => {
                     self.check_num_field()?;
@@ -257,7 +257,7 @@ impl AligningStateTextBased for CsvReaderState {
                     return Err(self.error_output_full());
                 }
                 ReadRecordResult::OutputEndsFull => {
-                    return Err(self.error_output_ends_full(num_fields, self.field_ends.len()));
+                    return Err(self.error_output_ends_full());
                 }
                 ReadRecordResult::Record => {
                     self.check_num_field()?;
@@ -311,7 +311,6 @@ impl AligningStateTextBased for CsvReaderState {
 
     fn align_flush(&mut self) -> Result<Vec<RowBatch>> {
         let mut res = vec![];
-        let num_fields = self.num_fields;
         let in_tmp = Vec::new();
         let mut out_tmp = vec![0u8; 1];
 
@@ -324,9 +323,7 @@ impl AligningStateTextBased for CsvReaderState {
             return match result {
                 ReadRecordResult::InputEmpty => Ok(vec![]),
                 ReadRecordResult::OutputFull => Err(self.error_output_full()),
-                ReadRecordResult::OutputEndsFull => {
-                    Err(self.error_output_ends_full(num_fields, self.field_ends.len()))
-                }
+                ReadRecordResult::OutputEndsFull => Err(self.error_output_ends_full()),
                 ReadRecordResult::Record => {
                     self.check_num_field()?;
                     self.common.offset += n_in;
@@ -341,8 +338,6 @@ impl AligningStateTextBased for CsvReaderState {
                 ReadRecordResult::End => Err(self.csv_error("unexpect eof in header")),
             };
         }
-
-        let num_fields = self.num_fields;
 
         let in_tmp = Vec::new();
         let mut out_tmp = vec![0u8; 1];
@@ -363,7 +358,7 @@ impl AligningStateTextBased for CsvReaderState {
                 return Err(self.error_output_full());
             }
             ReadRecordResult::OutputEndsFull => {
-                return Err(self.error_output_ends_full(num_fields, self.field_ends.len()));
+                return Err(self.error_output_ends_full());
             }
             ReadRecordResult::Record => {
                 self.check_num_field()?;
@@ -374,7 +369,7 @@ impl AligningStateTextBased for CsvReaderState {
                 let row_batch = RowBatch {
                     data,
                     row_ends: vec![last_batch_remain_len + n_out],
-                    field_ends: self.field_ends[..num_fields].to_vec(),
+                    field_ends: self.field_ends[..self.num_fields].to_vec(),
                     split_info: self.split_info.clone(),
                     batch_id: self.common.batch_id,
                     start_offset_in_split: self.common.offset,
@@ -417,14 +412,11 @@ impl CsvReaderState {
         self.csv_error("Bug: CSV Reader return output longer then input.")
     }
 
-    fn error_output_ends_full(
-        &self,
-        num_fields_expect: usize,
-        num_fields_actual: usize,
-    ) -> ErrorCode {
+    fn error_output_ends_full(&self) -> ErrorCode {
         self.csv_error(&format!(
             "too many fields, expect {}, got more than {}",
-            num_fields_expect, num_fields_actual
+            self.num_fields,
+            self.field_ends.len()
         ))
     }
 
