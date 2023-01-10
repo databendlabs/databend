@@ -338,7 +338,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let user_info = test_user_info();
         let mut p = user_info.to_pb()?;
         p.ver = VER + 1;
-        p.min_compatible = VER + 1;
+        p.min_reader_ver = VER + 1;
 
         let res = mt::UserInfo::from_pb(p);
         assert_eq!(
@@ -357,7 +357,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let stage_file = test_stage_file();
         let mut p = stage_file.to_pb()?;
         p.ver = VER + 1;
-        p.min_compatible = VER + 1;
+        p.min_reader_ver = VER + 1;
 
         let res = mt::StageFile::from_pb(p);
         assert_eq!(
@@ -376,7 +376,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let fs_stage_info = test_fs_stage_info();
         let mut p = fs_stage_info.to_pb()?;
         p.ver = VER + 1;
-        p.min_compatible = VER + 1;
+        p.min_reader_ver = VER + 1;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
@@ -395,7 +395,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let s3_stage_info = test_s3_stage_info();
         let mut p = s3_stage_info.to_pb()?;
         p.ver = VER + 1;
-        p.min_compatible = VER + 1;
+        p.min_reader_ver = VER + 1;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
@@ -414,7 +414,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let s3_stage_info = test_s3_stage_info_v14();
         let mut p = s3_stage_info.to_pb()?;
         p.ver = VER + 1;
-        p.min_compatible = VER + 1;
+        p.min_reader_ver = VER + 1;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
@@ -433,7 +433,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let gcs_stage_info = test_gcs_stage_info();
         let mut p = gcs_stage_info.to_pb()?;
         p.ver = VER + 1;
-        p.min_compatible = VER + 1;
+        p.min_reader_ver = VER + 1;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(
@@ -452,7 +452,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         let oss_stage_info = test_oss_stage_info();
         let mut p = oss_stage_info.to_pb()?;
         p.ver = VER + 1;
-        p.min_compatible = VER + 1;
+        p.min_reader_ver = VER + 1;
 
         let res = mt::UserStageInfo::from_pb(p);
         assert_eq!(

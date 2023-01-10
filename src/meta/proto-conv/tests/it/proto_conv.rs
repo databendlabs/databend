@@ -430,7 +430,7 @@ fn test_incompatible() -> anyhow::Result<()> {
     let db_meta = new_db_meta();
     let mut p = db_meta.to_pb()?;
     p.ver = VER + 1;
-    p.min_compatible = VER + 1;
+    p.min_reader_ver = VER + 1;
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
@@ -447,7 +447,7 @@ fn test_incompatible() -> anyhow::Result<()> {
     let db_meta = new_db_meta();
     let mut p = db_meta.to_pb()?;
     p.ver = 0;
-    p.min_compatible = 0;
+    p.min_reader_ver = 0;
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
