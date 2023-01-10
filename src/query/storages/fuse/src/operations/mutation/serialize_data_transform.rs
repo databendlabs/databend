@@ -35,7 +35,6 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationTransformMeta;
 use crate::operations::mutation::SerializeDataMeta;
-use crate::operations::mutation::SerializeState;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
 use crate::pipelines::processors::port::OutputPort;
@@ -44,6 +43,13 @@ use crate::pipelines::processors::Processor;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
+
+pub struct SerializeState {
+    pub block_data: Vec<u8>,
+    pub block_location: String,
+    pub index_data: Vec<u8>,
+    pub index_location: String,
+}
 
 enum State {
     Consume,

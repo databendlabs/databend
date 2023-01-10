@@ -38,13 +38,14 @@ use storages_common_table_meta::meta::ClusterStatistics;
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::operations::mutation::DataChunks;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
+
+type DataChunks = Vec<(usize, Vec<u8>)>;
 
 pub enum MutationAction {
     Deletion,

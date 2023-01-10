@@ -22,8 +22,6 @@ mod mutation_source;
 mod mutation_transform;
 pub mod recluster_mutator;
 mod serialize_data_transform;
-mod update;
-mod util;
 
 pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
@@ -45,6 +43,4 @@ pub use mutation_source::MutationSource;
 pub use mutation_transform::MutationTransform;
 pub use recluster_mutator::ReclusterMutator;
 pub use serialize_data_transform::SerializeDataTransform;
-pub use update::UpdateSource;
-pub use util::DataChunks;
-pub use util::SerializeState;
+pub use serialize_data_transform::SerializeState;
