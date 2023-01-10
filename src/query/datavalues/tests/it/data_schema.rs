@@ -50,22 +50,22 @@ fn test_schema_from_struct() -> Result<()> {
     let column_id_of_names = vec![
         ("a", 0),
         ("b", 1),
-        ("b:0", 2),
-        ("b:0:0", 3),
-        ("b:0:1", 4),
-        ("b:1", 5),
-        ("c", 6),
+        ("b:0", 1),
+        ("b:0:0", 1),
+        ("b:0:1", 2),
+        ("b:1", 3),
+        ("c", 4),
     ];
     for (name, column_id) in column_id_of_names {
         assert_eq!(schema.column_id_of(name).unwrap(), column_id,);
     }
-    assert_eq!(schema.max_column_id(), 7);
+    assert_eq!(schema.max_column_id(), 5);
 
     assert_eq!(
         schema
             .column_id_of_path(&["b".to_string(), "0".to_string(), "1".to_string()])
             .unwrap(),
-        4
+        2
     );
 
     // let mut path_indices = BTreeMap::new();
@@ -118,11 +118,11 @@ fn test_schema_modify_field() -> Result<()> {
     let s2 = StructType::create(None, vec![DataTypeImpl::Struct(s), child_field22]);
     schema.add_columns(&[DataField::new("s", DataTypeImpl::Struct(s2))])?;
     assert_eq!(schema.column_id_of("s").unwrap(), 3);
-    assert_eq!(schema.column_id_of("s:0").unwrap(), 4);
-    assert_eq!(schema.column_id_of("s:0:0").unwrap(), 5);
-    assert_eq!(schema.column_id_of("s:0:1").unwrap(), 6);
-    assert_eq!(schema.column_id_of("s:1").unwrap(), 7);
-    assert_eq!(schema.max_column_id(), 8);
+    assert_eq!(schema.column_id_of("s:0").unwrap(), 3);
+    assert_eq!(schema.column_id_of("s:0:0").unwrap(), 3);
+    assert_eq!(schema.column_id_of("s:0:1").unwrap(), 4);
+    assert_eq!(schema.column_id_of("s:1").unwrap(), 5);
+    assert_eq!(schema.max_column_id(), 6);
 
     // drop column
     schema.drop_column("s")?;

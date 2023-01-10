@@ -127,6 +127,7 @@ impl BlockReader {
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let mut field_marks = Vec::new();
         let mut need_to_fill_default_val = false;
+
         for column in &columns {
             let field = column.field.clone();
             let indices = &column.leaf_ids;
@@ -134,7 +135,7 @@ impl BlockReader {
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
             let mut column_in_block_meta = false;
-            for (i, index) in indices.into_iter().enumerate() {
+            for (i, index) in indices.iter().enumerate() {
                 let column_id = column.leaf_column_ids[i];
                 if let Some(column_meta) = columns_meta.get(&column_id) {
                     let column_read = <&[u8]>::clone(&chunk_map[index]);

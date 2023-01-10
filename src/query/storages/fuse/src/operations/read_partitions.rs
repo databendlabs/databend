@@ -260,7 +260,7 @@ impl FuseTable {
             let columns = projection.project_column_leaves(column_leaves).unwrap();
             for column in &columns {
                 let indices = &column.leaf_ids;
-                for (i, _index) in indices.into_iter().enumerate() {
+                for (i, _index) in indices.iter().enumerate() {
                     // ignore all deleted field
                     let column_id = column.leaf_column_ids[i];
 
@@ -323,7 +323,7 @@ impl FuseTable {
         let columns = projection.project_column_leaves(column_leaves).unwrap();
         for column in &columns {
             let indices = &column.leaf_ids;
-            for (i, _index) in indices.into_iter().enumerate() {
+            for (i, _index) in indices.iter().enumerate() {
                 let column_id = column.leaf_column_ids[i];
 
                 // ignore column this block dose not exist

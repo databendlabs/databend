@@ -19,7 +19,6 @@ use common_storage::ColumnLeaves;
 
 #[test]
 fn test_column_leaf_schema_from_struct() -> Result<()> {
-    println!("test_column_leaf_schema_from_struct");
     let child_field11 = u64::to_data_type();
     let child_field12 = u64::to_data_type();
     let child_field22 = u64::to_data_type();
@@ -50,6 +49,51 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
         assert_eq!(expeted_column_id.0.to_string(), column_leaf.field.name);
         for (j, column_id) in column_leaf.leaf_column_ids.iter().enumerate() {
             assert_eq!(expeted_column_id.1[j], *column_id);
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
+    let child_field11 = u64::to_data_type();
+    let child_field12 = u64::to_data_type();
+    let child_field22 = u64::to_data_type();
+
+    let s = StructType::create(None, vec![child_field11, child_field12]);
+
+    let s2 = StructType::create(None, vec![DataTypeImpl::Struct(s), child_field22]);
+
+    let field1 = DataField::new("a", u64::to_data_type());
+    let field2 = DataField::new("b", DataTypeImpl::Struct(s2));
+    let field3 = DataField::new("c", u64::to_data_type());
+
+    let old_schema = DataSchema::new(vec![field1, field2, field3]);
+    let old_column_leaves = ColumnLeaves::new_from_schema(&old_schema.to_arrow(), None);
+
+    let new_schema = DataSchema::init_if_need(old_schema);
+    let new_column_leaves =
+        ColumnLeaves::new_from_schema(&new_schema.to_arrow(), Some(new_schema.column_id_map()));
+
+    // make sure old and new schema build the same column id map
+    assert_eq!(
+        old_column_leaves.build_column_id_map(),
+        new_column_leaves.build_column_id_map()
+    );
+    for (old_leaf, new_leaf) in old_column_leaves
+        .column_leaves
+        .iter()
+        .zip(new_column_leaves.column_leaves.iter())
+    {
+        assert_eq!(old_leaf.field.name, new_leaf.field.name);
+        assert_eq!(old_leaf.leaf_ids, new_leaf.leaf_ids);
+        for (leaf_id, column_id) in old_leaf
+            .leaf_ids
+            .iter()
+            .zip(new_leaf.leaf_column_ids.iter())
+        {
+            assert_eq!(*leaf_id as u32, *column_id);
         }
     }
 

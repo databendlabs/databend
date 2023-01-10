@@ -33,9 +33,10 @@ pub struct DataSchema {
     pub(crate) fields: Vec<DataField>,
     pub(crate) metadata: BTreeMap<String, String>,
 
-    pub(crate) max_column_id: u32,
-    pub(crate) column_id_map: BTreeMap<String, u32>,
-    column_id_set: HashSet<u32>,
+    // define new fields as Option for compatibility
+    pub max_column_id: Option<u32>,
+    column_id_map: Option<BTreeMap<String, u32>>,
+    column_id_set: Option<HashSet<u32>>,
 }
 
 impl DataSchema {
@@ -43,9 +44,18 @@ impl DataSchema {
         Self {
             fields: vec![],
             metadata: BTreeMap::new(),
-            max_column_id: 0,
-            column_id_map: BTreeMap::new(),
-            column_id_set: HashSet::new(),
+            max_column_id: Some(0),
+            column_id_map: Some(BTreeMap::new()),
+            column_id_set: Some(HashSet::new()),
+        }
+    }
+
+    pub fn init_if_need(data_schema: DataSchema) -> Self {
+        // If max_column_id is none, it is an old version needs to compatibility
+        if data_schema.max_column_id.is_none() {
+            Self::new_from(data_schema.fields, data_schema.metadata)
+        } else {
+            data_schema
         }
     }
 
@@ -56,11 +66,9 @@ impl DataSchema {
         column_id_map: &mut BTreeMap<String, u32>,
         column_id_set: &mut HashSet<u32>,
     ) {
-        column_id_map.insert(column_name.to_string(), *max_column_id);
-        column_id_set.insert(*max_column_id);
-        *max_column_id += 1;
-
         if let DataTypeImpl::Struct(s) = data_type {
+            column_id_map.insert(column_name.to_string(), *max_column_id);
+            column_id_set.insert(*max_column_id);
             let inner_types = s.types();
             for (i, inner_type) in inner_types.iter().enumerate() {
                 let inner_name = format!("{}:{}", column_name, i);
@@ -72,7 +80,11 @@ impl DataSchema {
                     column_id_set,
                 );
             }
-        };
+        } else {
+            column_id_map.insert(column_name.to_string(), *max_column_id);
+            column_id_set.insert(*max_column_id);
+            *max_column_id += 1;
+        }
     }
 
     fn build_members_from_fields(
@@ -133,9 +145,9 @@ impl DataSchema {
         Self {
             fields,
             metadata: BTreeMap::new(),
-            max_column_id,
-            column_id_map,
-            column_id_set,
+            max_column_id: Some(max_column_id),
+            column_id_map: Some(column_id_map),
+            column_id_set: Some(column_id_set),
         }
     }
 
@@ -145,9 +157,9 @@ impl DataSchema {
         Self {
             fields,
             metadata,
-            max_column_id,
-            column_id_map,
-            column_id_set,
+            max_column_id: Some(max_column_id),
+            column_id_map: Some(column_id_map),
+            column_id_set: Some(column_id_set),
         }
     }
 
@@ -162,15 +174,20 @@ impl DataSchema {
         Self {
             fields,
             metadata,
-            max_column_id,
-            column_id_map,
-            column_id_set,
+            max_column_id: Some(max_column_id),
+            column_id_map: Some(column_id_map),
+            column_id_set: Some(column_id_set),
         }
     }
 
     #[inline]
-    pub const fn max_column_id(&self) -> u32 {
-        self.max_column_id
+    pub fn max_column_id(&self) -> u32 {
+        *self.max_column_id.as_ref().unwrap()
+    }
+
+    #[inline]
+    pub fn column_id_map(&self) -> &BTreeMap<String, u32> {
+        self.column_id_map.as_ref().unwrap()
     }
 
     pub fn column_id_of_path(&self, path_in_schema: &[String]) -> Result<u32> {
@@ -180,7 +197,7 @@ impl DataSchema {
 
     /// Find the column id with the given name.
     pub fn column_id_of(&self, name: &str) -> Result<u32> {
-        match self.column_id_map.get(name) {
+        match self.column_id_map.as_ref().unwrap().get(name) {
             Some(column_id) => Ok(*column_id),
             None => {
                 return Err(ErrorCode::UnknownColumn(format!("UnknownColumn {}", name,)));
@@ -193,7 +210,7 @@ impl DataSchema {
     }
 
     pub fn is_column_deleted(&self, column_id: u32) -> bool {
-        self.column_id_set.contains(&column_id)
+        self.column_id_set.as_ref().unwrap().contains(&column_id)
     }
 
     pub fn add_columns(&mut self, fields: &[DataField]) -> Result<()> {
@@ -208,9 +225,9 @@ impl DataSchema {
             Self::build_from_data_type(
                 data_type,
                 f.name(),
-                &mut self.max_column_id,
-                &mut self.column_id_map,
-                &mut self.column_id_set,
+                self.max_column_id.as_mut().unwrap(),
+                self.column_id_map.as_mut().unwrap(),
+                self.column_id_set.as_mut().unwrap(),
             );
             self.fields.push(f.to_owned());
         }
@@ -226,8 +243,8 @@ impl DataSchema {
             }
         }
         let column_id = self.column_id_of(column_name)?;
-        self.column_id_map.remove(column_name);
-        self.column_id_set.remove(&column_id);
+        self.column_id_map.as_mut().unwrap().remove(column_name);
+        self.column_id_set.as_mut().unwrap().remove(&column_id);
 
         Ok(())
     }
@@ -289,11 +306,6 @@ impl DataSchema {
         &self.metadata
     }
 
-    #[inline]
-    pub const fn column_id_map(&self) -> &BTreeMap<String, u32> {
-        &self.column_id_map
-    }
-
     /// Find the index of the column with the given name.
     pub fn index_of(&self, name: &str) -> Result<usize> {
         for i in 0..self.fields.len() {
@@ -341,8 +353,8 @@ impl DataSchema {
         Self::new_from_column_id_map(
             fields,
             self.meta().clone(),
-            self.column_id_map.clone(),
-            self.max_column_id,
+            self.column_id_map.as_ref().unwrap().clone(),
+            *self.max_column_id.as_ref().unwrap(),
         )
     }
 
@@ -356,8 +368,8 @@ impl DataSchema {
         Self::new_from_column_id_map(
             fields,
             self.meta().clone(),
-            self.column_id_map.clone(),
-            self.max_column_id,
+            self.column_id_map.as_ref().unwrap().clone(),
+            *self.max_column_id.as_ref().unwrap(),
         )
     }
 
@@ -405,8 +417,8 @@ impl DataSchema {
         Self::new_from_column_id_map(
             fields,
             self.meta().clone(),
-            self.column_id_map.clone(),
-            self.max_column_id,
+            self.column_id_map.as_ref().unwrap().clone(),
+            *self.max_column_id.as_ref().unwrap(),
         )
     }
 

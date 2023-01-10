@@ -106,6 +106,37 @@ impl ColumnLeaves {
         }
         Ok(column_leaf)
     }
+
+    fn build_column_id_map_from_leaf(
+        parent_name: &String,
+        leaf: &ColumnLeaf,
+        column_ids: &mut BTreeMap<String, u32>,
+    ) {
+        match leaf.children {
+            Some(ref children) => {
+                for child in children {
+                    let inner_field_name = format!("{}:{}", parent_name, child.field.name);
+                    Self::build_column_id_map_from_leaf(&inner_field_name, child, column_ids);
+                }
+            }
+            None => {
+                column_ids.insert(parent_name.to_string(), leaf.leaf_ids[0] as u32);
+            }
+        }
+    }
+
+    pub fn build_column_id_map(&self) -> BTreeMap<String, u32> {
+        let mut column_ids = BTreeMap::new();
+        for column_leaf in &self.column_leaves {
+            Self::build_column_id_map_from_leaf(
+                &column_leaf.field.name,
+                column_leaf,
+                &mut column_ids,
+            );
+        }
+
+        column_ids
+    }
 }
 
 /// `ColumnLeaf` contains all the leaf column ids of the column.

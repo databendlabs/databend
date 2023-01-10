@@ -14,6 +14,7 @@
 
 use std::marker::PhantomData;
 
+use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::SegmentInfoVersion;
@@ -36,7 +37,11 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V1(v) => load_by_version(reader, v).await?,
+            SnapshotVersion::V1(v) => {
+                let mut ts = load_by_version(reader, v).await?;
+                ts.schema = DataSchema::init_if_need(ts.schema);
+                ts
+            }
             SnapshotVersion::V0(v) => load_by_version(reader, v).await?.into(),
         };
         Ok(r)

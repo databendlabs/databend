@@ -117,12 +117,13 @@ use super::super::v0;
 
 impl From<v0::TableSnapshot> for TableSnapshot {
     fn from(s: v0::TableSnapshot) -> Self {
+        let schema = DataSchema::init_if_need(s.schema.clone());
         Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,
             timestamp: None,
             prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
-            schema: s.schema,
+            schema,
             summary: s.summary,
             segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
             cluster_key_meta: None,
