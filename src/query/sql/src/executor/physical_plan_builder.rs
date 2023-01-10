@@ -42,6 +42,7 @@ use super::HashJoin;
 use super::Limit;
 use super::Sort;
 use super::TableScan;
+use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
 use crate::executor::FragmentKind;
@@ -50,6 +51,7 @@ use crate::executor::PhysicalScalar;
 use crate::executor::SortDesc;
 use crate::executor::UnionAll;
 use crate::optimizer::ColumnSet;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
 use crate::plans::AndExpr;
@@ -125,6 +127,9 @@ impl PhysicalPlanBuilder {
 
     #[async_recursion::async_recursion]
     pub async fn build(&self, s_expr: &SExpr) -> Result<PhysicalPlan> {
+        // Build stat info
+        let stat_info = self.build_plan_stat_info(s_expr)?;
+
         match s_expr.plan() {
             RelOperator::Scan(scan) => {
                 let mut has_inner_column = false;
@@ -166,10 +171,13 @@ impl PhysicalPlanBuilder {
                         Some(push_downs),
                     )
                     .await?;
+
                 Ok(PhysicalPlan::TableScan(TableScan {
                     name_mapping,
                     source: Box::new(source),
                     table_index: scan.table_index,
+
+                    stat_info: Some(stat_info),
                 }))
             }
             RelOperator::DummyTableScan(_) => {
@@ -185,6 +193,10 @@ impl PhysicalPlanBuilder {
                     name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
                     source: Box::new(source),
                     table_index: DUMMY_TABLE_INDEX,
+
+                    stat_info: Some(PlanStatsInfo {
+                        estimated_rows: 1.0,
+                    }),
                 }))
             }
             RelOperator::Join(join) => {
@@ -224,6 +236,8 @@ impl PhysicalPlanBuilder {
                         .collect::<Result<_>>()?,
                     marker_index: join.marker_index,
                     from_correlated_subquery: join.from_correlated_subquery,
+
+                    stat_info: Some(stat_info),
                 }))
             }
 
@@ -238,6 +252,8 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|item| Ok((builder.build(&item.scalar)?, item.index)))
                         .collect::<Result<_>>()?,
+
+                    stat_info: Some(stat_info),
                 }))
             }
 
@@ -252,6 +268,8 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|scalar| builder.build(scalar))
                         .collect::<Result<_>>()?,
+
+                    stat_info: Some(stat_info),
                 }))
             }
             RelOperator::Aggregate(agg) => {
@@ -303,6 +321,7 @@ impl PhysicalPlanBuilder {
                                     input,
                                     agg_funcs,
                                     group_by: group_items,
+                                    stat_info: Some(stat_info),
                                 };
 
                                 let group_by_key_index =
@@ -332,6 +351,8 @@ impl PhysicalPlanBuilder {
                                 agg_funcs,
                                 group_by: group_items,
                                 input: Box::new(input),
+
+                                stat_info: Some(stat_info),
                             }),
                         }
                     }
@@ -398,6 +419,8 @@ impl PhysicalPlanBuilder {
                                     group_by: group_items,
                                     agg_funcs,
                                     before_group_by_schema,
+
+                                    stat_info: Some(stat_info),
                                 })
                             }
 
@@ -411,6 +434,8 @@ impl PhysicalPlanBuilder {
                                     group_by: group_items,
                                     agg_funcs,
                                     before_group_by_schema,
+
+                                    stat_info: Some(stat_info),
                                 })
                             }
 
@@ -441,11 +466,15 @@ impl PhysicalPlanBuilder {
                     })
                     .collect(),
                 limit: sort.limit,
+
+                stat_info: Some(stat_info),
             })),
             RelOperator::Limit(limit) => Ok(PhysicalPlan::Limit(Limit {
                 input: Box::new(self.build(s_expr.child(0)?).await?),
                 limit: limit.limit,
                 offset: limit.offset,
+
+                stat_info: Some(stat_info),
             })),
             RelOperator::Exchange(exchange) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
@@ -486,6 +515,8 @@ impl PhysicalPlanBuilder {
                     right: Box::new(self.build(s_expr.child(1)?).await?),
                     pairs,
                     schema: DataSchemaRefExt::create(fields),
+
+                    stat_info: Some(stat_info),
                 }))
             }
             _ => Err(ErrorCode::Internal(format!(
@@ -617,6 +648,15 @@ impl PhysicalPlanBuilder {
             order_by: order_by.unwrap_or_default(),
         })
     }
+
+    fn build_plan_stat_info(&self, s_expr: &SExpr) -> Result<PlanStatsInfo> {
+        let rel_expr = RelExpr::with_s_expr(s_expr);
+        let prop = rel_expr.derive_relational_prop()?;
+
+        Ok(PlanStatsInfo {
+            estimated_rows: prop.cardinality,
+        })
+    }
 }
 
 pub struct PhysicalScalarBuilder<'a> {
@@ -656,21 +696,31 @@ impl<'a> PhysicalScalarBuilder<'a> {
             }),
             Scalar::AndExpr(and) => Ok(PhysicalScalar::Function {
                 name: "and".to_string(),
+                params: vec![],
                 args: vec![self.build(&and.left)?, self.build(&and.right)?],
                 return_type: and.data_type(),
             }),
             Scalar::OrExpr(or) => Ok(PhysicalScalar::Function {
                 name: "or".to_string(),
+                params: vec![],
                 args: vec![self.build(&or.left)?, self.build(&or.right)?],
                 return_type: or.data_type(),
             }),
+            Scalar::NotExpr(not) => Ok(PhysicalScalar::Function {
+                name: "not".to_string(),
+                params: vec![],
+                args: vec![self.build(&not.argument)?],
+                return_type: not.data_type(),
+            }),
             Scalar::ComparisonExpr(comp) => Ok(PhysicalScalar::Function {
-                name: comp.op.to_func_name(),
+                name: comp.op.to_func_name().to_string(),
+                params: vec![],
                 args: vec![self.build(&comp.left)?, self.build(&comp.right)?],
                 return_type: comp.data_type(),
             }),
             Scalar::FunctionCall(func) => Ok(PhysicalScalar::Function {
                 name: func.func_name.clone(),
+                params: func.params.clone(),
                 args: func
                     .arguments
                     .iter()

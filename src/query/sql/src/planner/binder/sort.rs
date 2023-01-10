@@ -37,6 +37,7 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::ScalarItem;
@@ -385,6 +386,17 @@ impl<'a> Binder {
                         return_type: return_type.clone(),
                     }))
                 }
+                Scalar::NotExpr(NotExpr {
+                    argument,
+                    return_type,
+                }) => {
+                    let argument =
+                        Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
+                    Ok(Scalar::NotExpr(NotExpr {
+                        argument,
+                        return_type: return_type.clone(),
+                    }))
+                }
                 Scalar::ComparisonExpr(ComparisonExpr {
                     op,
                     left,
@@ -424,6 +436,7 @@ impl<'a> Binder {
                     }))
                 }
                 Scalar::FunctionCall(FunctionCall {
+                    params,
                     arguments,
                     func_name,
                     return_type,
@@ -433,6 +446,7 @@ impl<'a> Binder {
                         .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
                         .collect::<Result<Vec<_>>>()?;
                     Ok(Scalar::FunctionCall(FunctionCall {
+                        params: params.clone(),
                         arguments,
                         func_name: func_name.clone(),
                         return_type: return_type.clone(),

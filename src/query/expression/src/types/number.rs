@@ -19,6 +19,7 @@ use std::ops::Range;
 use common_arrow::arrow::buffer::Buffer;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
+use lexical_core::ToLexicalWithOptions;
 use num_traits::NumCast;
 use ordered_float::OrderedFloat;
 use serde::Deserialize;
@@ -707,6 +708,8 @@ pub trait Number:
     + Send
     + 'static
 {
+    type Native: ToLexicalWithOptions;
+
     const MIN: Self;
     const MAX: Self;
 
@@ -720,9 +723,14 @@ pub trait Number:
     fn upcast_scalar(scalar: Self) -> NumberScalar;
     fn upcast_column(col: Buffer<Self>) -> NumberColumn;
     fn upcast_domain(domain: SimpleDomain<Self>) -> NumberDomain;
+
+    fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
+        <Self::Native as ToLexicalWithOptions>::Options::default()
+    }
 }
 
 impl Number for u8 {
+    type Native = Self;
     const MIN: Self = u8::MIN;
     const MAX: Self = u8::MAX;
     const FLOATING: bool = false;
@@ -761,6 +769,7 @@ impl Number for u8 {
 }
 
 impl Number for u16 {
+    type Native = Self;
     const MIN: Self = u16::MIN;
     const MAX: Self = u16::MAX;
     const FLOATING: bool = false;
@@ -799,6 +808,8 @@ impl Number for u16 {
 }
 
 impl Number for u32 {
+    type Native = Self;
+
     const MIN: Self = u32::MIN;
     const MAX: Self = u32::MAX;
     const FLOATING: bool = false;
@@ -837,6 +848,8 @@ impl Number for u32 {
 }
 
 impl Number for u64 {
+    type Native = Self;
+
     const MIN: Self = u64::MIN;
     const MAX: Self = u64::MAX;
     const FLOATING: bool = false;
@@ -875,6 +888,8 @@ impl Number for u64 {
 }
 
 impl Number for i8 {
+    type Native = Self;
+
     const MIN: Self = i8::MIN;
     const MAX: Self = i8::MAX;
     const FLOATING: bool = false;
@@ -913,6 +928,8 @@ impl Number for i8 {
 }
 
 impl Number for i16 {
+    type Native = Self;
+
     const MIN: Self = i16::MIN;
     const MAX: Self = i16::MAX;
     const FLOATING: bool = false;
@@ -951,6 +968,8 @@ impl Number for i16 {
 }
 
 impl Number for i32 {
+    type Native = Self;
+
     const MIN: Self = i32::MIN;
     const MAX: Self = i32::MAX;
     const FLOATING: bool = false;
@@ -989,6 +1008,8 @@ impl Number for i32 {
 }
 
 impl Number for i64 {
+    type Native = Self;
+
     const MIN: Self = i64::MIN;
     const MAX: Self = i64::MAX;
     const FLOATING: bool = false;
@@ -1027,6 +1048,8 @@ impl Number for i64 {
 }
 
 impl Number for F32 {
+    type Native = f32;
+
     const MIN: Self = OrderedFloat(f32::NEG_INFINITY);
     const MAX: Self = OrderedFloat(f32::NAN);
     const FLOATING: bool = true;
@@ -1062,9 +1085,19 @@ impl Number for F32 {
     fn upcast_domain(domain: SimpleDomain<Self>) -> NumberDomain {
         NumberDomain::Float32(domain)
     }
+
+    fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
+        unsafe {
+            lexical_core::WriteFloatOptions::builder()
+                .trim_floats(true)
+                .build_unchecked()
+        }
+    }
 }
 
 impl Number for F64 {
+    type Native = f64;
+
     const MIN: Self = OrderedFloat(f64::NEG_INFINITY);
     const MAX: Self = OrderedFloat(f64::NAN);
     const FLOATING: bool = true;
@@ -1099,5 +1132,13 @@ impl Number for F64 {
 
     fn upcast_domain(domain: SimpleDomain<Self>) -> NumberDomain {
         NumberDomain::Float64(domain)
+    }
+
+    fn lexical_options() -> <Self::Native as ToLexicalWithOptions>::Options {
+        unsafe {
+            lexical_core::WriteFloatOptions::builder()
+                .trim_floats(true)
+                .build_unchecked()
+        }
     }
 }

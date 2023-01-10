@@ -74,7 +74,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         let remote_expr = optimized_expr.as_remote_expr();
         let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS).unwrap();
 
-        let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(0);
+        let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(1);
         let block = DataBlock::new(
             columns
                 .iter()
@@ -240,14 +240,5 @@ fn list_all_builtin_functions() {
         .sorted_by_key(|(alias_name, _)| alias_name.to_string())
     {
         writeln!(file, "{alias_name} -> {original_name}").unwrap();
-    }
-
-    writeln!(file, "\nNegative functions (negative to origin):").unwrap();
-    for (neg_name, original_name) in fn_registry
-        .negtives
-        .iter()
-        .sorted_by_key(|(alias_name, _)| alias_name.to_string())
-    {
-        writeln!(file, "{neg_name} -> not({original_name})").unwrap();
     }
 }

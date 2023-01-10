@@ -68,6 +68,11 @@ impl<'a> SelectivityEstimator<'a> {
                 return f64::min(left_selectivity, right_selectivity);
             }
 
+            Scalar::NotExpr(not_expr) => {
+                let argument_selectivity = self.compute_selectivity(&not_expr.argument);
+                return 1.0 - argument_selectivity;
+            }
+
             Scalar::ComparisonExpr(comp_expr) => {
                 return self.compute_selectivity_comparison_expr(comp_expr);
             }

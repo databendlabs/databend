@@ -17,7 +17,9 @@ use std::ops::BitAnd;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -55,11 +57,69 @@ impl Default for FunctionContext {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct EvalContext<'a> {
     pub generics: &'a GenericMap,
     pub num_rows: usize,
     pub tz: Tz,
+
+    // Validity bitmap of outer nullable column. This is an optimization
+    // to avoid recording errors on the NULL value which has a coresponding
+    // default value in nullable's inner column.
+    pub validity: Option<Bitmap>,
+    pub errors: Option<(MutableBitmap, String)>,
+}
+
+impl<'a> EvalContext<'a> {
+    #[inline]
+    pub fn set_error(&mut self, row: usize, error_msg: impl AsRef<str>) {
+        // If the row is NULL, we don't need to set error.
+        if self
+            .validity
+            .as_ref()
+            .map(|b| !b.get_bit(row))
+            .unwrap_or(false)
+        {
+            return;
+        }
+
+        match self.errors.as_mut() {
+            Some((valids, _)) => {
+                valids.set(row, false);
+            }
+            None => {
+                let mut valids = constant_bitmap(true, self.num_rows.max(1));
+                valids.set(row, false);
+                self.errors = Some((valids, error_msg.as_ref().to_string()));
+            }
+        }
+    }
+
+    pub fn render_error(&self, args: &[Value<AnyType>], name: &str) -> Result<(), String> {
+        match &self.errors {
+            Some((valids, error)) => {
+                let first_error_row = valids
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, valid)| !valid)
+                    .take(1)
+                    .next()
+                    .unwrap()
+                    .0;
+                let args = args
+                    .iter()
+                    .map(|arg| {
+                        let arg_ref = arg.as_ref();
+                        arg_ref.index(first_error_row).unwrap().to_string()
+                    })
+                    .join(", ");
+
+                let error_msg = format!("{} during evaluate function: {}({})", error, name, args);
+                Err(error_msg)
+            }
+            None => Ok(()),
+        }
+    }
 }
 
 /// `FunctionID` is a unique identifier for a function. It's used to construct
@@ -83,9 +143,7 @@ pub struct Function {
     #[allow(clippy::type_complexity)]
     pub calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
     #[allow(clippy::type_complexity)]
-    pub eval: Box<
-        dyn Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> + Send + Sync,
-    >,
+    pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
 }
 
 #[derive(Default)]
@@ -101,8 +159,6 @@ pub struct FunctionRegistry {
     >,
     /// Aliases map from alias function name to original function name.
     pub aliases: HashMap<String, String>,
-    /// Negative functions that are defined by wrapping a `not()` on the original function.
-    pub negtives: HashMap<String, String>,
 
     /// fn name to cast signatures
     pub auto_cast_signatures: HashMap<String, AutoCastSignature>,
@@ -118,7 +174,7 @@ impl FunctionRegistry {
             .keys()
             .chain(self.factories.keys())
             .chain(self.aliases.keys())
-            .chain(self.negtives.keys())
+            .unique()
             .cloned()
             .collect()
     }
@@ -127,7 +183,6 @@ impl FunctionRegistry {
         self.funcs.contains_key(func_name)
             || self.factories.contains_key(func_name)
             || self.aliases.contains_key(func_name)
-            || self.negtives.contains_key(func_name)
     }
 
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {
@@ -216,11 +271,6 @@ impl FunctionRegistry {
         }
     }
 
-    pub fn register_negative(&mut self, neg_fn_name: &str, original_fn_name: &str) {
-        self.negtives
-            .insert(neg_fn_name.to_string(), original_fn_name.to_string());
-    }
-
     pub fn register_auto_cast_signatures(&mut self, fn_name: &str, signatures: AutoCastSignature) {
         self.auto_cast_signatures
             .entry(fn_name.to_string())
@@ -231,8 +281,8 @@ impl FunctionRegistry {
 
 pub fn wrap_nullable<F>(
     f: F,
-) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> + Copy
-where F: Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> + Copy {
+) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy
+where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy {
     move |args, ctx| {
         type T = NullableType<AnyType>;
         type Result = AnyType;
@@ -244,7 +294,7 @@ where F: Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String>
         for arg in args {
             let arg = arg.try_downcast::<T>().unwrap();
             match arg {
-                ValueRef::Scalar(None) => return Ok(Value::Scalar(Scalar::Null)),
+                ValueRef::Scalar(None) => return Value::Scalar(Scalar::Null),
                 ValueRef::Scalar(Some(s)) => {
                     nonull_args.push(ValueRef::Scalar(s.clone()));
                 }
@@ -258,14 +308,14 @@ where F: Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String>
                 }
             }
         }
-        let results = f(&nonull_args, ctx)?;
+        let results = f(&nonull_args, ctx);
         let bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
         match results {
             Value::Scalar(s) => {
                 if bitmap.get(0) {
-                    Ok(Value::Scalar(Result::upcast_scalar(s)))
+                    Value::Scalar(s)
                 } else {
-                    Ok(Value::Scalar(Scalar::Null))
+                    Value::Scalar(Scalar::Null)
                 }
             }
             Value::Column(column) => {
@@ -284,7 +334,33 @@ where F: Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String>
                         validity: bitmap.into(),
                     })),
                 };
-                Ok(Value::Column(Result::upcast_column(result)))
+                Value::Column(result)
+            }
+        }
+    }
+}
+
+pub fn error_to_null<I1: ArgType, O: ArgType>(
+    func: impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
+) -> impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync
+{
+    move |val, ctx| {
+        let output = func(val, ctx);
+        if let Some((bitmap, _)) = ctx.errors.take() {
+            match output {
+                Value::Scalar(_) => Value::Scalar(None),
+                Value::Column(column) => Value::Column(NullableColumn {
+                    column,
+                    validity: bitmap.into(),
+                }),
+            }
+        } else {
+            match output {
+                Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
+                Value::Column(column) => Value::Column(NullableColumn {
+                    column,
+                    validity: constant_bitmap(true, ctx.num_rows).into(),
+                }),
             }
         }
     }

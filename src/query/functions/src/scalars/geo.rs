@@ -38,9 +38,8 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
-use geo_types::Coordinate;
-use h3ron::H3Cell;
-use h3ron::Index;
+use h3o::LatLng;
+use h3o::Resolution;
 use once_cell::sync::OnceCell;
 
 const PI: f64 = std::f64::consts::PI;
@@ -84,16 +83,22 @@ pub fn register(registry: &mut FunctionRegistry) {
     // init globals.
     geo_dist_init();
 
-    registry.register_passthrough_nullable_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<i64>, NumberType<u64>,_, _>(
+    registry.register_passthrough_nullable_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<u8>, NumberType<u64>,_, _>(
         "geo_to_h3",
         FunctionProperty::default(),
         |_,_,_|FunctionDomain::Full,
-        vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<i64>, NumberType<u64>>(
-            |x, y, r, builder, _| {
-                let coord = Coordinate { x: x.into(), y: y.into() };
-                let h3_cell = H3Cell::from_coordinate(coord, r as u8).map_err(|err| err.to_string())?;
-                builder.push(h3_cell.h3index());
-                Ok(())
+        vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<u8>, NumberType<u64>>(
+            |lon, lat, r, builder, ctx| {
+                match LatLng::from_degrees(lat.into(), lon.into()) {
+                    Ok(coord) => {
+                        let h3_cell =  coord.to_cell(Resolution::try_from(r).unwrap());
+                        builder.push(h3_cell.into())
+                    },
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push(0);
+                    }
+                }
             }
         ),
     );
@@ -145,10 +150,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn point_in_ellipses_fn(
-    args: &[ValueRef<AnyType>],
-    _: EvalContext,
-) -> Result<Value<AnyType>, String> {
+fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -203,8 +205,8 @@ fn point_in_ellipses_fn(
     }
 
     match len {
-        Some(_) => Ok(Value::Column(Column::Number(builder.build()))),
-        _ => Ok(Value::Scalar(Scalar::Number(builder.build_scalar()))),
+        Some(_) => Value::Column(Column::Number(builder.build())),
+        _ => Value::Scalar(Scalar::Number(builder.build_scalar())),
     }
 }
 

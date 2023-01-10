@@ -2,7 +2,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS UINT8)
-  | ^^^^^^^^^^^^^^^^ unable to cast 512 to UInt8
+  | ^^^^^^^^^^^^^^^^ unable to cast 512 to UInt8 during evaluate function: to_uint8(512_u16)
 
 
 
@@ -10,7 +10,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS UINT16)
-  | ^^^^^^^^^^^^^^^^^ unable to cast -4 to UInt16
+  | ^^^^^^^^^^^^^^^^^ unable to cast -4 to UInt16 during evaluate function: to_uint16(-4_i16)
 
 
 
@@ -42,7 +42,7 @@ error:
   --> SQL:1:22
   |
 1 | (CAST(a AS FLOAT32), CAST(a AS INT32), CAST(b AS FLOAT32), CAST(b AS INT32))
-  |                      ^^^^^^^^^^^^^^^^ unable to cast 4294967295 to Int32
+  |                      ^^^^^^^^^^^^^^^^ unable to cast 4294967295 to Int32 during evaluate function: to_int32(4294967295_u64)
 
 
 
@@ -58,7 +58,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast 256 to Int8
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast 256 to Int8 during evaluate function: to_int8(256_i16)
 
 
 
@@ -114,7 +114,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS UINT16)
-  | ^^^^^^^^^^^^^^^^^ unable to cast -4 to UInt16
+  | ^^^^^^^^^^^^^^^^^ unable to cast -4 to UInt16 during evaluate function: to_uint16(-4_i16)
 
 
 
@@ -122,7 +122,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(c AS INT16)
-  | ^^^^^^^^^^^^^^^^ unable to cast 11111111111 to Int16
+  | ^^^^^^^^^^^^^^^^ unable to cast 11111111111 to Int16 during evaluate function: to_int16(11111111111_i64)
 
 
 
@@ -281,7 +281,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(-30610224000000001 AS TIMESTAMP)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range during evaluate function: to_timestamp(-30610224000000001_i64)
 
 
 
@@ -361,7 +361,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(253402300800000000 AS TIMESTAMP)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range during evaluate function: to_timestamp(253402300800000000_i64)
 
 
 
@@ -493,7 +493,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(-354286 AS DATE)
-  | ^^^^^^^^^^^^^^^^^^^^^ date `0999-12-31` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^ date `0999-12-31` is out of range during evaluate function: to_date(-354286_i64)
 
 
 
@@ -555,7 +555,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(2932897 AS DATE)
-  | ^^^^^^^^^^^^^^^^^^^^^ date `+10000-01-01` is out of range
+  | ^^^^^^^^^^^^^^^^^^^^^ date `+10000-01-01` is out of range during evaluate function: to_date(2932897_i64)
 
 
 
@@ -880,7 +880,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022')
-  | ^^^^^^^^^^^^^^^^^^^^ unable to cast 2022 to TimestampType
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast 2022 to TimestampType during evaluate function: to_timestamp("2022")
 
 
 
@@ -888,7 +888,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022-01')
-  | ^^^^^^^^^^^^^^^^^^^^^^^ unable to cast 2022-01 to TimestampType
+  | ^^^^^^^^^^^^^^^^^^^^^^^ unable to cast 2022-01 to TimestampType during evaluate function: to_timestamp("2022-01")
 
 
 
@@ -905,7 +905,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('A NON-TIMESTMAP STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast A NON-TIMESTMAP STR to TimestampType
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast A NON-TIMESTMAP STR to TimestampType during evaluate function: to_timestamp("A NON-TIMESTMAP STR")
 
 
 
@@ -1080,7 +1080,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022')
-  | ^^^^^^^^^^^^^^^ unable to cast 2022 to DateType
+  | ^^^^^^^^^^^^^^^ unable to cast 2022 to DateType during evaluate function: to_date("2022")
 
 
 
@@ -1088,7 +1088,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022-01')
-  | ^^^^^^^^^^^^^^^^^^ unable to cast 2022-01 to DateType
+  | ^^^^^^^^^^^^^^^^^^ unable to cast 2022-01 to DateType during evaluate function: to_date("2022-01")
 
 
 
@@ -1105,7 +1105,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('A NON-DATE STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast A NON-DATE STR to DateType
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast A NON-DATE STR to DateType during evaluate function: to_date("A NON-DATE STR")
 
 
 

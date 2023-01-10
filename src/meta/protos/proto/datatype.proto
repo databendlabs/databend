@@ -19,9 +19,10 @@ package databend_proto;
 // An enumeration of all supported data types.
 message DataType {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   oneof dt {
+    Empty null_type = 22;
     NullableType nullable_type = 1;
     Empty bool_type = 2;
     Empty int8_type = 3;
@@ -50,7 +51,7 @@ message DataType {
 // Such a column allows to contain `null` elements
 message NullableType {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   // The type for the non-null element.
   DataType inner = 1;
@@ -59,7 +60,7 @@ message NullableType {
 // Timestamp data type with customizable precision and timezone: `tz`.
 message Timestamp {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   /// It's deprecated
   /// uint64 precision = 1;
@@ -69,7 +70,7 @@ message Timestamp {
 // Struct is similar to a `map` with fixed keys.
 message Struct {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   // Struct field names.
   repeated string names = 1;
@@ -81,7 +82,7 @@ message Struct {
 // Array contains multiple elements of the same type.
 message Array {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   // The type of the elements
   DataType inner = 1;
@@ -89,12 +90,12 @@ message Array {
 
 message VariantArray {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 }
 
 message VariantObject {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 }
 
 enum IntervalKind {
@@ -110,7 +111,7 @@ enum IntervalKind {
 }
 message IntervalType {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   IntervalKind kind = 1;
 }
@@ -118,7 +119,7 @@ message IntervalType {
 // Something under developing.:)
 message Variant {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 }
 
 // Place holder type for primitive types

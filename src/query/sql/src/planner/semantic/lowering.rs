@@ -49,9 +49,15 @@ impl Scalar {
                 params: vec![],
                 args: vec![expr.left.as_raw_expr(), expr.right.as_raw_expr()],
             },
+            Scalar::NotExpr(expr) => RawExpr::FunctionCall {
+                span: None,
+                name: "not".to_string(),
+                params: vec![],
+                args: vec![expr.argument.as_raw_expr()],
+            },
             Scalar::ComparisonExpr(expr) => RawExpr::FunctionCall {
                 span: None,
-                name: expr.op.to_func_name(),
+                name: expr.op.to_func_name().to_string(),
                 params: vec![],
                 args: vec![expr.left.as_raw_expr(), expr.right.as_raw_expr()],
             },
@@ -63,7 +69,7 @@ impl Scalar {
             Scalar::FunctionCall(func) => RawExpr::FunctionCall {
                 span: None,
                 name: func.func_name.clone(),
-                params: vec![],
+                params: func.params.clone(),
                 args: func.arguments.iter().map(Scalar::as_raw_expr).collect(),
             },
             Scalar::CastExpr(cast) => {
@@ -83,7 +89,6 @@ impl Scalar {
         }
     }
 
-    /// Convert to `Expr<String>` by type checking.
     pub fn as_expr(&self) -> Result<Expr<String>> {
         let raw_expr = self.as_raw_expr();
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {

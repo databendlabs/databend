@@ -36,8 +36,8 @@ use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
@@ -321,7 +321,7 @@ impl FuseTable {
         let input_schema = self.table_info.schema();
         let mut merged: Vec<DataField> =
             input_schema.fields().iter().map(DataField::from).collect();
-
+        let func_ctx = ctx.try_get_function_context()?;
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
@@ -355,6 +355,7 @@ impl FuseTable {
             self.get_block_compact_thresholds(),
             operators,
             merged,
+            func_ctx,
         ))
     }
 

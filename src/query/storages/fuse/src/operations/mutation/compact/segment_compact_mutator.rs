@@ -17,12 +17,12 @@ use std::time::Instant;
 
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
 use metrics::gauge;
 use opendal::Operator;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;

@@ -16,7 +16,6 @@
 #![feature(try_blocks)]
 
 mod common;
-mod convert;
 mod group_by;
 mod kernel;
 mod sort;

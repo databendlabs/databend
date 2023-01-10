@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::Versioned;
 use itertools::Itertools;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::operations::mutation::compact::CompactSinkMeta;
 use crate::operations::mutation::AbortOperation;

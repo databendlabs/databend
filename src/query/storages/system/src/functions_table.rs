@@ -48,8 +48,8 @@ impl AsyncSystemTable for FunctionsTable {
     }
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let function_factory = &BUILTIN_FUNCTIONS;
-        let func_names = function_factory.registered_names();
+        // TODO(andylokandy): add rewritable function names, e.g. database()
+        let func_names = BUILTIN_FUNCTIONS.registered_names();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let aggr_func_names = aggregate_function_factory.registered_names();
         let udfs = FunctionsTable::get_udfs(ctx).await?;

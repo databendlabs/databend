@@ -24,12 +24,12 @@ use common_catalog::plan::Projection;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::TableSchema;
 use common_storage::ColumnLeaves;
 use opendal::Object;
 use opendal::Operator;
 
 use crate::parquet_part::ParquetRowGroupPart;
+use crate::table_function::arrow_to_table_schema;
 
 pub type IndexedChunk = (usize, Vec<u8>);
 
@@ -53,17 +53,21 @@ pub struct ParquetReader {
     /// select a, b, a from t;
     /// ```
     columns_to_read: HashSet<usize>,
-    /// The schema of the [`common_expression::Chunk`] this reader produces.
-    output_schema: DataSchemaRef,
+    /// The schema of the [`common_expression::DataBlock`] this reader produces.
+    ///
+    /// ```
+    /// output_schema = DataSchema::from(projected_arrow_schema)
+    /// ```
+    pub(crate) output_schema: DataSchemaRef,
     /// The actual schema used to read parquet.
     ///
     /// The reason of using [`ArrowSchema`] to read parquet is that
     /// There are some types that Databend not support such as Timestamp of nanoseconds.
     /// Such types will be convert to supported types after deserialization.
     pub(crate) projected_arrow_schema: ArrowSchema,
-    /// [`ColumnLeaves`] corresponding to the `projected_schema`.
+    /// [`ColumnLeaves`] corresponding to the `projected_arrow_schema`.
     pub(crate) projected_column_leaves: ColumnLeaves,
-    /// [`ColumnDescriptor`]s corresponding to the `projected_schema`.
+    /// [`ColumnDescriptor`]s corresponding to the `projected_arrow_schema`.
     pub(crate) projected_column_descriptors: HashMap<usize, ColumnDescriptor>,
 }
 
@@ -80,7 +84,7 @@ impl ParquetReader {
             columns_to_read,
         ) = Self::do_projection(&schema, &projection)?;
 
-        let t_schema = TableSchema::from(&projected_arrow_schema);
+        let t_schema = arrow_to_table_schema(projected_arrow_schema.clone());
         let output_schema = DataSchema::from(&t_schema);
 
         Ok(Arc::new(ParquetReader {

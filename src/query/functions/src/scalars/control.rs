@@ -35,8 +35,6 @@ use common_expression::Value;
 use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_negative("is_null", "is_not_null");
-
     // special case for multi_if to have better performance in fixed size loop
     registry.register_function_factory("if", |_, args_type| {
         if args_type.len() != 3 {
@@ -111,8 +109,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match len {
-                    Some(_) => Ok(Value::Column(output_builder.build())),
-                    None => Ok(Value::Scalar(output_builder.build_scalar())),
+                    Some(_) => Value::Column(output_builder.build()),
+                    None => Value::Scalar(output_builder.build_scalar()),
                 }
             }),
         }))
@@ -224,8 +222,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 match len {
-                    Some(_) => Ok(Value::Column(output_builder.build())),
-                    None => Ok(Value::Scalar(output_builder.build_scalar())),
+                    Some(_) => Value::Column(output_builder.build()),
+                    None => Value::Scalar(output_builder.build_scalar()),
                 }
             }),
         }))
@@ -240,7 +238,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 has_false: true,
             })
         },
-        |_, _| Ok(Value::Scalar(false)),
+        |_, _| Value::Scalar(false),
     );
     registry.register_1_arg_core::<NullableType<GenericType<0>>, BooleanType, _, _>(
         "is_not_null",
@@ -254,10 +252,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         |arg, _| match &arg {
             ValueRef::Column(NullableColumn { validity, .. }) => {
                 let bitmap = validity.clone();
-                Ok(Value::Column(bitmap))
+                Value::Column(bitmap)
             }
-            ValueRef::Scalar(None) => Ok(Value::Scalar(false)),
-            ValueRef::Scalar(Some(_)) => Ok(Value::Scalar(true)),
+            ValueRef::Scalar(None) => Value::Scalar(false),
+            ValueRef::Scalar(Some(_)) => Value::Scalar(true),
         },
     );
 }

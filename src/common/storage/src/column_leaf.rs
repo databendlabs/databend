@@ -39,6 +39,14 @@ impl ColumnLeaves {
         Self { column_leaves }
     }
 
+    /// Traverse the fields in DFS order to get [`ColumnLeaf`].
+    ///
+    /// If the data type is [`ArrowType::Struct`], we should expand its inner fields.
+    ///
+    /// If the data type is [`ArrowType::List`] or other nested types, we should also expand its inner field.
+    /// It's because the inner field can also be [`ArrowType::Struct`] or other nested types.
+    /// If we don't dfs into it, the inner columns information will be lost.
+    /// and we can not construct the arrow-parquet reader correctly.
     fn traverse_fields_dfs(field: &ArrowField, leaf_id: &mut usize) -> ColumnLeaf {
         match &field.data_type {
             ArrowType::Struct(inner_fields) => {
@@ -49,6 +57,16 @@ impl ColumnLeaves {
                     child_leaf_ids.extend(child_column_leaf.leaf_ids.clone());
                     child_column_leaves.push(child_column_leaf);
                 }
+                ColumnLeaf::new(field.clone(), child_leaf_ids, Some(child_column_leaves))
+            }
+            ArrowType::List(inner_field)
+            | ArrowType::LargeList(inner_field)
+            | ArrowType::FixedSizeList(inner_field, _) => {
+                let mut child_column_leaves = Vec::with_capacity(1);
+                let mut child_leaf_ids = Vec::with_capacity(1);
+                let child_column_leaf = Self::traverse_fields_dfs(inner_field, leaf_id);
+                child_leaf_ids.extend(child_column_leaf.leaf_ids.clone());
+                child_column_leaves.push(child_column_leaf);
                 ColumnLeaf::new(field.clone(), child_leaf_ids, Some(child_column_leaves))
             }
             _ => {

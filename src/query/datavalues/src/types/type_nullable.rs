@@ -13,20 +13,12 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use rand::prelude::*;
 
 use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
-use crate::prelude::*;
-use crate::serializations::NullableSerializer;
-use crate::serializations::TypeSerializerImpl;
 
 #[derive(Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
@@ -59,11 +51,6 @@ impl DataType for NullableType {
         TypeID::Nullable
     }
 
-    #[inline]
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> String {
         format!("Nullable({})", self.inner.name())
     }
@@ -76,94 +63,12 @@ impl DataType for NullableType {
         false
     }
 
-    fn default_value(&self) -> DataValue {
-        DataValue::Null
-    }
-
-    fn random_value(&self) -> DataValue {
-        let mut rng = rand::rngs::SmallRng::from_entropy();
-        let p = rng.gen_bool(0.5);
-        // half possibility to be null
-        if p {
-            self.inner.random_value()
-        } else {
-            DataValue::Null
-        }
-    }
-
     fn arrow_type(&self) -> ArrowType {
         self.inner.arrow_type()
     }
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         self.inner.custom_arrow_meta()
-    }
-
-    fn create_serializer_inner<'a>(&self, column: &'a ColumnRef) -> Result<TypeSerializerImpl<'a>> {
-        let column: &NullableColumn = Series::check_get(column)?;
-        Ok(NullableSerializer {
-            validity: column.ensure_validity(),
-            inner: Box::new(self.inner.create_serializer(column.inner())?),
-        }
-        .into())
-    }
-
-    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
-        NullableDeserializer {
-            inner: Box::new(self.inner.create_deserializer(capacity)),
-            bitmap: MutableBitmap::with_capacity(capacity),
-        }
-        .into()
-    }
-
-    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
-        Box::new(MutableNullableColumn::new(
-            self.inner.create_mutable(capacity),
-            DataTypeImpl::Nullable(self.clone()),
-        ))
-    }
-
-    fn create_constant_column(
-        &self,
-        data: &DataValue,
-        size: usize,
-    ) -> common_exception::Result<ColumnRef> {
-        let mut bitmap = MutableBitmap::with_capacity(1);
-
-        if self.inner.data_type_id() == TypeID::Null {
-            return Ok(Arc::new(NullColumn::new(size)));
-        }
-        if self.inner.data_type_id() == TypeID::Nullable {
-            return Result::Err(ErrorCode::BadDataValueType(
-                "Nullable type can't be inside nullable type".to_string(),
-            ));
-        }
-        let data = if data.is_null() {
-            bitmap.extend_constant(size, false);
-            self.inner.default_value()
-        } else {
-            bitmap.extend_constant(size, true);
-            data.clone()
-        };
-        let column = self.inner.create_constant_column(&data, size)?;
-        Ok(NullableColumn::wrap_inner(column, Some(bitmap.into())))
-    }
-
-    fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
-        let mut res = Vec::with_capacity(data.len());
-        let mut bitmap = MutableBitmap::with_capacity(data.len());
-
-        for v in data {
-            if v.is_null() {
-                bitmap.push(false);
-                res.push(self.inner.default_value());
-            } else {
-                bitmap.push(true);
-                res.push(v.clone());
-            }
-        }
-        let column = self.inner.create_column(&res)?;
-        Ok(NullableColumn::wrap_inner(column, Some(bitmap.into())))
     }
 }
 

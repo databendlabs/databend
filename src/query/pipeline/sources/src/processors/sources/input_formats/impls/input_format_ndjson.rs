@@ -27,7 +27,7 @@ use common_formats::FileFormatOptionsExt;
 use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 
-use crate::processors::sources::input_formats::input_format_text::AligningState;
+use crate::processors::sources::input_formats::input_format_text::AligningStateRowDelimiter;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
@@ -35,6 +35,9 @@ use crate::processors::sources::input_formats::input_format_text::RowBatch;
 pub struct InputFormatNDJson {}
 
 impl InputFormatNDJson {
+    pub fn create() -> Self {
+        Self {}
+    }
     fn read_row(
         field_decoder: &FieldJsonAstDecoder,
         buf: &[u8],
@@ -71,6 +74,8 @@ impl InputFormatNDJson {
 }
 
 impl InputFormatTextBase for InputFormatNDJson {
+    type AligningState = AligningStateRowDelimiter;
+
     fn format_type() -> StageFileFormatType {
         StageFileFormatType::NdJson
     }
@@ -93,24 +98,11 @@ impl InputFormatTextBase for InputFormatNDJson {
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let mut num_rows = 0usize;
-        let start_row = batch.start_row;
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
             let buf = buf.trim();
             if !buf.is_empty() {
                 if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
-                    let row_info = if let Some(r) = start_row {
-                        format!("row={},", r + i)
-                    } else {
-                        String::new()
-                    };
-                    let msg = format!(
-                        "fail to parse NDJSON: {},  path={}, offset={}, {}",
-                        &batch.path,
-                        e,
-                        batch.offset + start,
-                        row_info,
-                    );
                     if builder.ctx.on_error_mode == OnErrorMode::Continue {
                         columns.iter_mut().for_each(|c| {
                             // check if parts of columns inserted data, if so, pop it.
@@ -121,7 +113,7 @@ impl InputFormatTextBase for InputFormatNDJson {
                         start = *end;
                         continue;
                     } else {
-                        return Err(ErrorCode::BadBytes(msg));
+                        return Err(batch.error(&e.message(), &builder.ctx, start, i));
                     }
                 }
             }
@@ -129,10 +121,6 @@ impl InputFormatTextBase for InputFormatNDJson {
             num_rows += 1;
         }
         Ok(())
-    }
-
-    fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>> {
-        Ok(state.align_by_record_delimiter(buf))
     }
 }
 

@@ -23,8 +23,8 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::ColumnMeta;
-use common_storages_table_meta::meta::Compression;
+use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::Compression;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct FusePartInfo {

@@ -16,9 +16,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_storages_table_meta::caches::LoadParams;
-use common_storages_table_meta::meta::TableSnapshot;
 use futures_util::stream;
+use storages_common_table_meta::caches::LoadParams;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;

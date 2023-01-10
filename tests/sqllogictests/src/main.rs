@@ -74,7 +74,7 @@ pub async fn main() -> Result<()> {
         for handler in handlers.iter() {
             match handler.as_str() {
                 "mysql" => {
-                    println!("Mysql client starts to run...");
+                    println!("MySQL client starts to run...");
                     run_mysql_client().await?;
                 }
                 "http" => {
@@ -93,7 +93,7 @@ pub async fn main() -> Result<()> {
     // If args don't set handler, run all handlers one by one.
 
     // First run databend with mysql client
-    println!("Mysql client starts to run...");
+    println!("MySQL client starts to run...");
     run_mysql_client().await?;
 
     // Second run databend with http client

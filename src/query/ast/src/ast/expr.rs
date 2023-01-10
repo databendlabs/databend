@@ -330,7 +330,7 @@ impl BinaryOperator {
             BinaryOperator::Eq => Ok(BinaryOperator::NotEq),
             BinaryOperator::NotEq => Ok(BinaryOperator::Eq),
             _ => Err(ErrorCode::Unimplemented(format!(
-                "Converting {self} to its relative is not currently supported"
+                "Converting {self} to its contrary is not currently supported"
             ))),
         }
     }

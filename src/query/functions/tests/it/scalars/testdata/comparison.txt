@@ -283,7 +283,7 @@ evaluation (internal):
 
 ast            : '1'!='2'
 raw expr       : noteq("1", "2")
-checked expr   : not<Boolean>(eq<String, String>("1", "2"))
+checked expr   : noteq<String, String>("1", "2")
 optimized expr : true
 output type    : Boolean
 output domain  : {FALSE, TRUE}
@@ -292,7 +292,7 @@ output         : true
 
 ast            : 1!=2
 raw expr       : noteq(1_u8, 2_u8)
-checked expr   : not<Boolean>(eq<UInt8, UInt8>(1_u8, 2_u8))
+checked expr   : noteq<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -301,7 +301,7 @@ output         : true
 
 ast            : 1.1!=1.1
 raw expr       : noteq(1.1_f64, 1.1_f64)
-checked expr   : not<Boolean>(eq<Float64, Float64>(1.1_f64, 1.1_f64))
+checked expr   : noteq<Float64, Float64>(1.1_f64, 1.1_f64)
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE, TRUE}
@@ -310,7 +310,7 @@ output         : false
 
 ast            : true != true
 raw expr       : noteq(true, true)
-checked expr   : not<Boolean>(eq<Boolean, Boolean>(true, true))
+checked expr   : noteq<Boolean, Boolean>(true, true)
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -319,7 +319,7 @@ output         : false
 
 ast            : true != null
 raw expr       : noteq(true, NULL)
-checked expr   : not<Boolean NULL>(eq<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL)))
+checked expr   : noteq<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -328,7 +328,7 @@ output         : NULL
 
 ast            : true != false
 raw expr       : noteq(true, false)
-checked expr   : not<Boolean>(eq<Boolean, Boolean>(true, false))
+checked expr   : noteq<Boolean, Boolean>(true, false)
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -337,7 +337,7 @@ output         : true
 
 ast            : [] != []
 raw expr       : noteq(array(), array())
-checked expr   : not<Boolean>(eq<Array(Nothing), Array(Nothing)>(array<>(), array<>()))
+checked expr   : noteq<Array(Nothing), Array(Nothing)>(array<>(), array<>())
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -346,7 +346,7 @@ output         : false
 
 ast            : ['a'] != ['a']
 raw expr       : noteq(array("a"), array("a"))
-checked expr   : not<Boolean>(eq<T0=String><Array(T0), Array(T0)>(array<T0=String><T0>("a"), array<T0=String><T0>("a")))
+checked expr   : noteq<T0=String><Array(T0), Array(T0)>(array<T0=String><T0>("a"), array<T0=String><T0>("a"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE, TRUE}
@@ -355,7 +355,70 @@ output         : false
 
 ast            : ['a'] != ['b']
 raw expr       : noteq(array("a"), array("b"))
-checked expr   : not<Boolean>(eq<T0=String><Array(T0), Array(T0)>(array<T0=String><T0>("a"), array<T0=String><T0>("b")))
+checked expr   : noteq<T0=String><Array(T0), Array(T0)>(array<T0=String><T0>("a"), array<T0=String><T0>("b"))
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+error: 
+  --> SQL:1:10
+  |
+1 | (1, 'a') != (1,)
+  |          ^^ no overload satisfies `noteq((UInt8, String), (UInt8,))`
+
+has tried possible overloads:
+  noteq(String, String) :: Boolean                                 : unable to unify `(UInt8, String)` with `String`
+  noteq(String NULL, String NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `String`
+  noteq(Date, Date) :: Boolean                                     : unable to unify `(UInt8, String)` with `Date`
+  noteq(Date NULL, Date NULL) :: Boolean NULL                      : unable to unify `(UInt8, String)` with `Date`
+  noteq(Timestamp, Timestamp) :: Boolean                           : unable to unify `(UInt8, String)` with `Timestamp`
+  noteq(Timestamp NULL, Timestamp NULL) :: Boolean NULL            : unable to unify `(UInt8, String)` with `Timestamp`
+  noteq(UInt8, UInt8) :: Boolean                                   : unable to unify `(UInt8, String)` with `UInt8`
+  noteq(UInt8 NULL, UInt8 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `UInt8`
+  noteq(UInt16, UInt16) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt16`
+  noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt16`
+  noteq(UInt32, UInt32) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt32`
+  noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt32`
+  noteq(UInt64, UInt64) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt64`
+  noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt64`
+  noteq(Int8, Int8) :: Boolean                                     : unable to unify `(UInt8, String)` with `Int8`
+  noteq(Int8 NULL, Int8 NULL) :: Boolean NULL                      : unable to unify `(UInt8, String)` with `Int8`
+  noteq(Int16, Int16) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int16`
+  noteq(Int16 NULL, Int16 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int16`
+  noteq(Int32, Int32) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int32`
+  noteq(Int32 NULL, Int32 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int32`
+  noteq(Int64, Int64) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int64`
+  noteq(Int64 NULL, Int64 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int64`
+  noteq(Float32, Float32) :: Boolean                               : unable to unify `(UInt8, String)` with `Float32`
+  noteq(Float32 NULL, Float32 NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Float32`
+  noteq(Float64, Float64) :: Boolean                               : unable to unify `(UInt8, String)` with `Float64`
+  noteq(Float64 NULL, Float64 NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Float64`
+  noteq(Boolean, Boolean) :: Boolean                               : unable to unify `(UInt8, String)` with `Boolean`
+  noteq(Boolean NULL, Boolean NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Boolean`
+  noteq(Variant, Variant) :: Boolean                               : unable to unify `(UInt8, String)` with `Variant`
+  noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Variant`
+  noteq(Array(Nothing), Array(Nothing)) :: Boolean                 : unable to unify `(UInt8, String)` with `Array(Nothing)`
+  noteq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL  : unable to unify `(UInt8, String)` with `Array(Nothing)`
+  noteq(Array(T0), Array(T0)) :: Boolean                           : unable to unify `(UInt8, String)` with `Array(T0)`
+  noteq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL            : unable to unify `(UInt8, String)` with `Array(T0)`
+  noteq((T0, T1), (T0, T1)) :: Boolean                             : unable to unify `(UInt8,)` with `(T0, T1)`
+
+
+
+ast            : (1, 'a') != (1, 'a')
+raw expr       : noteq(tuple(1_u8, "a"), tuple(1_u8, "a"))
+checked expr   : noteq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : false
+
+
+ast            : (1, 'a') != (1, 'b')
+raw expr       : noteq(tuple(1_u8, "a"), tuple(1_u8, "b"))
+checked expr   : noteq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
 output domain  : {FALSE, TRUE}
@@ -364,7 +427,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)!=to_timestamp(-100)
 raw expr       : noteq(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
-checked expr   : not<Boolean>(eq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))))
+checked expr   : noteq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -373,7 +436,7 @@ output         : true
 
 ast            : parse_json('"databend"') != parse_json('"databend"')
 raw expr       : noteq(parse_json("\"databend\""), parse_json("\"databend\""))
-checked expr   : not<Boolean>(eq<Variant, Variant>(parse_json<String>("\"databend\""), parse_json<String>("\"databend\"")))
+checked expr   : noteq<Variant, Variant>(parse_json<String>("\"databend\""), parse_json<String>("\"databend\""))
 optimized expr : false
 output type    : Boolean
 output domain  : Unknown
@@ -382,7 +445,7 @@ output         : false
 
 ast            : parse_json(lhs) != parse_json(rhs)
 raw expr       : noteq(parse_json(#0::String), parse_json(#1::String))
-checked expr   : not<Boolean>(eq<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1)))
+checked expr   : noteq<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1))
 evaluation:
 +--------+----------------------------------+----------------------------------+---------+
 |        | lhs                              | rhs                              | Output  |
@@ -406,7 +469,7 @@ evaluation (internal):
 
 ast            : lhs != rhs
 raw expr       : noteq(#0::String, #1::String)
-checked expr   : not<Boolean>(eq<String, String>(#0, #1))
+checked expr   : noteq<String, String>(#0, #1)
 evaluation:
 +--------+----------------------------------+----------------------------------+---------------+
 |        | lhs                              | rhs                              | Output        |
@@ -547,7 +610,7 @@ output         : false
 
 ast            : parse_json(lhs) >= parse_json(rhs)
 raw expr       : gte(parse_json(#0::String), parse_json(#1::String))
-checked expr   : not<Boolean>(lt<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1)))
+checked expr   : gte<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1))
 evaluation:
 +--------+-------------------------------+-------------------------------+---------+
 |        | lhs                           | rhs                           | Output  |
@@ -601,7 +664,7 @@ evaluation (internal):
 
 ast            : '5'<='2'
 raw expr       : lte("5", "2")
-checked expr   : not<Boolean>(gt<String, String>("5", "2"))
+checked expr   : lte<String, String>("5", "2")
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE, TRUE}
@@ -610,7 +673,7 @@ output         : false
 
 ast            : 1<=2
 raw expr       : lte(1_u8, 2_u8)
-checked expr   : not<Boolean>(gt<UInt8, UInt8>(1_u8, 2_u8))
+checked expr   : lte<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -619,7 +682,7 @@ output         : true
 
 ast            : 1.1<=2.1
 raw expr       : lte(1.1_f64, 2.1_f64)
-checked expr   : not<Boolean>(gt<Float64, Float64>(1.1_f64, 2.1_f64))
+checked expr   : lte<Float64, Float64>(1.1_f64, 2.1_f64)
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -628,16 +691,16 @@ output         : true
 
 ast            : true <= true
 raw expr       : lte(true, true)
-checked expr   : not<Boolean>(gt<Boolean, Boolean>(true, true))
+checked expr   : lte<Boolean, Boolean>(true, true)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
 ast            : true <= null
 raw expr       : lte(true, NULL)
-checked expr   : not<Boolean NULL>(gt<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL)))
+checked expr   : lte<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -646,7 +709,7 @@ output         : NULL
 
 ast            : true <= false
 raw expr       : lte(true, false)
-checked expr   : not<Boolean>(gt<Boolean, Boolean>(true, false))
+checked expr   : lte<Boolean, Boolean>(true, false)
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -655,7 +718,7 @@ output         : false
 
 ast            : [] <= []
 raw expr       : lte(array(), array())
-checked expr   : not<Boolean>(gt<Array(Nothing), Array(Nothing)>(array<>(), array<>()))
+checked expr   : lte<Array(Nothing), Array(Nothing)>(array<>(), array<>())
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -664,7 +727,34 @@ output         : true
 
 ast            : [1, 2] <= [2, 3]
 raw expr       : lte(array(1_u8, 2_u8), array(2_u8, 3_u8))
-checked expr   : not<Boolean>(gt<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8)))
+checked expr   : lte<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : (1, 'b') <= (1, 'a')
+raw expr       : lte(tuple(1_u8, "b"), tuple(1_u8, "a"))
+checked expr   : lte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : false
+
+
+ast            : (1, 'a') <= (1, 'b')
+raw expr       : lte(tuple(1_u8, "a"), tuple(1_u8, "b"))
+checked expr   : lte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : (1, 'a') <= (2, 'a')
+raw expr       : lte(tuple(1_u8, "a"), tuple(2_u8, "a"))
+checked expr   : lte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : true
 output type    : Boolean
 output domain  : {FALSE, TRUE}
@@ -673,7 +763,7 @@ output         : true
 
 ast            : parse_json('null') <= parse_json('null')
 raw expr       : lte(parse_json("null"), parse_json("null"))
-checked expr   : not<Boolean>(gt<Variant, Variant>(parse_json<String>("null"), parse_json<String>("null")))
+checked expr   : lte<Variant, Variant>(parse_json<String>("null"), parse_json<String>("null"))
 optimized expr : true
 output type    : Boolean
 output domain  : Unknown
@@ -682,7 +772,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-100)
 raw expr       : lte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
-checked expr   : not<Boolean>(gt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))))
+checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -691,7 +781,7 @@ output         : true
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-315360000000000)
 raw expr       : lte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(315360000000000_u64)))
-checked expr   : not<Boolean>(gt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))))
+checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -700,7 +790,7 @@ output         : true
 
 ast            : parse_json(lhs) <= parse_json(rhs)
 raw expr       : lte(parse_json(#0::String), parse_json(#1::String))
-checked expr   : not<Boolean>(gt<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1)))
+checked expr   : lte<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1))
 evaluation:
 +--------+------------------------------------------------+------------------------------------------------+---------+
 |        | lhs                                            | rhs                                            | Output  |
@@ -723,7 +813,7 @@ evaluation (internal):
 
 ast            : lhs <= rhs
 raw expr       : lte(#0::String, #1::String)
-checked expr   : not<Boolean>(gt<String, String>(#0, #1))
+checked expr   : lte<String, String>(#0, #1)
 evaluation:
 +--------+------------------------------------------------+------------------------------------------------+---------------+
 |        | lhs                                            | rhs                                            | Output        |
@@ -922,7 +1012,7 @@ evaluation (internal):
 
 ast            : '2'>='1'
 raw expr       : gte("2", "1")
-checked expr   : not<Boolean>(lt<String, String>("2", "1"))
+checked expr   : gte<String, String>("2", "1")
 optimized expr : true
 output type    : Boolean
 output domain  : {FALSE, TRUE}
@@ -931,7 +1021,7 @@ output         : true
 
 ast            : 1>=2
 raw expr       : gte(1_u8, 2_u8)
-checked expr   : not<Boolean>(lt<UInt8, UInt8>(1_u8, 2_u8))
+checked expr   : gte<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -940,7 +1030,7 @@ output         : false
 
 ast            : 1.1>=1.1
 raw expr       : gte(1.1_f64, 1.1_f64)
-checked expr   : not<Boolean>(lt<Float64, Float64>(1.1_f64, 1.1_f64))
+checked expr   : gte<Float64, Float64>(1.1_f64, 1.1_f64)
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -949,16 +1039,16 @@ output         : true
 
 ast            : true >= true
 raw expr       : gte(true, true)
-checked expr   : not<Boolean>(lt<Boolean, Boolean>(true, true))
+checked expr   : gte<Boolean, Boolean>(true, true)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
 ast            : true >= null
 raw expr       : gte(true, NULL)
-checked expr   : not<Boolean NULL>(lt<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL)))
+checked expr   : gte<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -967,7 +1057,7 @@ output         : NULL
 
 ast            : true >= false
 raw expr       : gte(true, false)
-checked expr   : not<Boolean>(lt<Boolean, Boolean>(true, false))
+checked expr   : gte<Boolean, Boolean>(true, false)
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -976,7 +1066,7 @@ output         : true
 
 ast            : [] >= []
 raw expr       : gte(array(), array())
-checked expr   : not<Boolean>(lt<Array(Nothing), Array(Nothing)>(array<>(), array<>()))
+checked expr   : gte<Array(Nothing), Array(Nothing)>(array<>(), array<>())
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -985,7 +1075,34 @@ output         : true
 
 ast            : [1, 2] >= [2, 3]
 raw expr       : gte(array(1_u8, 2_u8), array(2_u8, 3_u8))
-checked expr   : not<Boolean>(lt<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8)))
+checked expr   : gte<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : false
+
+
+ast            : (1, 'b') >= (1, 'a')
+raw expr       : gte(tuple(1_u8, "b"), tuple(1_u8, "a"))
+checked expr   : gte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : (1, 'a') >= (1, 'b')
+raw expr       : gte(tuple(1_u8, "a"), tuple(1_u8, "b"))
+checked expr   : gte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : false
+
+
+ast            : (1, 'a') >= (2, 'a')
+raw expr       : gte(tuple(1_u8, "a"), tuple(2_u8, "a"))
+checked expr   : gte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE, TRUE}
@@ -994,7 +1111,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-100)
 raw expr       : gte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
-checked expr   : not<Boolean>(lt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))))
+checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1003,7 +1120,7 @@ output         : false
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-315360000000000)
 raw expr       : gte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(315360000000000_u64)))
-checked expr   : not<Boolean>(lt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))))
+checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1012,7 +1129,7 @@ output         : true
 
 ast            : parse_json('1.912e2') >= parse_json('1.912e2')
 raw expr       : gte(parse_json("1.912e2"), parse_json("1.912e2"))
-checked expr   : not<Boolean>(lt<Variant, Variant>(parse_json<String>("1.912e2"), parse_json<String>("1.912e2")))
+checked expr   : gte<Variant, Variant>(parse_json<String>("1.912e2"), parse_json<String>("1.912e2"))
 optimized expr : true
 output type    : Boolean
 output domain  : Unknown
@@ -1021,7 +1138,7 @@ output         : true
 
 ast            : parse_json(lhs) >= parse_json(rhs)
 raw expr       : gte(parse_json(#0::String), parse_json(#1::String))
-checked expr   : not<Boolean>(lt<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1)))
+checked expr   : gte<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1))
 evaluation:
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------+
 |        | lhs                                                       | rhs                                                       | Output  |
@@ -1048,7 +1165,7 @@ evaluation (internal):
 
 ast            : lhs >= rhs
 raw expr       : gte(#0::String, #1::String)
-checked expr   : not<Boolean>(lt<String, String>(#0, #1))
+checked expr   : gte<String, String>(#0, #1)
 evaluation:
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------------+
 |        | lhs                                                       | rhs                                                       | Output        |
@@ -1167,62 +1284,6 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------+
 
 
-ast            : '1' not like '2'
-raw expr       : not(like("1", "2"))
-checked expr   : not<Boolean>(like<String, String>("1", "2"))
-optimized expr : true
-output type    : Boolean
-output domain  : {FALSE, TRUE}
-output         : true
-
-
-ast            : lhs not like 'a%'
-raw expr       : not(like(#0::String, "a%"))
-checked expr   : not<Boolean>(like<String, String>(#0, "a%"))
-evaluation:
-+--------+-----------------+---------------+
-|        | lhs             | Output        |
-+--------+-----------------+---------------+
-| Type   | String          | Boolean       |
-| Domain | {"abc"..="abf"} | {FALSE, TRUE} |
-| Row 0  | "abc"           | false         |
-| Row 1  | "abd"           | false         |
-| Row 2  | "abe"           | false         |
-| Row 3  | "abf"           | false         |
-+--------+-----------------+---------------+
-evaluation (internal):
-+--------+------------------------------------------------------------------------------+
-| Column | Data                                                                         |
-+--------+------------------------------------------------------------------------------+
-| lhs    | StringColumn { data: 0x616263616264616265616266, offsets: [0, 3, 6, 9, 12] } |
-| Output | Boolean([0b____0000])                                                        |
-+--------+------------------------------------------------------------------------------+
-
-
-ast            : lhs not like rhs
-raw expr       : not(like(#0::String, #1::String))
-checked expr   : not<Boolean>(like<String, String>(#0, #1))
-evaluation:
-+--------+-----------------+-----------------+---------------+
-|        | lhs             | rhs             | Output        |
-+--------+-----------------+-----------------+---------------+
-| Type   | String          | String          | Boolean       |
-| Domain | {"abc"..="abf"} | {"_b_"..="abe"} | {FALSE, TRUE} |
-| Row 0  | "abc"           | "a%"            | false         |
-| Row 1  | "abd"           | "_b_"           | false         |
-| Row 2  | "abe"           | "abe"           | false         |
-| Row 3  | "abf"           | "a"             | true          |
-+--------+-----------------+-----------------+---------------+
-evaluation (internal):
-+--------+------------------------------------------------------------------------------+
-| Column | Data                                                                         |
-+--------+------------------------------------------------------------------------------+
-| lhs    | StringColumn { data: 0x616263616264616265616266, offsets: [0, 3, 6, 9, 12] } |
-| rhs    | StringColumn { data: 0x61255f625f61626561, offsets: [0, 2, 5, 8, 9] }        |
-| Output | Boolean([0b____1000])                                                        |
-+--------+------------------------------------------------------------------------------+
-
-
 ast            : lhs regexp rhs
 raw expr       : regexp(#0::String, #1::String)
 checked expr   : regexp<String, String>(#0, #1)
@@ -1272,58 +1333,6 @@ evaluation (internal):
 | lhs    | StringColumn { data: 0x616263616264616265616266616263, offsets: [0, 3, 6, 9, 12, 15, 15] } |
 | rhs    | StringColumn { data: 0x5e615e6261626561, offsets: [0, 2, 4, 7, 8, 8, 8] }                  |
 | Output | Boolean([0b__101101])                                                                      |
-+--------+--------------------------------------------------------------------------------------------+
-
-
-ast            : lhs not regexp rhs
-raw expr       : not(regexp(#0::String, #1::String))
-checked expr   : not<Boolean>(regexp<String, String>(#0, #1))
-evaluation:
-+--------+--------------+--------------+---------------+
-|        | lhs          | rhs          | Output        |
-+--------+--------------+--------------+---------------+
-| Type   | String       | String       | Boolean       |
-| Domain | {""..="abf"} | {""..="abe"} | {FALSE, TRUE} |
-| Row 0  | "abc"        | "^a"         | false         |
-| Row 1  | "abd"        | "^b"         | true          |
-| Row 2  | "abe"        | "abe"        | false         |
-| Row 3  | "abf"        | "a"          | false         |
-| Row 4  | "abc"        | ""           | true          |
-| Row 5  | ""           | ""           | false         |
-+--------+--------------+--------------+---------------+
-evaluation (internal):
-+--------+--------------------------------------------------------------------------------------------+
-| Column | Data                                                                                       |
-+--------+--------------------------------------------------------------------------------------------+
-| lhs    | StringColumn { data: 0x616263616264616265616266616263, offsets: [0, 3, 6, 9, 12, 15, 15] } |
-| rhs    | StringColumn { data: 0x5e615e6261626561, offsets: [0, 2, 4, 7, 8, 8, 8] }                  |
-| Output | Boolean([0b__010010])                                                                      |
-+--------+--------------------------------------------------------------------------------------------+
-
-
-ast            : lhs not rlike rhs
-raw expr       : not(regexp(#0::String, #1::String))
-checked expr   : not<Boolean>(regexp<String, String>(#0, #1))
-evaluation:
-+--------+--------------+--------------+---------------+
-|        | lhs          | rhs          | Output        |
-+--------+--------------+--------------+---------------+
-| Type   | String       | String       | Boolean       |
-| Domain | {""..="abf"} | {""..="abe"} | {FALSE, TRUE} |
-| Row 0  | "abc"        | "^a"         | false         |
-| Row 1  | "abd"        | "^b"         | true          |
-| Row 2  | "abe"        | "abe"        | false         |
-| Row 3  | "abf"        | "a"          | false         |
-| Row 4  | "abc"        | ""           | true          |
-| Row 5  | ""           | ""           | false         |
-+--------+--------------+--------------+---------------+
-evaluation (internal):
-+--------+--------------------------------------------------------------------------------------------+
-| Column | Data                                                                                       |
-+--------+--------------------------------------------------------------------------------------------+
-| lhs    | StringColumn { data: 0x616263616264616265616266616263, offsets: [0, 3, 6, 9, 12, 15, 15] } |
-| rhs    | StringColumn { data: 0x5e615e6261626561, offsets: [0, 2, 4, 7, 8, 8, 8] }                  |
-| Output | Boolean([0b__010010])                                                                      |
 +--------+--------------------------------------------------------------------------------------------+
 
 

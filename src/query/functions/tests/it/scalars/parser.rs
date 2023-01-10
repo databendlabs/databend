@@ -50,8 +50,8 @@ macro_rules! with_interval_mapped_name {
 }
 
 macro_rules! transform_interval_add_sub {
-    ($span: expr, $columns: expr, $name: expr, $unit: expr, $date: expr, $interval: expr) => {
-        if $name == "plus" {
+    ($span: expr, $columns: expr, $op: expr, $unit: expr, $date: expr, $interval: expr) => {
+        if $op == BinaryOperator::Plus {
             with_interval_mapped_name!(|INTERVAL| match $unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
                     span: transform_span($span),
@@ -66,7 +66,7 @@ macro_rules! transform_interval_add_sub {
                     unimplemented!("{kind:?} is not supported for interval")
                 }
             })
-        } else if $name == "minus" {
+        } else if $op == BinaryOperator::Minus {
             with_interval_mapped_name!(|INTERVAL| match $unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
                     span: transform_span($span),
@@ -82,7 +82,7 @@ macro_rules! transform_interval_add_sub {
                 }
             })
         } else {
-            unimplemented!("operator {} is not supported for interval", $name)
+            unimplemented!("operator {} is not supported for interval", $op)
         }
     };
 }
@@ -154,7 +154,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         },
         AExpr::UnaryOp { span, op, expr } => RawExpr::FunctionCall {
             span: transform_span(span),
-            name: transform_unary_op(op),
+            name: format!("{op:?}").to_lowercase(),
             params: vec![],
             args: vec![transform_expr(*expr, columns)],
         },
@@ -163,66 +163,35 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             op,
             left,
             right,
-        } => {
-            let name = transform_binary_op(op);
-            match name.as_str() {
-                "notlike" => {
-                    let result = RawExpr::FunctionCall {
-                        span: transform_span(span),
-                        name: "like".to_string(),
-                        params: vec![],
-                        args: vec![
-                            transform_expr(*left, columns),
-                            transform_expr(*right, columns),
-                        ],
-                    };
-                    RawExpr::FunctionCall {
-                        span: transform_span(span),
-                        name: "not".to_string(),
-                        params: vec![],
-                        args: vec![result],
-                    }
-                }
-                "notregexp" | "notrlike" => {
-                    let result = RawExpr::FunctionCall {
-                        span: transform_span(span),
-                        name: "regexp".to_string(),
-                        params: vec![],
-                        args: vec![
-                            transform_expr(*left, columns),
-                            transform_expr(*right, columns),
-                        ],
-                    };
-                    RawExpr::FunctionCall {
-                        span: transform_span(span),
-                        name: "not".to_string(),
-                        params: vec![],
-                        args: vec![result],
-                    }
-                }
-                _ => match (*left.clone(), *right.clone()) {
-                    (AExpr::Interval { expr, unit, .. }, _) => {
-                        if name == "minus" {
-                            unimplemented!("interval cannot be the minuend")
-                        } else {
-                            transform_interval_add_sub!(span, columns, name, unit, right, expr)
-                        }
-                    }
-                    (_, AExpr::Interval { expr, unit, .. }) => {
-                        transform_interval_add_sub!(span, columns, name, unit, left, expr)
-                    }
-                    (_, _) => RawExpr::FunctionCall {
-                        span: transform_span(span),
-                        name,
-                        params: vec![],
-                        args: vec![
-                            transform_expr(*left, columns),
-                            transform_expr(*right, columns),
-                        ],
-                    },
-                },
+        } => match op {
+            BinaryOperator::NotLike => {
+                unimplemented!("please use `not (a like b)` instead")
             }
-        }
+            BinaryOperator::NotRLike | BinaryOperator::NotRegexp => {
+                unimplemented!("please use `not (a regexp b)` instead")
+            }
+            _ => match (*left.clone(), *right.clone()) {
+                (AExpr::Interval { expr, unit, .. }, _) => {
+                    if op == BinaryOperator::Minus {
+                        unimplemented!("interval cannot be minuend")
+                    } else {
+                        transform_interval_add_sub!(span, columns, op, unit, right, expr)
+                    }
+                }
+                (_, AExpr::Interval { expr, unit, .. }) => {
+                    transform_interval_add_sub!(span, columns, op, unit, left, expr)
+                }
+                (_, _) => RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: format!("{op:?}").to_lowercase(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*left, columns),
+                        transform_expr(*right, columns),
+                    ],
+                },
+            },
+        },
         AExpr::Position {
             span,
             substr_expr,
@@ -491,14 +460,6 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
 
         expr => unimplemented!("{expr:?} is unimplemented"),
     }
-}
-
-fn transform_unary_op(op: UnaryOperator) -> String {
-    format!("{op:?}").to_lowercase()
-}
-
-fn transform_binary_op(op: BinaryOperator) -> String {
-    format!("{op:?}").to_lowercase()
 }
 
 fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {

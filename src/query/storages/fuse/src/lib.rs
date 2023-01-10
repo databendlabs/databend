@@ -54,4 +54,4 @@ mod pipelines {
     }
 }
 
-pub use common_storages_index as index;
+pub use storages_common_index as index;

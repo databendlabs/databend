@@ -13,23 +13,14 @@
 // limitations under the License.
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_datavalues::Column as DvColumn;
-use common_datavalues::ColumnRef;
-use common_datavalues::ConstColumn;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use common_datavalues::IntoColumn;
 use ordered_float::OrderedFloat;
 
-use crate::types::AnyType;
-use crate::types::DataType;
-use crate::Column;
-use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
-use crate::Value;
 
 pub fn to_type(datatype: &TableDataType) -> DataTypeImpl {
     let f = TableField::new("tmp", datatype.clone());
@@ -50,7 +41,7 @@ pub fn to_schema(schema: &TableSchema) -> common_datavalues::DataSchema {
     common_datavalues::DataSchema::new_from(fields, schema.meta().clone())
 }
 
-pub fn to_scalar(scalar: &Scalar) -> DataValue {
+pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
     match scalar {
         Scalar::Null => DataValue::Null,
         Scalar::EmptyArray => DataValue::Null,
@@ -74,34 +65,13 @@ pub fn to_scalar(scalar: &Scalar) -> DataValue {
         Scalar::String(x) | Scalar::Variant(x) => DataValue::String(x.clone()),
         Scalar::Array(x) => {
             let values = (0..x.len())
-                .map(|idx| to_scalar(&x.index(idx).unwrap().to_owned()))
+                .map(|idx| scalar_to_datavalue(&x.index(idx).unwrap().to_owned()))
                 .collect();
             DataValue::Array(values)
         }
         Scalar::Tuple(x) => {
-            let values = x.iter().map(to_scalar).collect();
+            let values = x.iter().map(scalar_to_datavalue).collect();
             DataValue::Struct(values)
-        }
-    }
-}
-
-// we do not need conver scalar to datavalue
-
-pub fn to_column(column: &Value<AnyType>, size: usize, data_type: &DataType) -> ColumnRef {
-    match column {
-        Value::Scalar(s) => {
-            let col = ColumnBuilder::repeat(&s.as_ref(), 1, data_type).build();
-            let col = to_column(&Value::Column(col), 1, data_type);
-            ConstColumn::new(col, size).arc()
-        }
-        Value::Column(c) => {
-            let is_nullable = matches!(c, Column::Nullable(_));
-            let arrow_column = c.as_arrow();
-            if is_nullable {
-                arrow_column.into_nullable_column()
-            } else {
-                arrow_column.into_column()
-            }
         }
     }
 }

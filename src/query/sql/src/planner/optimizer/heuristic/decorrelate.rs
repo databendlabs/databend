@@ -42,6 +42,7 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -705,6 +706,13 @@ impl SubqueryRewriter {
                     return_type: or_expr.return_type.clone(),
                 }))
             }
+            Scalar::NotExpr(not_expr) => {
+                let argument = self.flatten_scalar(&not_expr.argument, correlated_columns)?;
+                Ok(Scalar::NotExpr(NotExpr {
+                    argument: Box::new(argument),
+                    return_type: not_expr.return_type.clone(),
+                }))
+            }
             Scalar::ComparisonExpr(comparison_expr) => {
                 let left = self.flatten_scalar(&comparison_expr.left, correlated_columns)?;
                 let right = self.flatten_scalar(&comparison_expr.right, correlated_columns)?;
@@ -735,6 +743,7 @@ impl SubqueryRewriter {
                     arguments.push(self.flatten_scalar(arg, correlated_columns)?);
                 }
                 Ok(Scalar::FunctionCall(FunctionCall {
+                    params: fun_call.params.clone(),
                     arguments,
                     func_name: fun_call.func_name.clone(),
                     return_type: fun_call.return_type.clone(),

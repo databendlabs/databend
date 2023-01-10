@@ -25,19 +25,19 @@ use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::ClusterStatistics;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
 use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
 use databend_query::storages::fuse::pruning::BlockPruner;
+use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -132,7 +132,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             blocks_map
                 .entry(stats.level)
                 .or_default()
-                .push((idx.0, b.clone()));
+                .push((idx.segment_idx, b.clone()));
         }
     });
 

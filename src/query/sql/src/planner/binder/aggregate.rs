@@ -38,6 +38,7 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
@@ -103,6 +104,11 @@ impl<'a> AggregateRewriter<'a> {
                 return_type: scalar.return_type.clone(),
             }
             .into()),
+            Scalar::NotExpr(scalar) => Ok(NotExpr {
+                argument: Box::new(self.visit(&scalar.argument)?),
+                return_type: scalar.return_type.clone(),
+            }
+            .into()),
             Scalar::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
                 left: Box::new(self.visit(&scalar.left)?),
@@ -117,6 +123,7 @@ impl<'a> AggregateRewriter<'a> {
                     .map(|arg| self.visit(arg))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(FunctionCall {
+                    params: func.params.clone(),
                     arguments: new_args,
                     func_name: func.func_name.clone(),
                     return_type: func.return_type.clone(),

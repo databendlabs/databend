@@ -15,7 +15,6 @@
 use std::io::Write;
 
 use common_expression::types::*;
-use common_expression::Column;
 use common_expression::FromData;
 use goldenfile::Mint;
 
@@ -32,29 +31,8 @@ fn test_comparison() {
     test_lte(file);
     test_gt(file);
     test_gte(file);
-
-    let like_columns = [
-        (
-            "lhs",
-            StringType::from_data(vec!["abc", "abd", "abe", "abf"]),
-        ),
-        ("rhs", StringType::from_data(vec!["a%", "_b_", "abe", "a"])),
-    ];
-    test_like(file, &like_columns);
-    test_notlike(file, &like_columns);
-
-    let regexp_columns = [
-        (
-            "lhs",
-            StringType::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
-        ),
-        (
-            "rhs",
-            StringType::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
-        ),
-    ];
-    test_regexp(file, &regexp_columns);
-    test_notregexp(file, &regexp_columns);
+    test_like(file);
+    test_regexp(file);
 }
 
 fn test_eq(file: &mut impl Write) {
@@ -135,6 +113,9 @@ fn test_noteq(file: &mut impl Write) {
     run_ast(file, "[] != []", &[]);
     run_ast(file, "['a'] != ['a']", &[]);
     run_ast(file, "['a'] != ['b']", &[]);
+    run_ast(file, "(1, 'a') != (1,)", &[]);
+    run_ast(file, "(1, 'a') != (1, 'a')", &[]);
+    run_ast(file, "(1, 'a') != (1, 'b')", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)!=to_timestamp(-100)",
@@ -226,6 +207,9 @@ fn test_lte(file: &mut impl Write) {
     run_ast(file, "true <= false", &[]);
     run_ast(file, "[] <= []", &[]);
     run_ast(file, "[1, 2] <= [2, 3]", &[]);
+    run_ast(file, "(1, 'b') <= (1, 'a')", &[]);
+    run_ast(file, "(1, 'a') <= (1, 'b')", &[]);
+    run_ast(file, "(1, 'a') <= (2, 'a')", &[]);
     run_ast(file, "parse_json('null') <= parse_json('null')", &[]);
     run_ast(
         file,
@@ -321,6 +305,9 @@ fn test_gte(file: &mut impl Write) {
     run_ast(file, "true >= false", &[]);
     run_ast(file, "[] >= []", &[]);
     run_ast(file, "[1, 2] >= [2, 3]", &[]);
+    run_ast(file, "(1, 'b') >= (1, 'a')", &[]);
+    run_ast(file, "(1, 'a') >= (1, 'b')", &[]);
+    run_ast(file, "(1, 'a') >= (2, 'a')", &[]);
     run_ast(
         file,
         "to_timestamp(-315360000000000)>=to_timestamp(-100)",
@@ -362,38 +349,40 @@ fn test_gte(file: &mut impl Write) {
     run_ast(file, "lhs >= rhs", &table);
 }
 
-fn test_like(file: &mut impl Write, columns: &[(&str, Column)]) {
+fn test_like(file: &mut impl Write) {
     run_ast(file, "'1' like '2'", &[]);
     run_ast(file, "'hello\n' like 'h%'", &[]);
     run_ast(file, "'h\n' like 'h_'", &[]);
     run_ast(file, r#"'%' like '\%'"#, &[]);
     run_ast(file, r#"'v%xx' like '_\%%'"#, &[]);
 
-    let like_columns = [(
+    let columns = [(
         "lhs",
         StringType::from_data(vec!["abc", "abd", "abe", "abf"]),
     )];
-    run_ast(file, "lhs like 'a%'", &like_columns);
-    run_ast(file, "lhs like rhs", columns);
+    run_ast(file, "lhs like 'a%'", &columns);
+    let columns = [
+        (
+            "lhs",
+            StringType::from_data(vec!["abc", "abd", "abe", "abf"]),
+        ),
+        ("rhs", StringType::from_data(vec!["a%", "_b_", "abe", "a"])),
+    ];
+    run_ast(file, "lhs like rhs", &columns);
 }
 
-fn test_notlike(file: &mut impl Write, columns: &[(&str, Column)]) {
-    run_ast(file, "'1' not like '2'", &[]);
+fn test_regexp(file: &mut impl Write) {
+    let columns = [
+        (
+            "lhs",
+            StringType::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
+        ),
+        (
+            "rhs",
+            StringType::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
+        ),
+    ];
 
-    let like_columns = [(
-        "lhs",
-        StringType::from_data(vec!["abc", "abd", "abe", "abf"]),
-    )];
-    run_ast(file, "lhs not like 'a%'", &like_columns);
-    run_ast(file, "lhs not like rhs", columns);
-}
-
-fn test_regexp(file: &mut impl Write, columns: &[(&str, Column)]) {
-    run_ast(file, "lhs regexp rhs", columns);
-    run_ast(file, "lhs rlike rhs", columns);
-}
-
-fn test_notregexp(file: &mut impl Write, columns: &[(&str, Column)]) {
-    run_ast(file, "lhs not regexp rhs", columns);
-    run_ast(file, "lhs not rlike rhs", columns);
+    run_ast(file, "lhs regexp rhs", &columns);
+    run_ast(file, "lhs rlike rhs", &columns);
 }

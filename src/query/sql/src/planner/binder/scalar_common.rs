@@ -24,6 +24,7 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
@@ -161,6 +162,7 @@ pub fn contain_subquery(scalar: &Scalar) -> bool {
         Scalar::OrExpr(OrExpr { left, right, .. }) => {
             contain_subquery(left) || contain_subquery(right)
         }
+        Scalar::NotExpr(NotExpr { argument, .. }) => contain_subquery(argument),
         Scalar::FunctionCall(FunctionCall { arguments, .. }) => {
             arguments.iter().any(contain_subquery)
         }

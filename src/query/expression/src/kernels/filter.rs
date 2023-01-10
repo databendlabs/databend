@@ -31,6 +31,7 @@ use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::StringType;
 use crate::types::ValueType;
+use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::BlockEntry;
@@ -191,11 +192,16 @@ impl Column {
                 MutableBitmap::with_capacity(length),
                 filter,
             ),
-            Column::String(column) => Self::filter_scalar_types::<StringType>(
-                column,
-                StringColumnBuilder::with_capacity(length, 0),
-                filter,
-            ),
+            Column::String(column) => {
+                let bytes_per_row = column.data.len() / filter.len().max(1);
+                let data_capacity = (filter.len() - filter.unset_bits()) * bytes_per_row;
+
+                Self::filter_scalar_types::<StringType>(
+                    column,
+                    StringColumnBuilder::with_capacity(length, data_capacity),
+                    filter,
+                )
+            }
             Column::Timestamp(column) => {
                 let ts = Self::filter_primitive_types(column, filter);
                 Column::Timestamp(ts)
@@ -234,11 +240,16 @@ impl Column {
                 let fields = fields.iter().map(|c| c.filter(filter)).collect();
                 Column::Tuple { fields, len }
             }
-            Column::Variant(column) => Self::filter_scalar_types::<StringType>(
-                column,
-                StringColumnBuilder::with_capacity(length, 0),
-                filter,
-            ),
+            Column::Variant(column) => {
+                let bytes_per_row = column.data.len() / filter.len().max(1);
+                let data_capacity = (filter.len() - filter.unset_bits()) * bytes_per_row;
+
+                Self::filter_scalar_types::<VariantType>(
+                    column,
+                    StringColumnBuilder::with_capacity(length, data_capacity),
+                    filter,
+                )
+            }
         }
     }
 

@@ -41,6 +41,7 @@ use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
@@ -178,6 +179,19 @@ impl SubqueryRewriter {
                 ))
             }
 
+            Scalar::NotExpr(expr) => {
+                let (argument, s_expr) =
+                    self.try_rewrite_subquery(&expr.argument, s_expr, false)?;
+                Ok((
+                    NotExpr {
+                        argument: Box::new(argument),
+                        return_type: expr.return_type.clone(),
+                    }
+                    .into(),
+                    s_expr,
+                ))
+            }
+
             Scalar::ComparisonExpr(expr) => {
                 let (left, s_expr) = self.try_rewrite_subquery(&expr.left, s_expr, false)?;
                 let (right, s_expr) = self.try_rewrite_subquery(&expr.right, &s_expr, false)?;
@@ -205,6 +219,7 @@ impl SubqueryRewriter {
                 }
 
                 let expr: Scalar = FunctionCall {
+                    params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
                     return_type: func.return_type.clone(),
@@ -297,6 +312,7 @@ impl SubqueryRewriter {
                 let scalar = if flatten_info.from_count_func {
                     // convert count aggregate function to multi_if function, if count() is not null, then count() else 0
                     let is_null = Scalar::FunctionCall(FunctionCall {
+                        params: vec![],
                         arguments: vec![column_ref.clone()],
                         func_name: "is_not_null".to_string(),
                         return_type: Box::new(DataType::Boolean),
@@ -309,6 +325,7 @@ impl SubqueryRewriter {
                     });
                     Scalar::CastExpr(CastExpr {
                         argument: Box::new(Scalar::FunctionCall(FunctionCall {
+                            params: vec![],
                             arguments: vec![is_null, column_ref.clone(), zero],
                             func_name: "if".to_string(),
                             return_type: Box::new(
@@ -321,9 +338,8 @@ impl SubqueryRewriter {
                         ),
                     })
                 } else if subquery.typ == SubqueryType::NotExists {
-                    Scalar::FunctionCall(FunctionCall {
-                        arguments: vec![column_ref],
-                        func_name: "not".to_string(),
+                    Scalar::NotExpr(NotExpr {
+                        argument: Box::new(column_ref),
                         return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
                     })
                 } else {

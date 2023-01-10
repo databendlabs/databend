@@ -24,6 +24,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
@@ -86,6 +87,11 @@ impl<'a> GroupingChecker<'a> {
                 return_type: scalar.return_type.clone(),
             }
             .into()),
+            Scalar::NotExpr(scalar) => Ok(NotExpr {
+                argument: Box::new(self.resolve(&scalar.argument, span)?),
+                return_type: scalar.return_type.clone(),
+            }
+            .into()),
             Scalar::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
                 left: Box::new(self.resolve(&scalar.left, span)?),
@@ -100,6 +106,7 @@ impl<'a> GroupingChecker<'a> {
                     .map(|arg| self.resolve(arg, span))
                     .collect::<Result<Vec<Scalar>>>()?;
                 Ok(FunctionCall {
+                    params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
                     return_type: func.return_type.clone(),

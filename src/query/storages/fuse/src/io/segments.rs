@@ -21,11 +21,11 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use common_storages_table_meta::caches::LoadParams;
-use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
 use futures_util::future;
 use opendal::Operator;
+use storages_common_table_meta::caches::LoadParams;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
 use tracing::Instrument;
 
 use crate::io::MetaReaders;
