@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args, clippy::too_many_arguments, clippy::type_complexity, clippy::vec_box)]
+// added for nightly-2022-12-15
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::match_single_binding)]
 
+
+#![allow(clippy::too_many_arguments, clippy::type_complexity, clippy::vec_box)]
 #![allow(dead_code)]
 #![allow(unreachable_patterns)]
 #![allow(unused_imports)]
