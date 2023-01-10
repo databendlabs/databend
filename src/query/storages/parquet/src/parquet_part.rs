@@ -19,7 +19,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use common_arrow::parquet::compression::Compression as ParquetCompression;
+use common_arrow::parquet::compression::Compression;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
@@ -61,48 +61,6 @@ impl ParquetLocationPart {
             None => Err(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to ParquetLocationPart.",
             )),
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Eq, PartialEq, Hash, Clone, Copy)]
-pub enum Compression {
-    Uncompressed,
-    Snappy,
-    Gzip,
-    Lzo,
-    Brotli,
-    Lz4,
-    Zstd,
-    Lz4Raw,
-}
-
-impl From<Compression> for ParquetCompression {
-    fn from(value: Compression) -> Self {
-        match value {
-            Compression::Uncompressed => ParquetCompression::Uncompressed,
-            Compression::Snappy => ParquetCompression::Snappy,
-            Compression::Gzip => ParquetCompression::Gzip,
-            Compression::Lzo => ParquetCompression::Lzo,
-            Compression::Brotli => ParquetCompression::Brotli,
-            Compression::Lz4 => ParquetCompression::Lz4,
-            Compression::Zstd => ParquetCompression::Zstd,
-            Compression::Lz4Raw => ParquetCompression::Lz4Raw,
-        }
-    }
-}
-
-impl From<ParquetCompression> for Compression {
-    fn from(value: ParquetCompression) -> Self {
-        match value {
-            ParquetCompression::Uncompressed => Compression::Uncompressed,
-            ParquetCompression::Snappy => Compression::Snappy,
-            ParquetCompression::Gzip => Compression::Gzip,
-            ParquetCompression::Lzo => Compression::Lzo,
-            ParquetCompression::Brotli => Compression::Brotli,
-            ParquetCompression::Lz4 => Compression::Lz4,
-            ParquetCompression::Zstd => Compression::Zstd,
-            ParquetCompression::Lz4Raw => Compression::Lz4Raw,
         }
     }
 }

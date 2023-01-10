@@ -149,7 +149,7 @@ impl ParquetReader {
                     PageMetaData {
                         column_start: meta.offset,
                         num_values: meta.length as i64,
-                        compression: meta.compression.into(),
+                        compression: meta.compression,
                         descriptor: descriptor.descriptor.clone(),
                     },
                     Arc::new(|_, _| true),
@@ -192,7 +192,7 @@ impl ParquetReader {
                     PageMetaData {
                         column_start: meta.offset,
                         num_values: meta.length as i64,
-                        compression: meta.compression.into(),
+                        compression: meta.compression,
                         descriptor: descriptor.descriptor.clone(),
                     },
                     Arc::new(move |_, header| {
