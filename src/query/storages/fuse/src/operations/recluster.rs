@@ -39,8 +39,6 @@ use crate::pruning::BlockPruner;
 use crate::FuseTable;
 use crate::TableMutator;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
 impl FuseTable {
@@ -97,8 +95,7 @@ impl FuseTable {
         } else {
             1.0
         };
-        let block_per_seg =
-            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+
         let mut mutator = ReclusterMutator::try_create(
             ctx.clone(),
             self.meta_location_generator.clone(),
@@ -199,14 +196,12 @@ impl FuseTable {
             FuseTableSink::try_create(
                 input,
                 ctx.clone(),
-                block_per_seg,
+                self.get_write_settings(),
                 self.operator.clone(),
                 self.meta_location_generator().clone(),
                 cluster_stats_gen.clone(),
                 block_compact_thresholds,
                 self.table_info.schema(),
-                self.storage_format,
-                self.table_compression,
                 None,
             )
         })?;

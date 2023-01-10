@@ -51,7 +51,7 @@ pub fn write_block(
                 arrow_schema,
                 common_arrow::native::write::WriteOptions {
                     compression: write_settings.table_compression.into(),
-                    max_page_size: Some(write_settings.native_max_page_size),
+                    max_page_size: Some(write_settings.max_page_size),
                 },
             );
 
