@@ -122,7 +122,7 @@ pub fn replace_nth_char(s: &str, idx: usize, newchar: char) -> String {
 /// This used for settings string unescape, like unescape format_field_delimiter from `\\x01` to `\x01`.
 pub fn unescape_string(escape_str: &str) -> Result<String> {
     enquote::unescape(escape_str, None)
-        .map_err(|e| ErrorCode::Internal(format!("unescape:{escape_str} error:{e:?}")))
+        .map_err(|e| ErrorCode::Internal(format!("unescape:{} error:{:?}", escape_str, e)))
 }
 
 pub fn convert_byte_size(num: f64) -> String {
@@ -139,7 +139,7 @@ pub fn convert_byte_size(num: f64) -> String {
     );
     let pretty_bytes = format!("{:.02}", num / delimiter.powi(exponent));
     let unit = units[exponent as usize];
-    format!("{negative}{pretty_bytes} {unit}")
+    format!("{}{} {}", negative, pretty_bytes, unit)
 }
 
 pub fn convert_number_size(num: f64) -> String {
@@ -155,7 +155,7 @@ pub fn convert_number_size(num: f64) -> String {
     ];
 
     if num < 1_f64 {
-        return format!("{negative}{num}");
+        return format!("{}{}", negative, num);
     }
     let delimiter = 1000_f64;
     let exponent = std::cmp::min(
@@ -167,5 +167,5 @@ pub fn convert_number_size(num: f64) -> String {
         .unwrap()
         * 1_f64;
     let unit = units[exponent as usize];
-    format!("{negative}{pretty_bytes}{unit}")
+    format!("{}{}{}", negative, pretty_bytes, unit)
 }

@@ -53,7 +53,7 @@ impl DataValue {
         let s = self.to_string();
         if single_quote {
             if let DataValue::String(_) = self {
-                return format!("'{s}'");
+                return format!("'{}'", s);
             }
         }
         s
@@ -64,7 +64,8 @@ impl DataValue {
             DataValue::Int64(v) if *v >= 0 => Ok(*v as u64),
             DataValue::UInt64(v) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected:{other:?} to get u64 number"
+                "Unexpected:{:?} to get u64 number",
+                other
             ))),
         }
     }
@@ -74,7 +75,8 @@ impl DataValue {
             DataValue::Int64(v) => Ok(*v),
             DataValue::UInt64(v) => Ok(*v as i64),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected:{other:?} to get i64 number"
+                "Unexpected:{:?} to get i64 number",
+                other
             ))),
         }
     }
@@ -83,7 +85,8 @@ impl DataValue {
         match self {
             DataValue::Boolean(v) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected:{other:?} to get boolean"
+                "Unexpected:{:?} to get boolean",
+                other
             ))),
         }
     }
@@ -94,7 +97,8 @@ impl DataValue {
             DataValue::UInt64(v) => Ok(*v as f64),
             DataValue::Float64(v) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected:{other:?} to get f64 number"
+                "Unexpected:{:?} to get f64 number",
+                other
             ))),
         }
     }
@@ -107,7 +111,8 @@ impl DataValue {
             DataValue::String(v) => Ok(v.to_owned()),
             DataValue::Variant(v) => Ok(v.to_string().into_bytes()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected:{other:?} to get string"
+                "Unexpected:{:?} to get string",
+                other
             ))),
         }
     }
@@ -116,7 +121,8 @@ impl DataValue {
         match self {
             DataValue::Array(vals) => Ok(vals.to_vec()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected:{other:?} to get array values"
+                "Unexpected:{:?} to get array values",
+                other
             ))),
         }
     }
@@ -125,7 +131,8 @@ impl DataValue {
         match self {
             DataValue::Struct(vals) => Ok(vals.to_vec()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected:{other:?} to get struct values"
+                "Unexpected:{:?} to get struct values",
+                other
             ))),
         }
     }
@@ -153,15 +160,15 @@ impl fmt::Display for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             DataValue::Null => write!(f, "NULL"),
-            DataValue::Boolean(v) => write!(f, "{v}"),
-            DataValue::Float64(v) => write!(f, "{v}"),
-            DataValue::Int64(v) => write!(f, "{v}"),
-            DataValue::UInt64(v) => write!(f, "{v}"),
+            DataValue::Boolean(v) => write!(f, "{}", v),
+            DataValue::Float64(v) => write!(f, "{}", v),
+            DataValue::Int64(v) => write!(f, "{}", v),
+            DataValue::UInt64(v) => write!(f, "{}", v),
             DataValue::String(v) => match std::str::from_utf8(v) {
-                Ok(v) => write!(f, "{v}"),
+                Ok(v) => write!(f, "{}", v),
                 Err(_e) => {
                     for c in v {
-                        write!(f, "{c:02x}")?;
+                        write!(f, "{:02x}", c)?;
                     }
                     Ok(())
                 }
@@ -186,7 +193,7 @@ impl fmt::Display for DataValue {
                         .join(", ")
                 )
             }
-            DataValue::Variant(v) => write!(f, "{v}"),
+            DataValue::Variant(v) => write!(f, "{}", v),
         }
     }
 }
@@ -195,14 +202,14 @@ impl fmt::Debug for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DataValue::Null => write!(f, "NULL"),
-            DataValue::Boolean(v) => write!(f, "{v}"),
-            DataValue::Int64(v) => write!(f, "{v}"),
-            DataValue::UInt64(v) => write!(f, "{v}"),
-            DataValue::Float64(v) => write!(f, "{v}"),
-            DataValue::String(_) => write!(f, "{self}"),
-            DataValue::Array(_) => write!(f, "{self}"),
-            DataValue::Struct(_) => write!(f, "{self}"),
-            DataValue::Variant(v) => write!(f, "{v}"),
+            DataValue::Boolean(v) => write!(f, "{}", v),
+            DataValue::Int64(v) => write!(f, "{}", v),
+            DataValue::UInt64(v) => write!(f, "{}", v),
+            DataValue::Float64(v) => write!(f, "{}", v),
+            DataValue::String(_) => write!(f, "{}", self),
+            DataValue::Array(_) => write!(f, "{}", self),
+            DataValue::Struct(_) => write!(f, "{}", self),
+            DataValue::Variant(v) => write!(f, "{}", v),
         }
     }
 }

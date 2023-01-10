@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
+
 #[macro_use]
 extern crate criterion;
 
@@ -50,7 +52,7 @@ fn bench_u64(c: &mut Criterion) {
 
     for i in 0..column.len() {
         let key = unsafe { column.index_unchecked(i) };
-        assert!(filter.contains(&key), "key {key} present");
+        assert!(filter.contains(&key), "key {} present", key);
     }
 
     c.bench_function("xor8_filter_u64_1m_rows_build_from_column_to_values", |b| {
@@ -71,7 +73,7 @@ fn bench_string(c: &mut Criterion) {
 
     for i in 0..column.len() {
         let key = unsafe { column.index_unchecked(i) };
-        assert!(filter.contains(&key), "key {key} present");
+        assert!(filter.contains(&key), "key {} present", key);
     }
 
     c.bench_function(

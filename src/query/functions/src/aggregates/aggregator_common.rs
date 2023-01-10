@@ -29,7 +29,8 @@ use super::StateAddr;
 pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-            "{name} expect to have single parameters, but got {actual}"
+            "{} expect to have single parameters, but got {}",
+            name, actual
         )));
     }
     Ok(())
@@ -38,7 +39,8 @@ pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
 pub fn assert_unary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-            "{name} expect to have single arguments, but got {actual}"
+            "{} expect to have single arguments, but got {}",
+            name, actual
         )));
     }
     Ok(())
@@ -47,7 +49,8 @@ pub fn assert_unary_arguments<D: Display>(name: D, actual: usize) -> Result<()> 
 pub fn assert_binary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 2 {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-            "{name} expect to have two arguments, but got {actual}"
+            "{} expect to have two arguments, but got {}",
+            name, actual
         )));
     }
     Ok(())
@@ -56,7 +59,8 @@ pub fn assert_binary_arguments<D: Display>(name: D, actual: usize) -> Result<()>
 pub fn assert_arguments<D: Display>(name: D, actual: usize, expected: usize) -> Result<()> {
     if actual != expected {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-            "{name} expect to have {expected} arguments, but got {actual}"
+            "{} expect to have {} arguments, but got {}",
+            name, expected, actual
         )));
     }
     Ok(())

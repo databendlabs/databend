@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
+
 mod grpc_action;
 mod grpc_client;
 mod kv_api_impl;
@@ -33,7 +35,7 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 
     let semver = semver.strip_prefix('v').unwrap_or(semver);
 
-    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {semver:?}: {e}"))
+    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
 });
 
 /// Oldest compatible nightly metasrv version

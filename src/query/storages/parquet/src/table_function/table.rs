@@ -78,14 +78,14 @@ impl ParquetTable {
                 Scalar::String(path) => {
                     let maybe_glob_path = std::str::from_utf8(path).unwrap();
                     let paths = glob::glob(maybe_glob_path)
-                        .map_err(|e| ErrorCode::Internal(format!("glob error: {e}")))?;
+                        .map_err(|e| ErrorCode::Internal(format!("glob error: {}", e)))?;
                     for entry in paths {
                         match entry {
                             Ok(path) => {
                                 file_locations.push(path.to_string_lossy().to_string());
                             }
                             Err(e) => {
-                                return Err(ErrorCode::Internal(format!("glob error: {e}")));
+                                return Err(ErrorCode::Internal(format!("glob error: {}", e)));
                             }
                         }
                     }
@@ -112,7 +112,7 @@ impl ParquetTable {
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
-            desc: format!("'{database_name}'.'{table_func_name}'"),
+            desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
                 schema: Arc::new(TableSchema::from(&arrow_schema)),

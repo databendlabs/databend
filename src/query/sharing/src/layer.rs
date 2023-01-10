@@ -64,7 +64,8 @@ pub fn create_share_table_operator(
         Some(share_endpoint_address) => {
             let signer = SharedSigner::new(
                 &format!(
-                    "http://{share_endpoint_address}/tenant/{share_tenant_id}/{share_name}/table/{table_name}/presign"
+                    "http://{}/tenant/{}/{}/table/{}/presign",
+                    share_endpoint_address, share_tenant_id, share_name, table_name
                 ),
                 share_endpoint_token,
             );

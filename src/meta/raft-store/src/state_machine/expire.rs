@@ -112,7 +112,7 @@ mod tests {
     fn test_expire_key_display() -> anyhow::Result<()> {
         let ms = 1666670258202;
         let k = ExpireKey::new(ms, 1000);
-        assert_eq!("2022-10-25-03-57-38=1000", format!("{k}"));
+        assert_eq!("2022-10-25-03-57-38=1000", format!("{}", k));
 
         Ok(())
     }

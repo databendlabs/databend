@@ -107,7 +107,8 @@ impl StageTable {
             if !pattern.is_empty() {
                 let regex = Regex::new(pattern).map_err(|e| {
                     ErrorCode::SyntaxException(format!(
-                        "Pattern format invalid, got:{pattern}, error:{e:?}"
+                        "Pattern format invalid, got:{}, error:{:?}",
+                        pattern, e
                     ))
                 })?;
                 all_files.retain(|v| regex.is_match(&v.path));

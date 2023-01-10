@@ -60,7 +60,7 @@ impl InputFormatNDJson {
                 &json[f.name().to_lowercase()]
             };
             field_decoder.read_field(deser, value).map_err(|e| {
-                let value_str = format!("{value:?}");
+                let value_str = format!("{:?}", value);
                 ErrorCode::BadBytes(format!(
                     "{}. column={} value={}",
                     e,

@@ -329,7 +329,8 @@ impl MemoryTableSource {
                 Self::traverse_paths(&values[..], &path[1..])
             }
             _ => Err(ErrorCode::BadArguments(format!(
-                "Unable to get column by paths: {path:?}"
+                "Unable to get column by paths: {:?}",
+                path
             ))),
         }
     }

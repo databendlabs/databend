@@ -426,7 +426,8 @@ impl TryInto<InnerCatalogConfig> for CatalogConfig {
         match self.ty.as_str() {
             "hive" => Ok(InnerCatalogConfig::Hive(self.hive.try_into()?)),
             ty => Err(ErrorCode::CatalogNotSupported(format!(
-                "got unsupported catalog type in config: {ty}"
+                "got unsupported catalog type in config: {}",
+                ty
             ))),
         }
     }

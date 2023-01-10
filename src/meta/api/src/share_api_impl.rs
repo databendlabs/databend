@@ -456,7 +456,7 @@ impl<KV: KVApi> ShareApi for KV {
                     let res = get_share_account_meta_or_err(
                         self,
                         &share_account_key,
-                        format!("remove_share_tenants: {share_id}"),
+                        format!("remove_share_tenants: {}", share_id),
                     )
                     .await;
 
@@ -850,7 +850,7 @@ impl<KV: KVApi> ShareApi for KV {
                 db_has_to_exist(
                     db_seq,
                     &db_name_key,
-                    format!("get_grant_privileges_of_object: {db_name_key}"),
+                    format!("get_grant_privileges_of_object: {}", db_name_key),
                 )?;
                 let object = ShareGrantObject::Database(db_id);
                 let (_seq, share_ids) = get_object_shared_by_share_ids(self, &object).await?;
@@ -887,7 +887,7 @@ impl<KV: KVApi> ShareApi for KV {
                 db_has_to_exist(
                     db_seq,
                     &db_name_key,
-                    format!("get_grant_privileges_of_object: {db_name_key}"),
+                    format!("get_grant_privileges_of_object: {}", db_name_key),
                 )?;
 
                 let table_name_key = DBIdTableName {
@@ -902,7 +902,7 @@ impl<KV: KVApi> ShareApi for KV {
                         db_name: db_name.clone(),
                         table_name,
                     },
-                    format!("get_grant_privileges_of_object: {table_name_key}"),
+                    format!("get_grant_privileges_of_object: {}", table_name_key),
                 )?;
 
                 let object = ShareGrantObject::Table(table_id);
@@ -1062,14 +1062,14 @@ async fn get_inbound_share_info_by_tenant(
     let (_share_meta_seq, share_meta) = get_share_meta_by_id_or_err(
         kv_api,
         share_id,
-        format!("get_inbound_share_infos_by_tenant: {share_id}"),
+        format!("get_inbound_share_infos_by_tenant: {}", share_id),
     )
     .await?;
 
     let (_seq, share_name) = get_share_id_to_name_or_err(
         kv_api,
         share_id,
-        format!("get_inbound_share_infos_by_tenant: {share_id}"),
+        format!("get_inbound_share_infos_by_tenant: {}", share_id),
     )
     .await?;
     let database_name = get_share_database_name(kv_api, &share_meta, &share_name).await?;
@@ -1081,7 +1081,10 @@ async fn get_inbound_share_info_by_tenant(
     let (_seq, meta) = get_share_account_meta_or_err(
         kv_api,
         &share_account_key,
-        format!("get_inbound_share_infos_by_tenant's account: {share_id}/{tenant}"),
+        format!(
+            "get_inbound_share_infos_by_tenant's account: {}/{}",
+            share_id, tenant
+        ),
     )
     .await?;
 
@@ -1218,7 +1221,7 @@ async fn get_share_object_seq_and_id(
             let (_db_id_seq, db_id, db_meta_seq, db_meta) = get_db_or_err(
                 kv_api,
                 &name_key,
-                format!("get_share_object_seq_and_id: {name_key}"),
+                format!("get_share_object_seq_and_id: {}", name_key),
             )
             .await?;
 
@@ -1238,7 +1241,7 @@ async fn get_share_object_seq_and_id(
             db_has_to_exist(
                 db_seq,
                 &db_name_key,
-                format!("get_share_object_seq_and_id: {db_name_key}"),
+                format!("get_share_object_seq_and_id: {}", db_name_key),
             )?;
 
             let name_key = DBIdTableName {
@@ -1254,7 +1257,7 @@ async fn get_share_object_seq_and_id(
                     db_name: db_name.clone(),
                     table_name: table_name.clone(),
                 },
-                format!("get_share_object_seq_and_id: {name_key}"),
+                format!("get_share_object_seq_and_id: {}", name_key),
             )?;
 
             let tbid = TableId { table_id };
@@ -1265,7 +1268,7 @@ async fn get_share_object_seq_and_id(
                 return Err(KVAppError::AppError(AppError::UnknownTable(
                     UnknownTable::new(
                         &name_key.table_name,
-                        format!("get_share_object_seq_and_id: {name_key}"),
+                        format!("get_share_object_seq_and_id: {}", name_key),
                     ),
                 )));
             }
@@ -1331,7 +1334,7 @@ async fn drop_accounts_granted_from_share(
         let ret = get_share_account_meta_or_err(
             kv_api,
             &share_account_key,
-            format!("drop_share's account: {share_id}/{account}"),
+            format!("drop_share's account: {}/{}", share_id, account),
         )
         .await;
 

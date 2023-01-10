@@ -30,7 +30,7 @@ impl Display for ShowCatalogsStmt<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "SHOW CATALOGS")?;
         if let Some(limit) = &self.limit {
-            write!(f, " {limit}")?
+            write!(f, " {}", limit)?
         }
 
         Ok(())
@@ -66,7 +66,7 @@ impl Display for CreateCatalogStmt {
         write!(f, " TYPE='{}'", self.catalog_type)?;
         write!(f, " CONNECTION = (")?;
         for (k, v) in self.options.iter() {
-            write!(f, " {k}='{v}'")?;
+            write!(f, " {}='{}'", k, v)?;
         }
         write!(f, " )")
     }

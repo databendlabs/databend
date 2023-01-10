@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
+
 use std::env;
 use std::fs::File;
 use std::io::BufRead;
@@ -70,13 +72,13 @@ fn main() {
     let output_file_path = dest_path.join("hms_patched.rs");
     let input = BufReader::new(
         File::open(&input_file_path)
-            .expect(format!("open generated file failure: {input_file_path:?}").as_str()),
+            .expect(format!("open generated file failure: {:?}", input_file_path).as_str()),
     );
     let mut output = File::create(output_file_path).expect("create output patch file failure");
     for line in input.lines() {
         let line = line.expect("readline failure");
         if !line.starts_with("#![") {
-            std::writeln!(output, "{line}").expect("write line to patched file failure");
+            std::writeln!(output, "{}", line).expect("write line to patched file failure");
         }
     }
 }

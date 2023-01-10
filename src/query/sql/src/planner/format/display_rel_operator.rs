@@ -77,7 +77,7 @@ impl Display for FormatContext {
                 RelOperator::Pattern(_) => write!(f, "Pattern"),
                 RelOperator::DummyTableScan(_) => write!(f, "DummyTableScan"),
             },
-            Self::Text(text) => write!(f, "{text}"),
+            Self::Text(text) => write!(f, "{}", text),
         }
     }
 }
@@ -382,7 +382,8 @@ pub fn logical_join_to_format_tree(
         vec![
             vec![
                 FormatTreeNode::new(FormatContext::Text(format!(
-                    "equi conditions: [{equi_conditions}]"
+                    "equi conditions: [{}]",
+                    equi_conditions
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "non-equi conditions: [{}]",
@@ -427,10 +428,11 @@ fn join_to_format_tree(
         },
         vec![
             vec![
-                FormatTreeNode::new(FormatContext::Text(format!("build keys: [{build_keys}]"))),
-                FormatTreeNode::new(FormatContext::Text(format!("probe keys: [{probe_keys}]"))),
+                FormatTreeNode::new(FormatContext::Text(format!("build keys: [{}]", build_keys))),
+                FormatTreeNode::new(FormatContext::Text(format!("probe keys: [{}]", probe_keys))),
                 FormatTreeNode::new(FormatContext::Text(format!(
-                    "other filters: [{join_filters}]"
+                    "other filters: [{}]",
+                    join_filters
                 ))),
             ],
             children,
@@ -463,9 +465,13 @@ fn aggregate_to_format_tree(
         },
         vec![
             vec![
-                FormatTreeNode::new(FormatContext::Text(format!("group items: [{group_items}]"))),
                 FormatTreeNode::new(FormatContext::Text(format!(
-                    "aggregate functions: [{agg_funcs}]"
+                    "group items: [{}]",
+                    group_items
+                ))),
+                FormatTreeNode::new(FormatContext::Text(format!(
+                    "aggregate functions: [{}]",
+                    agg_funcs
                 ))),
             ],
             children,
@@ -492,7 +498,8 @@ fn filter_to_format_tree(
         },
         vec![
             vec![FormatTreeNode::new(FormatContext::Text(format!(
-                "filters: [{scalars}]"
+                "filters: [{}]",
+                scalars
             )))],
             children,
         ]
@@ -519,7 +526,8 @@ fn eval_scalar_to_format_tree(
         },
         vec![
             vec![FormatTreeNode::new(FormatContext::Text(format!(
-                "scalars: [{scalars}]"
+                "scalars: [{}]",
+                scalars
             )))],
             children,
         ]
@@ -559,8 +567,8 @@ fn sort_to_format_tree(
         },
         vec![
             vec![
-                FormatTreeNode::new(FormatContext::Text(format!("sort keys: [{scalars}]"))),
-                FormatTreeNode::new(FormatContext::Text(format!("limit: [{limit}]"))),
+                FormatTreeNode::new(FormatContext::Text(format!("sort keys: [{}]", scalars))),
+                FormatTreeNode::new(FormatContext::Text(format!("limit: [{}]", limit))),
             ],
             children,
         ]
@@ -581,7 +589,7 @@ fn limit_to_format_tree(
         },
         vec![
             vec![
-                FormatTreeNode::new(FormatContext::Text(format!("limit: [{limit}]"))),
+                FormatTreeNode::new(FormatContext::Text(format!("limit: [{}]", limit))),
                 FormatTreeNode::new(FormatContext::Text(format!("offset: [{}]", op.offset))),
             ],
             children,

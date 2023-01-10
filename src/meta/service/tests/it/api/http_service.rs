@@ -43,7 +43,7 @@ async fn test_http_service_tls_server() -> Result<()> {
 
     let mut srv = HttpService::create(conf, meta_node);
     // test cert is issued for "localhost"
-    let url = format!("https://{TEST_CN_NAME}:30002/v1/health");
+    let url = format!("https://{}:30002/v1/health", TEST_CN_NAME);
 
     // load cert
     let mut buf = Vec::new();

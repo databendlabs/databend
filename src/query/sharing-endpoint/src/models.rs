@@ -155,7 +155,8 @@ impl SharingConfig {
             Some(share) => {
                 if !share.tenants.contains(&tenant_id) {
                     return Err(ErrorCode::AuthenticateFailure(format!(
-                        "tenant {tenant_id} is not allowed to access share {share_name}"
+                        "tenant {} is not allowed to access share {}",
+                        tenant_id, share_name
                     )));
                 }
                 // find table matches table_name

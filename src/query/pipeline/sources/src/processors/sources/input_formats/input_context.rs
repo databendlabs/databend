@@ -140,7 +140,8 @@ impl InputContext {
             StageFileFormatType::Parquet => Ok(Arc::new(InputFormatParquet {})),
             StageFileFormatType::Xml => Ok(Arc::new(InputFormatXML::create())),
             format => Err(ErrorCode::Internal(format!(
-                "Unsupported file format: {format:?}"
+                "Unsupported file format: {:?}",
+                format
             ))),
         }
     }

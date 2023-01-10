@@ -39,7 +39,7 @@ impl SettingMgr {
     pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
         Ok(SettingMgr {
             kv_api,
-            setting_prefix: format!("{USER_SETTING_API_KEY_PREFIX}/{tenant}"),
+            setting_prefix: format!("{}/{}", USER_SETTING_API_KEY_PREFIX, tenant),
         })
     }
 }
@@ -80,12 +80,13 @@ impl SettingApi for SettingMgr {
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
         let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown setting {name}")))?;
+            res.ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown setting {}", name)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
             Err(_) => Err(ErrorCode::UnknownVariable(format!(
-                "Unknown setting {name}"
+                "Unknown setting {}",
+                name
             ))),
         }
     }
@@ -103,7 +104,8 @@ impl SettingApi for SettingMgr {
             Ok(())
         } else {
             Err(ErrorCode::UnknownVariable(format!(
-                "Unknown setting {name}"
+                "Unknown setting {}",
+                name
             )))
         }
     }

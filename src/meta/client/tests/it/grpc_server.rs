@@ -132,7 +132,7 @@ pub fn start_grpc_server() -> String {
 pub fn start_grpc_server_with_service(svc: impl MetaService) -> String {
     let mut rng = rand::thread_rng();
     let port = rng.gen_range(10000..20000);
-    let addr = format!("127.0.0.1:{port}").parse().unwrap();
+    let addr = format!("127.0.0.1:{}", port).parse().unwrap();
 
     let svc = MetaServiceServer::new(svc);
 

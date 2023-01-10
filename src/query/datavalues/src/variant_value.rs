@@ -70,7 +70,8 @@ impl FromStr for VariantValue {
         match serde_json::Value::from_str(s) {
             Ok(v) => Ok(VariantValue::from(v)),
             Err(_) => Err(ErrorCode::StrParseError(format!(
-                "Unknown VariantValue: {s}"
+                "Unknown VariantValue: {}",
+                s
             ))),
         }
     }

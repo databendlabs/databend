@@ -252,7 +252,7 @@ impl ThreadTracker {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
             if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
                 let _guard = LimitMemGuard::enter_unlimited();
-                ThreadTracker::replace_error_message(Some(format!("{out_of_limit:?}")));
+                ThreadTracker::replace_error_message(Some(format!("{:?}", out_of_limit)));
                 return Err(AllocError);
             }
         }

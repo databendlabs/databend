@@ -93,7 +93,7 @@ fn pretty_source(source: InsertSource) -> RcDoc {
                             .append(RcDoc::space())
                             .append(RcDoc::text("="))
                             .append(RcDoc::space())
-                            .append(RcDoc::text(format!("{v:?}")))
+                            .append(RcDoc::text(format!("{:?}", v)))
                     }))
                     .group(),
                 ))
@@ -183,7 +183,7 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc {
                         copy_stmt
                             .files
                             .into_iter()
-                            .map(|file| RcDoc::text(format!("{file:?}"))),
+                            .map(|file| RcDoc::text(format!("{:?}", file))),
                     )
                     .group(),
                 ))
@@ -206,7 +206,7 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc {
                             .append(RcDoc::space())
                             .append(RcDoc::text("="))
                             .append(RcDoc::space())
-                            .append(RcDoc::text(format!("{v:?}")))
+                            .append(RcDoc::text(format!("{:?}", v)))
                     }))
                     .group(),
                 ))

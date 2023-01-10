@@ -112,7 +112,7 @@ impl SharingAccessor {
         let loc_prefix = loc_prefix.strip_prefix(self.get_root().as_str()).unwrap();
 
         let file_path = truncate_root(self.get_root(), input.file_name.clone());
-        let obj_path = format!("{loc_prefix}/{file_path}");
+        let obj_path = format!("{}/{}", loc_prefix, file_path);
         let op = self.op.clone();
         if input.method == "HEAD" {
             let s = op

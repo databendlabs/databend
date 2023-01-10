@@ -307,7 +307,8 @@ pub trait InputFormatPipe: Sized + Send + 'static {
             if n == 0 {
                 if total_read != size {
                     return Err(ErrorCode::BadBytes(format!(
-                        "split {split_info} expect {size} bytes, read only {total_read} bytes"
+                        "split {} expect {} bytes, read only {} bytes",
+                        split_info, size, total_read
                     )));
                 }
                 break;

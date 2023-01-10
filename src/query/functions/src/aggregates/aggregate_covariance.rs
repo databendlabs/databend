@@ -300,7 +300,8 @@ pub fn try_create_aggregate_covariance<R: AggregateCovariance>(
     });
 
     Err(ErrorCode::BadDataValueType(format!(
-        "Expected number data type, but got {arguments:?}"
+        "Expected number data type, but got {:?}",
+        arguments
     )))
 }
 

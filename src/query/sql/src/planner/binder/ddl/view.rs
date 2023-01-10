@@ -47,7 +47,7 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
-        let subquery = format!("{query}");
+        let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
             if_not_exists: *if_not_exists,
@@ -81,7 +81,7 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
-        let subquery = format!("{query}");
+        let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
             tenant,

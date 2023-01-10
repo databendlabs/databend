@@ -140,7 +140,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     {
         let to_addr = tc1.config.raft_config.raft_api_addr().await?;
 
-        let mut client = RaftServiceClient::connect(format!("http://{to_addr}")).await?;
+        let mut client = RaftServiceClient::connect(format!("http://{}", to_addr)).await?;
         let admin_req = join_req(
             node_id,
             tc3.config.raft_config.raft_api_addr().await?,

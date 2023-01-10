@@ -228,7 +228,7 @@ impl TableInfo {
     /// Create a TableInfo with only db, table, schema
     pub fn simple(db: &str, table: &str, schema: Arc<TableSchema>) -> TableInfo {
         TableInfo {
-            desc: format!("'{db}'.'{table}'"),
+            desc: format!("'{}'.'{}'", db, table),
             name: table.to_string(),
             meta: TableMeta {
                 schema,
@@ -241,7 +241,7 @@ impl TableInfo {
     pub fn new(db_name: &str, table_name: &str, ident: TableIdent, meta: TableMeta) -> TableInfo {
         TableInfo {
             ident,
-            desc: format!("'{db_name}'.'{table_name}'"),
+            desc: format!("'{}'.'{}'", db_name, table_name),
             name: table_name.to_string(),
             meta,
             ..Default::default()

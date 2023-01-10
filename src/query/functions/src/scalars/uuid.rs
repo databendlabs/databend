@@ -37,7 +37,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             for _ in 0..ctx.num_rows {
                 let value = UUIDv4::create();
                 offsets.push(offsets.last().unwrap() + 36u64);
-                write!(&mut values, "{value:x}").unwrap();
+                write!(&mut values, "{:x}", value).unwrap();
             }
 
             let col = StringColumn {

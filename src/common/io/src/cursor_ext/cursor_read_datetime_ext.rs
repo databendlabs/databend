@@ -48,8 +48,10 @@ fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
     if size > 0 && size < 3 {
         Ok(lexical_core::FromLexical::from_lexical(buf).unwrap())
     } else {
-        let msg =
-            format!("err with parse time part. Format like this:[03:00:00], got {size} digits");
+        let msg = format!(
+            "err with parse time part. Format like this:[03:00:00], got {} digits",
+            size
+        );
         Err(ErrorCode::BadBytes(msg))
     }
 }
@@ -83,7 +85,7 @@ where T: AsRef<[u8]>
         self.read_exact(buf.as_mut_slice())?;
         let mut v = std::str::from_utf8(buf.as_slice())
             .map_err_to_code(ErrorCode::BadBytes, || {
-                format!("Cannot convert value:{buf:?} to utf8")
+                format!("Cannot convert value:{:?} to utf8", buf)
             })?;
 
         // convert zero date to `1970-01-01`
@@ -93,7 +95,7 @@ where T: AsRef<[u8]>
         let d = v
             .parse::<NaiveDate>()
             .map_err_to_code(ErrorCode::BadBytes, || {
-                format!("Cannot parse value:{v} to Date type")
+                format!("Cannot parse value:{} to Date type", v)
             })?;
         let mut dt = tz.from_local_datetime(&d.and_hms(0, 0, 0)).unwrap();
 
@@ -114,7 +116,7 @@ where T: AsRef<[u8]>
             let mut times = Vec::with_capacity(3);
             loop {
                 buf.clear();
-                let size = self.keep_read(&mut buf, |f| f.is_ascii_digit());
+                let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f));
                 if size == 0 {
                     break;
                 } else {
@@ -143,7 +145,7 @@ where T: AsRef<[u8]>
             // ms .microseconds
             let dt = if self.ignore_byte(b'.') {
                 buf.clear();
-                let size = self.keep_read(&mut buf, |f| f.is_ascii_digit());
+                let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f));
                 if size == 0 {
                     return Err(ErrorCode::BadBytes(
                         "err with parse micros second, format like this:[.123456]",
@@ -213,7 +215,7 @@ where T: AsRef<[u8]>
         west_tz: bool,
         calc_offset: impl Fn(i64, i64, &DateTime<Tz>) -> Result<DateTime<Tz>>,
     ) -> Result<DateTime<Tz>> {
-        let n = self.keep_read(buf, |f| f.is_ascii_digit());
+        let n = self.keep_read(buf, |f| (b'0'..=b'9').contains(&f));
         if n != 2 {
             // +0800 will err in there
             return Err(ErrorCode::BadBytes(
@@ -224,7 +226,7 @@ where T: AsRef<[u8]>
         if (0..15).contains(&hour_offset) {
             buf.clear();
             self.ignore_byte(b':');
-            if self.keep_read(buf, |f| f.is_ascii_digit()) != 2 {
+            if self.keep_read(buf, |f| (b'0'..=b'9').contains(&f)) != 2 {
                 // +08[other byte]00 will err in there, e.g. +08-00
                 return Err(ErrorCode::BadBytes(
                     "err with parse timezone, format like this:[+08:00]",
@@ -249,12 +251,14 @@ where T: AsRef<[u8]>
                 }
             } else {
                 Err(ErrorCode::BadBytes(format!(
-                    "err with parse minute_offset:[{minute_offset:?}], timezone gap: [-14:00,+14:00]"
+                    "err with parse minute_offset:[{:?}], timezone gap: [-14:00,+14:00]",
+                    minute_offset
                 )))
             }
         } else {
             Err(ErrorCode::BadBytes(format!(
-                "err with parse hour_offset:[{hour_offset:?}], timezone gap: [-14:00,+14:00]"
+                "err with parse hour_offset:[{:?}], timezone gap: [-14:00,+14:00]",
+                hour_offset
             )))
         }
     }

@@ -286,7 +286,10 @@ pub fn db_has_to_exist(
         debug!(seq, ?db_name_ident, "db does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownDatabase(
-            UnknownDatabase::new(&db_name_ident.db_name, format!("{msg}: {db_name_ident}")),
+            UnknownDatabase::new(
+                &db_name_ident.db_name,
+                format!("{}: {}", msg, db_name_ident),
+            ),
         )))
     } else {
         Ok(())
@@ -305,7 +308,7 @@ pub fn table_has_to_exist(
         debug!(seq, ?name_ident, "does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownTable(
-            UnknownTable::new(&name_ident.table_name, format!("{ctx}: {name_ident}")),
+            UnknownTable::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
         )))
     } else {
         Ok(())
@@ -345,7 +348,7 @@ fn share_meta_has_to_exist(seq: u64, share_id: u64, msg: impl Display) -> Result
         debug!(seq, ?share_id, "share meta does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShareId(
-            UnknownShareId::new(share_id, format!("{msg}: {share_id}")),
+            UnknownShareId::new(share_id, format!("{}: {}", msg, share_id)),
         )))
     } else {
         Ok(())
@@ -366,7 +369,7 @@ fn share_has_to_exist(
         Err(KVAppError::AppError(AppError::UnknownShare(
             UnknownShare::new(
                 &share_name_ident.share_name,
-                format!("{msg}: {share_name_ident}"),
+                format!("{}: {}", msg, share_name_ident),
             ),
         )))
     } else {
@@ -406,7 +409,7 @@ fn share_account_meta_has_to_exist(
             UnknownShareAccounts::new(
                 &[name_key.account.clone()],
                 name_key.share_id,
-                format!("{msg}: {name_key}"),
+                format!("{}: {}", msg, name_key),
             ),
         )))
     } else {
@@ -427,7 +430,7 @@ pub async fn get_share_id_to_name_or_err(
         debug!(share_name_seq, ?share_id, "share meta does not exist");
 
         return Err(KVAppError::AppError(AppError::UnknownShareId(
-            UnknownShareId::new(share_id, format!("{msg}: {share_id}")),
+            UnknownShareId::new(share_id, format!("{}: {}", msg, share_id)),
         )));
     }
 

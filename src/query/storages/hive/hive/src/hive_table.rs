@@ -805,7 +805,8 @@ async fn do_list_files_from_dir(
             }
             _ => {
                 return Err(ErrorCode::ReadTableDataError(format!(
-                    "{path} couldn't get file mode"
+                    "{} couldn't get file mode",
+                    path
                 )));
             }
         }

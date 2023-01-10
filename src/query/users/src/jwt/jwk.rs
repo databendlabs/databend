@@ -113,12 +113,12 @@ impl JwkKeyStore {
 
 impl JwkKeyStore {
     async fn load_keys(&self) -> Result<()> {
-        let response = reqwest::get(&self.url)
-            .await
-            .map_err(|e| ErrorCode::AuthenticateFailure(format!("Could not download JWKS: {e}")))?;
+        let response = reqwest::get(&self.url).await.map_err(|e| {
+            ErrorCode::AuthenticateFailure(format!("Could not download JWKS: {}", e))
+        })?;
         let body = response.text().await.unwrap();
         let jwk_keys = serde_json::from_str::<JwkKeys>(&body)
-            .map_err(|e| ErrorCode::InvalidConfig(format!("Failed to parse keys: {e}")))?;
+            .map_err(|e| ErrorCode::InvalidConfig(format!("Failed to parse keys: {}", e)))?;
         let mut new_keys: HashMap<String, PubKey> = HashMap::new();
         for k in &jwk_keys.keys {
             new_keys.insert(k.kid.to_string(), k.get_public_key()?);

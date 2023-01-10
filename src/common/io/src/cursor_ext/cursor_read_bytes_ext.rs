@@ -45,7 +45,7 @@ pub trait ReadBytesExt {
         if !self.ignore_bytes(bs) {
             return Err(std::io::Error::new(
                 ErrorKind::InvalidData,
-                format!("Expected to have bytes {bs:?}"),
+                format!("Expected to have bytes {:?}", bs),
             ));
         }
         Ok(())
@@ -55,7 +55,7 @@ pub trait ReadBytesExt {
         if !self.ignore_insensitive_bytes(bs) {
             return Err(std::io::Error::new(
                 ErrorKind::InvalidData,
-                format!("Expected to have insensitive bytes {bs:?}"),
+                format!("Expected to have insensitive bytes {:?}", bs),
             ));
         }
         Ok(())

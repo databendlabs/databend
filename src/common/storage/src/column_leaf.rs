@@ -86,7 +86,8 @@ impl ColumnLeaves {
             return match &column_leaf.children {
                 Some(ref children) => Self::traverse_path(children, &path[1..]),
                 None => Err(ErrorCode::Internal(format!(
-                    "Cannot get column_leaf by path: {path:?}"
+                    "Cannot get column_leaf by path: {:?}",
+                    path
                 ))),
             };
         }

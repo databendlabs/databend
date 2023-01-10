@@ -81,7 +81,7 @@ where
         writer.write_char(' ')?;
 
         let fmt_level = meta.level().as_str();
-        write!(writer, "{fmt_level:>5} ")?;
+        write!(writer, "{:>5} ", fmt_level)?;
 
         write!(writer, "{:0>15?} ", std::thread::current().name())?;
         write!(writer, "{:0>2?} ", std::thread::current().id())?;
@@ -98,7 +98,7 @@ where
                 let ext = span.extensions();
                 if let Some(fields) = &ext.get::<FormattedFields<N>>() {
                     if !fields.is_empty() {
-                        write!(writer, "{{{fields}}}")?;
+                        write!(writer, "{{{}}}", fields)?;
                     }
                 }
                 write!(writer, ":")?;

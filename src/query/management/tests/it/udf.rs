@@ -38,7 +38,7 @@ async fn test_add_udf() -> Result<()> {
         }) => {
             assert_eq!(value, serde_json::to_vec(&udf)?);
         }
-        catch => panic!("GetKVActionReply{catch:?}"),
+        catch => panic!("GetKVActionReply{:?}", catch),
     }
 
     Ok(())

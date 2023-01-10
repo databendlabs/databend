@@ -164,7 +164,7 @@ impl Runtime {
         let mut mem_stat_name = String::from("UnnamedRuntime");
 
         if let Some(thread_name) = thread_name.as_ref() {
-            mem_stat_name = format!("{thread_name}Runtime");
+            mem_stat_name = format!("{}Runtime", thread_name);
         }
 
         let mem_stat = MemStat::create(mem_stat_name);
@@ -252,7 +252,7 @@ impl Runtime {
             // Thus, the `futures` passed into this method is NOT suggested to be "materialized"
             // iterator, e.g. Vec<..>
             let permit = semaphore.acquire_owned().await.map_err(|e| {
-                ErrorCode::Internal(format!("semaphore closed, acquire permit failure. {e}"))
+                ErrorCode::Internal(format!("semaphore closed, acquire permit failure. {}", e))
             })?;
             let handler = self.handle.spawn(async move {
                 // take the ownership of the permit, (implicitly) drop it when task is done

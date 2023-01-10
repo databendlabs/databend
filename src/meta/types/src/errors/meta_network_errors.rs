@@ -50,8 +50,8 @@ impl MetaNetworkError {
     pub fn add_context(self, context: impl Display) -> Self {
         match self {
             Self::ConnectionError(e) => e.add_context(context).into(),
-            Self::GetNodeAddrError(e) => Self::GetNodeAddrError(format!("{e}: {context}")),
-            Self::DnsParseError(e) => Self::DnsParseError(format!("{e}: {context}")),
+            Self::GetNodeAddrError(e) => Self::GetNodeAddrError(format!("{}: {}", e, context)),
+            Self::DnsParseError(e) => Self::DnsParseError(format!("{}: {}", e, context)),
             Self::TLSConfigError(e) => Self::TLSConfigError(e.add_context(|| context)),
             Self::BadAddressFormat(e) => Self::BadAddressFormat(e.add_context(|| context)),
             Self::InvalidArgument(e) => e.add_context(context).into(),

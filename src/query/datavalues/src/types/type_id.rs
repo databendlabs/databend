@@ -191,7 +191,8 @@ impl TypeID {
             TypeID::Int32 | TypeID::UInt32 | TypeID::Float32 | TypeID::Date => Ok(4),
             TypeID::Int64 | TypeID::UInt64 | TypeID::Float64 | TypeID::Timestamp => Ok(8),
             _ => Result::Err(ErrorCode::BadArguments(format!(
-                "Function number_byte_size argument must be numeric types, but got {self:?}"
+                "Function number_byte_size argument must be numeric types, but got {:?}",
+                self
             ))),
         }
     }
@@ -228,7 +229,7 @@ impl std::fmt::Display for TypeID {
         match self {
             TypeID::VariantArray => write!(f, "Array"),
             TypeID::VariantObject => write!(f, "Object"),
-            _ => write!(f, "{self:?}"),
+            _ => write!(f, "{:?}", self),
         }
     }
 }

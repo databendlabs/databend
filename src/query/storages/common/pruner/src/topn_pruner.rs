@@ -94,7 +94,8 @@ impl TopNPrunner {
             .map(|(id, meta)| {
                 let stat = meta.col_stats.get(&sort_idx).ok_or_else(|| {
                     ErrorCode::UnknownException(format!(
-                        "Unable to get the colStats by ColumnId: {sort_idx}"
+                        "Unable to get the colStats by ColumnId: {}",
+                        sort_idx
                     ))
                 })?;
                 Ok((id.clone(), stat.clone(), meta.clone()))

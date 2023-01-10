@@ -47,7 +47,7 @@ impl RoleMgr {
 
         Ok(RoleMgr {
             kv_api,
-            role_prefix: format!("{ROLE_API_KEY_PREFIX}/{tenant}"),
+            role_prefix: format!("{}/{}", ROLE_API_KEY_PREFIX, tenant),
         })
     }
 
@@ -114,11 +114,11 @@ impl RoleApi for RoleMgr {
         let kv_api = self.kv_api.clone();
         let res = kv_api.get_kv(&key).await?;
         let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownRole(format!("unknown role {role}")))?;
+            res.ok_or_else(|| ErrorCode::UnknownRole(format!("unknown role {}", role)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
-            Err(_) => Err(ErrorCode::UnknownRole(format!("unknown role {role}"))),
+            Err(_) => Err(ErrorCode::UnknownRole(format!("unknown role {}", role))),
         }
     }
 
@@ -201,7 +201,7 @@ impl RoleApi for RoleMgr {
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
-            Err(ErrorCode::UnknownRole(format!("unknown role {role}")))
+            Err(ErrorCode::UnknownRole(format!("unknown role {}", role)))
         }
     }
 }

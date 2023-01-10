@@ -177,7 +177,8 @@ impl DataSchema {
         let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name().clone()).collect();
 
         Err(ErrorCode::BadArguments(format!(
-            "Unable to get field named \"{name}\". Valid fields: {valid_fields:?}"
+            "Unable to get field named \"{}\". Valid fields: {:?}",
+            name, valid_fields
         )))
     }
 
@@ -307,7 +308,8 @@ impl TableSchema {
         let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name.clone()).collect();
 
         Err(ErrorCode::BadArguments(format!(
-            "Unable to get field named \"{name}\". Valid fields: {valid_fields:?}"
+            "Unable to get field named \"{}\". Valid fields: {:?}",
+            name, valid_fields
         )))
     }
 
@@ -396,7 +398,8 @@ impl TableSchema {
         }
         let valid_fields: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
         Err(ErrorCode::BadArguments(format!(
-            "Unable to get field paths. Valid fields: {valid_fields:?}"
+            "Unable to get field paths. Valid fields: {:?}",
+            valid_fields
         )))
     }
 
@@ -581,7 +584,7 @@ impl TableDataType {
             TableDataType::Nullable(inner_ty) => {
                 format!("Nullable({})", inner_ty.wrapped_display())
             }
-            _ => format!("{self}"),
+            _ => format!("{}", self),
         }
     }
 
@@ -1043,7 +1046,8 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
             })
         }
         _ => Err(ErrorCode::SemanticError(format!(
-            "Cannot create table with type: {data_type}"
+            "Cannot create table with type: {}",
+            data_type
         ))),
     }
 }

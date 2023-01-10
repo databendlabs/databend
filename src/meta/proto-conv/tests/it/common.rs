@@ -31,9 +31,9 @@ where
     let mut buf = vec![];
     common_protos::prost::Message::encode(&p, &mut buf)?;
     // The encoded data should be saved for compatability test.
-    println!("// Encoded data of version {VER} of {name}:");
+    println!("// Encoded data of version {} of {}:", VER, name);
     println!("// It is generated with common::test_pb_from_to.");
-    println!("let {name}_v{VER} = vec!{buf:?};");
+    println!("let {}_v{} = vec!{:?};", name, VER, buf);
 
     let got = MT::from_pb(p)?;
     assert_eq!(m, got, "convert from/to protobuf: {}", name);
@@ -54,7 +54,7 @@ where
 }
 
 pub(crate) fn print_err<T: Debug>(e: T) -> T {
-    eprintln!("Error: {e:?}");
+    eprintln!("Error: {:?}", e);
     e
 }
 

@@ -71,7 +71,7 @@ impl Debug for DataBlock {
             ]);
         }
 
-        write!(f, "{table}")
+        write!(f, "{}", table)
     }
 }
 
@@ -151,7 +151,7 @@ impl<'a> Display for ScalarRef<'a> {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[]"),
-            ScalarRef::Number(val) => write!(f, "{val:?}"),
+            ScalarRef::Number(val) => write!(f, "{:?}", val),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
             ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, chrono_tz::Tz::UTC)),
@@ -183,13 +183,13 @@ impl Display for Scalar {
         match self {
             Scalar::Null => write!(f, "NULL"),
             Scalar::EmptyArray => write!(f, "[]"),
-            Scalar::Number(n) => write!(f, "{n}"),
-            Scalar::Boolean(b) => write!(f, "{b}"),
+            Scalar::Number(n) => write!(f, "{}", n),
+            Scalar::Boolean(b) => write!(f, "{}", b),
             Scalar::String(s) => match std::str::from_utf8(s) {
-                Ok(v) => write!(f, "{v}"),
+                Ok(v) => write!(f, "{}", v),
                 Err(_e) => {
                     for c in s {
-                        write!(f, "{c:02x}")?;
+                        write!(f, "{:02x}", c)?;
                     }
                     Ok(())
                 }
@@ -555,8 +555,8 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
 impl<T: ValueType> Display for Value<T> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Value::Scalar(scalar) => write!(f, "{scalar:?}"),
-            Value::Column(col) => write!(f, "{col:?}"),
+            Value::Scalar(scalar) => write!(f, "{:?}", scalar),
+            Value::Column(col) => write!(f, "{:?}", col),
         }
     }
 }
@@ -564,8 +564,8 @@ impl<T: ValueType> Display for Value<T> {
 impl<'a, T: ValueType> Display for ValueRef<'a, T> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            ValueRef::Scalar(scalar) => write!(f, "{scalar:?}"),
-            ValueRef::Column(col) => write!(f, "{col:?}"),
+            ValueRef::Scalar(scalar) => write!(f, "{:?}", scalar),
+            ValueRef::Column(col) => write!(f, "{:?}", col),
         }
     }
 }
@@ -605,9 +605,9 @@ impl Display for NullableDomain<AnyType> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(value) = &self.value {
             if self.has_null {
-                write!(f, "{value} ∪ {{NULL}}")
+                write!(f, "{} ∪ {{NULL}}", value)
             } else {
-                write!(f, "{value}")
+                write!(f, "{}", value)
             }
         } else {
             assert!(self.has_null);

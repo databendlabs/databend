@@ -66,7 +66,8 @@ fn add_years_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDa
         new_day = last_day_of_year_month(new_year, month);
     }
     NaiveDate::from_ymd_opt(new_year, month, new_day).ok_or(format!(
-        "Overflow on date YMD {new_year}-{month}-{new_day}."
+        "Overflow on date YMD {}-{}-{}.",
+        new_year, month, new_day
     ))
 }
 

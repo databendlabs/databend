@@ -181,7 +181,7 @@ async fn test_retry_join() -> anyhow::Result<()> {
         match ret {
             Ok(_) => Ok(()),
             Err(e) => {
-                panic!("must JoinCluster success: {e:?}");
+                panic!("must JoinCluster success: {:?}", e);
             }
         }
     }
@@ -227,7 +227,7 @@ async fn test_join() -> anyhow::Result<()> {
     info!("--- upsert kv to every nodes");
     {
         for (i, cli) in clients.iter().enumerate() {
-            let k = format!("join-{i}");
+            let k = format!("join-{}", i);
 
             let res = cli
                 .upsert_kv(UpsertKVReq::new(
@@ -262,7 +262,7 @@ async fn test_join() -> anyhow::Result<()> {
     {
         for (icli, cli) in clients.iter().enumerate() {
             for i in 0..2 {
-                let k = format!("join-{i}");
+                let k = format!("join-{}", i);
                 let res = cli.get_kv(k.as_str()).await;
 
                 debug!("get kv {} from {}-th node,res: {:?}", k, icli, res);

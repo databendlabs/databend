@@ -42,7 +42,7 @@ async fn test_set_setting() -> Result<()> {
             }) => {
                 assert_eq!(value, serde_json::to_vec(&setting)?);
             }
-            catch => panic!("GetKVActionReply{catch:?}"),
+            catch => panic!("GetKVActionReply{:?}", catch),
         }
     }
 
@@ -62,7 +62,7 @@ async fn test_set_setting() -> Result<()> {
             }) => {
                 assert_eq!(value, serde_json::to_vec(&setting)?);
             }
-            catch => panic!("GetKVActionReply{catch:?}"),
+            catch => panic!("GetKVActionReply{:?}", catch),
         }
     }
 

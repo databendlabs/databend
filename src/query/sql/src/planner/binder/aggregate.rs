@@ -368,7 +368,7 @@ impl<'a> Binder {
                 continue;
             }
 
-            let group_item_name = format!("{expr:#}");
+            let group_item_name = format!("{:#}", expr);
             let index = if let Scalar::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding { index, .. },
             }) = &scalar_expr
@@ -442,10 +442,9 @@ impl<'a> Binder {
         if result.is_empty() {
             Err(original_error)
         } else if result.len() > 1 {
-            Err(ErrorCode::SemanticError(
-                expr.span()
-                    .display_error(format!("GROUP BY \"{expr}\" is ambiguous")),
-            ))
+            Err(ErrorCode::SemanticError(expr.span().display_error(
+                format!("GROUP BY \"{}\" is ambiguous", expr),
+            )))
         } else {
             let (column_binding, scalar) = available_aliases[result[0]].clone();
             // We will add the alias to BindContext, so we can reference it

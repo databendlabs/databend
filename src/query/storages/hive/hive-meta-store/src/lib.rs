@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::all)]
+#![allow(clippy::uninlined_format_args, clippy::too_many_arguments, clippy::type_complexity, clippy::vec_box)]
+
 #![allow(dead_code)]
 #![allow(unreachable_patterns)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(unused_extern_crates)]
 #![allow(deprecated)]
-#![allow(clippy::too_many_arguments, clippy::type_complexity, clippy::vec_box)]
 #![cfg_attr(rustfmt, rustfmt_skip)]
 mod hive_meta_store;
 

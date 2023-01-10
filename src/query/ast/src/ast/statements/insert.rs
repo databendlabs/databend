@@ -85,7 +85,7 @@ impl Display for InsertSource<'_> {
             InsertSource::StreamingV2 { settings, start: _ } => {
                 write!(f, " FILE_FORMAT = (")?;
                 for (k, v) in settings.iter() {
-                    write!(f, " {k} = '{v}'")?;
+                    write!(f, " {} = '{}'", k, v)?;
                 }
                 write!(f, " )")
             }

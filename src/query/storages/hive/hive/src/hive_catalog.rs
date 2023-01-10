@@ -180,7 +180,8 @@ impl HiveCatalog {
             if let Some(input_format) = sd.input_format.as_ref() {
                 if input_format != "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat" {
                     return Err(ErrorCode::Unimplemented(format!(
-                        "only support parquet, {input_format} not support"
+                        "only support parquet, {} not support",
+                        input_format
                     )));
                 }
             }

@@ -187,7 +187,8 @@ impl DataType {
             | DataType::Number(NumberDataType::Float64)
             | DataType::Number(NumberDataType::Int64) => Ok(8),
             _ => Result::Err(format!(
-                "Function number_byte_size argument must be numeric types, but got {self:?}"
+                "Function number_byte_size argument must be numeric types, but got {:?}",
+                self
             )),
         }
     }
@@ -245,7 +246,7 @@ impl DataType {
     pub fn wrapped_display(&self) -> String {
         match self {
             DataType::Nullable(inner_ty) => format!("Nullable({})", inner_ty.wrapped_display()),
-            _ => format!("{self}"),
+            _ => format!("{}", self),
         }
     }
 

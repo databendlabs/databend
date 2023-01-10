@@ -34,7 +34,7 @@ impl CatalogManager {
             .get(catalog_name)
             .as_deref()
             .cloned()
-            .ok_or_else(|| ErrorCode::BadArguments(format!("no such catalog {catalog_name}")))
+            .ok_or_else(|| ErrorCode::BadArguments(format!("no such catalog {}", catalog_name)))
     }
 
     pub fn instance() -> Arc<CatalogManager> {
@@ -63,7 +63,8 @@ impl CatalogManager {
                     Ok(())
                 } else {
                     Err(ErrorCode::CatalogAlreadyExists(format!(
-                        "Catalog {catalog_name} already exists"
+                        "Catalog {} already exists",
+                        catalog_name
                     )))
                 }
             }

@@ -47,13 +47,13 @@ pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq {
 
 impl ColumnIndex for usize {
     fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "#{self}")
+        write!(f, "#{}", self)
     }
 }
 
 impl ColumnIndex for String {
     fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self}")
+        write!(f, "{}", self)
     }
 }
 

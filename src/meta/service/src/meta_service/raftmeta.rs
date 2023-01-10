@@ -198,7 +198,8 @@ impl MetaNodeBuilder {
         } else {
             sto.get_node_endpoint(&node_id).await.map_err(|e| {
                 MetaStartupError::InvalidConfig(format!(
-                    "endpoint of node: {node_id} is not configured and is not in store, error: {e}",
+                    "endpoint of node: {} is not configured and is not in store, error: {}",
+                    node_id, e,
                 ))
             })?
         };
@@ -279,13 +280,19 @@ impl MetaNode {
 
         let ipv4_addr = host.parse::<Ipv4Addr>();
         let addr = match ipv4_addr {
-            Ok(addr) => format!("{addr}:{port}"),
+            Ok(addr) => format!("{}:{}", addr, port),
             Err(_) => {
                 let resolver = DNSResolver::instance().map_err(|e| {
-                    MetaNetworkError::DnsParseError(format!("get dns resolver instance error: {e}"))
+                    MetaNetworkError::DnsParseError(format!(
+                        "get dns resolver instance error: {}",
+                        e
+                    ))
                 })?;
                 let ip_addrs = resolver.resolve(host).await.map_err(|e| {
-                    MetaNetworkError::GetNodeAddrError(format!("resolve addr {host} error: {e}"))
+                    MetaNetworkError::GetNodeAddrError(format!(
+                        "resolve addr {} error: {}",
+                        host, e
+                    ))
                 })?;
                 format!("{}:{}", ip_addrs[0], port)
             }
@@ -525,7 +532,7 @@ impl MetaNode {
         for addr in addrs {
             info!("leave cluster via {}...", addr);
 
-            let conn_res = RaftServiceClient::connect(format!("http://{addr}")).await;
+            let conn_res = RaftServiceClient::connect(format!("http://{}", addr)).await;
             let mut raft_client = match conn_res {
                 Ok(c) => c,
                 Err(e) => {
@@ -596,7 +603,7 @@ impl MetaNode {
 
         if let Err(reason) = can_join_res {
             info!("skip joining, because: {}", reason);
-            return Ok(Err(format!("Did not join: {reason}")));
+            return Ok(Err(format!("Did not join: {}", reason)));
         }
 
         let mut errors = vec![];
@@ -1059,18 +1066,18 @@ impl MetaNode {
             .await
             .map_err(|e| MetaNetworkError::GetNodeAddrError(e.to_string()))?;
 
-        let mut client = RaftServiceClient::connect(format!("http://{endpoint}"))
+        let mut client = RaftServiceClient::connect(format!("http://{}", endpoint))
             .await
             .map_err(|e| {
                 MetaNetworkError::ConnectionError(ConnectionError::new(
                     e,
-                    format!("address: {endpoint}"),
+                    format!("address: {}", endpoint),
                 ))
             })?;
 
         let resp = client.forward(req).await.map_err(|e| {
             MetaNetworkError::from(e)
-                .add_context(format!("target: {node_id}, endpoint: {endpoint}"))
+                .add_context(format!("target: {}, endpoint: {}", node_id, endpoint))
         })?;
         let raft_mes = resp.into_inner();
 

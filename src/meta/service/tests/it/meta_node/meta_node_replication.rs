@@ -69,7 +69,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     let n_req = 12;
 
     for i in 0..n_req {
-        let key = format!("test_meta_node_snapshot_replication-key-{i}");
+        let key = format!("test_meta_node_snapshot_replication-key-{}", i);
         mn.write(LogEntry {
             txid: None,
             time_ms: None,
@@ -117,11 +117,11 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
         .await?;
 
     for i in 0..n_req {
-        let key = format!("test_meta_node_snapshot_replication-key-{i}");
+        let key = format!("test_meta_node_snapshot_replication-key-{}", i);
         let got = mn1.get_kv(&key).await?;
         match got {
             None => {
-                panic!("expect get some value for {key}")
+                panic!("expect get some value for {}", key)
             }
             Some(SeqV { ref data, .. }) => {
                 assert_eq!(data, b"v");

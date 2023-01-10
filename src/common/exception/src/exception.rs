@@ -34,7 +34,7 @@ impl ToString for ErrorCodeBacktrace {
         match self {
             ErrorCodeBacktrace::Serialized(backtrace) => Arc::as_ref(backtrace).clone(),
             ErrorCodeBacktrace::Origin(backtrace) => {
-                format!("{backtrace:?}")
+                format!("{:?}", backtrace)
             }
         }
     }
@@ -162,10 +162,10 @@ impl Debug for ErrorCode {
                                 "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> "
                             )
                         } else {
-                            write!(f, "\n\n{backtrace}")
+                            write!(f, "\n\n{}", backtrace)
                         }
                     }
-                    ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{backtrace}"),
+                    ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{}", backtrace),
                 }
             }
         }

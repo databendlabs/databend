@@ -408,11 +408,14 @@ impl AligningStateTextBased for CsvReaderState {
 impl CsvReaderState {
     fn check_num_field(&self, expect: usize, actual: usize, field_ends: &[usize]) -> Result<()> {
         if actual < expect {
-            Err(self.csv_error(&format!("expect {expect} fields, only found {actual} ")))
+            Err(self.csv_error(&format!("expect {} fields, only found {} ", expect, actual)))
         } else if actual > expect + 1
             || (actual == expect + 1 && field_ends[expect] != field_ends[expect - 1])
         {
-            Err(self.csv_error(&format!("too many fields, expect {expect}, got {actual}")))
+            Err(self.csv_error(&format!(
+                "too many fields, expect {}, got {}",
+                expect, actual
+            )))
         } else {
             Ok(())
         }
@@ -428,7 +431,8 @@ impl CsvReaderState {
         num_fields_actual: usize,
     ) -> ErrorCode {
         self.csv_error(&format!(
-            "too many fields, expect {num_fields_expect}, got more than {num_fields_actual}"
+            "too many fields, expect {}, got more than {}",
+            num_fields_expect, num_fields_actual
         ))
     }
 

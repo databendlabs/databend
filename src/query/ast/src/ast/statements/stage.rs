@@ -48,7 +48,7 @@ impl Display for CreateStageStmt {
         if !self.file_format_options.is_empty() {
             write!(f, " FILE_FORMAT = (")?;
             for (k, v) in self.file_format_options.iter() {
-                write!(f, " {k} = '{v}'")?;
+                write!(f, " {} = '{}'", k, v)?;
             }
             write!(f, " )")?;
         }

@@ -54,7 +54,7 @@ impl MetaEmbedded {
     /// - `common_meta_sled_store::init_temp_sled_db`
     pub async fn new(name: &str) -> Result<MetaEmbedded, MetaStorageError> {
         let mut config = RaftConfig {
-            sled_tree_prefix: format!("{name}-local-kv"),
+            sled_tree_prefix: format!("{}-local-kv", name),
             ..Default::default()
         };
 
@@ -82,7 +82,7 @@ impl MetaEmbedded {
         let x = GLOBAL_SEQ.fetch_add(1, Ordering::SeqCst);
         let id = 29000_u64 + (x as u64);
 
-        let name = format!("temp-{id}");
+        let name = format!("temp-{}", id);
 
         let m = Self::new(&name).await?;
         Ok(m)

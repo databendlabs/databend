@@ -553,7 +553,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ctx.set_error(
                         output.len(),
                         format!(
-                            "Too many times to repeat: ({times}), maximum is: {MAX_REPEAT_TIMES}"
+                            "Too many times to repeat: ({}), maximum is: {}",
+                            times, MAX_REPEAT_TIMES
                         ),
                     );
                 } else {

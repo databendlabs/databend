@@ -347,7 +347,8 @@ pub fn check_duplicate_join_tables(
         if let Some(right) = right_table_name {
             if left.eq(right) {
                 return Err(ErrorCode::SemanticError(format!(
-                    "Duplicated table name {left} in the same FROM clause"
+                    "Duplicated table name {} in the same FROM clause",
+                    left
                 )));
             }
         }
@@ -553,7 +554,8 @@ impl<'a> JoinConditionResolver<'a> {
                 })
             } else {
                 return Err(ErrorCode::SemanticError(format!(
-                    "column {join_key_name} specified in USING clause does not exist in left table"
+                    "column {} specified in USING clause does not exist in left table",
+                    join_key_name
                 )));
             };
 
@@ -567,7 +569,8 @@ impl<'a> JoinConditionResolver<'a> {
                 })
             } else {
                 return Err(ErrorCode::SemanticError(format!(
-                    "column {join_key_name} specified in USING clause does not exist in right table"
+                    "column {} specified in USING clause does not exist in right table",
+                    join_key_name
                 )));
             };
             let idx = !matches!(join_op, JoinOperator::RightOuter) as usize;

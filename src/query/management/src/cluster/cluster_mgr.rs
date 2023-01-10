@@ -130,7 +130,8 @@ impl ClusterApi for ClusterMgr {
                 result: None,
             } => Ok(()),
             UpsertKVReply { .. } => Err(ErrorCode::ClusterUnknownNode(format!(
-                "unknown node {node_id:?}"
+                "unknown node {:?}",
+                node_id
             ))),
         }
     }

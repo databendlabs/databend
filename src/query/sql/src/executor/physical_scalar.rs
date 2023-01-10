@@ -71,7 +71,7 @@ impl PhysicalScalar {
                     .map(|arg| arg.pretty_display())
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("{name}({args})")
+                format!("{}({})", name, args)
             }
             PhysicalScalar::Cast { input, target } => {
                 format!("CAST({} AS {})", input.pretty_display(), target.sql_name(),)
@@ -130,13 +130,13 @@ impl PhysicalScalar {
 impl Display for PhysicalScalar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            PhysicalScalar::Constant { value, .. } => write!(f, "{value}"),
+            PhysicalScalar::Constant { value, .. } => write!(f, "{}", value),
             PhysicalScalar::Function { name, args, .. } => write!(
                 f,
                 "{}({})",
                 name,
                 args.iter()
-                    .map(|arg| format!("{arg}"))
+                    .map(|arg| format!("{}", arg))
                     .collect::<Vec<String>>()
                     .join(", ")
             ),

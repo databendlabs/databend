@@ -36,7 +36,7 @@ pub trait PartInfo: Send + Sync {
 impl Debug for Box<dyn PartInfo> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match serde_json::to_string(self) {
-            Ok(str) => write!(f, "{str}"),
+            Ok(str) => write!(f, "{}", str),
             Err(_cause) => Err(std::fmt::Error {}),
         }
     }

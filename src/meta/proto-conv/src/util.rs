@@ -93,14 +93,16 @@ pub fn reader_check_msg(msg_ver: u64, msg_min_reader_ver: u64) -> Result<(), Inc
     if VER < msg_min_reader_ver {
         return Err(Incompatible {
             reason: format!(
-                "executable ver={VER} is smaller than the min reader version({msg_min_reader_ver}) that can read this message"
+                "executable ver={} is smaller than the min reader version({}) that can read this message",
+                VER, msg_min_reader_ver
             ),
         });
     }
     if msg_ver < MIN_MSG_VER {
         return Err(Incompatible {
             reason: format!(
-                "message ver={msg_ver} is smaller than executable MIN_MSG_VER({MIN_MSG_VER}) that this program can read"
+                "message ver={} is smaller than executable MIN_MSG_VER({}) that this program can read",
+                msg_ver, MIN_MSG_VER
             ),
         });
     }

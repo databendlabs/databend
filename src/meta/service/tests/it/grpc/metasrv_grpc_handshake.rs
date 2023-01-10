@@ -69,9 +69,10 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         let e = res.unwrap_err();
 
         let want = format!(
-            "meta-client protocol_version({cli_ver}) < metasrv min-compatible({MIN_METACLI_SEMVER})"
+            "meta-client protocol_version({}) < metasrv min-compatible({})",
+            cli_ver, MIN_METACLI_SEMVER
         );
-        assert!(e.to_string().contains(&want), "handshake err: {e:?}");
+        assert!(e.to_string().contains(&want), "handshake err: {:?}", e);
     }
 
     info!("--- server has smaller ver than C.min_srv_ver");
@@ -100,7 +101,9 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         );
         assert!(
             e.to_string().contains(&want),
-            "handshake err: {e:?} contains: {want}"
+            "handshake err: {:?} contains: {}",
+            e,
+            want
         );
     }
 

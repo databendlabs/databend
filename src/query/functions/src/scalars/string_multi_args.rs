@@ -826,7 +826,8 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
         if let Some(occur) = occur {
             if occur < 0 {
                 ctx.set_error(builder.len(), format!(
-                    "Incorrect arguments to regexp_replace: occurrence must not be negative, but got {occur}"
+                    "Incorrect arguments to regexp_replace: occurrence must not be negative, but got {}",
+                    occur
                 ));
                 StringType::push_default(&mut builder);
                 continue;
@@ -1001,8 +1002,9 @@ pub mod regexp {
     ) -> Result<Regex, String> {
         let pattern = match pat.is_empty() {
             true => "^$",
-            false => simdutf8::basic::from_utf8(pat)
-                .map_err(|e| format!("Unable to convert the {fn_name} pattern to string: {e}"))?,
+            false => simdutf8::basic::from_utf8(pat).map_err(|e| {
+                format!("Unable to convert the {} pattern to string: {}", fn_name, e)
+            })?,
         };
         // the default match type value is 'i', if it is empty
         let mt = match mt {
@@ -1029,9 +1031,13 @@ pub mod regexp {
                 // Notes: https://github.com/rust-lang/regex/issues/244
                 // It seems that the regexp crate doesn't support the 'u' match type.
                 'u' => Err(format!(
-                    "Unsupported arguments to {fn_name} match type: {c}",
+                    "Unsupported arguments to {} match type: {}",
+                    fn_name, c,
                 )),
-                _ => Err(format!("Incorrect arguments to {fn_name} match type: {c}",)),
+                _ => Err(format!(
+                    "Incorrect arguments to {} match type: {}",
+                    fn_name, c,
+                )),
             };
             #[allow(clippy::question_mark)]
             if let Err(e) = r {
@@ -1040,7 +1046,7 @@ pub mod regexp {
         }
         builder
             .build()
-            .map_err(|e| format!("Unable to build regex from {fn_name} pattern: {e}"))
+            .map_err(|e| format!("Unable to build regex from {} pattern: {}", fn_name, e))
     }
 
     /// Validates the arguments of 'regexp_*' functions, returns error if any of arguments is invalid
@@ -1055,21 +1061,24 @@ pub mod regexp {
         if let Some(pos) = pos {
             if pos < 1 {
                 return Err(format!(
-                    "Incorrect arguments to {fn_name}: position must be positive, but got {pos}"
+                    "Incorrect arguments to {}: position must be positive, but got {}",
+                    fn_name, pos
                 ));
             }
         }
         if let Some(occur) = occur {
             if occur < 1 {
                 return Err(format!(
-                    "Incorrect arguments to {fn_name}: occurrence must be positive, but got {occur}"
+                    "Incorrect arguments to {}: occurrence must be positive, but got {}",
+                    fn_name, occur
                 ));
             }
         }
         if let Some(ro) = ro {
             if ro != 0 && ro != 1 {
                 return Err(format!(
-                    "Incorrect arguments to {fn_name}: return_option must be 1 or 0, but got {ro}"
+                    "Incorrect arguments to {}: return_option must be 1 or 0, but got {}",
+                    fn_name, ro
                 ));
             }
         }

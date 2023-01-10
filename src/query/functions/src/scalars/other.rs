@@ -88,7 +88,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Ok(duration) => {
                     if duration.gt(&Duration::from_secs(300)) {
                         let err = format!(
-                            "The maximum sleep time is 300 seconds. Requested: {duration:?}"
+                            "The maximum sleep time is 300 seconds. Requested: {:?}",
+                            duration
                         );
                         ctx.set_error(output.len(), err);
                         output.push(0);

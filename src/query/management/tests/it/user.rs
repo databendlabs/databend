@@ -62,7 +62,7 @@ mock! {
 }
 
 fn format_user_key(username: &str, hostname: &str) -> String {
-    format!("'{username}'@'{hostname}'")
+    format!("'{}'@'{}'", username, hostname)
 }
 
 fn default_test_auth_info() -> AuthInfo {
@@ -321,9 +321,9 @@ mod get_users {
         let mut user_infos = vec![];
 
         for i in 0..9 {
-            let name = format!("test_user_{i}");
+            let name = format!("test_user_{}", i);
             names.push(name.clone());
-            let hostname = format!("test_hostname_{i}");
+            let hostname = format!("test_hostname_{}", i);
             hostnames.push(hostname.clone());
 
             let key = format!("tenant1/{}", format_user_key(&name, &hostname));

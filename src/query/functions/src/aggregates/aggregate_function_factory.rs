@@ -128,7 +128,10 @@ impl AggregateFunctionFactory {
     pub fn register_combinator(&mut self, suffix: &str, desc: CombinatorDescription) {
         for (exists_suffix, _) in &self.case_insensitive_combinator_desc {
             if exists_suffix.eq_ignore_ascii_case(suffix) {
-                panic!("Logical error: {suffix} combinator suffix already exists.");
+                panic!(
+                    "Logical error: {} combinator suffix already exists.",
+                    suffix
+                );
             }
         }
 
@@ -219,7 +222,8 @@ impl AggregateFunctionFactory {
         }
 
         Err(ErrorCode::UnknownAggregateFunction(format!(
-            "Unsupported AggregateFunction: {name}"
+            "Unsupported AggregateFunction: {}",
+            name
         )))
     }
 

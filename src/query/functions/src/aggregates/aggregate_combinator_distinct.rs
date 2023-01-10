@@ -192,7 +192,7 @@ pub fn try_create(
     arguments: Vec<DataType>,
     nested_creator: &AggregateFunctionCreator,
 ) -> Result<Arc<dyn AggregateFunction>> {
-    let name = format!("DistinctCombinator({nested_name})");
+    let name = format!("DistinctCombinator({})", nested_name);
     assert_variadic_arguments(&name, arguments.len(), (1, 32))?;
 
     let nested_arguments = match nested_name {

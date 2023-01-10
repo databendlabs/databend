@@ -142,7 +142,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ctx.set_error(
                             output.len(),
                             format!(
-                                "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got {v}"
+                                "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got {}",
+                                v
                             ),
                         );
                         String::new()

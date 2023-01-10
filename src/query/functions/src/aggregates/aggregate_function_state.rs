@@ -121,5 +121,5 @@ pub fn get_layout_offsets(
         total_size += layout.size();
     }
     Layout::from_size_align(total_size, max_align)
-        .map_err(|e| ErrorCode::LayoutError(format!("Layout error: {e}")))
+        .map_err(|e| ErrorCode::LayoutError(format!("Layout error: {}", e)))
 }

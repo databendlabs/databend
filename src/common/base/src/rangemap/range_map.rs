@@ -179,9 +179,9 @@ mod tests {
 
             a.insert(a1.clone()..a2, 11, 11);
             assert!(!a.get_by_point(&a1).is_empty());
-            assert!(!a.get_by_point(&format!("{a1}z")).is_empty());
-            assert!(!a.get_by_point(&format!("{a1}*")).is_empty());
-            assert!(!a.get_by_point(&format!("{a1}/")).is_empty());
+            assert!(!a.get_by_point(&format!("{}z", a1)).is_empty());
+            assert!(!a.get_by_point(&format!("{}*", a1)).is_empty());
+            assert!(!a.get_by_point(&format!("{}/", a1)).is_empty());
         }
     }
 

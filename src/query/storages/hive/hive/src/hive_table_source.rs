@@ -146,7 +146,7 @@ impl HiveTableSource {
         for datablock in data_blocks {
             let evaluator = Evaluator::new(datablock, func_ctx, &BUILTIN_FUNCTIONS);
             let res = evaluator.run(filter).map_err(|(_, e)| {
-                ErrorCode::Internal(format!("eval prewhere filter failed: {e}."))
+                ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
             })?;
             valids.push(res.clone());
             // shortcut, if predicates is const boolean (or can be cast to boolean)

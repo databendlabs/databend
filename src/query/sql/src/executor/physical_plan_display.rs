@@ -50,20 +50,20 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
         write!(f, "{}", "  ".repeat(self.indent))?;
 
         match self.node {
-            PhysicalPlan::TableScan(scan) => write!(f, "{scan}")?,
-            PhysicalPlan::Filter(filter) => write!(f, "{filter}")?,
-            PhysicalPlan::Project(project) => write!(f, "{project}")?,
-            PhysicalPlan::EvalScalar(eval_scalar) => write!(f, "{eval_scalar}")?,
-            PhysicalPlan::AggregatePartial(aggregate) => write!(f, "{aggregate}")?,
-            PhysicalPlan::AggregateFinal(aggregate) => write!(f, "{aggregate}")?,
-            PhysicalPlan::Sort(sort) => write!(f, "{sort}")?,
-            PhysicalPlan::Limit(limit) => write!(f, "{limit}")?,
-            PhysicalPlan::HashJoin(join) => write!(f, "{join}")?,
-            PhysicalPlan::Exchange(exchange) => write!(f, "{exchange}")?,
-            PhysicalPlan::ExchangeSource(source) => write!(f, "{source}")?,
-            PhysicalPlan::ExchangeSink(sink) => write!(f, "{sink}")?,
-            PhysicalPlan::UnionAll(union_all) => write!(f, "{union_all}")?,
-            PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{insert_select}")?,
+            PhysicalPlan::TableScan(scan) => write!(f, "{}", scan)?,
+            PhysicalPlan::Filter(filter) => write!(f, "{}", filter)?,
+            PhysicalPlan::Project(project) => write!(f, "{}", project)?,
+            PhysicalPlan::EvalScalar(eval_scalar) => write!(f, "{}", eval_scalar)?,
+            PhysicalPlan::AggregatePartial(aggregate) => write!(f, "{}", aggregate)?,
+            PhysicalPlan::AggregateFinal(aggregate) => write!(f, "{}", aggregate)?,
+            PhysicalPlan::Sort(sort) => write!(f, "{}", sort)?,
+            PhysicalPlan::Limit(limit) => write!(f, "{}", limit)?,
+            PhysicalPlan::HashJoin(join) => write!(f, "{}", join)?,
+            PhysicalPlan::Exchange(exchange) => write!(f, "{}", exchange)?,
+            PhysicalPlan::ExchangeSource(source) => write!(f, "{}", source)?,
+            PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
+            PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
+            PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
         }
 
         for node in self.node.children() {
@@ -86,7 +86,7 @@ impl Display for Filter {
         let scalars = self
             .predicates
             .iter()
-            .map(|scalar| format!("{scalar}"))
+            .map(|scalar| format!("{}", scalar))
             .collect::<Vec<String>>();
 
         write!(f, "Filter: [{}]", scalars.join(", "))
@@ -134,7 +134,7 @@ impl Display for EvalScalar {
         let scalars = self
             .scalars
             .iter()
-            .map(|(scalar, _)| format!("{scalar}"))
+            .map(|(scalar, _)| format!("{}", scalar))
             .collect::<Vec<String>>();
 
         write!(f, "EvalScalar: [{}]", scalars.join(", "))
@@ -169,7 +169,8 @@ impl Display for AggregateFinal {
 
         write!(
             f,
-            "Aggregate(Final): group items: [{group_items}], aggregate functions: [{agg_funcs}]"
+            "Aggregate(Final): group items: [{}], aggregate functions: [{}]",
+            group_items, agg_funcs
         )
     }
 }
@@ -202,7 +203,8 @@ impl Display for AggregatePartial {
 
         write!(
             f,
-            "Aggregate(Partial): group items: [{group_items}], aggregate functions: [{agg_funcs}]"
+            "Aggregate(Partial): group items: [{}], aggregate functions: [{}]",
+            group_items, agg_funcs
         )
     }
 }
@@ -224,21 +226,21 @@ impl Display for HashJoin {
                 let build_keys = self
                     .build_keys
                     .iter()
-                    .map(|scalar| format!("{scalar}"))
+                    .map(|scalar| format!("{}", scalar))
                     .collect::<Vec<String>>()
                     .join(", ");
 
                 let probe_keys = self
                     .probe_keys
                     .iter()
-                    .map(|scalar| format!("{scalar}"))
+                    .map(|scalar| format!("{}", scalar))
                     .collect::<Vec<String>>()
                     .join(", ");
 
                 let join_filters = self
                     .non_equi_conditions
                     .iter()
-                    .map(|scalar| format!("{scalar}"))
+                    .map(|scalar| format!("{}", scalar))
                     .collect::<Vec<String>>()
                     .join(", ");
 
@@ -257,7 +259,7 @@ impl Display for Exchange {
         let keys = self
             .keys
             .iter()
-            .map(|scalar| format!("{scalar}"))
+            .map(|scalar| format!("{}", scalar))
             .collect::<Vec<String>>()
             .join(", ");
 

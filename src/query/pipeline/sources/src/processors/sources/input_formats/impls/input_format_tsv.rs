@@ -97,12 +97,13 @@ impl InputFormatTSV {
         if err_msg.is_none() && column_index < num_columns {
             // todo(youngsofun): allow it optionally (set default)
             err_msg = Some(format!(
-                "need {num_columns} columns, find {column_index} only"
+                "need {} columns, find {} only",
+                num_columns, column_index
             ));
         }
 
         if let Some(m) = err_msg {
-            let mut msg = format!("{m}, row data: ");
+            let mut msg = format!("{}, row data: ", m);
             verbose_string(buf, &mut msg);
             Err(ErrorCode::BadBytes(msg))
         } else {

@@ -67,8 +67,8 @@ pub struct DFQueryResultWriter<'a, W: AsyncWrite + Send + Unpin> {
     inner: Option<QueryResultWriter<'a, W>>,
 }
 
-fn write_field<'a, W: AsyncWrite + Unpin>(
-    row_writer: &mut RowWriter<'a, W>,
+fn write_field<W: AsyncWrite + Unpin>(
+    row_writer: &mut RowWriter<W>,
     column: &ExprColumn,
     encoder: &FieldEncoderValues,
     buf: &mut Vec<u8>,

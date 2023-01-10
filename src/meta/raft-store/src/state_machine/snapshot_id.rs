@@ -42,7 +42,7 @@ impl FromStr for MetaSnapshotId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let invalid = || {
-            MetaStorageError::SnapshotError(AnyError::error(format!("invalid snapshot_id: {s}")))
+            MetaStorageError::SnapshotError(AnyError::error(format!("invalid snapshot_id: {}", s)))
         };
         let mut segs = s.split('-');
 

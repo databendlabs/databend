@@ -44,7 +44,8 @@ impl TryFrom<&[u8]> for RecordDelimiter {
             1 => Ok(RecordDelimiter::Any(s[0])),
             2 if s.eq(b"\r\n") => Ok(RecordDelimiter::Crlf),
             _ => Err(ErrorCode::InvalidArgument(format!(
-                "bad RecordDelimiter: '{s:?}'"
+                "bad RecordDelimiter: '{:?}'",
+                s
             ))),
         }
     }

@@ -36,10 +36,10 @@ impl<'a> Binder {
                 Some(predicate) => {
                     match predicate {
                         ShowLimit::Like { pattern } => {
-                            format!("WHERE name LIKE '{pattern}'")
+                            format!("WHERE name LIKE '{}'", pattern)
                         }
                         ShowLimit::Where { selection } => {
-                            format!("WHERE {selection}")
+                            format!("WHERE {}", selection)
                         }
                     }
                 }
@@ -59,7 +59,8 @@ impl<'a> Binder {
             .map(|s| format!("WHERE name LIKE '{s}'"))
             .unwrap_or_else(|| "".to_string());
         let query = format!(
-            "SELECT name, value, default, level, description, type FROM system.settings {sub_query} ORDER BY name"
+            "SELECT name, value, default, level, description, type FROM system.settings {} ORDER BY name",
+            sub_query
         );
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowSettings)

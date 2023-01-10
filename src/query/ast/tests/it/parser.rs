@@ -357,15 +357,15 @@ fn test_statement() {
         let backtrace = Backtrace::new();
         let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
-        writeln!(file, "{case}").unwrap();
+        writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
-        writeln!(file, "{stmt}").unwrap();
+        writeln!(file, "{}", stmt).unwrap();
         writeln!(file, "---------- AST ------------").unwrap();
-        writeln!(file, "{stmt:#?}").unwrap();
+        writeln!(file, "{:#?}", stmt).unwrap();
         writeln!(file, "\n").unwrap();
         if fmt.is_some() {
             writeln!(file, "---------- FORMAT ------------").unwrap();
-            writeln!(file, "{fmt:#?}").unwrap();
+            writeln!(file, "{:#?}", fmt).unwrap();
         }
     }
 }
@@ -413,7 +413,7 @@ fn test_statement_error() {
         let backtrace = Backtrace::new();
         let err = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap_err();
         writeln!(file, "---------- Input ----------").unwrap();
-        writeln!(file, "{case}").unwrap();
+        writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
         writeln!(file, "{}", err.message()).unwrap();
     }

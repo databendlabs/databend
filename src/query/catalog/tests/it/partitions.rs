@@ -59,7 +59,7 @@ impl TestPartInfo {
 fn gen_parts(kind: PartitionsShuffleKind, size: usize) -> Partitions {
     let mut parts = vec![];
     for i in 0..size {
-        parts.push(TestPartInfo::create(format!("{i}")));
+        parts.push(TestPartInfo::create(format!("{}", i)));
     }
 
     Partitions::create(kind, parts)
@@ -89,13 +89,13 @@ fn test_partition_reshuffle() {
         )
         .unwrap();
         let e1_parts = shuffle.get(&executors_3[0]).unwrap();
-        writeln!(file, "{e1_parts:?}").unwrap();
+        writeln!(file, "{:?}", e1_parts).unwrap();
 
         let e2_parts = shuffle.get(&executors_3[1]).unwrap();
-        writeln!(file, "{e2_parts:?}").unwrap();
+        writeln!(file, "{:?}", e2_parts).unwrap();
 
         let e3_parts = shuffle.get(&executors_3[2]).unwrap();
-        writeln!(file, "{e3_parts:?}").unwrap();
+        writeln!(file, "{:?}", e3_parts).unwrap();
     }
 
     // None.
@@ -109,13 +109,13 @@ fn test_partition_reshuffle() {
         )
         .unwrap();
         let e1_parts = shuffle.get(&executors_3[0]).unwrap();
-        writeln!(file, "{e1_parts:?}").unwrap();
+        writeln!(file, "{:?}", e1_parts).unwrap();
 
         let e2_parts = shuffle.get(&executors_3[1]).unwrap();
-        writeln!(file, "{e2_parts:?}").unwrap();
+        writeln!(file, "{:?}", e2_parts).unwrap();
 
         let e3_parts = shuffle.get(&executors_3[2]).unwrap();
-        writeln!(file, "{e3_parts:?}").unwrap();
+        writeln!(file, "{:?}", e3_parts).unwrap();
     }
 
     // Mod.
@@ -129,13 +129,13 @@ fn test_partition_reshuffle() {
         )
         .unwrap();
         let e1_parts = shuffle.get(&executors_3[0]).unwrap();
-        writeln!(file, "{e1_parts:?}").unwrap();
+        writeln!(file, "{:?}", e1_parts).unwrap();
 
         let e2_parts = shuffle.get(&executors_3[1]).unwrap();
-        writeln!(file, "{e2_parts:?}").unwrap();
+        writeln!(file, "{:?}", e2_parts).unwrap();
 
         let e3_parts = shuffle.get(&executors_3[2]).unwrap();
-        writeln!(file, "{e3_parts:?}").unwrap();
+        writeln!(file, "{:?}", e3_parts).unwrap();
     }
 
     // Mod.
@@ -149,10 +149,10 @@ fn test_partition_reshuffle() {
         )
         .unwrap();
         let e1_parts = shuffle.get(&executors_2[0]).unwrap();
-        writeln!(file, "{e1_parts:?}").unwrap();
+        writeln!(file, "{:?}", e1_parts).unwrap();
 
         let e2_parts = shuffle.get(&executors_2[1]).unwrap();
-        writeln!(file, "{e2_parts:?}").unwrap();
+        writeln!(file, "{:?}", e2_parts).unwrap();
     }
 
     // Rand.

@@ -34,7 +34,7 @@ async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
     let _mn = MetaNode::boot(&tc.config).await?;
     tc.assert_raft_server_connection().await?;
 
-    let mut client = RaftServiceClient::connect(format!("http://{addr}")).await?;
+    let mut client = RaftServiceClient::connect(format!("http://{}", addr)).await?;
 
     let cases = common_meta_raft_store::state_machine::testing::cases_incr_seq();
 
@@ -50,7 +50,7 @@ async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
         let resp: AppliedState = res?;
         match resp {
             AppliedState::Seq { seq } => {
-                assert_eq!(*want, seq, "{name}");
+                assert_eq!(*want, seq, "{}", name);
             }
             _ => {
                 panic!("not Seq")

@@ -607,7 +607,8 @@ pub fn fixed_hash(
         }
         _ => {
             return Err(ErrorCode::BadDataValueType(format!(
-                "Unsupported apply fn fixed_hash operation for column: {data_type:?}"
+                "Unsupported apply fn fixed_hash operation for column: {:?}",
+                data_type
             )));
         }
     }

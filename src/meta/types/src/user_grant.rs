@@ -63,9 +63,9 @@ impl fmt::Display for GrantObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         match self {
             GrantObject::Global => write!(f, "*.*"),
-            GrantObject::Database(ref cat, ref db) => write!(f, "'{cat}'.'{db}'.*"),
+            GrantObject::Database(ref cat, ref db) => write!(f, "'{}'.'{}'.*", cat, db),
             GrantObject::Table(ref cat, ref db, ref table) => {
-                write!(f, "'{cat}'.'{db}'.'{table}'")
+                write!(f, "'{}'.'{}'.'{}'", cat, db, table)
             }
         }
     }
@@ -226,7 +226,7 @@ impl ops::BitOr for UserGrantSet {
 impl fmt::Display for UserGrantSet {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         for entry in self.entries.iter() {
-            write!(f, "{entry}, ")?;
+            write!(f, "{}, ", entry)?;
         }
         write!(f, "ROLES: {:?}", self.roles())
     }

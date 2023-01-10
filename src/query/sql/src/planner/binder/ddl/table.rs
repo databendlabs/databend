@@ -263,16 +263,19 @@ impl<'a> Binder {
         // (unlike mysql, alias of derived table is not required in databend).
         let query = match limit {
             None => format!(
-                "SELECT * from (SELECT {select_cols} FROM system.tables WHERE database = '{database}') \
-                ORDER BY Name"
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                ORDER BY Name",
+                select_cols, database
             ),
             Some(ShowLimit::Like { pattern }) => format!(
-                "SELECT * from (SELECT {select_cols} FROM system.tables WHERE database = '{database}') \
-            WHERE Name LIKE '{pattern}' ORDER BY Name"
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+            WHERE Name LIKE '{}' ORDER BY Name",
+                select_cols, database, pattern
             ),
             Some(ShowLimit::Where { selection }) => format!(
-                "SELECT * from (SELECT {select_cols} FROM system.tables WHERE database = '{database}') \
-            WHERE ({selection}) ORDER BY Name"
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+            WHERE ({}) ORDER BY Name",
+                select_cols, database, selection
             ),
         };
         let tokens = tokenize_sql(query.as_str())?;
@@ -883,7 +886,7 @@ impl<'a> Binder {
                             let (_expr, expr_type) = scalar_binder.bind(default_expr).await?;
                             let data_type = DataType::from(&schema_data_type);
                             if common_super_type(data_type.clone(), expr_type.clone()).is_none() {
-                                return Err(ErrorCode::SemanticError(format!("column {name} is of type {data_type} but default expression is of type {expr_type}")));
+                                return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
                             }
                             Some(default_expr.to_string())
                         } else {
@@ -1004,7 +1007,8 @@ impl<'a> Binder {
             let expr = cluster_key.as_expr()?;
             if is_expr_non_deterministic(&expr) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "Cluster by expression `{cluster_by:#}` is not deterministic"
+                    "Cluster by expression `{:#}` is not deterministic",
+                    cluster_by
                 )));
             }
             let mut cluster_by = cluster_by.clone();
