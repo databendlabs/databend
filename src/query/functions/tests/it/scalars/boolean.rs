@@ -66,7 +66,7 @@ fn test_and(file: &mut impl Write) {
     run_ast(file, "(0 < 1) AND (a < 1)", one_null_column().as_slice()); // true         AND NULL(true)
 
     // Constant function call, even though it may throw, should not stop constant folding
-    run_ast(file, "const_false AND CAST('1000' AS STRING) = 1000", &[(
+    run_ast(file, "const_false AND CAST('1000' AS UINT32) = 1000", &[(
         "const_false",
         BooleanType::from_data(vec![false]),
     )]);

@@ -337,9 +337,9 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
-ast            : const_false AND CAST('1000' AS STRING) = 1000
-raw expr       : and(#0::Boolean, eq(CAST("1000" AS String), 1000_u16))
-checked expr   : and<Boolean, Boolean>(#0, eq<Int64, Int64>(CAST("1000" AS Int64), CAST(1000_u16 AS Int64)))
+ast            : const_false AND CAST('1000' AS UINT32) = 1000
+raw expr       : and(#0::Boolean, eq(CAST("1000" AS UInt32), 1000_u16))
+checked expr   : and<Boolean, Boolean>(#0, eq<UInt32, UInt32>(to_uint32<String>("1000"), CAST(1000_u16 AS UInt32)))
 optimized expr : false
 evaluation:
 +--------+-------------+---------+
