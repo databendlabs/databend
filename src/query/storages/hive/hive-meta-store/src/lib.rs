@@ -16,6 +16,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::derivable_impls)]
 #![allow(clippy::match_single_binding)]
+#![allow(clippy::unused_unit)]
 
 
 #![allow(clippy::too_many_arguments, clippy::type_complexity, clippy::vec_box)]
