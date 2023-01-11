@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::all)]
+// added for nightly-2022-12-15
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::match_single_binding)]
+#![allow(clippy::unused_unit)]
+#![allow(clippy::redundant_field_names)]
+
+
+#![allow(clippy::too_many_arguments, clippy::type_complexity, clippy::vec_box)]
 #![allow(dead_code)]
 #![allow(unreachable_patterns)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(unused_extern_crates)]
 #![allow(deprecated)]
-#![allow(clippy::too_many_arguments, clippy::type_complexity, clippy::vec_box)]
 #![cfg_attr(rustfmt, rustfmt_skip)]
 mod hive_meta_store;
 

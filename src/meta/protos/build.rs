@@ -14,6 +14,8 @@
 //
 // https://github.com/rust-lang/rustfmt/blob/e1ab878ccb24cda1b9e1c48865b375230385fede/build.rs
 
+#![allow(clippy::uninlined_format_args)]
+
 use std::env;
 use std::fs;
 use std::io::Error;

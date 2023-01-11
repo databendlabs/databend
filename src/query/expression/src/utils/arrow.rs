@@ -113,7 +113,7 @@ pub fn combine_validities(lhs: Option<&Bitmap>, rhs: Option<&Bitmap>) -> Option<
     }
 }
 
-pub fn combine_validities_2(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
+pub fn and_validities(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
     match (lhs, rhs) {
         (Some(lhs), None) => Some(lhs),
         (None, Some(rhs)) => Some(rhs),
@@ -122,7 +122,7 @@ pub fn combine_validities_2(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<
     }
 }
 
-pub fn combine_validities_3(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
+pub fn or_validities(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
     match (lhs, rhs) {
         (Some(lhs), None) => Some(lhs),
         (None, Some(rhs)) => Some(rhs),

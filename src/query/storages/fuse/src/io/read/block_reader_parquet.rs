@@ -177,6 +177,8 @@ impl BlockReader {
             .iter()
             .zip(chunks.into_iter().zip(column_descriptors.iter()))
             .map(|(meta, (chunk, column_descriptor))| {
+                let meta = meta.as_parquet().unwrap();
+
                 let page_meta_data = PageMetaData {
                     column_start: meta.offset,
                     num_values: meta.num_values as i64,

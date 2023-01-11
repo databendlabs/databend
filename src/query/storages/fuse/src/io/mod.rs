@@ -32,6 +32,7 @@ pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;
 pub use read::UncompressedBuffer;
 pub use segments::try_join_futures;
+pub use segments::try_join_futures_with_vec;
 pub use segments::SegmentsIO;
 pub use snapshots::ListSnapshotLiteOption;
 pub use snapshots::SnapshotLiteListExtended;

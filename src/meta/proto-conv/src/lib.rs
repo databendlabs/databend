@@ -14,6 +14,7 @@
 
 // For use of const fn: `Option::<T>::unwrap` at compile time.
 #![feature(const_option)]
+#![allow(clippy::uninlined_format_args)]
 
 //! Provides conversion from and to protobuf defined meta data, which is used for transport.
 //!
