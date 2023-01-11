@@ -17,6 +17,7 @@
 #![allow(clippy::derivable_impls)]
 #![allow(clippy::match_single_binding)]
 #![allow(clippy::unused_unit)]
+#![allow(clippy::redundant_field_names)]
 
 
 #![allow(clippy::too_many_arguments, clippy::type_complexity, clippy::vec_box)]
