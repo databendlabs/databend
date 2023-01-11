@@ -21,7 +21,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::arrow::combine_validities_2;
+use common_expression::arrow::and_validities;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
@@ -274,7 +274,7 @@ impl JoinHashTable {
                     valids = Some(m.into());
                     break;
                 } else {
-                    valids = combine_validities_2(valids, tmp_valids.cloned());
+                    valids = and_validities(valids, tmp_valids.cloned());
                 }
             }
             probe_state.valids = valids;

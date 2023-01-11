@@ -24,16 +24,19 @@ use common_meta_app::share as mt;
 use common_protos::pb;
 use enumflags2::BitFlags;
 
-use crate::check_ver;
+use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
-use crate::MIN_COMPATIBLE_VER;
+use crate::MIN_READER_VER;
 use crate::VER;
 
 impl FromToProto for mt::ObjectSharedByShareIds {
     type PB = pb::ObjectSharedByShareIds;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ObjectSharedByShareIds) -> Result<Self, Incompatible> {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
             share_ids: BTreeSet::from_iter(p.share_ids.iter().copied()),
@@ -44,7 +47,7 @@ impl FromToProto for mt::ObjectSharedByShareIds {
     fn to_pb(&self) -> Result<pb::ObjectSharedByShareIds, Incompatible> {
         let p = pb::ObjectSharedByShareIds {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             share_ids: Vec::from_iter(self.share_ids.iter().copied()),
         };
         Ok(p)
@@ -53,8 +56,11 @@ impl FromToProto for mt::ObjectSharedByShareIds {
 
 impl FromToProto for mt::ShareNameIdent {
     type PB = pb::ShareNameIdent;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ShareNameIdent) -> Result<Self, Incompatible> {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
             tenant: p.tenant,
@@ -66,7 +72,7 @@ impl FromToProto for mt::ShareNameIdent {
     fn to_pb(&self) -> Result<pb::ShareNameIdent, Incompatible> {
         let p = pb::ShareNameIdent {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             tenant: self.tenant.clone(),
             share_name: self.share_name.clone(),
         };
@@ -76,8 +82,11 @@ impl FromToProto for mt::ShareNameIdent {
 
 impl FromToProto for mt::ShareGrantObject {
     type PB = pb::ShareGrantObject;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ShareGrantObject) -> Result<Self, Incompatible> {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         match p.object {
             Some(pb::share_grant_object::Object::DbId(db_id)) => {
@@ -104,7 +113,7 @@ impl FromToProto for mt::ShareGrantObject {
 
         let p = pb::ShareGrantObject {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             object,
         };
         Ok(p)
@@ -113,9 +122,12 @@ impl FromToProto for mt::ShareGrantObject {
 
 impl FromToProto for mt::ShareGrantEntry {
     type PB = pb::ShareGrantEntry;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ShareGrantEntry) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let privileges = BitFlags::<mt::ShareGrantObjectPrivilege, u64>::from_bits(p.privileges);
         match privileges {
@@ -139,7 +151,7 @@ impl FromToProto for mt::ShareGrantEntry {
     fn to_pb(&self) -> Result<pb::ShareGrantEntry, Incompatible> {
         Ok(pb::ShareGrantEntry {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             object: Some(self.object().to_pb()?),
             privileges: self.privileges().bits(),
             grant_on: self.grant_on.to_pb()?,
@@ -153,9 +165,12 @@ impl FromToProto for mt::ShareGrantEntry {
 
 impl FromToProto for mt::ShareMeta {
     type PB = pb::ShareMeta;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ShareMeta) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
         let mut entries = BTreeMap::new();
         for entry in p.entries {
             let entry = mt::ShareGrantEntry::from_pb(entry)?;
@@ -186,7 +201,7 @@ impl FromToProto for mt::ShareMeta {
 
         Ok(pb::ShareMeta {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             database: match &self.database {
                 Some(db) => Some(mt::ShareGrantEntry::to_pb(db)?),
                 None => None,
@@ -206,9 +221,12 @@ impl FromToProto for mt::ShareMeta {
 
 impl FromToProto for mt::ShareAccountMeta {
     type PB = pb::ShareAccountMeta;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ShareAccountMeta) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(mt::ShareAccountMeta {
             account: p.account.clone(),
@@ -224,7 +242,7 @@ impl FromToProto for mt::ShareAccountMeta {
     fn to_pb(&self) -> Result<pb::ShareAccountMeta, Incompatible> {
         Ok(pb::ShareAccountMeta {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
 
             account: self.account.clone(),
             share_id: self.share_id,

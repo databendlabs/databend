@@ -24,16 +24,19 @@ use common_protos::pb;
 use common_protos::pb::data_type::Dt;
 use num::FromPrimitive;
 
-use crate::check_ver;
+use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
-use crate::MIN_COMPATIBLE_VER;
+use crate::MIN_READER_VER;
 use crate::VER;
 
 impl FromToProto for dv::DataSchema {
     type PB = pb::DataSchema;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DataSchema) -> Result<Self, Incompatible> {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let mut fs = Vec::with_capacity(p.fields.len());
         for f in p.fields.into_iter() {
@@ -52,7 +55,7 @@ impl FromToProto for dv::DataSchema {
 
         let p = pb::DataSchema {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             fields: fs,
             metadata: self.meta().clone(),
         };
@@ -62,8 +65,11 @@ impl FromToProto for dv::DataSchema {
 
 impl FromToProto for dv::DataField {
     type PB = pb::DataField;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DataField) -> Result<Self, Incompatible> {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = dv::DataField::new(
             &p.name,
@@ -78,7 +84,7 @@ impl FromToProto for dv::DataField {
     fn to_pb(&self) -> Result<pb::DataField, Incompatible> {
         let p = pb::DataField {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             name: self.name().clone(),
             default_expr: self.default_expr().cloned(),
             data_type: Some(self.data_type().to_pb()?),
@@ -89,8 +95,11 @@ impl FromToProto for dv::DataField {
 
 impl FromToProto for dv::DataTypeImpl {
     type PB = pb::DataType;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DataType) -> Result<Self, Incompatible> {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let dt = match p.dt {
             None => {
@@ -102,6 +111,7 @@ impl FromToProto for dv::DataTypeImpl {
         };
 
         match dt {
+            Dt::NullType(_) => Ok(dv::DataTypeImpl::Null(dv::NullType {})),
             Dt::NullableType(x) => Ok(dv::DataTypeImpl::Nullable(dv::NullableType::from_pb(
                 x.as_ref().clone(),
             )?)),
@@ -135,14 +145,19 @@ impl FromToProto for dv::DataTypeImpl {
     fn to_pb(&self) -> Result<pb::DataType, Incompatible> {
         match self {
             dv::DataTypeImpl::Null(_) => {
-                todo!()
+                let v = pb::DataType {
+                    ver: VER,
+                    min_reader_ver: MIN_READER_VER,
+                    dt: Some(Dt::NullType(pb::Empty {})),
+                };
+                Ok(v)
             }
             dv::DataTypeImpl::Nullable(x) => {
                 let inn = x.to_pb()?;
 
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::NullableType(Box::new(inn))),
                 };
                 Ok(v)
@@ -150,7 +165,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::Boolean(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::BoolType(pb::Empty {})),
                 };
                 Ok(v)
@@ -158,7 +173,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::Int8(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Int8Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -166,7 +181,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::Int16(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Int16Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -174,7 +189,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::Int32(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Int32Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -182,7 +197,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::Int64(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Int64Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -190,7 +205,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::UInt8(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Uint8Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -198,7 +213,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::UInt16(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Uint16Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -206,7 +221,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::UInt32(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Uint32Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -214,7 +229,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::UInt64(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Uint64Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -222,7 +237,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::Float32(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Float32Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -230,7 +245,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::Float64(_) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Float64Type(pb::Empty {})),
                 };
                 Ok(v)
@@ -238,7 +253,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::Date(_x) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::DateType(pb::Empty {})),
                 };
                 Ok(v)
@@ -248,7 +263,7 @@ impl FromToProto for dv::DataTypeImpl {
 
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::TimestampType(inn)),
                 };
                 Ok(v)
@@ -256,7 +271,7 @@ impl FromToProto for dv::DataTypeImpl {
             dv::DataTypeImpl::String(_x) => {
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::StringType(pb::Empty {})),
                 };
                 Ok(v)
@@ -266,7 +281,7 @@ impl FromToProto for dv::DataTypeImpl {
 
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::StructType(inn)),
                 };
                 Ok(v)
@@ -276,7 +291,7 @@ impl FromToProto for dv::DataTypeImpl {
 
                 let v = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::ArrayType(Box::new(inn))),
                 };
                 Ok(v)
@@ -286,7 +301,7 @@ impl FromToProto for dv::DataTypeImpl {
 
                 let p = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::VariantType(inn)),
                 };
                 Ok(p)
@@ -296,7 +311,7 @@ impl FromToProto for dv::DataTypeImpl {
 
                 let p = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::VariantArrayType(inn)),
                 };
                 Ok(p)
@@ -306,7 +321,7 @@ impl FromToProto for dv::DataTypeImpl {
 
                 let p = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::VariantObjectType(inn)),
                 };
                 Ok(p)
@@ -316,7 +331,7 @@ impl FromToProto for dv::DataTypeImpl {
 
                 let p = pb::DataType {
                     ver: VER,
-                    min_compatible: MIN_COMPATIBLE_VER,
+                    min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::IntervalType(inn)),
                 };
                 Ok(p)
@@ -327,9 +342,12 @@ impl FromToProto for dv::DataTypeImpl {
 
 impl FromToProto for dv::NullableType {
     type PB = pb::NullableType;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::NullableType) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let inner = p.inner.ok_or_else(|| Incompatible {
             reason: "NullableType.inner can not be None".to_string(),
@@ -346,7 +364,7 @@ impl FromToProto for dv::NullableType {
 
         let p = pb::NullableType {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             inner: Some(Box::new(inner_pb_type)),
         };
 
@@ -356,16 +374,19 @@ impl FromToProto for dv::NullableType {
 
 impl FromToProto for dv::TimestampType {
     type PB = pb::Timestamp;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::Timestamp) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(dv::TimestampType::default())
     }
 
     fn to_pb(&self) -> Result<pb::Timestamp, Incompatible> {
         let p = pb::Timestamp {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
         };
 
         Ok(p)
@@ -374,9 +395,12 @@ impl FromToProto for dv::TimestampType {
 
 impl FromToProto for dv::StructType {
     type PB = pb::Struct;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::Struct) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
         let names = p.names.clone();
 
         let mut types = Vec::with_capacity(p.types.len());
@@ -407,7 +431,7 @@ impl FromToProto for dv::StructType {
 
         let p = pb::Struct {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
 
             names,
             types,
@@ -419,9 +443,12 @@ impl FromToProto for dv::StructType {
 
 impl FromToProto for dv::ArrayType {
     type PB = pb::Array;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::Array) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let inner = p.inner.ok_or_else(|| Incompatible {
             reason: "Array.inner can not be None".to_string(),
@@ -438,7 +465,7 @@ impl FromToProto for dv::ArrayType {
 
         let p = pb::Array {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             inner: Some(Box::new(inner_pb_type)),
         };
 
@@ -448,9 +475,12 @@ impl FromToProto for dv::ArrayType {
 
 impl FromToProto for dv::VariantArrayType {
     type PB = pb::VariantArray;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::VariantArray) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(Self {})
     }
@@ -458,7 +488,7 @@ impl FromToProto for dv::VariantArrayType {
     fn to_pb(&self) -> Result<pb::VariantArray, Incompatible> {
         let p = pb::VariantArray {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
         };
         Ok(p)
     }
@@ -466,9 +496,12 @@ impl FromToProto for dv::VariantArrayType {
 
 impl FromToProto for dv::VariantObjectType {
     type PB = pb::VariantObject;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::VariantObject) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(Self {})
     }
@@ -476,7 +509,7 @@ impl FromToProto for dv::VariantObjectType {
     fn to_pb(&self) -> Result<pb::VariantObject, Incompatible> {
         let p = pb::VariantObject {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
         };
         Ok(p)
     }
@@ -484,6 +517,9 @@ impl FromToProto for dv::VariantObjectType {
 
 impl FromToProto for dv::IntervalKind {
     type PB = pb::IntervalKind;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
     fn from_pb(p: pb::IntervalKind) -> Result<Self, Incompatible>
     where Self: Sized {
         let dv_kind = match p {
@@ -518,9 +554,12 @@ impl FromToProto for dv::IntervalKind {
 }
 impl FromToProto for dv::IntervalType {
     type PB = pb::IntervalType;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::IntervalType) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let pb_kind: pb::IntervalKind =
             FromPrimitive::from_i32(p.kind).ok_or_else(|| Incompatible {
@@ -535,7 +574,7 @@ impl FromToProto for dv::IntervalType {
         let pb_kind = self.kind().to_pb()?;
         let p = pb::IntervalType {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             kind: pb_kind as i32,
         };
         Ok(p)
@@ -544,9 +583,12 @@ impl FromToProto for dv::IntervalType {
 
 impl FromToProto for dv::VariantType {
     type PB = pb::Variant;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::Variant) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(Self {})
     }
@@ -554,7 +596,7 @@ impl FromToProto for dv::VariantType {
     fn to_pb(&self) -> Result<pb::Variant, Incompatible> {
         let p = pb::Variant {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
         };
         Ok(p)
     }
@@ -562,6 +604,9 @@ impl FromToProto for dv::VariantType {
 
 impl FromToProto for DateTime<Utc> {
     type PB = String;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
 
     fn from_pb(p: String) -> Result<Self, Incompatible> {
         let v = DateTime::<Utc>::from_str(&p).map_err(|e| Incompatible {

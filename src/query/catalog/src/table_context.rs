@@ -58,8 +58,8 @@ pub struct ProcessInfo {
 #[derive(Debug, Clone)]
 pub struct StageAttachment {
     pub location: String,
-    pub file_format_options: BTreeMap<String, String>,
-    pub copy_options: BTreeMap<String, String>,
+    pub file_format_options: Option<BTreeMap<String, String>>,
+    pub copy_options: Option<BTreeMap<String, String>>,
 }
 
 #[async_trait::async_trait]

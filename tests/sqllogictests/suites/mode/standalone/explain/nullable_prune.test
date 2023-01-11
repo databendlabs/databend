@@ -45,7 +45,7 @@ explain select * from t_nullable_prune where a is null
 ----
 Filter
 ├── filters: [not(is_not_null(t_nullable_prune.a (#0)))]
-├── estimated rows: 2.00
+├── estimated rows: 4.00
 └── TableScan
     ├── table: default.default.t_nullable_prune
     ├── read rows: 3

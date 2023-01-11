@@ -252,7 +252,8 @@ impl FuseTable {
                 let indices = &column.leaf_ids;
                 for index in indices {
                     let col_metas = &block_meta.col_metas[&(*index as u32)];
-                    statistics.read_bytes += col_metas.len as usize;
+                    let (_, len) = col_metas.offset_length();
+                    statistics.read_bytes += len as usize;
                 }
             }
 

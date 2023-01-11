@@ -37,17 +37,15 @@ use crate::processors::sources::input_formats::input_format_text::RowBatch;
 pub struct InputFormatTSV {}
 
 impl InputFormatTSV {
-    #[allow(clippy::too_many_arguments)]
+    pub fn create() -> Self {
+        Self {}
+    }
     fn read_row(
         field_delimiter: u8,
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
         deserializers: &mut Vec<TypeDeserializerImpl>,
         schema: &TableSchemaRef,
-        path: &str,
-        batch_id: usize,
-        offset: usize,
-        row_index: Option<usize>,
     ) -> Result<()> {
         let num_columns = deserializers.len();
         let mut column_index = 0;
@@ -105,19 +103,7 @@ impl InputFormatTSV {
         }
 
         if let Some(m) = err_msg {
-            let row_info = if let Some(r) = row_index {
-                format!("at row {},", r)
-            } else {
-                String::new()
-            };
-            let mut msg = format!(
-                "fail to parse tsv {} batch {} at offset {}, {} reason={}, row data: ",
-                path,
-                batch_id,
-                offset + pos,
-                row_info,
-                m
-            );
+            let mut msg = format!("{}, row data: ", m);
             verbose_string(buf, &mut msg);
             Err(ErrorCode::BadBytes(msg))
         } else {
@@ -144,10 +130,10 @@ impl InputFormatTextBase for InputFormatTSV {
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         tracing::debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
-            batch.path,
+            batch.split_info.file.path,
             batch.batch_id,
-            batch.start_row,
-            batch.offset
+            batch.start_row_in_split,
+            batch.start_offset_in_split
         );
         let field_decoder = builder
             .field_decoder
@@ -158,7 +144,6 @@ impl InputFormatTextBase for InputFormatTSV {
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let mut num_rows = 0usize;
-        let start_row = batch.start_row;
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             if let Err(e) = Self::read_row(
@@ -167,10 +152,6 @@ impl InputFormatTextBase for InputFormatTSV {
                 buf,
                 columns,
                 schema,
-                &batch.path,
-                batch.batch_id,
-                batch.offset + start,
-                start_row.map(|n| n + i),
             ) {
                 if builder.ctx.on_error_mode == OnErrorMode::Continue {
                     columns.iter_mut().for_each(|c| {
@@ -182,7 +163,7 @@ impl InputFormatTextBase for InputFormatTSV {
                     start = *end;
                     continue;
                 } else {
-                    return Err(e);
+                    return Err(batch.error(&e.message(), &builder.ctx, start, i));
                 }
             }
             start = *end;

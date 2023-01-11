@@ -81,7 +81,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     assert_eq!(parts.len(), n);
 
     // do compact
-    let query = format!("optimize table {}.{} compact", db_name, tbl_name);
+    let query = format!("optimize table {db_name}.{tbl_name} compact");
 
     let mut planner = Planner::new(ctx.clone());
     let (plan, _, _) = planner.plan_sql(&query).await?;
@@ -95,7 +95,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // only arrange one worker for the `ReadDataSourcePlan`.
     ctx.get_settings().set_max_threads(1)?;
     let data_stream = interpreter.execute(ctx.clone()).await?;
-    let _ = data_stream.try_collect::<Vec<_>>();
+    let _ = data_stream.try_collect::<Vec<_>>().await;
 
     // verify compaction
     let table = fixture.latest_default_table().await?;

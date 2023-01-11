@@ -18,7 +18,6 @@ use common_datavalues::DataValue;
 
 use crate::types::number::NumberScalar;
 use crate::types::NumberDataType;
-use crate::with_number_type;
 use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::TableDataType;
@@ -33,8 +32,17 @@ pub fn can_convert(datatype: &DataTypeImpl) -> bool {
 }
 
 pub fn from_type(datatype: &DataTypeImpl) -> TableDataType {
-    with_number_type!(|TYPE| match datatype {
-        DataTypeImpl::TYPE(_) => TableDataType::Number(NumberDataType::TYPE),
+    match datatype {
+        DataTypeImpl::Int8(_) => TableDataType::Number(NumberDataType::Int8),
+        DataTypeImpl::Int16(_) => TableDataType::Number(NumberDataType::Int16),
+        DataTypeImpl::Int32(_) => TableDataType::Number(NumberDataType::Int32),
+        DataTypeImpl::Int64(_) => TableDataType::Number(NumberDataType::Int64),
+        DataTypeImpl::UInt8(_) => TableDataType::Number(NumberDataType::UInt8),
+        DataTypeImpl::UInt16(_) => TableDataType::Number(NumberDataType::UInt16),
+        DataTypeImpl::UInt32(_) => TableDataType::Number(NumberDataType::UInt32),
+        DataTypeImpl::UInt64(_) => TableDataType::Number(NumberDataType::UInt64),
+        DataTypeImpl::Float32(_) => TableDataType::Number(NumberDataType::Float32),
+        DataTypeImpl::Float64(_) => TableDataType::Number(NumberDataType::Float64),
 
         DataTypeImpl::Null(_) => TableDataType::Null,
         DataTypeImpl::Nullable(v) => TableDataType::Nullable(Box::new(from_type(v.inner_type()))),
@@ -58,8 +66,12 @@ pub fn from_type(datatype: &DataTypeImpl) -> TableDataType {
         DataTypeImpl::Variant(_)
         | DataTypeImpl::VariantArray(_)
         | DataTypeImpl::VariantObject(_) => TableDataType::Variant,
-        DataTypeImpl::Interval(_) => unreachable!("Interval is not deprecated"),
-    })
+
+        // NOTE: No Interval type is ever stored in meta-service.
+        //       This variant should never be matched.
+        //       Thus it is safe for this conversion to map it to any type.
+        DataTypeImpl::Interval(_) => TableDataType::Null,
+    }
 }
 
 pub fn from_schema(schema: &common_datavalues::DataSchema) -> TableSchema {
