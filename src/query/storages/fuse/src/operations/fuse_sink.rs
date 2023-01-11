@@ -38,7 +38,6 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::table::TableCompression;
 
 use super::AppendOperationLogEntry;
-use crate::fuse_table::FuseStorageFormat;
 use crate::io;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
@@ -124,14 +123,12 @@ pub struct FuseTableSink {
     input: Arc<InputPort>,
     ctx: Arc<dyn TableContext>,
     data_accessor: Operator,
-    num_block_threshold: u64,
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
     cluster_stats_gen: ClusterStatsGenerator,
 
     source_schema: TableSchemaRef,
-    storage_format: FuseStorageFormat,
-    table_compression: TableCompression,
+    write_settings: WriteSettings,
     // A dummy output port for distributed insert select to connect Exchange Sink.
     output: Option<Arc<OutputPort>>,
 }
@@ -141,14 +138,12 @@ impl FuseTableSink {
     pub fn try_create(
         input: Arc<InputPort>,
         ctx: Arc<dyn TableContext>,
-        num_block_threshold: usize,
+        write_settings: WriteSettings,
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
         thresholds: BlockCompactThresholds,
         source_schema: TableSchemaRef,
-        storage_format: FuseStorageFormat,
-        table_compression: TableCompression,
         output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
@@ -158,11 +153,9 @@ impl FuseTableSink {
             meta_locations,
             state: State::None,
             accumulator: StatisticsAccumulator::new(thresholds),
-            num_block_threshold: num_block_threshold as u64,
+            write_settings,
             cluster_stats_gen,
             source_schema,
-            storage_format,
-            table_compression,
             output,
         })))
     }
@@ -237,16 +230,10 @@ impl Processor for FuseTableSink {
                     Some(column_distinct_count),
                 )?;
 
-                let write_settings = WriteSettings {
-                    storage_format: self.storage_format,
-                    table_compression: self.table_compression,
-                    ..Default::default()
-                };
-
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let (size, meta_data) =
-                    io::write_block(&write_settings, &self.source_schema, block, &mut data)?;
+                    io::write_block(&self.write_settings, &self.source_schema, block, &mut data)?;
 
                 self.state = State::Serialized {
                     data,
@@ -345,10 +332,11 @@ impl Processor for FuseTableSink {
                     block_statistics,
                     Some(bloom_index_state.location),
                     bloom_filter_index_size,
-                    self.table_compression.into(),
+                    self.write_settings.table_compression.into(),
                 )?;
 
-                if self.accumulator.summary_block_count >= self.num_block_threshold {
+                if self.accumulator.summary_block_count >= self.write_settings.block_per_seg as u64
+                {
                     self.state = State::GenerateSegment;
                 }
             }

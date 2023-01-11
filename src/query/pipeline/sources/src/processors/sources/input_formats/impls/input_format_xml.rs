@@ -117,7 +117,6 @@ impl AligningStateTextBased for AligningStateWholeFile {
             data,
             row_ends: vec![],
             field_ends: vec![],
-            path: self.split_info.file.path.clone(),
             batch_id: 0,
             split_info: self.split_info.clone(),
             start_offset_in_split: 0,
@@ -146,7 +145,7 @@ impl InputFormatTextBase for InputFormatXML {
             .expect("must success");
         let columns = &mut builder.mutable_columns;
 
-        let path = &batch.path;
+        let path = &batch.split_info.file.path;
         let row_tag = builder.ctx.format_options.stage.row_tag.as_bytes().to_vec();
         let field_tag = vec![b'f', b'i', b'e', b'l', b'd'];
 
@@ -222,7 +221,7 @@ impl InputFormatTextBase for InputFormatXML {
                                 &mut cols,
                                 columns,
                                 &builder.ctx.schema,
-                                &batch.path,
+                                &batch.split_info.file.path,
                                 num_rows,
                             ) {
                                 if builder.ctx.on_error_mode == OnErrorMode::Continue {

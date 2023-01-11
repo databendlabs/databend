@@ -2047,7 +2047,7 @@ impl<KV: KVApi> SchemaApi for KV {
         }
     }
 
-    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    #[tracing::instrument(level = "debug", ret, skip_all)]
     async fn update_table_meta(
         &self,
         req: UpdateTableMetaReq,

@@ -283,15 +283,13 @@ impl BlockReader {
         let mut ranges = vec![];
         for index in indices.keys() {
             let column_meta = &columns_meta[index];
-            ranges.push((
-                *index,
-                column_meta.offset..(column_meta.offset + column_meta.len),
-            ));
+            let (offset, len) = column_meta.offset_length();
+            ranges.push((*index, offset..(offset + len)));
 
             // Perf
             {
                 metrics_inc_remote_io_seeks(1);
-                metrics_inc_remote_io_read_bytes(column_meta.len);
+                metrics_inc_remote_io_read_bytes(len);
             }
         }
 
@@ -312,10 +310,8 @@ impl BlockReader {
         let mut ranges = vec![];
         for index in indices.keys() {
             let column_meta = &part.columns_meta[index];
-            ranges.push((
-                *index,
-                column_meta.offset..(column_meta.offset + column_meta.len),
-            ));
+            let (offset, len) = column_meta.offset_length();
+            ranges.push((*index, offset..(offset + len)));
         }
 
         let object = self.operator.object(&part.location);

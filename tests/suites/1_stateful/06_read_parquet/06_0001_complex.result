@@ -1,0 +1,49 @@
+1	(1,'a')
+2	(3,'b')
+3	(3,'c')
+1	(1,'a')
+1	(1,'a')
+3	(3,'c')
+2	(3,'b')
+3	(3,'c')
+b
+c
+a
+b
+c
+(1,'a')
+(3,'b')
+(3,'c')
+1	1	a	(1,'a')
+2	3	b	(3,'b')
+3	3	c	(3,'c')
+3	3	c	(3,'c')
+1	1	a	(1,'a')
+2	3	b	(3,'b')
+1	(1,'a')
+2	(3,'b')
+1
+3
+1
+2
+NULL
+(NULL,NULL,NULL,NULL,NULL,['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient'],NULL,NULL)
+(NULL,NULL,NULL,NULL,NULL,['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient'],NULL,NULL)
+NULL	NULL
+NULL	['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient']
+NULL	['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient']
+[(NULL,NULL,'official','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL),(NULL,NULL,'usual','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL)]
+[(NULL,NULL,'official',NULL,'Quigley282',['Wilmer32'],['Mr.'],NULL,NULL)]
+[(NULL,NULL,'official',NULL,'Collier206',['Towanda270'],['Mrs.'],NULL,NULL),(NULL,NULL,'maiden',NULL,'Mayer370',['Towanda270'],['Mrs.'],NULL,NULL)]
+(NULL,NULL,'official','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL)
+(NULL,NULL,'official',NULL,'Quigley282',['Wilmer32'],['Mr.'],NULL,NULL)
+(NULL,NULL,'official',NULL,'Collier206',['Towanda270'],['Mrs.'],NULL,NULL)
+Infection Control
+Quigley282
+Collier206
+(NULL,NULL,'usual','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL)
+NULL
+(NULL,NULL,'maiden',NULL,'Mayer370',['Towanda270'],['Mrs.'],NULL,NULL)
+['Jennifer']
+NULL
+['Towanda270']
