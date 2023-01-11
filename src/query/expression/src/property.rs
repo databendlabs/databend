@@ -53,11 +53,11 @@ impl FunctionProperty {
 pub enum FunctionDomain<T: ValueType> {
     /// The function may return error.
     MayThrow,
-    /// The function must not return error, and the return value any valid
-    /// value the type can represent.
+    /// The function must not return error, and the return value can be
+    /// any valid value the type can represent.
     Full,
     /// The function must not return error, and have futher information
-    /// to restrict the range of the output value.
+    /// about the range of the output value.
     Domain(T::Domain),
 }
 

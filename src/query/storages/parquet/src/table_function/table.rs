@@ -18,7 +18,10 @@ use std::sync::Arc;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::arrow::io::parquet::read as pread;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -108,14 +111,14 @@ impl ParquetTable {
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
         let first_meta = ParquetReader::read_meta(&file_locations[0])?;
-        let arrow_schema = ParquetReader::infer_schema(&first_meta)?;
+        let arrow_schema = pread::infer_schema(&first_meta)?;
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: Arc::new(TableSchema::from(&arrow_schema)),
+                schema: arrow_to_table_schema(arrow_schema.clone()).into(),
                 engine: "SystemReadParquet".to_string(),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.
@@ -211,4 +214,28 @@ impl TableFunction for ParquetTable {
     where Self: 'a {
         self
     }
+}
+
+fn lower_field_name(field: &mut ArrowField) {
+    field.name = field.name.to_lowercase();
+    match &mut field.data_type {
+        ArrowDataType::List(f)
+        | ArrowDataType::LargeList(f)
+        | ArrowDataType::FixedSizeList(f, _) => {
+            lower_field_name(f.as_mut());
+        }
+        ArrowDataType::Struct(ref mut fields) => {
+            for f in fields {
+                lower_field_name(f);
+            }
+        }
+        _ => {}
+    }
+}
+
+pub fn arrow_to_table_schema(mut schema: ArrowSchema) -> TableSchema {
+    schema.fields.iter_mut().for_each(|f| {
+        lower_field_name(f);
+    });
+    TableSchema::from(&schema)
 }

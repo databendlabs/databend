@@ -41,7 +41,7 @@ impl FromToProto for mt::AuthInfo {
     type PB = pb::AuthInfo;
     fn from_pb(p: pb::AuthInfo) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         match p.info {
             Some(pb::auth_info::Info::None(pb::auth_info::None {})) => Ok(mt::AuthInfo::None),
@@ -75,7 +75,7 @@ impl FromToProto for mt::AuthInfo {
         };
         Ok(pb::AuthInfo {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             info,
         })
     }
@@ -85,7 +85,7 @@ impl FromToProto for mt::UserOption {
     type PB = pb::UserOption;
     fn from_pb(p: pb::UserOption) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         // ignore unknown flags
         let flags = BitFlags::<mt::UserOptionFlag, u64>::from_bits_truncate(p.flags);
@@ -98,7 +98,7 @@ impl FromToProto for mt::UserOption {
     fn to_pb(&self) -> Result<pb::UserOption, Incompatible> {
         Ok(pb::UserOption {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             flags: self.flags().bits(),
             default_role: self.default_role().cloned(),
         })
@@ -109,7 +109,7 @@ impl FromToProto for mt::UserQuota {
     type PB = pb::UserQuota;
     fn from_pb(p: pb::UserQuota) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(Self {
             max_cpu: p.max_cpu,
@@ -121,7 +121,7 @@ impl FromToProto for mt::UserQuota {
     fn to_pb(&self) -> Result<pb::UserQuota, Incompatible> {
         Ok(pb::UserQuota {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             max_cpu: self.max_cpu,
             max_memory_in_bytes: self.max_memory_in_bytes,
             max_storage_in_bytes: self.max_storage_in_bytes,
@@ -133,7 +133,7 @@ impl FromToProto for mt::GrantObject {
     type PB = pb::GrantObject;
     fn from_pb(p: pb::GrantObject) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         match p.object {
             Some(pb::grant_object::Object::Global(pb::grant_object::GrantGlobalObject {})) => {
@@ -175,7 +175,7 @@ impl FromToProto for mt::GrantObject {
         };
         Ok(pb::GrantObject {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             object,
         })
     }
@@ -185,7 +185,7 @@ impl FromToProto for mt::GrantEntry {
     type PB = pb::GrantEntry;
     fn from_pb(p: pb::GrantEntry) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let privileges = BitFlags::<mt::UserPrivilegeType, u64>::from_bits(p.privileges);
         match privileges {
@@ -204,7 +204,7 @@ impl FromToProto for mt::GrantEntry {
     fn to_pb(&self) -> Result<pb::GrantEntry, Incompatible> {
         Ok(pb::GrantEntry {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             object: Some(self.object().to_pb()?),
             privileges: self.privileges().bits(),
         })
@@ -215,7 +215,7 @@ impl FromToProto for mt::UserGrantSet {
     type PB = pb::UserGrantSet;
     fn from_pb(p: pb::UserGrantSet) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let mut entries = Vec::new();
         for entry in p.entries.iter() {
@@ -241,7 +241,7 @@ impl FromToProto for mt::UserGrantSet {
 
         Ok(pb::UserGrantSet {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             entries,
             roles,
         })
@@ -252,7 +252,7 @@ impl FromToProto for mt::UserInfo {
     type PB = pb::UserInfo;
     fn from_pb(p: pb::UserInfo) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(mt::UserInfo {
             name: p.name.clone(),
@@ -275,7 +275,7 @@ impl FromToProto for mt::UserInfo {
     fn to_pb(&self) -> Result<pb::UserInfo, Incompatible> {
         Ok(pb::UserInfo {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
             hostname: self.hostname.clone(),
             auth_info: Some(mt::AuthInfo::to_pb(&self.auth_info)?),
@@ -290,7 +290,7 @@ impl FromToProto for mt::UserIdentity {
     type PB = pb::UserIdentity;
     fn from_pb(p: pb::UserIdentity) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(mt::UserIdentity {
             username: p.username.clone(),
@@ -301,7 +301,7 @@ impl FromToProto for mt::UserIdentity {
     fn to_pb(&self) -> Result<pb::UserIdentity, Incompatible> {
         Ok(pb::UserIdentity {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             username: self.username.clone(),
             hostname: self.hostname.clone(),
         })
@@ -483,7 +483,7 @@ impl FromToProto for mt::FileFormatOptions {
     type PB = pb::user_stage_info::FileFormatOptions;
     fn from_pb(p: pb::user_stage_info::FileFormatOptions) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let format = mt::StageFileFormatType::from_pb(
             FromPrimitive::from_i32(p.format).ok_or_else(|| Incompatible {
@@ -521,7 +521,7 @@ impl FromToProto for mt::FileFormatOptions {
         let compression = mt::StageFileCompression::to_pb(&self.compression)? as i32;
         Ok(pb::user_stage_info::FileFormatOptions {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             format,
             skip_header: self.skip_header,
             field_delimiter: self.field_delimiter.clone(),
@@ -645,7 +645,7 @@ impl FromToProto for mt::UserStageInfo {
     type PB = pb::UserStageInfo;
     fn from_pb(p: pb::UserStageInfo) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(mt::UserStageInfo {
             stage_name: p.stage_name.clone(),
             stage_type: mt::StageType::from_pb(FromPrimitive::from_i32(p.stage_type).ok_or_else(
@@ -680,7 +680,7 @@ impl FromToProto for mt::UserStageInfo {
     fn to_pb(&self) -> Result<pb::UserStageInfo, Incompatible> {
         Ok(pb::UserStageInfo {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             stage_name: self.stage_name.clone(),
             stage_type: mt::StageType::to_pb(&self.stage_type)? as i32,
             stage_params: Some(mt::StageParams::to_pb(&self.stage_params)?),
@@ -700,7 +700,7 @@ impl FromToProto for mt::StageFile {
     type PB = pb::StageFile;
     fn from_pb(p: pb::StageFile) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(mt::StageFile {
             path: p.path.clone(),
             size: p.size,
@@ -717,7 +717,7 @@ impl FromToProto for mt::StageFile {
     fn to_pb(&self) -> Result<pb::StageFile, Incompatible> {
         Ok(pb::StageFile {
             ver: VER,
-            min_compatible: MIN_READER_VER,
+            min_reader_ver: MIN_READER_VER,
             path: self.path.clone(),
             size: self.size,
             md5: self.md5.clone(),

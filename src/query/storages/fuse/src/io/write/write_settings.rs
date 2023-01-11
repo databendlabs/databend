@@ -15,19 +15,26 @@
 use storages_common_table_meta::table::TableCompression;
 
 use crate::FuseStorageFormat;
+use crate::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::DEFAULT_ROW_PER_PAGE;
 
+#[derive(Clone)]
 pub struct WriteSettings {
     pub storage_format: FuseStorageFormat,
     pub table_compression: TableCompression,
-    pub native_max_page_size: usize,
+    // rows per page, current only work in native format
+    pub max_page_size: usize,
+
+    pub block_per_seg: usize,
 }
 
 impl Default for WriteSettings {
     fn default() -> Self {
-        WriteSettings {
+        Self {
             storage_format: FuseStorageFormat::Parquet,
-            table_compression: Default::default(),
-            native_max_page_size: 8192,
+            table_compression: TableCompression::LZ4,
+            max_page_size: DEFAULT_ROW_PER_PAGE,
+            block_per_seg: DEFAULT_BLOCK_PER_SEGMENT,
         }
     }
 }

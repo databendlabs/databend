@@ -15,7 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_arrow::native::ColumnMeta as NativeColumnMeta;
 use common_expression::TableField;
+use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -23,7 +25,6 @@ use crate::meta::statistics::ClusterStatistics;
 use crate::meta::statistics::ColumnStatistics;
 use crate::meta::statistics::FormatVersion;
 use crate::meta::ColumnId;
-use crate::meta::ColumnMeta;
 use crate::meta::Compression;
 use crate::meta::Location;
 use crate::meta::Statistics;
@@ -100,6 +101,28 @@ impl BlockMeta {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, EnumAsInner)]
+pub enum ColumnMeta {
+    Parquet(v0::ColumnMeta),
+    Native(NativeColumnMeta),
+}
+
+impl ColumnMeta {
+    pub fn total_rows(&self) -> usize {
+        match self {
+            ColumnMeta::Parquet(v) => v.num_values as usize,
+            ColumnMeta::Native(v) => v.pages.iter().map(|page| page.num_values as usize).sum(),
+        }
+    }
+
+    pub fn offset_length(&self) -> (u64, u64) {
+        match self {
+            ColumnMeta::Parquet(v) => (v.offset, v.len),
+            ColumnMeta::Native(v) => (v.offset, v.pages.iter().map(|page| page.length).sum()),
+        }
+    }
+}
+
 impl SegmentInfo {
     pub fn new(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
         Self {
@@ -156,12 +179,18 @@ impl BlockMeta {
             })
             .collect();
 
+        let col_metas = s
+            .col_metas
+            .iter()
+            .map(|(k, v)| (*k, ColumnMeta::Parquet(v.clone())))
+            .collect();
+
         Self {
             row_count: s.row_count,
             block_size: s.block_size,
             file_size: s.file_size,
             col_stats,
-            col_metas: s.col_metas.clone(),
+            col_metas,
             cluster_stats: None,
             location: (s.location.path.clone(), 0),
             bloom_filter_index_location: None,
@@ -180,12 +209,18 @@ impl BlockMeta {
             })
             .collect();
 
+        let col_metas = s
+            .col_metas
+            .iter()
+            .map(|(k, v)| (*k, ColumnMeta::Parquet(v.clone())))
+            .collect();
+
         Self {
             row_count: s.row_count,
             block_size: s.block_size,
             file_size: s.file_size,
             col_stats,
-            col_metas: s.col_metas.clone(),
+            col_metas,
             cluster_stats: None,
             location: s.location.clone(),
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
