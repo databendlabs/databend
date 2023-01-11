@@ -140,7 +140,7 @@ async fn execute(
     //
     //  thus here we spawn the task of executing the interpreter to ctx runtime :
     //    - "pthread_join" will happen in "query-ctx" thread
-    //    - "acquire" and "release" the async mutex lock will happen in pipeline executor threads
+    //    - "acquire" and "release" the async mutex lock will happen in other threads (it depends)
     //       e.g. "CompleteExecutor" threads
     //
     //  P.S. I think it will be better/more reasonable if we could avoid using pthread_join inside an async stack.
