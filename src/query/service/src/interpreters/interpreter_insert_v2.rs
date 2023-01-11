@@ -51,6 +51,7 @@ use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
@@ -167,12 +168,13 @@ impl InsertInterpreterV2 {
         let overwrite = self.plan.overwrite;
 
         let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
-        stage_info
-            .file_format_options
-            .apply(&attachment.file_format_options, true)?;
-        stage_info
-            .copy_options
-            .apply(&attachment.copy_options, true)?;
+
+        if let Some(ref options) = attachment.file_format_options {
+            stage_info.file_format_options = FileFormatOptions::from_map(options)?;
+        }
+        if let Some(ref options) = attachment.copy_options {
+            stage_info.copy_options.apply(options, true)?;
+        }
 
         let table_schema = infer_table_schema(&source_schema)?;
         let mut stage_table_info = StageTableInfo {

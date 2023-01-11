@@ -35,6 +35,9 @@ use crate::VER;
 
 impl FromToProto for mt::TableCopiedFileInfo {
     type PB = pb::TableCopiedFileInfo;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableCopiedFileInfo) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -66,6 +69,9 @@ impl FromToProto for mt::TableCopiedFileInfo {
 
 impl FromToProto for mt::TableCopiedFileLock {
     type PB = pb::TableCopiedFileLock;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableCopiedFileLock) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -84,6 +90,9 @@ impl FromToProto for mt::TableCopiedFileLock {
 
 impl FromToProto for mt::TableNameIdent {
     type PB = pb::TableNameIdent;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableNameIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -109,6 +118,9 @@ impl FromToProto for mt::TableNameIdent {
 
 impl FromToProto for mt::DBIdTableName {
     type PB = pb::DbIdTableName;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DbIdTableName) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -132,6 +144,9 @@ impl FromToProto for mt::DBIdTableName {
 
 impl FromToProto for mt::TableIdent {
     type PB = pb::TableIdent;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -156,6 +171,9 @@ impl FromToProto for mt::TableIdent {
 
 impl FromToProto for mt::TableMeta {
     type PB = pb::TableMeta;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -247,6 +265,9 @@ impl FromToProto for mt::TableMeta {
 
 impl FromToProto for mt::TableStatistics {
     type PB = pb::TableStatistics;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableStatistics) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -275,6 +296,9 @@ impl FromToProto for mt::TableStatistics {
 
 impl FromToProto for mt::TableIdList {
     type PB = pb::TableIdList;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableIdList) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 

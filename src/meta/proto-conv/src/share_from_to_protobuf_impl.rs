@@ -32,6 +32,9 @@ use crate::VER;
 
 impl FromToProto for mt::ObjectSharedByShareIds {
     type PB = pb::ObjectSharedByShareIds;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ObjectSharedByShareIds) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -53,6 +56,9 @@ impl FromToProto for mt::ObjectSharedByShareIds {
 
 impl FromToProto for mt::ShareNameIdent {
     type PB = pb::ShareNameIdent;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ShareNameIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -76,6 +82,9 @@ impl FromToProto for mt::ShareNameIdent {
 
 impl FromToProto for mt::ShareGrantObject {
     type PB = pb::ShareGrantObject;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ShareGrantObject) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -113,6 +122,9 @@ impl FromToProto for mt::ShareGrantObject {
 
 impl FromToProto for mt::ShareGrantEntry {
     type PB = pb::ShareGrantEntry;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ShareGrantEntry) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -153,6 +165,9 @@ impl FromToProto for mt::ShareGrantEntry {
 
 impl FromToProto for mt::ShareMeta {
     type PB = pb::ShareMeta;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ShareMeta) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -206,6 +221,9 @@ impl FromToProto for mt::ShareMeta {
 
 impl FromToProto for mt::ShareAccountMeta {
     type PB = pb::ShareAccountMeta;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::ShareAccountMeta) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;

@@ -12,25 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::Int64Type;
-use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::number::UInt8Type;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::string::StringDomain;
-use common_expression::types::AnyType;
-use common_expression::types::ArgType;
-use common_expression::types::DataType;
-use common_expression::types::NullableType;
-use common_expression::types::NumberDataType;
-use common_expression::types::StringType;
-use common_expression::types::ValueType;
+use common_expression::types::NumberColumn;
+use common_expression::types::*;
 use common_expression::wrap_nullable;
 use common_expression::Column;
 use common_expression::Domain;
@@ -43,7 +36,6 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
-use regex::bytes::Regex;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("concat", |_, args_type| {
@@ -664,9 +656,24 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<A
     };
 
     let size = len.unwrap_or(1);
-    let mut key: Vec<Vec<u8>> = Vec::new();
-    let mut map: HashMap<Vec<Vec<u8>>, Regex> = HashMap::new();
-    let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, size);
+    let mut builder = Vec::with_capacity(size);
+
+    let cached_reg = match (&pat_arg, &mt_arg) {
+        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+            match regexp::build_regexp_from_pattern("regexp_instr", pat, Some(mt)) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        (ValueRef::Scalar(pat), None) => {
+            match regexp::build_regexp_from_pattern("regexp_instr", pat, None) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+
     for idx in 0..size {
         let source = unsafe { source_arg.index_unchecked(idx) };
         let pat = unsafe { pat_arg.index_unchecked(idx) };
@@ -685,45 +692,43 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<A
 
         if let Err(err) = regexp::validate_regexp_arguments("regexp_instr", pos, occur, ro) {
             ctx.set_error(builder.len(), err);
-            builder.push_default();
+            builder.push(0);
             continue;
         }
 
         if source.is_empty() || pat.is_empty() {
-            builder.push_default();
+            builder.push(0);
             continue;
         }
-        key.push(pat.to_vec());
-        if let Some(mt) = mt {
-            key.push(mt.to_vec());
-        }
-        let re = if let Some(re) = map.get(&key) {
-            re
-        } else {
+
+        let mut local_re = None;
+        if cached_reg.is_none() {
             match regexp::build_regexp_from_pattern("regexp_instr", pat, mt) {
                 Ok(re) => {
-                    map.insert(key.clone(), re);
-                    map.get(&key).unwrap()
+                    local_re = Some(re);
                 }
                 Err(err) => {
                     ctx.set_error(builder.len(), err);
-                    builder.push_default();
+                    builder.push(0);
                     continue;
                 }
             }
         };
-        key.clear();
+        let re = cached_reg
+            .as_ref()
+            .unwrap_or_else(|| local_re.as_ref().unwrap());
 
         let pos = pos.unwrap_or(1);
         let occur = occur.unwrap_or(1);
         let ro = ro.unwrap_or(0);
 
         let instr = regexp::regexp_instr(source, re, pos, occur, ro);
-        builder.push(NumberScalar::UInt64(instr));
+        builder.push(instr);
     }
+
     match len {
-        Some(_) => Value::Column(Column::Number(builder.build())),
-        _ => Value::Scalar(Scalar::Number(builder.build_scalar())),
+        Some(_) => Value::Column(Column::Number(NumberColumn::UInt64(builder.into()))),
+        _ => Value::Scalar(Scalar::Number(NumberScalar::UInt64(builder.pop().unwrap()))),
     }
 }
 
@@ -740,9 +745,23 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<An
         None
     };
 
+    let cached_reg = match (&pat_arg, &mt_arg) {
+        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+            match regexp::build_regexp_from_pattern("regexp_like", pat, Some(mt)) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        (ValueRef::Scalar(pat), None) => {
+            match regexp::build_regexp_from_pattern("regexp_like", pat, None) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+
     let size = len.unwrap_or(1);
-    let mut key: Vec<Vec<u8>> = Vec::new();
-    let mut map: HashMap<Vec<Vec<u8>>, Regex> = HashMap::new();
     let mut builder = MutableBitmap::with_capacity(size);
     for idx in 0..size {
         let source = unsafe { source_arg.index_unchecked(idx) };
@@ -751,17 +770,11 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<An
             .as_ref()
             .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
 
-        key.push(pat.to_vec());
-        if let Some(mt) = mt {
-            key.push(mt.to_vec());
-        }
-        let re = if let Some(re) = map.get(&key) {
-            re
-        } else {
+        let mut local_re = None;
+        if cached_reg.is_none() {
             match regexp::build_regexp_from_pattern("regexp_like", pat, mt) {
                 Ok(re) => {
-                    map.insert(key.clone(), re);
-                    map.get(&key).unwrap()
+                    local_re = Some(re);
                 }
                 Err(err) => {
                     ctx.set_error(builder.len(), err);
@@ -770,8 +783,9 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<An
                 }
             }
         };
-        key.clear();
-
+        let re = cached_reg
+            .as_ref()
+            .unwrap_or_else(|| local_re.as_ref().unwrap());
         builder.push(re.is_match(source));
     }
     match len {
@@ -806,9 +820,24 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
     };
 
     let size = len.unwrap_or(1);
-    let mut key: Vec<Vec<u8>> = Vec::new();
-    let mut map: HashMap<Vec<Vec<u8>>, Regex> = HashMap::new();
     let mut builder = StringColumnBuilder::with_capacity(size, 0);
+
+    let cached_reg = match (&pat_arg, &mt_arg) {
+        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+            match regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        (ValueRef::Scalar(pat), None) => {
+            match regexp::build_regexp_from_pattern("regexp_replace", pat, None) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+
     for idx in 0..size {
         let source = unsafe { source_arg.index_unchecked(idx) };
         let pat = unsafe { pat_arg.index_unchecked(idx) };
@@ -845,17 +874,12 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
             builder.commit_row();
             continue;
         }
-        key.push(pat.to_vec());
-        if let Some(mt) = mt {
-            key.push(mt.to_vec());
-        }
-        let re = if let Some(re) = map.get(&key) {
-            re
-        } else {
+
+        let mut local_re = None;
+        if cached_reg.is_none() {
             match regexp::build_regexp_from_pattern("regexp_replace", pat, mt) {
                 Ok(re) => {
-                    map.insert(key.clone(), re);
-                    map.get(&key).unwrap()
+                    local_re = Some(re);
                 }
                 Err(err) => {
                     ctx.set_error(builder.len(), err);
@@ -864,7 +888,9 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
                 }
             }
         };
-        key.clear();
+        let re = cached_reg
+            .as_ref()
+            .unwrap_or_else(|| local_re.as_ref().unwrap());
 
         let pos = pos.unwrap_or(1);
         let occur = occur.unwrap_or(0);
@@ -902,9 +928,23 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
         None
     };
 
+    let cached_reg = match (&pat_arg, &mt_arg) {
+        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+            match regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        (ValueRef::Scalar(pat), None) => {
+            match regexp::build_regexp_from_pattern("regexp_replace", pat, None) {
+                Ok(re) => Some(re),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+
     let size = len.unwrap_or(1);
-    let mut key: Vec<Vec<u8>> = Vec::new();
-    let mut map: HashMap<Vec<Vec<u8>>, Regex> = HashMap::new();
     let mut builder = StringColumnBuilder::with_capacity(size, 0);
     let mut validity = MutableBitmap::with_capacity(size);
     for idx in 0..size {
@@ -931,17 +971,15 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
             builder.commit_row();
             continue;
         }
-        key.push(pat.to_vec());
-        if let Some(mt) = mt {
-            key.push(mt.to_vec());
-        }
-        let re = if let Some(re) = map.get(&key) {
-            re
-        } else {
+
+        let pos = pos.unwrap_or(1);
+        let occur = occur.unwrap_or(1);
+
+        let mut local_re = None;
+        if cached_reg.is_none() {
             match regexp::build_regexp_from_pattern("regexp_substr", pat, mt) {
                 Ok(re) => {
-                    map.insert(key.clone(), re);
-                    map.get(&key).unwrap()
+                    local_re = Some(re);
                 }
                 Err(err) => {
                     ctx.set_error(builder.len(), err);
@@ -950,10 +988,9 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
                 }
             }
         };
-        key.clear();
-
-        let pos = pos.unwrap_or(1);
-        let occur = occur.unwrap_or(1);
+        let re = cached_reg
+            .as_ref()
+            .unwrap_or_else(|| local_re.as_ref().unwrap());
 
         let substr = regexp::regexp_substr(source, re, pos, occur);
         match substr {

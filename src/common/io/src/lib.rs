@@ -14,6 +14,7 @@
 
 // https://github.com/rust-lang/rust-clippy/issues/8334
 #![allow(clippy::ptr_arg)]
+#![allow(clippy::uninlined_format_args)]
 #![feature(can_vector)]
 #![feature(read_buf)]
 #![feature(slice_internals)]

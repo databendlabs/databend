@@ -27,6 +27,10 @@ use crate::VER;
 impl FromToProto for StorageS3Config {
     type PB = pb::S3StorageConfig;
 
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.version
+    }
+
     fn from_pb(p: pb::S3StorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.version, p.min_reader_ver)?;
@@ -70,6 +74,10 @@ impl FromToProto for StorageS3Config {
 impl FromToProto for StorageGcsConfig {
     type PB = pb::GcsStorageConfig;
 
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.version
+    }
+
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.version, p.min_reader_ver)?;
@@ -96,6 +104,9 @@ impl FromToProto for StorageGcsConfig {
 
 impl FromToProto for StorageFsConfig {
     type PB = pb::FsStorageConfig;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.version
+    }
 
     fn from_pb(p: pb::FsStorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {
@@ -115,6 +126,9 @@ impl FromToProto for StorageFsConfig {
 
 impl FromToProto for StorageOssConfig {
     type PB = pb::OssStorageConfig;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.version
+    }
 
     fn from_pb(p: pb::OssStorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {

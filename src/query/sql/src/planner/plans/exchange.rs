@@ -43,7 +43,7 @@ impl Operator for Exchange {
         rel_expr.derive_relational_prop_child(0)
     }
 
-    fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: match self {
                 Exchange::Random => Distribution::Random,
@@ -54,10 +54,10 @@ impl Operator for Exchange {
         })
     }
 
-    fn compute_required_prop_child<'a>(
+    fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr<'a>,
+        _rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {

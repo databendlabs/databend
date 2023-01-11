@@ -32,6 +32,9 @@ use crate::VER;
 
 impl FromToProto for dv::DataSchema {
     type PB = pb::DataSchema;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DataSchema) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -62,6 +65,9 @@ impl FromToProto for dv::DataSchema {
 
 impl FromToProto for dv::DataField {
     type PB = pb::DataField;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DataField) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -89,6 +95,9 @@ impl FromToProto for dv::DataField {
 
 impl FromToProto for dv::DataTypeImpl {
     type PB = pb::DataType;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DataType) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -333,6 +342,9 @@ impl FromToProto for dv::DataTypeImpl {
 
 impl FromToProto for dv::NullableType {
     type PB = pb::NullableType;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::NullableType) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -362,6 +374,9 @@ impl FromToProto for dv::NullableType {
 
 impl FromToProto for dv::TimestampType {
     type PB = pb::Timestamp;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::Timestamp) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -380,6 +395,9 @@ impl FromToProto for dv::TimestampType {
 
 impl FromToProto for dv::StructType {
     type PB = pb::Struct;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::Struct) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -425,6 +443,9 @@ impl FromToProto for dv::StructType {
 
 impl FromToProto for dv::ArrayType {
     type PB = pb::Array;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::Array) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -454,6 +475,9 @@ impl FromToProto for dv::ArrayType {
 
 impl FromToProto for dv::VariantArrayType {
     type PB = pb::VariantArray;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::VariantArray) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -472,6 +496,9 @@ impl FromToProto for dv::VariantArrayType {
 
 impl FromToProto for dv::VariantObjectType {
     type PB = pb::VariantObject;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::VariantObject) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -490,6 +517,9 @@ impl FromToProto for dv::VariantObjectType {
 
 impl FromToProto for dv::IntervalKind {
     type PB = pb::IntervalKind;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
     fn from_pb(p: pb::IntervalKind) -> Result<Self, Incompatible>
     where Self: Sized {
         let dv_kind = match p {
@@ -524,6 +554,9 @@ impl FromToProto for dv::IntervalKind {
 }
 impl FromToProto for dv::IntervalType {
     type PB = pb::IntervalType;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::IntervalType) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -550,6 +583,9 @@ impl FromToProto for dv::IntervalType {
 
 impl FromToProto for dv::VariantType {
     type PB = pb::Variant;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::Variant) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -568,6 +604,9 @@ impl FromToProto for dv::VariantType {
 
 impl FromToProto for DateTime<Utc> {
     type PB = String;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
 
     fn from_pb(p: String) -> Result<Self, Incompatible> {
         let v = DateTime::<Utc>::from_str(&p).map_err(|e| Incompatible {

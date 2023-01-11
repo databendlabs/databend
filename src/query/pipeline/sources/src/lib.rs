@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(type_alias_impl_trait)]
+#![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
 
 pub mod processors;
