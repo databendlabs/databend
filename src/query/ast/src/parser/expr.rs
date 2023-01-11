@@ -648,17 +648,20 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let extract = map(
         rule! {
-            EXTRACT ~ ^"(" ~ ^#interval_kind ~ ^FROM ~ ^#subexpr(0) ~ ^")"
+            EXTRACT ~ "(" ~ ^#interval_kind ~ ^FROM ~ ^#subexpr(0) ~ ^")"
         },
         |(_, _, field, _, expr, _)| ExprElement::Extract {
             field,
             expr: Box::new(expr),
         },
     );
+    // ^"(" can expand to nom::combinator::cut(crate::match_text("(")).
+    // If the parser in cut() fails, parse simply breaks and does not attempt another branch.
+    // But we can use position as a field name, so need delete ^ in herre.
     let position = map(
         rule! {
             POSITION
-            ~ ^"("
+            ~ "("
             ~ ^#subexpr(BETWEEN_PREC)
             ~ ^IN
             ~ ^#subexpr(0)
@@ -672,7 +675,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let substring = map(
         rule! {
             ( SUBSTRING | SUBSTR )
-            ~ ^"("
+            ~ "("
             ~ ^#subexpr(0)
             ~ ( FROM | "," )
             ~ ^#subexpr(0)
@@ -693,7 +696,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let trim = map(
         rule! {
             TRIM
-            ~ ^"("
+            ~ "("
             ~ #subexpr(0)
             ~ ^")"
         },
@@ -705,7 +708,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let trim_from = map(
         rule! {
             TRIM
-            ~ ^"("
+            ~ "("
             ~ #trim_where
             ~ ^#subexpr(0)
             ~ ^FROM
@@ -781,7 +784,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
     let exists = map(
-        rule! { NOT? ~ EXISTS ~ ^"(" ~ ^#query ~ ^")" },
+        rule! { NOT? ~ EXISTS ~ "(" ~ ^#query ~ ^")" },
         |(opt_not, _, _, subquery, _)| ExprElement::Exists {
             subquery,
             not: opt_not.is_some(),

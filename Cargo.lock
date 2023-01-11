@@ -156,8 +156,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.14.2"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=1b190fc#1b190fc9883a618631f88a5fd939221d968ece65"
+version = "0.15.0"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=211be21#211be21991c29c235253a19413f43a76a367955f"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -790,9 +790,9 @@ checksum = "6c58ec36aac5066d5ca17df51b3e70279f5670a72102f5752cb7e7c856adfc70"
 
 [[package]]
 name = "bzip2"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6afcd980b5f3a45017c57e57a2fcccbb351cc43a356ce117ef760ef8052b89b0"
+checksum = "bdb116a6ef3f6c3698828873ad02c3014b3c85cadb88496095628e3ef1e347f8"
 dependencies = [
  "bzip2-sys",
  "libc",
@@ -1168,8 +1168,8 @@ dependencies = [
  "arrow-format",
  "arrow2",
  "futures",
- "pa",
  "parquet2",
+ "strawboat",
 ]
 
 [[package]]
@@ -5640,19 +5640,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pa"
-version = "0.1.0"
-source = "git+https://github.com/sundy-li/pa?rev=7e98302#7e98302d83016a874bdeb1417f1f0ad4f12f9be6"
-dependencies = [
- "arrow2",
- "bytemuck",
- "lz4",
- "serde",
- "serde_json",
- "zstd",
-]
-
-[[package]]
 name = "parity-scale-codec"
 version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7624,6 +7611,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-expression",
+ "enum-as-inner",
  "metrics",
  "once_cell",
  "opendal",
@@ -7636,6 +7624,21 @@ name = "str_stack"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
+
+[[package]]
+name = "strawboat"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbad34588af0e413a53579cbc362700a5bb20d2fbcdc89cf738e5c099e86118a"
+dependencies = [
+ "arrow2",
+ "bytemuck",
+ "lz4",
+ "serde",
+ "serde_json",
+ "snap",
+ "zstd",
+]
 
 [[package]]
 name = "streaming-decompression"

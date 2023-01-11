@@ -18,12 +18,13 @@ use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
-use common_arrow::native::read::reader::PaReader;
-use common_arrow::native::read::PaReadBuf;
+use common_arrow::native::read::reader::NativeReader;
+use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::DataBlock;
 use opendal::Object;
+use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
@@ -34,13 +35,13 @@ use crate::metrics::metrics_inc_remote_io_seeks;
 
 // Native storage format
 
-pub type Reader = Box<dyn PaReadBuf + Send + Sync>;
+pub type Reader = Box<dyn NativeReadBuf + Send + Sync>;
 
 impl BlockReader {
     pub async fn async_read_native_columns_data(
         &self,
         part: PartInfoPtr,
-    ) -> Result<Vec<(usize, PaReader<Reader>)>> {
+    ) -> Result<Vec<(usize, NativeReader<Reader>)>> {
         // Perf
         {
             metrics_inc_remote_io_read_parts(1);
@@ -56,16 +57,15 @@ impl BlockReader {
             join_handlers.push(Self::read_native_columns_data(
                 self.operator.object(&part.location),
                 index,
-                column_meta.offset,
-                column_meta.len,
-                column_meta.num_values,
+                column_meta,
                 field.data_type().clone(),
             ));
 
             // Perf
             {
+                let (_, len) = column_meta.offset_length();
                 metrics_inc_remote_io_seeks(1);
-                metrics_inc_remote_io_read_bytes(column_meta.len);
+                metrics_inc_remote_io_read_bytes(len);
             }
         }
 
@@ -83,28 +83,28 @@ impl BlockReader {
     pub async fn read_native_columns_data(
         o: Object,
         index: usize,
-        offset: u64,
-        length: u64,
-        rows: u64,
+        meta: &ColumnMeta,
         data_type: common_arrow::arrow::datatypes::DataType,
-    ) -> Result<(usize, PaReader<Reader>)> {
+    ) -> Result<(usize, NativeReader<Reader>)> {
         use backon::ExponentialBackoff;
         use backon::Retryable;
 
+        let (offset, length) = meta.offset_length();
+        let meta = meta.as_native().unwrap();
         let reader = { || async { o.range_read(offset..offset + length).await } }
             .retry(ExponentialBackoff::default())
             .when(|err| err.is_temporary())
             .await?;
 
         let reader: Reader = Box::new(std::io::Cursor::new(reader));
-        let fuse_reader = PaReader::new(reader, data_type, rows as usize, vec![]);
+        let fuse_reader = NativeReader::new(reader, data_type, meta.pages.clone(), vec![]);
         Ok((index, fuse_reader))
     }
 
     pub fn sync_read_native_columns_data(
         &self,
         part: PartInfoPtr,
-    ) -> Result<Vec<(usize, PaReader<Reader>)>> {
+    ) -> Result<Vec<(usize, NativeReader<Reader>)>> {
         let part = FusePartInfo::from_part(&part)?;
 
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
@@ -117,15 +117,10 @@ impl BlockReader {
             let op = self.operator.clone();
 
             let location = part.location.clone();
-            let offset = column_meta.offset;
-            let length = column_meta.len;
-
             let result = Self::sync_read_native_column(
                 op.object(&location),
                 index,
-                offset,
-                length,
-                column_meta.num_values,
+                column_meta,
                 field.data_type().clone(),
             );
 
@@ -138,14 +133,15 @@ impl BlockReader {
     pub fn sync_read_native_column(
         o: Object,
         index: usize,
-        offset: u64,
-        length: u64,
-        rows: u64,
+        meta: &ColumnMeta,
         data_type: common_arrow::arrow::datatypes::DataType,
-    ) -> Result<(usize, PaReader<Reader>)> {
+    ) -> Result<(usize, NativeReader<Reader>)> {
+        let (offset, length) = meta.offset_length();
         let reader = o.blocking_range_reader(offset..offset + length)?;
         let reader: Reader = Box::new(BufReader::new(reader));
-        let fuse_reader = PaReader::new(reader, data_type, rows as usize, vec![]);
+
+        let page_metas = meta.as_native().unwrap().pages.clone();
+        let fuse_reader = NativeReader::new(reader, data_type, page_metas, vec![]);
         Ok((index, fuse_reader))
     }
 

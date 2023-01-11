@@ -15,8 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_arrow::native::read::reader::PaReader;
-use common_arrow::native::read::PaReadBuf;
+use common_arrow::native::read::reader::NativeReader;
+use common_arrow::native::read::NativeReadBuf;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
@@ -35,7 +35,7 @@ use common_pipeline_core::processors::Processor;
 
 use crate::io::BlockReader;
 
-type DataChunks = Vec<(usize, PaReader<Box<dyn PaReadBuf + Send + Sync>>)>;
+type DataChunks = Vec<(usize, NativeReader<Box<dyn NativeReadBuf + Send + Sync>>)>;
 
 enum State {
     ReadData(Option<PartInfoPtr>),

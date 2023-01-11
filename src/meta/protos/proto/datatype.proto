@@ -22,6 +22,7 @@ message DataType {
   uint64 min_reader_ver = 101;
 
   oneof dt {
+    Empty null_type = 22;
     NullableType nullable_type = 1;
     Empty bool_type = 2;
     Empty int8_type = 3;
