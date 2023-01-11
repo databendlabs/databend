@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::Field as ArrowField;
-
 use crate::remove_nullable;
-use crate::types::data_type::from_arrow_field;
 use crate::types::data_type::DataType;
 use crate::types::data_type::DataTypeImpl;
 use crate::wrap_nullable;
@@ -92,18 +89,6 @@ impl DataField {
         }
 
         true
-    }
-
-    pub fn to_arrow(&self) -> ArrowField {
-        self.data_type.to_arrow_field(&self.name)
-    }
-}
-
-impl From<&ArrowField> for DataField {
-    fn from(f: &ArrowField) -> Self {
-        let dt: DataTypeImpl = from_arrow_field(f);
-
-        DataField::new(&f.name, dt)
     }
 }
 

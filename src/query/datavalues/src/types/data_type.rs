@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use dyn_clone::DynClone;
+
 use enum_dispatch::enum_dispatch;
 
 use super::type_array::ArrayType;
@@ -72,7 +69,7 @@ pub enum DataTypeImpl {
 }
 
 #[enum_dispatch]
-pub trait DataType: std::fmt::Debug + Sync + Send + DynClone
+pub trait DataType: std::fmt::Debug + Sync + Send
 where Self: Sized
 {
     fn data_type_id(&self) -> TypeID;
@@ -90,85 +87,9 @@ where Self: Sized
     fn can_inside_nullable(&self) -> bool {
         true
     }
-
-    /// arrow_type did not have nullable sign, it's nullable sign is in the field
-    fn arrow_type(&self) -> ArrowType;
-
-    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        None
-    }
-
-    fn to_arrow_field(&self, name: &str) -> ArrowField {
-        let ret = ArrowField::new(name, self.arrow_type(), self.is_nullable());
-        if let Some(meta) = self.custom_arrow_meta() {
-            ret.with_metadata(meta)
-        } else {
-            ret
-        }
-    }
 }
 
-pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
-    match dt {
-        ArrowType::Null => DataTypeImpl::Null(NullType {}),
-        ArrowType::UInt8 => DataTypeImpl::UInt8(UInt8Type::default()),
-        ArrowType::UInt16 => DataTypeImpl::UInt16(UInt16Type::default()),
-        ArrowType::UInt32 => DataTypeImpl::UInt32(UInt32Type::default()),
-        ArrowType::UInt64 => DataTypeImpl::UInt64(UInt64Type::default()),
-        ArrowType::Int8 => DataTypeImpl::Int8(Int8Type::default()),
-        ArrowType::Int16 => DataTypeImpl::Int16(Int16Type::default()),
-        ArrowType::Int32 => DataTypeImpl::Int32(Int32Type::default()),
-        ArrowType::Int64 => DataTypeImpl::Int64(Int64Type::default()),
-        ArrowType::Boolean => DataTypeImpl::Boolean(BooleanType::default()),
-        ArrowType::Float32 => DataTypeImpl::Float32(Float32Type::default()),
-        ArrowType::Float64 => DataTypeImpl::Float64(Float64Type::default()),
-
-        // TODO support other list
-        ArrowType::List(f) | ArrowType::LargeList(f) | ArrowType::FixedSizeList(f, _) => {
-            let inner = from_arrow_field(f);
-            DataTypeImpl::Array(ArrayType::create(inner))
-        }
-
-        ArrowType::Binary | ArrowType::LargeBinary | ArrowType::Utf8 | ArrowType::LargeUtf8 => {
-            DataTypeImpl::String(StringType::default())
-        }
-
-        ArrowType::Timestamp(_, _) => TimestampType::new_impl(),
-
-        ArrowType::Date32 | ArrowType::Date64 => DataTypeImpl::Date(DateType::default()),
-
-        ArrowType::Struct(fields) => {
-            let names = fields.iter().map(|f| f.name.clone()).collect();
-            let types = fields.iter().map(from_arrow_field).collect();
-
-            DataTypeImpl::Struct(StructType::create(Some(names), types))
-        }
-        ArrowType::Extension(custom_name, _, _) => match custom_name.as_str() {
-            "Variant" => DataTypeImpl::Variant(VariantType::default()),
-            "VariantArray" => DataTypeImpl::VariantArray(VariantArrayType::default()),
-            "VariantObject" => DataTypeImpl::VariantObject(VariantObjectType::default()),
-            _ => unimplemented!("data_type: {:?}", dt),
-        },
-
-        // this is safe, because we define the datatype firstly
-        _ => {
-            unimplemented!("data_type: {:?}", dt)
-        }
-    }
-}
-
-pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
-    let dt = f.data_type();
-    let ty = from_arrow_type(dt);
-
-    let is_nullable = f.is_nullable;
-    if is_nullable && ty.can_inside_nullable() {
-        NullableType::new_impl(ty)
-    } else {
-        ty
-    }
-}
-
+ 
 pub fn wrap_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
     if !data_type.can_inside_nullable() {
         return data_type.clone();

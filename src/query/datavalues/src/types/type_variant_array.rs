@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
+
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
@@ -36,13 +36,6 @@ impl DataType for VariantArrayType {
         "Array".to_string()
     }
 
-    fn arrow_type(&self) -> ArrowType {
-        ArrowType::Extension(
-            "VariantArray".to_owned(),
-            Box::new(ArrowType::LargeBinary),
-            None,
-        )
-    }
 }
 
 impl std::fmt::Debug for VariantArrayType {

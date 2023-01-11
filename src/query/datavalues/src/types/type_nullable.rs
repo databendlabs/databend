@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
+
+
 
 use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
@@ -63,13 +63,6 @@ impl DataType for NullableType {
         false
     }
 
-    fn arrow_type(&self) -> ArrowType {
-        self.inner.arrow_type()
-    }
-
-    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        self.inner.custom_arrow_meta()
-    }
 }
 
 impl std::fmt::Debug for NullableType {
