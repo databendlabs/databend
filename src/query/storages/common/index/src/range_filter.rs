@@ -58,16 +58,7 @@ impl RangeFilter {
             })
             .unwrap();
 
-        Ok(Self {
-            schema,
-            expr: conjunction,
-            func_ctx: ctx.try_get_function_context()?,
-        })
-    }
-
-    pub fn try_eval_const(&self) -> Result<bool> {
-        let input_domains = self
-            .expr
+        let input_domains = conjunction
             .column_refs()
             .into_iter()
             .map(|(name, ty)| {
@@ -76,11 +67,20 @@ impl RangeFilter {
             })
             .collect::<Result<_>>()?;
 
-        let folder = ConstantFolder::new(input_domains, self.func_ctx, &BUILTIN_FUNCTIONS);
-        let (new_expr, _) = folder.fold(&self.expr);
+        let func_ctx = ctx.try_get_function_context()?;
+        let folder = ConstantFolder::new(input_domains, func_ctx, &BUILTIN_FUNCTIONS);
+        let (new_expr, _) = folder.fold(&conjunction);
 
+        Ok(Self {
+            schema,
+            expr: new_expr,
+            func_ctx,
+        })
+    }
+
+    pub fn try_eval_const(&self) -> Result<bool> {
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(new_expr, Expr::Constant {
+        Ok(!matches!(self.expr, Expr::Constant {
             scalar: Scalar::Boolean(false),
             ..
         }))
