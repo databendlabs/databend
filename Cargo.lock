@@ -7638,8 +7638,6 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbad34588af0e413a53579cbc362700a5bb20d2fbcdc89cf738e5c099e86118a"
 dependencies = [
  "arrow2",
  "bytemuck",
