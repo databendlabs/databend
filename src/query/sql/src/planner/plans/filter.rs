@@ -52,21 +52,21 @@ impl Operator for Filter {
         RelOp::Filter
     }
 
-    fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
 
-    fn compute_required_prop_child<'a>(
+    fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr<'a>,
+        _rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         Ok(required.clone())
     }
 
-    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
         let output_columns = input_prop.output_columns;
 

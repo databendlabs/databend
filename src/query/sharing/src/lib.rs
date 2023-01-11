@@ -14,6 +14,8 @@
 
 //! Sharing crate is used to provide Databend Cloud's sharing support.
 
+#![allow(clippy::uninlined_format_args)]
+
 mod layer;
 pub use layer::create_share_table_operator;
 

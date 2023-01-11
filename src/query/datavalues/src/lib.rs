@@ -15,6 +15,7 @@
 //! *Credits to the work of https://github.com/pola-rs/polars, which served as
 //! insipration for the crate*
 
+#![allow(clippy::uninlined_format_args)]
 #![feature(trusted_len)]
 #![feature(cursor_remaining)]
 

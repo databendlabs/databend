@@ -31,7 +31,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
-use crate::io::try_join_futures;
+use crate::io::try_join_futures_with_vec;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::deletion::deletion_meta::DeletionSourceMeta;
@@ -162,7 +162,7 @@ impl DeletionTransform {
             });
         }
 
-        try_join_futures(
+        try_join_futures_with_vec(
             self.ctx.clone(),
             handles,
             "deletion-write-segments-worker".to_owned(),
@@ -328,7 +328,7 @@ impl Processor for DeletionTransform {
                 // Read all segments information in parallel.
                 let segments_io =
                     SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.schema.clone());
-                let segment_locations = &self.base_segments;
+                let segment_locations = self.base_segments.as_slice();
                 let segments = segments_io
                     .read_segments(segment_locations)
                     .await?

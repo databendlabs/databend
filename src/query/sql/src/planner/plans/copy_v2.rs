@@ -44,8 +44,7 @@ impl FromStr for ValidationMode {
                 match rows {
                     Ok(v) => Ok(ValidationMode::ReturnNRows(v)),
                     Err(_) => Err(format!(
-                        "Unknown validation mode:{:?}, must one of {{ RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS}}",
-                        v
+                        "Unknown validation mode:{v:?}, must one of {{ RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS}}"
                     )),
                 }
             }
@@ -86,10 +85,10 @@ impl Debug for CopyPlanV2 {
                 force,
                 ..
             } => {
-                write!(f, "Copy into {:}.{:}", database_name, table_name)?;
-                write!(f, ", validation_mode: {:?}", validation_mode)?;
-                write!(f, ", from: {:?}", from)?;
-                write!(f, " force: {}", force)?;
+                write!(f, "Copy into {database_name:}.{table_name:}")?;
+                write!(f, ", validation_mode: {validation_mode:?}")?;
+                write!(f, ", from: {from:?}")?;
+                write!(f, " force: {force}")?;
             }
             CopyPlanV2::IntoStage {
                 stage,
@@ -97,9 +96,9 @@ impl Debug for CopyPlanV2 {
                 validation_mode,
                 ..
             } => {
-                write!(f, "Copy into {:?}", stage)?;
-                write!(f, ", path: {:?}", path)?;
-                write!(f, ", validation_mode: {:?}", validation_mode)?;
+                write!(f, "Copy into {stage:?}")?;
+                write!(f, ", path: {path:?}")?;
+                write!(f, ", validation_mode: {validation_mode:?}")?;
             }
         }
         Ok(())

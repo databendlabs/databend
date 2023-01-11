@@ -19,6 +19,8 @@
 //! `MetaEmbedded` behave exactly the same as a metasrv without distributed logs(raft), since it is driven by
 //! a embedded raft `StateMachine`.
 
+#![allow(clippy::uninlined_format_args)]
+
 mod kv_api_impl;
 mod meta_embedded;
 
