@@ -95,7 +95,7 @@ fn test_user_stage_fs_v22() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_fs_v22.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_fs_v22.as_slice(), 22, want)?;
 
     Ok(())
 }
@@ -142,7 +142,7 @@ fn test_user_stage_fs_v21() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_fs_v21.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_fs_v21.as_slice(), 21, want)?;
 
     Ok(())
 }
@@ -188,7 +188,7 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_fs_v20.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_fs_v20.as_slice(), 20, want)?;
 
     Ok(())
 }
@@ -235,7 +235,7 @@ fn test_user_stage_fs_v18() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_fs_v18.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_fs_v18.as_slice(), 18, want)?;
 
     Ok(())
 }
@@ -283,7 +283,7 @@ fn test_user_stage_fs_v16() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_fs_v16.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_fs_v16.as_slice(), 16, want)?;
 
     Ok(())
 }
@@ -342,7 +342,7 @@ fn test_user_stage_s3_v16() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_s3_v16.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_s3_v16.as_slice(), 16, want)?;
     Ok(())
 }
 
@@ -394,7 +394,7 @@ fn test_user_stage_gcs_v16() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_gcs_v16.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_gcs_v16.as_slice(), 16, want)?;
     Ok(())
 }
 
@@ -450,7 +450,7 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_oss_v16.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_oss_v16.as_slice(), 16, want)?;
     Ok(())
 }
 
@@ -507,7 +507,7 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_oss_v13.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_oss_v13.as_slice(), 13, want)?;
     Ok(())
 }
 
@@ -565,7 +565,7 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_s3_v11.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_s3_v11.as_slice(), 11, want)?;
     Ok(())
 }
 
@@ -621,7 +621,7 @@ fn test_user_stage_s3_v9() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_s3_v9.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_s3_v9.as_slice(), 9, want)?;
     Ok(())
 }
 
@@ -668,7 +668,7 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_fs_v6.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_fs_v6.as_slice(), 6, want)?;
 
     Ok(())
 }
@@ -725,7 +725,7 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_s3_v6.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_s3_v6.as_slice(), 6, want)?;
     Ok(())
 }
 
@@ -777,7 +777,7 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_gcs_v6.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_gcs_v6.as_slice(), 6, want)?;
     Ok(())
 }
 
@@ -824,7 +824,7 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_fs_v4.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_fs_v4.as_slice(), 4, want)?;
 
     Ok(())
 }
@@ -881,7 +881,7 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_s3_v4.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_s3_v4.as_slice(), 4, want)?;
     Ok(())
 }
 
@@ -932,7 +932,7 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_gcs_v4.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_gcs_v4.as_slice(), 4, want)?;
     Ok(())
 }
 
@@ -987,7 +987,7 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_s3_v1.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_s3_v1.as_slice(), 1, want)?;
     Ok(())
 }
 
@@ -1036,7 +1036,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), internal_stage_v17.as_slice(), want)?;
+    common::test_load_old(func_name!(), internal_stage_v17.as_slice(), 17, want)?;
     Ok(())
 }
 
@@ -1084,6 +1084,6 @@ fn test_user_stage_v18() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_v18.as_slice(), want)?;
+    common::test_load_old(func_name!(), user_stage_v18.as_slice(), 18, want)?;
     Ok(())
 }

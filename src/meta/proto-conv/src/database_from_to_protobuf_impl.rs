@@ -31,6 +31,9 @@ use crate::VER;
 
 impl FromToProto for mt::DatabaseNameIdent {
     type PB = pb::DatabaseNameIdent;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DatabaseNameIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -54,6 +57,9 @@ impl FromToProto for mt::DatabaseNameIdent {
 
 impl FromToProto for mt::DatabaseMeta {
     type PB = pb::DatabaseMeta;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DatabaseMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -103,6 +109,9 @@ impl FromToProto for mt::DatabaseMeta {
 
 impl FromToProto for mt::DbIdList {
     type PB = pb::DbIdList;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DbIdList) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 

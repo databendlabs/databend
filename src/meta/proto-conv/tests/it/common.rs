@@ -41,12 +41,21 @@ where
 }
 
 /// Tests loading old version data.
-pub(crate) fn test_load_old<MT>(name: impl Display, buf: &[u8], want: MT) -> anyhow::Result<()>
+///
+/// Returns the message version.
+pub(crate) fn test_load_old<MT>(
+    name: impl Display,
+    buf: &[u8],
+    want_msg_ver: u64,
+    want: MT,
+) -> anyhow::Result<()>
 where
     MT: FromToProto + PartialEq + Debug,
     MT::PB: common_protos::prost::Message + Default,
 {
     let p: MT::PB = common_protos::prost::Message::decode(buf).map_err(print_err)?;
+    assert_eq!(want_msg_ver, MT::get_pb_ver(&p), "loading {}", name);
+
     let got = MT::from_pb(p).map_err(print_err)?;
 
     assert_eq!(want, got, "loading {} with version {} program", name, VER);
