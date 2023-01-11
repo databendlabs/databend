@@ -12,7 +12,7 @@ raw expr       : and(true, NULL)
 checked expr   : and<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -39,7 +39,7 @@ raw expr       : and(false, NULL)
 checked expr   : and<Boolean NULL, Boolean NULL>(CAST(false AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : false
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {FALSE}
 output         : false
 
 
@@ -337,6 +337,27 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
+ast            : const_false AND CAST('1000' AS STRING) = 1000
+raw expr       : and(#0::Boolean, eq(CAST("1000" AS String), 1000_u16))
+checked expr   : and<Boolean, Boolean>(#0, eq<Int64, Int64>(CAST("1000" AS Int64), CAST(1000_u16 AS Int64)))
+optimized expr : false
+evaluation:
++--------+-------------+---------+
+|        | const_false | Output  |
++--------+-------------+---------+
+| Type   | Boolean     | Boolean |
+| Domain | {FALSE}     | {FALSE} |
+| Row 0  | false       | false   |
++--------+-------------+---------+
+evaluation (internal):
++-------------+-----------------------+
+| Column      | Data                  |
++-------------+-----------------------+
+| const_false | Boolean([0b_______0]) |
+| Output      | Boolean([0b_______0]) |
++-------------+-----------------------+
+
+
 ast            : NOT a
 raw expr       : not(#0::NULL)
 checked expr   : not<Boolean NULL>(CAST(#0 AS Boolean NULL))
@@ -442,7 +463,7 @@ raw expr       : or(NULL, false)
 checked expr   : or<Boolean NULL, Boolean NULL>(CAST(NULL AS Boolean NULL), CAST(false AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
