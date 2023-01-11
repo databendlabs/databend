@@ -16,24 +16,3 @@
 
 use common_datavalues::DataTypeImpl;
 use common_datavalues::TimestampType;
-
-use crate::common;
-
-#[test]
-fn test_datatype_latest() -> anyhow::Result<()> {
-    common::test_pb_from_to("datatype", test_datatype())?;
-    Ok(())
-}
-
-#[test]
-fn test_datatype_v15() -> anyhow::Result<()> {
-    // It is generated with common::test_pb_from_to.
-    let datatype_v15 = vec![114, 6, 160, 6, 15, 168, 6, 1, 160, 6, 15, 168, 6, 1];
-    let want = TimestampType::new_impl();
-    common::test_load_old(func_name!(), datatype_v15.as_slice(), 15, want)?;
-    Ok(())
-}
-
-fn test_datatype() -> DataTypeImpl {
-    TimestampType::new_impl()
-}
