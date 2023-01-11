@@ -13,16 +13,13 @@
 //  limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::table::ColumnId;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -30,14 +27,12 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
-use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::operations::read::native_data_source::DataChunks;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct NativeDeserializeDataTransform {
     scan_progress: Arc<Progress>,
-    schema: DataSchemaRef,
     block_reader: Arc<BlockReader>,
 
     input: Arc<InputPort>,
@@ -58,7 +53,6 @@ impl NativeDeserializeDataTransform {
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
                 scan_progress,
-                schema: block_reader.schema(),
                 block_reader,
                 input,
                 output,
@@ -67,40 +61,6 @@ impl NativeDeserializeDataTransform {
                 chunks: vec![],
             },
         )))
-    }
-
-    fn fill_missing_values(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        // check if need to fill some columns with default values
-        let part = FusePartInfo::from_part(&self.parts[0])?;
-        let data_block_column_ids: HashSet<ColumnId> = part.columns_meta.keys().cloned().collect();
-        let mut need_to_fill_data = false;
-        if data_block_column_ids.len() != self.schema.fields().len() {
-            need_to_fill_data = true;
-        } else {
-            for (i, _field) in self.schema.fields().iter().enumerate() {
-                let column_id = self.schema.column_id_of_index(i)?;
-                if !data_block_column_ids.contains(&column_id) {
-                    need_to_fill_data = true;
-                    break;
-                }
-            }
-        }
-        if need_to_fill_data {
-            let mut num_rows = 0;
-            for part in &self.parts {
-                let part = FusePartInfo::from_part(part)?;
-                num_rows += part.nums_rows;
-            }
-
-            Ok(DataBlock::create_with_schema_from_data_block(
-                &self.schema,
-                data_block,
-                data_block_column_ids,
-                num_rows,
-            )?)
-        } else {
-            Ok(data_block)
-        }
     }
 }
 
@@ -179,7 +139,9 @@ impl Processor for NativeDeserializeDataTransform {
 
             let data_block = self.block_reader.build_block(arrays)?;
 
-            let data_block = self.fill_missing_values(data_block)?;
+            let data_block = self
+                .block_reader
+                .fill_missing_native_column_values(data_block, &self.parts)?;
 
             let progress_values = ProgressValues {
                 rows: data_block.num_rows(),

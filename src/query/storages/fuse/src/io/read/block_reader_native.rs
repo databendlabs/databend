@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io::BufReader;
 use std::time::Instant;
 
@@ -21,6 +22,7 @@ use common_arrow::arrow::chunk::Chunk;
 use common_arrow::native::read::reader::PaReader;
 use common_arrow::native::read::PaReadBuf;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::table::ColumnId;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use opendal::Object;
@@ -141,6 +143,50 @@ impl BlockReader {
         let reader: Reader = Box::new(BufReader::new(reader));
         let fuse_reader = PaReader::new(reader, data_type, rows as usize, vec![]);
         Ok((index, fuse_reader))
+    }
+
+    pub fn fill_missing_native_column_values(
+        &self,
+        data_block: DataBlock,
+        parts: &[PartInfoPtr],
+    ) -> Result<DataBlock> {
+        // check if need to fill some columns with default values
+        let part = FusePartInfo::from_part(&parts[0])?;
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        let mut need_to_fill_data = false;
+
+        let columns_meta = &part.columns_meta;
+        for column in &columns {
+            let indices = &column.leaf_ids;
+            for i in 0..indices.len() {
+                let column_id = column.leaf_column_ids[i];
+                if !columns_meta.contains_key(&column_id) {
+                    need_to_fill_data = true;
+                    break;
+                }
+            }
+            if need_to_fill_data {
+                break;
+            }
+        }
+        if need_to_fill_data {
+            let mut num_rows = 0;
+            for part in parts {
+                let part = FusePartInfo::from_part(part)?;
+                num_rows += part.nums_rows;
+            }
+
+            let data_block_column_ids: HashSet<ColumnId> =
+                part.columns_meta.keys().cloned().collect();
+            Ok(DataBlock::create_with_schema_from_data_block(
+                &self.projected_schema,
+                data_block,
+                data_block_column_ids,
+                num_rows,
+            )?)
+        } else {
+            Ok(data_block)
+        }
     }
 
     pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
