@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -116,27 +117,36 @@ fn test_bloom_filter() -> Result<()> {
 }
 
 fn eval_index(index: &BlockFilter, col_name: &str, val: Scalar, ty: DataType) -> FilterEvalResult {
-    index
-        .eval(
-            check_function(
-                None,
-                "eq",
-                &[],
-                &[
-                    Expr::ColumnRef {
-                        span: None,
-                        id: col_name.to_string(),
-                        data_type: ty.clone(),
-                    },
-                    Expr::Constant {
-                        span: None,
-                        scalar: val,
-                        data_type: ty,
-                    },
-                ],
-                &BUILTIN_FUNCTIONS,
-            )
-            .unwrap(),
-        )
-        .unwrap()
+    let expr = check_function(
+        None,
+        "eq",
+        &[],
+        &[
+            Expr::ColumnRef {
+                span: None,
+                id: col_name.to_string(),
+                data_type: ty.clone(),
+            },
+            Expr::Constant {
+                span: None,
+                scalar: val,
+                data_type: ty,
+            },
+        ],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+
+    let point_query_cols = BlockFilter::find_eq_columns(&expr).unwrap();
+
+    let mut scalar_map = HashMap::<Scalar, u64>::new();
+    let func_ctx = FunctionContext::default();
+    for (_, scalar, ty) in point_query_cols.iter() {
+        if !scalar_map.contains_key(scalar) {
+            let digest = BlockFilter::calculate_target_digest(func_ctx, scalar, ty).unwrap();
+            scalar_map.insert(scalar.clone(), digest);
+        }
+    }
+
+    index.eval(expr, &scalar_map).unwrap()
 }

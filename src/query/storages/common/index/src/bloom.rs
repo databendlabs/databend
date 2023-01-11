@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::arrow::constant_bitmap;
 use common_expression::converts::scalar_to_datavalue;
 use common_expression::types::DataType;
 use common_expression::types::NullableType;
@@ -157,13 +156,13 @@ impl BlockFilter {
                     data_type: data_type.clone(),
                     display_name: source_field.name().clone(),
                 };
-                let scalar = PhysicalScalar::Function {
+                let siphash_func = PhysicalScalar::Function {
                     name: "siphash".to_string(),
                     params: vec![],
                     args: vec![arg],
                     return_type,
                 };
-                let expr = scalar.as_expr()?;
+                let expr = siphash_func.as_expr()?;
                 exprs.push(expr);
 
                 let source_columns = blocks
@@ -192,16 +191,16 @@ impl BlockFilter {
             let (column, validity) = if field.data_type().is_nullable() {
                 let nullable_column =
                     NullableType::<UInt64Type>::try_downcast_column(&col).unwrap();
-                (nullable_column.column, nullable_column.validity)
+                (nullable_column.column, Some(nullable_column.validity))
             } else {
                 let column = UInt64Type::try_downcast_column(&col).unwrap();
-                let validity = constant_bitmap(true, column.len()).into();
-                (column, validity)
+                (column, None)
             };
 
             // create filter per column
             let mut filter_builder = Xor8Builder::create();
-            let filter = if validity.unset_bits() > 0 {
+            let filter = if validity.as_ref().map(|v| v.unset_bits()).unwrap_or(0) > 0 {
+                let validity = validity.unwrap();
                 let mut digests = Vec::with_capacity(column.len());
                 UInt64Type::iter_column(&column)
                     .zip(validity.iter())
@@ -252,12 +251,16 @@ impl BlockFilter {
     ///
     /// Otherwise return `Uncertain`.
     #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
-    pub fn eval(&self, mut expr: Expr<String>) -> Result<FilterEvalResult> {
+    pub fn eval(
+        &self,
+        mut expr: Expr<String>,
+        scalar_map: &HashMap<Scalar, u64>,
+    ) -> Result<FilterEvalResult> {
         visit_expr_column_eq_constant(
             &mut expr,
             &mut |span, col_name, scalar, ty, return_type| {
                 // If the column doesn't contain the constant, we rewrite the expression to `false`.
-                if self.find(col_name, scalar, ty)? == FilterEvalResult::MustFalse {
+                if self.find(col_name, scalar, ty, scalar_map)? == FilterEvalResult::MustFalse {
                     Ok(Some(Expr::Constant {
                         span,
                         scalar: Scalar::Boolean(false),
@@ -290,11 +293,41 @@ impl BlockFilter {
         }
     }
 
+    /// calculate digest for constant scalar
+    pub fn calculate_target_digest(
+        func_ctx: FunctionContext,
+        scalar: &Scalar,
+        data_type: &DataType,
+    ) -> Result<u64> {
+        let arg = PhysicalScalar::Constant {
+            value: Literal::try_from(scalar.clone())?,
+            data_type: data_type.clone(),
+        };
+        let siphash_func = PhysicalScalar::Function {
+            name: "siphash".to_string(),
+            params: vec![],
+            args: vec![arg],
+            return_type: DataType::Number(NumberDataType::UInt64),
+        };
+        let expr = siphash_func.as_expr()?;
+
+        let data_block = DataBlock::empty();
+        let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
+        let value = evaluator
+            .run(&expr)
+            .map_err(|(_, e)| ErrorCode::Internal(format!("eval siphash failed: {}.", e)))?;
+        let number_scalar = value.into_scalar().unwrap().into_number().unwrap();
+        let digest = u64::try_downcast_scalar(&number_scalar).unwrap();
+        Ok(digest)
+    }
+
     /// Find all columns that match the pattern of `col = <constant>` in the expression.
-    pub fn find_eq_columns(expr: &Expr<String>) -> Result<Vec<String>> {
+    pub fn find_eq_columns(expr: &Expr<String>) -> Result<Vec<(String, Scalar, DataType)>> {
         let mut cols = Vec::new();
-        visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, _, _, _| {
-            cols.push(col_name.to_string());
+        visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, scalar, ty, _| {
+            if Xor8Filter::is_supported_type(ty) && !scalar.is_null() {
+                cols.push((col_name.to_string(), scalar.clone(), ty.clone()));
+            }
             Ok(None)
         })?;
         Ok(cols)
@@ -306,7 +339,13 @@ impl BlockFilter {
         format!("Bloom({})", column_name)
     }
 
-    fn find(&self, column_name: &str, target: &Scalar, ty: &DataType) -> Result<FilterEvalResult> {
+    fn find(
+        &self,
+        column_name: &str,
+        target: &Scalar,
+        ty: &DataType,
+        scalar_map: &HashMap<Scalar, u64>,
+    ) -> Result<FilterEvalResult> {
         let filter_column = &Self::build_filter_column_name(column_name);
 
         if !self.filter_schema.has_field(filter_column)
@@ -331,30 +370,10 @@ impl BlockFilter {
             let datavalue = scalar_to_datavalue(target);
             filter.contains(&datavalue)
         } else {
-            let digest = if let Scalar::Null = target {
-                0u64
-            } else {
-                let arg = PhysicalScalar::Constant {
-                    value: Literal::try_from(target.clone()).unwrap(),
-                    data_type: ty.clone(),
-                };
-                let scalar = PhysicalScalar::Function {
-                    name: "siphash".to_string(),
-                    params: vec![],
-                    args: vec![arg],
-                    return_type: DataType::Number(NumberDataType::UInt64),
-                };
-                let expr = scalar.as_expr()?;
-
-                let data_block = DataBlock::empty();
-                let evaluator = Evaluator::new(&data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
-                let value = evaluator.run(&expr).map_err(|(_, e)| {
-                    ErrorCode::Internal(format!("eval siphash failed: {}.", e))
-                })?;
-                let number_scalar = value.into_scalar().unwrap().into_number().unwrap();
-                u64::try_downcast_scalar(&number_scalar).unwrap()
-            };
-            filter.contains_digest(digest)
+            match scalar_map.get(target) {
+                Some(digest) => filter.contains_digest(*digest),
+                None => true,
+            }
         };
 
         if contains {
