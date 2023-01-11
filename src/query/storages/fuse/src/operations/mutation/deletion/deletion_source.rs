@@ -61,8 +61,8 @@ type DataChunks = Vec<(usize, Vec<u8>)>;
 struct SerializeState {
     block_data: Vec<u8>,
     block_location: String,
-    index_data: Vec<u8>,
-    index_location: String,
+    index_data: Option<Vec<u8>>,
+    index_location: Option<String>,
 }
 
 enum State {
@@ -281,13 +281,16 @@ impl Processor for DeletionSource {
 
                 // build block index.
                 let location = self.location_gen.block_bloom_index_location(&block_id);
-                let (bloom_index_state, column_distinct_count) = BloomIndexState::try_create(
+                let bloom_index_state = BloomIndexState::try_create(
                     self.ctx.clone(),
                     self.source_schema.clone(),
                     &block,
                     location,
                 )?;
-                let col_stats = gen_columns_statistics(&block, Some(column_distinct_count))?;
+                let column_distinct_count = bloom_index_state
+                    .as_ref()
+                    .map(|i| i.column_distinct_count.clone());
+                let col_stats = gen_columns_statistics(&block, column_distinct_count)?;
 
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
@@ -300,6 +303,17 @@ impl Processor for DeletionSource {
                 )?;
                 let col_metas = util::column_metas(&meta_data)?;
 
+                let (index_data, index_location, index_size) =
+                    if let Some(bloom_index_state) = bloom_index_state {
+                        (
+                            Some(bloom_index_state.data.clone()),
+                            Some(bloom_index_state.location.clone()),
+                            bloom_index_state.size,
+                        )
+                    } else {
+                        (None, None, 0u64)
+                    };
+
                 // new block meta.
                 let new_meta = Arc::new(BlockMeta::new(
                     row_count,
@@ -309,8 +323,8 @@ impl Processor for DeletionSource {
                     col_metas,
                     cluster_stats,
                     block_location.clone(),
-                    Some(bloom_index_state.location.clone()),
-                    bloom_index_state.size,
+                    index_location.clone(),
+                    index_size,
                     self.table_compression.into(),
                 ));
 
@@ -318,8 +332,8 @@ impl Processor for DeletionSource {
                     SerializeState {
                         block_data,
                         block_location: block_location.0,
-                        index_data: bloom_index_state.data,
-                        index_location: bloom_index_state.location.0,
+                        index_data,
+                        index_location: index_location.map(|l| l.0),
                     },
                     new_meta,
                 );
@@ -401,12 +415,12 @@ impl Processor for DeletionSource {
                 )
                 .await?;
                 // write index data.
-                write_data(
-                    &serialize_state.index_data,
-                    &self.dal,
-                    &serialize_state.index_location,
-                )
-                .await?;
+                if let (Some(index_data), Some(index_location)) =
+                    (serialize_state.index_data, serialize_state.index_location)
+                {
+                    write_data(&index_data, &self.dal, &index_location).await?;
+                }
+
                 self.state = State::Generated(Deletion::Replaced(block_meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
