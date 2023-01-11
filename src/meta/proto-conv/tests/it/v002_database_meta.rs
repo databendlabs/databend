@@ -30,7 +30,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// These bytes are built with `test_build_pb_buf()`.
+// These message bytes are built from the output of `test_build_pb_buf()`.
 #[test]
 fn test_decode_v2_database_meta() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![
@@ -41,7 +41,7 @@ fn test_decode_v2_database_meta() -> anyhow::Result<()> {
         114, 194, 1, 1, 1, 160, 6, 2, 168, 6, 1,
     ];
 
-    let want = mt::DatabaseMeta {
+    let want = || mt::DatabaseMeta {
         engine: "44".to_string(),
         engine_options: btreemap! {s("abc") => s("def")},
         options: btreemap! {s("xyz") => s("foo")},
@@ -53,7 +53,8 @@ fn test_decode_v2_database_meta() -> anyhow::Result<()> {
         from_share: None,
     };
 
-    common::test_load_old(func_name!(), bytes.as_slice(), 2, want)
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), bytes.as_slice(), 2, want())
 }
 
 fn s(ss: impl ToString) -> String {

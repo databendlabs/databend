@@ -25,11 +25,12 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// These bytes are built with `test_build_pb_buf()`.
+// The message bytes are built from the output of `test_build_pb_buf()`
 #[test]
 fn test_decode_v7_copied_file_lock() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![160, 6, 7, 168, 6, 1];
-    let want = mt::TableCopiedFileLock {};
+    let want = || mt::TableCopiedFileLock {};
 
-    common::test_load_old(func_name!(), bytes.as_slice(), 7, want)
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), bytes.as_slice(), 7, want())
 }

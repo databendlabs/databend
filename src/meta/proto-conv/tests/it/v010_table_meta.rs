@@ -32,7 +32,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// These bytes are built with `test_build_pb_buf()`.
+// The message bytes are built from the output of `test_build_pb_buf()`
 #[test]
 fn test_decode_v10_table_meta() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![
@@ -80,7 +80,7 @@ fn test_decode_v10_table_meta() -> anyhow::Result<()> {
         1, 99, 160, 6, 10, 168, 6, 1,
     ];
 
-    let want = mt::TableMeta {
+    let want = || mt::TableMeta {
         schema: Arc::new(ce::TableSchema::new_from(
             vec![
                 ce::TableField::new(
@@ -143,7 +143,8 @@ fn test_decode_v10_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
     };
 
-    common::test_load_old(func_name!(), bytes.as_slice(), 10, want)
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), bytes.as_slice(), 10, want())
 }
 
 fn s(ss: impl ToString) -> String {

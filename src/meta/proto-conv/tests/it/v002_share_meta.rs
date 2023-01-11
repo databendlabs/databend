@@ -30,7 +30,7 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// These bytes are built with `test_build_pb_buf()`.
+// The message bytes are built from the output of `test_build_pb_buf()`
 #[test]
 fn test_decode_v2_share_meta() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![
@@ -43,7 +43,7 @@ fn test_decode_v2_share_meta() -> anyhow::Result<()> {
         45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 2, 168, 6, 1,
     ];
 
-    let want = {
+    let want = || {
         let now = Utc.ymd(2014, 11, 28).and_hms(12, 0, 9);
 
         let db_entry = share::ShareGrantEntry::new(
@@ -71,7 +71,8 @@ fn test_decode_v2_share_meta() -> anyhow::Result<()> {
         }
     };
 
-    common::test_load_old(func_name!(), bytes.as_slice(), 2, want)
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), bytes.as_slice(), 2, want())
 }
 
 fn s(ss: impl ToString) -> String {

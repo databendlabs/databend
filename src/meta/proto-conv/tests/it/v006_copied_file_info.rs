@@ -27,18 +27,19 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// These bytes are built with `test_build_pb_buf()`.
+// The message bytes are built from the output of `test_build_pb_buf()`
 #[test]
 fn test_decode_v6_copied_file_info() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![
         10, 4, 101, 116, 97, 103, 16, 128, 8, 26, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32,
         49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 6, 168, 6, 1,
     ];
-    let want = mt::TableCopiedFileInfo {
+    let want = || mt::TableCopiedFileInfo {
         etag: Some("etag".to_string()),
         content_length: 1024,
         last_modified: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
     };
 
-    common::test_load_old(func_name!(), bytes.as_slice(), 6, want)
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), bytes.as_slice(), 6, want())
 }
