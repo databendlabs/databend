@@ -70,6 +70,10 @@ fn test_and(file: &mut impl Write) {
         "const_false",
         BooleanType::from_data(vec![false]),
     )]);
+    run_ast(file, "false AND CAST(str AS UINT32) = 1000", &[(
+        "str",
+        StringType::from_data(vec!["1000"]),
+    )]);
 }
 
 fn test_not(file: &mut impl Write) {
