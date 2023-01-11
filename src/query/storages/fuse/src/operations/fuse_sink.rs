@@ -59,6 +59,7 @@ pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
     pub(crate) location: Location,
+    pub(crate) column_distinct_count: HashMap<usize, usize>,
 }
 
 impl BloomIndexState {
@@ -67,7 +68,7 @@ impl BloomIndexState {
         source_schema: TableSchemaRef,
         block: &DataBlock,
         location: Location,
-    ) -> Result<(Self, HashMap<usize, usize>)> {
+    ) -> Result<Option<Self>> {
         // write index
         let bloom_index = BlockFilter::try_create(
             ctx.try_get_function_context()?,
@@ -75,23 +76,25 @@ impl BloomIndexState {
             location.1,
             &[block],
         )?;
-        let index_block = bloom_index.filter_block;
-        let mut data = Vec::with_capacity(100 * 1024);
-        let index_block_schema = &bloom_index.filter_schema;
-        let (size, _) = blocks_to_parquet(
-            index_block_schema,
-            vec![index_block],
-            &mut data,
-            TableCompression::None,
-        )?;
-        Ok((
-            Self {
+        if let Some(bloom_index) = bloom_index {
+            let index_block = bloom_index.filter_block;
+            let mut data = Vec::with_capacity(100 * 1024);
+            let index_block_schema = &bloom_index.filter_schema;
+            let (size, _) = blocks_to_parquet(
+                index_block_schema,
+                vec![index_block],
+                &mut data,
+                TableCompression::None,
+            )?;
+            Ok(Some(Self {
                 data,
                 size,
                 location,
-            },
-            bloom_index.column_distinct_count,
-        ))
+                column_distinct_count: bloom_index.column_distinct_count,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -103,7 +106,7 @@ enum State {
         size: u64,
         meta_data: HashMap<ColumnId, ColumnMeta>,
         block_statistics: BlockStatistics,
-        bloom_index_state: BloomIndexState,
+        bloom_index_state: Option<BloomIndexState>,
     },
     GenerateSegment,
     SerializedSegment {
@@ -216,18 +219,19 @@ impl Processor for FuseTableSink {
                 let (block_location, block_id) = self.meta_locations.gen_block_location();
 
                 let location = self.meta_locations.block_bloom_index_location(&block_id);
-                let (bloom_index_state, column_distinct_count) = BloomIndexState::try_create(
+                let bloom_index_state = BloomIndexState::try_create(
                     self.ctx.clone(),
                     self.source_schema.clone(),
                     &block,
                     location,
                 )?;
-
+                let column_distinct_count =
+                    bloom_index_state.as_ref().map(|i| i.column_distinct_count.clone());
                 let block_statistics = BlockStatistics::from(
                     &block,
                     block_location.0,
                     cluster_stats,
-                    Some(column_distinct_count),
+                    column_distinct_count,
                 )?;
 
                 // we need a configuration of block size threshold here
@@ -311,27 +315,40 @@ impl Processor for FuseTableSink {
                 let start = Instant::now();
 
                 // write bloom filter index
-                io::write_data(
-                    &bloom_index_state.data,
-                    &self.data_accessor,
-                    &bloom_index_state.location.0,
-                )
-                .await?;
+                if let Some(ref bloom_index_state) = bloom_index_state {
+                    io::write_data(
+                        &bloom_index_state.data,
+                        &self.data_accessor,
+                        &bloom_index_state.location.0,
+                    )
+                    .await?;
 
-                // Perf.
-                {
-                    metrics_inc_block_index_write_nums(1);
-                    metrics_inc_block_index_write_bytes(bloom_index_state.data.len() as u64);
-                    metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
+                    // Perf.
+                    {
+                        metrics_inc_block_index_write_nums(1);
+                        metrics_inc_block_index_write_bytes(bloom_index_state.data.len() as u64);
+                        metrics_inc_block_index_write_milliseconds(
+                            start.elapsed().as_millis() as u64
+                        );
+                    }
                 }
 
-                let bloom_filter_index_size = bloom_index_state.size;
+                let (bloom_index_location, bloom_index_size) =
+                    if let Some(bloom_index_state) = bloom_index_state {
+                        (
+                            Some(bloom_index_state.location.clone()),
+                            bloom_index_state.size,
+                        )
+                    } else {
+                        (None, 0u64)
+                    };
+
                 self.accumulator.add_block(
                     size,
                     meta_data,
                     block_statistics,
-                    Some(bloom_index_state.location),
-                    bloom_filter_index_size,
+                    bloom_index_location,
+                    bloom_index_size,
                     self.write_settings.table_compression.into(),
                 )?;
 

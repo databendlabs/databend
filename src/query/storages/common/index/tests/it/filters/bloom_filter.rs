@@ -71,7 +71,8 @@ fn test_bloom_filter() -> Result<()> {
         schema,
         LatestBloom::VERSION,
         &blocks_ref,
-    )?;
+    )?
+    .unwrap();
 
     assert_eq!(
         FilterEvalResult::MustFalse,

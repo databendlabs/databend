@@ -131,7 +131,7 @@ impl BlockFilter {
         source_schema: TableSchemaRef,
         version: u64,
         blocks: &[&DataBlock],
-    ) -> Result<Self> {
+    ) -> Result<Option<Self>> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("block is empty"));
         }
@@ -175,6 +175,9 @@ impl BlockFilter {
                 let column = Column::concat(&source_columns);
                 columns.push(column);
             }
+        }
+        if columns.is_empty() {
+            return Ok(None);
         }
 
         let mut filter_fields = vec![];
@@ -235,14 +238,14 @@ impl BlockFilter {
         let filter_schema = Arc::new(TableSchema::new(filter_fields));
         let filter_block = DataBlock::new(filter_columns, 1);
 
-        Ok(Self {
+        Ok(Some(Self {
             func_ctx,
             version,
             source_schema,
             filter_schema,
             filter_block,
             column_distinct_count,
-        })
+        }))
     }
 
     /// Apply the predicate expression, return the result.
