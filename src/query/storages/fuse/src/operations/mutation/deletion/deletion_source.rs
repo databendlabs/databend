@@ -287,8 +287,9 @@ impl Processor for DeletionSource {
                     &block,
                     location,
                 )?;
-                let column_distinct_count =
-                    bloom_index_state.as_ref().map(|i| i.column_distinct_count.clone());
+                let column_distinct_count = bloom_index_state
+                    .as_ref()
+                    .map(|i| i.column_distinct_count.clone());
                 let col_stats = gen_columns_statistics(&block, column_distinct_count)?;
 
                 // serialize data block.

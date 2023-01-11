@@ -7576,7 +7576,6 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
- "common-sql",
  "criterion",
  "match-template",
  "rand 0.8.5",

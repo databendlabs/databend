@@ -144,7 +144,7 @@ fn eval_index(index: &BlockFilter, col_name: &str, val: Scalar, ty: DataType) ->
     let func_ctx = FunctionContext::default();
     for (_, scalar, ty) in point_query_cols.iter() {
         if !scalar_map.contains_key(scalar) {
-            let digest = BlockFilter::calculate_target_digest(func_ctx, scalar, ty).unwrap();
+            let digest = BlockFilter::calculate_scalar_digest(func_ctx, scalar, ty).unwrap();
             scalar_map.insert(scalar.clone(), digest);
         }
     }

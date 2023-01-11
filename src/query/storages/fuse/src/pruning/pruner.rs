@@ -163,7 +163,7 @@ pub fn new_filter_pruner(
             for (col_name, scalar, ty) in point_query_cols.iter() {
                 filter_block_cols.push(BlockFilter::build_filter_column_name(col_name));
                 if !scalar_map.contains_key(scalar) {
-                    let digest = BlockFilter::calculate_target_digest(func_ctx, scalar, ty)?;
+                    let digest = BlockFilter::calculate_scalar_digest(func_ctx, scalar, ty)?;
                     scalar_map.insert(scalar.clone(), digest);
                 }
             }

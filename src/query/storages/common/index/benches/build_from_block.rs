@@ -17,7 +17,6 @@ extern crate criterion;
 
 use std::ops::Deref;
 
-use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::number::NumberColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
@@ -25,11 +24,7 @@ use common_expression::types::NumberDataType;
 use common_expression::types::UInt64Type;
 use common_expression::types::ValueType;
 use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
 use common_expression::FunctionContext;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_sql::executor::PhysicalScalar;
 use criterion::Criterion;
 use rand::prelude::random;
 use rand::rngs::StdRng;
@@ -38,6 +33,7 @@ use rand::SeedableRng;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::FilterBuilder;
 use storages_common_index::filters::Xor8Builder;
+use storages_common_index::BlockFilter;
 
 /// Benchmark building BlockFilter from DataBlock.
 ///
@@ -103,7 +99,15 @@ fn bench_u64_using_digests(c: &mut Criterion) {
     let column = rand_i64_column(1_000_000);
 
     let mut builder = Xor8Builder::create();
-    let digests = calculate_digests(&column, &DataType::Number(NumberDataType::Int64));
+    let func_ctx = FunctionContext::default();
+    let col = BlockFilter::calculate_column_digest(
+        func_ctx,
+        &column,
+        &DataType::Number(NumberDataType::Int64),
+        &DataType::Boolean,
+    )
+    .unwrap();
+    let digests = UInt64Type::try_downcast_column(&col).unwrap();
     builder.add_digests(digests.deref());
     let filter = builder.build().unwrap();
 
@@ -117,7 +121,15 @@ fn bench_u64_using_digests(c: &mut Criterion) {
         |b| {
             b.iter(|| {
                 let mut builder = Xor8Builder::create();
-                let digests = calculate_digests(&column, &DataType::Number(NumberDataType::Int64));
+                let func_ctx = FunctionContext::default();
+                let col = BlockFilter::calculate_column_digest(
+                    func_ctx,
+                    &column,
+                    &DataType::Number(NumberDataType::Int64),
+                    &DataType::Boolean,
+                )
+                .unwrap();
+                let digests = UInt64Type::try_downcast_column(&col).unwrap();
                 builder.add_digests(digests.deref());
                 let _filter = criterion::black_box(builder.build().unwrap());
             })
@@ -129,7 +141,15 @@ fn bench_string_using_digests(c: &mut Criterion) {
     let column = rand_str_column(1_000_000, 32);
 
     let mut builder = Xor8Builder::create();
-    let digests = calculate_digests(&column, &DataType::String);
+    let func_ctx = FunctionContext::default();
+    let col = BlockFilter::calculate_column_digest(
+        func_ctx,
+        &column,
+        &DataType::String,
+        &DataType::Boolean,
+    )
+    .unwrap();
+    let digests = UInt64Type::try_downcast_column(&col).unwrap();
     builder.add_digests(digests.deref());
     let filter = builder.build().unwrap();
 
@@ -143,34 +163,20 @@ fn bench_string_using_digests(c: &mut Criterion) {
         |b| {
             b.iter(|| {
                 let mut builder = Xor8Builder::create();
-                let digests = calculate_digests(&column, &DataType::String);
+                let func_ctx = FunctionContext::default();
+                let col = BlockFilter::calculate_column_digest(
+                    func_ctx,
+                    &column,
+                    &DataType::String,
+                    &DataType::Boolean,
+                )
+                .unwrap();
+                let digests = UInt64Type::try_downcast_column(&col).unwrap();
                 builder.add_digests(digests.deref());
                 let _filter = criterion::black_box(builder.build().unwrap());
             })
         },
     );
-}
-
-fn calculate_digests(column: &Column, data_type: &DataType) -> Buffer<u64> {
-    let arg = PhysicalScalar::IndexedVariable {
-        index: 0,
-        data_type: data_type.clone(),
-        display_name: "a".to_string(),
-    };
-    let siphash_func = PhysicalScalar::Function {
-        name: "siphash".to_string(),
-        params: vec![],
-        args: vec![arg],
-        return_type: DataType::Boolean,
-    };
-    let expr = siphash_func.as_expr().unwrap();
-
-    let func_ctx = FunctionContext::default();
-    let data_block = DataBlock::new_from_columns(vec![column.clone()]);
-    let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
-    let value = evaluator.run(&expr).unwrap();
-    let col = value.convert_to_full_column(data_type, data_block.num_rows());
-    UInt64Type::try_downcast_column(&col).unwrap()
 }
 
 fn rand_i64_column(n: i32) -> Column {

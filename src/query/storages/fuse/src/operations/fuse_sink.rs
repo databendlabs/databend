@@ -225,8 +225,9 @@ impl Processor for FuseTableSink {
                     &block,
                     location,
                 )?;
-                let column_distinct_count =
-                    bloom_index_state.as_ref().map(|i| i.column_distinct_count.clone());
+                let column_distinct_count = bloom_index_state
+                    .as_ref()
+                    .map(|i| i.column_distinct_count.clone());
                 let block_statistics = BlockStatistics::from(
                     &block,
                     block_location.0,

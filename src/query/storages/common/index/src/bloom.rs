@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::converts::scalar_to_datavalue;
+use common_expression::eval_function;
 use common_expression::types::DataType;
 use common_expression::types::NullableType;
 use common_expression::types::Number;
@@ -31,10 +32,8 @@ use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::Domain;
-use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
-use common_expression::Literal;
 use common_expression::Scalar;
 use common_expression::Span;
 use common_expression::TableDataType;
@@ -43,7 +42,6 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_sql::executor::PhysicalScalar;
 use storages_common_table_meta::meta::V2BloomBlock;
 use storages_common_table_meta::meta::Versioned;
 
@@ -136,7 +134,6 @@ impl BlockFilter {
             return Err(ErrorCode::BadArguments("block is empty"));
         }
 
-        let mut exprs = Vec::new();
         let mut fields = Vec::new();
         let mut columns = Vec::new();
         for i in 0..blocks[0].num_columns() {
@@ -151,20 +148,6 @@ impl BlockFilter {
                 let field = DataField::new(source_field.name().as_str(), return_type.clone());
                 fields.push(field);
 
-                let arg = PhysicalScalar::IndexedVariable {
-                    index: columns.len(),
-                    data_type: data_type.clone(),
-                    display_name: source_field.name().clone(),
-                };
-                let siphash_func = PhysicalScalar::Function {
-                    name: "siphash".to_string(),
-                    params: vec![],
-                    args: vec![arg],
-                    return_type,
-                };
-                let expr = siphash_func.as_expr()?;
-                exprs.push(expr);
-
                 let source_columns = blocks
                     .iter()
                     .map(|block| {
@@ -173,7 +156,7 @@ impl BlockFilter {
                     })
                     .collect::<Vec<_>>();
                 let column = Column::concat(&source_columns);
-                columns.push(column);
+                columns.push((column, data_type.clone()));
             }
         }
         if columns.is_empty() {
@@ -183,14 +166,9 @@ impl BlockFilter {
         let mut filter_fields = vec![];
         let mut filter_columns = vec![];
         let mut column_distinct_count = HashMap::<usize, usize>::new();
-
-        let data_block = DataBlock::new_from_columns(columns);
-        let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
-        for (field, expr) in fields.iter().zip(exprs.iter()) {
-            let value = evaluator
-                .run(expr)
-                .map_err(|(_, e)| ErrorCode::Internal(format!("eval siphash failed: {}.", e)))?;
-            let col = value.convert_to_full_column(field.data_type(), data_block.num_rows());
+        for (field, (column, data_type)) in fields.iter().zip(columns.iter()) {
+            let col =
+                Self::calculate_column_digest(func_ctx, column, data_type, field.data_type())?;
             let (column, validity) = if field.data_type().is_nullable() {
                 let nullable_column =
                     NullableType::<UInt64Type>::try_downcast_column(&col).unwrap();
@@ -204,16 +182,12 @@ impl BlockFilter {
             let mut filter_builder = Xor8Builder::create();
             if validity.as_ref().map(|v| v.unset_bits()).unwrap_or(0) > 0 {
                 let validity = validity.unwrap();
-                let mut column_iter = column.deref().iter();
-                let mut validity_iter = validity.into_iter();
-                filter_builder.add_digests(std::iter::from_fn(move || {
-                    if let Some(validity) = validity_iter.next() {
-                        let digest = column_iter.next().unwrap();
-                        if !validity { Some(&0) } else { Some(digest) }
-                    } else {
-                        None
-                    }
-                }));
+                let it = column.deref().iter().zip(validity.iter()).map(
+                    |(v, b)| {
+                        if !b { &0 } else { v }
+                    },
+                );
+                filter_builder.add_digests(it);
             } else {
                 filter_builder.add_digests(column.deref());
             }
@@ -296,29 +270,41 @@ impl BlockFilter {
         }
     }
 
+    /// calculate digest for column
+    pub fn calculate_column_digest(
+        func_ctx: FunctionContext,
+        column: &Column,
+        data_type: &DataType,
+        target_type: &DataType,
+    ) -> Result<Column> {
+        let (value, _) = eval_function(
+            None,
+            "siphash",
+            [(Value::Column(column.clone()), data_type.clone())],
+            func_ctx,
+            column.len(),
+            &BUILTIN_FUNCTIONS,
+        )
+        .map_err(|(_, e)| ErrorCode::Internal(format!("eval siphash failed: {}.", e)))?;
+        let column = value.convert_to_full_column(target_type, column.len());
+        Ok(column)
+    }
+
     /// calculate digest for constant scalar
-    pub fn calculate_target_digest(
+    pub fn calculate_scalar_digest(
         func_ctx: FunctionContext,
         scalar: &Scalar,
         data_type: &DataType,
     ) -> Result<u64> {
-        let arg = PhysicalScalar::Constant {
-            value: Literal::try_from(scalar.clone())?,
-            data_type: data_type.clone(),
-        };
-        let siphash_func = PhysicalScalar::Function {
-            name: "siphash".to_string(),
-            params: vec![],
-            args: vec![arg],
-            return_type: DataType::Number(NumberDataType::UInt64),
-        };
-        let expr = siphash_func.as_expr()?;
-
-        let data_block = DataBlock::empty();
-        let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
-        let value = evaluator
-            .run(&expr)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("eval siphash failed: {}.", e)))?;
+        let (value, _) = eval_function(
+            None,
+            "siphash",
+            [(Value::Scalar(scalar.clone()), data_type.clone())],
+            func_ctx,
+            1,
+            &BUILTIN_FUNCTIONS,
+        )
+        .map_err(|(_, e)| ErrorCode::Internal(format!("eval siphash failed: {}.", e)))?;
         let number_scalar = value.into_scalar().unwrap().into_number().unwrap();
         let digest = u64::try_downcast_scalar(&number_scalar).unwrap();
         Ok(digest)
