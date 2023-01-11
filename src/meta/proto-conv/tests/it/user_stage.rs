@@ -194,10 +194,10 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_user_stage_fs_v18() -> anyhow::Result<()> {
+fn test_user_stage_fs_v17() -> anyhow::Result<()> {
     // Encoded data of version 18 of user_stage_fs:
     // It is generated with common::test_pb_from_to.
-    let user_stage_fs_v18 = vec![
+    let user_stage_fs_v17 = vec![
         10, 17, 102, 115, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115, 26,
         25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115,
         160, 6, 16, 168, 6, 1, 34, 20, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 160, 6,
@@ -235,7 +235,7 @@ fn test_user_stage_fs_v18() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_fs_v18.as_slice(), 18, want)?;
+    common::test_load_old(func_name!(), user_stage_fs_v17.as_slice(), 17, want)?;
 
     Ok(())
 }
@@ -570,10 +570,10 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_user_stage_s3_v9() -> anyhow::Result<()> {
+fn test_user_stage_s3_v8() -> anyhow::Result<()> {
     // Encoded data of version 9 of user_stage_s3:
     // It is generated with common::test_pb_from_to.
-    let user_stage_s3_v9 = vec![
+    let user_stage_s3_v8 = vec![
         10, 24, 115, 51, 58, 47, 47, 109, 121, 98, 117, 99, 107, 101, 116, 47, 100, 97, 116, 97,
         47, 102, 105, 108, 101, 115, 16, 1, 26, 100, 10, 98, 10, 96, 18, 24, 104, 116, 116, 112,
         115, 58, 47, 47, 115, 51, 46, 97, 109, 97, 122, 111, 110, 97, 119, 115, 46, 99, 111, 109,
@@ -621,7 +621,7 @@ fn test_user_stage_s3_v9() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_s3_v9.as_slice(), 9, want)?;
+    common::test_load_old(func_name!(), user_stage_s3_v8.as_slice(), 8, want)?;
     Ok(())
 }
 
@@ -1041,12 +1041,12 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_user_stage_v18() -> anyhow::Result<()> {
-    common::test_pb_from_to("user_stage_v18", test_user_stage_info_v18())?;
+fn test_user_stage_v19() -> anyhow::Result<()> {
+    common::test_pb_from_to("user_stage_v19", test_user_stage_info_v18())?;
 
     // Encoded data of version v18 of user_stage:
     // It is generated with common::test_pb_from_to.
-    let user_stage_v18 = vec![
+    let user_stage_v19 = vec![
         10, 4, 114, 111, 111, 116, 16, 3, 26, 25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47,
         116, 111, 47, 102, 105, 108, 101, 115, 160, 6, 19, 168, 6, 1, 34, 20, 8, 1, 16, 128, 8, 26,
         1, 124, 34, 2, 47, 47, 40, 2, 160, 6, 19, 168, 6, 1, 42, 10, 10, 3, 32, 154, 5, 16, 142, 8,
@@ -1084,6 +1084,6 @@ fn test_user_stage_v18() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    common::test_load_old(func_name!(), user_stage_v18.as_slice(), 18, want)?;
+    common::test_load_old(func_name!(), user_stage_v19.as_slice(), 19, want)?;
     Ok(())
 }
