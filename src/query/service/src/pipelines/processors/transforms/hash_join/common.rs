@@ -17,8 +17,8 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::arrow::combine_validities_3;
 use common_expression::arrow::constant_bitmap;
+use common_expression::arrow::or_validities;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
@@ -116,7 +116,7 @@ impl JoinHashTable {
                             valids = Some(m.into());
                             break;
                         } else {
-                            valids = combine_validities_3(valids, Some(bitmap.clone()));
+                            valids = or_validities(valids, Some(bitmap.clone()));
                         }
                     }
                     Column::Null { .. } => {}
