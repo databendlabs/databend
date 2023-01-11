@@ -116,7 +116,7 @@ where T: AsRef<[u8]>
             let mut times = Vec::with_capacity(3);
             loop {
                 buf.clear();
-                let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f));
+                let size = self.keep_read(&mut buf, |f| f.is_ascii_digit());
                 if size == 0 {
                     break;
                 } else {
@@ -145,7 +145,7 @@ where T: AsRef<[u8]>
             // ms .microseconds
             let dt = if self.ignore_byte(b'.') {
                 buf.clear();
-                let size = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f));
+                let size = self.keep_read(&mut buf, |f| f.is_ascii_digit());
                 if size == 0 {
                     return Err(ErrorCode::BadBytes(
                         "err with parse micros second, format like this:[.123456]",
@@ -215,7 +215,7 @@ where T: AsRef<[u8]>
         west_tz: bool,
         calc_offset: impl Fn(i64, i64, &DateTime<Tz>) -> Result<DateTime<Tz>>,
     ) -> Result<DateTime<Tz>> {
-        let n = self.keep_read(buf, |f| (b'0'..=b'9').contains(&f));
+        let n = self.keep_read(buf, |f| f.is_ascii_digit());
         if n != 2 {
             // +0800 will err in there
             return Err(ErrorCode::BadBytes(
@@ -226,7 +226,7 @@ where T: AsRef<[u8]>
         if (0..15).contains(&hour_offset) {
             buf.clear();
             self.ignore_byte(b':');
-            if self.keep_read(buf, |f| (b'0'..=b'9').contains(&f)) != 2 {
+            if self.keep_read(buf, |f| f.is_ascii_digit()) != 2 {
                 // +08[other byte]00 will err in there, e.g. +08-00
                 return Err(ErrorCode::BadBytes(
                     "err with parse timezone, format like this:[+08:00]",
