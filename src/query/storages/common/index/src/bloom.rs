@@ -199,22 +199,22 @@ impl BlockFilter {
 
             // create filter per column
             let mut filter_builder = Xor8Builder::create();
-            let filter = if validity.as_ref().map(|v| v.unset_bits()).unwrap_or(0) > 0 {
+            if validity.as_ref().map(|v| v.unset_bits()).unwrap_or(0) > 0 {
                 let validity = validity.unwrap();
-                let mut digests = Vec::with_capacity(column.len());
-                UInt64Type::iter_column(&column)
-                    .zip(validity.iter())
-                    .for_each(|(v, b)| {
-                        if !b {
-                            digests.push(0);
-                        } else {
-                            digests.push(v);
-                        }
-                    });
-                filter_builder.build_from_digests(&digests)?
+                let mut column_iter = column.deref().iter();
+                let mut validity_iter = validity.into_iter();
+                filter_builder.add_digests(std::iter::from_fn(move || {
+                    if let Some(validity) = validity_iter.next() {
+                        let digest = column_iter.next().unwrap();
+                        if !validity { Some(&0) } else { Some(digest) }
+                    } else {
+                        None
+                    }
+                }));
             } else {
-                filter_builder.build_from_digests(column.deref())?
-            };
+                filter_builder.add_digests(column.deref());
+            }
+            let filter = filter_builder.build()?;
 
             if let Some(len) = filter.len() {
                 let idx = source_schema.index_of(field.name().as_str()).unwrap();

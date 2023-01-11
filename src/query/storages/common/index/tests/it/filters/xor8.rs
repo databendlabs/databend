@@ -221,11 +221,16 @@ fn test_xor_bitmap_from_digests() -> Result<()> {
     let numbers = 1_000_000;
 
     let size = 8 * numbers;
-    let keys: Vec<u64> = (0..numbers).collect();
+    let digests: Vec<u64> = (0..numbers).collect();
     let mut builder = Xor8Builder::create();
-    let filter = builder.build_from_digests(&keys)?;
-    for key in keys.iter() {
-        assert!(filter.contains_digest(*key), "key {} not present", key);
+    builder.add_digests(&digests);
+    let filter = builder.build()?;
+    for digest in digests.iter() {
+        assert!(
+            filter.contains_digest(*digest),
+            "digests {} not present",
+            digest
+        );
     }
 
     let val = filter.to_bytes()?;

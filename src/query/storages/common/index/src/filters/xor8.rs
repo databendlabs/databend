@@ -65,13 +65,8 @@ impl FilterBuilder for Xor8Builder {
         self.builder.populate(keys)
     }
 
-    fn build_from_digests(&mut self, digests: &[u64]) -> Result<Self::Filter, Self::Error> {
-        let f = self
-            .builder
-            .build_from_digests(digests)
-            .map_err(|e| Xor8BuildingError::new(&e))?;
-
-        Ok(Xor8Filter { filter: f })
+    fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
+        self.builder.populate_digests(digests)
     }
 
     fn build(mut self) -> Result<Self::Filter, Self::Error> {
