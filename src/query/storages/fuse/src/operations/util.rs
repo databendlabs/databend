@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::SingleColumnMeta;
 
 pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, ColumnMeta>> {
     // currently we use one group only
@@ -45,12 +46,12 @@ pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, 
                     "column start and length should not be negative"
                 );
                 let num_values = chunk_meta.num_values as u64;
-                let res = ColumnMeta {
+                let res = SingleColumnMeta {
                     offset: col_start as u64,
                     len: col_len as u64,
                     num_values,
                 };
-                col_metas.insert(idx as u32, res);
+                col_metas.insert(idx as u32, ColumnMeta::Parquet(res));
             }
             None => {
                 return Err(ErrorCode::ParquetFileInvalid(format!(
