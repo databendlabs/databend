@@ -18,6 +18,7 @@ use common_exception::Result;
 use super::group::Group;
 use crate::optimizer::memo::Memo;
 use crate::optimizer::pattern_extractor::PatternExtractor;
+use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RulePtr;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
@@ -36,6 +37,9 @@ pub struct MExpr {
 
     pub plan: RelOperator,
     pub children: Vec<IndexType>,
+
+    // Disable rules for current `MExpr`
+    pub applied_rules: AppliedRules,
 }
 
 impl MExpr {
@@ -44,12 +48,14 @@ impl MExpr {
         index: IndexType,
         plan: RelOperator,
         children: Vec<IndexType>,
+        applied_rules: AppliedRules,
     ) -> Self {
         MExpr {
             group_index,
             plan,
             children,
             index,
+            applied_rules,
         }
     }
 
@@ -87,6 +93,10 @@ impl MExpr {
         rule: &RulePtr,
         transform_state: &mut TransformResult,
     ) -> Result<()> {
+        if self.applied_rules.get(&rule.id()) {
+            return Ok(());
+        }
+
         let mut extractor = PatternExtractor::create();
         let exprs = extractor.extract(memo, self, rule.pattern())?;
 
