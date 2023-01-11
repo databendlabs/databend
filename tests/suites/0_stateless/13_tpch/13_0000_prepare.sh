@@ -4,6 +4,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 
+for t in customer lineitem nation orders partsupp part region supplier; do
+    echo "DROP TABLE IF EXISTS $t" | $MYSQL_CLIENT_CONNECT
+done
+
 # create tpch tables
 echo "CREATE TABLE IF NOT EXISTS nation
 (
