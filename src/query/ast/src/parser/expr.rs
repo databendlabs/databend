@@ -43,7 +43,7 @@ pub fn expr(i: Input) -> IResult<Expr> {
 }
 
 fn expr_or_placeholder(i: Input) -> IResult<Option<Expr>> {
-    alt((map(rule! { "?" }, |_| None), map(subexpr(0),  Some)))(i)
+    alt((map(rule! { "?" }, |_| None), map(subexpr(0), Some)))(i)
 }
 
 pub fn values_with_placeholder(i: Input) -> IResult<Vec<Option<Expr>>> {
