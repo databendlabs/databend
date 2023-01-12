@@ -109,6 +109,7 @@ impl Memo {
             self.group(group_index)?.num_exprs(),
             s_expr.plan,
             children_group,
+            s_expr.applied_rules,
         );
         self.insert_m_expr(group_index, m_expr)?;
 
