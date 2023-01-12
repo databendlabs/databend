@@ -42,6 +42,15 @@ pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0))(i)
 }
 
+fn expr_or_placeholder(i: Input) -> IResult<Option<Expr>> {
+    alt((map(rule! { "?" }, |_| None), map(subexpr(0), Some)))(i)
+}
+
+pub fn values_with_placeholder(i: Input) -> IResult<Vec<Option<Expr>>> {
+    let values = comma_separated_list0(expr_or_placeholder);
+    map(rule! { ( "(" ~  #values ~ ")" ) }, |(_, v, _)| v)(i)
+}
+
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
         let higher_prec_expr_element =
@@ -655,9 +664,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             expr: Box::new(expr),
         },
     );
-    // ^"(" can expand to nom::combinator::cut(crate::match_text("(")).
-    // If the parser in cut() fails, parse simply breaks and does not attempt another branch.
-    // But we can use position as a field name, so need delete ^ in herre.
     let position = map(
         rule! {
             POSITION

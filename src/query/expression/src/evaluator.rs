@@ -18,6 +18,7 @@ use std::sync::Mutex;
 
 use common_arrow::arrow::bitmap;
 use itertools::Itertools;
+use tracing::error;
 
 use crate::block::DataBlock;
 use crate::expression::Expr;
@@ -518,7 +519,31 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
     }
 
+    /// Fold a single expression, returning the new expression and the domain of the new expression.
     pub fn fold(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
+        const MAX_ITERATIONS: usize = 1024;
+
+        let mut old_expr = expr.clone();
+        let mut old_domain = None;
+        for _ in 0..MAX_ITERATIONS {
+            let (new_expr, domain) = self.fold_once(&old_expr);
+            if new_expr == old_expr {
+                return (new_expr, domain);
+            }
+            old_expr = new_expr;
+            old_domain = domain;
+        }
+
+        error!("maximum iterations reached while folding expression");
+
+        (old_expr, old_domain)
+    }
+
+    /// Fold expression by one step, specifically reducing expression by domain calculation and then
+    /// folding the function calls with all constant arguments. Take the procedure for only one time
+    /// may not reach the simplest form of expression, therefore we need to call this function
+    /// repeatedly until the expression becomes stable.
+    fn fold_once(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
         let (new_expr, domain) = match expr {
             Expr::Constant {
                 scalar, data_type, ..

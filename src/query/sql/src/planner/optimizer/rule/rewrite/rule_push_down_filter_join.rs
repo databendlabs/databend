@@ -308,7 +308,7 @@ impl Rule for RulePushDownFilterJoin {
         if !need_push {
             return Ok(());
         }
-        result.apply_rule(&self.id);
+        result.set_applied_rule(&self.id);
         state.add_result(result);
 
         Ok(())

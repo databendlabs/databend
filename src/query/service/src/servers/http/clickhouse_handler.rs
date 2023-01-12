@@ -112,7 +112,51 @@ async fn execute(
     handle: Option<JoinHandle<()>>,
 ) -> Result<WithContentType<Body>> {
     let format_typ = format.typ.clone();
-    let mut data_stream = interpreter.execute(ctx.clone()).await?;
+
+    // the reason of spawning new task to execute the interpreter:
+    // (sorry, I failed to describe it in a more concise way)
+    //
+    // - there are executions of interpreters that will block the caller (NOT async wait)
+    //   e.g. PipelineCompleteExecutor::execute, will spawn thread that executes the pipeline,
+    //   and then, join the thread handle.
+    // - async mutex (tokio::sync::Mutex) are used while executing the queries/statements
+    //   An async task may yield while holding the lock of an async mutex. e.g. embedded meta store
+    // - this method(execute) is running with default tokio runtime
+    //
+    // if executes the interpreter "directly" (by using current thread), the following deadlock may happen:
+    //
+    // - thread A acquired a lock of async mutex and yield (without releasing the lock)
+    // - thread A as a tokio processor, grab the task, which will unlock the async mutex
+    //   but before execute the task, preemptively scheduled to the following task:
+    //   - spawns a new native thread B, which also trying to acquire lock of the same mutex
+    //   - and then (pthread-)joining the handle of thread B
+    //   thus the following deadlock occurs
+    //   - thread A is blocked in joining thread B
+    //     the async task(thread A grabbed) which will release the lock will not be executed
+    //   - thread B is trying to acquire a lock of the same mutex
+    //
+    //  to avoid the above scenario, one of the ways is to let the thread that blocked in pthread_join
+    //  not in charge of running async task that will release the lock.
+    //
+    //  thus here we spawn the task of executing the interpreter to ctx runtime :
+    //    - "pthread_join" will happen in "query-ctx" thread
+    //    - "acquire" and "release" the async mutex lock will happen in other threads (it depends)
+    //       e.g. "CompleteExecutor" threads
+    //
+    //  P.S. I think it will be better/more reasonable if we could avoid using pthread_join inside an async stack.
+
+    let mut data_stream = ctx
+        .try_spawn({
+            let ctx = ctx.clone();
+            async move { interpreter.execute(ctx.clone()).await }
+        })?
+        .await
+        .map_err(|err| {
+            ErrorCode::from_string(format!(
+                "clickhouse handler failed to join interpreter thread: {err:?}"
+            ))
+        })??;
+
     let table_schema = infer_table_schema(&schema)?;
     let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
         format,

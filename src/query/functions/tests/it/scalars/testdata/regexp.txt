@@ -3,7 +3,7 @@ raw expr       : regexp_instr("dog cat dog", "dog", 1_u8)
 checked expr   : regexp_instr<String, String, Int64>("dog cat dog", "dog", CAST(1_u8 AS Int64))
 optimized expr : 1_u64
 output type    : UInt64
-output domain  : Unknown
+output domain  : {1..=1}
 output         : 1_u64
 
 
@@ -12,7 +12,7 @@ raw expr       : regexp_instr("aa aaa aaaa aa aaa aaaa", "a{2}", 1_u8)
 checked expr   : regexp_instr<String, String, Int64>("aa aaa aaaa aa aaa aaaa", "a{2}", CAST(1_u8 AS Int64))
 optimized expr : 1_u64
 output type    : UInt64
-output domain  : Unknown
+output domain  : {1..=1}
 output         : 1_u64
 
 
@@ -21,7 +21,7 @@ raw expr       : regexp_instr("aa aaa aaaa aa aaa aaaa", NULL, 2_u8)
 checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL>(CAST("aa aaa aaaa aa aaa aaaa" AS String NULL), CAST(NULL AS String NULL), CAST(2_u8 AS Int64 NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -30,7 +30,7 @@ raw expr       : regexp_instr("", "", 1_u8)
 checked expr   : regexp_instr<String, String, Int64>("", "", CAST(1_u8 AS Int64))
 optimized expr : 0_u64
 output type    : UInt64
-output domain  : Unknown
+output domain  : {0..=0}
 output         : 0_u64
 
 
@@ -38,7 +38,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr('', '', 0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 during evaluate function: regexp_instr("", "", 0_i64)
+  | ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr("", "", 0_i64)`
 
 
 
@@ -256,7 +256,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr(source, pat, pos, occur, ro)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 during evaluate function: regexp_instr("dog cat dog", "dog", 0_i64, 1_i64, 0_i64)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr("dog cat dog", "dog", 0_i64, 1_i64, 0_i64)`
 
 
 
@@ -264,7 +264,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr(source, pat, pos, occur, ro)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: return_option must be 1 or 0, but got 2 during evaluate function: regexp_instr("aa aaa aaaa aa aaa aaaa", "A{2}", 2_i64, 2_i64, 2_i64)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: return_option must be 1 or 0, but got 2 while evaluating function `regexp_instr("aa aaa aaaa aa aaa aaaa", "A{2}", 2_i64, 2_i64, 2_i64)`
 
 
 
@@ -272,7 +272,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr(source, pat, pos, occur, ro, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr match type: - during evaluate function: regexp_instr("aa aaa aaaa aa aaa aaaa", "A{4}", 1_i64, 1_i64, 1_i64, "-i")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr match type: - while evaluating function `regexp_instr("aa aaa aaaa aa aaa aaaa", "A{4}", 1_i64, 1_i64, 1_i64, "-i")`
 
 
 
@@ -281,7 +281,7 @@ raw expr       : regexp_like("Michael!", ".*")
 checked expr   : regexp_like<String, String>("Michael!", ".*")
 optimized expr : true
 output type    : Boolean
-output domain  : Unknown
+output domain  : {TRUE}
 output         : true
 
 
@@ -290,7 +290,7 @@ raw expr       : regexp_like("a", "^[a-d]")
 checked expr   : regexp_like<String, String>("a", "^[a-d]")
 optimized expr : true
 output type    : Boolean
-output domain  : Unknown
+output domain  : {TRUE}
 output         : true
 
 
@@ -299,7 +299,7 @@ raw expr       : regexp_like("abc", "ABC")
 checked expr   : regexp_like<String, String>("abc", "ABC")
 optimized expr : true
 output type    : Boolean
-output domain  : Unknown
+output domain  : {TRUE}
 output         : true
 
 
@@ -308,7 +308,7 @@ raw expr       : regexp_like("abc", "ABC", "c")
 checked expr   : regexp_like<String, String, String>("abc", "ABC", "c")
 optimized expr : false
 output type    : Boolean
-output domain  : Unknown
+output domain  : {FALSE}
 output         : false
 
 
@@ -317,7 +317,7 @@ raw expr       : regexp_like("abc", "ABC", NULL)
 checked expr   : regexp_like<String NULL, String NULL, String NULL>(CAST("abc" AS String NULL), CAST("ABC" AS String NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
 output type    : Boolean NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -326,7 +326,7 @@ raw expr       : regexp_like("", "", "c")
 checked expr   : regexp_like<String, String, String>("", "", "c")
 optimized expr : true
 output type    : Boolean
-output domain  : Unknown
+output domain  : {TRUE}
 output         : true
 
 
@@ -424,7 +424,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_like(source, pat, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: x during evaluate function: regexp_like("abc", "abc", "x")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: x while evaluating function `regexp_like("abc", "abc", "x")`
 
 
 
@@ -432,7 +432,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_like(source, pat, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unsupported arguments to regexp_like match type: u during evaluate function: regexp_like("abc", "abc", "u")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unsupported arguments to regexp_like match type: u while evaluating function `regexp_like("abc", "abc", "u")`
 
 
 
@@ -440,7 +440,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_like(source, pat, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: - during evaluate function: regexp_like("Abc-", "abc", "-i")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: - while evaluating function `regexp_like("Abc-", "abc", "-i")`
 
 
 
@@ -448,7 +448,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_like(source, pat, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: - during evaluate function: regexp_like("Abc--", "abc-", "-")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: - while evaluating function `regexp_like("Abc--", "abc-", "-")`
 
 
 
@@ -457,7 +457,7 @@ raw expr       : regexp_replace("a b c", "b", "X")
 checked expr   : regexp_replace<String, String, String>("a b c", "b", "X")
 optimized expr : "a X c"
 output type    : String
-output domain  : Unknown
+output domain  : {"a X c"..="a X c"}
 output         : "a X c"
 
 
@@ -466,7 +466,7 @@ raw expr       : regexp_replace("a b c", "", "X")
 checked expr   : regexp_replace<String, String, String>("a b c", "", "X")
 optimized expr : "a b c"
 output type    : String
-output domain  : Unknown
+output domain  : {"a b c"..="a b c"}
 output         : "a b c"
 
 
@@ -475,7 +475,7 @@ raw expr       : regexp_replace("", "b", "X")
 checked expr   : regexp_replace<String, String, String>("", "b", "X")
 optimized expr : ""
 output type    : String
-output domain  : Unknown
+output domain  : {""..=""}
 output         : ""
 
 
@@ -484,7 +484,7 @@ raw expr       : regexp_replace("a b c", "b", NULL)
 checked expr   : regexp_replace<String NULL, String NULL, String NULL>(CAST("a b c" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -493,7 +493,7 @@ raw expr       : regexp_replace("abc def ghi", "[a-z]+", "X", 1_u8, 3_u8)
 checked expr   : regexp_replace<String, String, String, Int64, Int64>("abc def ghi", "[a-z]+", "X", CAST(1_u8 AS Int64), CAST(3_u8 AS Int64))
 optimized expr : "abc def X"
 output type    : String
-output domain  : Unknown
+output domain  : {"abc def X"..="abc def X"}
 output         : "abc def X"
 
 
@@ -695,7 +695,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_replace(source, pat, repl, pos)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: position must be positive, but got 0 during evaluate function: regexp_replace("abc", "b", "X", 0_i64)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: position must be positive, but got 0 while evaluating function `regexp_replace("abc", "b", "X", 0_i64)`
 
 
 
@@ -703,7 +703,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_replace(source, pat, repl, pos, occur)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: occurrence must not be negative, but got -1 during evaluate function: regexp_replace("a b c", "b", "X", 1_i64, -1_i64)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: occurrence must not be negative, but got -1 while evaluating function `regexp_replace("a b c", "b", "X", 1_i64, -1_i64)`
 
 
 
@@ -711,7 +711,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_replace(source, pat, repl, pos, occur, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace match type: - during evaluate function: regexp_replace("a b c", "b", "X", 1_i64, 0_i64, "-c")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace match type: - while evaluating function `regexp_replace("a b c", "b", "X", 1_i64, 0_i64, "-c")`
 
 
 
@@ -720,7 +720,7 @@ raw expr       : regexp_substr("abc def ghi", "[a-z]+")
 checked expr   : regexp_substr<String, String>("abc def ghi", "[a-z]+")
 optimized expr : "abc"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"abc"..="abc"}
 output         : "abc"
 
 
@@ -729,7 +729,7 @@ raw expr       : regexp_substr("abc def ghi", "[a-z]+", 1_u8, 3_u8)
 checked expr   : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", CAST(1_u8 AS Int64), CAST(3_u8 AS Int64))
 optimized expr : "ghi"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"ghi"..="ghi"}
 output         : "ghi"
 
 
@@ -738,7 +738,7 @@ raw expr       : regexp_substr("abc def ghi", "[a-z]+", NULL)
 checked expr   : regexp_substr<String NULL, String NULL, Int64 NULL>(CAST("abc def ghi" AS String NULL), CAST("[a-z]+" AS String NULL), CAST(NULL AS Int64 NULL))
 optimized expr : NULL
 output type    : String NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -747,7 +747,7 @@ raw expr       : regexp_substr("abc def ghi", "")
 checked expr   : regexp_substr<String, String>("abc def ghi", "")
 optimized expr : NULL
 output type    : String NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -756,7 +756,7 @@ raw expr       : regexp_substr("", NULL)
 checked expr   : regexp_substr<String NULL, String NULL>(CAST("" AS String NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -765,7 +765,7 @@ raw expr       : regexp_substr("", "", 1_u8, 3_u8)
 checked expr   : regexp_substr<String, String, Int64, Int64>("", "", CAST(1_u8 AS Int64), CAST(3_u8 AS Int64))
 optimized expr : NULL
 output type    : String NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -927,7 +927,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_substr(source, pat, pos, occur, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_substr: occurrence must be positive, but got 0 during evaluate function: regexp_substr("a b c", "b", 1_i64, 0_i64, "-c")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_substr: occurrence must be positive, but got 0 while evaluating function `regexp_substr("a b c", "b", 1_i64, 0_i64, "-c")`
 
 
 

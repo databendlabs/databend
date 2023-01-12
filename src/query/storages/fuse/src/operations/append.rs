@@ -35,8 +35,6 @@ use common_sql::evaluator::CompoundBlockOperator;
 use crate::operations::FuseTableSink;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 impl FuseTable {
     pub fn do_append_data(
@@ -46,10 +44,9 @@ impl FuseTable {
         append_mode: AppendMode,
         need_output: bool,
     ) -> Result<()> {
-        let block_per_seg =
-            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
-
         let block_compact_thresholds = self.get_block_compact_thresholds();
+        let write_settings = self.get_write_settings();
+
         match append_mode {
             AppendMode::Normal => {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -103,14 +100,12 @@ impl FuseTable {
                 FuseTableSink::try_create(
                     transform_input_port,
                     ctx.clone(),
-                    block_per_seg,
+                    write_settings.clone(),
                     self.operator.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     block_compact_thresholds,
                     self.table_info.schema(),
-                    self.storage_format,
-                    self.table_compression,
                     Some(transform_output_port),
                 )
             })?;
@@ -119,14 +114,12 @@ impl FuseTable {
                 FuseTableSink::try_create(
                     input,
                     ctx.clone(),
-                    block_per_seg,
+                    write_settings.clone(),
                     self.operator.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     block_compact_thresholds,
                     self.table_info.schema(),
-                    self.storage_format,
-                    self.table_compression,
                     None,
                 )
             })?;

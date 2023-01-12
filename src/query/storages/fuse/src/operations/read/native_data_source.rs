@@ -16,15 +16,15 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_arrow::native::read::reader::PaReader;
-use common_arrow::native::read::PaReadBuf;
+use common_arrow::native::read::reader::NativeReader;
+use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
-pub type DataChunks = Vec<(usize, PaReader<Box<dyn PaReadBuf + Send + Sync>>)>;
+pub type DataChunks = Vec<(usize, NativeReader<Box<dyn NativeReadBuf + Send + Sync>>)>;
 
 pub struct NativeDataSourceMeta {
     pub part: Vec<PartInfoPtr>,

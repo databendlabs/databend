@@ -14,6 +14,8 @@
 
 // TODO(xuanwo): Add crate level documents here.
 
+#![allow(clippy::uninlined_format_args)]
+
 mod error;
 
 pub use error::Backtrace;

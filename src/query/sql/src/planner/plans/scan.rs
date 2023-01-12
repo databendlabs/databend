@@ -96,7 +96,7 @@ impl Operator for Scan {
         RelOp::Scan
     }
 
-    fn derive_relational_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<RelationalProperty> {
         let mut used_columns = ColumnSet::new();
         if let Some(preds) = &self.push_down_predicates {
             for pred in preds.iter() {
@@ -160,17 +160,17 @@ impl Operator for Scan {
         })
     }
 
-    fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: Distribution::Random,
         })
     }
 
     // Won't be invoked at all, since `PhysicalScan` is leaf node
-    fn compute_required_prop_child<'a>(
+    fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr<'a>,
+        _rel_expr: &RelExpr,
         _child_index: usize,
         _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {

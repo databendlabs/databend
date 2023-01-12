@@ -37,9 +37,9 @@ impl Operator for DummyTableScan {
         super::RelOp::DummyTableScan
     }
 
-    fn derive_relational_prop<'a>(
+    fn derive_relational_prop(
         &self,
-        _rel_expr: &crate::optimizer::RelExpr<'a>,
+        _rel_expr: &crate::optimizer::RelExpr,
     ) -> Result<RelationalProperty> {
         Ok(RelationalProperty {
             output_columns: ColumnSet::new(),
@@ -54,19 +54,19 @@ impl Operator for DummyTableScan {
         })
     }
 
-    fn derive_physical_prop<'a>(
+    fn derive_physical_prop(
         &self,
-        _rel_expr: &crate::optimizer::RelExpr<'a>,
+        _rel_expr: &crate::optimizer::RelExpr,
     ) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: crate::optimizer::Distribution::Serial,
         })
     }
 
-    fn compute_required_prop_child<'a>(
+    fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _rel_expr: &crate::optimizer::RelExpr<'a>,
+        _rel_expr: &crate::optimizer::RelExpr,
         _child_index: usize,
         required: &crate::optimizer::RequiredProperty,
     ) -> Result<crate::optimizer::RequiredProperty> {

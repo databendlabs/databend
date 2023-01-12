@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
+
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Arc;

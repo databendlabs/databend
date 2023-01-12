@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod sort;
 pub mod transform;
 pub mod transform_block_compact;
 pub mod transform_block_compact_no_split;

@@ -12,12 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
+
 #[macro_use]
 extern crate criterion;
 
+use std::ops::Deref;
+
 use common_expression::types::number::NumberColumn;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::UInt64Type;
+use common_expression::types::ValueType;
 use common_expression::Column;
+use common_expression::FunctionContext;
 use criterion::Criterion;
 use rand::prelude::random;
 use rand::rngs::StdRng;
@@ -26,6 +35,7 @@ use rand::SeedableRng;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::FilterBuilder;
 use storages_common_index::filters::Xor8Builder;
+use storages_common_index::BlockFilter;
 
 /// Benchmark building BlockFilter from DataBlock.
 ///
@@ -87,6 +97,90 @@ fn bench_string(c: &mut Criterion) {
     );
 }
 
+fn bench_u64_using_digests(c: &mut Criterion) {
+    let column = rand_i64_column(1_000_000);
+
+    let mut builder = Xor8Builder::create();
+    let func_ctx = FunctionContext::default();
+    let col = BlockFilter::calculate_column_digest(
+        func_ctx,
+        &column,
+        &DataType::Number(NumberDataType::Int64),
+        &DataType::Boolean,
+    )
+    .unwrap();
+    let digests = UInt64Type::try_downcast_column(&col).unwrap();
+    builder.add_digests(digests.deref());
+    let filter = builder.build().unwrap();
+
+    for i in 0..digests.len() {
+        let digest = unsafe { digests.get_unchecked(i) };
+        assert!(filter.contains_digest(*digest), "digest {} present", digest);
+    }
+
+    c.bench_function(
+        "xor8_filter_u64_1m_rows_build_from_column_to_digests",
+        |b| {
+            b.iter(|| {
+                let mut builder = Xor8Builder::create();
+                let func_ctx = FunctionContext::default();
+                let col = BlockFilter::calculate_column_digest(
+                    func_ctx,
+                    &column,
+                    &DataType::Number(NumberDataType::Int64),
+                    &DataType::Boolean,
+                )
+                .unwrap();
+                let digests = UInt64Type::try_downcast_column(&col).unwrap();
+                builder.add_digests(digests.deref());
+                let _filter = criterion::black_box(builder.build().unwrap());
+            })
+        },
+    );
+}
+
+fn bench_string_using_digests(c: &mut Criterion) {
+    let column = rand_str_column(1_000_000, 32);
+
+    let mut builder = Xor8Builder::create();
+    let func_ctx = FunctionContext::default();
+    let col = BlockFilter::calculate_column_digest(
+        func_ctx,
+        &column,
+        &DataType::String,
+        &DataType::Boolean,
+    )
+    .unwrap();
+    let digests = UInt64Type::try_downcast_column(&col).unwrap();
+    builder.add_digests(digests.deref());
+    let filter = builder.build().unwrap();
+
+    for i in 0..digests.len() {
+        let digest = unsafe { digests.get_unchecked(i) };
+        assert!(filter.contains_digest(*digest), "digest {} present", digest);
+    }
+
+    c.bench_function(
+        "xor8_filter_string16to32_1m_rows_build_from_column_to_digests",
+        |b| {
+            b.iter(|| {
+                let mut builder = Xor8Builder::create();
+                let func_ctx = FunctionContext::default();
+                let col = BlockFilter::calculate_column_digest(
+                    func_ctx,
+                    &column,
+                    &DataType::String,
+                    &DataType::Boolean,
+                )
+                .unwrap();
+                let digests = UInt64Type::try_downcast_column(&col).unwrap();
+                builder.add_digests(digests.deref());
+                let _filter = criterion::black_box(builder.build().unwrap());
+            })
+        },
+    );
+}
+
 fn rand_i64_column(n: i32) -> Column {
     let seed: u64 = random();
 
@@ -116,5 +210,11 @@ fn rand_str_column(n: i32, len: i32) -> Column {
     Column::String(builder.build())
 }
 
-criterion_group!(benches, bench_u64, bench_string);
+criterion_group!(
+    benches,
+    bench_u64,
+    bench_u64_using_digests,
+    bench_string,
+    bench_string_using_digests
+);
 criterion_main!(benches);

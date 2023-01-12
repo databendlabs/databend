@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
+#![allow(incomplete_features)]
 #![feature(allocator_api)]
 #![feature(thread_local)]
 #![feature(ptr_metadata)]
@@ -19,7 +21,6 @@
 #![feature(try_trait_v2)]
 #![feature(thread_id_value)]
 #![feature(backtrace_frames)]
-#![allow(incomplete_features)]
 #![feature(alloc_error_hook)]
 
 pub mod base;

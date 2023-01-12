@@ -68,15 +68,21 @@ use uuid::Uuid;
 
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::WriteSettings;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
+use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
 use crate::DEFAULT_ROW_PER_BLOCK;
+use crate::DEFAULT_ROW_PER_PAGE;
+use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
+use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 
 #[derive(Clone)]
@@ -164,6 +170,24 @@ impl FuseTable {
 
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
+    }
+
+    pub fn get_write_settings(&self) -> WriteSettings {
+        let default_rows_per_page = if self.operator.metadata().can_blocking() {
+            DEFAULT_ROW_PER_PAGE_FOR_BLOCKING
+        } else {
+            DEFAULT_ROW_PER_PAGE
+        };
+        let max_page_size = self.get_option(FUSE_OPT_KEY_ROW_PER_PAGE, default_rows_per_page);
+        let block_per_seg =
+            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+
+        WriteSettings {
+            storage_format: self.storage_format,
+            table_compression: self.table_compression,
+            max_page_size,
+            block_per_seg,
+        }
     }
 
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
