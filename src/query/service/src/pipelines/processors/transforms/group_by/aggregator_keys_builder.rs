@@ -14,12 +14,13 @@
 
 use std::marker::PhantomData;
 
-use common_expression::large_number::LargeNumber;
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
+
+use super::large_number::LargeNumber;
 
 /// Remove the group by key from the state and rebuild it into a column
 pub trait KeysColumnBuilder {

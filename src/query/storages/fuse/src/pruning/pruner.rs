@@ -19,7 +19,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_expression::ConstantFolder;
-use common_expression::Domain;
 use common_expression::Expr;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
@@ -131,21 +130,8 @@ pub fn new_filter_pruner(
             })
             .unwrap();
 
-        let input_domains = expr
-            .column_refs()
-            .into_iter()
-            .map(|(name, ty)| {
-                let domain = Domain::full(&ty);
-                (name, domain)
-            })
-            .collect();
-
-        let folder = ConstantFolder::new(
-            input_domains,
-            ctx.try_get_function_context()?,
-            &BUILTIN_FUNCTIONS,
-        );
-        let (optimized_expr, _) = folder.fold(&expr);
+        let (optimized_expr, _) =
+            ConstantFolder::fold(&expr, ctx.try_get_function_context()?, &BUILTIN_FUNCTIONS);
         let point_query_cols = BlockFilter::find_eq_columns(&optimized_expr)?;
 
         tracing::debug!(

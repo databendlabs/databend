@@ -1586,11 +1586,6 @@ impl<'a> Iterator for ColumnIterator<'a> {
 
 unsafe impl<'a> TrustedLen for ColumnIterator<'a> {}
 
-#[inline]
-pub fn upcast_gat<'short, 'long: 'short>(long: ScalarRef<'long>) -> ScalarRef<'short> {
-    long
-}
-
 #[macro_export]
 macro_rules! for_all_number_varints{
     ($macro:tt $(, $x:tt)*) => {

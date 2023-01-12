@@ -16,10 +16,11 @@ use std::slice::Iter;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
-use common_expression::large_number::LargeNumber;
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringIterator;
+
+use super::large_number::LargeNumber;
 
 pub trait KeysColumnIter<T: ?Sized> {
     type Iterator<'a>: Iterator<Item = &'a T>
