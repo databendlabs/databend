@@ -11,23 +11,23 @@ statement ok
 DROP TABLE IF EXISTS `05_0027_at_t0_2`
 
 statement ok
-CREATE TABLE `05_0027_at_t0`(a int, b Tuple(Bool, Int64),c int,d double)
+CREATE TABLE `05_0027_at_t0`(a int, b Tuple(Bool, Int64, Float64, String, Date, Timestamp),c Array(UInt8),d double)
 
 statement ok
-INSERT INTO TABLE `05_0027_at_t0` values(1,(true,2.0),3,4.0)
+INSERT INTO TABLE `05_0027_at_t0` values(1,(true, 100, 12.34, 'abc', '2020-01-01', '2020-01-01 00:00:00'),[101,2],4.0)
 
-query I(BI)IF
+query ITIF
 SELECT * FROM `05_0027_at_t0`
 ----
-1 (1,2) 3 4.0
+1 (1,100,12.34,'abc','2020-01-01','2020-01-01 00:00:00.000000') [101,2] 4.0
 
 statement ok
-create table `05_0027_at_t0_1`(a int, b Tuple(Bool, Int64),c int,d double) AS SELECT * FROM `05_0027_at_t0`;
+create table `05_0027_at_t0_1`(a int, b Tuple(Bool, Int64, Float64, String, Date, Timestamp),c Array(UInt8),d double) AS SELECT * FROM `05_0027_at_t0`;
 
-query I(BI)IF
+query ITIF
 SELECT * FROM `05_0027_at_t0_1`
 ----
-1 (1,2) 3 4.0
+1 (1,100,12.34,'abc','2020-01-01','2020-01-01 00:00:00.000000') [101,2] 4.0
 
 statement ok
 DROP TABLE IF EXISTS `05_0027_at_t0_1`
@@ -36,25 +36,25 @@ statement ok
 ALTER TABLE `05_0027_at_t0` DROP COLUMN a
 
 statement ok
-create table `05_0027_at_t0_2`(b Tuple(Bool, Int64),c int,d double) AS SELECT * FROM `05_0027_at_t0`;
+create table `05_0027_at_t0_2`(b Tuple(Bool, Int64, Float64, String, Date, Timestamp),c Array(UInt8),d double) AS SELECT * FROM `05_0027_at_t0`;
 
 query FIII
 SELECT d,b.1,c,b.2 FROM `05_0027_at_t0_2` 
 ----
-4.0 1 3 2
+4.0 1 [101,2] 100
 
 statement ok
 DROP TABLE IF EXISTS `05_0027_at_t0_2`
 
-query FIII
-SELECT d,b.1,c,b.2 FROM `05_0027_at_t0`
+query FIIIF
+SELECT d,b.1,c,b.2,b.3 FROM `05_0027_at_t0`
 ----
-4.0 1 3 2
+4.0 1 [101,2] 100 12.34
 
-query (BI)IF
+query TIF
 SELECT * FROM `05_0027_at_t0`
 ----
-(1,2) 3 4.0
+(1,100,12.34,'abc','2020-01-01','2020-01-01 00:00:00.000000') [101,2] 4.0
 
 statement ok
 ALTER TABLE `05_0027_at_t0` DROP COLUMN b
@@ -62,7 +62,7 @@ ALTER TABLE `05_0027_at_t0` DROP COLUMN b
 query IF
 SELECT * FROM `05_0027_at_t0`
 ----
-3 4.0
+[101,2] 4.0
 
 statement ok
 ALTER TABLE `05_0027_at_t0` DROP COLUMN d
@@ -70,7 +70,7 @@ ALTER TABLE `05_0027_at_t0` DROP COLUMN d
 query I
 SELECT * FROM `05_0027_at_t0`
 ----
-3
+[101,2]
 
 statement error 1109
 ALTER TABLE `05_0027_at_t0` DROP COLUMN c
@@ -82,13 +82,13 @@ statement ok
 ALTER TABLE `05_0027_at_t0` ADD COLUMN a float
 
 statement ok
-INSERT INTO TABLE `05_0027_at_t0` values(4,5.0)
+INSERT INTO TABLE `05_0027_at_t0` values([4,5],5.0)
 
 query IF
-SELECT * FROM `05_0027_at_t0` order by c
+SELECT * FROM `05_0027_at_t0` order by a 
 ----
-3 0.0
-4 5.0
+[101,2] 0.0
+[4,5] 5.0
 
 statement ok
 ALTER TABLE `05_0027_at_t0` ADD COLUMN b Tuple(double, int)
@@ -97,24 +97,24 @@ statement ok
 ALTER TABLE `05_0027_at_t0` ADD COLUMN e int
 
 statement ok
-INSERT INTO TABLE `05_0027_at_t0` values(10,6.0,(111.0,2),1)
+INSERT INTO TABLE `05_0027_at_t0` values([9,10],6.0,(111.0,2),202)
 
-query IF(FI)I
-SELECT * FROM `05_0027_at_t0` order by c
+query IFTI
+SELECT * FROM `05_0027_at_t0` order by a
 ----
-3 0.0 (0.0,0) 0
-4 5.0 (0.0,0) 0
-10 6.0 (111.0,2) 1
+[101,2] 0.0 (0.0,0) 0
+[4,5] 5.0 (0.0,0) 0
+[9,10] 6.0 (111.0,2) 202
 
 statement ok
 ALTER TABLE `05_0027_at_t0` DROP COLUMN c
 
-query FI
+query FTI
 SELECT * FROM `05_0027_at_t0` order by a
 ----
 0.0 (0.0,0) 0
 5.0 (0.0,0) 0
-6.0 (111.0,2) 1
+6.0 (111.0,2) 202
 
 query FFI
 SELECT b.1,a,b.2 FROM `05_0027_at_t0` order by a
@@ -126,7 +126,7 @@ SELECT b.1,a,b.2 FROM `05_0027_at_t0` order by a
 statement ok
 ALTER TABLE `05_0027_at_t0` DROP COLUMN e
 
-query F(FI)I
+query FT
 SELECT * FROM `05_0027_at_t0` order by a
 ----
 0.0 (0.0,0)

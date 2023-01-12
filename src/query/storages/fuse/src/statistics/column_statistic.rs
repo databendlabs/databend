@@ -52,6 +52,7 @@ pub fn gen_columns_statistics(
     let mut statistics = StatisticsOfColumns::new();
 
     let leaves = traverse::traverse_columns_dfs(data_block.columns())?;
+    let column_ids = data_block.schema().to_column_ids()?;
 
     for (idx, (col_idx, col)) in leaves.iter().enumerate() {
         let col_data_type = col.data_type();
@@ -114,7 +115,8 @@ pub fn gen_columns_statistics(
             distinct_of_values: Some(distinct_of_values),
         };
 
-        statistics.insert(idx as u32, col_stats);
+        // use column id as key instead of index
+        statistics.insert(column_ids[idx], col_stats);
     }
     Ok(statistics)
 }
