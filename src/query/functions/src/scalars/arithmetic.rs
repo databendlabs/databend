@@ -159,7 +159,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     |a, b, output, ctx| {
                                         let b = (b.as_() : T);
                                         if std::intrinsics::unlikely(b == 0.0) {
-                                            ctx.set_error(output.len(), "/ by zero");
+                                            ctx.set_error(output.len(), "divided by zero");
                                             output.push(F64::default());
                                         } else {
                                             output.push(((a.as_() : T) / b));
@@ -179,7 +179,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     |a, b, output, ctx| {
                                     let b = (b.as_() : F64);
                                     if std::intrinsics::unlikely(b == 0.0) {
-                                            ctx.set_error(output.len(), "/ by zero");
+                                            ctx.set_error(output.len(), "divided by zero");
                                             output.push(T::default());
                                     } else {
                                         output.push(((a.as_() : F64) / b).as_() : T);
@@ -209,7 +209,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         |a, b, output, ctx| {
                                         let b = (b.as_() : F64);
                                         if std::intrinsics::unlikely(b == 0.0) {
-                                                ctx.set_error(output.len(), "/ by zero");
+                                                ctx.set_error(output.len(), "divided by zero");
                                                 output.push(T::default());
                                         } else {
                                             output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
@@ -267,11 +267,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         match num_traits::cast::cast(val) {
                                             Some(val) => output.push(val),
                                             None => {
-                                                ctx.set_error(output.len(), format!(
-                                                    "unable to cast {} to {}",
-                                                    val,
-                                                    dest_type,
-                                                ));
+                                                ctx.set_error(output.len(),"number overflowed");
                                                 output.push(DEST_TYPE::default());
                                             },
                                         }
@@ -509,8 +505,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         ctx.set_error(
                                             output.len(),
                                             format!(
-                                                "unable to cast {} to {}: {}",
-                                                str_val, dest_type, e
+                                                "unable to parse string to type `{dest_type}` because {e}",
                                             ),
                                         );
                                         output.push(DEST_TYPE::default());

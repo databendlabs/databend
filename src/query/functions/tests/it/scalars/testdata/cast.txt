@@ -2,7 +2,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS UINT8)
-  | ^^^^^^^^^^^^^^^^ unable to cast 512 to UInt8 during evaluate function: to_uint8(512_u16)
+  | ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint8(512_u16)`
 
 
 
@@ -10,7 +10,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS UINT16)
-  | ^^^^^^^^^^^^^^^^^ unable to cast -4 to UInt16 during evaluate function: to_uint16(-4_i16)
+  | ^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint16(-4_i16)`
 
 
 
@@ -42,7 +42,7 @@ error:
   --> SQL:1:22
   |
 1 | (CAST(a AS FLOAT32), CAST(a AS INT32), CAST(b AS FLOAT32), CAST(b AS INT32))
-  |                      ^^^^^^^^^^^^^^^^ unable to cast 4294967295 to Int32 during evaluate function: to_int32(4294967295_u64)
+  |                      ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int32(4294967295_u64)`
 
 
 
@@ -58,7 +58,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast 256 to Int8 during evaluate function: to_int8(256_i16)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int8(256_i16)`
 
 
 
@@ -114,7 +114,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS UINT16)
-  | ^^^^^^^^^^^^^^^^^ unable to cast -4 to UInt16 during evaluate function: to_uint16(-4_i16)
+  | ^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint16(-4_i16)`
 
 
 
@@ -122,7 +122,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(c AS INT16)
-  | ^^^^^^^^^^^^^^^^ unable to cast 11111111111 to Int16 during evaluate function: to_int16(11111111111_i64)
+  | ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int16(11111111111_i64)`
 
 
 
@@ -281,7 +281,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(-30610224000000001 AS TIMESTAMP)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `-30610224000000001` is out of range during evaluate function: to_timestamp(-30610224000000001_i64)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `to_timestamp(-30610224000000001_i64)`
 
 
 
@@ -361,7 +361,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(253402300800000000 AS TIMESTAMP)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp `253402300800000000` is out of range during evaluate function: to_timestamp(253402300800000000_i64)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `to_timestamp(253402300800000000_i64)`
 
 
 
@@ -493,7 +493,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(-354286 AS DATE)
-  | ^^^^^^^^^^^^^^^^^^^^^ date `0999-12-31` is out of range during evaluate function: to_date(-354286_i64)
+  | ^^^^^^^^^^^^^^^^^^^^^ date is out of range while evaluating function `to_date(-354286_i64)`
 
 
 
@@ -555,7 +555,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(2932897 AS DATE)
-  | ^^^^^^^^^^^^^^^^^^^^^ date `+10000-01-01` is out of range during evaluate function: to_date(2932897_i64)
+  | ^^^^^^^^^^^^^^^^^^^^^ date is out of range while evaluating function `to_date(2932897_i64)`
 
 
 
@@ -659,6 +659,206 @@ evaluation (internal):
 | a      | [-354285, -100, 0, 100, 2932896]        |
 | Output | Int64([-354285, -100, 0, 100, 2932896]) |
 +--------+-----------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('foo' AS UINT64)
+  | ^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `UInt64` because invalid digit found in string while evaluating function `to_uint64("foo")`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('1foo' AS UINT64)
+  | ^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `UInt64` because invalid digit found in string while evaluating function `to_uint64("1foo")`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('-1' AS UINT64)
+  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `UInt64` because invalid digit found in string while evaluating function `to_uint64("-1")`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('256' AS UINT8)
+  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `UInt8` because number too large to fit in target type while evaluating function `to_uint8("256")`
+
+
+
+ast            : CAST('1' AS UINT64)
+raw expr       : CAST("1" AS UInt64)
+checked expr   : to_uint64<String>("1")
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : Unknown
+output         : 1_u64
+
+
+ast            : CAST(str AS INT64)
+raw expr       : CAST(#0::String AS Int64)
+checked expr   : to_int64<String>(#0)
+evaluation:
++--------+--------------------------------+--------------------------+
+|        | str                            | Output                   |
++--------+--------------------------------+--------------------------+
+| Type   | String                         | Int64                    |
+| Domain | {"-1"..="9223372036854775807"} | Unknown                  |
+| Row 0  | "-9223372036854775808"         | -9223372036854775808_i64 |
+| Row 1  | "-1"                           | -1_i64                   |
+| Row 2  | "0"                            | 0_i64                    |
+| Row 3  | "1"                            | 1_i64                    |
+| Row 4  | "9223372036854775807"          | 9223372036854775807_i64  |
++--------+--------------------------------+--------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| str    | StringColumn { data: 0x2d393232333337323033363835343737353830382d31303139323233333732303336383534373735383037, offsets: [0, 20, 22, 23, 24, 43] } |
+| Output | Int64([-9223372036854775808, -1, 0, 1, 9223372036854775807])                                                                                      |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : CAST(num AS STRING)
+raw expr       : CAST(#0::Int64 AS String)
+checked expr   : to_string<Int64>(#0)
+evaluation:
++--------+----------------------------------------------+------------------------+
+|        | num                                          | Output                 |
++--------+----------------------------------------------+------------------------+
+| Type   | Int64                                        | String                 |
+| Domain | {-9223372036854775808..=9223372036854775807} | {""..}                 |
+| Row 0  | -9223372036854775808_i64                     | "-9223372036854775808" |
+| Row 1  | -1_i64                                       | "-1"                   |
+| Row 2  | 0_i64                                        | "0"                    |
+| Row 3  | 1_i64                                        | "1"                    |
+| Row 4  | 9223372036854775807_i64                      | "9223372036854775807"  |
++--------+----------------------------------------------+------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| num    | Int64([-9223372036854775808, -1, 0, 1, 9223372036854775807])                                                                                      |
+| Output | StringColumn { data: 0x2d393232333337323033363835343737353830382d31303139323233333732303336383534373735383037, offsets: [0, 20, 22, 23, 24, 43] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : CAST(num AS STRING)
+raw expr       : CAST(#0::UInt64 AS String)
+checked expr   : to_string<UInt64>(#0)
+evaluation:
++--------+----------------------------+------------------------+
+|        | num                        | Output                 |
++--------+----------------------------+------------------------+
+| Type   | UInt64                     | String                 |
+| Domain | {0..=18446744073709551615} | {""..}                 |
+| Row 0  | 0_u64                      | "0"                    |
+| Row 1  | 1_u64                      | "1"                    |
+| Row 2  | 18446744073709551615_u64   | "18446744073709551615" |
++--------+----------------------------+------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------+
+| Column | Data                                                                                          |
++--------+-----------------------------------------------------------------------------------------------+
+| num    | UInt64([0, 1, 18446744073709551615])                                                          |
+| Output | StringColumn { data: 0x30313138343436373434303733373039353531363135, offsets: [0, 1, 2, 22] } |
++--------+-----------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('t' AS BOOLEAN)
+  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("t")`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('f' AS BOOLEAN)
+  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("f")`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('0' AS BOOLEAN)
+  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("0")`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('1' AS BOOLEAN)
+  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("1")`
+
+
+
+ast            : CAST('true' AS BOOLEAN)
+raw expr       : CAST("true" AS Boolean)
+checked expr   : to_boolean<String>("true")
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : CAST('false' AS BOOLEAN)
+raw expr       : CAST("false" AS Boolean)
+checked expr   : to_boolean<String>("false")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : false
+
+
+ast            : CAST('TRUE' AS BOOLEAN)
+raw expr       : CAST("TRUE" AS Boolean)
+checked expr   : to_boolean<String>("TRUE")
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : CAST('FaLse' AS BOOLEAN)
+raw expr       : CAST("FaLse" AS Boolean)
+checked expr   : to_boolean<String>("FaLse")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : false
+
+
+ast            : CAST(bool AS STRING)
+raw expr       : CAST(#0::Boolean AS String)
+checked expr   : to_string<Boolean>(#0)
+evaluation:
++--------+---------------+---------+
+|        | bool          | Output  |
++--------+---------------+---------+
+| Type   | Boolean       | String  |
+| Domain | {FALSE, TRUE} | {""..}  |
+| Row 0  | false         | "false" |
+| Row 1  | true          | "true"  |
++--------+---------------+---------+
+evaluation (internal):
++--------+-----------------------------------------------------------------+
+| Column | Data                                                            |
++--------+-----------------------------------------------------------------+
+| bool   | Boolean([0b______10])                                           |
+| Output | StringColumn { data: 0x66616c736574727565, offsets: [0, 5, 9] } |
++--------+-----------------------------------------------------------------+
 
 
 ast            : CAST(0 AS BOOLEAN)
@@ -879,8 +1079,24 @@ evaluation (internal):
 error: 
   --> SQL:1:1
   |
+1 | CAST(a AS TIMESTAMP)
+  | ^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `to_timestamp(9223372036854775807_i64)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS DATE)
+  | ^^^^^^^^^^^^^^^ date is out of range while evaluating function `to_date(9223372036854775807_i64)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
 1 | TO_TIMESTAMP('2022')
-  | ^^^^^^^^^^^^^^^^^^^^ unable to cast 2022 to TimestampType during evaluate function: to_timestamp("2022")
+  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `TIMESTAMP` while evaluating function `to_timestamp("2022")`
 
 
 
@@ -888,7 +1104,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022-01')
-  | ^^^^^^^^^^^^^^^^^^^^^^^ unable to cast 2022-01 to TimestampType during evaluate function: to_timestamp("2022-01")
+  | ^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `TIMESTAMP` while evaluating function `to_timestamp("2022-01")`
 
 
 
@@ -905,7 +1121,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('A NON-TIMESTMAP STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast A NON-TIMESTMAP STR to TimestampType during evaluate function: to_timestamp("A NON-TIMESTMAP STR")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `TIMESTAMP` while evaluating function `to_timestamp("A NON-TIMESTMAP STR")`
 
 
 
@@ -1080,7 +1296,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022')
-  | ^^^^^^^^^^^^^^^ unable to cast 2022 to DateType during evaluate function: to_date("2022")
+  | ^^^^^^^^^^^^^^^ unable to parse string to type `DATE` while evaluating function `to_date("2022")`
 
 
 
@@ -1088,7 +1304,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022-01')
-  | ^^^^^^^^^^^^^^^^^^ unable to cast 2022-01 to DateType during evaluate function: to_date("2022-01")
+  | ^^^^^^^^^^^^^^^^^^ unable to parse string to type `DATE` while evaluating function `to_date("2022-01")`
 
 
 
@@ -1105,7 +1321,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('A NON-DATE STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast A NON-DATE STR to DateType during evaluate function: to_date("A NON-DATE STR")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `DATE` while evaluating function `to_date("A NON-DATE STR")`
 
 
 
@@ -2055,6 +2271,214 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------+
 
 
+ast            : TRY_CAST('foo' AS UINT64)
+raw expr       : TRY_CAST("foo" AS UInt64)
+checked expr   : try_to_uint64<String>("foo")
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {0..=18446744073709551615} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST('1foo' AS UINT64)
+raw expr       : TRY_CAST("1foo" AS UInt64)
+checked expr   : try_to_uint64<String>("1foo")
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {0..=18446744073709551615} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST('-1' AS UINT64)
+raw expr       : TRY_CAST("-1" AS UInt64)
+checked expr   : try_to_uint64<String>("-1")
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {0..=18446744073709551615} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST('256' AS UINT8)
+raw expr       : TRY_CAST("256" AS UInt8)
+checked expr   : try_to_uint8<String>("256")
+optimized expr : NULL
+output type    : UInt8 NULL
+output domain  : {0..=255} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST('1' AS UINT64)
+raw expr       : TRY_CAST("1" AS UInt64)
+checked expr   : try_to_uint64<String>("1")
+optimized expr : 1_u64
+output type    : UInt64 NULL
+output domain  : {0..=18446744073709551615} ∪ {NULL}
+output         : 1_u64
+
+
+ast            : TRY_CAST(str AS INT64)
+raw expr       : TRY_CAST(#0::String AS Int64)
+checked expr   : try_to_int64<String>(#0)
+evaluation:
++--------+--------------------------------+-------------------------------------------------------+
+|        | str                            | Output                                                |
++--------+--------------------------------+-------------------------------------------------------+
+| Type   | String                         | Int64 NULL                                            |
+| Domain | {"-1"..="9223372036854775807"} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Row 0  | "-9223372036854775808"         | -9223372036854775808_i64                              |
+| Row 1  | "-1"                           | -1_i64                                                |
+| Row 2  | "0"                            | 0_i64                                                 |
+| Row 3  | "1"                            | 1_i64                                                 |
+| Row 4  | "9223372036854775807"          | 9223372036854775807_i64                               |
++--------+--------------------------------+-------------------------------------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+| str    | StringColumn { data: 0x2d393232333337323033363835343737353830382d31303139323233333732303336383534373735383037, offsets: [0, 20, 22, 23, 24, 43] } |
+| Output | NullableColumn { column: Int64([-9223372036854775808, -1, 0, 1, 9223372036854775807]), validity: [0b___11111] }                                   |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(num AS STRING)
+raw expr       : TRY_CAST(#0::Int64 AS String)
+checked expr   : try_to_string<Int64>(#0)
+evaluation:
++--------+----------------------------------------------+------------------------+
+|        | num                                          | Output                 |
++--------+----------------------------------------------+------------------------+
+| Type   | Int64                                        | String NULL            |
+| Domain | {-9223372036854775808..=9223372036854775807} | {""..} ∪ {NULL}        |
+| Row 0  | -9223372036854775808_i64                     | "-9223372036854775808" |
+| Row 1  | -1_i64                                       | "-1"                   |
+| Row 2  | 0_i64                                        | "0"                    |
+| Row 3  | 1_i64                                        | "1"                    |
+| Row 4  | 9223372036854775807_i64                      | "9223372036854775807"  |
++--------+----------------------------------------------+------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                 |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| num    | Int64([-9223372036854775808, -1, 0, 1, 9223372036854775807])                                                                                                                                         |
+| Output | NullableColumn { column: StringColumn { data: 0x2d393232333337323033363835343737353830382d31303139323233333732303336383534373735383037, offsets: [0, 20, 22, 23, 24, 43] }, validity: [0b___11111] } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(num AS STRING)
+raw expr       : TRY_CAST(#0::UInt64 AS String)
+checked expr   : try_to_string<UInt64>(#0)
+evaluation:
++--------+----------------------------+------------------------+
+|        | num                        | Output                 |
++--------+----------------------------+------------------------+
+| Type   | UInt64                     | String NULL            |
+| Domain | {0..=18446744073709551615} | {""..} ∪ {NULL}        |
+| Row 0  | 0_u64                      | "0"                    |
+| Row 1  | 1_u64                      | "1"                    |
+| Row 2  | 18446744073709551615_u64   | "18446744073709551615" |
++--------+----------------------------+------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                             |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------+
+| num    | UInt64([0, 1, 18446744073709551615])                                                                                                             |
+| Output | NullableColumn { column: StringColumn { data: 0x30313138343436373434303733373039353531363135, offsets: [0, 1, 2, 22] }, validity: [0b_____111] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST('t' AS BOOLEAN)
+raw expr       : TRY_CAST("t" AS Boolean)
+checked expr   : try_to_boolean<String>("t")
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {FALSE, TRUE} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST('f' AS BOOLEAN)
+raw expr       : TRY_CAST("f" AS Boolean)
+checked expr   : try_to_boolean<String>("f")
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {FALSE, TRUE} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST('0' AS BOOLEAN)
+raw expr       : TRY_CAST("0" AS Boolean)
+checked expr   : try_to_boolean<String>("0")
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {FALSE, TRUE} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST('1' AS BOOLEAN)
+raw expr       : TRY_CAST("1" AS Boolean)
+checked expr   : try_to_boolean<String>("1")
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {FALSE, TRUE} ∪ {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST('true' AS BOOLEAN)
+raw expr       : TRY_CAST("true" AS Boolean)
+checked expr   : try_to_boolean<String>("true")
+optimized expr : true
+output type    : Boolean NULL
+output domain  : {FALSE, TRUE} ∪ {NULL}
+output         : true
+
+
+ast            : TRY_CAST('false' AS BOOLEAN)
+raw expr       : TRY_CAST("false" AS Boolean)
+checked expr   : try_to_boolean<String>("false")
+optimized expr : false
+output type    : Boolean NULL
+output domain  : {FALSE, TRUE} ∪ {NULL}
+output         : false
+
+
+ast            : TRY_CAST('TRUE' AS BOOLEAN)
+raw expr       : TRY_CAST("TRUE" AS Boolean)
+checked expr   : try_to_boolean<String>("TRUE")
+optimized expr : true
+output type    : Boolean NULL
+output domain  : {FALSE, TRUE} ∪ {NULL}
+output         : true
+
+
+ast            : TRY_CAST('FaLse' AS BOOLEAN)
+raw expr       : TRY_CAST("FaLse" AS Boolean)
+checked expr   : try_to_boolean<String>("FaLse")
+optimized expr : false
+output type    : Boolean NULL
+output domain  : {FALSE, TRUE} ∪ {NULL}
+output         : false
+
+
+ast            : TRY_CAST(bool AS STRING)
+raw expr       : TRY_CAST(#0::Boolean AS String)
+checked expr   : try_to_string<Boolean>(#0)
+evaluation:
++--------+---------------+-----------------+
+|        | bool          | Output          |
++--------+---------------+-----------------+
+| Type   | Boolean       | String NULL     |
+| Domain | {FALSE, TRUE} | {""..} ∪ {NULL} |
+| Row 0  | false         | "false"         |
+| Row 1  | true          | "true"          |
++--------+---------------+-----------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                               |
++--------+--------------------------------------------------------------------------------------------------------------------+
+| bool   | Boolean([0b______10])                                                                                              |
+| Output | NullableColumn { column: StringColumn { data: 0x66616c736574727565, offsets: [0, 5, 9] }, validity: [0b______11] } |
++--------+--------------------------------------------------------------------------------------------------------------------+
+
+
 ast            : TRY_CAST(0 AS BOOLEAN)
 raw expr       : TRY_CAST(0_u8 AS Boolean)
 checked expr   : try_to_boolean<UInt8>(0_u8)
@@ -2268,6 +2692,48 @@ evaluation (internal):
 | a      | Int32([-354285, -100, 0, 100, 2932896])                                                                                       |
 | Output | NullableColumn { column: [-30610224000000000, -8640000000000, 0, 8640000000000, 253402214400000000], validity: [0b___11111] } |
 +--------+-------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(a AS TIMESTAMP)
+raw expr       : TRY_CAST(#0::Int64 AS Timestamp)
+checked expr   : try_to_timestamp<Int64>(#0)
+optimized expr : NULL
+evaluation:
++--------+---------------------------------------------+----------------------------------------------------+
+|        | a                                           | Output                                             |
++--------+---------------------------------------------+----------------------------------------------------+
+| Type   | Int64                                       | Timestamp NULL                                     |
+| Domain | {9223372036854775807..=9223372036854775807} | {-30610224000000000..=253402300799999999} ∪ {NULL} |
+| Row 0  | 9223372036854775807_i64                     | NULL                                               |
++--------+---------------------------------------------+----------------------------------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------+
+| Column | Data                                                   |
++--------+--------------------------------------------------------+
+| a      | Int64([9223372036854775807])                           |
+| Output | NullableColumn { column: [0], validity: [0b_______0] } |
++--------+--------------------------------------------------------+
+
+
+ast            : TRY_CAST(a AS DATE)
+raw expr       : TRY_CAST(#0::Int64 AS Date)
+checked expr   : try_to_date<Int64>(#0)
+optimized expr : NULL
+evaluation:
++--------+---------------------------------------------+------------------------------+
+|        | a                                           | Output                       |
++--------+---------------------------------------------+------------------------------+
+| Type   | Int64                                       | Date NULL                    |
+| Domain | {9223372036854775807..=9223372036854775807} | {2932896..=2932896} ∪ {NULL} |
+| Row 0  | 9223372036854775807_i64                     | NULL                         |
++--------+---------------------------------------------+------------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------+
+| Column | Data                                                   |
++--------+--------------------------------------------------------+
+| a      | Int64([9223372036854775807])                           |
+| Output | NullableColumn { column: [0], validity: [0b_______0] } |
++--------+--------------------------------------------------------+
 
 
 ast            : TRY_TO_TIMESTAMP('2022')
