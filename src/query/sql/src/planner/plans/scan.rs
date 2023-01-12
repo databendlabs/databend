@@ -132,6 +132,7 @@ impl Operator for Scan {
                     )
                     .ok();
                     let column_stat = ColumnStat {
+                        ndv: col_stat.number_of_distinct_values,
                         null_count: col_stat.null_count,
                         histogram,
                     };

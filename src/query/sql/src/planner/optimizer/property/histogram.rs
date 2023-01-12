@@ -26,6 +26,12 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 /// We are constructing this in an "Equi-depth" fashion, which means
 /// every bucket has roughly the same number of rows.
 ///
+/// Real-world data distribution is often skewed,
+/// so an equal-height histogram is better than an equal-width histogram,
+/// the former can use multiple buckets to show the skew data, but for the latter,
+/// it is difficult to give the exact frequency of the skew data
+/// when the skew data and other data fall into the same bucket
+///
 /// We choose this approach because so far the histogram is originally
 /// constructed from NDV(number of distinct values) and the total number
 /// of rows instead of maintaining a real histogram for each column,
@@ -81,15 +87,15 @@ pub fn histogram_from_ndv(
     bound: Option<(Datum, Datum)>,
     num_buckets: usize,
 ) -> Result<Histogram> {
-    if ndv <= 2 {
-        if num_rows != 0 {
-            return Err(ErrorCode::Internal(format!(
+    if ndv <= 0 {
+        return if num_rows != 0 {
+            Err(ErrorCode::Internal(format!(
                 "NDV must be greater than 0 when the number of rows is greater than 0, got NDV: {}, num_rows: {}",
                 ndv, num_rows
-            )));
+            )))
         } else {
-            return Ok(Histogram { buckets: vec![] });
-        }
+            Ok(Histogram { buckets: vec![] })
+        };
     }
 
     if num_buckets < 2 {

@@ -22,6 +22,9 @@ pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
 #[derive(Debug, Clone)]
 /// Statistics information of a column
 pub struct ColumnStat {
+    /// Number of distinct values
+    pub ndv: u64,
+
     /// Count of null values
     pub null_count: u64,
 
