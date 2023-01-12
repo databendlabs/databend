@@ -42,8 +42,10 @@ pub trait CatalogManagerHelper {
 
     async fn register_build_in_catalogs(&self, conf: &Config) -> Result<()>;
 
+    /// build catalog from config
     fn register_external_catalogs(&self, conf: &Config) -> Result<()>;
 
+    /// build catalog from sql
     async fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
 
     fn drop_user_defined_catalog(&self, req: DropCatalogReq) -> Result<()>;

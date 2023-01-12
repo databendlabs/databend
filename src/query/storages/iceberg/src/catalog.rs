@@ -92,6 +92,7 @@ impl IcebergCatalog {
     ///
     /// Such catalog will be seen as an `flatten` catalogs,
     /// a `default` database will be generated directly
+    #[tracing::instrument(level = "debug", skip(operator))]
     pub fn try_create(name: &str, flatten: bool, operator: DataOperator) -> Result<Self> {
         Ok(Self {
             name: name.to_string(),
@@ -101,6 +102,7 @@ impl IcebergCatalog {
     }
 
     /// list read databases
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn list_database_from_read(&self) -> Result<Vec<Arc<dyn Database>>> {
         if self.flatten {
             // is flatten catalog, return `default` catalog

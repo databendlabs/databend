@@ -26,6 +26,8 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use opendal::layers::SubdirLayer;
+use opendal::ObjectLister;
+use opendal::ObjectMode;
 use opendal::Operator;
 
 use crate::table::IcebergTable;
@@ -116,5 +118,21 @@ impl Database for IcebergDatabase {
         )
         .await?;
         return Ok(Arc::new(tbl) as Arc<dyn Table>);
+    }
+
+    async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
+        let mut tables = vec![];
+        let mut lister: ObjectLister = self.db_root.object("/").list().await?;
+        while let Some(page) = lister.next_page().await? {
+            for entry in page {
+                if entry.mode().await? != ObjectMode::DIR {
+                    continue;
+                }
+                let tbl_name = entry.name();
+                let table = self.get_table(tbl_name).await?;
+                tables.push(table);
+            }
+        }
+        Ok(tables)
     }
 }
