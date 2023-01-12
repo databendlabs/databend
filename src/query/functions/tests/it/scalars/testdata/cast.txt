@@ -698,7 +698,7 @@ raw expr       : CAST("1" AS UInt64)
 checked expr   : to_uint64<String>("1")
 optimized expr : 1_u64
 output type    : UInt64
-output domain  : Unknown
+output domain  : {1..=1}
 output         : 1_u64
 
 
@@ -809,7 +809,7 @@ raw expr       : CAST("true" AS Boolean)
 checked expr   : to_boolean<String>("true")
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -818,7 +818,7 @@ raw expr       : CAST("false" AS Boolean)
 checked expr   : to_boolean<String>("false")
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -827,7 +827,7 @@ raw expr       : CAST("TRUE" AS Boolean)
 checked expr   : to_boolean<String>("TRUE")
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -836,7 +836,7 @@ raw expr       : CAST("FaLse" AS Boolean)
 checked expr   : to_boolean<String>("FaLse")
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -2276,7 +2276,7 @@ raw expr       : TRY_CAST("foo" AS UInt64)
 checked expr   : try_to_uint64<String>("foo")
 optimized expr : NULL
 output type    : UInt64 NULL
-output domain  : {0..=18446744073709551615} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -2285,7 +2285,7 @@ raw expr       : TRY_CAST("1foo" AS UInt64)
 checked expr   : try_to_uint64<String>("1foo")
 optimized expr : NULL
 output type    : UInt64 NULL
-output domain  : {0..=18446744073709551615} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -2294,7 +2294,7 @@ raw expr       : TRY_CAST("-1" AS UInt64)
 checked expr   : try_to_uint64<String>("-1")
 optimized expr : NULL
 output type    : UInt64 NULL
-output domain  : {0..=18446744073709551615} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -2303,7 +2303,7 @@ raw expr       : TRY_CAST("256" AS UInt8)
 checked expr   : try_to_uint8<String>("256")
 optimized expr : NULL
 output type    : UInt8 NULL
-output domain  : {0..=255} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -2312,7 +2312,7 @@ raw expr       : TRY_CAST("1" AS UInt64)
 checked expr   : try_to_uint64<String>("1")
 optimized expr : 1_u64
 output type    : UInt64 NULL
-output domain  : {0..=18446744073709551615} ∪ {NULL}
+output domain  : {1..=1}
 output         : 1_u64
 
 
@@ -2391,7 +2391,7 @@ raw expr       : TRY_CAST("t" AS Boolean)
 checked expr   : try_to_boolean<String>("t")
 optimized expr : NULL
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -2400,7 +2400,7 @@ raw expr       : TRY_CAST("f" AS Boolean)
 checked expr   : try_to_boolean<String>("f")
 optimized expr : NULL
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -2409,7 +2409,7 @@ raw expr       : TRY_CAST("0" AS Boolean)
 checked expr   : try_to_boolean<String>("0")
 optimized expr : NULL
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -2418,7 +2418,7 @@ raw expr       : TRY_CAST("1" AS Boolean)
 checked expr   : try_to_boolean<String>("1")
 optimized expr : NULL
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -2427,7 +2427,7 @@ raw expr       : TRY_CAST("true" AS Boolean)
 checked expr   : try_to_boolean<String>("true")
 optimized expr : true
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {TRUE}
 output         : true
 
 
@@ -2436,7 +2436,7 @@ raw expr       : TRY_CAST("false" AS Boolean)
 checked expr   : try_to_boolean<String>("false")
 optimized expr : false
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {FALSE}
 output         : false
 
 
@@ -2445,7 +2445,7 @@ raw expr       : TRY_CAST("TRUE" AS Boolean)
 checked expr   : try_to_boolean<String>("TRUE")
 optimized expr : true
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {TRUE}
 output         : true
 
 
@@ -2454,7 +2454,7 @@ raw expr       : TRY_CAST("FaLse" AS Boolean)
 checked expr   : try_to_boolean<String>("FaLse")
 optimized expr : false
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {FALSE}
 output         : false
 
 
@@ -2699,13 +2699,13 @@ raw expr       : TRY_CAST(#0::Int64 AS Timestamp)
 checked expr   : try_to_timestamp<Int64>(#0)
 optimized expr : NULL
 evaluation:
-+--------+---------------------------------------------+----------------------------------------------------+
-|        | a                                           | Output                                             |
-+--------+---------------------------------------------+----------------------------------------------------+
-| Type   | Int64                                       | Timestamp NULL                                     |
-| Domain | {9223372036854775807..=9223372036854775807} | {-30610224000000000..=253402300799999999} ∪ {NULL} |
-| Row 0  | 9223372036854775807_i64                     | NULL                                               |
-+--------+---------------------------------------------+----------------------------------------------------+
++--------+---------------------------------------------+----------------+
+|        | a                                           | Output         |
++--------+---------------------------------------------+----------------+
+| Type   | Int64                                       | Timestamp NULL |
+| Domain | {9223372036854775807..=9223372036854775807} | {NULL}         |
+| Row 0  | 9223372036854775807_i64                     | NULL           |
++--------+---------------------------------------------+----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------+
 | Column | Data                                                   |
@@ -2720,13 +2720,13 @@ raw expr       : TRY_CAST(#0::Int64 AS Date)
 checked expr   : try_to_date<Int64>(#0)
 optimized expr : NULL
 evaluation:
-+--------+---------------------------------------------+------------------------------+
-|        | a                                           | Output                       |
-+--------+---------------------------------------------+------------------------------+
-| Type   | Int64                                       | Date NULL                    |
-| Domain | {9223372036854775807..=9223372036854775807} | {2932896..=2932896} ∪ {NULL} |
-| Row 0  | 9223372036854775807_i64                     | NULL                         |
-+--------+---------------------------------------------+------------------------------+
++--------+---------------------------------------------+-----------+
+|        | a                                           | Output    |
++--------+---------------------------------------------+-----------+
+| Type   | Int64                                       | Date NULL |
+| Domain | {9223372036854775807..=9223372036854775807} | {NULL}    |
+| Row 0  | 9223372036854775807_i64                     | NULL      |
++--------+---------------------------------------------+-----------+
 evaluation (internal):
 +--------+--------------------------------------------------------+
 | Column | Data                                                   |
