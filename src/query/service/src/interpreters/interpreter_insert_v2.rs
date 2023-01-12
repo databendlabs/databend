@@ -260,23 +260,23 @@ impl InsertInterpreterV2 {
         if !const_columns.is_empty() {
             pipeline.add_transform(|transform_input_port, transform_output_port| {
                 TransformAddConstColumns::try_create(
+                    ctx.clone(),
                     transform_input_port,
                     transform_output_port,
                     attachment_data_schema.clone(),
                     source_schema.clone(),
                     const_columns.clone(),
-                    ctx.clone(),
                 )
             })?;
         }
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformResortAddOn::try_create(
+                ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 source_schema.clone(),
                 table.clone(),
-                ctx.clone(),
             )
         })?;
 

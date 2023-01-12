@@ -30,7 +30,6 @@ use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::sessions::QueryContext;
 
-
 pub struct TransformAddConstColumns {
     expression_transform: CompoundBlockOperator,
     input_len: usize,
