@@ -19,7 +19,6 @@ common-io = { path = "../../common/io" }
 # Github dependencies
 
 # Crates.io dependencies
-tracing = "0.1.36"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = "6"
@@ -41,6 +40,7 @@ rand = { version = "0.8.5", features = ["small_rng"] }
 rust_decimal = "1.26"
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = "0.1.36"
 typetag = "0.2.3"
 
 [dev-dependencies]
