@@ -664,9 +664,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             expr: Box::new(expr),
         },
     );
-    // ^"(" can expand to nom::combinator::cut(crate::match_text("(")).
-    // If the parser in cut() fails, parse simply breaks and does not attempt another branch.
-    // But we can use position as a field name, so need delete ^ in herre.
     let position = map(
         rule! {
             POSITION
