@@ -12,34 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use ordered_float::OrderedFloat;
 
 use crate::Scalar;
-use crate::TableDataType;
-use crate::TableField;
-use crate::TableSchema;
-
-pub fn to_type(datatype: &TableDataType) -> DataTypeImpl {
-    let f = TableField::new("tmp", datatype.clone());
-    let arrow_f: ArrowField = (&f).into();
-    common_datavalues::from_arrow_field(&arrow_f)
-}
-
-pub fn to_schema(schema: &TableSchema) -> common_datavalues::DataSchema {
-    let fields = schema
-        .fields()
-        .iter()
-        .map(|f| {
-            let ty = to_type(f.data_type());
-            common_datavalues::DataField::new(f.name(), ty)
-                .with_default_expr(f.default_expr().cloned())
-        })
-        .collect();
-    common_datavalues::DataSchema::new_from(fields, schema.meta().clone())
-}
 
 pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
     match scalar {

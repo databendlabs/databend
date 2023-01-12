@@ -14,8 +14,6 @@
 
 use std::marker::PhantomData;
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
@@ -47,14 +45,6 @@ macro_rules! impl_numeric {
             fn name(&self) -> String {
                 $name.to_string()
             }
-
-            fn arrow_type(&self) -> ArrowType {
-                ArrowType::$tname
-            }
-        }
-
-        paste::paste! {
-            pub type [<$tname Type>] = PrimitiveDataType<$ty>;
         }
 
         impl std::fmt::Debug for PrimitiveDataType<$ty> {

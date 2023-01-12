@@ -1311,25 +1311,8 @@ dependencies = [
 name = "common-datavalues"
 version = "0.1.0"
 dependencies = [
- "chrono",
- "chrono-tz",
- "common-arrow",
- "common-exception",
- "common-hashtable",
- "common-io",
- "criterion",
- "dyn-clone",
+ "enum-as-inner",
  "enum_dispatch",
- "itertools",
- "lexical-core",
- "micromarshal",
- "num",
- "once_cell",
- "ordered-float 3.4.0",
- "paste",
- "pretty_assertions",
- "primitive-types",
- "rand 0.8.5",
  "serde",
  "serde_json",
 ]
