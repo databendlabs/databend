@@ -58,18 +58,9 @@ impl RangeFilter {
             })
             .unwrap();
 
-        let input_domains = conjunction
-            .column_refs()
-            .into_iter()
-            .map(|(name, ty)| {
-                let domain = Domain::full(&ty);
-                Ok((name, domain))
-            })
-            .collect::<Result<_>>()?;
-
         let func_ctx = ctx.try_get_function_context()?;
-        let folder = ConstantFolder::new(input_domains, func_ctx, &BUILTIN_FUNCTIONS);
-        let (new_expr, _) = folder.fold(&conjunction);
+
+        let (new_expr, _) = ConstantFolder::fold(&conjunction, func_ctx, &BUILTIN_FUNCTIONS);
 
         Ok(Self {
             schema,
@@ -99,8 +90,12 @@ impl RangeFilter {
             })
             .collect::<Result<_>>()?;
 
-        let folder = ConstantFolder::new(input_domains, self.func_ctx, &BUILTIN_FUNCTIONS);
-        let (new_expr, _) = folder.fold(&self.expr);
+        let (new_expr, _) = ConstantFolder::fold_with_domain(
+            &self.expr,
+            input_domains,
+            self.func_ctx,
+            &BUILTIN_FUNCTIONS,
+        );
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
         Ok(!matches!(new_expr, Expr::Constant {
