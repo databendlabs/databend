@@ -65,6 +65,7 @@ Check out what we've done this week to make Databend even better for you.
 **Storage**
 
 - bump opendal for streaming read support ([#9503](https://github.com/datafuselabs/databend/pull/9503))
+- refactor bloom index to use vectorized siphash function ([#9542](https://github.com/datafuselabs/databend/pull/9542))
 
 ### Bug Fixes :wrench:
 
