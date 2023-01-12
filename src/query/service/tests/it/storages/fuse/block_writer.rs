@@ -85,7 +85,7 @@ impl<'a> BlockWriter<'a> {
             col_metas,
             cluster_stats,
             location,
-            Some(bloom_filter_index_location),
+            bloom_filter_index_location,
             bloom_filter_index_size,
             Compression::Lz4Raw,
         );
@@ -98,23 +98,27 @@ impl<'a> BlockWriter<'a> {
         schema: TableSchemaRef,
         block: &DataBlock,
         block_id: Uuid,
-    ) -> Result<(u64, Location)> {
+    ) -> Result<(u64, Option<Location>)> {
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);
 
         let bloom_index =
             BlockFilter::try_create(FunctionContext::default(), schema, location.1, &[block])?;
-        let index_block = bloom_index.filter_block;
-        let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
-        let index_block_schema = &bloom_index.filter_schema;
-        let (size, _) = blocks_to_parquet(
-            index_block_schema,
-            vec![index_block],
-            &mut data,
-            TableCompression::None,
-        )?;
-        write_data(&data, data_accessor, &location.0).await?;
-        Ok((size, location))
+        if let Some(bloom_index) = bloom_index {
+            let index_block = bloom_index.filter_block;
+            let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
+            let index_block_schema = &bloom_index.filter_schema;
+            let (size, _) = blocks_to_parquet(
+                index_block_schema,
+                vec![index_block],
+                &mut data,
+                TableCompression::None,
+            )?;
+            write_data(&data, data_accessor, &location.0).await?;
+            Ok((size, Some(location)))
+        } else {
+            Ok((0u64, None))
+        }
     }
 }

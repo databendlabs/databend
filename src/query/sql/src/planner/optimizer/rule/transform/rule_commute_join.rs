@@ -78,8 +78,17 @@ impl Rule for RuleCommuteJoin {
                 (join.left_conditions, join.right_conditions) =
                     (join.right_conditions, join.left_conditions);
                 join.join_type = join.join_type.opposite();
-                let result =
+                let mut result =
                     SExpr::create_binary(join.into(), right_child.clone(), left_child.clone());
+
+                // Disable the following rules for the generated expression
+                result.set_applied_rule(&RuleID::CommuteJoin);
+                result.set_applied_rule(&RuleID::LeftAssociateJoin);
+                result.set_applied_rule(&RuleID::LeftExchangeJoin);
+                result.set_applied_rule(&RuleID::RightAssociateJoin);
+                result.set_applied_rule(&RuleID::RightExchangeJoin);
+                result.set_applied_rule(&RuleID::ExchangeJoin);
+
                 state.add_result(result);
             }
             _ => {}

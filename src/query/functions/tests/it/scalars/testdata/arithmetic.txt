@@ -507,7 +507,7 @@ error:
   --> SQL:1:5
   |
 1 | 2.0 / 0
-  |     ^ / by zero during evaluate function: divide(2_f64, 0_u8)
+  |     ^ divided by zero while evaluating function `divide(2_f64, 0_u8)`
 
 
 
@@ -653,7 +653,7 @@ error:
   --> SQL:1:3
   |
 1 | c div 0
-  |   ^^^ / by zero during evaluate function: div(10_u32, 0_u8)
+  |   ^^^ divided by zero while evaluating function `div(10_u32, 0_u8)`
 
 
 
@@ -777,7 +777,7 @@ error:
   --> SQL:1:3
   |
 1 | c % 0
-  |   ^ Division by zero during evaluate function: modulo(10_u32, 0_u8)
+  |   ^ Division by zero while evaluating function `modulo(10_u32, 0_u8)`
 
 
 

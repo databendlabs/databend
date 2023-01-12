@@ -16,10 +16,17 @@ use crate::optimizer::RuleID;
 use crate::optimizer::RuleSet;
 
 pub fn get_explore_rule_set() -> RuleSet {
+    join_rule_set_rs_b2()
+}
+
+/// Get rule set of join order RS-B2.
+/// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
+fn join_rule_set_rs_b2() -> RuleSet {
     RuleSet::create_with_ids(vec![
         RuleID::CommuteJoin,
         RuleID::LeftAssociateJoin,
         RuleID::RightAssociateJoin,
+        RuleID::ExchangeJoin,
     ])
     .unwrap()
 }

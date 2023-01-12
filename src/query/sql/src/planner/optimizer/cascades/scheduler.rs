@@ -21,12 +21,17 @@ use super::CascadesOptimizer;
 
 pub struct Scheduler {
     task_queue: VecDeque<Task>,
+
+    /// A counter to track the number of tasks
+    /// that have been scheduled.
+    scheduled_task_count: u64,
 }
 
 impl Scheduler {
     pub fn new() -> Self {
         Self {
             task_queue: Default::default(),
+            scheduled_task_count: 0,
         }
     }
 
@@ -38,7 +43,15 @@ impl Scheduler {
                 continue;
             }
             task.execute(optimizer, self)?;
+
+            // Update the counter
+            self.scheduled_task_count += 1;
         }
+
+        tracing::debug!(
+            "CascadesOptimizer: scheduled {} tasks",
+            self.scheduled_task_count
+        );
 
         Ok(())
     }

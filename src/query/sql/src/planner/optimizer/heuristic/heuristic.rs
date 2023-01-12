@@ -117,7 +117,7 @@ impl HeuristicOptimizer {
         for rule in rule_list.iter() {
             let mut state = TransformResult::new();
             if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
-                s_expr.apply_rule(&rule.id());
+                s_expr.set_applied_rule(&rule.id());
                 rule.apply(&s_expr, &mut state)?;
                 if !state.results().is_empty() {
                     // Recursive optimize the result

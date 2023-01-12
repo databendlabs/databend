@@ -116,16 +116,16 @@ impl FromToProto for dv::DataTypeImpl {
                 x.as_ref().clone(),
             )?)),
             Dt::BoolType(_) => Ok(dv::DataTypeImpl::Boolean(dv::BooleanType {})),
-            Dt::Int8Type(_) => Ok(dv::DataTypeImpl::Int8(dv::Int8Type::default())),
-            Dt::Int16Type(_) => Ok(dv::DataTypeImpl::Int16(dv::Int16Type::default())),
-            Dt::Int32Type(_) => Ok(dv::DataTypeImpl::Int32(dv::Int32Type::default())),
-            Dt::Int64Type(_) => Ok(dv::DataTypeImpl::Int64(dv::Int64Type::default())),
-            Dt::Uint8Type(_) => Ok(dv::DataTypeImpl::UInt8(dv::UInt8Type::default())),
-            Dt::Uint16Type(_) => Ok(dv::DataTypeImpl::UInt16(dv::UInt16Type::default())),
-            Dt::Uint32Type(_) => Ok(dv::DataTypeImpl::UInt32(dv::UInt32Type::default())),
-            Dt::Uint64Type(_) => Ok(dv::DataTypeImpl::UInt64(dv::UInt64Type::default())),
-            Dt::Float32Type(_) => Ok(dv::DataTypeImpl::Float32(dv::Float32Type::default())),
-            Dt::Float64Type(_) => Ok(dv::DataTypeImpl::Float64(dv::Float64Type::default())),
+            Dt::Int8Type(_) => Ok(dv::DataTypeImpl::Int8(Default::default())),
+            Dt::Int16Type(_) => Ok(dv::DataTypeImpl::Int16(Default::default())),
+            Dt::Int32Type(_) => Ok(dv::DataTypeImpl::Int32(Default::default())),
+            Dt::Int64Type(_) => Ok(dv::DataTypeImpl::Int64(Default::default())),
+            Dt::Uint8Type(_) => Ok(dv::DataTypeImpl::UInt8(Default::default())),
+            Dt::Uint16Type(_) => Ok(dv::DataTypeImpl::UInt16(Default::default())),
+            Dt::Uint32Type(_) => Ok(dv::DataTypeImpl::UInt32(Default::default())),
+            Dt::Uint64Type(_) => Ok(dv::DataTypeImpl::UInt64(Default::default())),
+            Dt::Float32Type(_) => Ok(dv::DataTypeImpl::Float32(Default::default())),
+            Dt::Float64Type(_) => Ok(dv::DataTypeImpl::Float64(Default::default())),
             Dt::DateType(_) => Ok(dv::DataTypeImpl::Date(dv::DateType {})),
             Dt::TimestampType(x) => Ok(dv::DataTypeImpl::Timestamp(dv::TimestampType::from_pb(x)?)),
             Dt::StringType(_) => Ok(dv::DataTypeImpl::String(dv::StringType {})),
@@ -149,6 +149,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::NullType(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -159,6 +160,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::NullableType(Box::new(inn))),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -167,6 +169,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::BoolType(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -175,6 +178,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Int8Type(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -183,6 +187,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Int16Type(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -191,6 +196,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Int32Type(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -199,6 +205,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Int64Type(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -207,6 +214,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Uint8Type(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -215,6 +223,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Uint16Type(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -223,6 +232,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Uint32Type(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -231,6 +241,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Uint64Type(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -239,6 +250,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Float32Type(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -247,6 +259,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::Float64Type(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -255,6 +268,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::DateType(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -265,6 +279,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::TimestampType(inn)),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -273,6 +288,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::StringType(pb::Empty {})),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -283,6 +299,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::StructType(inn)),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -293,6 +310,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::ArrayType(Box::new(inn))),
+                    dt24: None,
                 };
                 Ok(v)
             }
@@ -303,6 +321,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::VariantType(inn)),
+                    dt24: None,
                 };
                 Ok(p)
             }
@@ -313,6 +332,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::VariantArrayType(inn)),
+                    dt24: None,
                 };
                 Ok(p)
             }
@@ -323,6 +343,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::VariantObjectType(inn)),
+                    dt24: None,
                 };
                 Ok(p)
             }
@@ -333,6 +354,7 @@ impl FromToProto for dv::DataTypeImpl {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     dt: Some(Dt::IntervalType(inn)),
+                    dt24: None,
                 };
                 Ok(p)
             }

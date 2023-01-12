@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::remove_nullable;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 
 use crate::types::number::NumberScalar;
-use crate::types::NumberDataType;
+use crate::types::*;
 use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::TableDataType;
@@ -86,47 +85,49 @@ pub fn from_schema(schema: &common_datavalues::DataSchema) -> TableSchema {
     TableSchema::new_from(fields, schema.meta().clone())
 }
 
-pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
+pub fn from_scalar(datavalue: &DataValue, datatype: &DataType) -> Scalar {
     if datavalue.is_null() {
         return Scalar::Null;
     }
 
-    let datatype = remove_nullable(datatype);
+    let datatype = datatype.remove_nullable();
     match datatype {
-        DataTypeImpl::Null(_) => Scalar::Null,
-        DataTypeImpl::Boolean(_) => Scalar::Boolean(datavalue.as_bool().unwrap()),
-        DataTypeImpl::Int8(_) => {
-            Scalar::Number(NumberScalar::Int8(datavalue.as_i64().unwrap() as i8))
+        DataType::Null => Scalar::Null,
+        DataType::Boolean => Scalar::Boolean(*datavalue.as_boolean().unwrap()),
+        DataType::Number(NumberDataType::Int8) => {
+            Scalar::Number(NumberScalar::Int8(*datavalue.as_int64().unwrap() as i8))
         }
-        DataTypeImpl::Int16(_) => {
-            Scalar::Number(NumberScalar::Int16(datavalue.as_i64().unwrap() as i16))
+        DataType::Number(NumberDataType::Int16) => {
+            Scalar::Number(NumberScalar::Int16(*datavalue.as_int64().unwrap() as i16))
         }
-        DataTypeImpl::Int32(_) => {
-            Scalar::Number(NumberScalar::Int32(datavalue.as_i64().unwrap() as i32))
+        DataType::Number(NumberDataType::Int32) => {
+            Scalar::Number(NumberScalar::Int32(*datavalue.as_int64().unwrap() as i32))
         }
-        DataTypeImpl::Int64(_) => Scalar::Number(NumberScalar::Int64(datavalue.as_i64().unwrap())),
-        DataTypeImpl::UInt8(_) => {
-            Scalar::Number(NumberScalar::UInt8(datavalue.as_u64().unwrap() as u8))
+        DataType::Number(NumberDataType::Int64) => {
+            Scalar::Number(NumberScalar::Int64(*datavalue.as_int64().unwrap()))
         }
-        DataTypeImpl::UInt16(_) => {
-            Scalar::Number(NumberScalar::UInt16(datavalue.as_u64().unwrap() as u16))
+        DataType::Number(NumberDataType::UInt8) => {
+            Scalar::Number(NumberScalar::UInt8(*datavalue.as_u_int64().unwrap() as u8))
         }
-        DataTypeImpl::UInt32(_) => {
-            Scalar::Number(NumberScalar::UInt32(datavalue.as_u64().unwrap() as u32))
+        DataType::Number(NumberDataType::UInt16) => {
+            Scalar::Number(NumberScalar::UInt16(*datavalue.as_u_int64().unwrap() as u16))
         }
-        DataTypeImpl::UInt64(_) => {
-            Scalar::Number(NumberScalar::UInt64(datavalue.as_u64().unwrap()))
+        DataType::Number(NumberDataType::UInt32) => {
+            Scalar::Number(NumberScalar::UInt32(*datavalue.as_u_int64().unwrap() as u32))
         }
-        DataTypeImpl::Float32(_) => Scalar::Number(NumberScalar::Float32(
-            (datavalue.as_f64().unwrap() as f32).into(),
+        DataType::Number(NumberDataType::UInt64) => {
+            Scalar::Number(NumberScalar::UInt64(*datavalue.as_u_int64().unwrap()))
+        }
+        DataType::Number(NumberDataType::Float32) => Scalar::Number(NumberScalar::Float32(
+            (*datavalue.as_float64().unwrap() as f32).into(),
         )),
-        DataTypeImpl::Float64(_) => {
-            Scalar::Number(NumberScalar::Float64(datavalue.as_f64().unwrap().into()))
-        }
-        DataTypeImpl::Timestamp(_) => Scalar::Timestamp(datavalue.as_i64().unwrap()),
-        DataTypeImpl::Date(_) => Scalar::Date(datavalue.as_i64().unwrap() as i32),
-        DataTypeImpl::String(_) => Scalar::String(datavalue.as_string().unwrap()),
-        DataTypeImpl::Variant(_) => match datavalue {
+        DataType::Number(NumberDataType::Float64) => Scalar::Number(NumberScalar::Float64(
+            (*datavalue.as_float64().unwrap()).into(),
+        )),
+        DataType::Timestamp => Scalar::Timestamp(*datavalue.as_int64().unwrap()),
+        DataType::Date => Scalar::Date(*datavalue.as_int64().unwrap() as i32),
+        DataType::String => Scalar::String(datavalue.as_string().unwrap().to_vec()),
+        DataType::Variant => match datavalue {
             DataValue::String(x) => Scalar::Variant(x.clone()),
             DataValue::Variant(x) => {
                 let v: Vec<u8> = serde_json::to_vec(x).unwrap();
@@ -134,13 +135,12 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
             }
             _ => unreachable!(),
         },
-        DataTypeImpl::Struct(types) => {
+        DataType::Tuple(types) => {
             let values = match datavalue {
                 DataValue::Struct(x) => x,
                 _ => unreachable!(),
             };
             let inners = types
-                .types()
                 .iter()
                 .zip(values.iter())
                 .map(|(ty, v)| from_scalar(v, ty))
@@ -148,17 +148,16 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
 
             Scalar::Tuple(inners)
         }
-        DataTypeImpl::Array(ty) => {
+        DataType::Array(ty) => {
             let values = match datavalue {
                 DataValue::Array(x) => x,
                 _ => unreachable!(),
             };
 
-            let new_type = from_type(ty.inner_type());
-            let mut builder = ColumnBuilder::with_capacity(&(&new_type).into(), values.len());
+            let mut builder = ColumnBuilder::with_capacity(ty.as_ref(), values.len());
 
             for value in values.iter() {
-                let scalar = from_scalar(value, ty.inner_type());
+                let scalar = from_scalar(value, ty.as_ref());
                 builder.push(scalar.as_ref());
             }
             let col = builder.build();

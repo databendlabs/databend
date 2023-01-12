@@ -102,8 +102,10 @@ impl Rule for RuleRightAssociateJoin {
         let t2 = s_expr.child(1)?.child(0)?;
         let t3 = s_expr.child(1)?.child(1)?;
 
-        // Ensure inner joins
-        if join1.join_type != JoinType::Inner || join2.join_type != JoinType::Inner {
+        // Ensure inner joins or cross joins.
+        if !matches!(join1.join_type, JoinType::Inner | JoinType::Cross)
+            || !matches!(join2.join_type, JoinType::Inner | JoinType::Cross)
+        {
             return Ok(());
         }
 
@@ -180,7 +182,7 @@ impl Rule for RuleRightAssociateJoin {
             return Ok(());
         }
 
-        let result = SExpr::create(
+        let mut result = SExpr::create(
             join_3.into(),
             vec![
                 SExpr::create_binary(join_4.into(), t1.clone(), t2.clone()),
@@ -189,6 +191,13 @@ impl Rule for RuleRightAssociateJoin {
             None,
             None,
         );
+
+        // Disable the following rules for join 3
+        result.set_applied_rule(&RuleID::LeftAssociateJoin);
+        result.set_applied_rule(&RuleID::LeftExchangeJoin);
+        result.set_applied_rule(&RuleID::RightAssociateJoin);
+        result.set_applied_rule(&RuleID::RightExchangeJoin);
+        result.set_applied_rule(&RuleID::ExchangeJoin);
 
         state.add_result(result);
 

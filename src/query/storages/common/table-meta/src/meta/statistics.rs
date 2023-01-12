@@ -16,7 +16,6 @@ use std::collections::HashMap;
 
 use common_base::base::uuid::Uuid;
 use common_expression::converts::from_scalar;
-use common_expression::converts::to_type;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -68,11 +67,10 @@ impl ColumnStatistics {
         v0: &crate::meta::v0::statistics::ColumnStatistics,
         data_type: &TableDataType,
     ) -> Self {
-        let old_type = to_type(data_type);
-
+        let data_type = data_type.into();
         Self {
-            min: from_scalar(&v0.min, &old_type),
-            max: from_scalar(&v0.max, &old_type),
+            min: from_scalar(&v0.min, &data_type),
+            max: from_scalar(&v0.max, &data_type),
             null_count: v0.null_count,
             in_memory_size: v0.in_memory_size,
             distinct_of_values: None,
@@ -85,18 +83,18 @@ impl ClusterStatistics {
         v0: crate::meta::v0::statistics::ClusterStatistics,
         data_type: &TableDataType,
     ) -> Self {
-        let old_type = to_type(data_type);
+        let data_type = data_type.into();
         Self {
             cluster_key_id: v0.cluster_key_id,
             min: v0
                 .min
                 .into_iter()
-                .map(|s| from_scalar(&s, &old_type))
+                .map(|s| from_scalar(&s, &data_type))
                 .collect(),
             max: v0
                 .max
                 .into_iter()
-                .map(|s| from_scalar(&s, &old_type))
+                .map(|s| from_scalar(&s, &data_type))
                 .collect(),
             level: v0.level,
         }

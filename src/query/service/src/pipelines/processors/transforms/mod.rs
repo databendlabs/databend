@@ -24,6 +24,7 @@ mod transform_left_join;
 mod transform_limit;
 mod transform_mark_join;
 
+mod transform_add_const_columns;
 mod transform_convert_grouping;
 mod transform_merge_block;
 mod transform_resort_addon;
@@ -43,6 +44,7 @@ pub use hash_join::HashJoinState;
 pub use hash_join::HashTable;
 pub use hash_join::JoinHashTable;
 pub use hash_join::SerializerHashTable;
+pub use transform_add_const_columns::TransformAddConstColumns;
 pub use transform_aggregator::TransformAggregator;
 pub use transform_block_compact::BlockCompactor;
 pub use transform_block_compact::TransformBlockCompact;

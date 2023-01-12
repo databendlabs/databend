@@ -14,8 +14,6 @@
 
 use std::fmt;
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
@@ -92,10 +90,6 @@ impl DataType for IntervalType {
 
     fn name(&self) -> String {
         format!("Interval({})", self.kind)
-    }
-
-    fn arrow_type(&self) -> ArrowType {
-        ArrowType::Int64
     }
 }
 

@@ -30,6 +30,8 @@ fn test_cast() {
         test_cast_to_variant(file, is_try);
         test_cast_number_to_timestamp(file, is_try);
         test_cast_number_to_date(file, is_try);
+        test_cast_between_number_and_string(file, is_try);
+        test_cast_between_boolean_and_string(file, is_try);
         test_cast_between_number_and_boolean(file, is_try);
         test_cast_between_date_and_timestamp(file, is_try);
         test_cast_between_string_and_timestamp(file, is_try);
@@ -310,6 +312,53 @@ fn test_cast_between_number_and_boolean(file: &mut impl Write, is_try: bool) {
     )]);
 }
 
+fn test_cast_between_number_and_string(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    run_ast(file, format!("{prefix}CAST('foo' AS UINT64)"), &[]);
+    run_ast(file, format!("{prefix}CAST('1foo' AS UINT64)"), &[]);
+    run_ast(file, format!("{prefix}CAST('-1' AS UINT64)"), &[]);
+    run_ast(file, format!("{prefix}CAST('256' AS UINT8)"), &[]);
+    run_ast(file, format!("{prefix}CAST('1' AS UINT64)"), &[]);
+    run_ast(file, format!("{prefix}CAST(str AS INT64)"), &[(
+        "str",
+        StringType::from_data(vec![
+            "-9223372036854775808",
+            "-1",
+            "0",
+            "1",
+            "9223372036854775807",
+        ]),
+    )]);
+
+    run_ast(file, format!("{prefix}CAST(num AS STRING)"), &[(
+        "num",
+        Int64Type::from_data(vec![i64::MIN, -1, 0, 1, i64::MAX]),
+    )]);
+    run_ast(file, format!("{prefix}CAST(num AS STRING)"), &[(
+        "num",
+        UInt64Type::from_data(vec![0, 1, u64::MAX]),
+    )]);
+}
+
+fn test_cast_between_boolean_and_string(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    run_ast(file, format!("{prefix}CAST('t' AS BOOLEAN)"), &[]);
+    run_ast(file, format!("{prefix}CAST('f' AS BOOLEAN)"), &[]);
+    run_ast(file, format!("{prefix}CAST('0' AS BOOLEAN)"), &[]);
+    run_ast(file, format!("{prefix}CAST('1' AS BOOLEAN)"), &[]);
+    run_ast(file, format!("{prefix}CAST('true' AS BOOLEAN)"), &[]);
+    run_ast(file, format!("{prefix}CAST('false' AS BOOLEAN)"), &[]);
+    run_ast(file, format!("{prefix}CAST('TRUE' AS BOOLEAN)"), &[]);
+    run_ast(file, format!("{prefix}CAST('FaLse' AS BOOLEAN)"), &[]);
+
+    run_ast(file, format!("{prefix}CAST(bool AS STRING)"), &[(
+        "bool",
+        BooleanType::from_data(vec![false, true]),
+    )]);
+}
+
 fn test_cast_between_date_and_timestamp(file: &mut impl Write, is_try: bool) {
     let prefix = if is_try { "TRY_" } else { "" };
 
@@ -334,6 +383,14 @@ fn test_cast_between_date_and_timestamp(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}CAST(TO_DATE(a) AS TIMESTAMP)"), &[(
         "a",
         Int32Type::from_data(vec![-354285, -100, 0, 100, 2932896]),
+    )]);
+    run_ast(file, format!("{prefix}CAST(a AS TIMESTAMP)"), &[(
+        "a",
+        Int64Type::from_data(vec![i64::MAX]),
+    )]);
+    run_ast(file, format!("{prefix}CAST(a AS DATE)"), &[(
+        "a",
+        Int64Type::from_data(vec![i64::MAX]),
     )]);
 }
 

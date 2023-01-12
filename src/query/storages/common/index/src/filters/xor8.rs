@@ -65,6 +65,10 @@ impl FilterBuilder for Xor8Builder {
         self.builder.populate(keys)
     }
 
+    fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
+        self.builder.populate_digests(digests)
+    }
+
     fn build(mut self) -> Result<Self::Filter, Self::Error> {
         let f = self
             .builder
@@ -92,6 +96,10 @@ impl Filter for Xor8Filter {
 
     fn contains<K: ?Sized + Hash>(&self, key: &K) -> bool {
         self.filter.contains(key)
+    }
+
+    fn contains_digest(&self, digest: u64) -> bool {
+        self.filter.contains_digest(digest)
     }
 
     fn to_bytes(&self) -> Result<Vec<u8>, Xor8CodecError> {
