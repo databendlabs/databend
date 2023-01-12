@@ -370,7 +370,7 @@ pub trait VisitorMut: Sized {
         &mut self,
         _is_global: bool,
         _variable: &mut Identifier<'_>,
-        _value: &mut Literal,
+        _value: &mut Box<Expr<'_>>,
     ) {
     }
 

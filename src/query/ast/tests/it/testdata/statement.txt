@@ -8061,6 +8061,66 @@ Update(
 
 
 ---------- Input ----------
+SET max_threads = 10;
+---------- Output ---------
+SET max_threads = 10
+---------- AST ------------
+SetVariable {
+    is_global: false,
+    variable: Identifier {
+        name: "max_threads",
+        quote: None,
+        span: Ident(4..15),
+    },
+    value: Literal {
+        span: [
+            LiteralInteger(18..20),
+        ],
+        lit: Integer(
+            10,
+        ),
+    },
+}
+
+
+---------- Input ----------
+SET max_threads = 10*2;
+---------- Output ---------
+SET max_threads = (10 * 2)
+---------- AST ------------
+SetVariable {
+    is_global: false,
+    variable: Identifier {
+        name: "max_threads",
+        quote: None,
+        span: Ident(4..15),
+    },
+    value: BinaryOp {
+        span: [
+            Multiply(20..21),
+        ],
+        op: Multiply,
+        left: Literal {
+            span: [
+                LiteralInteger(18..20),
+            ],
+            lit: Integer(
+                10,
+            ),
+        },
+        right: Literal {
+            span: [
+                LiteralInteger(21..22),
+            ],
+            lit: Integer(
+                2,
+            ),
+        },
+    },
+}
+
+
+---------- Input ----------
 UNSET max_threads;
 ---------- Output ---------
 UNSET max_threads

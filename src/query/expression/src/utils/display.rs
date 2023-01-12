@@ -363,7 +363,7 @@ impl<Index: ColumnIndex> Display for RawExpr<Index> {
 }
 
 impl Display for Literal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match self {
             Literal::Null => write!(f, "NULL"),
             Literal::Boolean(val) => write!(f, "{val}"),

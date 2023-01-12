@@ -20,6 +20,12 @@ A cluster-level setting is a cluster setting and the value will be stored in the
 
 ## Examples
 
+The following example sets the `max_memory_usage` setting to `4 GB`:
+
+```sql
+SET max_memory_usage = 1024*1024*1024*4;
+```
+
 The following example sets the `max_threads` setting to `4`:
 
 ```sql
