@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
+
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
@@ -34,10 +34,6 @@ impl DataType for VariantType {
 
     fn name(&self) -> String {
         "Variant".to_string()
-    }
-
-    fn arrow_type(&self) -> ArrowType {
-        ArrowType::Extension("Variant".to_owned(), Box::new(ArrowType::LargeBinary), None)
     }
 }
 

@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field;
+
 
 use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
@@ -49,14 +48,7 @@ impl DataType for ArrayType {
         format!("Array({})", self.inner.name())
     }
 
-    fn arrow_type(&self) -> ArrowType {
-        let field = Field::new(
-            "_array".to_string(),
-            self.inner.arrow_type(),
-            self.inner.is_nullable(),
-        );
-        ArrowType::LargeList(Box::new(field))
-    }
+    
 }
 
 impl std::fmt::Debug for ArrayType {
