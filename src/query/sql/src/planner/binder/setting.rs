@@ -73,9 +73,11 @@ impl<'a> Binder {
                 (name, domain)
             })
             .collect();
-        let func_ctx = self.ctx.try_get_function_context()?;
-        let folder = ConstantFolder::new(input_domains, func_ctx, &BUILTIN_FUNCTIONS);
-        let (new_expr, _) = folder.fold(&expr);
+        let (new_expr, _) = ConstantFolder::fold(
+            &expr,
+            self.ctx.try_get_function_context()?,
+            &BUILTIN_FUNCTIONS,
+        );
         match new_expr {
             common_expression::Expr::Constant { scalar, .. } => {
                 let value = String::from_utf8(scalar.into_string().unwrap())?;
