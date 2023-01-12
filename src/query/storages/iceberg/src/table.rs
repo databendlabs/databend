@@ -86,7 +86,7 @@ impl IcebergTable {
         // construct table info
         let info = TableInfo {
             ident: TableIdent::new(0, 0),
-            desc: format!("IcebergTable: '{}'.'{}'", database, table_name),
+            desc: format!("IcebergTable: '{database}'.'{table_name}'"),
             name: table_name.to_string(),
             meta: meta_iceberg_to_databend(catalog, &metadata),
             ..Default::default()
@@ -122,7 +122,7 @@ impl IcebergTable {
         // Spark will arange all files with a sequencial number
         let meta_dir = tbl_root.object("metadata");
         let files = meta_dir.list().await.map_err(|e| {
-            ErrorCode::ReadTableDataError(format!("Cannot list metadata directory: {:?}", e))
+            ErrorCode::ReadTableDataError(format!("Cannot list metadata directory: {e:?}"))
         })?;
         files
             .filter_map(|obj| async {

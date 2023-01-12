@@ -98,13 +98,12 @@ impl Database for IcebergDatabase {
     }
 
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
-        let path = format!("{}/", table_name);
+        let path = format!("{table_name}/");
         // check existence first
         let tbl_obj = self.db_root.object(&path);
         if !tbl_obj.is_exist().await? {
             return Err(ErrorCode::UnknownTable(format!(
-                "table {} does not exist",
-                table_name
+                "table {table_name} does not exist"
             )));
         }
 

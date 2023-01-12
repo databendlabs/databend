@@ -144,8 +144,7 @@ impl Catalog for IcebergCatalog {
             // is flatten catalog, must return `default` catalog
             if db_name != "default" {
                 return Err(ErrorCode::UnknownDatabase(format!(
-                    "Database {} does not exist",
-                    db_name
+                    "Database {db_name} does not exist"
                 )));
             }
             let tbl: Arc<dyn Database> =
@@ -157,12 +156,11 @@ impl Catalog for IcebergCatalog {
         }
 
         let operator = self.operator.operator();
-        let rel_path = format!("{}/", db_name);
+        let rel_path = format!("{db_name}/");
         let obj = operator.object(&rel_path);
         if !obj.is_exist().await? {
             return Err(ErrorCode::UnknownDatabase(format!(
-                "Database {} does not exist",
-                db_name
+                "Database {db_name} does not exist"
             )));
         }
         let db_root = self.operator.operator().layer(SubdirLayer::new(db_name));
