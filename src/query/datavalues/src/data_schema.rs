@@ -71,7 +71,10 @@ impl DataSchema {
             column_id_set.insert(*max_column_id);
             let inner_types = s.types();
             for (i, inner_type) in inner_types.iter().enumerate() {
-                let inner_name = format!("{}:{}", column_name, i);
+                let inner_name = match s.names() {
+                    Some(names) => format!("{}:{}", column_name, names[i]),
+                    None => format!("{}:{}", column_name, i),
+                };
                 Self::build_from_data_type(
                     inner_type,
                     &inner_name,
@@ -211,6 +214,10 @@ impl DataSchema {
 
     pub fn is_column_deleted(&self, column_id: u32) -> bool {
         self.column_id_set.as_ref().unwrap().contains(&column_id)
+    }
+
+    pub fn column_id_set(&self) -> &HashSet<u32> {
+        &self.column_id_set.as_ref().unwrap()
     }
 
     pub fn add_columns(&mut self, fields: &[DataField]) -> Result<()> {
@@ -429,6 +436,38 @@ impl DataSchema {
             .map(|f| f.to_arrow())
             .collect::<Vec<_>>();
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
+    }
+
+    fn data_type_column_ids(
+        &self,
+        column_name: &str,
+        data_type: &DataTypeImpl,
+        column_ids: &mut Vec<u32>,
+    ) -> Result<()> {
+        if let DataTypeImpl::Struct(s) = data_type {
+            let inner_types = s.types();
+            for (i, inner_type) in inner_types.iter().enumerate() {
+                let inner_name = match s.names() {
+                    Some(names) => format!("{}:{}", column_name, names[i]),
+                    None => format!("{}:{}", column_name, i),
+                };
+
+                self.data_type_column_ids(&inner_name, inner_type, column_ids)?;
+            }
+        } else {
+            column_ids.push(self.column_id_of(column_name)?);
+        }
+        Ok(())
+    }
+
+    pub fn to_column_ids(&self) -> Result<Vec<u32>> {
+        let mut column_ids = Vec::with_capacity(self.fields.len());
+        for field in &self.fields {
+            let data_type = field.data_type();
+            self.data_type_column_ids(field.name(), data_type, &mut column_ids)?;
+        }
+
+        Ok(column_ids)
     }
 
     pub fn create_deserializers(&self, capacity: usize) -> Vec<TypeDeserializerImpl> {

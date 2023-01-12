@@ -337,8 +337,8 @@ impl DataBlock {
 
     pub fn create_with_schema_from_data_block(
         schema: &DataSchemaRef,
-        data_block: DataBlock,
-        data_block_column_ids: HashSet<u32>,
+        data_block: &DataBlock,
+        data_block_column_ids: &HashSet<u32>,
         num_rows: usize,
     ) -> Result<DataBlock> {
         let mut new_data_block = DataBlock::create(Arc::new(DataSchema::empty()), vec![]);

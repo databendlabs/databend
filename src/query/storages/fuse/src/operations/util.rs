@@ -33,6 +33,7 @@ pub fn column_metas(
             num_row_groups
         )));
     }
+    let column_ids = schema.to_column_ids()?;
     let row_group = &file_meta.row_groups[0];
     let mut col_metas = HashMap::with_capacity(row_group.columns.len());
     for (idx, col_chunk) in row_group.columns.iter().enumerate() {
@@ -55,7 +56,7 @@ pub fn column_metas(
                     num_values,
                 };
                 // use column id as key instead of index
-                let column_id = schema.column_id_of_path(&chunk_meta.path_in_schema)?;
+                let column_id = column_ids[idx];
                 col_metas.insert(column_id, res);
             }
             None => {

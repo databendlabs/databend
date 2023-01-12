@@ -170,18 +170,18 @@ impl BlockReader {
             }
         }
         if need_to_fill_data {
+            let data_block_column_ids: HashSet<ColumnId> =
+                part.columns_meta.keys().cloned().collect();
             let mut num_rows = 0;
             for part in parts {
                 let part = FusePartInfo::from_part(part)?;
                 num_rows += part.nums_rows;
             }
 
-            let data_block_column_ids: HashSet<ColumnId> =
-                part.columns_meta.keys().cloned().collect();
             Ok(DataBlock::create_with_schema_from_data_block(
                 &self.projected_schema,
-                data_block,
-                data_block_column_ids,
+                &data_block,
+                &data_block_column_ids,
                 num_rows,
             )?)
         } else {

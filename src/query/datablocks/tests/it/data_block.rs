@@ -130,13 +130,9 @@ fn test_data_block_create_with_schema_from_data_block() -> Result<()> {
     ]);
 
     let data_block_column_ids: HashSet<u32> = vec![0, 2, 5].iter().cloned().collect();
-    let new_block: DataBlock = DataBlock::create_with_schema_from_data_block(
-        &schema,
-        block,
-        data_block_column_ids.clone(),
-        3,
-    )
-    .unwrap();
+    let new_block: DataBlock =
+        DataBlock::create_with_schema_from_data_block(&schema, &block, &data_block_column_ids, 3)
+            .unwrap();
     assert_eq!(3, new_block.num_rows());
     assert_eq!(6, new_block.num_columns());
 
