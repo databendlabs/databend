@@ -23,7 +23,6 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataSchema;
-use common_expression::Domain;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use super::BindContext;
