@@ -20,7 +20,7 @@ raw expr       : parse_json("null")
 checked expr   : parse_json<String>("null")
 optimized expr : 0x2000000000000000
 output type    : Variant
-output domain  : Unknown
+output domain  : Undefined
 output         : null
 
 
@@ -29,7 +29,7 @@ raw expr       : parse_json(" \t")
 checked expr   : parse_json<String>(" \t")
 optimized expr : 0x2000000000000000
 output type    : Variant
-output domain  : Unknown
+output domain  : Undefined
 output         : null
 
 
@@ -38,7 +38,7 @@ raw expr       : parse_json("true")
 checked expr   : parse_json<String>("true")
 optimized expr : 0x2000000040000000
 output type    : Variant
-output domain  : Unknown
+output domain  : Undefined
 output         : true
 
 
@@ -47,7 +47,7 @@ raw expr       : parse_json("false")
 checked expr   : parse_json<String>("false")
 optimized expr : 0x2000000030000000
 output type    : Variant
-output domain  : Unknown
+output domain  : Undefined
 output         : false
 
 
@@ -56,7 +56,7 @@ raw expr       : parse_json("\"测试\"")
 checked expr   : parse_json<String>("\"测试\"")
 optimized expr : 0x2000000010000006e6b58be8af95
 output type    : Variant
-output domain  : Unknown
+output domain  : Undefined
 output         : "测试"
 
 
@@ -65,7 +65,7 @@ raw expr       : parse_json("1234")
 checked expr   : parse_json<String>("1234")
 optimized expr : 0x20000000200000035004d2
 output type    : Variant
-output domain  : Unknown
+output domain  : Undefined
 output         : 1234
 
 
@@ -74,7 +74,7 @@ raw expr       : parse_json("[1,2,3,4]")
 checked expr   : parse_json<String>("[1,2,3,4]")
 optimized expr : 0x80000004200000022000000220000002200000025001500250035004
 output type    : Variant
-output domain  : Unknown
+output domain  : Undefined
 output         : [1,2,3,4]
 
 
@@ -83,7 +83,7 @@ raw expr       : parse_json("{\"a\":\"b\",\"c\":\"d\"}")
 checked expr   : parse_json<String>("{\"a\":\"b\",\"c\":\"d\"}")
 optimized expr : 0x400000021000000110000001100000011000000161636264
 output type    : Variant
-output domain  : Unknown
+output domain  : Undefined
 output         : {"a":"b","c":"d"}
 
 
@@ -153,7 +153,7 @@ raw expr       : try_parse_json("nuLL")
 checked expr   : try_parse_json<String>("nuLL")
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Undefined ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -162,7 +162,7 @@ raw expr       : try_parse_json("null")
 checked expr   : try_parse_json<String>("null")
 optimized expr : 0x2000000000000000
 output type    : Variant NULL
-output domain  : Undefined ∪ {NULL}
+output domain  : Undefined
 output         : null
 
 
@@ -171,7 +171,7 @@ raw expr       : try_parse_json("true")
 checked expr   : try_parse_json<String>("true")
 optimized expr : 0x2000000040000000
 output type    : Variant NULL
-output domain  : Undefined ∪ {NULL}
+output domain  : Undefined
 output         : true
 
 
@@ -180,7 +180,7 @@ raw expr       : try_parse_json("false")
 checked expr   : try_parse_json<String>("false")
 optimized expr : 0x2000000030000000
 output type    : Variant NULL
-output domain  : Undefined ∪ {NULL}
+output domain  : Undefined
 output         : false
 
 
@@ -189,7 +189,7 @@ raw expr       : try_parse_json("\"测试\"")
 checked expr   : try_parse_json<String>("\"测试\"")
 optimized expr : 0x2000000010000006e6b58be8af95
 output type    : Variant NULL
-output domain  : Undefined ∪ {NULL}
+output domain  : Undefined
 output         : "测试"
 
 
@@ -198,7 +198,7 @@ raw expr       : try_parse_json("1234")
 checked expr   : try_parse_json<String>("1234")
 optimized expr : 0x20000000200000035004d2
 output type    : Variant NULL
-output domain  : Undefined ∪ {NULL}
+output domain  : Undefined
 output         : 1234
 
 
@@ -207,7 +207,7 @@ raw expr       : try_parse_json("[1,2,3,4]")
 checked expr   : try_parse_json<String>("[1,2,3,4]")
 optimized expr : 0x80000004200000022000000220000002200000025001500250035004
 output type    : Variant NULL
-output domain  : Undefined ∪ {NULL}
+output domain  : Undefined
 output         : [1,2,3,4]
 
 
@@ -216,7 +216,7 @@ raw expr       : try_parse_json("{\"a\":\"b\",\"c\":\"d\"}")
 checked expr   : try_parse_json<String>("{\"a\":\"b\",\"c\":\"d\"}")
 optimized expr : 0x400000021000000110000001100000011000000161636264
 output type    : Variant NULL
-output domain  : Undefined ∪ {NULL}
+output domain  : Undefined
 output         : {"a":"b","c":"d"}
 
 
@@ -286,7 +286,7 @@ raw expr       : check_json("true")
 checked expr   : check_json<String>("true")
 optimized expr : NULL
 output type    : String NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -295,7 +295,7 @@ raw expr       : check_json("nuLL")
 checked expr   : check_json<String>("nuLL")
 optimized expr : "expected ident, pos 3"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"expected ident, pos 3"..="expected ident, pos 3"}
 output         : "expected ident, pos 3"
 
 
@@ -349,7 +349,7 @@ raw expr       : length(parse_json("1234"))
 checked expr   : length<Variant NULL>(CAST(parse_json<String>("1234") AS Variant NULL))
 optimized expr : NULL
 output type    : UInt32 NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -358,7 +358,7 @@ raw expr       : length(parse_json("[1,2,3,4]"))
 checked expr   : length<Variant NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Variant NULL))
 optimized expr : 4_u32
 output type    : UInt32 NULL
-output domain  : Unknown
+output domain  : {4..=4}
 output         : 4_u32
 
 
@@ -367,7 +367,7 @@ raw expr       : length(parse_json("{\"k\":\"v\"}"))
 checked expr   : length<Variant NULL>(CAST(parse_json<String>("{\"k\":\"v\"}") AS Variant NULL))
 optimized expr : NULL
 output type    : UInt32 NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -421,7 +421,7 @@ raw expr       : object_keys(parse_json("[1,2,3,4]"))
 checked expr   : object_keys<Variant NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Variant NULL))
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -430,7 +430,7 @@ raw expr       : object_keys(parse_json("{\"k1\":\"v1\",\"k2\":\"v2\"}"))
 checked expr   : object_keys<Variant NULL>(CAST(parse_json<String>("{\"k1\":\"v1\",\"k2\":\"v2\"}") AS Variant NULL))
 optimized expr : 0x8000000210000002100000026b316b32
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : ["k1","k2"]
 
 
@@ -484,7 +484,7 @@ raw expr       : get(parse_json("null"), 1_u8)
 checked expr   : get<Variant NULL, UInt64 NULL>(CAST(parse_json<String>("null") AS Variant NULL), CAST(1_u8 AS UInt64 NULL))
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -493,7 +493,7 @@ raw expr       : get(parse_json("null"), "k")
 checked expr   : get<Variant NULL, String NULL>(CAST(parse_json<String>("null") AS Variant NULL), CAST("k" AS String NULL))
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -502,7 +502,7 @@ raw expr       : get(parse_json("[1,2,3,4]"), 1_u8)
 checked expr   : get<Variant NULL, UInt64 NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Variant NULL), CAST(1_u8 AS UInt64 NULL))
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : 2
 
 
@@ -511,7 +511,7 @@ raw expr       : get(parse_json("[1,2,3,4]"), plus(2_u8, 3_u8))
 checked expr   : get<Variant NULL, UInt64 NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Variant NULL), CAST(plus<UInt8, UInt8>(2_u8, 3_u8) AS UInt64 NULL))
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -520,7 +520,7 @@ raw expr       : get(parse_json("{\"k\":\"v\"}"), "k")
 checked expr   : get<Variant NULL, String NULL>(CAST(parse_json<String>("{\"k\":\"v\"}") AS Variant NULL), CAST("k" AS String NULL))
 optimized expr : 0x200000001000000176
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : "v"
 
 
@@ -529,7 +529,7 @@ raw expr       : get(parse_json("{\"k\":\"v\"}"), "x")
 checked expr   : get<Variant NULL, String NULL>(CAST(parse_json<String>("{\"k\":\"v\"}") AS Variant NULL), CAST("x" AS String NULL))
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -538,7 +538,7 @@ raw expr       : get(CAST(tuple("a", "b") AS Variant), "2")
 checked expr   : get<Variant NULL, String NULL>(CAST(to_variant<T0=(String, String)><T0>(tuple<String, String>("a", "b")) AS Variant NULL), CAST("2" AS String NULL))
 optimized expr : 0x200000001000000162
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : "b"
 
 
@@ -641,7 +641,7 @@ raw expr       : get_ignore_case(parse_json("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "
 checked expr   : get_ignore_case<Variant NULL, String NULL>(CAST(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}") AS Variant NULL), CAST("AA" AS String NULL))
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : 1
 
 
@@ -650,7 +650,7 @@ raw expr       : get_ignore_case(parse_json("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "
 checked expr   : get_ignore_case<Variant NULL, String NULL>(CAST(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}") AS Variant NULL), CAST("aa" AS String NULL))
 optimized expr : 0x20000000200000025003
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : 3
 
 
@@ -659,7 +659,7 @@ raw expr       : get_ignore_case(parse_json("{\"Aa\":1, \"aA\":2, \"aa\":3}"), "
 checked expr   : get_ignore_case<Variant NULL, String NULL>(CAST(parse_json<String>("{\"Aa\":1, \"aA\":2, \"aa\":3}") AS Variant NULL), CAST("bb" AS String NULL))
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -715,7 +715,7 @@ raw expr       : get_path(parse_json("[[1,2],3]"), "[0]")
 checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("[[1,2],3]") AS Variant NULL), CAST("[0]" AS String NULL))
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : [1,2]
 
 
@@ -724,7 +724,7 @@ raw expr       : get_path(parse_json("[[1,2],3]"), "[0][1]")
 checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("[[1,2],3]") AS Variant NULL), CAST("[0][1]" AS String NULL))
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : 2
 
 
@@ -733,7 +733,7 @@ raw expr       : get_path(parse_json("[1,2,3]"), "[0]")
 checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("[1,2,3]") AS Variant NULL), CAST("[0]" AS String NULL))
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : 1
 
 
@@ -742,7 +742,7 @@ raw expr       : get_path(parse_json("[1,2,3]"), "k2:k3")
 checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("[1,2,3]") AS Variant NULL), CAST("k2:k3" AS String NULL))
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -751,7 +751,7 @@ raw expr       : get_path(parse_json("{\"a\":{\"b\":2}}"), "[\"a\"][\"b\"]")
 checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("{\"a\":{\"b\":2}}") AS Variant NULL), CAST("[\"a\"][\"b\"]" AS String NULL))
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : 2
 
 
@@ -760,7 +760,7 @@ raw expr       : get_path(parse_json("{\"a\":{\"b\":2}}"), "a:b")
 checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("{\"a\":{\"b\":2}}") AS Variant NULL), CAST("a:b" AS String NULL))
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : 2
 
 
@@ -769,7 +769,7 @@ raw expr       : get_path(parse_json("{\"a\":{\"b\":2}}"), "[\"a\"]")
 checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("{\"a\":{\"b\":2}}") AS Variant NULL), CAST("[\"a\"]" AS String NULL))
 optimized expr : 0x400000011000000120000002625002
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : {"b":2}
 
 
@@ -778,7 +778,7 @@ raw expr       : get_path(parse_json("{\"a\":{\"b\":2}}"), "a")
 checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>("{\"a\":{\"b\":2}}") AS Variant NULL), CAST("a" AS String NULL))
 optimized expr : 0x400000011000000120000002625002
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : {"b":2}
 
 
@@ -834,7 +834,7 @@ raw expr       : json_extract_path_text("[[1,2],3]", "[0]")
 checked expr   : json_extract_path_text<String, String>("[[1,2],3]", "[0]")
 optimized expr : "[1,2]"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"[1,2]"..="[1,2]"}
 output         : "[1,2]"
 
 
@@ -843,7 +843,7 @@ raw expr       : json_extract_path_text("[[1,2],3]", "[0][1]")
 checked expr   : json_extract_path_text<String, String>("[[1,2],3]", "[0][1]")
 optimized expr : "2"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"2"..="2"}
 output         : "2"
 
 
@@ -852,7 +852,7 @@ raw expr       : json_extract_path_text("[1,2,3]", "[0]")
 checked expr   : json_extract_path_text<String, String>("[1,2,3]", "[0]")
 optimized expr : "1"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"1"..="1"}
 output         : "1"
 
 
@@ -861,7 +861,7 @@ raw expr       : json_extract_path_text("[1,2,3]", "k2:k3")
 checked expr   : json_extract_path_text<String, String>("[1,2,3]", "k2:k3")
 optimized expr : NULL
 output type    : String NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -870,7 +870,7 @@ raw expr       : json_extract_path_text("{\"a\":{\"b\":2}}", "[\"a\"][\"b\"]")
 checked expr   : json_extract_path_text<String, String>("{\"a\":{\"b\":2}}", "[\"a\"][\"b\"]")
 optimized expr : "2"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"2"..="2"}
 output         : "2"
 
 
@@ -879,7 +879,7 @@ raw expr       : json_extract_path_text("{\"a\":{\"b\":2}}", "a:b")
 checked expr   : json_extract_path_text<String, String>("{\"a\":{\"b\":2}}", "a:b")
 optimized expr : "2"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"2"..="2"}
 output         : "2"
 
 
@@ -888,7 +888,7 @@ raw expr       : json_extract_path_text("{\"a\":{\"b\":2}}", "[\"a\"]")
 checked expr   : json_extract_path_text<String, String>("{\"a\":{\"b\":2}}", "[\"a\"]")
 optimized expr : "{\"b\":2}"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"{\"b\":2}"..="{\"b\":2}"}
 output         : "{\"b\":2}"
 
 
@@ -897,7 +897,7 @@ raw expr       : json_extract_path_text("{\"a\":{\"b\":2}}", "a")
 checked expr   : json_extract_path_text<String, String>("{\"a\":{\"b\":2}}", "a")
 optimized expr : "{\"b\":2}"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"{\"b\":2}"..="{\"b\":2}"}
 output         : "{\"b\":2}"
 
 
@@ -953,7 +953,7 @@ raw expr       : as_boolean(parse_json("true"))
 checked expr   : as_boolean<Variant>(parse_json<String>("true"))
 optimized expr : true
 output type    : Boolean NULL
-output domain  : Unknown
+output domain  : {TRUE}
 output         : true
 
 
@@ -962,7 +962,7 @@ raw expr       : as_boolean(parse_json("123"))
 checked expr   : as_boolean<Variant>(parse_json<String>("123"))
 optimized expr : NULL
 output type    : Boolean NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -971,7 +971,7 @@ raw expr       : as_integer(parse_json("true"))
 checked expr   : as_integer<Variant>(parse_json<String>("true"))
 optimized expr : NULL
 output type    : Int64 NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -980,7 +980,7 @@ raw expr       : as_integer(parse_json("123"))
 checked expr   : as_integer<Variant>(parse_json<String>("123"))
 optimized expr : 123_i64
 output type    : Int64 NULL
-output domain  : Unknown
+output domain  : {123..=123}
 output         : 123_i64
 
 
@@ -989,7 +989,7 @@ raw expr       : as_float(parse_json("\"ab\""))
 checked expr   : as_float<Variant>(parse_json<String>("\"ab\""))
 optimized expr : NULL
 output type    : Float64 NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -998,7 +998,7 @@ raw expr       : as_float(parse_json("12.34"))
 checked expr   : as_float<Variant>(parse_json<String>("12.34"))
 optimized expr : 12.34_f64
 output type    : Float64 NULL
-output domain  : Unknown
+output domain  : {12.34..=12.34}
 output         : 12.34_f64
 
 
@@ -1007,7 +1007,7 @@ raw expr       : as_string(parse_json("\"ab\""))
 checked expr   : as_string<Variant>(parse_json<String>("\"ab\""))
 optimized expr : "ab"
 output type    : String NULL
-output domain  : Unknown
+output domain  : {"ab"..="ab"}
 output         : "ab"
 
 
@@ -1016,7 +1016,7 @@ raw expr       : as_string(parse_json("12.34"))
 checked expr   : as_string<Variant>(parse_json<String>("12.34"))
 optimized expr : NULL
 output type    : String NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -1025,7 +1025,7 @@ raw expr       : as_array(parse_json("[1,2,3]"))
 checked expr   : as_array<Variant>(parse_json<String>("[1,2,3]"))
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : [1,2,3]
 
 
@@ -1034,7 +1034,7 @@ raw expr       : as_array(parse_json("{\"a\":\"b\"}"))
 checked expr   : as_array<Variant>(parse_json<String>("{\"a\":\"b\"}"))
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -1043,7 +1043,7 @@ raw expr       : as_object(parse_json("[1,2,3]"))
 checked expr   : as_object<Variant>(parse_json<String>("[1,2,3]"))
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -1052,7 +1052,7 @@ raw expr       : as_object(parse_json("{\"a\":\"b\"}"))
 checked expr   : as_object<Variant>(parse_json<String>("{\"a\":\"b\"}"))
 optimized expr : 0x4000000110000001100000016162
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined
 output         : {"a":"b"}
 
 

@@ -49,7 +49,7 @@ use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::values::Value;
 use crate::values::ValueRef;
-use crate::with_number_type;
+use crate::with_integer_mapped_type;
 use crate::Column;
 use crate::ColumnIndex;
 use crate::TableDataType;
@@ -232,24 +232,8 @@ impl Debug for NumberScalar {
             NumberScalar::Int16(val) => write!(f, "{val}_i16"),
             NumberScalar::Int32(val) => write!(f, "{val}_i32"),
             NumberScalar::Int64(val) => write!(f, "{val}_i64"),
-            NumberScalar::Float32(val) => match Decimal::from_f32(val.0) {
-                Some(d) => write!(
-                    f,
-                    "{}_f32",
-                    d.round_dp_with_strategy(FLOAT_NUM_FRAC_DIGITS, RoundingStrategy::ToZero)
-                        .normalize()
-                ),
-                None => write!(f, "{val}_f32"),
-            },
-            NumberScalar::Float64(val) => match Decimal::from_f64(val.0) {
-                Some(d) => write!(
-                    f,
-                    "{}_f64",
-                    d.round_dp_with_strategy(FLOAT_NUM_FRAC_DIGITS, RoundingStrategy::ToZero)
-                        .normalize()
-                ),
-                None => write!(f, "{val}_f64"),
-            },
+            NumberScalar::Float32(val) => write!(f, "{}_f32", display_f32(**val)),
+            NumberScalar::Float64(val) => write!(f, "{}_f64", display_f64(**val)),
         }
     }
 }
@@ -265,24 +249,8 @@ impl Display for NumberScalar {
             NumberScalar::Int16(val) => write!(f, "{val}"),
             NumberScalar::Int32(val) => write!(f, "{val}"),
             NumberScalar::Int64(val) => write!(f, "{val}"),
-            NumberScalar::Float32(val) => match Decimal::from_f32(val.0) {
-                Some(d) => write!(
-                    f,
-                    "{}",
-                    d.round_dp_with_strategy(FLOAT_NUM_FRAC_DIGITS, RoundingStrategy::ToZero)
-                        .normalize()
-                ),
-                None => write!(f, "{val}"),
-            },
-            NumberScalar::Float64(val) => match Decimal::from_f64(val.0) {
-                Some(d) => write!(
-                    f,
-                    "{}",
-                    d.round_dp_with_strategy(FLOAT_NUM_FRAC_DIGITS, RoundingStrategy::ToZero)
-                        .normalize()
-                ),
-                None => write!(f, "{val}"),
-            },
+            NumberScalar::Float32(val) => write!(f, "{}", display_f32(**val)),
+            NumberScalar::Float64(val) => write!(f, "{}", display_f64(**val)),
         }
     }
 }
@@ -645,8 +613,16 @@ impl Display for StringDomain {
 
 impl Display for NumberDomain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        with_number_type!(|TYPE| match self {
+        with_integer_mapped_type!(|TYPE| match self {
             NumberDomain::TYPE(domain) => write!(f, "{domain}"),
+            NumberDomain::Float32(SimpleDomain { min, max }) => write!(f, "{}", SimpleDomain {
+                min: display_f32(**min),
+                max: display_f32(**max),
+            }),
+            NumberDomain::Float64(SimpleDomain { min, max }) => write!(f, "{}", SimpleDomain {
+                min: display_f64(**min),
+                max: display_f64(**max),
+            }),
         })
     }
 }
@@ -679,5 +655,29 @@ impl Display for Domain {
             }
             Domain::Undefined => write!(f, "Undefined"),
         }
+    }
+}
+
+/// Display a float as with fixed number of fractional digits to avoid test failures due to
+/// rounding differences between MacOS and Linus.
+fn display_f32(num: f32) -> String {
+    match Decimal::from_f32(num) {
+        Some(d) => d
+            .round_dp_with_strategy(FLOAT_NUM_FRAC_DIGITS, RoundingStrategy::ToZero)
+            .normalize()
+            .to_string(),
+        None => num.to_string(),
+    }
+}
+
+/// Display a float as with fixed number of fractional digits to avoid test failures due to
+/// rounding differences between MacOS and Linus.
+fn display_f64(num: f64) -> String {
+    match Decimal::from_f64(num) {
+        Some(d) => d
+            .round_dp_with_strategy(FLOAT_NUM_FRAC_DIGITS, RoundingStrategy::ToZero)
+            .normalize()
+            .to_string(),
+        None => num.to_string(),
     }
 }

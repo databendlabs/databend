@@ -3,7 +3,7 @@ raw expr       : upper("Abc")
 checked expr   : upper<String>("Abc")
 optimized expr : "ABC"
 output type    : String
-output domain  : {""..}
+output domain  : {"ABC"..="ABC"}
 output         : "ABC"
 
 
@@ -12,7 +12,7 @@ raw expr       : upper("Dobrý den")
 checked expr   : upper<String>("Dobrý den")
 optimized expr : "DOBRÝ DEN"
 output type    : String
-output domain  : {""..}
+output domain  : {"DOBRÝ DEN"..="DOBRÝ DEN"}
 output         : "DOBRÝ DEN"
 
 
@@ -21,7 +21,7 @@ raw expr       : upper("ß😀山")
 checked expr   : upper<String>("ß😀山")
 optimized expr : "SS😀山"
 output type    : String
-output domain  : {""..}
+output domain  : {"SS😀山"..="SS😀山"}
 output         : "SS😀山"
 
 
@@ -61,7 +61,7 @@ raw expr       : lower("Abc")
 checked expr   : lower<String>("Abc")
 optimized expr : "abc"
 output type    : String
-output domain  : {""..}
+output domain  : {"abc"..="abc"}
 output         : "abc"
 
 
@@ -70,7 +70,7 @@ raw expr       : lower("DOBRÝ DEN")
 checked expr   : lower<String>("DOBRÝ DEN")
 optimized expr : "dobrý den"
 output type    : String
-output domain  : {""..}
+output domain  : {"dobrý den"..="dobrý den"}
 output         : "dobrý den"
 
 
@@ -79,7 +79,7 @@ raw expr       : lower("İ😀山")
 checked expr   : lower<String>("İ😀山")
 optimized expr : "i\u{307}😀山"
 output type    : String
-output domain  : {""..}
+output domain  : {"i\u{307}😀山"..="i\u{307}😀山"}
 output         : "i\u{307}😀山"
 
 
@@ -119,7 +119,7 @@ raw expr       : bit_length("latin")
 checked expr   : bit_length<String>("latin")
 optimized expr : 40_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {40..=40}
 output         : 40_u64
 
 
@@ -159,7 +159,7 @@ raw expr       : octet_length("latin")
 checked expr   : length<String>("latin")
 optimized expr : 5_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {5..=5}
 output         : 5_u64
 
 
@@ -199,7 +199,7 @@ raw expr       : char_length("latin")
 checked expr   : char_length<String>("latin")
 optimized expr : 5_u64
 output type    : UInt64
-output domain  : Unknown
+output domain  : {5..=5}
 output         : 5_u64
 
 
@@ -239,7 +239,7 @@ raw expr       : to_base64("Abc")
 checked expr   : to_base64<String>("Abc")
 optimized expr : "QWJj"
 output type    : String
-output domain  : {""..}
+output domain  : {"QWJj"..="QWJj"}
 output         : "QWJj"
 
 
@@ -248,7 +248,7 @@ raw expr       : to_base64("123")
 checked expr   : to_base64<String>("123")
 optimized expr : "MTIz"
 output type    : String
-output domain  : {""..}
+output domain  : {"MTIz"..="MTIz"}
 output         : "MTIz"
 
 
@@ -287,7 +287,7 @@ raw expr       : from_base64("QWJj")
 checked expr   : from_base64<String>("QWJj")
 optimized expr : "Abc"
 output type    : String
-output domain  : Unknown
+output domain  : {"Abc"..="Abc"}
 output         : "Abc"
 
 
@@ -296,7 +296,7 @@ raw expr       : from_base64("MTIz")
 checked expr   : from_base64<String>("MTIz")
 optimized expr : "123"
 output type    : String
-output domain  : Unknown
+output domain  : {"123"..="123"}
 output         : "123"
 
 
@@ -343,7 +343,7 @@ raw expr       : quote("a\0b")
 checked expr   : quote<String>("a\0b")
 optimized expr : "a\\0b"
 output type    : String
-output domain  : {""..}
+output domain  : {"a\\0b"..="a\\0b"}
 output         : "a\\0b"
 
 
@@ -352,7 +352,7 @@ raw expr       : quote("a'b")
 checked expr   : quote<String>("a'b")
 optimized expr : "a\\'b"
 output type    : String
-output domain  : {""..}
+output domain  : {"a\\'b"..="a\\'b"}
 output         : "a\\'b"
 
 
@@ -361,7 +361,7 @@ raw expr       : quote("a\"b")
 checked expr   : quote<String>("a\"b")
 optimized expr : "a\\\"b"
 output type    : String
-output domain  : {""..}
+output domain  : {"a\\\"b"..="a\\\"b"}
 output         : "a\\\"b"
 
 
@@ -370,7 +370,7 @@ raw expr       : quote("a\u{8}b")
 checked expr   : quote<String>("a\u{8}b")
 optimized expr : "a\\bb"
 output type    : String
-output domain  : {""..}
+output domain  : {"a\\bb"..="a\\bb"}
 output         : "a\\bb"
 
 
@@ -379,7 +379,7 @@ raw expr       : quote("a\nb")
 checked expr   : quote<String>("a\nb")
 optimized expr : "a\\nb"
 output type    : String
-output domain  : {""..}
+output domain  : {"a\\nb"..="a\\nb"}
 output         : "a\\nb"
 
 
@@ -388,7 +388,7 @@ raw expr       : quote("a\rb")
 checked expr   : quote<String>("a\rb")
 optimized expr : "a\\rb"
 output type    : String
-output domain  : {""..}
+output domain  : {"a\\rb"..="a\\rb"}
 output         : "a\\rb"
 
 
@@ -397,7 +397,7 @@ raw expr       : quote("a\tb")
 checked expr   : quote<String>("a\tb")
 optimized expr : "a\\tb"
 output type    : String
-output domain  : {""..}
+output domain  : {"a\\tb"..="a\\tb"}
 output         : "a\\tb"
 
 
@@ -406,7 +406,7 @@ raw expr       : quote("a\\b")
 checked expr   : quote<String>("a\\b")
 optimized expr : "a\\\\b"
 output type    : String
-output domain  : {""..}
+output domain  : {"a\\\\b"..="a\\\\b"}
 output         : "a\\\\b"
 
 
@@ -415,7 +415,7 @@ raw expr       : quote("你好")
 checked expr   : quote<String>("你好")
 optimized expr : "你好"
 output type    : String
-output domain  : {""..}
+output domain  : {"你好"..="你好"}
 output         : "你好"
 
 
@@ -424,7 +424,7 @@ raw expr       : quote("ß😀山")
 checked expr   : quote<String>("ß😀山")
 optimized expr : "ß😀山"
 output type    : String
-output domain  : {""..}
+output domain  : {"ß😀山"..="ß😀山"}
 output         : "ß😀山"
 
 
@@ -433,7 +433,7 @@ raw expr       : quote("Dobrý den")
 checked expr   : quote<String>("Dobrý den")
 optimized expr : "Dobrý den"
 output type    : String
-output domain  : {""..}
+output domain  : {"Dobrý den"..="Dobrý den"}
 output         : "Dobrý den"
 
 
@@ -473,7 +473,7 @@ raw expr       : reverse("abc")
 checked expr   : reverse<String>("abc")
 optimized expr : "cba"
 output type    : String
-output domain  : {""..}
+output domain  : {"cba"..="cba"}
 output         : "cba"
 
 
@@ -482,7 +482,7 @@ raw expr       : reverse("a")
 checked expr   : reverse<String>("a")
 optimized expr : "a"
 output type    : String
-output domain  : {""..}
+output domain  : {"a"..="a"}
 output         : "a"
 
 
@@ -491,7 +491,7 @@ raw expr       : reverse("")
 checked expr   : reverse<String>("")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -500,7 +500,7 @@ raw expr       : reverse("你好")
 checked expr   : reverse<String>("你好")
 optimized expr : "��堽�"
 output type    : String
-output domain  : {""..}
+output domain  : {"��堽�"..="��堽�"}
 output         : "��堽�"
 
 
@@ -509,7 +509,7 @@ raw expr       : reverse("ß😀山")
 checked expr   : reverse<String>("ß😀山")
 optimized expr : "��倘���"
 output type    : String
-output domain  : {""..}
+output domain  : {"��倘���"..="��倘���"}
 output         : "��倘���"
 
 
@@ -518,7 +518,7 @@ raw expr       : reverse("Dobrý den")
 checked expr   : reverse<String>("Dobrý den")
 optimized expr : "ned ��rboD"
 output type    : String
-output domain  : {""..}
+output domain  : {"ned ��rboD"..="ned ��rboD"}
 output         : "ned ��rboD"
 
 
@@ -665,7 +665,7 @@ raw expr       : ltrim("   abc   ")
 checked expr   : ltrim<String>("   abc   ")
 optimized expr : "abc   "
 output type    : String
-output domain  : {""..}
+output domain  : {"abc   "..="abc   "}
 output         : "abc   "
 
 
@@ -674,7 +674,7 @@ raw expr       : ltrim("  ")
 checked expr   : ltrim<String>("  ")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -715,7 +715,7 @@ raw expr       : rtrim("   abc   ")
 checked expr   : rtrim<String>("   abc   ")
 optimized expr : "   abc"
 output type    : String
-output domain  : {""..}
+output domain  : {"   abc"..="   abc"}
 output         : "   abc"
 
 
@@ -724,7 +724,7 @@ raw expr       : rtrim("  ")
 checked expr   : rtrim<String>("  ")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -765,7 +765,7 @@ raw expr       : trim_leading("aaabbaaa", "a")
 checked expr   : trim_leading<String, String>("aaabbaaa", "a")
 optimized expr : "bbaaa"
 output type    : String
-output domain  : {""..}
+output domain  : {"bbaaa"..="bbaaa"}
 output         : "bbaaa"
 
 
@@ -774,7 +774,7 @@ raw expr       : trim_leading("aaabbaaa", "aa")
 checked expr   : trim_leading<String, String>("aaabbaaa", "aa")
 optimized expr : "abbaaa"
 output type    : String
-output domain  : {""..}
+output domain  : {"abbaaa"..="abbaaa"}
 output         : "abbaaa"
 
 
@@ -783,7 +783,7 @@ raw expr       : trim_leading("aaaaaaaa", "a")
 checked expr   : trim_leading<String, String>("aaaaaaaa", "a")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -792,7 +792,7 @@ raw expr       : trim_leading("aaabbaaa", "b")
 checked expr   : trim_leading<String, String>("aaabbaaa", "b")
 optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {""..}
+output domain  : {"aaabbaaa"..="aaabbaaa"}
 output         : "aaabbaaa"
 
 
@@ -886,7 +886,7 @@ raw expr       : trim_trailing("aaabbaaa", "a")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "a")
 optimized expr : "aaabb"
 output type    : String
-output domain  : {""..}
+output domain  : {"aaabb"..="aaabb"}
 output         : "aaabb"
 
 
@@ -895,7 +895,7 @@ raw expr       : trim_trailing("aaabbaaa", "aa")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "aa")
 optimized expr : "aaabba"
 output type    : String
-output domain  : {""..}
+output domain  : {"aaabba"..="aaabba"}
 output         : "aaabba"
 
 
@@ -904,7 +904,7 @@ raw expr       : trim_trailing("aaaaaaaa", "a")
 checked expr   : trim_trailing<String, String>("aaaaaaaa", "a")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -913,7 +913,7 @@ raw expr       : trim_trailing("aaabbaaa", "b")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "b")
 optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {""..}
+output domain  : {"aaabbaaa"..="aaabbaaa"}
 output         : "aaabbaaa"
 
 
@@ -1007,7 +1007,7 @@ raw expr       : trim_both("aaabbaaa", "a")
 checked expr   : trim_both<String, String>("aaabbaaa", "a")
 optimized expr : "bb"
 output type    : String
-output domain  : {""..}
+output domain  : {"bb"..="bb"}
 output         : "bb"
 
 
@@ -1016,7 +1016,7 @@ raw expr       : trim_both("aaabbaaa", "aa")
 checked expr   : trim_both<String, String>("aaabbaaa", "aa")
 optimized expr : "abba"
 output type    : String
-output domain  : {""..}
+output domain  : {"abba"..="abba"}
 output         : "abba"
 
 
@@ -1025,7 +1025,7 @@ raw expr       : trim_both("aaaaaaaa", "a")
 checked expr   : trim_both<String, String>("aaaaaaaa", "a")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -1034,7 +1034,7 @@ raw expr       : trim_both("aaabbaaa", "b")
 checked expr   : trim_both<String, String>("aaabbaaa", "b")
 optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {""..}
+output domain  : {"aaabbaaa"..="aaabbaaa"}
 output         : "aaabbaaa"
 
 
@@ -1128,7 +1128,7 @@ raw expr       : trim("   abc   ")
 checked expr   : trim<String>("   abc   ")
 optimized expr : "abc"
 output type    : String
-output domain  : {""..}
+output domain  : {"abc"..="abc"}
 output         : "abc"
 
 
@@ -1137,7 +1137,7 @@ raw expr       : trim("  ")
 checked expr   : trim<String>("  ")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -1178,7 +1178,7 @@ raw expr       : trim_both("aaabbaaa", "a")
 checked expr   : trim_both<String, String>("aaabbaaa", "a")
 optimized expr : "bb"
 output type    : String
-output domain  : {""..}
+output domain  : {"bb"..="bb"}
 output         : "bb"
 
 
@@ -1187,7 +1187,7 @@ raw expr       : trim_both("aaabbaaa", "aa")
 checked expr   : trim_both<String, String>("aaabbaaa", "aa")
 optimized expr : "abba"
 output type    : String
-output domain  : {""..}
+output domain  : {"abba"..="abba"}
 output         : "abba"
 
 
@@ -1196,7 +1196,7 @@ raw expr       : trim_both("aaaaaaaa", "a")
 checked expr   : trim_both<String, String>("aaaaaaaa", "a")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -1205,7 +1205,7 @@ raw expr       : trim_both("aaabbaaa", "b")
 checked expr   : trim_both<String, String>("aaabbaaa", "b")
 optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {""..}
+output domain  : {"aaabbaaa"..="aaabbaaa"}
 output         : "aaabbaaa"
 
 
@@ -1321,7 +1321,7 @@ raw expr       : trim_leading("aaabbaaa", "a")
 checked expr   : trim_leading<String, String>("aaabbaaa", "a")
 optimized expr : "bbaaa"
 output type    : String
-output domain  : {""..}
+output domain  : {"bbaaa"..="bbaaa"}
 output         : "bbaaa"
 
 
@@ -1330,7 +1330,7 @@ raw expr       : trim_leading("aaabbaaa", "aa")
 checked expr   : trim_leading<String, String>("aaabbaaa", "aa")
 optimized expr : "abbaaa"
 output type    : String
-output domain  : {""..}
+output domain  : {"abbaaa"..="abbaaa"}
 output         : "abbaaa"
 
 
@@ -1339,7 +1339,7 @@ raw expr       : trim_leading("aaaaaaaa", "a")
 checked expr   : trim_leading<String, String>("aaaaaaaa", "a")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -1348,7 +1348,7 @@ raw expr       : trim_leading("aaabbaaa", "b")
 checked expr   : trim_leading<String, String>("aaabbaaa", "b")
 optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {""..}
+output domain  : {"aaabbaaa"..="aaabbaaa"}
 output         : "aaabbaaa"
 
 
@@ -1464,7 +1464,7 @@ raw expr       : trim_trailing("aaabbaaa", "a")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "a")
 optimized expr : "aaabb"
 output type    : String
-output domain  : {""..}
+output domain  : {"aaabb"..="aaabb"}
 output         : "aaabb"
 
 
@@ -1473,7 +1473,7 @@ raw expr       : trim_trailing("aaabbaaa", "aa")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "aa")
 optimized expr : "aaabba"
 output type    : String
-output domain  : {""..}
+output domain  : {"aaabba"..="aaabba"}
 output         : "aaabba"
 
 
@@ -1482,7 +1482,7 @@ raw expr       : trim_trailing("aaaaaaaa", "a")
 checked expr   : trim_trailing<String, String>("aaaaaaaa", "a")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -1491,7 +1491,7 @@ raw expr       : trim_trailing("aaabbaaa", "b")
 checked expr   : trim_trailing<String, String>("aaabbaaa", "b")
 optimized expr : "aaabbaaa"
 output type    : String
-output domain  : {""..}
+output domain  : {"aaabbaaa"..="aaabbaaa"}
 output         : "aaabbaaa"
 
 
@@ -1607,7 +1607,7 @@ raw expr       : concat("5", "3", "4")
 checked expr   : concat<String, String, String>("5", "3", "4")
 optimized expr : "534"
 output type    : String
-output domain  : {"5"..}
+output domain  : {"534"..="534"}
 output         : "534"
 
 
@@ -1616,7 +1616,7 @@ raw expr       : concat(NULL, "3", "4")
 checked expr   : concat<String NULL, String NULL, String NULL>(CAST(NULL AS String NULL), CAST("3" AS String NULL), CAST("4" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
-output domain  : {""..} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -1672,7 +1672,7 @@ raw expr       : concat_ws("-", "3", NULL, "4", NULL, "5")
 checked expr   : concat_ws<String NULL, String NULL, String NULL, String NULL, String NULL, String NULL>(CAST("-" AS String NULL), CAST("3" AS String NULL), CAST(NULL AS String NULL), CAST("4" AS String NULL), CAST(NULL AS String NULL), CAST("5" AS String NULL))
 optimized expr : "3-4-5"
 output type    : String NULL
-output domain  : {""..} ∪ {NULL}
+output domain  : {"3-4-5"..="3-4-5"}
 output         : "3-4-5"
 
 
@@ -1681,7 +1681,7 @@ raw expr       : concat_ws(NULL, "3", "4")
 checked expr   : concat_ws<String NULL, String NULL, String NULL>(CAST(NULL AS String NULL), CAST("3" AS String NULL), CAST("4" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
-output domain  : {""..} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -2121,7 +2121,7 @@ raw expr       : unhex("6461746162656e64")
 checked expr   : unhex<String>("6461746162656e64")
 optimized expr : "databend"
 output type    : String
-output domain  : Unknown
+output domain  : {"databend"..="databend"}
 output         : "databend"
 
 
@@ -2174,7 +2174,7 @@ raw expr       : lpad("hi", 2_u8, "?")
 checked expr   : lpad<String, UInt64, String>("hi", CAST(2_u8 AS UInt64), "?")
 optimized expr : "hi"
 output type    : String
-output domain  : {""..}
+output domain  : {"hi"..="hi"}
 output         : "hi"
 
 
@@ -2183,7 +2183,7 @@ raw expr       : lpad("hi", 4_u8, "?")
 checked expr   : lpad<String, UInt64, String>("hi", CAST(4_u8 AS UInt64), "?")
 optimized expr : "??hi"
 output type    : String
-output domain  : {""..}
+output domain  : {"??hi"..="??hi"}
 output         : "??hi"
 
 
@@ -2192,7 +2192,7 @@ raw expr       : lpad("hi", 0_u8, "?")
 checked expr   : lpad<String, UInt64, String>("hi", CAST(0_u8 AS UInt64), "?")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -2201,7 +2201,7 @@ raw expr       : lpad("hi", 1_u8, "?")
 checked expr   : lpad<String, UInt64, String>("hi", CAST(1_u8 AS UInt64), "?")
 optimized expr : "h"
 output type    : String
-output domain  : {""..}
+output domain  : {"h"..="h"}
 output         : "h"
 
 
@@ -2246,7 +2246,7 @@ raw expr       : rpad("hi", 2_u8, "?")
 checked expr   : rpad<String, UInt64, String>("hi", CAST(2_u8 AS UInt64), "?")
 optimized expr : "hi"
 output type    : String
-output domain  : {""..}
+output domain  : {"hi"..="hi"}
 output         : "hi"
 
 
@@ -2255,7 +2255,7 @@ raw expr       : rpad("hi", 4_u8, "?")
 checked expr   : rpad<String, UInt64, String>("hi", CAST(4_u8 AS UInt64), "?")
 optimized expr : "hi??"
 output type    : String
-output domain  : {""..}
+output domain  : {"hi??"..="hi??"}
 output         : "hi??"
 
 
@@ -2264,7 +2264,7 @@ raw expr       : rpad("hi", 0_u8, "?")
 checked expr   : rpad<String, UInt64, String>("hi", CAST(0_u8 AS UInt64), "?")
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -2273,7 +2273,7 @@ raw expr       : rpad("hi", 1_u8, "?")
 checked expr   : rpad<String, UInt64, String>("hi", CAST(1_u8 AS UInt64), "?")
 optimized expr : "h"
 output type    : String
-output domain  : {""..}
+output domain  : {"h"..="h"}
 output         : "h"
 
 
@@ -2318,7 +2318,7 @@ raw expr       : replace("hi", "", "?")
 checked expr   : replace<String, String, String>("hi", "", "?")
 optimized expr : "hi"
 output type    : String
-output domain  : {""..}
+output domain  : {"hi"..="hi"}
 output         : "hi"
 
 
@@ -2327,7 +2327,7 @@ raw expr       : replace("hi", "", "hi")
 checked expr   : replace<String, String, String>("hi", "", "hi")
 optimized expr : "hi"
 output type    : String
-output domain  : {""..}
+output domain  : {"hi"..="hi"}
 output         : "hi"
 
 
@@ -2336,7 +2336,7 @@ raw expr       : replace("hi", "i", "?")
 checked expr   : replace<String, String, String>("hi", "i", "?")
 optimized expr : "h?"
 output type    : String
-output domain  : {""..}
+output domain  : {"h?"..="h?"}
 output         : "h?"
 
 
@@ -2345,7 +2345,7 @@ raw expr       : replace("hi", "x", "?")
 checked expr   : replace<String, String, String>("hi", "x", "?")
 optimized expr : "hi"
 output type    : String
-output domain  : {""..}
+output domain  : {"hi"..="hi"}
 output         : "hi"
 
 
@@ -2379,7 +2379,7 @@ raw expr       : strcmp("text", "text2")
 checked expr   : strcmp<String, String>("text", "text2")
 optimized expr : -1_i8
 output type    : Int8
-output domain  : {-128..=127}
+output domain  : {-1..=-1}
 output         : -1_i8
 
 
@@ -2388,7 +2388,7 @@ raw expr       : strcmp("text2", "text")
 checked expr   : strcmp<String, String>("text2", "text")
 optimized expr : 1_i8
 output type    : Int8
-output domain  : {-128..=127}
+output domain  : {1..=1}
 output         : 1_i8
 
 
@@ -2397,7 +2397,7 @@ raw expr       : strcmp("hii", "hii")
 checked expr   : strcmp<String, String>("hii", "hii")
 optimized expr : 0_i8
 output type    : Int8
-output domain  : {-128..=127}
+output domain  : {0..=0}
 output         : 0_i8
 
 
@@ -2429,7 +2429,7 @@ raw expr       : locate("bar", "foobarbar")
 checked expr   : locate<String, String>("bar", "foobarbar")
 optimized expr : 4_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {4..=4}
 output         : 4_u64
 
 
@@ -2438,7 +2438,7 @@ raw expr       : instr("foobarbar", "bar")
 checked expr   : instr<String, String>("foobarbar", "bar")
 optimized expr : 4_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {4..=4}
 output         : 4_u64
 
 
@@ -2447,7 +2447,7 @@ raw expr       : position("bar", "foobarbar")
 checked expr   : position<String, String>("bar", "foobarbar")
 optimized expr : 4_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {4..=4}
 output         : 4_u64
 
 
@@ -2456,7 +2456,7 @@ raw expr       : position("foobarbar", "bar")
 checked expr   : position<String, String>("foobarbar", "bar")
 optimized expr : 0_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {0..=0}
 output         : 0_u64
 
 
@@ -2465,7 +2465,7 @@ raw expr       : locate("bar", "foobarbar", 5_u8)
 checked expr   : locate<String, String, UInt64>("bar", "foobarbar", CAST(5_u8 AS UInt64))
 optimized expr : 7_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {7..=7}
 output         : 7_u64
 
 
@@ -2518,7 +2518,7 @@ raw expr       : char(65_u8, NULL)
 checked expr   : char<UInt8 NULL, UInt8 NULL>(CAST(65_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : NULL
 output type    : String NULL
-output domain  : Unknown
+output domain  : {NULL}
 output         : NULL
 
 
@@ -2585,7 +2585,7 @@ raw expr       : soundex("你好中国北京")
 checked expr   : soundex<String>("你好中国北京")
 optimized expr : "你000"
 output type    : String
-output domain  : {""..}
+output domain  : {"你000"..="你000"}
 output         : "你000"
 
 
@@ -2594,7 +2594,7 @@ raw expr       : soundex("")
 checked expr   : soundex<String>("")
 optimized expr : "0000"
 output type    : String
-output domain  : {""..}
+output domain  : {"0000"..="0000"}
 output         : "0000"
 
 
@@ -2603,7 +2603,7 @@ raw expr       : soundex("hello all folks")
 checked expr   : soundex<String>("hello all folks")
 optimized expr : "H4142"
 output type    : String
-output domain  : {""..}
+output domain  : {"H4142"..="H4142"}
 output         : "H4142"
 
 
@@ -2612,7 +2612,7 @@ raw expr       : soundex("#3556 in bugdb")
 checked expr   : soundex<String>("#3556 in bugdb")
 optimized expr : "I51231"
 output type    : String
-output domain  : {""..}
+output domain  : {"I51231"..="I51231"}
 output         : "I51231"
 
 
@@ -2653,7 +2653,7 @@ raw expr       : ord("и")
 checked expr   : ord<String>("и")
 optimized expr : 53432_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {53432..=53432}
 output         : 53432_u64
 
 
@@ -2662,7 +2662,7 @@ raw expr       : ord("早ab")
 checked expr   : ord<String>("早ab")
 optimized expr : 15112105_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {15112105..=15112105}
 output         : 15112105_u64
 
 
@@ -2671,7 +2671,7 @@ raw expr       : ord("💖")
 checked expr   : ord<String>("💖")
 optimized expr : 4036989590_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {4036989590..=4036989590}
 output         : 4036989590_u64
 
 
@@ -2689,7 +2689,7 @@ raw expr       : repeat("3", 5_u8)
 checked expr   : repeat<String, UInt64>("3", CAST(5_u8 AS UInt64))
 optimized expr : "33333"
 output type    : String
-output domain  : Unknown
+output domain  : {"33333"..="33333"}
 output         : "33333"
 
 
@@ -2745,7 +2745,7 @@ raw expr       : insert("Quadratic", 3_u8, 4_u8, "What")
 checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST(3_u8 AS Int64), CAST(4_u8 AS Int64), "What")
 optimized expr : "QuWhattic"
 output type    : String
-output domain  : {""..}
+output domain  : {"QuWhattic"..="QuWhattic"}
 output         : "QuWhattic"
 
 
@@ -2754,7 +2754,7 @@ raw expr       : insert("Quadratic", minus(1_u8), 4_u8, "What")
 checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST(minus<UInt8>(1_u8) AS Int64), CAST(4_u8 AS Int64), "What")
 optimized expr : "Quadratic"
 output type    : String
-output domain  : {""..}
+output domain  : {"Quadratic"..="Quadratic"}
 output         : "Quadratic"
 
 
@@ -2763,7 +2763,7 @@ raw expr       : insert("Quadratic", 3_u8, 100_u8, "What")
 checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST(3_u8 AS Int64), CAST(100_u8 AS Int64), "What")
 optimized expr : "QuWhat"
 output type    : String
-output domain  : {""..}
+output domain  : {"QuWhat"..="QuWhat"}
 output         : "QuWhat"
 
 
@@ -2907,7 +2907,7 @@ raw expr       : left("", 0_u8)
 checked expr   : left<String, UInt64>("", CAST(0_u8 AS UInt64))
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -2916,7 +2916,7 @@ raw expr       : left("", 1_u8)
 checked expr   : left<String, UInt64>("", CAST(1_u8 AS UInt64))
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -2955,7 +2955,7 @@ raw expr       : right("", 0_u8)
 checked expr   : right<String, UInt64>("", CAST(0_u8 AS UInt64))
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -2964,7 +2964,7 @@ raw expr       : right("", 1_u8)
 checked expr   : right<String, UInt64>("", CAST(1_u8 AS UInt64))
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -3003,7 +3003,7 @@ raw expr       : mid("1234567890", minus(3_u8), 3_u8)
 checked expr   : substr<String, Int64, UInt64>("1234567890", CAST(minus<UInt8>(3_u8) AS Int64), CAST(3_u8 AS UInt64))
 optimized expr : "890"
 output type    : String
-output domain  : {""..}
+output domain  : {"890"..="890"}
 output         : "890"
 
 
@@ -3012,7 +3012,7 @@ raw expr       : mid("1234567890", minus(3_u8))
 checked expr   : substr<String, Int64>("1234567890", CAST(minus<UInt8>(3_u8) AS Int64))
 optimized expr : "890"
 output type    : String
-output domain  : {""..}
+output domain  : {"890"..="890"}
 output         : "890"
 
 
@@ -3021,7 +3021,7 @@ raw expr       : substr("", 0_u8, 1_u8)
 checked expr   : substr<String, Int64, UInt64>("", CAST(0_u8 AS Int64), CAST(1_u8 AS UInt64))
 optimized expr : ""
 output type    : String
-output domain  : {""..}
+output domain  : {""..=""}
 output         : ""
 
 
@@ -3030,7 +3030,7 @@ raw expr       : substr("Sakila", minus(4_u8), 2_u8)
 checked expr   : substr<String, Int64, UInt64>("Sakila", CAST(minus<UInt8>(4_u8) AS Int64), CAST(2_u8 AS UInt64))
 optimized expr : "ki"
 output type    : String
-output domain  : {""..}
+output domain  : {"ki"..="ki"}
 output         : "ki"
 
 
@@ -3039,7 +3039,7 @@ raw expr       : substr("sakila", minus(4_u8))
 checked expr   : substr<String, Int64>("sakila", CAST(minus<UInt8>(4_u8) AS Int64))
 optimized expr : "kila"
 output type    : String
-output domain  : {""..}
+output domain  : {"kila"..="kila"}
 output         : "kila"
 
 
@@ -3048,7 +3048,7 @@ raw expr       : substr("abc", 2_u8)
 checked expr   : substr<String, Int64>("abc", CAST(2_u8 AS Int64))
 optimized expr : "bc"
 output type    : String
-output domain  : {""..}
+output domain  : {"bc"..="bc"}
 output         : "bc"
 
 

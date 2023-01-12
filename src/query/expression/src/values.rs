@@ -301,7 +301,13 @@ impl<'a> ScalarRef<'a> {
             }),
             ScalarRef::Timestamp(t) => Domain::Timestamp(SimpleDomain { min: *t, max: *t }),
             ScalarRef::Date(d) => Domain::Date(SimpleDomain { min: *d, max: *d }),
-            ScalarRef::Array(array) => Domain::Array(Some(Box::new(array.domain()))),
+            ScalarRef::Array(array) => {
+                if array.len() == 0 {
+                    Domain::Array(None)
+                } else {
+                    Domain::Array(Some(Box::new(array.domain())))
+                }
+            }
             ScalarRef::Tuple(fields) => {
                 let types = data_type.as_tuple().unwrap();
                 Domain::Tuple(
@@ -640,8 +646,12 @@ impl Column {
                 })
             }
             Column::Array(col) => {
-                let inner_domain = col.values.domain();
-                Domain::Array(Some(Box::new(inner_domain)))
+                if col.len() == 0 {
+                    Domain::Array(None)
+                } else {
+                    let inner_domain = col.values.domain();
+                    Domain::Array(Some(Box::new(inner_domain)))
+                }
             }
             Column::Nullable(col) => {
                 let inner_domain = col.column.domain();
