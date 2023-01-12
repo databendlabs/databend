@@ -36,6 +36,7 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 use h3o::LatLng;
@@ -133,6 +134,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
+    // point in ellipses
     registry.register_function_factory("point_in_ellipses", |_, args_type| {
         if args_type.len() < 6 {
             return None;
@@ -148,6 +150,120 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: Box::new(point_in_ellipses_fn),
         }))
     });
+
+    // point in polygon
+    registry.register_function_factory("point_in_polygon", |_, args_type| {
+        // We allow function invocation in one of the following forms:
+        //  1. simple polygon
+        //  pointInPolygon((x, y), [(x1, y1), (x2, y2), ...])
+        //  2. polygon with a number of holes, each hole as a subsequent argument.
+        //  pointInPolygon((x, y), [(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...)
+        //  3. polygon with a number of holes, all as multidimensional array
+        //  pointInPolygon((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
+
+        if args_type.len() < 2 {
+            return None;
+        }
+
+        println!("arg_types: {:#?}", args_type);
+
+        let (arg1, arg2) = if args_type.len() == 2 {
+            let arg1 = match args_type.get(0)? {
+                DataType::Tuple(tys) => tys.clone(),
+                _ => return None,
+            };
+            let arg2 = match args_type.get(1)? {
+                DataType::Array(box DataType::Tuple(tys)) => (0..tys.len())
+                    .map(|_| DataType::Number(NumberDataType::Float64))
+                    .collect(),
+                _ => return None,
+            };
+            (arg1, arg2)
+        } else {
+            (vec![], vec![])
+        };
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "point_in_polygon".to_string(),
+                args_type: vec![
+                    DataType::Tuple(arg1),
+                    DataType::Array(Box::new(DataType::Tuple(arg2))),
+                ],
+                return_type: DataType::Number(NumberDataType::UInt8),
+                property: Default::default(),
+            },
+            calc_domain: Box::new(|_| FunctionDomain::Full),
+            eval: Box::new(point_in_polygon_fn),
+        }))
+    });
+}
+
+fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let arg0: Vec<f64> = match &args[0] {
+        ValueRef::Scalar(ScalarRef::Tuple(fields)) => fields
+            .iter()
+            .cloned()
+            .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(&s).unwrap()))
+            .map(|x: ValueRef<Float64Type>| match x {
+                ValueRef::Scalar(v) => *v,
+                _ => unreachable!(),
+            })
+            .collect(),
+        ValueRef::Column(Column::Tuple { fields, .. }) => fields
+            .iter()
+            .cloned()
+            .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))
+            .map(|x: ValueRef<Float64Type>| match x {
+                ValueRef::Scalar(v) => *v,
+                _ => unreachable!(),
+            })
+            .collect(),
+        _ => unreachable!(),
+    };
+
+    let point = coord! {x:arg0[0], y:arg0[1]};
+
+    let arg1 = match &args[1] {
+        ValueRef::Scalar(ScalarRef::Array(c)) => {
+            let v: Vec<Coordinate> = c
+                .iter()
+                .map(|s| match s {
+                    ScalarRef::Tuple(fields) => fields
+                        .iter()
+                        .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(s).unwrap()))
+                        .map(|x: ValueRef<Float64Type>| match x {
+                            ValueRef::Scalar(v) => *v,
+                            _ => 0_f64,
+                        })
+                        .collect::<Vec<_>>(),
+                    _ => unreachable!(),
+                })
+                .map(|v| {
+                    coord! {x: v[0], y: v[1]}
+                })
+                .collect();
+            v
+        }
+        _ => unreachable!(),
+    };
+
+    let poly = polygon!(arg1);
+
+    let input_rows = len.unwrap_or(1);
+
+    println!("arg1 fn: {:#?}", point);
+    println!("arg2 fn: {:#?}", poly);
+    println!("input rows: {input_rows}");
+
+    let is_in = poly.contains(&point);
+    println!("is_in: {is_in}");
+
+    Value::Scalar(Scalar::Number(NumberScalar::UInt8(u8::from(is_in))))
 }
 
 fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {

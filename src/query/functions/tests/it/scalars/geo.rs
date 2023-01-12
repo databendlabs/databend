@@ -30,6 +30,7 @@ fn test_geo() {
     test_geo_distance(file);
     test_great_circle_angle(file);
     test_point_in_ellipses(file);
+    // test_point_in_polygon(file);
 }
 
 fn test_geo_to_h3(file: &mut impl Write) {
@@ -122,4 +123,15 @@ fn test_point_in_ellipses(file: &mut impl Write) {
         ("a", Float64Type::from_data(vec![1.0, 1.1, 1.2])),
         ("b", Float64Type::from_data(vec![0.9999, 0.9998, 0.9997])),
     ]);
+}
+
+#[test]
+fn test_point_in_polygon() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("geo.txt").unwrap();
+    run_ast(
+        file,
+        "point_in_polygon((3., 3.), [(6, 0), (8, 4), (5, 8), (0, 2)])",
+        &[],
+    );
 }
