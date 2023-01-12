@@ -46,5 +46,5 @@ curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" -
 echo "select * from sample" | $MYSQL_CLIENT_CONNECT
 #
 ### Drop table.
-#echo "drop table sample" | $MYSQL_CLIENT_CONNECT
-#echo "drop stage if exists s1" | $MYSQL_CLIENT_CONNECT
+echo "drop table sample" | $MYSQL_CLIENT_CONNECT
+echo "drop stage if exists s1" | $MYSQL_CLIENT_CONNECT
