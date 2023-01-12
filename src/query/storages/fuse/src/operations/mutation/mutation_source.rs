@@ -88,6 +88,7 @@ pub struct MutationSource {
 }
 
 impl MutationSource {
+    #![allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         action: MutationAction,
@@ -209,8 +210,10 @@ impl Processor for MutationSource {
                             MutationAction::Deletion => {
                                 if affect_rows == num_rows {
                                     // all the rows should be removed.
-                                    let meta =
-                                        SerializeDataMeta::create(self.index, self.origin_stats);
+                                    let meta = SerializeDataMeta::create(
+                                        self.index.clone(),
+                                        self.origin_stats.clone(),
+                                    );
                                     self.state = State::Output(
                                         self.ctx.try_get_part(),
                                         DataBlock::empty_with_meta(meta),
@@ -222,8 +225,8 @@ impl Processor for MutationSource {
                                     data_block = data_block.filter(&filter)?;
                                     if self.remain_reader.is_none() {
                                         let meta = SerializeDataMeta::create(
-                                            self.index,
-                                            self.origin_stats,
+                                            self.index.clone(),
+                                            self.origin_stats.clone(),
                                         );
                                         self.state = State::Output(
                                             self.ctx.try_get_part(),
@@ -294,7 +297,6 @@ impl Processor for MutationSource {
                             });
                         }
                     }
-                    data_block
                 } else {
                     return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
                 };
@@ -307,7 +309,7 @@ impl Processor for MutationSource {
                     .operators
                     .iter()
                     .try_fold(data_block, |input, op| op.execute(&func_ctx, input))?;
-                let meta = SerializeDataMeta::create(self.index, self.origin_stats);
+                let meta = SerializeDataMeta::create(self.index.clone(), self.origin_stats.clone());
                 self.state = State::Output(self.ctx.try_get_part(), block.add_meta(Some(meta))?);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
@@ -320,7 +322,7 @@ impl Processor for MutationSource {
             State::ReadData(Some(part)) => {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
                 let part = MutationPartInfo::from_part(&part)?;
-                self.index = part.index;
+                self.index = part.index.clone();
                 self.origin_stats = part.cluster_stats.clone();
                 let inner_part = part.inner_part.clone();
                 let fuse_part = FusePartInfo::from_part(&inner_part)?;

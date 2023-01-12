@@ -14,10 +14,19 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
+use common_sql::plans::BoundColumnRef;
+use common_sql::plans::CastExpr;
+use common_sql::plans::FunctionCall;
+use common_sql::BindContext;
+use common_sql::ColumnBinding;
+use common_sql::Scalar;
+use common_sql::Visibility;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
@@ -25,7 +34,6 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::ExpressionBuilderWithoutRenaming;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::UpdatePlan;
 
@@ -62,22 +70,69 @@ impl Interpreter for UpdateInterpreter {
         let tbl_name = self.plan.table.as_str();
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        let eb = ExpressionBuilderWithoutRenaming::create(self.plan.metadata.clone());
         // TODO(zhyass): selection and update_list support subquery.
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
-            (
-                Some(eb.build(scalar)?),
-                scalar.used_columns().into_iter().collect(),
-            )
+            let filter = scalar.as_expr()?.as_remote_expr();
+            let col_indices = scalar.used_columns().into_iter().collect();
+            (Some(filter), col_indices)
         } else {
             (None, vec![])
         };
 
+        let predicate = Scalar::BoundColumnRef(BoundColumnRef {
+            column: ColumnBinding {
+                database_name: None,
+                table_name: None,
+                column_name: "_predicate".to_string(),
+                index: tbl.schema().num_fields(),
+                data_type: Box::new(DataType::Boolean),
+                visibility: Visibility::Visible,
+            },
+        });
+
+        let schema: DataSchema = tbl.schema().into();
         let update_list = self.plan.update_list.iter().try_fold(
             Vec::with_capacity(self.plan.update_list.len()),
             |mut acc, (id, scalar)| {
-                let expr = eb.build(scalar)?;
-                acc.push((*id, expr));
+                let filed = schema.field(*id);
+                let left = Scalar::CastExpr(CastExpr {
+                    argument: Box::new(scalar.clone()),
+                    from_type: Box::new(scalar.data_type()),
+                    target_type: Box::new(filed.data_type().clone()),
+                });
+                let scalar = if col_indices.is_empty() {
+                    // The condition is always true.
+                    // Replace column to the result of the following expression:
+                    // CAST(expression, type)
+                    left
+                } else {
+                    // Replace column to the result of the following expression:
+                    // if(condition, CAST(expression, type), column)
+                    let mut right = None;
+                    for column_binding in self.plan.bind_context.columns.iter() {
+                        if BindContext::match_column_binding(
+                            Some(db_name),
+                            Some(tbl_name),
+                            filed.name(),
+                            column_binding,
+                        ) {
+                            right = Some(Scalar::BoundColumnRef(BoundColumnRef {
+                                column: column_binding.clone(),
+                            }));
+                            break;
+                        }
+                    }
+                    let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+                    println!("right: {:?}", right);
+                    let return_type = right.data_type();
+                    Scalar::FunctionCall(FunctionCall {
+                        params: vec![],
+                        arguments: vec![predicate.clone(), left, right],
+                        func_name: "if".to_string(),
+                        return_type: Box::new(return_type),
+                    })
+                };
+                acc.push((*id, scalar.as_expr()?.as_remote_expr()));
                 Ok::<_, ErrorCode>(acc)
             },
         )?;

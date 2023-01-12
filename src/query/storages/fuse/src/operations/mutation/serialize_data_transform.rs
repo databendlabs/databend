@@ -144,18 +144,17 @@ impl Processor for SerializeDataTransform {
 
         let mut input_data = self.input.pull_data().unwrap()?;
         let meta = input_data.take_meta();
-        if meta.is_none() {
-            self.state = State::Output(Mutation::DoNothing);
-        } else {
-            let meta = meta.unwrap();
+        if let Some(meta) = meta {
             let meta = SerializeDataMeta::from_meta(&meta)?;
-            self.index = meta.index;
+            self.index = meta.index.clone();
             self.origin_stats = meta.cluster_stats.clone();
             if input_data.is_empty() {
                 self.state = State::Output(Mutation::Deleted);
             } else {
                 self.state = State::NeedSerialize(input_data);
             }
+        } else {
+            self.state = State::Output(Mutation::DoNothing);
         }
         Ok(Event::Sync)
     }
@@ -217,7 +216,7 @@ impl Processor for SerializeDataTransform {
                 );
             }
             State::Output(op) => {
-                let meta = MutationTransformMeta::create(self.index, op);
+                let meta = MutationTransformMeta::create(self.index.clone(), op);
                 self.output_data = Some(DataBlock::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),

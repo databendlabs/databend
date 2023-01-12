@@ -16,6 +16,5 @@ mod block_compact_mutator;
 mod deletion;
 mod recluster_mutator;
 mod segments_compact_mutator;
-mod update;
 
 pub use deletion::do_deletion;

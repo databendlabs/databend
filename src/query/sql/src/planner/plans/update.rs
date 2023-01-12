@@ -17,20 +17,18 @@ use std::sync::Arc;
 
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_meta_types::MetaId;
 
 use crate::plans::Scalar;
-use crate::MetadataRef;
+use crate::BindContext;
 
 #[derive(Clone, Debug)]
 pub struct UpdatePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub table_id: MetaId,
-    pub metadata: MetadataRef,
     pub update_list: HashMap<usize, Scalar>,
     pub selection: Option<Scalar>,
+    pub bind_context: Box<BindContext>,
 }
 
 impl UpdatePlan {

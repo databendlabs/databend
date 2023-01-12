@@ -144,7 +144,7 @@ impl FuseTable {
         Ok(())
     }
 
-    fn try_eval_const(
+    pub fn try_eval_const(
         &self,
         ctx: Arc<dyn TableContext>,
         schema: &TableSchema,

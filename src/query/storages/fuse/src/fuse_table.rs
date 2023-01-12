@@ -36,7 +36,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
-// use common_sql::ExpressionParser;
 use common_expression::RemoteExpr;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;

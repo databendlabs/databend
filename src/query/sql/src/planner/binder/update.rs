@@ -67,7 +67,6 @@ impl<'a> Binder {
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
-        let table_id = table.get_id();
 
         let mut scalar_binder = ScalarBinder::new(
             &context,
@@ -103,10 +102,9 @@ impl<'a> Binder {
             catalog: catalog_name,
             database: database_name,
             table: table_name,
-            table_id,
-            metadata: self.metadata.clone(),
             update_list: update_columns,
             selection: push_downs,
+            bind_context: Box::new(context.clone()),
         };
         Ok(Plan::Update(Box::new(plan)))
     }
