@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use super::data_type::DataType;
 use crate::prelude::*;
 
@@ -38,7 +36,6 @@ impl DataType for NullType {
     fn can_inside_nullable(&self) -> bool {
         false
     }
- 
 }
 
 impl std::fmt::Debug for NullType {

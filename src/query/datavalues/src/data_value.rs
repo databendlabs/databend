@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use enum_as_inner::EnumAsInner;
-
-
 
 use crate::VariantValue;
 

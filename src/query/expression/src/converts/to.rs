@@ -12,15 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use ordered_float::OrderedFloat;
 
 use crate::Scalar;
-use crate::TableDataType;
-use crate::TableField;
-use crate::TableSchema;
 
 pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
     match scalar {

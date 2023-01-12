@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
@@ -23,7 +21,6 @@ use crate::prelude::*;
 /// any date not in the range will be invalid
 pub const DATE_MAX: i32 = 2932896;
 pub const DATE_MIN: i32 = -354285;
-
 
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct DateType {}

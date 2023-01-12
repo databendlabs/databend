@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use enum_dispatch::enum_dispatch;
 
 use super::type_array::ArrayType;
@@ -21,16 +19,7 @@ use super::type_boolean::BooleanType;
 use super::type_date::DateType;
 use super::type_id::TypeID;
 use super::type_nullable::NullableType;
-use super::type_primitive::Float32Type;
-use super::type_primitive::Float64Type;
-use super::type_primitive::Int16Type;
-use super::type_primitive::Int32Type;
-use super::type_primitive::Int64Type;
-use super::type_primitive::Int8Type;
-use super::type_primitive::UInt16Type;
-use super::type_primitive::UInt32Type;
-use super::type_primitive::UInt64Type;
-use super::type_primitive::UInt8Type;
+use super::type_primitive::*;
 use super::type_string::StringType;
 use super::type_struct::StructType;
 use super::type_timestamp::TimestampType;
@@ -47,16 +36,16 @@ pub enum DataTypeImpl {
     Null(NullType),
     Nullable(NullableType),
     Boolean(BooleanType),
-    Int8(Int8Type),
-    Int16(Int16Type),
-    Int32(Int32Type),
-    Int64(Int64Type),
-    UInt8(UInt8Type),
-    UInt16(UInt16Type),
-    UInt32(UInt32Type),
-    UInt64(UInt64Type),
-    Float32(Float32Type),
-    Float64(Float64Type),
+    Int8(PrimitiveDataType<i8>),
+    Int16(PrimitiveDataType<i16>),
+    Int32(PrimitiveDataType<i32>),
+    Int64(PrimitiveDataType<i64>),
+    UInt8(PrimitiveDataType<u8>),
+    UInt16(PrimitiveDataType<u16>),
+    UInt32(PrimitiveDataType<u32>),
+    UInt64(PrimitiveDataType<u64>),
+    Float32(PrimitiveDataType<f32>),
+    Float64(PrimitiveDataType<f64>),
     Date(DateType),
     Timestamp(TimestampType),
     String(StringType),
@@ -89,7 +78,6 @@ where Self: Sized
     }
 }
 
- 
 pub fn wrap_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
     if !data_type.can_inside_nullable() {
         return data_type.clone();

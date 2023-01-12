@@ -16,10 +16,6 @@ use core::fmt;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-
-
-
-
 use crate::DataField;
 
 /// memory layout.
@@ -64,7 +60,6 @@ impl DataSchema {
     pub fn field(&self, i: usize) -> &DataField {
         &self.fields[i]
     }
- 
 
     /// Returns an immutable reference to field `metadata`.
     #[inline]

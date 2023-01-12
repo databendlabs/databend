@@ -14,8 +14,6 @@
 
 use std::marker::PhantomData;
 
-
-
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
@@ -47,10 +45,6 @@ macro_rules! impl_numeric {
             fn name(&self) -> String {
                 $name.to_string()
             }
-        }
-
-        paste::paste! {
-            pub type [<$tname Type>] = PrimitiveDataType<$ty>;
         }
 
         impl std::fmt::Debug for PrimitiveDataType<$ty> {

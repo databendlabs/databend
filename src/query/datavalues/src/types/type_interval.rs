@@ -14,8 +14,6 @@
 
 use std::fmt;
 
-
-
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
@@ -93,7 +91,6 @@ impl DataType for IntervalType {
     fn name(&self) -> String {
         format!("Interval({})", self.kind)
     }
-
 }
 
 impl std::fmt::Debug for IntervalType {
