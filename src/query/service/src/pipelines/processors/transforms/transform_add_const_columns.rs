@@ -30,6 +30,7 @@ use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::sessions::QueryContext;
 
+
 pub struct TransformAddConstColumns {
     expression_transform: CompoundBlockOperator,
     input_len: usize,
@@ -38,13 +39,18 @@ pub struct TransformAddConstColumns {
 impl TransformAddConstColumns
 where Self: Transform
 {
+    /// used in insert with with placeholder.
+    /// e.g. for `insert into t1 (a, b, c) values (?, 1, ?)`,
+    /// output_schema has all 3 columns,
+    /// input_schema has columns (a, c) to load data from attachment,
+    /// const_values contains a scalar 1
     pub fn try_create(
+        ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         mut const_values: Vec<DataScalar>,
-        ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
         let fields = output_schema.fields();
         let mut ops = Vec::with_capacity(fields.len());
