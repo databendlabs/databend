@@ -174,14 +174,14 @@ impl Processor for SerializeDataTransform {
                 let location = self.location_gen.block_bloom_index_location(&block_id);
                 let bloom_index_state = BloomIndexState::try_create(
                     self.ctx.clone(),
-                    self.source_schema.clone(),
+                    self.schema.clone(),
                     &block,
                     location,
                 )?;
                 let column_distinct_count = bloom_index_state
                     .as_ref()
                     .map(|i| i.column_distinct_count.clone());
-                let col_stats = gen_columns_statistics(&block, Some(column_distinct_count))?;
+                let col_stats = gen_columns_statistics(&block, column_distinct_count)?;
 
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
@@ -254,7 +254,7 @@ impl Processor for SerializeDataTransform {
                 {
                     write_data(&index_data, &self.dal, &index_location).await?;
                 }
-                
+
                 self.state = State::Output(Mutation::Replaced(block_meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
