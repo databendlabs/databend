@@ -233,6 +233,9 @@ pub enum TokenKind {
     /// A cube root math operator in PostgreSQL
     #[token("||/")]
     PGCubeRoot,
+    /// Placeholder used in prepared stmt
+    #[token("?")]
+    Placeholder,
 
     // Keywords
     //
