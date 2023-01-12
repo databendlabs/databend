@@ -39,6 +39,11 @@ use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
+use geo::coord;
+use geo::Contains;
+use geo::Coord;
+use geo::LineString;
+use geo::Polygon;
 use h3o::LatLng;
 use h3o::Resolution;
 use once_cell::sync::OnceCell;
@@ -165,8 +170,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        println!("arg_types: {:#?}", args_type);
-
         let (arg1, arg2) = if args_type.len() == 2 {
             let arg1 = match args_type.get(0)? {
                 DataType::Tuple(tys) => tys.clone(),
@@ -204,66 +207,82 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
     });
-    let arg0: Vec<f64> = match &args[0] {
-        ValueRef::Scalar(ScalarRef::Tuple(fields)) => fields
-            .iter()
-            .cloned()
-            .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(&s).unwrap()))
-            .map(|x: ValueRef<Float64Type>| match x {
-                ValueRef::Scalar(v) => *v,
-                _ => unreachable!(),
-            })
-            .collect(),
-        ValueRef::Column(Column::Tuple { fields, .. }) => fields
-            .iter()
-            .cloned()
-            .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))
-            .map(|x: ValueRef<Float64Type>| match x {
-                ValueRef::Scalar(v) => *v,
-                _ => unreachable!(),
-            })
-            .collect(),
-        _ => unreachable!(),
-    };
-
-    let point = coord! {x:arg0[0], y:arg0[1]};
-
-    let arg1 = match &args[1] {
-        ValueRef::Scalar(ScalarRef::Array(c)) => {
-            let v: Vec<Coordinate> = c
-                .iter()
-                .map(|s| match s {
-                    ScalarRef::Tuple(fields) => fields
-                        .iter()
-                        .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(s).unwrap()))
-                        .map(|x: ValueRef<Float64Type>| match x {
-                            ValueRef::Scalar(v) => *v,
-                            _ => 0_f64,
-                        })
-                        .collect::<Vec<_>>(),
-                    _ => unreachable!(),
-                })
-                .map(|v| {
-                    coord! {x: v[0], y: v[1]}
-                })
-                .collect();
-            v
-        }
-        _ => unreachable!(),
-    };
-
-    let poly = polygon!(arg1);
 
     let input_rows = len.unwrap_or(1);
+    let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt8, input_rows);
+    for idx in 0..input_rows {
+        let arg0: Vec<f64> = match &args[0] {
+            ValueRef::Scalar(ScalarRef::Tuple(fields)) => fields
+                .iter()
+                .cloned()
+                .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(&s).unwrap()))
+                .map(|x: ValueRef<Float64Type>| match x {
+                    ValueRef::Scalar(v) => *v,
+                    _ => unreachable!(),
+                })
+                .collect(),
+            ValueRef::Column(Column::Tuple { fields, .. }) => fields
+                .iter()
+                .cloned()
+                .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))
+                .map(|x: ValueRef<Float64Type>| match x {
+                    ValueRef::Column(c) => unsafe {
+                        Float64Type::index_column_unchecked(&c, idx).0
+                    },
+                    _ => unreachable!(),
+                })
+                .collect(),
+            _ => unreachable!(),
+        };
 
-    println!("arg1 fn: {:#?}", point);
-    println!("arg2 fn: {:#?}", poly);
+        let point = coord! {x:arg0[0], y:arg0[1]};
+
+        let arg1 = match &args[1] {
+            ValueRef::Scalar(ScalarRef::Array(c)) => {
+                let v: Vec<Coord> = c
+                    .iter()
+                    .map(|s| match s {
+                        ScalarRef::Tuple(fields) => fields
+                            .iter()
+                            .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(s).unwrap()))
+                            .map(|x: ValueRef<Float64Type>| match x {
+                                ValueRef::Scalar(v) => *v,
+                                _ => 0_f64,
+                            })
+                            .collect::<Vec<_>>(),
+                        _ => {
+                            println!("555");
+                            unreachable!()
+                        }
+                    })
+                    .map(|v| {
+                        coord! {x: v[0], y: v[1]}
+                    })
+                    .collect();
+                v
+            }
+            _ => {
+                println!("111");
+                unreachable!()
+            }
+        };
+
+        let poly = Polygon::new(LineString(arg1), vec![]);
+
+        println!("arg1 fn: {:#?}", point);
+        println!("arg2 fn: {:#?}", poly);
+
+        let is_in = poly.contains(&point);
+
+        builder.push(NumberScalar::UInt8(u8::from(is_in)));
+    }
+
     println!("input rows: {input_rows}");
 
-    let is_in = poly.contains(&point);
-    println!("is_in: {is_in}");
-
-    Value::Scalar(Scalar::Number(NumberScalar::UInt8(u8::from(is_in))))
+    match len {
+        Some(_) => Value::Column(Column::Number(builder.build())),
+        _ => Value::Scalar(Scalar::Number(builder.build_scalar())),
+    }
 }
 
 fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
