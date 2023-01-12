@@ -2227,6 +2227,7 @@ dependencies = [
  "common-functions",
  "common-meta-app",
  "common-pipeline-core",
+ "common-sql",
  "common-storage",
  "glob",
  "opendal",
@@ -7709,7 +7710,6 @@ dependencies = [
 name = "storages-common-pruner"
 version = "0.1.0"
 dependencies = [
- "common-catalog",
  "common-exception",
  "common-expression",
  "serde",

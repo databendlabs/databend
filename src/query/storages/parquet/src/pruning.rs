@@ -34,6 +34,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnLeaves;
 use storages_common_pruner::RangePruner;
@@ -74,16 +75,17 @@ pub fn prune_and_set_partitions(
     read_options: &ReadOptions,
 ) -> Result<()> {
     let mut partitions = Vec::with_capacity(locations.len());
+    let func_ctx = ctx.try_get_function_context()?;
 
     let row_group_pruner = if read_options.prune_row_groups {
-        Some(RangePrunerCreator::try_create(ctx, *filters, schema)?)
+        Some(RangePrunerCreator::try_create(func_ctx, *filters, schema)?)
     } else {
         None
     };
 
     let page_pruners = if read_options.prune_pages && filters.is_some() {
         let filters = filters.unwrap();
-        Some(build_column_page_pruners(ctx, schema, filters)?)
+        Some(build_column_page_pruners(func_ctx, schema, filters)?)
     } else {
         None
     };
@@ -166,7 +168,7 @@ type ColumnRangePruners = Vec<(usize, Arc<dyn RangePruner + Send + Sync>)>;
 /// Build page pruner of each column.
 /// Only one column expression can be used to build the page pruner.
 fn build_column_page_pruners(
-    ctx: &Arc<dyn TableContext>,
+    func_ctx: FunctionContext,
     schema: &TableSchemaRef,
     filters: &[Expr<String>],
 ) -> Result<ColumnRangePruners> {
@@ -185,7 +187,7 @@ fn build_column_page_pruners(
     pruner_per_col
         .iter()
         .map(|(k, v)| {
-            let filter = RangePrunerCreator::try_create(ctx, Some(v), schema)?;
+            let filter = RangePrunerCreator::try_create(func_ctx, Some(v), schema)?;
             let col_idx = schema.index_of(k)?;
             Ok((col_idx, filter))
         })
@@ -265,10 +267,26 @@ fn combine_intervals(row_selections: Vec<Vec<Interval>>) -> Vec<Interval> {
     if row_selections.is_empty() {
         return vec![];
     }
-    let mut res = row_selections[0].clone();
+    let mut selection = row_selections[0].clone();
     for sel in row_selections.iter().skip(1) {
-        res = and_intervals(&res, sel);
+        selection = and_intervals(&selection, sel);
     }
+
+    // Merge intervals if they are consecutive
+    let mut res = vec![];
+    for sel in selection {
+        if res.is_empty() {
+            res.push(sel);
+            continue;
+        }
+        let back = res.last_mut().unwrap();
+        if back.start + back.length == sel.start {
+            back.length += sel.length;
+        } else {
+            res.push(sel);
+        }
+    }
+
     res
 }
 
@@ -306,10 +324,54 @@ fn is_in(probe: Interval, intervals: &[Interval]) -> Vec<Interval> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
+    use common_arrow::parquet::compression::CompressionOptions;
+    use common_arrow::parquet::encoding::hybrid_rle::encode_bool;
+    use common_arrow::parquet::encoding::Encoding;
     use common_arrow::parquet::indexes::Interval;
+    use common_arrow::parquet::metadata::Descriptor;
+    use common_arrow::parquet::metadata::SchemaDescriptor;
+    use common_arrow::parquet::page::DataPage;
+    use common_arrow::parquet::page::DataPageHeader;
+    use common_arrow::parquet::page::DataPageHeaderV1;
+    use common_arrow::parquet::page::Page;
+    use common_arrow::parquet::read::read_metadata;
+    use common_arrow::parquet::schema::types::ParquetType;
+    use common_arrow::parquet::schema::types::PhysicalType;
+    use common_arrow::parquet::statistics::serialize_statistics;
+    use common_arrow::parquet::statistics::PrimitiveStatistics;
+    use common_arrow::parquet::statistics::Statistics;
+    use common_arrow::parquet::types::NativeType;
+    use common_arrow::parquet::write::Compressor;
+    use common_arrow::parquet::write::DynIter;
+    use common_arrow::parquet::write::DynStreamingIterator;
+    use common_arrow::parquet::write::FileWriter;
+    use common_arrow::parquet::write::Version;
+    use common_arrow::parquet::write::WriteOptions;
+    use common_exception::Result;
+    use common_expression::types::DataType;
+    use common_expression::types::NumberDataType;
+    use common_expression::FunctionContext;
+    use common_expression::Literal;
+    use common_expression::TableDataType;
+    use common_expression::TableField;
+    use common_expression::TableSchemaRef;
+    use common_expression::TableSchemaRefExt;
+    use common_sql::plans::BoundColumnRef;
+    use common_sql::plans::ConstantExpr;
+    use common_sql::plans::FunctionCall;
+    use common_sql::plans::Scalar;
+    use common_sql::ColumnBinding;
+    use common_sql::Visibility;
+    use common_storage::ColumnLeaves;
+    use storages_common_pruner::RangePrunerCreator;
 
     use crate::pruning::and_intervals;
+    use crate::pruning::build_column_page_pruners;
     use crate::pruning::combine_intervals;
+    use crate::pruning::filter_pages;
+    use crate::statistics::collect_row_group_stats;
 
     #[test]
     fn test_and_intervals() {
@@ -335,32 +397,403 @@ mod tests {
 
     #[test]
     fn test_combine_intervals() {
-        // sel1: [12, 35), [38, 43)
-        // sel2: [0, 5), [9, 24), [30, 40)
-        // sel3: [1,2), [4, 31), [30, 41)
-        let intervals = vec![
-            vec![Interval::new(12, 23), Interval::new(38, 5)],
-            vec![
-                Interval::new(0, 5),
-                Interval::new(9, 15),
-                Interval::new(30, 10),
-            ],
-            vec![
+        {
+            // sel1: [12, 35), [38, 43)
+            // sel2: [0, 5), [9, 24), [30, 40)
+            // sel3: [1,2), [4, 31), [30, 41)
+            let intervals = vec![
+                vec![Interval::new(12, 23), Interval::new(38, 5)],
+                vec![
+                    Interval::new(0, 5),
+                    Interval::new(9, 15),
+                    Interval::new(30, 10),
+                ],
+                vec![
+                    Interval::new(1, 1),
+                    Interval::new(4, 27),
+                    Interval::new(39, 2),
+                ],
+            ];
+
+            // [12, 24), [30, 31), [39, 40)
+            let expected = vec![
+                Interval::new(12, 12),
+                Interval::new(30, 1),
+                Interval::new(39, 1),
+            ];
+
+            let actual = combine_intervals(intervals);
+
+            assert_eq!(expected, actual);
+        }
+
+        {
+            // sel1: [1,2), [2, 4), [4, 7)
+            let intervals = vec![vec![
                 Interval::new(1, 1),
-                Interval::new(4, 27),
-                Interval::new(39, 2),
-            ],
+                Interval::new(2, 2),
+                Interval::new(4, 3),
+            ]];
+
+            // [12, 24), [30, 31), [39, 40)
+            let expected = vec![Interval::new(1, 6)];
+
+            let actual = combine_intervals(intervals);
+
+            assert_eq!(expected, actual);
+        }
+    }
+
+    fn unzip_option<T: NativeType>(
+        array: &[Option<T>],
+    ) -> common_arrow::parquet::error::Result<(Vec<u8>, Vec<u8>)> {
+        // leave the first 4 bytes anouncing the length of the def level
+        // this will be overwritten at the end, once the length is known.
+        // This is unknown at this point because of the uleb128 encoding,
+        // whose length is variable.
+        let mut validity = std::io::Cursor::new(vec![0; 4]);
+        validity.set_position(4);
+
+        let mut values = vec![];
+        let iter = array.iter().map(|value| {
+            if let Some(item) = value {
+                values.extend_from_slice(item.to_le_bytes().as_ref());
+                true
+            } else {
+                false
+            }
+        });
+        encode_bool(&mut validity, iter)?;
+
+        // write the length, now that it is known
+        let mut validity = validity.into_inner();
+        let length = validity.len() - 4;
+        // todo: pay this small debt (loop?)
+        let length = length.to_le_bytes();
+        validity[0] = length[0];
+        validity[1] = length[1];
+        validity[2] = length[2];
+        validity[3] = length[3];
+
+        Ok((values, validity))
+    }
+
+    pub fn array_to_page_v1<T: NativeType>(
+        array: &[Option<T>],
+        options: &WriteOptions,
+        descriptor: &Descriptor,
+    ) -> common_arrow::parquet::error::Result<Page> {
+        let (values, mut buffer) = unzip_option(array)?;
+
+        buffer.extend_from_slice(&values);
+
+        let statistics = if options.write_statistics {
+            let statistics = &PrimitiveStatistics {
+                primitive_type: descriptor.primitive_type.clone(),
+                null_count: Some((array.len() - array.iter().flatten().count()) as i64),
+                distinct_count: None,
+                max_value: array.iter().flatten().max_by(|x, y| x.ord(y)).copied(),
+                min_value: array.iter().flatten().min_by(|x, y| x.ord(y)).copied(),
+            } as &dyn Statistics;
+            Some(serialize_statistics(statistics))
+        } else {
+            None
+        };
+
+        let header = DataPageHeaderV1 {
+            num_values: array.len() as i32,
+            encoding: Encoding::Plain.into(),
+            definition_level_encoding: Encoding::Rle.into(),
+            repetition_level_encoding: Encoding::Rle.into(),
+            statistics,
+        };
+
+        Ok(Page::Data(DataPage::new(
+            DataPageHeader::V1(header),
+            buffer,
+            descriptor.clone(),
+            Some(array.len()),
+        )))
+    }
+
+    fn write_test_parquet() -> Result<(TableSchemaRef, Vec<u8>)> {
+        let page1 = vec![Some(0), Some(1), None, Some(3), Some(4), Some(5), Some(6)];
+        let page2 = vec![Some(10), Some(11)];
+
+        let options = WriteOptions {
+            write_statistics: true,
+            version: Version::V1,
+        };
+
+        let schema = SchemaDescriptor::new("schema".to_string(), vec![ParquetType::from_physical(
+            "col1".to_string(),
+            PhysicalType::Int32,
+        )]);
+
+        let pages = vec![
+            array_to_page_v1::<i32>(&page1, &options, &schema.columns()[0].descriptor),
+            array_to_page_v1::<i32>(&page2, &options, &schema.columns()[0].descriptor),
         ];
 
-        // [12, 24), [30, 31), [39, 40)
-        let expected = vec![
-            Interval::new(12, 12),
-            Interval::new(30, 1),
-            Interval::new(39, 1),
-        ];
+        let pages = DynStreamingIterator::new(Compressor::new(
+            DynIter::new(pages.into_iter()),
+            CompressionOptions::Uncompressed,
+            vec![],
+        ));
+        let columns = std::iter::once(Ok(pages));
 
-        let actual = combine_intervals(intervals);
+        let writer = Cursor::new(vec![]);
+        let mut writer = FileWriter::new(writer, schema, options, None);
 
-        assert_eq!(expected, actual);
+        writer.write(DynIter::new(columns))?;
+        writer.end(None)?;
+
+        Ok((
+            TableSchemaRefExt::create(vec![TableField::new(
+                "col1",
+                TableDataType::Number(NumberDataType::Int32),
+            )]),
+            writer.into_inner().into_inner(),
+        ))
+    }
+
+    #[test]
+    fn test_prune_row_group() -> Result<()> {
+        let (schema, data) = write_test_parquet()?;
+        let mut reader = Cursor::new(data);
+        let metadata = read_metadata(&mut reader)?;
+        let rgs = metadata.row_groups;
+        let arrow_schema = schema.to_arrow();
+        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
+
+        let row_group_stats = collect_row_group_stats(&column_leaves, &rgs)?;
+
+        // col1 > 12
+        {
+            let filter = Scalar::FunctionCall(FunctionCall {
+                params: vec![],
+                arguments: vec![
+                    Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: "col1".to_string(),
+                            index: 0,
+                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    Scalar::ConstantExpr(ConstantExpr {
+                        value: Literal::Int32(12),
+                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                    }),
+                ],
+                func_name: "gt".to_string(),
+                return_type: Box::new(DataType::Boolean),
+            });
+            let filters = vec![filter.as_expr()?];
+            let pruner = RangePrunerCreator::try_create(
+                FunctionContext::default(),
+                Some(&filters),
+                &schema,
+            )?;
+            assert!(!pruner.should_keep(&row_group_stats[0]));
+        }
+
+        // col1 < 0
+        {
+            let filter = Scalar::FunctionCall(FunctionCall {
+                params: vec![],
+                arguments: vec![
+                    Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: "col1".to_string(),
+                            index: 0,
+                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    Scalar::ConstantExpr(ConstantExpr {
+                        value: Literal::Int32(0),
+                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                    }),
+                ],
+                func_name: "lt".to_string(),
+                return_type: Box::new(DataType::Boolean),
+            });
+            let filters = vec![filter.as_expr()?];
+            let pruner = RangePrunerCreator::try_create(
+                FunctionContext::default(),
+                Some(&filters),
+                &schema,
+            )?;
+            assert!(!pruner.should_keep(&row_group_stats[0]));
+        }
+
+        // col1 <= 5
+        {
+            let filter = Scalar::FunctionCall(FunctionCall {
+                params: vec![],
+                arguments: vec![
+                    Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: "col1".to_string(),
+                            index: 0,
+                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    Scalar::ConstantExpr(ConstantExpr {
+                        value: Literal::Int32(5),
+                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                    }),
+                ],
+                func_name: "lte".to_string(),
+                return_type: Box::new(DataType::Boolean),
+            });
+            let filters = vec![filter.as_expr()?];
+            let pruner = RangePrunerCreator::try_create(
+                FunctionContext::default(),
+                Some(&filters),
+                &schema,
+            )?;
+            assert!(pruner.should_keep(&row_group_stats[0]));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_filter_pages() -> Result<()> {
+        let (schema, data) = write_test_parquet()?;
+        let mut reader = Cursor::new(data);
+        let metadata = read_metadata(&mut reader)?;
+        let rg = &metadata.row_groups[0];
+
+        // col1 > 12
+        {
+            let filter = Scalar::FunctionCall(FunctionCall {
+                params: vec![],
+                arguments: vec![
+                    Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: "col1".to_string(),
+                            index: 0,
+                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    Scalar::ConstantExpr(ConstantExpr {
+                        value: Literal::Int32(12),
+                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                    }),
+                ],
+                func_name: "gt".to_string(),
+                return_type: Box::new(DataType::Boolean),
+            });
+            let filters = vec![filter.as_expr()?];
+            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
+            let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
+
+            assert_eq!(Vec::<Interval>::new(), row_selection);
+        }
+
+        // col1 <= 5
+        {
+            let filter = Scalar::FunctionCall(FunctionCall {
+                params: vec![],
+                arguments: vec![
+                    Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: "col1".to_string(),
+                            index: 0,
+                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    Scalar::ConstantExpr(ConstantExpr {
+                        value: Literal::Int32(5),
+                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                    }),
+                ],
+                func_name: "lte".to_string(),
+                return_type: Box::new(DataType::Boolean),
+            });
+            let filters = vec![filter.as_expr()?];
+            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
+            let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
+
+            assert_eq!(vec![Interval::new(0, 7)], row_selection);
+        }
+
+        // col1 > 10
+        {
+            let filter = Scalar::FunctionCall(FunctionCall {
+                params: vec![],
+                arguments: vec![
+                    Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: "col1".to_string(),
+                            index: 0,
+                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    Scalar::ConstantExpr(ConstantExpr {
+                        value: Literal::Int32(10),
+                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                    }),
+                ],
+                func_name: "gt".to_string(),
+                return_type: Box::new(DataType::Boolean),
+            });
+            let filters = vec![filter.as_expr()?];
+            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
+            let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
+
+            assert_eq!(vec![Interval::new(7, 2)], row_selection);
+        }
+
+        // col1 <= 10
+        {
+            let filter = Scalar::FunctionCall(FunctionCall {
+                params: vec![],
+                arguments: vec![
+                    Scalar::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: "col1".to_string(),
+                            index: 0,
+                            data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    Scalar::ConstantExpr(ConstantExpr {
+                        value: Literal::Int32(10),
+                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                    }),
+                ],
+                func_name: "lte".to_string(),
+                return_type: Box::new(DataType::Boolean),
+            });
+            let filters = vec![filter.as_expr()?];
+            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
+            let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
+
+            assert_eq!(vec![Interval::new(0, 9)], row_selection);
+        }
+
+        Ok(())
     }
 }
