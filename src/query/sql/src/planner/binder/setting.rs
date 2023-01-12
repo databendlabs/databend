@@ -21,7 +21,6 @@ use common_ast::ast::UnSetStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Literal;
@@ -53,8 +52,8 @@ impl<'a> Binder {
         );
         let variable = variable.name.clone();
 
-        let box (scalar, data_type) = type_checker.resolve(value, None).await?;
-        let schema = Arc::new(DataSchema::new(vec![DataField::new("result", data_type)]));
+        let box (scalar, _) = type_checker.resolve(value, None).await?;
+        let schema = Arc::new(DataSchema::empty());
 
         let builder = PhysicalScalarBuilder::new(&schema);
         let scalar = builder.build(&scalar)?;
