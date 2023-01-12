@@ -20,17 +20,19 @@ use common_ast::ast::UnSetSource;
 use common_ast::ast::UnSetStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
-use common_expression::Literal;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use super::BindContext;
 use super::Binder;
 use crate::executor::PhysicalScalarBuilder;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::CastExpr;
 use crate::plans::Plan;
+use crate::plans::Scalar;
 use crate::plans::SettingPlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::VarValue;
@@ -52,9 +54,13 @@ impl<'a> Binder {
         );
         let variable = variable.name.clone();
 
-        let box (scalar, _) = type_checker.resolve(value, None).await?;
+        let box (scalar, data_type) = type_checker.resolve(value, None).await?;
         let schema = Arc::new(DataSchema::empty());
-
+        let scalar = Scalar::CastExpr(CastExpr {
+            argument: Box::new(scalar),
+            from_type: Box::new(data_type),
+            target_type: Box::new(DataType::String),
+        });
         let builder = PhysicalScalarBuilder::new(&schema);
         let scalar = builder.build(&scalar)?;
         let expr = scalar.as_expr()?;
@@ -64,28 +70,16 @@ impl<'a> Binder {
         let val = evaluator
             .run(&expr)
             .map_err(|_| ErrorCode::SemanticError(format!("Failed to run expr: {}", expr)))?;
-        let value = Literal::try_from(val.into_scalar().unwrap())?;
-        let value = match value {
-            Literal::Int8(val) => Ok(val.to_string()),
-            Literal::Int16(val) => Ok(val.to_string()),
-            Literal::Int32(val) => Ok(val.to_string()),
-            Literal::Int64(val) => Ok(val.to_string()),
-            Literal::UInt8(val) => Ok(val.to_string()),
-            Literal::UInt16(val) => Ok(val.to_string()),
-            Literal::UInt32(val) => Ok(val.to_string()),
-            Literal::UInt64(val) => Ok(val.to_string()),
-            Literal::Float32(val) => Ok(val.to_string()),
-            Literal::Float64(val) => Ok(val.to_string()),
-            Literal::String(val) => Ok(String::from_utf8(val)?),
-            other => Err(ErrorCode::BadDataValueType(format!(
-                "Variable {:?} unexpected value: {:?}",
-                variable, other
-            ))),
-        };
+        let value = String::from_utf8(
+            val.into_scalar()
+                .map_err(|_| ErrorCode::SemanticError(format!("Failed to into_scalar: {}", expr)))?
+                .into_string()
+                .unwrap(),
+        )?;
         let vars = vec![VarValue {
             is_global,
             variable,
-            value: value?,
+            value,
         }];
         Ok(Plan::SetVariable(Box::new(SettingPlan { vars })))
     }
