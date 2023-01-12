@@ -65,14 +65,6 @@ impl<'a> Binder {
         let scalar = builder.build(&scalar)?;
         let expr = scalar.as_expr()?;
 
-        let input_domains = expr
-            .column_refs()
-            .into_iter()
-            .map(|(name, ty)| {
-                let domain = Domain::full(&ty);
-                (name, domain)
-            })
-            .collect();
         let (new_expr, _) = ConstantFolder::fold(
             &expr,
             self.ctx.try_get_function_context()?,
