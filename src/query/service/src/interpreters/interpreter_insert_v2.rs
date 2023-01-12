@@ -789,6 +789,7 @@ async fn fill_default_value(
         let (mut scalar, ty) = binder.bind(&ast).await?;
         if !field.data_type().eq(&ty) {
             scalar = Scalar::CastExpr(CastExpr {
+                is_try: false,
                 argument: Box::new(scalar),
                 from_type: Box::new(ty),
                 target_type: Box::new(field.data_type().clone()),
@@ -869,6 +870,7 @@ async fn exprs_to_scalar<'a>(
         let field_data_type = schema.field(i).data_type();
         if &data_type != field_data_type {
             scalar = Scalar::CastExpr(CastExpr {
+                is_try: false,
                 argument: Box::new(scalar),
                 from_type: Box::new(data_type),
                 target_type: Box::new(field_data_type.clone()),

@@ -56,6 +56,7 @@ impl<'a> Binder {
         let box (scalar, data_type) = type_checker.resolve(value, None).await?;
         let schema = Arc::new(DataSchema::empty());
         let scalar = Scalar::CastExpr(CastExpr {
+            is_try: false,
             argument: Box::new(scalar),
             from_type: Box::new(data_type),
             target_type: Box::new(DataType::String),

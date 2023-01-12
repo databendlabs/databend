@@ -524,6 +524,32 @@ impl<'a> TypeChecker<'a> {
                     .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
                 Box::new((
                     CastExpr {
+                        is_try: false,
+                        argument: Box::new(scalar),
+                        from_type: Box::new(data_type),
+                        target_type: Box::new(expr.data_type().clone()),
+                    }
+                    .into(),
+                    expr.data_type().clone(),
+                ))
+            }
+
+            Expr::TryCast {
+                expr, target_type, ..
+            } => {
+                let box (scalar, data_type) = self.resolve(expr, required_type).await?;
+                let raw_expr = RawExpr::Cast {
+                    span: None,
+                    is_try: true,
+                    expr: Box::new(scalar.as_raw_expr()),
+                    dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
+                };
+                let registry = &BUILTIN_FUNCTIONS;
+                let expr = type_check::check(&raw_expr, registry)
+                    .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
+                Box::new((
+                    CastExpr {
+                        is_try: true,
                         argument: Box::new(scalar),
                         from_type: Box::new(data_type),
                         target_type: Box::new(expr.data_type().clone()),
@@ -819,30 +845,6 @@ impl<'a> TypeChecker<'a> {
                     paths.push_front(path);
                 }
                 self.resolve_map_access(expr, paths).await?
-            }
-
-            Expr::TryCast {
-                expr, target_type, ..
-            } => {
-                let box (scalar, data_type) = self.resolve(expr, required_type).await?;
-                let raw_expr = RawExpr::Cast {
-                    span: None,
-                    is_try: true,
-                    expr: Box::new(scalar.as_raw_expr()),
-                    dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
-                };
-                let registry = &BUILTIN_FUNCTIONS;
-                let expr = type_check::check(&raw_expr, registry)
-                    .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
-                Box::new((
-                    CastExpr {
-                        argument: Box::new(scalar),
-                        from_type: Box::new(data_type),
-                        target_type: Box::new(expr.data_type().clone()),
-                    }
-                    .into(),
-                    expr.data_type().clone(),
-                ))
             }
 
             Expr::Extract {

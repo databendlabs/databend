@@ -233,6 +233,7 @@ impl SubqueryRewriter {
                 let (scalar, s_expr) = self.try_rewrite_subquery(&cast.argument, s_expr, false)?;
                 Ok((
                     CastExpr {
+                        is_try: cast.is_try,
                         argument: Box::new(scalar),
                         from_type: cast.from_type.clone(),
                         target_type: cast.target_type.clone(),
@@ -324,6 +325,7 @@ impl SubqueryRewriter {
                         ),
                     });
                     Scalar::CastExpr(CastExpr {
+                        is_try: true,
                         argument: Box::new(Scalar::FunctionCall(FunctionCall {
                             params: vec![],
                             arguments: vec![is_null, column_ref.clone(), zero],

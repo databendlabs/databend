@@ -44,8 +44,8 @@ pub enum PhysicalScalar {
         args: Vec<PhysicalScalar>,
         return_type: DataType,
     },
-
     Cast {
+        is_try: bool,
         input: Box<PhysicalScalar>,
         target: DataType,
     },
@@ -73,8 +73,23 @@ impl PhysicalScalar {
                     .join(", ");
                 format!("{}({})", name, args)
             }
-            PhysicalScalar::Cast { input, target } => {
+            PhysicalScalar::Cast {
+                is_try: false,
+                input,
+                target,
+            } => {
                 format!("CAST({} AS {})", input.pretty_display(), target.sql_name(),)
+            }
+            PhysicalScalar::Cast {
+                is_try: true,
+                input,
+                target,
+            } => {
+                format!(
+                    "TRY_CAST({} AS {})",
+                    input.pretty_display(),
+                    target.sql_name(),
+                )
             }
             PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
         }
@@ -97,15 +112,16 @@ impl PhysicalScalar {
                     args,
                 }
             }
-            PhysicalScalar::Cast { input, target } => {
-                let is_try = target.is_nullable();
-                RawExpr::Cast {
-                    span: None,
-                    is_try,
-                    expr: Box::new(input.as_raw_expr()),
-                    dest_type: target.clone(),
-                }
-            }
+            PhysicalScalar::Cast {
+                is_try,
+                input,
+                target,
+            } => RawExpr::Cast {
+                span: None,
+                is_try: *is_try,
+                expr: Box::new(input.as_raw_expr()),
+                dest_type: target.clone(),
+            },
             PhysicalScalar::IndexedVariable {
                 index, data_type, ..
             } => RawExpr::ColumnRef {
@@ -140,8 +156,19 @@ impl Display for PhysicalScalar {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            PhysicalScalar::Cast { input, target } => {
+            PhysicalScalar::Cast {
+                is_try: false,
+                input,
+                target,
+            } => {
                 write!(f, "CAST({} AS {})", input, target.sql_name())
+            }
+            PhysicalScalar::Cast {
+                is_try: true,
+                input,
+                target,
+            } => {
+                write!(f, "TRY_CAST({} AS {})", input, target.sql_name())
             }
             PhysicalScalar::IndexedVariable { index, .. } => write!(f, "${index}"),
         }
