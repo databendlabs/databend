@@ -334,7 +334,7 @@ error:
   --> SQL:1:1
   |
 1 | from_base64('!@#')
-  | ^^^^^^^^^^^^^^^^^^ Invalid byte 33, offset 0. during evaluate function: from_base64("!@#")
+  | ^^^^^^^^^^^^^^^^^^ Invalid byte 33, offset 0. while evaluating function `from_base64("!@#")`
 
 
 
@@ -2697,7 +2697,7 @@ error:
   --> SQL:1:1
   |
 1 | repeat('3', 1000001)
-  | ^^^^^^^^^^^^^^^^^^^^ Too many times to repeat: (1000001), maximum is: 1000000 during evaluate function: repeat("3", 1000001_u64)
+  | ^^^^^^^^^^^^^^^^^^^^ Too many times to repeat: (1000001), maximum is: 1000000 while evaluating function `repeat("3", 1000001_u64)`
 
 
 

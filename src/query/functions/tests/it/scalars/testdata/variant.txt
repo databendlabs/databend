@@ -11,7 +11,7 @@ error:
   --> SQL:1:1
   |
 1 | parse_json('nuLL')
-  | ^^^^^^^^^^^^^^^^^^ expected ident, pos 3 during evaluate function: parse_json("nuLL")
+  | ^^^^^^^^^^^^^^^^^^ expected ident, pos 3 while evaluating function `parse_json("nuLL")`
 
 
 
