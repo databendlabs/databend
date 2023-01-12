@@ -34,11 +34,11 @@ fn fill_missing_columns(
 ) -> Result<()> {
     pipeline.add_transform(|transform_input_port, transform_output_port| {
         TransformResortAddOn::try_create(
+            ctx.clone(),
             transform_input_port,
             transform_output_port,
             source_schema.clone(),
             table.clone(),
-            ctx.clone(),
         )
     })?;
     Ok(())

@@ -17,13 +17,11 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
+use common_expression::Scalar as DataScalar;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::parse_exprs;
-use common_storages_factory::Table;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -32,41 +30,35 @@ use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::sessions::QueryContext;
 
-pub struct TransformResortAddOn {
+pub struct TransformAddConstColumns {
     expression_transform: CompoundBlockOperator,
     input_len: usize,
 }
 
-impl TransformResortAddOn
+impl TransformAddConstColumns
 where Self: Transform
 {
+    /// used in insert with with placeholder.
+    /// e.g. for `insert into t1 (a, b, c) values (?, 1, ?)`,
+    /// output_schema has all 3 columns,
+    /// input_schema has columns (a, c) to load data from attachment,
+    /// const_values contains a scalar 1
     pub fn try_create(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         input_schema: DataSchemaRef,
-        table: Arc<dyn Table>,
+        output_schema: DataSchemaRef,
+        mut const_values: Vec<DataScalar>,
     ) -> Result<ProcessorPtr> {
-        let fields = table
-            .schema()
-            .fields()
-            .iter()
-            .map(DataField::from)
-            .collect::<Vec<_>>();
-
+        let fields = output_schema.fields();
         let mut ops = Vec::with_capacity(fields.len());
         for f in fields.iter() {
             let expr = if !input_schema.has_field(f.name()) {
-                if let Some(default_expr) = f.default_expr() {
-                    let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
-                    expr.remove(0)
-                } else {
-                    let default_value = f.data_type().default_value();
-                    Expr::Constant {
-                        span: None,
-                        scalar: default_value,
-                        data_type: f.data_type().clone(),
-                    }
+                Expr::Constant {
+                    span: None,
+                    scalar: const_values.remove(0),
+                    data_type: f.data_type().clone(),
                 }
             } else {
                 let field = input_schema.field_with_name(f.name()).unwrap();
@@ -93,8 +85,8 @@ where Self: Transform
     }
 }
 
-impl Transform for TransformResortAddOn {
-    const NAME: &'static str = "AddOnTransform";
+impl Transform for TransformAddConstColumns {
+    const NAME: &'static str = "AddConstColumnsTransform";
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
         block = self.expression_transform.transform(block)?;
