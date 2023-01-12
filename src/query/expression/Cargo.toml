@@ -19,6 +19,7 @@ common-io = { path = "../../common/io" }
 # Github dependencies
 
 # Crates.io dependencies
+tracing = "0.1.36"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = "6"
