@@ -231,3 +231,7 @@ impl SampleSet for UniformSampleSet {
         }
     }
 }
+
+// Todo: need to explain what's `InterleavedBucket`
+struct InterleavedBucket {
+}
