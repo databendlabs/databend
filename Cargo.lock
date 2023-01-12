@@ -1813,6 +1813,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-pipeline-core",
+ "match-template",
 ]
 
 [[package]]
