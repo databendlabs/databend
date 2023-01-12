@@ -21,9 +21,9 @@ use common_ast::ast::UnSetStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::DataBlock;
+use common_expression::ConstantFolder;
 use common_expression::DataSchema;
-use common_expression::Evaluator;
+use common_expression::Domain;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use super::BindContext;
@@ -64,24 +64,30 @@ impl<'a> Binder {
         let builder = PhysicalScalarBuilder::new(&schema);
         let scalar = builder.build(&scalar)?;
         let expr = scalar.as_expr()?;
-        let block = DataBlock::empty();
+
+        let input_domains = expr
+            .column_refs()
+            .into_iter()
+            .map(|(name, ty)| {
+                let domain = Domain::full(&ty);
+                (name, domain)
+            })
+            .collect();
         let func_ctx = self.ctx.try_get_function_context()?;
-        let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-        let val = evaluator
-            .run(&expr)
-            .map_err(|_| ErrorCode::SemanticError(format!("Failed to run expr: {}", expr)))?;
-        let value = String::from_utf8(
-            val.into_scalar()
-                .map_err(|_| ErrorCode::SemanticError(format!("Failed to into_scalar: {}", expr)))?
-                .into_string()
-                .unwrap(),
-        )?;
-        let vars = vec![VarValue {
-            is_global,
-            variable,
-            value,
-        }];
-        Ok(Plan::SetVariable(Box::new(SettingPlan { vars })))
+        let folder = ConstantFolder::new(input_domains, func_ctx, &BUILTIN_FUNCTIONS);
+        let (new_expr, _) = folder.fold(&expr);
+        match new_expr {
+            common_expression::Expr::Constant { scalar, .. } => {
+                let value = String::from_utf8(scalar.into_string().unwrap())?;
+                let vars = vec![VarValue {
+                    is_global,
+                    variable,
+                    value,
+                }];
+                Ok(Plan::SetVariable(Box::new(SettingPlan { vars })))
+            }
+            _ => Err(ErrorCode::SemanticError("value must be constant value")),
+        }
     }
 
     pub(in crate::planner::binder) async fn bind_unset_variable(
