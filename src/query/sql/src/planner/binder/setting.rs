@@ -12,16 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
-use common_ast::ast::Literal;
 use common_ast::ast::UnSetSource;
 use common_ast::ast::UnSetStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::Evaluator;
+use common_expression::Literal;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use super::BindContext;
 use super::Binder;
+use crate::executor::PhysicalScalarBuilder;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::Plan;
 use crate::plans::SettingPlan;
@@ -34,30 +42,51 @@ impl<'a> Binder {
         bind_context: &BindContext,
         is_global: bool,
         variable: &Identifier<'a>,
-        value: &Literal,
+        value: &Expr<'a>,
     ) -> Result<Plan> {
-        let type_checker = TypeChecker::new(
+        let mut type_checker = TypeChecker::new(
             bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
         );
-
         let variable = variable.name.clone();
 
-        let box (value, _) = type_checker.resolve_literal(value, Some(DataType::String))?;
-        let value = String::from_utf8(
-            value
-                .as_string()
-                .ok_or_else(|| ErrorCode::Internal("Invalid variable value"))?
-                .clone(),
-        )?;
+        let box (scalar, data_type) = type_checker.resolve(value, None).await?;
+        let schema = Arc::new(DataSchema::new(vec![DataField::new("result", data_type)]));
 
+        let builder = PhysicalScalarBuilder::new(&schema);
+        let scalar = builder.build(&scalar)?;
+        let expr = scalar.as_expr()?;
+        let block = DataBlock::empty();
+        let func_ctx = self.ctx.try_get_function_context()?;
+        let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+        let val = evaluator
+            .run(&expr)
+            .map_err(|_| ErrorCode::SemanticError(format!("Failed to run expr: {}", expr)))?;
+        let value = Literal::try_from(val.into_scalar().unwrap())?;
+        let value = match value {
+            Literal::Int8(val) => Ok(val.to_string()),
+            Literal::Int16(val) => Ok(val.to_string()),
+            Literal::Int32(val) => Ok(val.to_string()),
+            Literal::Int64(val) => Ok(val.to_string()),
+            Literal::UInt8(val) => Ok(val.to_string()),
+            Literal::UInt16(val) => Ok(val.to_string()),
+            Literal::UInt32(val) => Ok(val.to_string()),
+            Literal::UInt64(val) => Ok(val.to_string()),
+            Literal::Float32(val) => Ok(val.to_string()),
+            Literal::Float64(val) => Ok(val.to_string()),
+            Literal::String(val) => Ok(String::from_utf8(val)?),
+            other => Err(ErrorCode::BadDataValueType(format!(
+                "Variable {:?} unexpected value: {:?}",
+                variable, other
+            ))),
+        };
         let vars = vec![VarValue {
             is_global,
             variable,
-            value,
+            value: value?,
         }];
         Ok(Plan::SetVariable(Box::new(SettingPlan { vars })))
     }
