@@ -56,6 +56,9 @@ pub enum RuleID {
     CommuteJoin,
     LeftAssociateJoin,
     RightAssociateJoin,
+    LeftExchangeJoin,
+    RightExchangeJoin,
+    ExchangeJoin,
 }
 
 impl Display for RuleID {
@@ -83,6 +86,9 @@ impl Display for RuleID {
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
             RuleID::LeftAssociateJoin => write!(f, "LeftAssociateJoin"),
             RuleID::RightAssociateJoin => write!(f, "RightAssociateJoin"),
+            RuleID::LeftExchangeJoin => write!(f, "LeftExchangeJoin"),
+            RuleID::RightExchangeJoin => write!(f, "RightExchangeJoin"),
+            RuleID::ExchangeJoin => write!(f, "ExchangeJoin"),
         }
     }
 }
