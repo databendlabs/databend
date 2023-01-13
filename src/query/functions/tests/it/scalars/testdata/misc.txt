@@ -1,0 +1,38 @@
+error: 
+  --> SQL:1:1
+  |
+1 | plu(1, 2)
+  | ^^^^^^^^^ function `plu` does not exist
+
+
+
+ast            : const_false AND CAST('1000' AS UINT32) = 1000
+raw expr       : and(#0::Boolean, eq(CAST("1000" AS UInt32), 1000_u16))
+checked expr   : and<Boolean, Boolean>(#0, eq<UInt32, UInt32>(to_uint32<String>("1000"), CAST(1000_u16 AS UInt32)))
+optimized expr : false
+evaluation:
++--------+-------------+---------+
+|        | const_false | Output  |
++--------+-------------+---------+
+| Type   | Boolean     | Boolean |
+| Domain | {FALSE}     | {FALSE} |
+| Row 0  | false       | false   |
++--------+-------------+---------+
+evaluation (internal):
++-------------+-----------------------+
+| Column      | Data                  |
++-------------+-----------------------+
+| const_false | Boolean([0b_______0]) |
+| Output      | Boolean([0b_______0]) |
++-------------+-----------------------+
+
+
+ast            : false AND CAST(str AS UINT32) = 1000
+raw expr       : and(false, eq(CAST(#0::String AS UInt32), 1000_u16))
+checked expr   : and<Boolean, Boolean>(false, eq<UInt32, UInt32>(to_uint32<String>(#0), CAST(1000_u16 AS UInt32)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+

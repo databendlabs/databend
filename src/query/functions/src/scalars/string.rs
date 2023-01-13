@@ -506,7 +506,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-            output.write_row(|data| write!(data, "{val:b}")).unwrap();
+            write!(output.data, "{val:b}").unwrap();
+            output.commit_row();
         }),
     );
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
@@ -514,7 +515,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-            output.write_row(|data| write!(data, "{val:o}")).unwrap();
+            write!(output.data, "{val:o}").unwrap();
+            output.commit_row();
         }),
     );
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
@@ -522,7 +524,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-            output.write_row(|data| write!(data, "{val:x}")).unwrap();
+            write!(output.data, "{val:x}").unwrap();
+            output.commit_row();
         }),
     );
 
