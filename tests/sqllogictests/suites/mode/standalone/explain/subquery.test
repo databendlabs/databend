@@ -343,7 +343,7 @@ query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
 ----
 Filter
-├── filters: [CAST(if(is_not_null(scalar_subquery_3 (#3)), scalar_subquery_3 (#3), 0_i64) AS BIGINT UNSIGNED NULL)]
+├── filters: [TRY_CAST(if(is_not_null(scalar_subquery_3 (#3)), scalar_subquery_3 (#3), 0_i64) AS BIGINT UNSIGNED NULL)]
 ├── estimated rows: 0.33
 └── HashJoin
     ├── join type: SINGLE
