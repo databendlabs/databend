@@ -37,8 +37,6 @@ Check out what we've done this week to make Databend even better for you.
 
 ### Code Refactoring :tada:
 
-**\***
-
 - merge new expression ([#9411](https://github.com/datafuselabs/databend/pull/9411))
 - remove and rename crates ([#9481](https://github.com/datafuselabs/databend/pull/9481))
 - bump rust version ([#9540](https://github.com/datafuselabs/databend/pull/9540))
@@ -81,13 +79,11 @@ Check out what we've done this week to make Databend even better for you.
 
 Stay connected with the latest news about Databend.
 
-### Databend Now Works with New Expression
+### New Year, New Expression!
 
-After more than half a year of development and migration, Databend now works entirely with **New Expression** .
+We're so thrilled to tell you that Databend now fully works with New Expression after more than a half year of dedicated work. New Expression introduces a *formal type system* to Databend and supports *type-safe downward casting* , making the definition of functions easier.
 
-New Expression brings a *formal type system* to Databend and supports *type-safe downward casting* . Also, it will be easier to define functions in the new expressions.
-
-We are in the process of resolving a small number of remaining issues and will release a new v0.9 version once it has been fully stabilised.
+New Expression is still being tuned, and a new version (v0.9) of Databend will be released once the tuning work is complete.
 
 **Learn More**
 
@@ -98,9 +94,9 @@ We are in the process of resolving a small number of remaining issues and will r
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-####  Support `unnest`
+### `UNNEST` Function
 
-The `UNNEST` function takes an `ARRAY` and returns a table with a row for each element in the `ARRAY`.
+The UNNEST function takes an array as a parameter, and returns a table containing each element of the array in a row.
 
 **Syntax**
 
@@ -108,7 +104,7 @@ The `UNNEST` function takes an `ARRAY` and returns a table with a row for each e
 UNNEST(ARRAY) [WITH OFFSET]
 ```
 
-Implementing the `UNNEST` function for Databend could be a good start on the road to contribution.
+If you're interested in becoming a contributor, helping us develop the `UNNEST` function would be a good start.
 
 [Issue 9549: Feature: Support `unnest`](https://github.com/datafuselabs/databend/issues/9549)
 
@@ -121,7 +117,7 @@ You can check the changelog of Databend Nightly for details about our latest dev
 - [v0.8.177-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.8.177-nightly)
 - [v0.8.176-patch1](https://github.com/datafuselabs/databend/releases/tag/v0.8.176-patch1)
 
-Databend is currently working on the release of v0.9, so stay tuned.
+We're gearing up for the v0.9 release of Databend. Stay tuned.
 
 ## Contributors
 
