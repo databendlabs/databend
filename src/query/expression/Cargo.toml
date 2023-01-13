@@ -40,6 +40,7 @@ rand = { version = "0.8.5", features = ["small_rng"] }
 rust_decimal = "1.26"
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = "0.1.36"
 typetag = "0.2.3"
 
 [dev-dependencies]

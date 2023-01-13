@@ -63,9 +63,9 @@ pub struct EvalContext<'a> {
     pub num_rows: usize,
     pub tz: Tz,
 
-    // Validity bitmap of outer nullable column. This is an optimization
-    // to avoid recording errors on the NULL value which has a coresponding
-    // default value in nullable's inner column.
+    /// Validity bitmap of outer nullable column. This is an optimization
+    /// to avoid recording errors on the NULL value which has a coresponding
+    /// default value in nullable's inner column.
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
 }
@@ -95,7 +95,7 @@ impl<'a> EvalContext<'a> {
         }
     }
 
-    pub fn render_error(&self, args: &[Value<AnyType>], name: &str) -> Result<(), String> {
+    pub fn render_error(&self, args: &[Value<AnyType>], func_name: &str) -> Result<(), String> {
         match &self.errors {
             Some((valids, error)) => {
                 let first_error_row = valids
@@ -114,7 +114,7 @@ impl<'a> EvalContext<'a> {
                     })
                     .join(", ");
 
-                let error_msg = format!("{} during evaluate function: {}({})", error, name, args);
+                let error_msg = format!("{error} while evaluating function `{func_name}({args})`");
                 Err(error_msg)
             }
             None => Ok(()),
@@ -346,12 +346,12 @@ pub fn error_to_null<I1: ArgType, O: ArgType>(
 {
     move |val, ctx| {
         let output = func(val, ctx);
-        if let Some((bitmap, _)) = ctx.errors.take() {
+        if let Some((validity, _)) = ctx.errors.take() {
             match output {
                 Value::Scalar(_) => Value::Scalar(None),
                 Value::Column(column) => Value::Column(NullableColumn {
                     column,
-                    validity: bitmap.into(),
+                    validity: validity.into(),
                 }),
             }
         } else {

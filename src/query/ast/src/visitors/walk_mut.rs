@@ -15,7 +15,7 @@
 use super::visitor_mut::VisitorMut;
 use crate::ast::*;
 
-pub fn walk_expr_mut<'a, V: VisitorMut>(visitor: &mut V, expr: &mut Expr<'a>) {
+pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
     match expr {
         Expr::ColumnRef {
             span,
@@ -134,11 +134,11 @@ pub fn walk_expr_mut<'a, V: VisitorMut>(visitor: &mut V, expr: &mut Expr<'a>) {
     }
 }
 
-pub fn walk_identifier_mut<'a, V: VisitorMut>(visitor: &mut V, ident: &mut Identifier<'a>) {
+pub fn walk_identifier_mut<V: VisitorMut>(visitor: &mut V, ident: &mut Identifier) {
     visitor.visit_identifier(ident);
 }
 
-pub fn walk_query_mut<'a, V: VisitorMut>(visitor: &mut V, query: &mut Query<'a>) {
+pub fn walk_query_mut<V: VisitorMut>(visitor: &mut V, query: &mut Query) {
     let Query {
         with,
         body,
@@ -163,7 +163,7 @@ pub fn walk_query_mut<'a, V: VisitorMut>(visitor: &mut V, query: &mut Query<'a>)
     }
 }
 
-pub fn walk_set_expr_mut<'a, V: VisitorMut>(visitor: &mut V, set_expr: &mut SetExpr<'a>) {
+pub fn walk_set_expr_mut<V: VisitorMut>(visitor: &mut V, set_expr: &mut SetExpr) {
     match set_expr {
         SetExpr::Select(select) => {
             visitor.visit_select_stmt(select);
@@ -177,7 +177,7 @@ pub fn walk_set_expr_mut<'a, V: VisitorMut>(visitor: &mut V, set_expr: &mut SetE
     }
 }
 
-pub fn walk_select_target_mut<'a, V: VisitorMut>(visitor: &mut V, target: &mut SelectTarget<'a>) {
+pub fn walk_select_target_mut<V: VisitorMut>(visitor: &mut V, target: &mut SelectTarget) {
     match target {
         SelectTarget::AliasedExpr { expr, alias } => {
             visitor.visit_expr(expr);
@@ -206,10 +206,7 @@ pub fn walk_select_target_mut<'a, V: VisitorMut>(visitor: &mut V, target: &mut S
     }
 }
 
-pub fn walk_table_reference_mut<'a, V: VisitorMut>(
-    visitor: &mut V,
-    table_ref: &mut TableReference<'a>,
-) {
+pub fn walk_table_reference_mut<V: VisitorMut>(visitor: &mut V, table_ref: &mut TableReference) {
     match table_ref {
         TableReference::Table {
             catalog,
@@ -266,20 +263,14 @@ pub fn walk_table_reference_mut<'a, V: VisitorMut>(
     }
 }
 
-pub fn walk_time_travel_point_mut<'a, V: VisitorMut>(
-    visitor: &mut V,
-    time: &mut TimeTravelPoint<'a>,
-) {
+pub fn walk_time_travel_point_mut<V: VisitorMut>(visitor: &mut V, time: &mut TimeTravelPoint) {
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
     }
 }
 
-pub fn walk_join_condition_mut<'a, V: VisitorMut>(
-    visitor: &mut V,
-    join_cond: &mut JoinCondition<'a>,
-) {
+pub fn walk_join_condition_mut<V: VisitorMut>(visitor: &mut V, join_cond: &mut JoinCondition) {
     match join_cond {
         JoinCondition::On(expr) => visitor.visit_expr(expr),
         JoinCondition::Using(using) => {
@@ -292,14 +283,14 @@ pub fn walk_join_condition_mut<'a, V: VisitorMut>(
     }
 }
 
-pub fn walk_cte_mut<'a, V: VisitorMut>(visitor: &mut V, cte: &mut CTE<'a>) {
+pub fn walk_cte_mut<V: VisitorMut>(visitor: &mut V, cte: &mut CTE) {
     let CTE { alias, query, .. } = cte;
 
     visitor.visit_identifier(&mut alias.name);
     visitor.visit_query(query);
 }
 
-pub fn walk_statement_mut<'a, V: VisitorMut>(visitor: &mut V, statement: &mut Statement<'a>) {
+pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statement) {
     match statement {
         Statement::Explain { kind, query } => visitor.visit_explain(kind, &mut *query),
         Statement::Query(query) => visitor.visit_query(&mut *query),

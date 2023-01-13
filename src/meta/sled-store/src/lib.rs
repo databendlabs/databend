@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
+
 //! sled_store implement a key-value like store backed by sled::Tree.
 //!
 //! It is used by raft for log and state machine storage.

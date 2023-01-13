@@ -1,9 +1,41 @@
+ast            : geo_to_h3(37.79506683, 55.71290588, 15)
+raw expr       : geo_to_h3(37.79506683_f64, 55.71290588_f64, 15_u8)
+checked expr   : geo_to_h3<Float64, Float64, UInt8>(37.79506683_f64, 55.71290588_f64, 15_u8)
+optimized expr : 644325524701193974_u64
+output type    : UInt64
+output domain  : {644325524701193974..=644325524701193974}
+output         : 644325524701193974_u64
+
+
+ast            : geo_to_h3(lon, lat, 15)
+raw expr       : geo_to_h3(#0::Float64, #1::Float64, 15_u8)
+checked expr   : geo_to_h3<Float64, Float64, UInt8>(#0, #1, 15_u8)
+evaluation:
++--------+-------------------------+---------------------------+----------------------------+
+|        | lon                     | lat                       | Output                     |
++--------+-------------------------+---------------------------+----------------------------+
+| Type   | Float64                 | Float64                   | UInt64                     |
+| Domain | {37.598135..=37.660183} | {55.720762..=55.77922738} | {0..=18446744073709551615} |
+| Row 0  | 37.63098076_f64         | 55.77922738_f64           | 644325529094369568_u64     |
+| Row 1  | 37.660183_f64           | 55.763241_f64             | 644325528627451570_u64     |
+| Row 2  | 37.598135_f64           | 55.720762_f64             | 644325528491955313_u64     |
++--------+-------------------------+---------------------------+----------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------+
+| Column | Data                                                                 |
++--------+----------------------------------------------------------------------+
+| lon    | Float64([37.63098076, 37.660183, 37.598135])                         |
+| lat    | Float64([55.77922738, 55.763241, 55.720762])                         |
+| Output | UInt64([644325529094369568, 644325528627451570, 644325528491955313]) |
++--------+----------------------------------------------------------------------+
+
+
 ast            : great_circle_distance(55.755831, 37.617673, -55.755831, -37.617673)
 raw expr       : great_circle_distance(55.755831_f64, 37.617673_f64, minus(55.755831_f64), minus(37.617673_f64))
 checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, minus<Float64>(55.755831_f64), minus<Float64>(37.617673_f64))
 optimized expr : 14128353_f32
 output type    : Float32
-output domain  : {-inf..=NaN}
+output domain  : {14128353..=14128353}
 output         : 14128353_f32
 
 
@@ -37,7 +69,7 @@ raw expr       : geo_distance(55.755831_f64, 37.617673_f64, minus(55.755831_f64)
 checked expr   : geo_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, minus<Float64>(55.755831_f64), minus<Float64>(37.617673_f64))
 optimized expr : 14128353_f32
 output type    : Float32
-output domain  : {-inf..=NaN}
+output domain  : {14128353..=14128353}
 output         : 14128353_f32
 
 
@@ -71,7 +103,7 @@ raw expr       : great_circle_angle(0_u8, 0_u8, 45_u8, 0_u8)
 checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(CAST(0_u8 AS Float64), CAST(0_u8 AS Float64), CAST(45_u8 AS Float64), CAST(0_u8 AS Float64))
 optimized expr : 44.99998_f32
 output type    : Float32
-output domain  : {-inf..=NaN}
+output domain  : {44.99998..=44.99998}
 output         : 44.99998_f32
 
 
@@ -103,7 +135,7 @@ raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, 1_f64, 0.999
 checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, 1_f64, 0.9999_f64)
 optimized expr : 1_u8
 output type    : UInt8
-output domain  : {0..=255}
+output domain  : {1..=1}
 output         : 1_u8
 
 
@@ -128,5 +160,56 @@ evaluation (internal):
 | b      | Float64([0.9999, 0.9998, 0.9997]) |
 | Output | UInt8([0, 0, 0])                  |
 +--------+-----------------------------------+
+
+
+ast            : point_in_polygon((3., 3.), [(6, 0), (8, 4), (5, 8), (0, 2)])
+raw expr       : point_in_polygon(tuple(3_f64, 3_f64), array(tuple(6_u8, 0_u8), tuple(8_u8, 4_u8), tuple(5_u8, 8_u8), tuple(0_u8, 2_u8)))
+checked expr   : point_in_polygon<(Float64, Float64), Array((Float64, Float64))>(tuple<Float64, Float64>(3_f64, 3_f64), CAST(array<T0=(UInt8, UInt8)><T0, T0, T0, T0>(tuple<UInt8, UInt8>(6_u8, 0_u8), tuple<UInt8, UInt8>(8_u8, 4_u8), tuple<UInt8, UInt8>(5_u8, 8_u8), tuple<UInt8, UInt8>(0_u8, 2_u8)) AS Array((Float64, Float64))))
+optimized expr : 1_u8
+output type    : UInt8
+output domain  : {1..=1}
+output         : 1_u8
+
+
+ast            : point_in_polygon((a, b), [(6, 0), (8, 4), (5, 8), (0, 2)])
+raw expr       : point_in_polygon(tuple(#0::Float64, #1::Float64), array(tuple(6_u8, 0_u8), tuple(8_u8, 4_u8), tuple(5_u8, 8_u8), tuple(0_u8, 2_u8)))
+checked expr   : point_in_polygon<(Float64, Float64), Array((Float64, Float64))>(tuple<Float64, Float64>(#0, #1), CAST(array<T0=(UInt8, UInt8)><T0, T0, T0, T0>(tuple<UInt8, UInt8>(6_u8, 0_u8), tuple<UInt8, UInt8>(8_u8, 4_u8), tuple<UInt8, UInt8>(5_u8, 8_u8), tuple<UInt8, UInt8>(0_u8, 2_u8)) AS Array((Float64, Float64))))
+optimized expr : point_in_polygon<(Float64, Float64), Array((Float64, Float64))>(tuple<Float64, Float64>(#0, #1), [(6_f64, 0_f64), (8_f64, 4_f64), (5_f64, 8_f64), (0_f64, 2_f64)])
+evaluation:
++--------+-----------+-----------+-----------+
+|        | a         | b         | Output    |
++--------+-----------+-----------+-----------+
+| Type   | Float64   | Float64   | UInt8     |
+| Domain | {3..=3.2} | {3..=3.2} | {0..=255} |
+| Row 0  | 3_f64     | 3_f64     | 1_u8      |
+| Row 1  | 3.1_f64   | 3.1_f64   | 1_u8      |
+| Row 2  | 3.2_f64   | 3.2_f64   | 1_u8      |
++--------+-----------+-----------+-----------+
+evaluation (internal):
++--------+------------------------+
+| Column | Data                   |
++--------+------------------------+
+| a      | Float64([3, 3.1, 3.2]) |
+| b      | Float64([3, 3.1, 3.2]) |
+| Output | UInt8([1, 1, 1])       |
++--------+------------------------+
+
+
+ast            : geohash_encode(-5.60302734375, 42.593994140625)
+raw expr       : geohash_encode(minus(5.60302734375_f64), 42.593994140625_f64)
+checked expr   : geohash_encode<Float64, Float64>(minus<Float64>(5.6030273437_f64), 42.5939941406_f64)
+optimized expr : "ezs42d000000"
+output type    : String
+output domain  : {"ezs42d000000"..="ezs42d000000"}
+output         : "ezs42d000000"
+
+
+ast            : geohash_decode('ezs42')
+raw expr       : geohash_decode("ezs42")
+checked expr   : geohash_decode<String>("ezs42")
+optimized expr : (-5.6030273437_f64, 42.6049804687_f64)
+output type    : (Float64, Float64)
+output domain  : ({-5.6030273437..=-5.6030273437}, {42.6049804687..=42.6049804687})
+output         : (-5.6030273437_f64, 42.6049804687_f64)
 
 

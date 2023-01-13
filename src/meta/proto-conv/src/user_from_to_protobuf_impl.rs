@@ -39,6 +39,9 @@ use crate::VER;
 
 impl FromToProto for mt::AuthInfo {
     type PB = pb::AuthInfo;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::AuthInfo) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -83,6 +86,9 @@ impl FromToProto for mt::AuthInfo {
 
 impl FromToProto for mt::UserOption {
     type PB = pb::UserOption;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::UserOption) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -107,6 +113,9 @@ impl FromToProto for mt::UserOption {
 
 impl FromToProto for mt::UserQuota {
     type PB = pb::UserQuota;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::UserQuota) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -131,6 +140,9 @@ impl FromToProto for mt::UserQuota {
 
 impl FromToProto for mt::GrantObject {
     type PB = pb::GrantObject;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::GrantObject) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -183,6 +195,9 @@ impl FromToProto for mt::GrantObject {
 
 impl FromToProto for mt::GrantEntry {
     type PB = pb::GrantEntry;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::GrantEntry) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -213,6 +228,9 @@ impl FromToProto for mt::GrantEntry {
 
 impl FromToProto for mt::UserGrantSet {
     type PB = pb::UserGrantSet;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::UserGrantSet) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -250,6 +268,9 @@ impl FromToProto for mt::UserGrantSet {
 
 impl FromToProto for mt::UserInfo {
     type PB = pb::UserInfo;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::UserInfo) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -288,6 +309,9 @@ impl FromToProto for mt::UserInfo {
 
 impl FromToProto for mt::UserIdentity {
     type PB = pb::UserIdentity;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::UserIdentity) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -310,6 +334,9 @@ impl FromToProto for mt::UserIdentity {
 
 impl FromToProto for mt::StageFileFormatType {
     type PB = pb::user_stage_info::StageFileFormatType;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
     fn from_pb(p: pb::user_stage_info::StageFileFormatType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
@@ -347,6 +374,9 @@ impl FromToProto for mt::StageFileFormatType {
 
 impl FromToProto for mt::StageFileCompression {
     type PB = pb::user_stage_info::StageFileCompression;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
     fn from_pb(p: pb::user_stage_info::StageFileCompression) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
@@ -399,6 +429,9 @@ impl FromToProto for mt::StageFileCompression {
 
 impl FromToProto for mt::StageType {
     type PB = pb::user_stage_info::StageType;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
     fn from_pb(p: pb::user_stage_info::StageType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
@@ -421,6 +454,9 @@ impl FromToProto for mt::StageType {
 
 impl FromToProto for StorageParams {
     type PB = pb::user_stage_info::StageStorage;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
     fn from_pb(p: pb::user_stage_info::StageStorage) -> Result<Self, Incompatible>
     where Self: Sized {
         match p.storage {
@@ -463,6 +499,9 @@ impl FromToProto for StorageParams {
 
 impl FromToProto for mt::StageParams {
     type PB = pb::user_stage_info::StageParams;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
     fn from_pb(p: pb::user_stage_info::StageParams) -> Result<Self, Incompatible>
     where Self: Sized {
         Ok(mt::StageParams {
@@ -481,6 +520,9 @@ impl FromToProto for mt::StageParams {
 
 impl FromToProto for mt::FileFormatOptions {
     type PB = pb::user_stage_info::FileFormatOptions;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::user_stage_info::FileFormatOptions) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -537,6 +579,9 @@ impl FromToProto for mt::FileFormatOptions {
 
 impl FromToProto for mt::OnErrorMode {
     type PB = pb::user_stage_info::OnErrorMode;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
     fn from_pb(p: pb::user_stage_info::OnErrorMode) -> Result<Self, Incompatible>
     where Self: Sized {
         match p.mode {
@@ -588,6 +633,9 @@ impl FromToProto for mt::OnErrorMode {
 
 impl FromToProto for mt::CopyOptions {
     type PB = pb::user_stage_info::CopyOptions;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
     fn from_pb(p: pb::user_stage_info::CopyOptions) -> Result<Self, Incompatible>
     where Self: Sized {
         let on_error = mt::OnErrorMode::from_pb(p.on_error.ok_or_else(|| Incompatible {
@@ -643,6 +691,9 @@ impl FromToProto for mt::CopyOptions {
 
 impl FromToProto for mt::UserStageInfo {
     type PB = pb::UserStageInfo;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::UserStageInfo) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
@@ -698,6 +749,9 @@ impl FromToProto for mt::UserStageInfo {
 
 impl FromToProto for mt::StageFile {
     type PB = pb::StageFile;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::StageFile) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;

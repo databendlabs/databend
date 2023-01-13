@@ -48,10 +48,7 @@ pub fn check_date(days: i64) -> Result<i32, String> {
     if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
         Ok(days as i32)
     } else {
-        Err(format!(
-            "date `{}` is out of range",
-            date_to_string(days, chrono_tz::Tz::UTC)
-        ))
+        Err("date is out of range".to_string())
     }
 }
 

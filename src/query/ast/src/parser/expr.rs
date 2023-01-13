@@ -42,6 +42,15 @@ pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0))(i)
 }
 
+fn expr_or_placeholder(i: Input) -> IResult<Option<Expr>> {
+    alt((map(rule! { "?" }, |_| None), map(subexpr(0), Some)))(i)
+}
+
+pub fn values_with_placeholder(i: Input) -> IResult<Vec<Option<Expr>>> {
+    let values = comma_separated_list0(expr_or_placeholder);
+    map(rule! { ( "(" ~  #values ~ ")" ) }, |(_, v, _)| v)(i)
+}
+
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
         let higher_prec_expr_element =
@@ -648,7 +657,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let extract = map(
         rule! {
-            EXTRACT ~ ^"(" ~ ^#interval_kind ~ ^FROM ~ ^#subexpr(0) ~ ^")"
+            EXTRACT ~ "(" ~ ^#interval_kind ~ ^FROM ~ ^#subexpr(0) ~ ^")"
         },
         |(_, _, field, _, expr, _)| ExprElement::Extract {
             field,
@@ -658,7 +667,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let position = map(
         rule! {
             POSITION
-            ~ ^"("
+            ~ "("
             ~ ^#subexpr(BETWEEN_PREC)
             ~ ^IN
             ~ ^#subexpr(0)
@@ -672,7 +681,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let substring = map(
         rule! {
             ( SUBSTRING | SUBSTR )
-            ~ ^"("
+            ~ "("
             ~ ^#subexpr(0)
             ~ ( FROM | "," )
             ~ ^#subexpr(0)
@@ -693,7 +702,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let trim = map(
         rule! {
             TRIM
-            ~ ^"("
+            ~ "("
             ~ #subexpr(0)
             ~ ^")"
         },
@@ -705,7 +714,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let trim_from = map(
         rule! {
             TRIM
-            ~ ^"("
+            ~ "("
             ~ #trim_where
             ~ ^#subexpr(0)
             ~ ^FROM
@@ -781,7 +790,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
     let exists = map(
-        rule! { NOT? ~ EXISTS ~ ^"(" ~ ^#query ~ ^")" },
+        rule! { NOT? ~ EXISTS ~ "(" ~ ^#query ~ ^")" },
         |(opt_not, _, _, subquery, _)| ExprElement::Exists {
             subquery,
             not: opt_not.is_some(),

@@ -165,8 +165,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.14.2"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=1b190fc#1b190fc9883a618631f88a5fd939221d968ece65"
+version = "0.15.0"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=211be21#211be21991c29c235253a19413f43a76a367955f"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -379,6 +379,12 @@ dependencies = [
  "libc",
  "winapi",
 ]
+
+[[package]]
+name = "auto_ops"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7460f7dd8e100147b82a63afca1a20eb6c231ee36b90ba7272e14951cb58af59"
 
 [[package]]
 name = "autocfg"
@@ -802,9 +808,9 @@ checksum = "6c58ec36aac5066d5ca17df51b3e70279f5670a72102f5752cb7e7c856adfc70"
 
 [[package]]
 name = "bzip2"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6afcd980b5f3a45017c57e57a2fcccbb351cc43a356ce117ef760ef8052b89b0"
+checksum = "bdb116a6ef3f6c3698828873ad02c3014b3c85cadb88496095628e3ef1e347f8"
 dependencies = [
  "bzip2-sys",
  "libc",
@@ -1180,8 +1186,8 @@ dependencies = [
  "arrow-format",
  "arrow2",
  "futures",
- "pa",
  "parquet2",
+ "strawboat",
 ]
 
 [[package]]
@@ -1323,25 +1329,8 @@ dependencies = [
 name = "common-datavalues"
 version = "0.1.0"
 dependencies = [
- "chrono",
- "chrono-tz",
- "common-arrow",
- "common-exception",
- "common-hashtable",
- "common-io",
- "criterion",
- "dyn-clone",
+ "enum-as-inner",
  "enum_dispatch",
- "itertools",
- "lexical-core",
- "micromarshal",
- "num",
- "once_cell",
- "ordered-float 3.4.0",
- "paste",
- "pretty_assertions",
- "primitive-types",
- "rand 0.8.5",
  "serde",
  "serde_json",
 ]
@@ -1393,6 +1382,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
+ "tracing",
  "typetag",
 ]
 
@@ -1444,9 +1434,10 @@ dependencies = [
  "crc32fast",
  "criterion",
  "ctor",
- "geo-types",
+ "geo",
+ "geohash",
  "goldenfile",
- "h3ron",
+ "h3o",
  "hex",
  "itertools",
  "lexical-core",
@@ -1842,6 +1833,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-pipeline-core",
+ "match-template",
 ]
 
 [[package]]
@@ -1856,6 +1848,7 @@ dependencies = [
  "common-meta-types",
  "common-protos",
  "common-storage",
+ "convert_case 0.6.0",
  "enumflags2",
  "maplit",
  "num",
@@ -2514,6 +2507,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_panic"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58baae561b85ca19b3122a9ddd35c8ec40c3bcd14fe89921824eae73f7baffbf"
+
+[[package]]
 name = "constant_time_eq"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2524,6 +2523,15 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
+name = "convert_case"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+dependencies = [
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "core-foundation"
@@ -3117,7 +3125,7 @@ version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
 dependencies = [
- "convert_case",
+ "convert_case 0.4.0",
  "proc-macro2",
  "quote",
  "rustc_version",
@@ -3522,6 +3530,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "float_eq"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28a80e3145d8ad11ba0995949bbcf48b9df2be62772b3d351ef017dff6ecb853"
+
+[[package]]
 name = "float_next_after"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3784,9 +3798,9 @@ dependencies = [
 
 [[package]]
 name = "geo"
-version = "0.22.1"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0943f2fcf1e21429a6d3a9842308ee363a6d9018fda475c47c564156d44eef3"
+checksum = "b39f57e9624b1a17ce621375464e9878c705d0aaadaf25cb44e4e0005a16de2f"
 dependencies = [
  "float_next_after",
  "geo-types",
@@ -3810,11 +3824,21 @@ dependencies = [
 
 [[package]]
 name = "geographiclib-rs"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdbd3cdc1856ca7736763d2784671c2c9b0093f0ee47e2bed0059feed6afca89"
+checksum = "04a4efc8e99f43d1d29331a073981bb13074b253edc08ffc8ccf5f384b1d1d1e"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "geohash"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2531fb8e2edacf602fd1f2672da559dc1527509cf90940b7a0ebd06b998a004f"
+dependencies = [
+ "geo-types",
+ "libm",
 ]
 
 [[package]]
@@ -3959,29 +3983,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "h3ron"
-version = "0.15.1"
+name = "h3o"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7d52875c47f35a0db141bef968682165623e7d1671a0da40b87f581a3a953fd"
+checksum = "ec7971d84f2fd6b8541ad199b5c9d86e1387214636111b0483a954fc9843a66b"
 dependencies = [
  "ahash 0.8.2",
- "geo",
- "geo-types",
- "h3ron-h3-sys",
- "hashbrown 0.12.3",
- "thiserror",
-]
-
-[[package]]
-name = "h3ron-h3-sys"
-version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08c039f9d6d4fc8b77f31739cd5290a70476888f9b57375395d75b9cf1c49f10"
-dependencies = [
- "cc",
- "geo-types",
- "glob",
- "regex",
+ "auto_ops",
+ "either",
+ "float_eq",
+ "konst",
 ]
 
 [[package]]
@@ -4590,6 +4601,22 @@ dependencies = [
  "elliptic-curve",
  "sha2",
 ]
+
+[[package]]
+name = "konst"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4850f150968eec6df7f1b348a0874db47a9bcd5e2a41ee1d347392f929590d9d"
+dependencies = [
+ "const_panic",
+ "konst_kernel",
+]
+
+[[package]]
+name = "konst_kernel"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7771682454392dfe62a909aba2c6efc6674e2ad0b678fbc33b154e2e1bd59b89"
 
 [[package]]
 name = "lazy_static"
@@ -5707,19 +5734,6 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "sha2",
-]
-
-[[package]]
-name = "pa"
-version = "0.1.0"
-source = "git+https://github.com/sundy-li/pa?rev=7e98302#7e98302d83016a874bdeb1417f1f0ad4f12f9be6"
-dependencies = [
- "arrow2",
- "bytemuck",
- "lz4",
- "serde",
- "serde_json",
- "zstd",
 ]
 
 [[package]]
@@ -7714,6 +7728,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-expression",
+ "enum-as-inner",
  "metrics",
  "once_cell",
  "opendal",
@@ -7726,6 +7741,21 @@ name = "str_stack"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
+
+[[package]]
+name = "strawboat"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbad34588af0e413a53579cbc362700a5bb20d2fbcdc89cf738e5c099e86118a"
+dependencies = [
+ "arrow2",
+ "bytemuck",
+ "lz4",
+ "serde",
+ "serde_json",
+ "snap",
+ "zstd",
+]
 
 [[package]]
 name = "streaming-decompression"

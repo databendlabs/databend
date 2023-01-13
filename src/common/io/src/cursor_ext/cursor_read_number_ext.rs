@@ -55,7 +55,7 @@ pub fn collect_number(buffer: &[u8]) -> (usize, usize) {
         index += 1;
     }
     if point_pos < len {
-        while index < len && (b'0'..=b'9').contains(&buffer[index]) {
+        while index < len && buffer[index].is_ascii_digit() {
             index += 1;
         }
     }
@@ -67,7 +67,7 @@ pub fn collect_number(buffer: &[u8]) -> (usize, usize) {
         if index < len && (buffer[index] == b'-' || buffer[index] == b'+') {
             index += 1
         }
-        while index < len && (b'0'..=b'9').contains(&buffer[index]) {
+        while index < len && buffer[index].is_ascii_digit() {
             index += 1;
         }
     }

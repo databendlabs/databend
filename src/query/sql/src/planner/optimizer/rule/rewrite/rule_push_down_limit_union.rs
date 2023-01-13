@@ -100,7 +100,7 @@ impl Rule for RulePushDownLimitUnion {
         let mut result = SExpr::create_binary(union.into(), union_left_child, union_right_child);
         // Add original limit to top
         result = SExpr::create_unary(limit.into(), result);
-        result.apply_rule(&self.id);
+        result.set_applied_rule(&self.id);
         state.add_result(result);
 
         Ok(())

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-
 use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
@@ -85,26 +81,6 @@ impl DataType for StructType {
 
     fn can_inside_nullable(&self) -> bool {
         false
-    }
-
-    fn arrow_type(&self) -> ArrowType {
-        let names = match &self.names {
-            Some(names) => names.clone(),
-            None => (0..self.types.len())
-                .map(|i| i.to_string())
-                .collect::<Vec<_>>(),
-        };
-        let fields = names
-            .iter()
-            .zip(self.types.iter())
-            .map(|(name, type_)| type_.to_arrow_field(name))
-            .collect();
-
-        ArrowType::Struct(fields)
-    }
-
-    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        None
     }
 }
 

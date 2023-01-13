@@ -16,7 +16,6 @@ use std::ops::Range;
 
 use crate::property::Domain;
 use crate::types::ValueType;
-use crate::upcast_gat;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -36,7 +35,7 @@ impl ValueType for AnyType {
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
-        upcast_gat(long)
+        long
     }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {

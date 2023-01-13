@@ -18,6 +18,7 @@ use std::sync::Mutex;
 
 use common_arrow::arrow::bitmap;
 use itertools::Itertools;
+use tracing::error;
 
 use crate::block::DataBlock;
 use crate::expression::Expr;
@@ -172,7 +173,8 @@ impl<'a> Evaluator<'a> {
             if !*RECURSING.lock().unwrap() {
                 *RECURSING.lock().unwrap() = true;
                 assert_eq!(
-                    ConstantFolder::new(
+                    ConstantFolder::fold_with_domain(
+                        expr,
                         self.input_columns
                             .domains()
                             .into_iter()
@@ -181,7 +183,6 @@ impl<'a> Evaluator<'a> {
                         self.func_ctx,
                         self.fn_registry
                     )
-                    .fold(expr)
                     .1,
                     None,
                     "domain calculation should not return any domain for expressions that are possible to fail"
@@ -506,19 +507,71 @@ pub struct ConstantFolder<'a, Index: ColumnIndex> {
 }
 
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
-    pub fn new(
-        input_domains: HashMap<Index, Domain>,
+    /// Fold a single expression, returning the new expression and the domain of the new expression.
+    pub fn fold(
+        expr: &Expr<Index>,
         func_ctx: FunctionContext,
         fn_registry: &'a FunctionRegistry,
-    ) -> Self {
-        ConstantFolder {
+    ) -> (Expr<Index>, Option<Domain>) {
+        let input_domains = expr
+            .column_refs()
+            .into_iter()
+            .map(|(name, ty)| {
+                let domain = Domain::full(&ty);
+                (name, domain)
+            })
+            .collect();
+
+        let folder = ConstantFolder {
             input_domains,
             func_ctx,
             fn_registry,
-        }
+        };
+
+        folder.fold_to_stable(expr)
     }
 
-    pub fn fold(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
+    /// Fold a single expression with columns' domain, and then return the new expression and the
+    /// domain of the new expression.
+    pub fn fold_with_domain(
+        expr: &Expr<Index>,
+        input_domains: HashMap<Index, Domain>,
+        func_ctx: FunctionContext,
+        fn_registry: &'a FunctionRegistry,
+    ) -> (Expr<Index>, Option<Domain>) {
+        let folder = ConstantFolder {
+            input_domains,
+            func_ctx,
+            fn_registry,
+        };
+
+        folder.fold_to_stable(expr)
+    }
+
+    /// Running `fold_once()` for only one time may not reach the simplest form of expression,
+    /// therefore we need to call it repeatedly until the expression becomes stable.
+    fn fold_to_stable(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
+        const MAX_ITERATIONS: usize = 1024;
+
+        let mut old_expr = expr.clone();
+        let mut old_domain = None;
+        for _ in 0..MAX_ITERATIONS {
+            let (new_expr, domain) = self.fold_once(&old_expr);
+            if new_expr == old_expr {
+                return (new_expr, domain);
+            }
+            old_expr = new_expr;
+            old_domain = domain;
+        }
+
+        error!("maximum iterations reached while folding expression");
+
+        (old_expr, old_domain)
+    }
+
+    /// Fold expression by one step, specifically reducing expression by domain calculation and then
+    /// folding the function calls with all constant arguments.
+    fn fold_once(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
         let (new_expr, domain) = match expr {
             Expr::Constant {
                 scalar, data_type, ..
@@ -545,7 +598,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 expr,
                 dest_type,
             } => {
-                let (inner_expr, inner_domain) = self.fold(expr);
+                let (inner_expr, inner_domain) = self.fold_once(expr);
 
                 let new_domain = if *is_try {
                     inner_domain.and_then(|inner_domain| {
@@ -614,7 +667,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             } => {
                 let (mut args_expr, mut args_domain) = (Vec::new(), Some(Vec::new()));
                 for arg in args {
-                    let (expr, domain) = self.fold(arg);
+                    let (expr, domain) = self.fold_once(arg);
                     args_expr.push(expr);
                     args_domain = args_domain.zip(domain).map(|(mut domains, domain)| {
                         domains.push(domain);

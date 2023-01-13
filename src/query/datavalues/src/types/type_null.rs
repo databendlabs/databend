@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-
 use super::data_type::DataType;
 use crate::prelude::*;
 
@@ -37,11 +35,6 @@ impl DataType for NullType {
 
     fn can_inside_nullable(&self) -> bool {
         false
-    }
-
-    // NullType must inside nullable
-    fn arrow_type(&self) -> ArrowType {
-        ArrowType::Null
     }
 }
 

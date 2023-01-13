@@ -15,6 +15,7 @@
 // Because the compiler complains about recursion limit for a trait requirement check...
 // error[[E0275](https://doc.rust-lang.org/error-index.html#E0275)]: overflow evaluating the requirement `(...)`
 // When compiling `impl KVApiBuilder<MetaGrpcClient> for Builder`.
+#![allow(clippy::uninlined_format_args)]
 #![recursion_limit = "1024"]
 #![feature(extend_one)]
 mod api;

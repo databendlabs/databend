@@ -255,14 +255,9 @@ impl HttpQuery {
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
-                file_format_options: match attachment.file_format_options {
-                    Some(ref params) => params.clone(),
-                    None => BTreeMap::new(),
-                },
-                copy_options: match attachment.copy_options {
-                    Some(ref params) => params.clone(),
-                    None => BTreeMap::new(),
-                },
+                file_format_options: attachment.file_format_options.clone(),
+                copy_options: attachment.copy_options.clone(),
+                values_str: "".to_string(),
             }),
             None => {}
         };

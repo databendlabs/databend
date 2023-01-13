@@ -12,7 +12,7 @@ raw expr       : and(true, NULL)
 checked expr   : and<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -39,7 +39,7 @@ raw expr       : and(false, NULL)
 checked expr   : and<Boolean NULL, Boolean NULL>(CAST(false AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : false
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {FALSE}
 output         : false
 
 
@@ -442,7 +442,7 @@ raw expr       : or(NULL, false)
 checked expr   : or<Boolean NULL, Boolean NULL>(CAST(NULL AS Boolean NULL), CAST(false AS Boolean NULL))
 optimized expr : NULL
 output type    : Boolean NULL
-output domain  : {FALSE, TRUE} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 

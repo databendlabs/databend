@@ -3,7 +3,7 @@ raw expr       : eq("1", "2")
 checked expr   : eq<String, String>("1", "2")
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -30,7 +30,7 @@ raw expr       : eq(1_f64, 1_u8)
 checked expr   : eq<Float64, Float64>(1_f64, CAST(1_u8 AS Float64))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -84,7 +84,7 @@ raw expr       : eq(array(1_u8, 2_u8), array(1_u8, 2_u8))
 checked expr   : eq<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(1_u8, 2_u8))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -93,7 +93,7 @@ raw expr       : eq(array(true), array())
 checked expr   : eq<T0=Boolean><Array(T0), Array(T0)>(array<T0=Boolean><T0>(true), CAST(array<>() AS Array(Boolean)))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -147,7 +147,7 @@ raw expr       : eq(tuple(1_u8, "a"), tuple(1_u8, "a"))
 checked expr   : eq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -156,7 +156,7 @@ raw expr       : eq(tuple(1_u8, "a"), tuple(1_u8, "b"))
 checked expr   : eq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -165,7 +165,7 @@ raw expr       : eq(today(), "2020-01-01")
 checked expr   : eq<Date, Date>(today<>(), CAST("2020-01-01" AS Date))
 optimized expr : false
 output type    : Boolean
-output domain  : Unknown
+output domain  : {FALSE}
 output         : false
 
 
@@ -214,7 +214,7 @@ raw expr       : eq(1.1_f64, 1.1_f64)
 checked expr   : eq<Float64, Float64>(1.1_f64, 1.1_f64)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -223,7 +223,7 @@ raw expr       : eq(parse_json("[1,2,3,[\"a\",\"b\",\"c\"]]"), parse_json("[1,2,
 checked expr   : eq<Variant, Variant>(parse_json<String>("[1,2,3,[\"a\",\"b\",\"c\"]]"), parse_json<String>("[1,2,3,[\"a\",\"b\",\"c\"]]"))
 optimized expr : true
 output type    : Boolean
-output domain  : Unknown
+output domain  : {TRUE}
 output         : true
 
 
@@ -286,7 +286,7 @@ raw expr       : noteq("1", "2")
 checked expr   : noteq<String, String>("1", "2")
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -304,7 +304,7 @@ raw expr       : noteq(1.1_f64, 1.1_f64)
 checked expr   : noteq<Float64, Float64>(1.1_f64, 1.1_f64)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -349,7 +349,7 @@ raw expr       : noteq(array("a"), array("a"))
 checked expr   : noteq<T0=String><Array(T0), Array(T0)>(array<T0=String><T0>("a"), array<T0=String><T0>("a"))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -358,7 +358,7 @@ raw expr       : noteq(array("a"), array("b"))
 checked expr   : noteq<T0=String><Array(T0), Array(T0)>(array<T0=String><T0>("a"), array<T0=String><T0>("b"))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -412,7 +412,7 @@ raw expr       : noteq(tuple(1_u8, "a"), tuple(1_u8, "a"))
 checked expr   : noteq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -421,7 +421,7 @@ raw expr       : noteq(tuple(1_u8, "a"), tuple(1_u8, "b"))
 checked expr   : noteq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -439,7 +439,7 @@ raw expr       : noteq(parse_json("\"databend\""), parse_json("\"databend\""))
 checked expr   : noteq<Variant, Variant>(parse_json<String>("\"databend\""), parse_json<String>("\"databend\""))
 optimized expr : false
 output type    : Boolean
-output domain  : Unknown
+output domain  : {FALSE}
 output         : false
 
 
@@ -496,7 +496,7 @@ raw expr       : lt("1", "2")
 checked expr   : lt<String, String>("1", "2")
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -523,7 +523,7 @@ raw expr       : lt(true, true)
 checked expr   : lt<Boolean, Boolean>(true, true)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -559,7 +559,7 @@ raw expr       : lt(array(1_u8, 2_u8), array(2_u8, 3_u8))
 checked expr   : lt<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -568,7 +568,7 @@ raw expr       : lt(tuple(1_u8, "b"), tuple(1_u8, "a"))
 checked expr   : lt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -577,7 +577,7 @@ raw expr       : lt(tuple(1_u8, "a"), tuple(1_u8, "b"))
 checked expr   : lt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -586,7 +586,7 @@ raw expr       : lt(tuple(1_u8, "a"), tuple(2_u8, "a"))
 checked expr   : lt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -604,7 +604,7 @@ raw expr       : lt(parse_json("\"true\""), parse_json("\"false\""))
 checked expr   : lt<Variant, Variant>(parse_json<String>("\"true\""), parse_json<String>("\"false\""))
 optimized expr : false
 output type    : Boolean
-output domain  : Unknown
+output domain  : {FALSE}
 output         : false
 
 
@@ -667,7 +667,7 @@ raw expr       : lte("5", "2")
 checked expr   : lte<String, String>("5", "2")
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -730,7 +730,7 @@ raw expr       : lte(array(1_u8, 2_u8), array(2_u8, 3_u8))
 checked expr   : lte<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -739,7 +739,7 @@ raw expr       : lte(tuple(1_u8, "b"), tuple(1_u8, "a"))
 checked expr   : lte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -748,7 +748,7 @@ raw expr       : lte(tuple(1_u8, "a"), tuple(1_u8, "b"))
 checked expr   : lte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -757,7 +757,7 @@ raw expr       : lte(tuple(1_u8, "a"), tuple(2_u8, "a"))
 checked expr   : lte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -766,7 +766,7 @@ raw expr       : lte(parse_json("null"), parse_json("null"))
 checked expr   : lte<Variant, Variant>(parse_json<String>("null"), parse_json<String>("null"))
 optimized expr : true
 output type    : Boolean
-output domain  : Unknown
+output domain  : {TRUE}
 output         : true
 
 
@@ -839,7 +839,7 @@ raw expr       : gt("3", "2")
 checked expr   : gt<String, String>("3", "2")
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -866,7 +866,7 @@ raw expr       : gt(true, true)
 checked expr   : gt<Boolean, Boolean>(true, true)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -902,7 +902,7 @@ raw expr       : gt(array(1_u8, 2_u8), array(2_u8, 3_u8))
 checked expr   : gt<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -911,7 +911,7 @@ raw expr       : gt(tuple(1_u8, "b"), tuple(1_u8, "a"))
 checked expr   : gt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -920,7 +920,7 @@ raw expr       : gt(tuple(1_u8, "a"), tuple(1_u8, "b"))
 checked expr   : gt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -929,7 +929,7 @@ raw expr       : gt(tuple(1_u8, "a"), tuple(2_u8, "a"))
 checked expr   : gt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -956,7 +956,7 @@ raw expr       : gt(parse_json("{\"k\":\"v\",\"a\":\"b\"}"), parse_json("{\"k\":
 checked expr   : gt<Variant, Variant>(parse_json<String>("{\"k\":\"v\",\"a\":\"b\"}"), parse_json<String>("{\"k\":\"v\",\"a\":\"d\"}"))
 optimized expr : false
 output type    : Boolean
-output domain  : Unknown
+output domain  : {FALSE}
 output         : false
 
 
@@ -1015,7 +1015,7 @@ raw expr       : gte("2", "1")
 checked expr   : gte<String, String>("2", "1")
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -1078,7 +1078,7 @@ raw expr       : gte(array(1_u8, 2_u8), array(2_u8, 3_u8))
 checked expr   : gte<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -1087,7 +1087,7 @@ raw expr       : gte(tuple(1_u8, "b"), tuple(1_u8, "a"))
 checked expr   : gte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -1096,7 +1096,7 @@ raw expr       : gte(tuple(1_u8, "a"), tuple(1_u8, "b"))
 checked expr   : gte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -1105,7 +1105,7 @@ raw expr       : gte(tuple(1_u8, "a"), tuple(2_u8, "a"))
 checked expr   : gte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -1132,7 +1132,7 @@ raw expr       : gte(parse_json("1.912e2"), parse_json("1.912e2"))
 checked expr   : gte<Variant, Variant>(parse_json<String>("1.912e2"), parse_json<String>("1.912e2"))
 optimized expr : true
 output type    : Boolean
-output domain  : Unknown
+output domain  : {TRUE}
 output         : true
 
 
@@ -1195,7 +1195,7 @@ raw expr       : like("1", "2")
 checked expr   : like<String, String>("1", "2")
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -1205,7 +1205,7 @@ raw expr       : like("hello\n", "h%")
 checked expr   : like<String, String>("hello\n", "h%")
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -1215,7 +1215,7 @@ raw expr       : like("h\n", "h_")
 checked expr   : like<String, String>("h\n", "h_")
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -1224,7 +1224,7 @@ raw expr       : like("%", "\\%")
 checked expr   : like<String, String>("%", "\\%")
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -1233,7 +1233,7 @@ raw expr       : like("v%xx", "_\\%%")
 checked expr   : like<String, String>("v%xx", "_\\%%")
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 

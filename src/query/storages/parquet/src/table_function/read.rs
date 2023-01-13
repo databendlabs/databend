@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::parquet::read as pread;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -28,6 +27,7 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use storages_common_pruner::RangePrunerCreator;
 
+use super::table::arrow_to_table_schema;
 use super::ParquetTable;
 use super::TableContext;
 use crate::parquet_part::ColumnMeta;
@@ -115,13 +115,27 @@ impl ParquetTable {
             PushDownInfo::projection_of_push_downs(&plan.source_info.schema(), &plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx)?;
         let ctx_ref = ctx.clone();
-        // `dummy_reader` is only used for prune columns in row groups.
-        let (_, _, _, columns_to_read) =
-            ParquetReader::do_projection(&self.arrow_schema, &columns_to_read)?;
 
         // do parition at the begin of the whole pipeline.
         let push_downs = plan.push_downs.clone();
-        let schema = plan.source_info.schema();
+
+        // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.
+        // Therefore, if there is inner fields in projection, we skip the row group pruning.
+        let skip_pruning = matches!(columns_to_read, Projection::InnerColumns(_));
+
+        // Use `projected_column_leaves` to collect stats from row groups for pruning.
+        // `projected_column_leaves` contains the smallest column set that is needed for the query.
+        // Use `projected_arrow_schema` to create `row_group_pruner` (`RangePruner`).
+        //
+        // During evaluation,
+        // `RangePruner` will use field name to find the offset in the schema,
+        // and use the offset to find the column stat from `StatisticsOfColumns` (HashMap<offset, stat>).
+        //
+        // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
+        let (projected_arrow_schema, projected_column_leaves, _, columns_to_read) =
+            ParquetReader::do_projection(&self.arrow_schema, &columns_to_read)?;
+        let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
+
         pipeline.set_on_init(move || {
             let mut partitions = Vec::with_capacity(locations.len());
 
@@ -138,22 +152,28 @@ impl ParquetTable {
 
             for location in &locations {
                 let file_meta = ParquetReader::read_meta(location)?;
-                let arrow_schema = pread::infer_schema(&file_meta)?;
                 let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
 
-                // If collecting stats fails or `should_keep` is true, we still read the row group.
-                // Otherwise, the row group will be pruned.
-                if let Ok(row_group_stats) = ParquetReader::collect_row_group_stats(
-                    &arrow_schema,
-                    &file_meta.row_groups,
-                    &columns_to_read,
-                ) {
-                    for (idx, (stats, _rg)) in row_group_stats
+                let no_stats = file_meta.row_groups.iter().any(|r| {
+                    r.columns()
                         .iter()
-                        .zip(file_meta.row_groups.iter())
-                        .enumerate()
-                    {
-                        row_group_pruned[idx] = !row_group_pruner.should_keep(stats);
+                        .any(|c| c.metadata().statistics.is_none())
+                });
+
+                if !skip_pruning && !no_stats {
+                    // If collecting stats fails or `should_keep` is true, we still read the row group.
+                    // Otherwise, the row group will be pruned.
+                    if let Ok(row_group_stats) = ParquetReader::collect_row_group_stats(
+                        &projected_column_leaves,
+                        &file_meta.row_groups,
+                    ) {
+                        for (idx, (stats, _rg)) in row_group_stats
+                            .iter()
+                            .zip(file_meta.row_groups.iter())
+                            .enumerate()
+                        {
+                            row_group_pruned[idx] = !row_group_pruner.should_keep(stats);
+                        }
                     }
                 }
 

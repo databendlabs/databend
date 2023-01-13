@@ -16,4 +16,5 @@ mod read;
 mod table;
 
 use common_catalog::table_context::TableContext;
+pub use table::arrow_to_table_schema;
 pub use table::ParquetTable;

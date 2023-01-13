@@ -41,11 +41,11 @@ impl TransformResortAddOn
 where Self: Transform
 {
     pub fn try_create(
+        ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         input_schema: DataSchemaRef,
         table: Arc<dyn Table>,
-        ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
         let fields = table
             .schema()

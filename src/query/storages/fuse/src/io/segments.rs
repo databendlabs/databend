@@ -131,3 +131,18 @@ where
 
     Ok(joint)
 }
+
+/// This is a workaround to address `higher-ranked lifetime error` from rustc
+///
+/// TODO: remove me after rustc works with try_join_futures directly.
+pub async fn try_join_futures_with_vec<Fut>(
+    ctx: Arc<dyn TableContext>,
+    futures: Vec<Fut>,
+    thread_name: String,
+) -> Result<Vec<Fut::Output>>
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    try_join_futures(ctx, futures, thread_name).await
+}

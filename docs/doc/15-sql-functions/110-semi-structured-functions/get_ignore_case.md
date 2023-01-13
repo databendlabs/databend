@@ -2,7 +2,7 @@
 title: GET_IGNORE_CASE
 ---
 
-Extracts value from an `OBJECT` by `field_name`, or a `VARIANT` that contains `OBJECT`.
+Extracts value from a `VARIANT` that contains `OBJECT` by the field_name.
 The value is returned as a `Variant` or `NULL` if either of the arguments is `NULL`.
 
 `GET_IGNORE_CASE` is similar to `GET` but applies case-insensitive matching to field names.
@@ -11,7 +11,6 @@ First match the exact same field name, if not found, match the case-insensitive 
 ## Syntax
 
 ```sql
-GET_IGNORE_CASE( <object>, <field_name> )
 GET_IGNORE_CASE( <variant>, <field_name> )
 ```
 
@@ -19,7 +18,6 @@ GET_IGNORE_CASE( <variant>, <field_name> )
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| `<object>`      | The OBJECT value
 | `<variant>`     | The VARIANT value that contains either an ARRAY or an OBJECT
 | `<field_name>`  | The String value specifies the key in a key-value pair of OBJECT
 

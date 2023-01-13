@@ -17,12 +17,9 @@
 
 use std::sync::Arc;
 
-use ce::converts::from_schema;
-use ce::converts::to_schema;
 use chrono::DateTime;
 use chrono::Utc;
-use common_datavalues as dv;
-use common_expression as ce;
+use common_expression as ex;
 use common_meta_app::schema as mt;
 use common_protos::pb;
 use common_storage::StorageParams;
@@ -35,6 +32,9 @@ use crate::VER;
 
 impl FromToProto for mt::TableCopiedFileInfo {
     type PB = pb::TableCopiedFileInfo;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableCopiedFileInfo) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -66,6 +66,9 @@ impl FromToProto for mt::TableCopiedFileInfo {
 
 impl FromToProto for mt::TableCopiedFileLock {
     type PB = pb::TableCopiedFileLock;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableCopiedFileLock) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -84,6 +87,9 @@ impl FromToProto for mt::TableCopiedFileLock {
 
 impl FromToProto for mt::TableNameIdent {
     type PB = pb::TableNameIdent;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableNameIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -109,6 +115,9 @@ impl FromToProto for mt::TableNameIdent {
 
 impl FromToProto for mt::DBIdTableName {
     type PB = pb::DbIdTableName;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DbIdTableName) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -132,6 +141,9 @@ impl FromToProto for mt::DBIdTableName {
 
 impl FromToProto for mt::TableIdent {
     type PB = pb::TableIdent;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -156,6 +168,9 @@ impl FromToProto for mt::TableIdent {
 
 impl FromToProto for mt::TableMeta {
     type PB = pb::TableMeta;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -174,9 +189,8 @@ impl FromToProto for mt::TableMeta {
             p.catalog
         };
 
-        let dv_schema = dv::DataSchema::from_pb(schema)?;
         let v = Self {
-            schema: Arc::new(from_schema(&dv_schema)),
+            schema: Arc::new(ex::TableSchema::from_pb(schema)?),
             catalog,
             engine: p.engine,
             engine_options: p.engine_options,
@@ -210,12 +224,11 @@ impl FromToProto for mt::TableMeta {
     }
 
     fn to_pb(&self) -> Result<pb::TableMeta, Incompatible> {
-        let schema = to_schema(&self.schema);
         let p = pb::TableMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             catalog: self.catalog.clone(),
-            schema: Some(schema.to_pb()?),
+            schema: Some(self.schema.to_pb()?),
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             storage_params: match self.storage_params.clone() {
@@ -247,6 +260,9 @@ impl FromToProto for mt::TableMeta {
 
 impl FromToProto for mt::TableStatistics {
     type PB = pb::TableStatistics;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableStatistics) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
@@ -275,6 +291,9 @@ impl FromToProto for mt::TableStatistics {
 
 impl FromToProto for mt::TableIdList {
     type PB = pb::TableIdList;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::TableIdList) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 

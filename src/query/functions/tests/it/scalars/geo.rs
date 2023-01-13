@@ -25,10 +25,28 @@ fn test_geo() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("geo.txt").unwrap();
 
+    test_geo_to_h3(file);
     test_great_circle_distance(file);
     test_geo_distance(file);
     test_great_circle_angle(file);
     test_point_in_ellipses(file);
+    test_point_in_polygon(file);
+    test_geohash_encode(file);
+    test_geohash_decode(file);
+}
+
+fn test_geo_to_h3(file: &mut impl Write) {
+    run_ast(file, "geo_to_h3(37.79506683, 55.71290588, 15)", &[]);
+    run_ast(file, "geo_to_h3(lon, lat, 15)", &[
+        (
+            "lon",
+            Float64Type::from_data(vec![37.63098076, 37.66018300, 37.59813500]),
+        ),
+        (
+            "lat",
+            Float64Type::from_data(vec![55.77922738, 55.76324100, 55.72076200]),
+        ),
+    ]);
 }
 
 fn test_great_circle_distance(file: &mut impl Write) {
@@ -107,4 +125,29 @@ fn test_point_in_ellipses(file: &mut impl Write) {
         ("a", Float64Type::from_data(vec![1.0, 1.1, 1.2])),
         ("b", Float64Type::from_data(vec![0.9999, 0.9998, 0.9997])),
     ]);
+}
+
+fn test_point_in_polygon(file: &mut impl Write) {
+    run_ast(
+        file,
+        "point_in_polygon((3., 3.), [(6, 0), (8, 4), (5, 8), (0, 2)])",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "point_in_polygon((a, b), [(6, 0), (8, 4), (5, 8), (0, 2)])",
+        &[
+            ("a", Float64Type::from_data(vec![3.0, 3.1, 3.2])),
+            ("b", Float64Type::from_data(vec![3.0, 3.1, 3.2])),
+        ],
+    );
+}
+
+fn test_geohash_encode(file: &mut impl Write) {
+    run_ast(file, "geohash_encode(-5.60302734375, 42.593994140625)", &[]);
+}
+
+fn test_geohash_decode(file: &mut impl Write) {
+    run_ast(file, "geohash_decode('ezs42')", &[]);
 }

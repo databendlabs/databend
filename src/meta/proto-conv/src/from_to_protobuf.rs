@@ -19,6 +19,9 @@ pub trait FromToProto {
     /// The corresponding protobuf defined type.
     type PB;
 
+    /// Get the version encoded in a protobuf message.
+    fn get_pb_ver(p: &Self::PB) -> u64;
+
     /// Convert to rust type from protobuf type.
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized;
@@ -37,6 +40,9 @@ impl<T> FromToProto for Arc<T>
 where T: FromToProto
 {
     type PB = T::PB;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        T::get_pb_ver(p)
+    }
 
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
