@@ -84,7 +84,7 @@ async fn expect_end(ep: &EndpointType, result: QueryResponse) -> Result<()> {
         "{:?}",
         result
     );
-    assert!(result.schema.is_some(), "{:?}", result);
+    assert!(!result.schema.is_empty(), "{:?}", result);
 
     let next_uri = result.next_uri.clone().unwrap();
     if next_uri.contains("final") {
@@ -126,13 +126,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert!(result.schema.is_some(), "{:?}", result);
-    assert_eq!(
-        result.schema.as_ref().unwrap().fields().len(),
-        11,
-        "{:?}",
-        result
-    );
+    assert_eq!(result.schema.len(), 11, "{:?}", result);
 
     // get state
     let uri = make_state_uri(query_id);
@@ -141,7 +135,7 @@ async fn test_simple_sql() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
-    assert!(result.schema.is_some(), "{:?}", result);
+    assert!(result.schema.is_empty(), "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
     // get page, support retry
@@ -152,7 +146,7 @@ async fn test_simple_sql() -> Result<()> {
         assert!(result.error.is_none(), "{:?}", result);
         assert_eq!(result.data.len(), 10, "{:?}", result);
         assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
-        assert!(result.schema.is_some(), "{:?}", result);
+        assert!(!result.schema.is_empty(), "{:?}", result);
         assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     }
 
@@ -175,14 +169,8 @@ async fn test_simple_sql() -> Result<()> {
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
-    assert!(result.schema.is_some(), "{:?}", result);
     // has only one column
-    assert_eq!(
-        result.schema.as_ref().unwrap().fields().len(),
-        1,
-        "{:?}",
-        result
-    );
+    assert_eq!(result.schema.len(), 1, "{:?}", result);
     Ok(())
 }
 
@@ -194,27 +182,15 @@ async fn test_show_databases() -> Result<()> {
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
-    assert!(result.schema.is_some(), "{:?}", result);
     // has only one field: name
-    assert_eq!(
-        result.schema.as_ref().unwrap().fields().len(),
-        1,
-        "{:?}",
-        result
-    );
+    assert_eq!(result.schema.len(), 1, "{:?}", result);
 
     let sql = "show full databases";
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
-    assert!(result.schema.is_some(), "{:?}", result);
     // has two fields: catalog, name
-    assert_eq!(
-        result.schema.as_ref().unwrap().fields().len(),
-        2,
-        "{:?}",
-        result
-    );
+    assert_eq!(result.schema.len(), 2, "{:?}", result);
     Ok(())
 }
 
@@ -310,7 +286,7 @@ async fn test_wait_time_secs() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert_eq!(result.next_uri, Some(next_uri.clone()), "{:?}", result);
-    assert!(result.schema.is_some(), "{:?}", result);
+    assert!(!result.schema.is_empty(), "{:?}", result);
 
     let mut uri = make_page_uri(query_id, 0);
     let mut num_row = 0;
@@ -334,7 +310,7 @@ async fn test_wait_time_secs() -> Result<()> {
             }
             None => {
                 assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
-                assert!(result.schema.is_some(), "{:?}", result);
+                assert!(result.schema.is_empty(), "{:?}", result);
                 assert_eq!(num_row, 1, "{:?}", result);
                 return Ok(());
             }
@@ -381,7 +357,7 @@ async fn test_pagination() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 2, "{:?}", result);
     assert_eq!(result.next_uri, Some(next_uri), "{:?}", result);
-    assert!(result.schema.is_some(), "{:?}", result);
+    assert!(!result.schema.is_empty(), "{:?}", result);
 
     // get page not expected
     let uri = make_page_uri(query_id, 6);
@@ -397,7 +373,7 @@ async fn test_pagination() -> Result<()> {
         let msg = || format!("page {}: {:?}", page, result);
         assert_eq!(status, StatusCode::OK, "{:?}", msg());
         assert!(result.error.is_none(), "{:?}", msg());
-        assert!(result.schema.is_some(), "{:?}", result);
+        assert!(!result.schema.is_empty(), "{:?}", result);
         if page == 5 {
             // get state
             let uri = make_state_uri(query_id);
@@ -427,7 +403,7 @@ async fn test_http_session() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert!(result.next_uri.is_some(), "{:?}", result);
-    assert!(result.schema.is_some(), "{:?}", result);
+    assert!(result.schema.is_empty(), "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     let session_id = &result.session_id.unwrap();
 
@@ -525,7 +501,7 @@ async fn test_system_tables() -> Result<()> {
             error_message
         );
         assert!(result.next_uri.is_some(), "{:?}", result);
-        assert!(result.schema.is_some(), "{:?}", result);
+        assert!(!result.schema.is_empty(), "{:?}", result);
     }
     Ok(())
 }
