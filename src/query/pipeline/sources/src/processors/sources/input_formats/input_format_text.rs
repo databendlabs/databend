@@ -225,17 +225,10 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
 
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder>;
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<Option<ErrorCode>>;
-
-    fn row_batch_maximum_error(error_map: &HashMap<u16, InputError>) -> Option<ErrorCode> {
-        if error_map.is_empty() {
-            None
-        } else {
-            // unwrap is safe here cause error_map must have at least 1 element.
-            let (_key, input_error) = error_map.iter().max_by_key(|entry| entry.1.num).unwrap();
-            Some(input_error.err.clone())
-        }
-    }
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>>;
 }
 
 pub struct InputFormatTextPipe<T> {
@@ -448,6 +441,19 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
     fn memory_size(&self) -> usize {
         self.mutable_columns.iter().map(|x| x.memory_size()).sum()
     }
+
+    fn merge_map(&self, error_map: HashMap<u16, InputError>, file_name: String) {
+        if let Some(ref on_error_map) = self.ctx.on_error_map {
+            on_error_map
+                .entry(file_name)
+                .and_modify(|x| {
+                    for (k, v) in error_map.clone() {
+                        x.entry(k).and_modify(|y| y.num += v.num).or_insert(v);
+                    }
+                })
+                .or_insert(error_map);
+        }
+    }
 }
 
 impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
@@ -470,8 +476,10 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
 
     fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<DataBlock>> {
         if let Some(b) = batch {
+            let file_name = b.split_info.file.path.clone();
             self.num_rows += b.row_ends.len();
-            T::deserialize(self, b)?;
+            let r = T::deserialize(self, b)?;
+            self.merge_map(r, file_name);
             let mem = self.memory_size();
             tracing::debug!(
                 "chunk builder added new batch: row {} size {}",

@@ -91,7 +91,10 @@ impl InputFormatTextBase for InputFormatNDJson {
         Arc::new(FieldJsonAstDecoder::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<Option<ErrorCode>> {
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>> {
         let field_decoder = builder
             .field_decoder
             .as_any()
@@ -139,13 +142,6 @@ impl InputFormatTextBase for InputFormatNDJson {
                                 }
                             });
                             start = *end;
-                            error_map
-                                .entry(e.code())
-                                .and_modify(|input_error| input_error.num += 1)
-                                .or_insert(InputError {
-                                    err: e.clone(),
-                                    num: 1,
-                                });
                             continue;
                         }
                         _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
@@ -155,7 +151,7 @@ impl InputFormatTextBase for InputFormatNDJson {
             start = *end;
             num_rows += 1;
         }
-        Ok(Self::row_batch_maximum_error(&error_map))
+        Ok(error_map)
     }
 }
 

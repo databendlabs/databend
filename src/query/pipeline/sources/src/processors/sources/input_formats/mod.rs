@@ -30,6 +30,7 @@ pub use input_pipeline::StreamingReadBatch;
 pub use input_split::split_by_size;
 pub use input_split::SplitInfo;
 
+#[derive(Debug, Clone)]
 pub struct InputError {
     pub(crate) err: ErrorCode,
     pub(crate) num: usize,

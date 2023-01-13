@@ -102,7 +102,10 @@ impl InputFormatTextBase for InputFormatCSV {
         Arc::new(FieldDecoderCSV::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<Option<ErrorCode>> {
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>> {
         let columns = &mut builder.mutable_columns;
         let n_column = columns.len();
         let mut start = 0usize;
@@ -160,7 +163,7 @@ impl InputFormatTextBase for InputFormatCSV {
             field_end_idx += n_column;
             num_rows += 1;
         }
-        Ok(Self::row_batch_maximum_error(&error_map))
+        Ok(error_map)
     }
 }
 

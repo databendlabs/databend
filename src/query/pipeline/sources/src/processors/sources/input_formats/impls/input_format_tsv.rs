@@ -130,7 +130,10 @@ impl InputFormatTextBase for InputFormatTSV {
         Arc::new(FieldDecoderTSV::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<Option<ErrorCode>> {
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>> {
         tracing::debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.split_info.file.path,
@@ -189,13 +192,6 @@ impl InputFormatTextBase for InputFormatTSV {
                             }
                         });
                         start = *end;
-                        error_map
-                            .entry(e.code())
-                            .and_modify(|input_error| input_error.num += 1)
-                            .or_insert(InputError {
-                                err: e.clone(),
-                                num: 1,
-                            });
                         continue;
                     }
                     _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
@@ -204,7 +200,7 @@ impl InputFormatTextBase for InputFormatTSV {
             start = *end;
             num_rows += 1;
         }
-        Ok(Self::row_batch_maximum_error(&error_map))
+        Ok(error_map)
     }
 }
 

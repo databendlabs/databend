@@ -139,7 +139,10 @@ impl InputFormatTextBase for InputFormatXML {
         Arc::new(FieldDecoderXML::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<Option<ErrorCode>> {
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>> {
         let field_decoder = builder
             .field_decoder
             .as_any()
@@ -264,13 +267,6 @@ impl InputFormatTextBase for InputFormatXML {
                                                 c.pop_data_value().expect("must success");
                                             }
                                         });
-                                        error_map
-                                            .entry(e.code())
-                                            .and_modify(|input_error| input_error.num += 1)
-                                            .or_insert(InputError {
-                                                err: e.clone(),
-                                                num: 1,
-                                            });
                                         continue;
                                     }
                                     _ => return Err(xml_error(&e.message(), path, num_rows)),
@@ -293,7 +289,7 @@ impl InputFormatTextBase for InputFormatXML {
                 }
             }
         }
-        Ok(Self::row_batch_maximum_error(&error_map))
+        Ok(error_map)
     }
 }
 

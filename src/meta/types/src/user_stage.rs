@@ -14,6 +14,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::str::FromStr;
 
 use chrono::DateTime;
@@ -304,6 +306,30 @@ pub enum OnErrorMode {
 impl Default for OnErrorMode {
     fn default() -> Self {
         Self::AbortNum(1)
+    }
+}
+
+impl Display for OnErrorMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            OnErrorMode::Continue => {
+                write!(f, "continue")
+            }
+            OnErrorMode::SkipFileNum(n) => {
+                if *n <= 1 {
+                    write!(f, "skipfile")
+                } else {
+                    write!(f, "skipfile_{}", n)
+                }
+            }
+            OnErrorMode::AbortNum(n) => {
+                if *n <= 1 {
+                    write!(f, "abort")
+                } else {
+                    write!(f, "abort_{}", n)
+                }
+            }
+        }
     }
 }
 
