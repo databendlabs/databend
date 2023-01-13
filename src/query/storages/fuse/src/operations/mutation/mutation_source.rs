@@ -224,14 +224,7 @@ impl Processor for MutationSource {
                                         Value::Column(Column::Boolean(predicate_col.not()));
                                     data_block = data_block.filter(&filter)?;
                                     if self.remain_reader.is_none() {
-                                        let meta = SerializeDataMeta::create(
-                                            self.index.clone(),
-                                            self.origin_stats.clone(),
-                                        );
-                                        self.state = State::Output(
-                                            self.ctx.try_get_part(),
-                                            data_block.add_meta(Some(meta))?,
-                                        );
+                                        self.state = State::PerformOperator(data_block);
                                     } else {
                                         self.state = State::ReadRemain {
                                             part,
