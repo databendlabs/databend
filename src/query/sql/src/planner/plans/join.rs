@@ -182,7 +182,8 @@ impl Join {
                 break;
             }
             // Currently don't consider the case such as: `t1.a + t1.b = t2.a`
-            if left_condition.used_columns().len() > 1 || right_condition.used_columns().len() > 1 {
+            if left_condition.used_columns().len() != 1 || right_condition.used_columns().len() != 1
+            {
                 continue;
             }
             let left_col_stat = left_prop
