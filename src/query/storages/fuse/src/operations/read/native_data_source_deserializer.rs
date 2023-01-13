@@ -15,9 +15,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_arrow::schema_projection as ap;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -40,16 +43,39 @@ pub struct NativeDeserializeDataTransform {
     output_data: Option<DataBlock>,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<DataChunks>,
+
+    prewhere_columns: Vec<usize>,
+    remain_columns: Vec<usize>,
 }
 
 impl NativeDeserializeDataTransform {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         block_reader: Arc<BlockReader>,
+        plan: &DataSourcePlan,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+        let reader_schema = block_reader.schema();
+
+        let prewhere_columns: Vec<usize> =
+            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
+                None => (0..reader_schema.num_fields()).collect(),
+                Some(v) => {
+                    let projected_arrow_schema =
+                        v.prewhere_columns.project_schema(plan.schema().as_ref());
+                    projected_arrow_schema
+                        .fields()
+                        .iter()
+                        .map(|f| reader_schema.index_of(f.name()))
+                        .collect()
+                }
+            };
+        let remain_columns: Vec<usize> = (0..reader_schema.num_fields())
+            .filter(|i| !prewhere_columns.contains(i))
+            .collect();
+
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
                 scan_progress,
@@ -59,6 +85,9 @@ impl NativeDeserializeDataTransform {
                 output_data: None,
                 parts: vec![],
                 chunks: vec![],
+
+                prewhere_columns,
+                remain_columns,
             },
         )))
     }
@@ -127,13 +156,16 @@ impl Processor for NativeDeserializeDataTransform {
         if let Some(chunks) = self.chunks.last_mut() {
             let mut arrays = Vec::with_capacity(chunks.len());
 
+            for index in self.prewhere_columns.iter() {
+                arrays.push((*index, chunks[0].next_array()?));
+            }
+
             for (index, chunk) in chunks.iter_mut() {
                 if !chunk.has_next() {
                     // No data anymore
                     let _ = self.chunks.pop();
                     return Ok(());
                 }
-
                 arrays.push((*index, chunk.next_array()?));
             }
 
