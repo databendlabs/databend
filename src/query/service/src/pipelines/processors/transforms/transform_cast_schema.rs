@@ -55,6 +55,7 @@ where Self: Transform
                     span: None,
                     id: index,
                     data_type: from.data_type().clone(),
+                    display_name: from.name().clone(),
                 };
                 if from != to {
                     Expr::Cast {

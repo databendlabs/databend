@@ -32,6 +32,7 @@ impl Scalar {
                 span: None,
                 id: column_ref.column.column_name.clone(),
                 data_type: *column_ref.column.data_type.clone(),
+                display_name: column_ref.column.column_name.clone(),
             },
             Scalar::ConstantExpr(constant) => RawExpr::Literal {
                 span: None,
@@ -65,6 +66,7 @@ impl Scalar {
                 span: None,
                 id: agg.display_name.clone(),
                 data_type: *agg.return_type.clone(),
+                display_name: agg.display_name.clone(),
             },
             Scalar::FunctionCall(func) => RawExpr::FunctionCall {
                 span: None,
@@ -85,6 +87,7 @@ impl Scalar {
                 span: None,
                 id: DUMMY_NAME.to_string(),
                 data_type: subquery.data_type(),
+                display_name: DUMMY_NAME.to_string(),
             },
         }
     }

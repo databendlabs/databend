@@ -123,11 +123,14 @@ impl PhysicalScalar {
                 dest_type: target.clone(),
             },
             PhysicalScalar::IndexedVariable {
-                index, data_type, ..
+                index,
+                data_type,
+                display_name,
             } => RawExpr::ColumnRef {
                 span: None,
                 id: *index,
                 data_type: data_type.clone(),
+                display_name: display_name.clone(),
             },
         }
     }

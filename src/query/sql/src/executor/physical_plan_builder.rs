@@ -630,8 +630,9 @@ impl PhysicalPlanBuilder {
                         // sort item is already a column
                         let scalar = RemoteExpr::ColumnRef {
                             span: None,
-                            id: name,
+                            id: name.clone(),
                             data_type,
+                            display_name: name,
                         };
 
                         Ok((scalar, item.asc, item.nulls_first))

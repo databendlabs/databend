@@ -127,6 +127,7 @@ fn eval_index(index: &BlockFilter, col_name: &str, val: Scalar, ty: DataType) ->
                 span: None,
                 id: col_name.to_string(),
                 data_type: ty.clone(),
+                display_name: col_name.to_string(),
             },
             Expr::Constant {
                 span: None,

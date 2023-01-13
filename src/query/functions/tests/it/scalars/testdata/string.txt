@@ -35,8 +35,8 @@ output         : NULL
 
 
 ast            : ucase(a)
-raw expr       : ucase(#0::String)
-checked expr   : upper<String>(#0)
+raw expr       : ucase(a::String)
+checked expr   : upper<String>(a)
 evaluation:
 +--------+-------------------+-------------+
 |        | a                 | Output      |
@@ -93,8 +93,8 @@ output         : NULL
 
 
 ast            : lcase(a)
-raw expr       : lcase(#0::String)
-checked expr   : lower<String>(#0)
+raw expr       : lcase(a::String)
+checked expr   : lower<String>(a)
 evaluation:
 +--------+-------------------+----------------+
 |        | a                 | Output         |
@@ -133,8 +133,8 @@ output         : NULL
 
 
 ast            : bit_length(a)
-raw expr       : bit_length(#0::String)
-checked expr   : bit_length<String>(#0)
+raw expr       : bit_length(a::String)
+checked expr   : bit_length<String>(a)
 evaluation:
 +--------+-----------------------------------+----------------------------+
 |        | a                                 | Output                     |
@@ -173,8 +173,8 @@ output         : NULL
 
 
 ast            : length(a)
-raw expr       : length(#0::String)
-checked expr   : length<String>(#0)
+raw expr       : length(a::String)
+checked expr   : length<String>(a)
 evaluation:
 +--------+-----------------------------------+----------------------------+
 |        | a                                 | Output                     |
@@ -213,8 +213,8 @@ output         : NULL
 
 
 ast            : character_length(a)
-raw expr       : character_length(#0::String)
-checked expr   : char_length<String>(#0)
+raw expr       : character_length(a::String)
+checked expr   : char_length<String>(a)
 evaluation:
 +--------+-----------------------------------+---------+
 |        | a                                 | Output  |
@@ -262,8 +262,8 @@ output         : NULL
 
 
 ast            : to_base64(a)
-raw expr       : to_base64(#0::String)
-checked expr   : to_base64<String>(#0)
+raw expr       : to_base64(a::String)
+checked expr   : to_base64<String>(a)
 evaluation:
 +--------+-----------------+--------+
 |        | a               | Output |
@@ -310,8 +310,8 @@ output         : NULL
 
 
 ast            : from_base64(a)
-raw expr       : from_base64(#0::String)
-checked expr   : from_base64<String>(#0)
+raw expr       : from_base64(a::String)
+checked expr   : from_base64<String>(a)
 evaluation:
 +--------+-------------------+---------+
 |        | a                 | Output  |
@@ -447,8 +447,8 @@ output         : NULL
 
 
 ast            : quote(a)
-raw expr       : quote(#0::String)
-checked expr   : quote<String>(#0)
+raw expr       : quote(a::String)
+checked expr   : quote<String>(a)
 evaluation:
 +--------+---------------------+-------------+
 |        | a                   | Output      |
@@ -532,8 +532,8 @@ output         : NULL
 
 
 ast            : reverse(a)
-raw expr       : reverse(#0::String)
-checked expr   : reverse<String>(#0)
+raw expr       : reverse(a::String)
+checked expr   : reverse<String>(a)
 evaluation:
 +--------+--------------+--------+
 |        | a            | Output |
@@ -617,8 +617,8 @@ output         : NULL
 
 
 ast            : ascii(a)
-raw expr       : ascii(#0::String)
-checked expr   : ascii<String>(#0)
+raw expr       : ascii(a::String)
+checked expr   : ascii<String>(a)
 evaluation:
 +--------+-----------------+------------+
 |        | a               | Output     |
@@ -640,8 +640,8 @@ evaluation (internal):
 
 
 ast            : ascii(b)
-raw expr       : ascii(#0::String)
-checked expr   : ascii<String>(#0)
+raw expr       : ascii(b::String)
+checked expr   : ascii<String>(b)
 optimized expr : 0_u8
 evaluation:
 +--------+-----------+---------+
@@ -688,8 +688,8 @@ output         : NULL
 
 
 ast            : ltrim(a)
-raw expr       : ltrim(#0::String)
-checked expr   : ltrim<String>(#0)
+raw expr       : ltrim(a::String)
+checked expr   : ltrim<String>(a)
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -738,8 +738,8 @@ output         : NULL
 
 
 ast            : rtrim(a)
-raw expr       : rtrim(#0::String)
-checked expr   : rtrim<String>(#0)
+raw expr       : rtrim(a::String)
+checked expr   : rtrim<String>(a)
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -815,8 +815,8 @@ output         : NULL
 
 
 ast            : trim_leading(a, 'a')
-raw expr       : trim_leading(#0::String, "a")
-checked expr   : trim_leading<String, String>(#0, "a")
+raw expr       : trim_leading(a::String, "a")
+checked expr   : trim_leading<String, String>(a, "a")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -837,8 +837,8 @@ evaluation (internal):
 
 
 ast            : trim_leading(a, b)
-raw expr       : trim_leading(#0::String, #1::String)
-checked expr   : trim_leading<String, String>(#0, #1)
+raw expr       : trim_leading(a::String, b::String)
+checked expr   : trim_leading<String, String>(a, b)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -860,8 +860,8 @@ evaluation (internal):
 
 
 ast            : trim_leading('aba', b)
-raw expr       : trim_leading("aba", #1::String)
-checked expr   : trim_leading<String, String>("aba", #1)
+raw expr       : trim_leading("aba", b::String)
+checked expr   : trim_leading<String, String>("aba", b)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -936,8 +936,8 @@ output         : NULL
 
 
 ast            : trim_trailing(a, 'b')
-raw expr       : trim_trailing(#0::String, "b")
-checked expr   : trim_trailing<String, String>(#0, "b")
+raw expr       : trim_trailing(a::String, "b")
+checked expr   : trim_trailing<String, String>(a, "b")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -958,8 +958,8 @@ evaluation (internal):
 
 
 ast            : trim_trailing(a, b)
-raw expr       : trim_trailing(#0::String, #1::String)
-checked expr   : trim_trailing<String, String>(#0, #1)
+raw expr       : trim_trailing(a::String, b::String)
+checked expr   : trim_trailing<String, String>(a, b)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -981,8 +981,8 @@ evaluation (internal):
 
 
 ast            : trim_trailing('aba', b)
-raw expr       : trim_trailing("aba", #1::String)
-checked expr   : trim_trailing<String, String>("aba", #1)
+raw expr       : trim_trailing("aba", b::String)
+checked expr   : trim_trailing<String, String>("aba", b)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -1057,8 +1057,8 @@ output         : NULL
 
 
 ast            : trim_both(a, 'a')
-raw expr       : trim_both(#0::String, "a")
-checked expr   : trim_both<String, String>(#0, "a")
+raw expr       : trim_both(a::String, "a")
+checked expr   : trim_both<String, String>(a, "a")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -1079,8 +1079,8 @@ evaluation (internal):
 
 
 ast            : trim_both(a, b)
-raw expr       : trim_both(#0::String, #1::String)
-checked expr   : trim_both<String, String>(#0, #1)
+raw expr       : trim_both(a::String, b::String)
+checked expr   : trim_both<String, String>(a, b)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1102,8 +1102,8 @@ evaluation (internal):
 
 
 ast            : trim_both('aba', b)
-raw expr       : trim_both("aba", #1::String)
-checked expr   : trim_both<String, String>("aba", #1)
+raw expr       : trim_both("aba", b::String)
+checked expr   : trim_both<String, String>("aba", b)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -1151,8 +1151,8 @@ output         : NULL
 
 
 ast            : trim(a)
-raw expr       : trim(#0::String)
-checked expr   : trim<String>(#0)
+raw expr       : trim(a::String)
+checked expr   : trim<String>(a)
 evaluation:
 +--------+-----------------------+--------+
 |        | a                     | Output |
@@ -1228,8 +1228,8 @@ output         : NULL
 
 
 ast            : trim(both 'a' from a)
-raw expr       : trim_both(#0::String, "a")
-checked expr   : trim_both<String, String>(#0, "a")
+raw expr       : trim_both(a::String, "a")
+checked expr   : trim_both<String, String>(a, "a")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -1250,8 +1250,8 @@ evaluation (internal):
 
 
 ast            : trim(both b from a)
-raw expr       : trim_both(#0::String, #1::String)
-checked expr   : trim_both<String, String>(#0, #1)
+raw expr       : trim_both(a::String, b::String)
+checked expr   : trim_both<String, String>(a, b)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1273,8 +1273,8 @@ evaluation (internal):
 
 
 ast            : trim(both a from a)
-raw expr       : trim_both(#0::String, #0::String)
-checked expr   : trim_both<String, String>(#0, #0)
+raw expr       : trim_both(a::String, a::String)
+checked expr   : trim_both<String, String>(a, a)
 evaluation:
 +--------+-----------------------+--------+
 |        | a                     | Output |
@@ -1295,8 +1295,8 @@ evaluation (internal):
 
 
 ast            : trim(both b from 'aba')
-raw expr       : trim_both("aba", #1::String)
-checked expr   : trim_both<String, String>("aba", #1)
+raw expr       : trim_both("aba", b::String)
+checked expr   : trim_both<String, String>("aba", b)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -1371,8 +1371,8 @@ output         : NULL
 
 
 ast            : trim(leading 'a' from a)
-raw expr       : trim_leading(#0::String, "a")
-checked expr   : trim_leading<String, String>(#0, "a")
+raw expr       : trim_leading(a::String, "a")
+checked expr   : trim_leading<String, String>(a, "a")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -1393,8 +1393,8 @@ evaluation (internal):
 
 
 ast            : trim(leading b from a)
-raw expr       : trim_leading(#0::String, #1::String)
-checked expr   : trim_leading<String, String>(#0, #1)
+raw expr       : trim_leading(a::String, b::String)
+checked expr   : trim_leading<String, String>(a, b)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1416,8 +1416,8 @@ evaluation (internal):
 
 
 ast            : trim(leading a from a)
-raw expr       : trim_leading(#0::String, #0::String)
-checked expr   : trim_leading<String, String>(#0, #0)
+raw expr       : trim_leading(a::String, a::String)
+checked expr   : trim_leading<String, String>(a, a)
 evaluation:
 +--------+-----------------------+--------+
 |        | a                     | Output |
@@ -1438,8 +1438,8 @@ evaluation (internal):
 
 
 ast            : trim(leading b from 'aba')
-raw expr       : trim_leading("aba", #1::String)
-checked expr   : trim_leading<String, String>("aba", #1)
+raw expr       : trim_leading("aba", b::String)
+checked expr   : trim_leading<String, String>("aba", b)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -1514,8 +1514,8 @@ output         : NULL
 
 
 ast            : trim(trailing 'a' from a)
-raw expr       : trim_trailing(#0::String, "a")
-checked expr   : trim_trailing<String, String>(#0, "a")
+raw expr       : trim_trailing(a::String, "a")
+checked expr   : trim_trailing<String, String>(a, "a")
 evaluation:
 +--------+-----------------------+----------+
 |        | a                     | Output   |
@@ -1536,8 +1536,8 @@ evaluation (internal):
 
 
 ast            : trim(trailing b from a)
-raw expr       : trim_trailing(#0::String, #1::String)
-checked expr   : trim_trailing<String, String>(#0, #1)
+raw expr       : trim_trailing(a::String, b::String)
+checked expr   : trim_trailing<String, String>(a, b)
 evaluation:
 +--------+-----------------------+-------------+--------+
 |        | a                     | b           | Output |
@@ -1559,8 +1559,8 @@ evaluation (internal):
 
 
 ast            : trim(trailing a from a)
-raw expr       : trim_trailing(#0::String, #0::String)
-checked expr   : trim_trailing<String, String>(#0, #0)
+raw expr       : trim_trailing(a::String, a::String)
+checked expr   : trim_trailing<String, String>(a, a)
 evaluation:
 +--------+-----------------------+--------+
 |        | a                     | Output |
@@ -1581,8 +1581,8 @@ evaluation (internal):
 
 
 ast            : trim(trailing b from 'aba')
-raw expr       : trim_trailing("aba", #1::String)
-checked expr   : trim_trailing<String, String>("aba", #1)
+raw expr       : trim_trailing("aba", b::String)
+checked expr   : trim_trailing<String, String>("aba", b)
 evaluation:
 +--------+-------------+--------+
 |        | b           | Output |
@@ -1621,8 +1621,8 @@ output         : NULL
 
 
 ast            : concat(a, '3', '4', '5')
-raw expr       : concat(#0::String, "3", "4", "5")
-checked expr   : concat<String, String, String, String>(#0, "3", "4", "5")
+raw expr       : concat(a::String, "3", "4", "5")
+checked expr   : concat<String, String, String, String>(a, "3", "4", "5")
 evaluation:
 +--------+-----------------------+----------------+
 |        | a                     | Output         |
@@ -1644,9 +1644,9 @@ evaluation (internal):
 
 
 ast            : concat(a, '3')
-raw expr       : concat(#0::String NULL, "3")
-checked expr   : concat<String NULL, String NULL>(#0, CAST("3" AS String NULL))
-optimized expr : concat<String NULL, String NULL>(#0, "3")
+raw expr       : concat(a::String NULL, "3")
+checked expr   : concat<String NULL, String NULL>(a, CAST("3" AS String NULL))
+optimized expr : concat<String NULL, String NULL>(a, "3")
 evaluation:
 +--------+----------------------+-----------------+
 |        | a                    | Output          |
@@ -1686,8 +1686,8 @@ output         : NULL
 
 
 ast            : concat_ws(a, '3', '4', '5')
-raw expr       : concat_ws(#0::String, "3", "4", "5")
-checked expr   : concat_ws<String, String, String, String>(#0, "3", "4", "5")
+raw expr       : concat_ws(a::String, "3", "4", "5")
+checked expr   : concat_ws<String, String, String, String>(a, "3", "4", "5")
 evaluation:
 +--------+-------------+---------+
 |        | a           | Output  |
@@ -1709,9 +1709,9 @@ evaluation (internal):
 
 
 ast            : concat_ws(a, '3')
-raw expr       : concat_ws(#0::String NULL, "3")
-checked expr   : concat_ws<String NULL, String NULL>(#0, CAST("3" AS String NULL))
-optimized expr : concat_ws<String NULL, String NULL>(#0, "3")
+raw expr       : concat_ws(a::String NULL, "3")
+checked expr   : concat_ws<String NULL, String NULL>(a, CAST("3" AS String NULL))
+optimized expr : concat_ws<String NULL, String NULL>(a, "3")
 evaluation:
 +--------+----------------------+-----------------+
 |        | a                    | Output          |
@@ -1733,9 +1733,9 @@ evaluation (internal):
 
 
 ast            : concat_ws(a, '3', '4')
-raw expr       : concat_ws(#0::String NULL, "3", "4")
-checked expr   : concat_ws<String NULL, String NULL, String NULL>(#0, CAST("3" AS String NULL), CAST("4" AS String NULL))
-optimized expr : concat_ws<String NULL, String NULL, String NULL>(#0, "3", "4")
+raw expr       : concat_ws(a::String NULL, "3", "4")
+checked expr   : concat_ws<String NULL, String NULL, String NULL>(a, CAST("3" AS String NULL), CAST("4" AS String NULL))
+optimized expr : concat_ws<String NULL, String NULL, String NULL>(a, "3", "4")
 evaluation:
 +--------+----------------------+-----------------+
 |        | a                    | Output          |
@@ -1769,8 +1769,8 @@ has tried possible overloads:
 
 
 ast            : bin(a)
-raw expr       : bin(#0::Int8)
-checked expr   : bin<Int64>(CAST(#0 AS Int64))
+raw expr       : bin(a::Int8)
+checked expr   : bin<Int64>(CAST(a AS Int64))
 evaluation:
 +--------+----------+--------------------------------------------------------------------+
 |        | a        | Output                                                             |
@@ -1791,8 +1791,8 @@ evaluation (internal):
 
 
 ast            : bin(a2)
-raw expr       : bin(#1::UInt8 NULL)
-checked expr   : bin<Int64 NULL>(CAST(#1 AS Int64 NULL))
+raw expr       : bin(a2::UInt8 NULL)
+checked expr   : bin<Int64 NULL>(CAST(a2 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
@@ -1813,8 +1813,8 @@ evaluation (internal):
 
 
 ast            : bin(b)
-raw expr       : bin(#2::Int16)
-checked expr   : bin<Int64>(CAST(#2 AS Int64))
+raw expr       : bin(b::Int16)
+checked expr   : bin<Int64>(CAST(b AS Int64))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -1835,8 +1835,8 @@ evaluation (internal):
 
 
 ast            : bin(c)
-raw expr       : bin(#3::UInt32)
-checked expr   : bin<Int64>(CAST(#3 AS Int64))
+raw expr       : bin(c::UInt32)
+checked expr   : bin<Int64>(CAST(c AS Int64))
 evaluation:
 +--------+-----------+---------+
 |        | c         | Output  |
@@ -1881,8 +1881,8 @@ has tried possible overloads:
 
 
 ast            : oct(a)
-raw expr       : oct(#0::Int8)
-checked expr   : oct<Int64>(CAST(#0 AS Int64))
+raw expr       : oct(a::Int8)
+checked expr   : oct<Int64>(CAST(a AS Int64))
 evaluation:
 +--------+----------+--------------------------+
 |        | a        | Output                   |
@@ -1903,8 +1903,8 @@ evaluation (internal):
 
 
 ast            : oct(a2)
-raw expr       : oct(#1::UInt8 NULL)
-checked expr   : oct<Int64 NULL>(CAST(#1 AS Int64 NULL))
+raw expr       : oct(a2::UInt8 NULL)
+checked expr   : oct<Int64 NULL>(CAST(a2 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
@@ -1925,8 +1925,8 @@ evaluation (internal):
 
 
 ast            : oct(b)
-raw expr       : oct(#2::Int16)
-checked expr   : oct<Int64>(CAST(#2 AS Int64))
+raw expr       : oct(b::Int16)
+checked expr   : oct<Int64>(CAST(b AS Int64))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -1947,8 +1947,8 @@ evaluation (internal):
 
 
 ast            : oct(c)
-raw expr       : oct(#3::UInt32)
-checked expr   : oct<Int64>(CAST(#3 AS Int64))
+raw expr       : oct(c::UInt32)
+checked expr   : oct<Int64>(CAST(c AS Int64))
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
@@ -1993,8 +1993,8 @@ has tried possible overloads:
 
 
 ast            : hex(a)
-raw expr       : hex(#0::Int8)
-checked expr   : hex<Int64>(CAST(#0 AS Int64))
+raw expr       : hex(a::Int8)
+checked expr   : hex<Int64>(CAST(a AS Int64))
 evaluation:
 +--------+----------+--------------------+
 |        | a        | Output             |
@@ -2015,8 +2015,8 @@ evaluation (internal):
 
 
 ast            : hex(a2)
-raw expr       : hex(#1::UInt8 NULL)
-checked expr   : hex<Int64 NULL>(CAST(#1 AS Int64 NULL))
+raw expr       : hex(a2::UInt8 NULL)
+checked expr   : hex<Int64 NULL>(CAST(a2 AS Int64 NULL))
 evaluation:
 +--------+------------------+-----------------+
 |        | a2               | Output          |
@@ -2037,8 +2037,8 @@ evaluation (internal):
 
 
 ast            : hex(b)
-raw expr       : hex(#2::Int16)
-checked expr   : hex<Int64>(CAST(#2 AS Int64))
+raw expr       : hex(b::Int16)
+checked expr   : hex<Int64>(CAST(b AS Int64))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -2059,8 +2059,8 @@ evaluation (internal):
 
 
 ast            : hex(c)
-raw expr       : hex(#3::UInt32)
-checked expr   : hex<Int64>(CAST(#3 AS Int64))
+raw expr       : hex(c::UInt32)
+checked expr   : hex<Int64>(CAST(c AS Int64))
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
@@ -2095,8 +2095,8 @@ has tried possible overloads:
 
 
 ast            : hex(e)
-raw expr       : hex(#5::String)
-checked expr   : hex<String>(#5)
+raw expr       : hex(e::String)
+checked expr   : hex<String>(e)
 evaluation:
 +--------+-----------------+--------------------+
 |        | e               | Output             |
@@ -2126,8 +2126,8 @@ output         : "databend"
 
 
 ast            : unhex(hex(s))
-raw expr       : unhex(hex(#0::String))
-checked expr   : unhex<String>(hex<String>(#0))
+raw expr       : unhex(hex(s::String))
+checked expr   : unhex<String>(hex<String>(s))
 evaluation:
 +--------+-----------------+------------+
 |        | s               | Output     |
@@ -2148,8 +2148,8 @@ evaluation (internal):
 
 
 ast            : unhex(s)
-raw expr       : unhex(#0::String)
-checked expr   : unhex<String>(#0)
+raw expr       : unhex(s::String)
+checked expr   : unhex<String>(s)
 evaluation:
 +--------+-----------------------+------------+
 |        | s                     | Output     |
@@ -2218,8 +2218,8 @@ has tried possible overloads:
 
 
 ast            : lpad(a, b, c)
-raw expr       : lpad(#0::String, #1::UInt8, #2::String)
-checked expr   : lpad<String, UInt64, String>(#0, CAST(#1 AS UInt64), #2)
+raw expr       : lpad(a::String, b::UInt8, c::String)
+checked expr   : lpad<String, UInt64, String>(a, CAST(b AS UInt64), c)
 evaluation:
 +--------+-----------------+---------+-------------+---------+
 |        | a               | b       | c           | Output  |
@@ -2290,8 +2290,8 @@ has tried possible overloads:
 
 
 ast            : rpad(a, b, c)
-raw expr       : rpad(#0::String, #1::UInt8, #2::String)
-checked expr   : rpad<String, UInt64, String>(#0, CAST(#1 AS UInt64), #2)
+raw expr       : rpad(a::String, b::UInt8, c::String)
+checked expr   : rpad<String, UInt64, String>(a, CAST(b AS UInt64), c)
 evaluation:
 +--------+-----------------+---------+-------------+---------+
 |        | a               | b       | c           | Output  |
@@ -2350,8 +2350,8 @@ output         : "hi"
 
 
 ast            : replace(a, b, c)
-raw expr       : replace(#0::String, #1::String, #2::String)
-checked expr   : replace<String, String, String>(#0, #1, #2)
+raw expr       : replace(a::String, b::String, c::String)
+checked expr   : replace<String, String, String>(a, b, c)
 evaluation:
 +--------+-----------------+-------------+-------------+--------+
 |        | a               | b           | c           | Output |
@@ -2402,8 +2402,8 @@ output         : 0_i8
 
 
 ast            : strcmp(a, b)
-raw expr       : strcmp(#0::String, #1::String)
-checked expr   : strcmp<String, String>(#0, #1)
+raw expr       : strcmp(a::String, b::String)
+checked expr   : strcmp<String, String>(a, b)
 evaluation:
 +--------+-----------------+------------------+--------------+
 |        | a               | b                | Output       |
@@ -2470,8 +2470,8 @@ output         : 7_u64
 
 
 ast            : locate(a, b, c)
-raw expr       : locate(#0::String, #1::String, #2::UInt8)
-checked expr   : locate<String, String, UInt64>(#0, #1, CAST(#2 AS UInt64))
+raw expr       : locate(a::String, b::String, c::UInt8)
+checked expr   : locate<String, String, UInt64>(a, b, CAST(c AS UInt64))
 evaluation:
 +--------+---------------+---------------+---------+----------------------------+
 |        | a             | b             | c       | Output                     |
@@ -2523,8 +2523,8 @@ output         : NULL
 
 
 ast            : char(a, b, c)
-raw expr       : char(#0::UInt8, #1::UInt8, #2::UInt8)
-checked expr   : char<UInt8, UInt8, UInt8>(#0, #1, #2)
+raw expr       : char(a::UInt8, b::UInt8, c::UInt8)
+checked expr   : char<UInt8, UInt8, UInt8>(a, b, c)
 evaluation:
 +--------+-----------+-----------+-----------+--------+
 |        | a         | b         | c         | Output |
@@ -2546,8 +2546,8 @@ evaluation (internal):
 
 
 ast            : char(a2, b, c)
-raw expr       : char(#4::UInt8 NULL, #1::UInt8, #2::UInt8)
-checked expr   : char<UInt8 NULL, UInt8 NULL, UInt8 NULL>(#4, CAST(#1 AS UInt8 NULL), CAST(#2 AS UInt8 NULL))
+raw expr       : char(a2::UInt8 NULL, b::UInt8, c::UInt8)
+checked expr   : char<UInt8 NULL, UInt8 NULL, UInt8 NULL>(a2, CAST(b AS UInt8 NULL), CAST(c AS UInt8 NULL))
 evaluation:
 +--------+-----------+-----------+--------------------+-------------+
 |        | b         | c         | a2                 | Output      |
@@ -2617,8 +2617,8 @@ output         : "I51231"
 
 
 ast            : soundex(a)
-raw expr       : soundex(#0::String)
-checked expr   : soundex<String>(#0)
+raw expr       : soundex(a::String)
+checked expr   : soundex<String>(a)
 evaluation:
 +--------+------------------------------------+---------+
 |        | a                                  | Output  |
@@ -2702,9 +2702,9 @@ error:
 
 
 ast            : repeat(a, 3)
-raw expr       : repeat(#0::String, 3_u8)
-checked expr   : repeat<String, UInt64>(#0, CAST(3_u8 AS UInt64))
-optimized expr : repeat<String, UInt64>(#0, 3_u64)
+raw expr       : repeat(a::String, 3_u8)
+checked expr   : repeat<String, UInt64>(a, CAST(3_u8 AS UInt64))
+optimized expr : repeat<String, UInt64>(a, 3_u64)
 evaluation:
 +--------+-------------+---------+
 |        | a           | Output  |
@@ -2804,8 +2804,8 @@ output         : NULL
 
 
 ast            : insert(a, b, c, d)
-raw expr       : insert(#0::String, #1::UInt8, #2::UInt8, #3::String)
-checked expr   : insert<String, Int64, Int64, String>(#0, CAST(#1 AS Int64), CAST(#2 AS Int64), #3)
+raw expr       : insert(a::String, b::UInt8, c::UInt8, d::String)
+checked expr   : insert<String, Int64, Int64, String>(a, CAST(b AS Int64), CAST(c AS Int64), d)
 evaluation:
 +--------+-----------------+---------+---------+---------------+---------+
 |        | a               | b       | c       | d             | Output  |
@@ -2830,8 +2830,8 @@ evaluation (internal):
 
 
 ast            : insert(x, y, z, u)
-raw expr       : insert(#0::String NULL, #1::UInt8 NULL, #2::UInt8 NULL, #3::String NULL)
-checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(#0, CAST(#1 AS Int64 NULL), CAST(#2 AS Int64 NULL), #3)
+raw expr       : insert(x::String NULL, y::UInt8 NULL, z::UInt8 NULL, u::String NULL)
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(x, CAST(y AS Int64 NULL), CAST(z AS Int64 NULL), u)
 evaluation:
 +--------+--------------------------+------------------+------------------+------------------------+-----------------+
 |        | x                        | y                | z                | u                      | Output          |
@@ -2874,8 +2874,8 @@ output         : "     "
 
 
 ast            : space(a)
-raw expr       : space(#0::UInt8)
-checked expr   : space<UInt64>(CAST(#0 AS UInt64))
+raw expr       : space(a::UInt8)
+checked expr   : space<UInt64>(CAST(a AS UInt64))
 evaluation:
 +--------+---------+--------------------+
 |        | a       | Output             |
@@ -2921,8 +2921,8 @@ output         : ""
 
 
 ast            : left('123456789', a)
-raw expr       : left("123456789", #0::UInt8)
-checked expr   : left<String, UInt64>("123456789", CAST(#0 AS UInt64))
+raw expr       : left("123456789", a::UInt8)
+checked expr   : left<String, UInt64>("123456789", CAST(a AS UInt64))
 evaluation:
 +--------+----------+-------------+
 |        | a        | Output      |
@@ -2969,8 +2969,8 @@ output         : ""
 
 
 ast            : right('123456789', a)
-raw expr       : right("123456789", #0::UInt8)
-checked expr   : right<String, UInt64>("123456789", CAST(#0 AS UInt64))
+raw expr       : right("123456789", a::UInt8)
+checked expr   : right<String, UInt64>("123456789", CAST(a AS UInt64))
 evaluation:
 +--------+----------+-------------+
 |        | a        | Output      |
@@ -3053,8 +3053,8 @@ output         : "bc"
 
 
 ast            : substr('abc', pos, len)
-raw expr       : substr("abc", #0::Int8, #1::UInt8)
-checked expr   : substr<String, Int64, UInt64>("abc", CAST(#0 AS Int64), CAST(#1 AS UInt64))
+raw expr       : substr("abc", pos::Int8, len::UInt8)
+checked expr   : substr<String, Int64, UInt64>("abc", CAST(pos AS Int64), CAST(len AS UInt64))
 evaluation:
 +--------+----------+---------+--------+
 |        | pos      | len     | Output |

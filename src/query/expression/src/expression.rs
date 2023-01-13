@@ -36,27 +36,29 @@ use crate::values::Scalar;
 pub type Span = Option<std::ops::Range<usize>>;
 
 pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq {
-    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
-    fn sql_display(&self) -> String {
-        let mut buf = String::new();
-        let mut formatter = std::fmt::Formatter::new(&mut buf);
-        self.sql_display_fmt(&mut formatter).unwrap();
-        buf
-    }
+    // fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+    // fn sql_display(&self) -> String {
+    //     let mut buf = String::new();
+    //     let mut formatter = std::fmt::Formatter::new(&mut buf);
+    //     self.sql_display_fmt(&mut formatter).unwrap();
+    //     buf
+    // }
 }
 
 impl ColumnIndex for usize {
-    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "#{}", self)
-    }
+    // fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    //     write!(f, "#{}", self)
+    // }
 }
 
 impl ColumnIndex for String {
-    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
-    }
+    // fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    //     write!(f, "{}", self)
+    // }
 }
 
+/// An unchecked expression that is directly desguared from SQL or constructed by the planner.
+/// It can be type-checked and then converted to an evaluatable [`Expr`].
 #[derive(Debug, Clone)]
 pub enum RawExpr<Index: ColumnIndex = usize> {
     Literal {
@@ -67,6 +69,9 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
         span: Span,
         id: Index,
         data_type: DataType,
+
+        // The name used to pretty print the expression.
+        display_name: String,
     },
     Cast {
         span: Span,
@@ -82,6 +87,8 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
     },
 }
 
+/// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
+/// It is .
 #[derive(Debug, Clone, Educe, EnumAsInner)]
 #[educe(PartialEq)]
 pub enum Expr<Index: ColumnIndex = usize> {
@@ -94,6 +101,9 @@ pub enum Expr<Index: ColumnIndex = usize> {
         span: Span,
         id: Index,
         data_type: DataType,
+
+        // The name used to pretty print the expression.
+        display_name: String,
     },
     Cast {
         span: Span,
@@ -127,6 +137,9 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         span: Span,
         id: Index,
         data_type: DataType,
+
+        // The name used to pretty print the expression.
+        display_name: String,
     },
     Cast {
         span: Span,
@@ -251,7 +264,7 @@ impl<Index: ColumnIndex> Expr<Index> {
     pub fn sql_display(&self) -> String {
         match self {
             Expr::Constant { scalar, .. } => format!("{}", scalar.as_ref()),
-            Expr::ColumnRef { id, .. } => id.sql_display(),
+            Expr::ColumnRef { display_name, .. } => display_name.clone(),
             Expr::Cast {
                 is_try,
                 expr,
@@ -298,10 +311,12 @@ impl<Index: ColumnIndex> Expr<Index> {
                 span,
                 id,
                 data_type,
+                display_name,
             } => Expr::ColumnRef {
                 span: span.clone(),
                 id: f(id),
                 data_type: data_type.clone(),
+                display_name: display_name.clone(),
             },
             Expr::Cast {
                 span,
@@ -347,10 +362,12 @@ impl<Index: ColumnIndex> Expr<Index> {
                 span,
                 id,
                 data_type,
+                display_name,
             } => RemoteExpr::ColumnRef {
                 span: span.clone(),
                 id: id.clone(),
                 data_type: data_type.clone(),
+                display_name: display_name.clone(),
             },
             Expr::Cast {
                 span,
@@ -397,10 +414,12 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 span,
                 id,
                 data_type,
+                display_name,
             } => Expr::ColumnRef {
                 span: span.clone(),
                 id: id.clone(),
                 data_type: data_type.clone(),
+                display_name: display_name.clone(),
             },
             RemoteExpr::Cast {
                 span,

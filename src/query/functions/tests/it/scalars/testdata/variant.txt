@@ -88,8 +88,8 @@ output         : {"a":"b","c":"d"}
 
 
 ast            : parse_json(s)
-raw expr       : parse_json(#0::String)
-checked expr   : parse_json<String>(#0)
+raw expr       : parse_json(s::String)
+checked expr   : parse_json<String>(s)
 evaluation:
 +--------+-----------------------------------------------------------+-----------------------+
 |        | s                                                         | Output                |
@@ -117,8 +117,8 @@ evaluation (internal):
 
 
 ast            : parse_json(s)
-raw expr       : parse_json(#0::String NULL)
-checked expr   : parse_json<String NULL>(#0)
+raw expr       : parse_json(s::String NULL)
+checked expr   : parse_json<String NULL>(s)
 evaluation:
 +--------+------------------------+--------------+
 |        | s                      | Output       |
@@ -221,8 +221,8 @@ output         : {"a":"b","c":"d"}
 
 
 ast            : try_parse_json(s)
-raw expr       : try_parse_json(#0::String)
-checked expr   : try_parse_json<String>(#0)
+raw expr       : try_parse_json(s::String)
+checked expr   : try_parse_json<String>(s)
 evaluation:
 +--------+-----------------------------------------------------------+-----------------------+
 |        | s                                                         | Output                |
@@ -250,8 +250,8 @@ evaluation (internal):
 
 
 ast            : try_parse_json(s)
-raw expr       : try_parse_json(#0::String NULL)
-checked expr   : try_parse_json<String NULL>(#0)
+raw expr       : try_parse_json(s::String NULL)
+checked expr   : try_parse_json<String NULL>(s)
 evaluation:
 +--------+-----------------------+--------------------+
 |        | s                     | Output             |
@@ -300,8 +300,8 @@ output         : "expected ident, pos 3"
 
 
 ast            : check_json(s)
-raw expr       : check_json(#0::String)
-checked expr   : check_json<String>(#0)
+raw expr       : check_json(s::String)
+checked expr   : check_json<String>(s)
 evaluation:
 +--------+------------------+-------------------------+
 |        | s                | Output                  |
@@ -322,8 +322,8 @@ evaluation (internal):
 
 
 ast            : check_json(s)
-raw expr       : check_json(#0::String NULL)
-checked expr   : check_json<String NULL>(#0)
+raw expr       : check_json(s::String NULL)
+checked expr   : check_json<String NULL>(s)
 evaluation:
 +--------+-----------------------+-------------------------+
 |        | s                     | Output                  |
@@ -372,8 +372,8 @@ output         : NULL
 
 
 ast            : length(parse_json(s))
-raw expr       : length(parse_json(#0::String))
-checked expr   : length<Variant NULL>(CAST(parse_json<String>(#0) AS Variant NULL))
+raw expr       : length(parse_json(s::String))
+checked expr   : length<Variant NULL>(CAST(parse_json<String>(s) AS Variant NULL))
 evaluation:
 +--------+----------------------------------+-------------+
 |        | s                                | Output      |
@@ -394,8 +394,8 @@ evaluation (internal):
 
 
 ast            : length(parse_json(s))
-raw expr       : length(parse_json(#0::String NULL))
-checked expr   : length<Variant NULL>(parse_json<String NULL>(#0))
+raw expr       : length(parse_json(s::String NULL))
+checked expr   : length<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
 +--------+------------------------+-------------+
 |        | s                      | Output      |
@@ -435,8 +435,8 @@ output         : ["k1","k2"]
 
 
 ast            : object_keys(parse_json(s))
-raw expr       : object_keys(parse_json(#0::String))
-checked expr   : object_keys<Variant NULL>(CAST(parse_json<String>(#0) AS Variant NULL))
+raw expr       : object_keys(parse_json(s::String))
+checked expr   : object_keys<Variant NULL>(CAST(parse_json<String>(s) AS Variant NULL))
 evaluation:
 +--------+-------------------------------------------------+--------------+
 |        | s                                               | Output       |
@@ -457,8 +457,8 @@ evaluation (internal):
 
 
 ast            : object_keys(parse_json(s))
-raw expr       : object_keys(parse_json(#0::String NULL))
-checked expr   : object_keys<Variant NULL>(parse_json<String NULL>(#0))
+raw expr       : object_keys(parse_json(s::String NULL))
+checked expr   : object_keys<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
 +--------+-------------------------------------------------+--------------+
 |        | s                                               | Output       |
@@ -543,8 +543,8 @@ output         : "b"
 
 
 ast            : parse_json(s)[i]
-raw expr       : get(parse_json(#0::String), #1::UInt64)
-checked expr   : get<Variant NULL, UInt64 NULL>(CAST(parse_json<String>(#0) AS Variant NULL), CAST(#1 AS UInt64 NULL))
+raw expr       : get(parse_json(s::String), i::UInt64)
+checked expr   : get<Variant NULL, UInt64 NULL>(CAST(parse_json<String>(s) AS Variant NULL), CAST(i AS UInt64 NULL))
 evaluation:
 +--------+----------------------------------+---------+--------------+
 |        | s                                | i       | Output       |
@@ -566,8 +566,8 @@ evaluation (internal):
 
 
 ast            : parse_json(s)[i]
-raw expr       : get(parse_json(#0::String NULL), #1::UInt64 NULL)
-checked expr   : get<Variant NULL, UInt64 NULL>(parse_json<String NULL>(#0), #1)
+raw expr       : get(parse_json(s::String NULL), i::UInt64 NULL)
+checked expr   : get<Variant NULL, UInt64 NULL>(parse_json<String NULL>(s), i)
 evaluation:
 +--------+------------------------+------------------+--------------+
 |        | s                      | i                | Output       |
@@ -590,8 +590,8 @@ evaluation (internal):
 
 
 ast            : parse_json(s)[k]
-raw expr       : get(parse_json(#0::String), #1::String)
-checked expr   : get<Variant NULL, String NULL>(CAST(parse_json<String>(#0) AS Variant NULL), CAST(#1 AS String NULL))
+raw expr       : get(parse_json(s::String), k::String)
+checked expr   : get<Variant NULL, String NULL>(CAST(parse_json<String>(s) AS Variant NULL), CAST(k AS String NULL))
 evaluation:
 +--------+------------------------+-------------+--------------+
 |        | s                      | k           | Output       |
@@ -613,8 +613,8 @@ evaluation (internal):
 
 
 ast            : parse_json(s)[k]
-raw expr       : get(parse_json(#0::String NULL), #1::String)
-checked expr   : get<Variant NULL, String NULL>(parse_json<String NULL>(#0), CAST(#1 AS String NULL))
+raw expr       : get(parse_json(s::String NULL), k::String)
+checked expr   : get<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(k AS String NULL))
 evaluation:
 +--------+-----------------------------+------------+--------------+
 |        | s                           | k          | Output       |
@@ -664,8 +664,8 @@ output         : NULL
 
 
 ast            : get_ignore_case(parse_json(s), k)
-raw expr       : get_ignore_case(parse_json(#0::String), #1::String)
-checked expr   : get_ignore_case<Variant NULL, String NULL>(CAST(parse_json<String>(#0) AS Variant NULL), CAST(#1 AS String NULL))
+raw expr       : get_ignore_case(parse_json(s::String), k::String)
+checked expr   : get_ignore_case<Variant NULL, String NULL>(CAST(parse_json<String>(s) AS Variant NULL), CAST(k AS String NULL))
 evaluation:
 +--------+------------------------+-------------+--------------+
 |        | s                      | k           | Output       |
@@ -687,8 +687,8 @@ evaluation (internal):
 
 
 ast            : get_ignore_case(parse_json(s), k)
-raw expr       : get_ignore_case(parse_json(#0::String NULL), #1::String)
-checked expr   : get_ignore_case<Variant NULL, String NULL>(parse_json<String NULL>(#0), CAST(#1 AS String NULL))
+raw expr       : get_ignore_case(parse_json(s::String NULL), k::String)
+checked expr   : get_ignore_case<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(k AS String NULL))
 evaluation:
 +--------+-----------------------------+------------+--------------+
 |        | s                           | k          | Output       |
@@ -783,8 +783,8 @@ output         : {"b":2}
 
 
 ast            : get_path(parse_json(s), k)
-raw expr       : get_path(parse_json(#0::String), #1::String)
-checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>(#0) AS Variant NULL), CAST(#1 AS String NULL))
+raw expr       : get_path(parse_json(s::String), k::String)
+checked expr   : get_path<Variant NULL, String NULL>(CAST(parse_json<String>(s) AS Variant NULL), CAST(k AS String NULL))
 evaluation:
 +--------+---------------------------------+-------------------+--------------+
 |        | s                               | k                 | Output       |
@@ -806,8 +806,8 @@ evaluation (internal):
 
 
 ast            : get_path(parse_json(s), k)
-raw expr       : get_path(parse_json(#0::String NULL), #1::String)
-checked expr   : get_path<Variant NULL, String NULL>(parse_json<String NULL>(#0), CAST(#1 AS String NULL))
+raw expr       : get_path(parse_json(s::String NULL), k::String)
+checked expr   : get_path<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(k AS String NULL))
 evaluation:
 +--------+-----------------------------+--------------+--------------+
 |        | s                           | k            | Output       |
@@ -902,8 +902,8 @@ output         : "{\"b\":2}"
 
 
 ast            : json_extract_path_text(s, k)
-raw expr       : json_extract_path_text(#0::String, #1::String)
-checked expr   : json_extract_path_text<String, String>(#0, #1)
+raw expr       : json_extract_path_text(s::String, k::String)
+checked expr   : json_extract_path_text<String, String>(s, k)
 evaluation:
 +--------+---------------------------------+-------------------+-------------+
 |        | s                               | k                 | Output      |
@@ -925,8 +925,8 @@ evaluation (internal):
 
 
 ast            : json_extract_path_text(s, k)
-raw expr       : json_extract_path_text(#0::String NULL, #1::String)
-checked expr   : json_extract_path_text<String NULL, String NULL>(#0, CAST(#1 AS String NULL))
+raw expr       : json_extract_path_text(s::String NULL, k::String)
+checked expr   : json_extract_path_text<String NULL, String NULL>(s, CAST(k AS String NULL))
 evaluation:
 +--------+-----------------------------+--------------+-------------+
 |        | s                           | k            | Output      |
@@ -1057,8 +1057,8 @@ output         : {"a":"b"}
 
 
 ast            : as_boolean(parse_json(s))
-raw expr       : as_boolean(parse_json(#0::String))
-checked expr   : as_boolean<Variant>(parse_json<String>(#0))
+raw expr       : as_boolean(parse_json(s::String))
+checked expr   : as_boolean<Variant>(parse_json<String>(s))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1082,8 +1082,8 @@ evaluation (internal):
 
 
 ast            : as_boolean(try_parse_json(s))
-raw expr       : as_boolean(try_parse_json(#0::String))
-checked expr   : as_boolean<Variant NULL>(try_parse_json<String>(#0))
+raw expr       : as_boolean(try_parse_json(s::String))
+checked expr   : as_boolean<Variant NULL>(try_parse_json<String>(s))
 evaluation:
 +--------+------------------------------+------------------------+
 |        | s                            | Output                 |
@@ -1107,8 +1107,8 @@ evaluation (internal):
 
 
 ast            : as_integer(parse_json(s))
-raw expr       : as_integer(parse_json(#0::String))
-checked expr   : as_integer<Variant>(parse_json<String>(#0))
+raw expr       : as_integer(parse_json(s::String))
+checked expr   : as_integer<Variant>(parse_json<String>(s))
 evaluation:
 +--------+------------------------------+------------+
 |        | s                            | Output     |
@@ -1132,8 +1132,8 @@ evaluation (internal):
 
 
 ast            : as_integer(try_parse_json(s))
-raw expr       : as_integer(try_parse_json(#0::String))
-checked expr   : as_integer<Variant NULL>(try_parse_json<String>(#0))
+raw expr       : as_integer(try_parse_json(s::String))
+checked expr   : as_integer<Variant NULL>(try_parse_json<String>(s))
 evaluation:
 +--------+------------------------------+-------------------------------------------------------+
 |        | s                            | Output                                                |
@@ -1157,8 +1157,8 @@ evaluation (internal):
 
 
 ast            : as_float(parse_json(s))
-raw expr       : as_float(parse_json(#0::String))
-checked expr   : as_float<Variant>(parse_json<String>(#0))
+raw expr       : as_float(parse_json(s::String))
+checked expr   : as_float<Variant>(parse_json<String>(s))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1182,8 +1182,8 @@ evaluation (internal):
 
 
 ast            : as_float(try_parse_json(s))
-raw expr       : as_float(try_parse_json(#0::String))
-checked expr   : as_float<Variant NULL>(try_parse_json<String>(#0))
+raw expr       : as_float(try_parse_json(s::String))
+checked expr   : as_float<Variant NULL>(try_parse_json<String>(s))
 evaluation:
 +--------+------------------------------+-----------------------+
 |        | s                            | Output                |
@@ -1207,8 +1207,8 @@ evaluation (internal):
 
 
 ast            : as_string(parse_json(s))
-raw expr       : as_string(parse_json(#0::String))
-checked expr   : as_string<Variant>(parse_json<String>(#0))
+raw expr       : as_string(parse_json(s::String))
+checked expr   : as_string<Variant>(parse_json<String>(s))
 evaluation:
 +--------+------------------------------+-------------+
 |        | s                            | Output      |
@@ -1232,8 +1232,8 @@ evaluation (internal):
 
 
 ast            : as_string(try_parse_json(s))
-raw expr       : as_string(try_parse_json(#0::String))
-checked expr   : as_string<Variant NULL>(try_parse_json<String>(#0))
+raw expr       : as_string(try_parse_json(s::String))
+checked expr   : as_string<Variant NULL>(try_parse_json<String>(s))
 evaluation:
 +--------+------------------------------+-----------------+
 |        | s                            | Output          |
@@ -1257,8 +1257,8 @@ evaluation (internal):
 
 
 ast            : as_array(parse_json(s))
-raw expr       : as_array(parse_json(#0::String))
-checked expr   : as_array<Variant>(parse_json<String>(#0))
+raw expr       : as_array(parse_json(s::String))
+checked expr   : as_array<Variant>(parse_json<String>(s))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1282,8 +1282,8 @@ evaluation (internal):
 
 
 ast            : as_array(try_parse_json(s))
-raw expr       : as_array(try_parse_json(#0::String))
-checked expr   : as_array<Variant NULL>(try_parse_json<String>(#0))
+raw expr       : as_array(try_parse_json(s::String))
+checked expr   : as_array<Variant NULL>(try_parse_json<String>(s))
 evaluation:
 +--------+------------------------------+--------------------+
 |        | s                            | Output             |
@@ -1307,8 +1307,8 @@ evaluation (internal):
 
 
 ast            : as_object(parse_json(s))
-raw expr       : as_object(parse_json(#0::String))
-checked expr   : as_object<Variant>(parse_json<String>(#0))
+raw expr       : as_object(parse_json(s::String))
+checked expr   : as_object<Variant>(parse_json<String>(s))
 evaluation:
 +--------+------------------------------+--------------+
 |        | s                            | Output       |
@@ -1332,8 +1332,8 @@ evaluation (internal):
 
 
 ast            : as_object(try_parse_json(s))
-raw expr       : as_object(try_parse_json(#0::String))
-checked expr   : as_object<Variant NULL>(try_parse_json<String>(#0))
+raw expr       : as_object(try_parse_json(s::String))
+checked expr   : as_object<Variant NULL>(try_parse_json<String>(s))
 evaluation:
 +--------+------------------------------+--------------------+
 |        | s                            | Output             |
