@@ -34,8 +34,6 @@ use num_traits::AsPrimitive;
 use num_traits::Float;
 use num_traits::Pow;
 use ordered_float::OrderedFloat;
-use rand::Rng;
-use rand::SeedableRng;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _, _>(
@@ -265,39 +263,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| OrderedFloat(lhs.0.pow(rhs.0)),
-    );
-
-    registry.register_0_arg_core::<NumberType<F64>, _, _>(
-        "rand",
-        FunctionProperty::default().non_deterministic(),
-        || {
-            FunctionDomain::Domain(SimpleDomain {
-                min: OrderedFloat(0.0),
-                max: OrderedFloat(1.0),
-            })
-        },
-        |ctx| {
-            let mut rng = rand::rngs::SmallRng::from_entropy();
-            let rand_nums = (0..ctx.num_rows)
-                .map(|_| rng.gen::<F64>())
-                .collect::<Vec<_>>();
-            Value::Column(rand_nums.into())
-        },
-    );
-
-    registry.register_1_arg::<NumberType<u64>, NumberType<F64>, _, _>(
-        "rand",
-        FunctionProperty::default().non_deterministic(),
-        |_| {
-            FunctionDomain::Domain(SimpleDomain {
-                min: OrderedFloat(0.0),
-                max: OrderedFloat(1.0),
-            })
-        },
-        |val, _| {
-            let mut rng = rand::rngs::SmallRng::seed_from_u64(val);
-            rng.gen::<F64>()
-        },
     );
 
     for ty in ALL_NUMERICS_TYPES {

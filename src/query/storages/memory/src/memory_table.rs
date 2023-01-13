@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -32,7 +33,6 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_expression::InMemoryData;
 use common_expression::Value;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
@@ -47,6 +47,11 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::memory_part::MemoryPartInfo;
+
+/// Shared store to support memory tables.
+///
+/// Indexed by table id etc.
+pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
 
 static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
     Lazy::new(|| Arc::new(Default::default()));

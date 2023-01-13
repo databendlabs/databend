@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::fmt::Debug;
 use std::ops::Range;
 
 use common_arrow::arrow::array::Array;
@@ -23,12 +25,15 @@ use common_exception::Result;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::BlockMetaInfoPtr;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Value;
+
+pub type SendableDataBlockStream =
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;
+pub type BlockMetaInfoPtr = Box<dyn BlockMetaInfo>;
 
 /// DataBlock is a lightweight container for a group of columns.
 #[derive(Clone)]
@@ -42,6 +47,17 @@ pub struct DataBlock {
 pub struct BlockEntry {
     pub data_type: DataType,
     pub value: Value<AnyType>,
+}
+
+#[typetag::serde(tag = "type")]
+pub trait BlockMetaInfo: Debug + Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+    fn as_mut_any(&mut self) -> &mut dyn Any;
+
+    #[allow(clippy::borrowed_box)]
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo>;
 }
 
 impl DataBlock {
@@ -339,5 +355,25 @@ impl BlockEntry {
             Value::Scalar(s) => std::mem::size_of_val(&s),
             Value::Column(c) => c.memory_size(),
         }
+    }
+}
+
+impl Eq for Box<dyn BlockMetaInfo> {}
+
+impl PartialEq for Box<dyn BlockMetaInfo> {
+    fn eq(&self, other: &Self) -> bool {
+        let this_type_id = self.as_any().type_id();
+        let other_type_id = other.as_any().type_id();
+
+        match this_type_id == other_type_id {
+            true => self.equals(other),
+            false => false,
+        }
+    }
+}
+
+impl Clone for Box<dyn BlockMetaInfo> {
+    fn clone(&self) -> Self {
+        self.clone_self()
     }
 }
