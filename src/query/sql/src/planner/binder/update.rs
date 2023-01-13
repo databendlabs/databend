@@ -23,6 +23,7 @@ use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::normalize_identifier;
 use crate::plans::Plan;
+use crate::plans::Scalar;
 use crate::plans::UpdatePlan;
 use crate::BindContext;
 
@@ -87,12 +88,23 @@ impl<'a> Binder {
                 )));
             }
 
+            // TODO(zhyass): selection and update_list support subquery.
             let (scalar, _) = scalar_binder.bind(&update_expr.expr).await?;
+            if matches!(scalar, Scalar::SubqueryExpr(_)) {
+                return Err(ErrorCode::Internal(
+                    "Update does not support subquery temporarily",
+                ));
+            }
             update_columns.insert(index, scalar);
         }
 
         let push_downs = if let Some(expr) = selection {
             let (scalar, _) = scalar_binder.bind(expr).await?;
+            if matches!(scalar, Scalar::SubqueryExpr(_)) {
+                return Err(ErrorCode::Internal(
+                    "Update does not support subquery temporarily",
+                ));
+            }
             Some(scalar)
         } else {
             None
