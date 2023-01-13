@@ -29,8 +29,8 @@ AS_OBJECT( <variant> )
 - AS_INTEGER: Int64
 - AS_FLOAT:   Float64
 - AS_STRING:  String
-- AS_ARRAY:   Array
-- AS_OBJECT:  Object
+- AS_ARRAY:   Variant contains Array
+- AS_OBJECT:  Variant contains Object
 
 ## Examples
 
