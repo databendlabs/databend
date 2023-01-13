@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
@@ -34,10 +32,6 @@ impl DataType for StringType {
 
     fn name(&self) -> String {
         "String".to_string()
-    }
-
-    fn arrow_type(&self) -> ArrowType {
-        ArrowType::LargeBinary
     }
 }
 

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_exception::ErrorCode;
-use common_exception::Result;
-
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
@@ -25,16 +21,6 @@ use crate::prelude::*;
 /// any date not in the range will be invalid
 pub const DATE_MAX: i32 = 2932896;
 pub const DATE_MIN: i32 = -354285;
-
-#[inline]
-pub fn check_date(days: i32) -> Result<()> {
-    if (DATE_MIN..=DATE_MAX).contains(&days) {
-        return Ok(());
-    }
-    Err(ErrorCode::InvalidDate(
-        "Date only ranges from 1000-01-01 to 9999-12-31",
-    ))
-}
 
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct DateType {}
@@ -52,10 +38,6 @@ impl DataType for DateType {
 
     fn name(&self) -> String {
         "Date".to_string()
-    }
-
-    fn arrow_type(&self) -> ArrowType {
-        ArrowType::Date32
     }
 }
 

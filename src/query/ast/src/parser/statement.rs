@@ -31,6 +31,7 @@ use nom::Slice;
 
 use crate::ast::*;
 use crate::input::Input;
+use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::stage::*;
@@ -160,12 +161,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let set_variable = map(
         rule! {
-            SET ~ (GLOBAL)? ~ #ident ~ "=" ~ #literal
+            SET ~ (GLOBAL)? ~ #ident ~ "=" ~ #subexpr(0)
         },
         |(_, opt_is_global, variable, _, value)| Statement::SetVariable {
             is_global: opt_is_global.is_some(),
             variable,
-            value,
+            value: Box::new(value),
         },
     );
 

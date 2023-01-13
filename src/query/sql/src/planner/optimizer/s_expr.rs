@@ -139,7 +139,7 @@ impl SExpr {
     }
 
     /// Record the applied rule id in current SExpr
-    pub(crate) fn apply_rule(&mut self, rule_id: &RuleID) {
+    pub(crate) fn set_applied_rule(&mut self, rule_id: &RuleID) {
         self.applied_rules.set(rule_id, true);
     }
 

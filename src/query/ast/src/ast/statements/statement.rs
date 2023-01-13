@@ -22,7 +22,6 @@ use super::*;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
-use crate::ast::Literal;
 use crate::ast::Query;
 use crate::ast::TableReference;
 
@@ -57,7 +56,7 @@ pub enum Statement<'a> {
     SetVariable {
         is_global: bool,
         variable: Identifier<'a>,
-        value: Literal,
+        value: Box<Expr<'a>>,
     },
 
     UnSetVariable(UnSetStmt<'a>),

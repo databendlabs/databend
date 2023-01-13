@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_expression::error_to_null;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::BooleanType;
@@ -19,6 +20,7 @@ use common_expression::types::NullableType;
 use common_expression::types::StringType;
 use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
+use common_expression::EvalContext;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
@@ -178,53 +180,47 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_string",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<BooleanType, StringType>(|val, output, _| {
-            output.put_str(if val { "true" } else { "false" });
-            output.commit_row();
-        }),
+        eval_boolean_to_string,
     );
 
     registry.register_combine_nullable_1_arg::<BooleanType, StringType, _, _>(
         "try_to_string",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<BooleanType, NullableType<StringType>>(|val, output, _| {
-            output.builder.put_str(if val { "true" } else { "false" });
-            output.validity.push(true);
-        }),
+        error_to_null(eval_boolean_to_string),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, BooleanType, _, _>(
         "to_boolean",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, BooleanType>(|val, output, ctx| {
-            if val.eq_ignore_ascii_case(b"true") {
-                output.push(true);
-            } else if val.eq_ignore_ascii_case(b"false") {
-                output.push(false);
-            } else {
-                ctx.set_error(
-                    output.len(),
-                    format!("Cannot convert {} to boolean", String::from_utf8_lossy(val)),
-                );
-                output.push(false);
-            }
-        }),
+        eval_string_to_boolean,
     );
 
     registry.register_combine_nullable_1_arg::<StringType, BooleanType, _, _>(
         "try_to_boolean",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, NullableType<BooleanType>>(|val, output, _| {
-            if val.eq_ignore_ascii_case(b"true") {
-                output.push(true);
-            } else if val.eq_ignore_ascii_case(b"false") {
-                output.push(false);
-            } else {
-                output.push_null();
-            }
-        }),
+        error_to_null(eval_string_to_boolean),
     );
+}
+
+fn eval_boolean_to_string(val: ValueRef<BooleanType>, ctx: &mut EvalContext) -> Value<StringType> {
+    vectorize_with_builder_1_arg::<BooleanType, StringType>(|val, output, _| {
+        output.put_str(if val { "true" } else { "false" });
+        output.commit_row();
+    })(val, ctx)
+}
+
+fn eval_string_to_boolean(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BooleanType> {
+    vectorize_with_builder_1_arg::<StringType, BooleanType>(|val, output, ctx| {
+        if val.eq_ignore_ascii_case(b"true") {
+            output.push(true);
+        } else if val.eq_ignore_ascii_case(b"false") {
+            output.push(false);
+        } else {
+            ctx.set_error(output.len(), "unable to parse string to type `BOOLEAN`");
+            output.push(false);
+        }
+    })(val, ctx)
 }

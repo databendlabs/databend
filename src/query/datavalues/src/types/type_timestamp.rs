@@ -12,34 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::DateTime;
-use chrono::TimeZone;
-use chrono::Utc;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_exception::ErrorCode;
-use common_exception::Result;
-
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
-
-/// timestamp ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999
-/// timestamp_max and timestamp_min means days offset from 1970-01-01 00:00:00.000000
-/// any timestamp not in the range will be invalid
-pub const TIMESTAMP_MAX: i64 = 253402300799999999;
-pub const TIMESTAMP_MIN: i64 = -30610224000000000;
-pub const MICROSECONDS: i64 = 1_000_000;
-
-#[inline]
-pub fn check_timestamp(micros: i64) -> Result<()> {
-    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
-        return Ok(());
-    }
-    Err(ErrorCode::InvalidTimestamp(
-        "Timestamp only ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999",
-    ))
-}
 
 /// Timestamp type only stores UTC time in microseconds
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
@@ -52,11 +27,6 @@ pub struct TimestampType {
 impl TimestampType {
     pub fn new_impl() -> DataTypeImpl {
         DataTypeImpl::Timestamp(TimestampType { precision: 0 })
-    }
-
-    #[inline]
-    pub fn utc_timestamp(&self, v: i64) -> DateTime<Utc> {
-        Utc.timestamp(v / 1_000_000, (v % 1_000_000 * 1000) as u32)
     }
 
     #[inline]
@@ -76,11 +46,6 @@ impl DataType for TimestampType {
 
     fn name(&self) -> String {
         "Timestamp".to_string()
-    }
-
-    // To avoid the overhead of precision conversion, we store Microsecond for all precisions.
-    fn arrow_type(&self) -> ArrowType {
-        ArrowType::Timestamp(TimeUnit::Microsecond, None)
     }
 }
 

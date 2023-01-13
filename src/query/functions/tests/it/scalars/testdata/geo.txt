@@ -3,7 +3,7 @@ raw expr       : geo_to_h3(37.79506683_f64, 55.71290588_f64, 15_u8)
 checked expr   : geo_to_h3<Float64, Float64, UInt8>(37.79506683_f64, 55.71290588_f64, 15_u8)
 optimized expr : 644325524701193974_u64
 output type    : UInt64
-output domain  : {0..=18446744073709551615}
+output domain  : {644325524701193974..=644325524701193974}
 output         : 644325524701193974_u64
 
 
@@ -35,7 +35,7 @@ raw expr       : great_circle_distance(55.755831_f64, 37.617673_f64, minus(55.75
 checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, minus<Float64>(55.755831_f64), minus<Float64>(37.617673_f64))
 optimized expr : 14128353_f32
 output type    : Float32
-output domain  : {-inf..=NaN}
+output domain  : {14128353..=14128353}
 output         : 14128353_f32
 
 
@@ -69,7 +69,7 @@ raw expr       : geo_distance(55.755831_f64, 37.617673_f64, minus(55.755831_f64)
 checked expr   : geo_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, minus<Float64>(55.755831_f64), minus<Float64>(37.617673_f64))
 optimized expr : 14128353_f32
 output type    : Float32
-output domain  : {-inf..=NaN}
+output domain  : {14128353..=14128353}
 output         : 14128353_f32
 
 
@@ -103,7 +103,7 @@ raw expr       : great_circle_angle(0_u8, 0_u8, 45_u8, 0_u8)
 checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(CAST(0_u8 AS Float64), CAST(0_u8 AS Float64), CAST(45_u8 AS Float64), CAST(0_u8 AS Float64))
 optimized expr : 44.99998_f32
 output type    : Float32
-output domain  : {-inf..=NaN}
+output domain  : {44.99998..=44.99998}
 output         : 44.99998_f32
 
 
@@ -135,7 +135,7 @@ raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, 1_f64, 0.999
 checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, 1_f64, 0.9999_f64)
 optimized expr : 1_u8
 output type    : UInt8
-output domain  : {0..=255}
+output domain  : {1..=1}
 output         : 1_u8
 
 

@@ -62,7 +62,6 @@ use common_jsonb::to_bool;
 use common_jsonb::to_f64;
 use common_jsonb::to_i64;
 use common_jsonb::to_str;
-use common_jsonb::to_string;
 use common_jsonb::to_u64;
 use common_jsonb::JsonPath;
 use common_jsonb::Number as JsonbNumber;
@@ -597,10 +596,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.tz)) {
                 Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 None => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("unable to cast {} to DateType", to_string(val)),
-                    );
+                    ctx.set_error(output.len(), "unable to cast to type `DATE`");
                     output.push(0);
                 }
             }
@@ -629,10 +625,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             {
                 Some(ts) => output.push(ts.timestamp_micros()),
                 None => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("unable to cast {} to TimestampType", to_string(val)),
-                    );
+                    ctx.set_error(output.len(), "unable to cast to type `TIMESTAMP`");
                     output.push(0);
                 }
             },
@@ -683,10 +676,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     None => {
                                         ctx.set_error(
                                             output.len(),
-                                            format!(
-                                                "unable to cast {} to {dest_type}",
-                                                to_string(val)
-                                            ),
+                                            format!("unable to cast to type {dest_type}",),
                                         );
                                         output.push(NUM_TYPE::default());
                                     }

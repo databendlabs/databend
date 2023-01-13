@@ -358,8 +358,8 @@ impl PipelineBuilder {
         self.main_pipeline.resize(1)?;
         self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_final(
-                AggregatorTransformParams::try_create(input, output, &params)?,
                 self.ctx.clone(),
+                AggregatorTransformParams::try_create(input, output, &params)?,
             )
         })?;
 
@@ -640,11 +640,11 @@ impl PipelineBuilder {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
                         TransformResortAddOn::try_create(
+                            self.ctx.clone(),
                             transform_input_port,
                             transform_output_port,
                             source_schema.clone(),
                             table.clone(),
-                            self.ctx.clone(),
                         )
                     },
                 )?;

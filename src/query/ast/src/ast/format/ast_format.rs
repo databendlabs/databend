@@ -907,15 +907,19 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         &mut self,
         is_global: bool,
         variable: &'ast Identifier<'ast>,
-        value: &'ast Literal,
+        value: &'ast Expr<'ast>,
     ) {
+        let mut children = Vec::with_capacity(1);
+        self.visit_expr(value);
+        children.push(self.children.pop().unwrap());
+
         let name = if is_global {
-            format!("SetGlobal {} = {}", variable, value)
+            format!("SetGlobal {}", variable)
         } else {
-            format!("Set {} = {}", variable, value)
+            format!("Set {}", variable)
         };
-        let format_ctx = AstFormatContext::new(name);
-        let node = FormatTreeNode::new(format_ctx);
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
 
