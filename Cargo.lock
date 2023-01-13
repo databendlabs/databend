@@ -1435,6 +1435,7 @@ dependencies = [
  "criterion",
  "ctor",
  "geo",
+ "geohash",
  "goldenfile",
  "h3o",
  "hex",
@@ -3828,6 +3829,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04a4efc8e99f43d1d29331a073981bb13074b253edc08ffc8ccf5f384b1d1d1e"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "geohash"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2531fb8e2edacf602fd1f2672da559dc1527509cf90940b7a0ebd06b998a004f"
+dependencies = [
+ "geo-types",
+ "libm",
 ]
 
 [[package]]

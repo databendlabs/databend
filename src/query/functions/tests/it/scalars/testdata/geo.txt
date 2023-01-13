@@ -195,3 +195,21 @@ evaluation (internal):
 +--------+------------------------+
 
 
+ast            : geohash_encode(-5.60302734375, 42.593994140625)
+raw expr       : geohash_encode(minus(5.60302734375_f64), 42.593994140625_f64)
+checked expr   : geohash_encode<Float64, Float64>(minus<Float64>(5.6030273437_f64), 42.5939941406_f64)
+optimized expr : "ezs42d000000"
+output type    : String
+output domain  : {"ezs42d000000"..="ezs42d000000"}
+output         : "ezs42d000000"
+
+
+ast            : geohash_decode('ezs42')
+raw expr       : geohash_decode("ezs42")
+checked expr   : geohash_decode<String>("ezs42")
+optimized expr : (-5.6030273437_f64, 42.6049804687_f64)
+output type    : (Float64, Float64)
+output domain  : ({-5.6030273437..=-5.6030273437}, {42.6049804687..=42.6049804687})
+output         : (-5.6030273437_f64, 42.6049804687_f64)
+
+

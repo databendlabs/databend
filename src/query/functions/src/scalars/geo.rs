@@ -17,6 +17,7 @@ use std::num::Wrapping;
 use std::sync::Arc;
 use std::sync::Once;
 
+use common_expression::types::map::KvPair;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::number::NumberScalar;
@@ -26,7 +27,10 @@ use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
+use common_expression::types::StringType;
 use common_expression::types::ValueType;
+use common_expression::vectorize_with_builder_1_arg;
+use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
 use common_expression::Column;
 use common_expression::EvalContext;
@@ -44,6 +48,8 @@ use geo::Contains;
 use geo::Coord;
 use geo::LineString;
 use geo::Polygon;
+#[allow(deprecated)]
+use geohash::Coordinate;
 use h3o::LatLng;
 use h3o::Resolution;
 use once_cell::sync::OnceCell;
@@ -138,6 +144,46 @@ pub fn register(registry: &mut FunctionRegistry) {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::SphereMeters))
         },
     );
+
+    registry.register_passthrough_nullable_2_arg::<Float64Type, Float64Type, StringType, _, _>(
+        "geohash_encode",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<Float64Type, Float64Type, StringType>(
+            |lon, lat, builder, ctx| {
+                // todo(ariesdevil): wait geohash update to new geo_types or fire a PR
+                #[allow(deprecated)]
+                let c = Coordinate { x: lon.0, y: lat.0 };
+                match geohash::encode(c, 12) {
+                    Ok(r) => builder.put_str(&r),
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.put_str("");
+                    }
+                }
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry
+        .register_passthrough_nullable_1_arg::<StringType, KvPair<Float64Type, Float64Type>, _, _>(
+            "geohash_decode",
+            FunctionProperty::default(),
+            |_| FunctionDomain::Full,
+            vectorize_with_builder_1_arg::<StringType, KvPair<Float64Type, Float64Type>>(
+                |encoded, builder, ctx| {
+                    let s = std::str::from_utf8(encoded).unwrap();
+                    match geohash::decode(s) {
+                        Ok((c, _, _)) => builder.push((c.x.into(), c.y.into())),
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e.to_string());
+                            builder.push((F64::from(0.0), F64::from(0.0)))
+                        }
+                    }
+                },
+            ),
+        );
 
     // point in ellipses
     registry.register_function_factory("point_in_ellipses", |_, args_type| {
@@ -250,10 +296,7 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
                                 _ => 0_f64,
                             })
                             .collect::<Vec<_>>(),
-                        _ => {
-                            println!("555");
-                            unreachable!()
-                        }
+                        _ => unreachable!(),
                     })
                     .map(|v| {
                         coord! {x: v[0], y: v[1]}
@@ -261,23 +304,15 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
                     .collect();
                 v
             }
-            _ => {
-                println!("111");
-                unreachable!()
-            }
+            _ => unreachable!(),
         };
 
         let poly = Polygon::new(LineString(arg1), vec![]);
-
-        println!("arg1 fn: {:#?}", point);
-        println!("arg2 fn: {:#?}", poly);
 
         let is_in = poly.contains(&point);
 
         builder.push(NumberScalar::UInt8(u8::from(is_in)));
     }
-
-    println!("input rows: {input_rows}");
 
     match len {
         Some(_) => Value::Column(Column::Number(builder.build())),

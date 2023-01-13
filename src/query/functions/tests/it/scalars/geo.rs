@@ -31,6 +31,8 @@ fn test_geo() {
     test_great_circle_angle(file);
     test_point_in_ellipses(file);
     test_point_in_polygon(file);
+    test_geohash_encode(file);
+    test_geohash_decode(file);
 }
 
 fn test_geo_to_h3(file: &mut impl Write) {
@@ -140,4 +142,12 @@ fn test_point_in_polygon(file: &mut impl Write) {
             ("b", Float64Type::from_data(vec![3.0, 3.1, 3.2])),
         ],
     );
+}
+
+fn test_geohash_encode(file: &mut impl Write) {
+    run_ast(file, "geohash_encode(-5.60302734375, 42.593994140625)", &[]);
+}
+
+fn test_geohash_decode(file: &mut impl Write) {
+    run_ast(file, "geohash_decode('ezs42')", &[]);
 }
