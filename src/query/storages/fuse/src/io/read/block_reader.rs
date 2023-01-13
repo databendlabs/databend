@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::VecDeque;
-use std::io::IoSliceMut;
 use std::io::Read;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
+use bytes::buf::Reader;
+use bytes::Buf;
 use bytes::Bytes;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
@@ -65,51 +65,12 @@ impl OwnerMemory {
         OwnerMemory { chunks }
     }
 
-    pub fn get_chunk(
-        &self,
-        index: usize,
-        path: &str,
-        range: Range<usize>,
-    ) -> Result<ChunksReader<'_>> {
+    pub fn get_chunk(&self, index: usize, path: &str, range: Range<usize>) -> Result<ChunksReader> {
         match self.chunks.get(&index) {
             Some(chunks) => {
-                let mut bytes = VecDeque::new();
-                let mut skipping = range.start;
-                let mut remaing = range.end - range.start;
-
-                let mut pos = 0;
-                while skipping > 0 && pos < chunks.len() {
-                    if skipping < chunks[pos].len() {
-                        unsafe {
-                            let take = std::cmp::min(chunks[pos].len() - skipping, remaing);
-                            let chunk_data = chunks[pos].slice(skipping..skipping + take);
-                            bytes.push_back(std::slice::from_raw_parts(
-                                chunk_data.as_ptr(),
-                                chunk_data.len(),
-                            ));
-                            remaing -= take;
-                        }
-                    }
-
-                    skipping -= std::cmp::min(skipping, chunks[pos].len());
-                    pos += 1;
-                }
-
-                while remaing > 0 && pos < chunks.len() {
-                    unsafe {
-                        let take = std::cmp::min(chunks[pos].len(), remaing);
-                        let chunk_data = chunks[pos].slice(0..take);
-                        bytes.push_back(std::slice::from_raw_parts(
-                            chunk_data.as_ptr(),
-                            chunk_data.len(),
-                        ));
-                        remaing -= take;
-                    }
-
-                    pos += 1;
-                }
-
-                Ok(ChunksReader::create(bytes))
+                let mut bytes_buf = BytesBuf::create(chunks.to_vec(), range.end);
+                bytes_buf.advance(range.start);
+                Ok(ChunksReader::create(bytes_buf.reader()))
             }
             None => Err(ErrorCode::Internal(format!(
                 "It's a terrible bug, not found range data, merged_range_idx:{}, path:{}",
@@ -120,53 +81,91 @@ impl OwnerMemory {
 }
 
 #[derive(Clone)]
-pub struct ChunksReader<'a> {
-    bytes: VecDeque<&'a [u8]>,
+pub struct BytesBuf {
+    pos: usize,
+    remaining: usize,
+    bytes: Vec<Bytes>,
 }
 
-impl<'a> ChunksReader<'a> {
-    pub fn create(bytes: VecDeque<&'a [u8]>) -> ChunksReader<'a> {
-        ChunksReader::<'a> { bytes }
+impl BytesBuf {
+    pub fn create(bytes: Vec<Bytes>, remaining: usize) -> BytesBuf {
+        BytesBuf {
+            bytes,
+            pos: 0,
+            remaining,
+        }
+    }
+}
+
+impl Buf for BytesBuf {
+    #[inline]
+    fn remaining(&self) -> usize {
+        self.remaining
+    }
+
+    #[inline]
+    fn chunk(&self) -> &[u8] {
+        self.bytes[self.pos].chunk()
+    }
+
+    #[inline]
+    fn advance(&mut self, mut cnt: usize) {
+        self.remaining -= cnt;
+
+        while cnt > 0 {
+            let bytes = &mut self.bytes[self.pos];
+
+            if bytes.remaining() > cnt {
+                bytes.advance(cnt);
+                return;
+            }
+
+            self.pos += 1;
+            cnt -= bytes.remaining();
+            bytes.advance(bytes.remaining());
+        }
+    }
+}
+
+pub struct ChunksReader {
+    inner: Reader<BytesBuf>,
+}
+
+impl Clone for ChunksReader {
+    fn clone(&self) -> Self {
+        ChunksReader {
+            inner: self.inner.get_ref().clone().reader(),
+        }
+    }
+}
+
+impl ChunksReader {
+    pub fn create(inner: Reader<BytesBuf>) -> ChunksReader {
+        ChunksReader { inner }
     }
 
     #[allow(clippy::wrong_self_convention)]
     pub fn to_vec(mut self) -> Vec<u8> {
-        let len = self.bytes.iter().map(|s| s.len()).sum();
-        let mut array = Vec::with_capacity(len);
-
-        while let Some(bytes) = self.bytes.pop_front() {
-            array.extend_from_slice(bytes);
-        }
-
-        array
+        let buf = self.inner.get_mut();
+        let mut res = Vec::with_capacity(buf.remaining());
+        Buf::copy_to_slice(buf, &mut res);
+        res
     }
 }
 
-impl<'a> Read for ChunksReader<'a> {
+impl Read for ChunksReader {
+    #[inline]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        while let Some(first) = self.bytes.front_mut() {
-            match first.read(buf)? {
-                0 if !buf.is_empty() => {
-                    self.bytes.pop_front();
-                }
-                n => return Ok(n),
+        if buf.len() == 1 {
+            if !self.inner.get_mut().has_remaining() {
+                return Ok(0);
             }
+
+            buf[0] = self.inner.get_mut().get_u8();
+            return Ok(1);
         }
 
-        Ok(0)
-    }
-
-    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> std::io::Result<usize> {
-        while let Some(first) = self.bytes.front_mut() {
-            match first.read_vectored(bufs)? {
-                0 if bufs.iter().any(|b| !b.is_empty()) => {
-                    self.bytes.pop_front();
-                }
-                n => return Ok(n),
-            }
-        }
-
-        Ok(0)
+        self.inner.read(buf)
     }
 }
 
@@ -189,7 +188,7 @@ where Self: 'static
         }
     }
 
-    pub fn columns_chunks(&self) -> Result<Vec<(usize, ChunksReader<'_>)>> {
+    pub fn columns_chunks(&self) -> Result<Vec<(usize, ChunksReader)>> {
         let mut res = Vec::with_capacity(self.columns_chunks.len());
 
         for (column_idx, (chunk_idx, range)) in &self.columns_chunks {
