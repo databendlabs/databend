@@ -23,4 +23,5 @@ mod read_options;
 mod statistics;
 mod table_function;
 
+pub use read_options::ReadOptions;
 pub use table_function::ParquetTable;

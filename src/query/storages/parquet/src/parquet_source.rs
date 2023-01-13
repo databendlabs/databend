@@ -38,6 +38,7 @@ use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_reader::IndexedChunk;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::State::Generated;
+use crate::ReadOptions;
 
 struct PrewhereData {
     data_block: DataBlock,
@@ -67,6 +68,8 @@ pub struct ParquetSource {
     prewhere_reader: Arc<ParquetReader>,
     prewhere_filter: Arc<Option<Expr>>,
     remain_reader: Arc<Option<ParquetReader>>,
+
+    read_options: ReadOptions,
 }
 
 impl ParquetSource {
@@ -77,6 +80,7 @@ impl ParquetSource {
         prewhere_reader: Arc<ParquetReader>,
         prewhere_filter: Arc<Option<Expr>>,
         remain_reader: Arc<Option<ParquetReader>>,
+        read_options: ReadOptions,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let mut src_fields = prewhere_reader.output_schema().fields().clone();
@@ -96,6 +100,7 @@ impl ParquetSource {
             prewhere_reader,
             prewhere_filter,
             remain_reader,
+            read_options,
         })))
     }
 
@@ -193,6 +198,7 @@ impl ParquetSource {
             let block = if raw_chunks.is_empty() {
                 prewhere_block
             } else if let Some(remain_reader) = self.remain_reader.as_ref() {
+                // If reach in this branch, it means `read_options.do_prewhere = true`
                 let remain_block = match filter {
                     Value::Scalar(_) => {
                         // The case of all filtered is already covered in `do_prewhere_filter`.
@@ -200,9 +206,10 @@ impl ParquetSource {
                         remain_reader.deserialize(rg_part, raw_chunks, None)?
                     }
                     Value::Column(bitmap) => {
-                        if bitmap.unset_bits() == 0 {
+                        if !self.read_options.push_down_bitmap() || bitmap.unset_bits() == 0 {
                             // don't need filter
-                            remain_reader.deserialize(rg_part, raw_chunks, None)?
+                            let block = remain_reader.deserialize(rg_part, raw_chunks, None)?;
+                            DataBlock::filter_with_bitmap(block, &bitmap)?
                         } else {
                             remain_reader.deserialize(rg_part, raw_chunks, Some(bitmap))?
                         }

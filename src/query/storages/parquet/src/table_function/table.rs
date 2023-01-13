@@ -44,6 +44,7 @@ use opendal::Operator;
 
 use super::TableContext;
 use crate::parquet_part::ParquetLocationPart;
+use crate::ReadOptions;
 
 pub struct ParquetTable {
     table_args: Vec<Scalar>,
@@ -52,6 +53,7 @@ pub struct ParquetTable {
     pub(super) table_info: TableInfo,
     pub(super) arrow_schema: ArrowSchema,
     pub(super) operator: Operator,
+    pub(super) read_options: ReadOptions,
 }
 
 impl ParquetTable {
@@ -150,6 +152,7 @@ impl ParquetTable {
             table_info,
             arrow_schema,
             operator,
+            read_options: ReadOptions::new(), // Now, `read_options` is hard-coded.
         }))
     }
 }
@@ -169,7 +172,7 @@ impl Table for ParquetTable {
     }
 
     fn support_prewhere(&self) -> bool {
-        true
+        self.read_options.do_prewhere()
     }
 
     fn has_exact_total_row_count(&self) -> bool {

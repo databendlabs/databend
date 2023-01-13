@@ -30,7 +30,6 @@ use crate::parquet_part::ParquetLocationPart;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::ParquetSource;
 use crate::pruning::prune_and_set_partitions;
-use crate::read_options::ReadOptions;
 
 impl ParquetTable {
     pub fn create_reader(&self, projection: Projection) -> Result<Arc<ParquetReader>> {
@@ -139,8 +138,7 @@ impl ParquetTable {
                 .collect::<Vec<_>>()
         });
 
-        // Now, `read_options` is hard-coded.
-        let read_options = ReadOptions::default();
+        let read_options = self.read_options;
 
         pipeline.set_on_init(move || {
             prune_and_set_partitions(
@@ -151,7 +149,7 @@ impl ParquetTable {
                 &columns_to_read,
                 &projected_column_leaves,
                 skip_pruning,
-                &read_options,
+                read_options,
             )
         });
 

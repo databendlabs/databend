@@ -72,18 +72,18 @@ pub fn prune_and_set_partitions(
     columns_to_read: &HashSet<usize>,
     column_leaves: &ColumnLeaves,
     skip_pruning: bool,
-    read_options: &ReadOptions,
+    read_options: ReadOptions,
 ) -> Result<()> {
     let mut partitions = Vec::with_capacity(locations.len());
     let func_ctx = ctx.try_get_function_context()?;
 
-    let row_group_pruner = if read_options.prune_row_groups {
+    let row_group_pruner = if read_options.prune_row_groups() {
         Some(RangePrunerCreator::try_create(func_ctx, *filters, schema)?)
     } else {
         None
     };
 
-    let page_pruners = if read_options.prune_pages && filters.is_some() {
+    let page_pruners = if read_options.prune_pages() && filters.is_some() {
         let filters = filters.unwrap();
         Some(build_column_page_pruners(func_ctx, schema, filters)?)
     } else {
@@ -108,7 +108,7 @@ pub fn prune_and_set_partitions(
                 .any(|c| c.metadata().statistics.is_none())
         });
 
-        if read_options.prune_row_groups && !skip_pruning && !no_stats {
+        if read_options.prune_row_groups() && !skip_pruning && !no_stats {
             let pruner = row_group_pruner.as_ref().unwrap();
             // If collecting stats fails or `should_keep` is true, we still read the row group.
             // Otherwise, the row group will be pruned.
@@ -130,7 +130,7 @@ pub fn prune_and_set_partitions(
                 continue;
             }
 
-            let row_selection = if read_options.prune_pages {
+            let row_selection = if read_options.prune_pages() {
                 page_pruners
                     .as_ref()
                     .map(|pruners| filter_pages(&mut file, schema, rg, pruners))
