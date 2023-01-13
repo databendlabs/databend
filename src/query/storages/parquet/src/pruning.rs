@@ -134,7 +134,8 @@ pub fn prune_and_set_partitions(
                 page_pruners
                     .as_ref()
                     .map(|pruners| filter_pages(&mut file, schema, rg, pruners))
-                    .transpose()?
+                    .transpose()
+                    .unwrap_or(None)
             } else {
                 None
             };

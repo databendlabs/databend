@@ -180,6 +180,7 @@ impl ParquetTable {
                     prewhere_reader.clone(),
                     prewhere_filter.clone(),
                     remain_reader.clone(),
+                    self.read_options,
                 )
             },
             max_io_requests,

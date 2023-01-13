@@ -152,7 +152,10 @@ impl ParquetTable {
             table_info,
             arrow_schema,
             operator,
-            read_options: ReadOptions::new(), // Now, `read_options` is hard-coded.
+            read_options: ReadOptions::new()
+                .with_prune_row_groups()
+                .with_prune_pages()
+                .with_do_prewhere(), // Now, `read_options` is hard-coded.
         }))
     }
 }
