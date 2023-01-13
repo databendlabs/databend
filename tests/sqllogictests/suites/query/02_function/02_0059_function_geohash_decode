@@ -1,0 +1,5 @@
+query I
+select geohash_decode('ezs42')
+----
+(-5.60302734375,42.60498046875)
+
