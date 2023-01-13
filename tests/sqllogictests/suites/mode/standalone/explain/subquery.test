@@ -2,7 +2,7 @@ query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
 Filter
-├── filters: [eq(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0_i64) AS BIGINT UNSIGNED NULL))]
+├── filters: [eq(t.number (#0), TRY_CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0_i64) AS BIGINT UNSIGNED NULL))]
 ├── estimated rows: 0.33
 └── HashJoin
     ├── join type: SINGLE
