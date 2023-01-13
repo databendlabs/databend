@@ -17,6 +17,7 @@ use std::num::Wrapping;
 use std::sync::Arc;
 use std::sync::Once;
 
+use common_expression::types::map::KvPair;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::number::NumberScalar;
@@ -26,7 +27,10 @@ use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
+use common_expression::types::StringType;
 use common_expression::types::ValueType;
+use common_expression::vectorize_with_builder_1_arg;
+use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
 use common_expression::Column;
 use common_expression::EvalContext;
@@ -36,8 +40,16 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
+use geo::coord;
+use geo::Contains;
+use geo::Coord;
+use geo::LineString;
+use geo::Polygon;
+#[allow(deprecated)]
+use geohash::Coordinate;
 use h3o::LatLng;
 use h3o::Resolution;
 use once_cell::sync::OnceCell;
@@ -133,6 +145,47 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
+    registry.register_passthrough_nullable_2_arg::<Float64Type, Float64Type, StringType, _, _>(
+        "geohash_encode",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<Float64Type, Float64Type, StringType>(
+            |lon, lat, builder, ctx| {
+                // todo(ariesdevil): wait geohash update to new geo_types or fire a PR
+                #[allow(deprecated)]
+                let c = Coordinate { x: lon.0, y: lat.0 };
+                match geohash::encode(c, 12) {
+                    Ok(r) => builder.put_str(&r),
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.put_str("");
+                    }
+                }
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry
+        .register_passthrough_nullable_1_arg::<StringType, KvPair<Float64Type, Float64Type>, _, _>(
+            "geohash_decode",
+            FunctionProperty::default(),
+            |_| FunctionDomain::Full,
+            vectorize_with_builder_1_arg::<StringType, KvPair<Float64Type, Float64Type>>(
+                |encoded, builder, ctx| match std::str::from_utf8(encoded)
+                    .map_err(|e| e.to_string())
+                    .and_then(|s| geohash::decode(s).map_err(|e| e.to_string()))
+                {
+                    Ok((c, _, _)) => builder.push((c.x.into(), c.y.into())),
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e);
+                        builder.push((F64::from(0.0), F64::from(0.0)))
+                    }
+                },
+            ),
+        );
+
+    // point in ellipses
     registry.register_function_factory("point_in_ellipses", |_, args_type| {
         if args_type.len() < 6 {
             return None;
@@ -148,6 +201,115 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: Box::new(point_in_ellipses_fn),
         }))
     });
+
+    // point in polygon
+    registry.register_function_factory("point_in_polygon", |_, args_type| {
+        if args_type.len() < 2 {
+            return None;
+        }
+
+        let (arg1, arg2) = if args_type.len() == 2 {
+            let arg1 = match args_type.get(0)? {
+                DataType::Tuple(tys) => tys.clone(),
+                _ => return None,
+            };
+            let arg2 = match args_type.get(1)? {
+                DataType::Array(box DataType::Tuple(tys)) => (0..tys.len())
+                    .map(|_| DataType::Number(NumberDataType::Float64))
+                    .collect(),
+                _ => return None,
+            };
+            (arg1, arg2)
+        } else {
+            (vec![], vec![])
+        };
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "point_in_polygon".to_string(),
+                args_type: vec![
+                    DataType::Tuple(arg1),
+                    DataType::Array(Box::new(DataType::Tuple(arg2))),
+                ],
+                return_type: DataType::Number(NumberDataType::UInt8),
+                property: Default::default(),
+            },
+            calc_domain: Box::new(|_| FunctionDomain::Full),
+            eval: Box::new(point_in_polygon_fn),
+        }))
+    });
+}
+
+fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
+    let input_rows = len.unwrap_or(1);
+    let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt8, input_rows);
+    for idx in 0..input_rows {
+        let arg0: Vec<f64> = match &args[0] {
+            ValueRef::Scalar(ScalarRef::Tuple(fields)) => fields
+                .iter()
+                .cloned()
+                .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(&s).unwrap()))
+                .map(|x: ValueRef<Float64Type>| match x {
+                    ValueRef::Scalar(v) => *v,
+                    _ => unreachable!(),
+                })
+                .collect(),
+            ValueRef::Column(Column::Tuple { fields, .. }) => fields
+                .iter()
+                .cloned()
+                .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))
+                .map(|x: ValueRef<Float64Type>| match x {
+                    ValueRef::Column(c) => unsafe {
+                        Float64Type::index_column_unchecked(&c, idx).0
+                    },
+                    _ => unreachable!(),
+                })
+                .collect(),
+            _ => unreachable!(),
+        };
+
+        let point = coord! {x:arg0[0], y:arg0[1]};
+
+        let arg1 = match &args[1] {
+            ValueRef::Scalar(ScalarRef::Array(c)) => {
+                let v: Vec<Coord> = c
+                    .iter()
+                    .map(|s| match s {
+                        ScalarRef::Tuple(fields) => fields
+                            .iter()
+                            .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(s).unwrap()))
+                            .map(|x: ValueRef<Float64Type>| match x {
+                                ValueRef::Scalar(v) => *v,
+                                _ => 0_f64,
+                            })
+                            .collect::<Vec<_>>(),
+                        _ => unreachable!(),
+                    })
+                    .map(|v| {
+                        coord! {x: v[0], y: v[1]}
+                    })
+                    .collect();
+                v
+            }
+            _ => unreachable!(),
+        };
+
+        let poly = Polygon::new(LineString(arg1), vec![]);
+
+        let is_in = poly.contains(&point);
+
+        builder.push(NumberScalar::UInt8(u8::from(is_in)));
+    }
+
+    match len {
+        Some(_) => Value::Column(Column::Number(builder.build())),
+        _ => Value::Scalar(Scalar::Number(builder.build_scalar())),
+    }
 }
 
 fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {

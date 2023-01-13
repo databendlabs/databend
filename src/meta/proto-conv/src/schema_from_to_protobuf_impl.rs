@@ -15,11 +15,11 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use common_datavalues as dv;
 use common_expression as ex;
-use common_expression::converts::from_type;
+use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_protos::pb;
+use common_protos::pb::data_type::Dt;
 use common_protos::pb::data_type::Dt24;
 use common_protos::pb::number::Num;
 
@@ -106,10 +106,70 @@ impl FromToProto for ex::TableDataType {
             }),
             (Some(_), None) => {
                 // Convert from version 23 or lower:
+                let x = match p.dt.unwrap() {
+                    Dt::NullType(_) => ex::TableDataType::Null,
+                    Dt::NullableType(nullable_type) => {
+                        //
+                        reader_check_msg(nullable_type.ver, nullable_type.min_reader_ver)?;
 
-                let x = dv::DataTypeImpl::from_pb(p)?;
-                let y = from_type(&x);
-                Ok(y)
+                        let inner = Box::into_inner(nullable_type).inner;
+                        let inner = inner.ok_or_else(|| Incompatible {
+                            reason: "NullableType.inner can not be None".to_string(),
+                        })?;
+                        let inner = Box::into_inner(inner);
+                        ex::TableDataType::Nullable(Box::new(ex::TableDataType::from_pb(inner)?))
+                    }
+                    Dt::BoolType(_) => ex::TableDataType::Boolean,
+                    Dt::Int8Type(_) => ex::TableDataType::Number(NumberDataType::Int8),
+                    Dt::Int16Type(_) => ex::TableDataType::Number(NumberDataType::Int16),
+                    Dt::Int32Type(_) => ex::TableDataType::Number(NumberDataType::Int32),
+                    Dt::Int64Type(_) => ex::TableDataType::Number(NumberDataType::Int64),
+                    Dt::Uint8Type(_) => ex::TableDataType::Number(NumberDataType::UInt8),
+                    Dt::Uint16Type(_) => ex::TableDataType::Number(NumberDataType::UInt16),
+                    Dt::Uint32Type(_) => ex::TableDataType::Number(NumberDataType::UInt32),
+                    Dt::Uint64Type(_) => ex::TableDataType::Number(NumberDataType::UInt64),
+                    Dt::Float32Type(_) => ex::TableDataType::Number(NumberDataType::Float32),
+                    Dt::Float64Type(_) => ex::TableDataType::Number(NumberDataType::Float64),
+                    Dt::DateType(_) => ex::TableDataType::Date,
+                    Dt::TimestampType(_) => ex::TableDataType::Timestamp,
+                    Dt::StringType(_) => ex::TableDataType::String,
+                    Dt::StructType(stt) => {
+                        reader_check_msg(stt.ver, stt.min_reader_ver)?;
+
+                        let mut types = vec![];
+                        for x in stt.types {
+                            let vv = ex::TableDataType::from_pb(x)?;
+                            types.push(vv);
+                        }
+
+                        ex::TableDataType::Tuple {
+                            fields_name: stt.names,
+                            fields_type: types,
+                        }
+                    }
+                    Dt::ArrayType(a) => {
+                        reader_check_msg(a.ver, a.min_reader_ver)?;
+
+                        let inner = Box::into_inner(a).inner;
+                        let inner = inner.ok_or_else(|| Incompatible {
+                            reason: "Array.inner can not be None".to_string(),
+                        })?;
+                        let inner = Box::into_inner(inner);
+                        ex::TableDataType::Array(Box::new(ex::TableDataType::from_pb(inner)?))
+                    }
+                    Dt::VariantType(_) => ex::TableDataType::Variant,
+                    Dt::VariantArrayType(_) => ex::TableDataType::Variant,
+                    Dt::VariantObjectType(_) => ex::TableDataType::Variant,
+                    // NOTE: No Interval type is ever stored in meta-service.
+                    //       This variant should never be matched.
+                    //       Thus it is safe for this conversion to map it to any type.
+                    Dt::IntervalType(_) => ex::TableDataType::Null,
+                };
+                Ok(x)
+
+                // let x = dv::DataTypeImpl::from_pb(p)?;
+                // let y = from_type(&x);
+                // Ok(y)
             }
             (None, Some(_)) => {
                 // Convert from version 24 or higher:
