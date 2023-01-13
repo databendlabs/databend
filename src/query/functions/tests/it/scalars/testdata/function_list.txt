@@ -913,6 +913,10 @@ geo_distance(Float64, Float64, Float64, Float64) :: Float32
 geo_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 geo_to_h3(Float64, Float64, UInt8) :: UInt64
 geo_to_h3(Float64 NULL, Float64 NULL, UInt8 NULL) :: UInt64 NULL
+geohash_decode(String) :: (Float64, Float64)
+geohash_decode(String NULL) :: (Float64, Float64) NULL
+geohash_encode(Float64, Float64) :: String
+geohash_encode(Float64 NULL, Float64 NULL) :: String NULL
 get(Array(Nothing) NULL, UInt64 NULL) :: NULL
 get(Array(T0 NULL), UInt64) :: T0 NULL
 get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
@@ -3235,6 +3239,7 @@ lte
 multi_if
 noteq
 point_in_ellipses
+point_in_polygon
 regexp_instr
 regexp_like
 regexp_replace

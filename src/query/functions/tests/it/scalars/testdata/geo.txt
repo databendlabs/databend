@@ -162,3 +162,54 @@ evaluation (internal):
 +--------+-----------------------------------+
 
 
+ast            : point_in_polygon((3., 3.), [(6, 0), (8, 4), (5, 8), (0, 2)])
+raw expr       : point_in_polygon(tuple(3_f64, 3_f64), array(tuple(6_u8, 0_u8), tuple(8_u8, 4_u8), tuple(5_u8, 8_u8), tuple(0_u8, 2_u8)))
+checked expr   : point_in_polygon<(Float64, Float64), Array((Float64, Float64))>(tuple<Float64, Float64>(3_f64, 3_f64), CAST(array<T0=(UInt8, UInt8)><T0, T0, T0, T0>(tuple<UInt8, UInt8>(6_u8, 0_u8), tuple<UInt8, UInt8>(8_u8, 4_u8), tuple<UInt8, UInt8>(5_u8, 8_u8), tuple<UInt8, UInt8>(0_u8, 2_u8)) AS Array((Float64, Float64))))
+optimized expr : 1_u8
+output type    : UInt8
+output domain  : {1..=1}
+output         : 1_u8
+
+
+ast            : point_in_polygon((a, b), [(6, 0), (8, 4), (5, 8), (0, 2)])
+raw expr       : point_in_polygon(tuple(#0::Float64, #1::Float64), array(tuple(6_u8, 0_u8), tuple(8_u8, 4_u8), tuple(5_u8, 8_u8), tuple(0_u8, 2_u8)))
+checked expr   : point_in_polygon<(Float64, Float64), Array((Float64, Float64))>(tuple<Float64, Float64>(#0, #1), CAST(array<T0=(UInt8, UInt8)><T0, T0, T0, T0>(tuple<UInt8, UInt8>(6_u8, 0_u8), tuple<UInt8, UInt8>(8_u8, 4_u8), tuple<UInt8, UInt8>(5_u8, 8_u8), tuple<UInt8, UInt8>(0_u8, 2_u8)) AS Array((Float64, Float64))))
+optimized expr : point_in_polygon<(Float64, Float64), Array((Float64, Float64))>(tuple<Float64, Float64>(#0, #1), [(6_f64, 0_f64), (8_f64, 4_f64), (5_f64, 8_f64), (0_f64, 2_f64)])
+evaluation:
++--------+-----------+-----------+-----------+
+|        | a         | b         | Output    |
++--------+-----------+-----------+-----------+
+| Type   | Float64   | Float64   | UInt8     |
+| Domain | {3..=3.2} | {3..=3.2} | {0..=255} |
+| Row 0  | 3_f64     | 3_f64     | 1_u8      |
+| Row 1  | 3.1_f64   | 3.1_f64   | 1_u8      |
+| Row 2  | 3.2_f64   | 3.2_f64   | 1_u8      |
++--------+-----------+-----------+-----------+
+evaluation (internal):
++--------+------------------------+
+| Column | Data                   |
++--------+------------------------+
+| a      | Float64([3, 3.1, 3.2]) |
+| b      | Float64([3, 3.1, 3.2]) |
+| Output | UInt8([1, 1, 1])       |
++--------+------------------------+
+
+
+ast            : geohash_encode(-5.60302734375, 42.593994140625)
+raw expr       : geohash_encode(minus(5.60302734375_f64), 42.593994140625_f64)
+checked expr   : geohash_encode<Float64, Float64>(minus<Float64>(5.6030273437_f64), 42.5939941406_f64)
+optimized expr : "ezs42d000000"
+output type    : String
+output domain  : {"ezs42d000000"..="ezs42d000000"}
+output         : "ezs42d000000"
+
+
+ast            : geohash_decode('ezs42')
+raw expr       : geohash_decode("ezs42")
+checked expr   : geohash_decode<String>("ezs42")
+optimized expr : (-5.6030273437_f64, 42.6049804687_f64)
+output type    : (Float64, Float64)
+output domain  : ({-5.6030273437..=-5.6030273437}, {42.6049804687..=42.6049804687})
+output         : (-5.6030273437_f64, 42.6049804687_f64)
+
+
