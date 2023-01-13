@@ -204,14 +204,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // point in polygon
     registry.register_function_factory("point_in_polygon", |_, args_type| {
-        // We allow function invocation in one of the following forms:
-        //  1. simple polygon
-        //  pointInPolygon((x, y), [(x1, y1), (x2, y2), ...])
-        //  2. polygon with a number of holes, each hole as a subsequent argument.
-        //  pointInPolygon((x, y), [(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...)
-        //  3. polygon with a number of holes, all as multidimensional array
-        //  pointInPolygon((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
-
         if args_type.len() < 2 {
             return None;
         }
