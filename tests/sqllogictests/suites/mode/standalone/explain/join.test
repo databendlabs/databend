@@ -24,7 +24,7 @@ HashJoin
 ├── build keys: [t.number (#0)]
 ├── probe keys: [t1.number (#1)]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── read rows: 1
@@ -50,7 +50,7 @@ HashJoin
 ├── build keys: [t.number (#0), t.number (#0)]
 ├── probe keys: [t1.number (#1), plus(t1.number (#1), 1_u8)]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── read rows: 1
@@ -138,7 +138,7 @@ HashJoin
 ├── build keys: [t1.number (#1)]
 ├── probe keys: [t2.number (#2)]
 ├── filters: []
-├── estimated rows: 100.00
+├── estimated rows: 333.33
 ├── HashJoin(Build)
 │   ├── join type: CROSS
 │   ├── build keys: []

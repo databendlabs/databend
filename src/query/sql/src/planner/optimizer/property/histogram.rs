@@ -88,7 +88,7 @@ pub fn histogram_from_ndv(
     bound: Option<(Datum, Datum)>,
     num_buckets: usize,
 ) -> Result<Histogram> {
-    if ndv == 0 {
+    if ndv <= 2 {
         return if num_rows != 0 {
             Err(ErrorCode::Internal(format!(
                 "NDV must be greater than 0 when the number of rows is greater than 0, got NDV: {}, num_rows: {}",

@@ -40,7 +40,7 @@ Exchange
     ├── build keys: [t.number (#0)]
     ├── probe keys: [t2.number (#2)]
     ├── filters: []
-    ├── estimated rows: 3.00
+    ├── estimated rows: 6.00
     ├── Exchange(Build)
     │   ├── exchange type: Hash(t.number (#0))
     │   └── HashJoin
@@ -90,7 +90,7 @@ Exchange
     ├── build keys: [t.b (#1)]
     ├── probe keys: [t2.number (#4)]
     ├── filters: []
-    ├── estimated rows: 3.00
+    ├── estimated rows: 6.00
     ├── Exchange(Build)
     │   ├── exchange type: Hash(t.b (#1))
     │   └── HashJoin
