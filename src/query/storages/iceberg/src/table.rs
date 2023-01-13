@@ -120,7 +120,8 @@ impl IcebergTable {
         }
         // try Spark's way
         // Spark will arange all files with a sequencial number
-        let meta_dir = tbl_root.object("metadata");
+        // in such case, we just need to find the file with largest alphabetical name.
+        let meta_dir = tbl_root.object("metadata/");
         let files = meta_dir.list().await.map_err(|e| {
             ErrorCode::ReadTableDataError(format!("Cannot list metadata directory: {e:?}"))
         })?;
@@ -140,6 +141,7 @@ impl IcebergTable {
             .await
             .into_iter()
             .max()
+            .map(|s| format!("metadata/{s}"))
             .ok_or_else(|| ErrorCode::ReadTableDataError("Cannot get the latest manifest file"))
     }
 }

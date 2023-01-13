@@ -10,8 +10,8 @@ publish = false
 
 [dependencies]
 common-catalog = { path = "../../catalog" }
-common-expression = {path = "../../expression"}
 common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-storage = { path = "../../../common/storage" }

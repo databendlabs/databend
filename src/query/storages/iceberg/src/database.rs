@@ -103,9 +103,9 @@ impl Database for IcebergDatabase {
         let path = format!("{table_name}/");
         // check existence first
         let tbl_obj = self.db_root.object(&path);
-        if !tbl_obj.is_exist().await? {
+        if !tbl_obj.is_exist().await? || tbl_obj.mode().await? != ObjectMode::DIR {
             return Err(ErrorCode::UnknownTable(format!(
-                "table {table_name} does not exist"
+                "table {table_name} does not exist or is not a valid table"
             )));
         }
 
