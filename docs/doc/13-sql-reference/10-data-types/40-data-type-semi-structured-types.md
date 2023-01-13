@@ -6,22 +6,57 @@ description: Semi-structured Types can hold any other data types.
 ## Semi-structured Data Types
 | Name    |  Aliases  | Build From Values        | Description
 |---------|-----------|--------------------------|----------------
-| ARRAY   |           | [1,2,3]                  | Zero-based indexed list, each value can have difference data type.
-| OBJECT  | MAP       | {"a":1,"b":{"c":2}}      | Collection of key-value pairs, each key is a VARCHAR, and each value is a VARIANT.
-| VARIANT | JSON      | [1,{"a":1,"b":{"c":2}}]  | Collection of elements of different data types., including ARRAY and OBJECT.
+| VARIANT | JSON      | [1,{"a":1,"b":{"c":2}}]  | Collection of elements of different data types, including NULL, BOOLEAN, NUMBER, STRING, ARRAY, and OBJECT.
 
-## Array Data Types
+## Variant Data Types
 
-ARRAY in Databend is similar to an array in many other programming languages, but the value in an ARRAY types can be different, each value in an Array is VARIANT type.
+A VARIANT can store a value of any other type, including NULL, BOOLEAN, NUMBER, STRING, ARRAY, and OBJECT, and the internal value can be any level of nested structure, which is very flexible to store various data. VARIANT can also be called JSON, for more information, please refer to [JSON website](https://www.json.org/json-en.html)
+
+### Example
+
+Create a table:
+```sql
+CREATE TABLE variant_table(var VARIANT NULL);
+```
+
+Insert a value with different type into the table:
+```sql
+INSERT INTO variant_table VALUES(1),(1.34),(true),(parse_json('[1,2,3,["a","b","c"]]')),(parse_json('{"a":1,"b":{"c":2}}'));
+```
+
+Query the result:
+```sql
+SELECT * FROM variant_table;
++-----------------------+
+| var                   |
++-----------------------+
+| 1                     |
+| 1.34                  |
+| true                  |
+| [1,2,3,["a","b","c"]] |
+| {"a":1,"b":{"c":2}}   |
++-----------------------+
+```
+
+## Get by index
+
+Variant contains ARRAY is a zero based array like many other programming languages, each element is also a Variant type.
+Element can be accessed by its index.
 
 ### Example
 
 ```sql
-CREATE TABLE array_table(arr ARRAY NULL);
+CREATE TABLE array_table(arr VARIANT NULL);
 ```
 
+Desc the `array_table`:
 ```sql
 DESC array_table;
++-------+---------+------+---------+
+| Field | Type    | Null | Default |
++-------+---------+------+---------+
+| arr   | Variant | YES  | NULL    |
++-------+---------+------+---------+
 ```
 
 Insert a value into the table, `[1,2,3,["a","b","c"]]`:
@@ -59,30 +94,28 @@ SELECT arr[3][0] FROM array_table;
 +-----------+
 ```
 
-## Object Data Types
+## Get by field name
 
-Databend OBJECT is a data type acting like a "dictionary”, “hash”, or “map” in other programming languages.
-An OBJECT contains key-value pairs.
-
-In a Databend OBJECT, each key is a VARCHAR, and each value is a VARIANT.
+Variant contains OBJECT is key-value pairs, each key is a VARCHAR, and each value is a Variant. It act like a "dictionary”, “hash”, or “map” in other programming languages.
+Value can be accessed by the field name.
 
 ### Example 1
 
-This example shows how to access the values at each hierarchical level of an OBJECT:
+This example shows how to access the values at each hierarchical level of a Variant:
 
-Create a table with OBJECT type:
+Create a table with VARIANT type:
 ```sql
-CREATE TABLE object_table(obj OBJECT NULL);
+CREATE TABLE object_table(obj VARIANT NULL);
 ```
 
 Desc the `object_table`:
 ```sql
 DESC object_table;
-+-------+--------+------+---------+
-| Field | Type   | Null | Default |
-+-------+--------+------+---------+
-| obj   | Object | YES  | NULL    |
-+-------+--------+------+---------+
++-------+---------+------+---------+
+| Field | Type    | Null | Default |
++-------+---------+------+---------+
+| obj   | Variant | YES  | NULL    |
++-------+---------+------+---------+
 ```
 
 Insert a value into the table, `{"a":1,"b":{"c":2}}`:
@@ -123,12 +156,12 @@ SELECT obj:b:c FROM object_table;
 
 ### Example 2
 
-This example shows how to query with data of the OBJECT type:
+This example shows how to query with data of the VARIANT type:
 
-Create a table with an OBJECT column to hold the employee's contact information including name and Email address:
+Create a table with an VARIANT column to hold the employee's contact information including name and Email address:
 
 ```sql
-CREATE TABLE employees (id INT, info OBJECT);
+CREATE TABLE employees (id INT, info VARIANT);
 ```
 
 Insert two rows to the table:
@@ -172,36 +205,6 @@ SELECT info:Email FROM employees WHERE id = 2 and info:Name = 'Bob';
 +------------------+
 | bob@databend.com |
 +------------------+
-```
-
-## Variant Data Types
-
-A VARIANT can store a value of any other type, including ARRAY and OBJECT, likes "Struct" in other languages.
-
-### Example
-
-Create a table:
-```sql
-CREATE TABLE variant_table(var VARIANT NULL);
-```
-
-Insert a value with different type into the table:
-```sql
-INSERT INTO variant_table VALUES(1),(1.34),(true),(parse_json('[1,2,3,["a","b","c"]]')),(parse_json('{"a":1,"b":{"c":2}}'));
-```
-
-Query the result:
-```sql
-SELECT * FROM variant_table;
-+-----------------------+
-| var                   |
-+-----------------------+
-| 1                     |
-| 1.34                  |
-| true                  |
-| [1,2,3,["a","b","c"]] |
-| {"a":1,"b":{"c":2}}   |
-+-----------------------+
 ```
 
 ## Data Type Conversion
