@@ -15,7 +15,7 @@
 //! Defines application key spaces that are defined by raft-store.
 //! All of the key spaces stores key-value pairs in the underlying sled db.
 
-use common_meta_sled_store::openraft;
+use common_meta_sled_store::openraft::Entry;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledOrderedSerde;
@@ -27,7 +27,6 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
-use openraft::raft::Entry;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -214,10 +213,7 @@ impl RaftStoreEntry {
     }
 
     /// Deserialize a serialized key-value entry `[key, value]`.
-    pub fn deserialize(ent: &[Vec<u8>]) -> Result<Self, MetaStorageError> {
-        let prefix_key = &ent[0];
-        let vec_value = &ent[1];
-
+    pub fn deserialize(prefix_key: &[u8], vec_value: &[u8]) -> Result<Self, MetaStorageError> {
         let prefix = prefix_key[0];
         let vec_key = &prefix_key[1..];
 

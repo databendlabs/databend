@@ -294,9 +294,10 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
         let tree = db.open_tree(&name)?;
         for x in tree.iter() {
             let kv = x?;
-            let kv = vec![kv.0.to_vec(), kv.1.to_vec()];
+            let k = kv.0.to_vec();
+            let v = kv.1.to_vec();
 
-            let kv_entry = RaftStoreEntry::deserialize(&kv)?;
+            let kv_entry = RaftStoreEntry::deserialize(&k, &v)?;
             let tree_kv = (name.clone(), kv_entry);
 
             let line = serde_json::to_string(&tree_kv)?;
