@@ -15,10 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -31,12 +28,10 @@ use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::MutationAction;
-use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
-use crate::pruning::BlockPruner;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -84,6 +79,7 @@ impl FuseTable {
         )
         .await?;
 
+        // TODO(zhyass): support cluster stats generator.
         pipeline.add_transform(|input, output| {
             SerializeDataTransform::try_create(
                 ctx.clone(),
@@ -113,29 +109,18 @@ impl FuseTable {
     ) -> Result<()> {
         let all_col_ids = self.all_the_columns_ids();
         let schema = self.schema();
-        let mut ops = Vec::with_capacity(update_list.len() + 1);
+
         let mut offset_map = BTreeMap::new();
         let mut remain_reader = None;
-        let projection = if col_indices.is_empty() {
-            let mut pos = 0;
+        let mut pos = 0;
+        let (projection, input_schema) = if col_indices.is_empty() {
             all_col_ids.iter().for_each(|&id| {
                 offset_map.insert(id, pos);
                 pos += 1;
             });
 
-            for (id, remote_expr) in update_list.into_iter() {
-                let expr = remote_expr
-                    .as_expr(&BUILTIN_FUNCTIONS)
-                    .unwrap()
-                    .project_column_ref(|name| schema.index_of(name).unwrap());
-
-                ops.push(BlockOperator::Map { expr });
-                offset_map.insert(id, pos);
-                pos += 1;
-            }
-            Projection::Columns(all_col_ids)
+            (Projection::Columns(all_col_ids), schema.clone())
         } else {
-            let mut pos = 0;
             col_indices.iter().for_each(|&id| {
                 offset_map.insert(id, pos);
                 pos += 1;
@@ -145,6 +130,7 @@ impl FuseTable {
                 .iter()
                 .map(|idx| schema.fields()[*idx].clone())
                 .collect();
+
             let remain_col_ids: Vec<usize> = all_col_ids
                 .into_iter()
                 .filter(|id| !col_indices.contains(id))
@@ -161,82 +147,44 @@ impl FuseTable {
             }
 
             fields.push(TableField::new("_predicate", TableDataType::Boolean));
-            let input_schema = Arc::new(TableSchema::new(fields));
             pos += 1;
 
-            for (id, remote_expr) in update_list.into_iter() {
-                let expr = remote_expr
-                    .as_expr(&BUILTIN_FUNCTIONS)
-                    .unwrap()
-                    .project_column_ref(|name| input_schema.index_of(name).unwrap());
-                ops.push(BlockOperator::Map { expr });
-                offset_map.insert(id, pos);
-                pos += 1;
-            }
-
-            Projection::Columns(col_indices.clone())
+            (
+                Projection::Columns(col_indices.clone()),
+                Arc::new(TableSchema::new(fields)),
+            )
         };
 
+        let mut ops = Vec::with_capacity(update_list.len() + 1);
+        for (id, remote_expr) in update_list.into_iter() {
+            let expr = remote_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .unwrap()
+                .project_column_ref(|name| input_schema.index_of(name).unwrap());
+            ops.push(BlockOperator::Map { expr });
+            offset_map.insert(id, pos);
+            pos += 1;
+        }
         ops.push(BlockOperator::Project {
             projection: offset_map.values().cloned().collect(),
         });
 
         let block_reader = self.create_block_reader(projection.clone())?;
-
-        let (filter_expr, filters) = if let Some(filter) = filter {
+        let remain_reader = Arc::new(remain_reader);
+        let (filter_expr, filters) = if let Some(remote_expr) = filter {
             let schema = block_reader.schema();
             (
-                Arc::new(filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
+                Arc::new(remote_expr.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
                     expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
                 })),
-                vec![filter],
+                vec![remote_expr],
             )
         } else {
             (Arc::new(None), vec![])
         };
 
-        let remain_reader = Arc::new(remain_reader);
-
-        let push_down = Some(PushDownInfo {
-            projection: Some(projection),
-            filters,
-            ..PushDownInfo::default()
-        });
-
-        let segments_location = base_snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(
-            &ctx,
-            self.operator.clone(),
-            self.table_info.schema(),
-            &push_down,
-            segments_location,
-        )
-        .await?;
-
-        let mut indices = Vec::with_capacity(block_metas.len());
-        let mut metas = Vec::with_capacity(block_metas.len());
-        block_metas.into_iter().for_each(|(index, block_meta)| {
-            indices.push(index);
-            metas.push(block_meta);
-        });
-
-        let (_, inner_parts) = self.read_partitions_with_metas(
-            ctx.clone(),
-            self.table_info.schema(),
-            None,
-            metas,
-            base_snapshot.summary.block_count as usize,
-        )?;
-
-        let parts = Partitions::create(
-            PartitionsShuffleKind::Mod,
-            indices
-                .into_iter()
-                .zip(inner_parts.partitions.into_iter())
-                .map(|(a, b)| MutationPartInfo::create(a, None, b))
-                .collect(),
-        );
-        ctx.try_set_partitions(parts)?;
+        self.mutation_block_purning(ctx.clone(), filters, projection, base_snapshot)
+            .await?;
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         // Add source pipe.

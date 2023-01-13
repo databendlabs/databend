@@ -189,48 +189,15 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
-        let push_down = Some(PushDownInfo {
-            projection: Some(projection.clone()),
-            filters: vec![filter.clone()],
-            ..PushDownInfo::default()
-        });
-
-        let segments_location = base_snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(
-            &ctx,
-            self.operator.clone(),
-            self.table_info.schema(),
-            &push_down,
-            segments_location,
+        self.mutation_block_purning(
+            ctx.clone(),
+            vec![filter.clone()],
+            projection.clone(),
+            base_snapshot,
         )
         .await?;
 
-        let mut index_stats = Vec::with_capacity(block_metas.len());
-        let mut metas = Vec::with_capacity(block_metas.len());
-        for (index, block_meta) in block_metas.into_iter() {
-            index_stats.push((index, block_meta.cluster_stats.clone()));
-            metas.push(block_meta);
-        }
-
-        let (_, inner_parts) = self.read_partitions_with_metas(
-            ctx.clone(),
-            self.table_info.schema(),
-            None,
-            metas,
-            base_snapshot.summary.block_count as usize,
-        )?;
-
-        let parts = Partitions::create(
-            PartitionsShuffleKind::Mod,
-            index_stats
-                .into_iter()
-                .zip(inner_parts.partitions.into_iter())
-                .map(|((a, b), c)| MutationPartInfo::create(a, b, c))
-                .collect(),
-        );
-        ctx.try_set_partitions(parts)?;
-
-        let block_reader = self.create_block_reader(projection.clone())?;
+        let block_reader = self.create_block_reader(projection)?;
         let schema = block_reader.schema();
         let filter =
             Arc::new(filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
@@ -273,6 +240,55 @@ impl FuseTable {
             },
             max_threads,
         )
+    }
+
+    pub async fn mutation_block_purning(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filters: Vec<RemoteExpr<String>>,
+        projection: Projection,
+        base_snapshot: &TableSnapshot,
+    ) -> Result<()> {
+        let push_down = Some(PushDownInfo {
+            projection: Some(projection),
+            filters,
+            ..PushDownInfo::default()
+        });
+
+        let segments_location = base_snapshot.segments.clone();
+        let block_metas = BlockPruner::prune(
+            &ctx,
+            self.operator.clone(),
+            self.table_info.schema(),
+            &push_down,
+            segments_location,
+        )
+        .await?;
+
+        let mut index_stats = Vec::with_capacity(block_metas.len());
+        let mut metas = Vec::with_capacity(block_metas.len());
+        for (index, block_meta) in block_metas.into_iter() {
+            index_stats.push((index, block_meta.cluster_stats.clone()));
+            metas.push(block_meta);
+        }
+
+        let (_, inner_parts) = self.read_partitions_with_metas(
+            ctx.clone(),
+            self.table_info.schema(),
+            None,
+            metas,
+            base_snapshot.summary.block_count as usize,
+        )?;
+
+        let parts = Partitions::create(
+            PartitionsShuffleKind::Mod,
+            index_stats
+                .into_iter()
+                .zip(inner_parts.partitions.into_iter())
+                .map(|((a, b), c)| MutationPartInfo::create(a, b, c))
+                .collect(),
+        );
+        ctx.try_set_partitions(parts)
     }
 
     pub fn try_add_mutation_transform(
