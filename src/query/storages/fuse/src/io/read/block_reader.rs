@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
@@ -320,8 +321,8 @@ impl BlockReader {
     }
 
     // Build non duplicate leaf_ids to avoid repeated read column from parquet
-    pub(crate) fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashMap<usize, Field> {
-        let mut indices = HashMap::with_capacity(columns.len());
+    pub(crate) fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> BTreeMap<usize, Field> {
+        let mut indices = BTreeMap::new();
         for column in columns {
             for index in &column.leaf_ids {
                 indices.insert(*index, column.field.clone());

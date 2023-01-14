@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
-
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;

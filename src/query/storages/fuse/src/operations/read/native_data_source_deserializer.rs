@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourcePlan;
@@ -54,6 +53,7 @@ pub struct NativeDeserializeDataTransform {
 
     prewhere_columns: Vec<usize>,
     remain_columns: Vec<usize>,
+    output_columns: Vec<usize>,
     prewhere_filter: Arc<Option<Expr>>,
 }
 
@@ -72,8 +72,9 @@ impl NativeDeserializeDataTransform {
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => (0..reader_schema.num_fields()).collect(),
                 Some(v) => {
-                    let projected_arrow_schema =
-                        v.prewhere_columns.project_schema(plan.source_info.schema().as_ref());
+                    let projected_arrow_schema = v
+                        .prewhere_columns
+                        .project_schema(plan.source_info.schema().as_ref());
                     projected_arrow_schema
                         .fields()
                         .iter()
@@ -86,13 +87,25 @@ impl NativeDeserializeDataTransform {
             .filter(|i| !prewhere_columns.contains(i))
             .collect();
 
+        let output_columns: Vec<usize> =
+            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
+                None => (0..reader_schema.num_fields()).collect(),
+                Some(v) => {
+                    let projected = v
+                        .output_columns
+                        .project_schema(plan.source_info.schema().as_ref());
+                    projected
+                        .fields()
+                        .iter()
+                        .map(|f| reader_schema.index_of(f.name()).unwrap())
+                        .collect()
+                }
+            };
+
         let prewhere_schema = reader_schema.project(&prewhere_columns);
         let prewhere_schema: DataSchema = DataSchema::from(&prewhere_schema);
         let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
-        
-        println!("prewhere_columns {:?}", prewhere_columns);
-        println!("remain_columns {:?}", remain_columns);
-        
+
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
                 ctx,
@@ -106,6 +119,7 @@ impl NativeDeserializeDataTransform {
 
                 prewhere_columns,
                 remain_columns,
+                output_columns,
                 prewhere_filter,
             },
         )))
@@ -203,7 +217,11 @@ impl Processor for NativeDeserializeDataTransform {
                     let prewhere_block = self
                         .block_reader
                         .build_block(arrays.clone(), Some(&self.prewhere_columns))?;
-                    let evaluator = Evaluator::new(&prewhere_block, self.ctx.try_get_function_context()?, &BUILTIN_FUNCTIONS);
+                    let evaluator = Evaluator::new(
+                        &prewhere_block,
+                        self.ctx.try_get_function_context()?,
+                        &BUILTIN_FUNCTIONS,
+                    );
                     let result = evaluator.run(filter).map_err(|(_, e)| {
                         ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
                     })?;
@@ -218,7 +236,7 @@ impl Processor for NativeDeserializeDataTransform {
                         metrics_inc_pruning_prewhere_nums(1);
                         for index in self.remain_columns.iter() {
                             let chunk = chunks.get_mut(*index).unwrap();
-                            chunk.1.skip_page();
+                            chunk.1.skip_page()?;
                         }
                         return Ok(());
                     }
@@ -227,7 +245,10 @@ impl Processor for NativeDeserializeDataTransform {
                         let chunk = chunks.get_mut(*index).unwrap();
                         arrays.push((chunk.0, chunk.1.next_array()?));
                     }
-                    let block = self.block_reader.build_block(arrays, None)?;
+
+                    let block = self
+                        .block_reader
+                        .build_block(arrays, Some(&self.output_columns))?;
                     block.filter(&result)
                 }
                 None => {
@@ -235,7 +256,8 @@ impl Processor for NativeDeserializeDataTransform {
                         let chunk = chunks.get_mut(*index).unwrap();
                         arrays.push((chunk.0, chunk.1.next_array()?));
                     }
-                    self.block_reader.build_block(arrays, None)
+                    self.block_reader
+                        .build_block(arrays, Some(&self.output_columns))
                 }
             }?;
 
