@@ -42,7 +42,8 @@ futures = "0.3.24"
 futures-util = "0.3.24"
 itertools = "0.10.5"
 metrics = "0.20.1"
-opendal = "0.24"
+opendal = { path = "/home/sundy/work/opendal" }
+
 serde = { workspace = true }
 serde_json = { workspace = true }
 streaming-decompression = "0.1.2"

@@ -15,15 +15,21 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_arrow::schema_projection as ap;
+
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::Value;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -31,10 +37,12 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 use crate::io::BlockReader;
+use crate::metrics::metrics_inc_pruning_prewhere_nums;
 use crate::operations::read::native_data_source::DataChunks;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct NativeDeserializeDataTransform {
+    ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
 
@@ -46,6 +54,7 @@ pub struct NativeDeserializeDataTransform {
 
     prewhere_columns: Vec<usize>,
     remain_columns: Vec<usize>,
+    prewhere_filter: Arc<Option<Expr>>,
 }
 
 impl NativeDeserializeDataTransform {
@@ -64,20 +73,29 @@ impl NativeDeserializeDataTransform {
                 None => (0..reader_schema.num_fields()).collect(),
                 Some(v) => {
                     let projected_arrow_schema =
-                        v.prewhere_columns.project_schema(plan.schema().as_ref());
+                        v.prewhere_columns.project_schema(plan.source_info.schema().as_ref());
                     projected_arrow_schema
                         .fields()
                         .iter()
-                        .map(|f| reader_schema.index_of(f.name()))
+                        .map(|f| reader_schema.index_of(f.name()).unwrap())
                         .collect()
                 }
             };
+
         let remain_columns: Vec<usize> = (0..reader_schema.num_fields())
             .filter(|i| !prewhere_columns.contains(i))
             .collect();
 
+        let prewhere_schema = reader_schema.project(&prewhere_columns);
+        let prewhere_schema: DataSchema = DataSchema::from(&prewhere_schema);
+        let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
+        
+        println!("prewhere_columns {:?}", prewhere_columns);
+        println!("remain_columns {:?}", remain_columns);
+        
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
+                ctx,
                 scan_progress,
                 block_reader,
                 input,
@@ -88,12 +106,26 @@ impl NativeDeserializeDataTransform {
 
                 prewhere_columns,
                 remain_columns,
+                prewhere_filter,
             },
         )))
     }
+
+    fn build_prewhere_filter_expr(
+        plan: &DataSourcePlan,
+        schema: &DataSchema,
+    ) -> Result<Arc<Option<Expr>>> {
+        Ok(
+            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
+                None => Arc::new(None),
+                Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
+                    expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+                })),
+            },
+        )
+    }
 }
 
-#[async_trait::async_trait]
 impl Processor for NativeDeserializeDataTransform {
     fn name(&self) -> String {
         String::from("NativeDeserializeDataTransform")
@@ -157,19 +189,55 @@ impl Processor for NativeDeserializeDataTransform {
             let mut arrays = Vec::with_capacity(chunks.len());
 
             for index in self.prewhere_columns.iter() {
-                arrays.push((*index, chunks[0].next_array()?));
-            }
-
-            for (index, chunk) in chunks.iter_mut() {
-                if !chunk.has_next() {
+                let chunk = chunks.get_mut(*index).unwrap();
+                if !chunk.1.has_next() {
                     // No data anymore
                     let _ = self.chunks.pop();
                     return Ok(());
                 }
-                arrays.push((*index, chunk.next_array()?));
+                arrays.push((chunk.0, chunk.1.next_array()?));
             }
 
-            let data_block = self.block_reader.build_block(arrays)?;
+            let data_block = match self.prewhere_filter.as_ref() {
+                Some(filter) => {
+                    let prewhere_block = self
+                        .block_reader
+                        .build_block(arrays.clone(), Some(&self.prewhere_columns))?;
+                    let evaluator = Evaluator::new(&prewhere_block, self.ctx.try_get_function_context()?, &BUILTIN_FUNCTIONS);
+                    let result = evaluator.run(filter).map_err(|(_, e)| {
+                        ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
+                    })?;
+                    let filter = DataBlock::cast_to_nonull_boolean(&result).unwrap();
+
+                    let all_filtered = match &filter {
+                        Value::Scalar(v) => !v,
+                        Value::Column(bitmap) => bitmap.unset_bits() == bitmap.len(),
+                    };
+
+                    if all_filtered {
+                        metrics_inc_pruning_prewhere_nums(1);
+                        for index in self.remain_columns.iter() {
+                            let chunk = chunks.get_mut(*index).unwrap();
+                            chunk.1.skip_page();
+                        }
+                        return Ok(());
+                    }
+
+                    for index in self.remain_columns.iter() {
+                        let chunk = chunks.get_mut(*index).unwrap();
+                        arrays.push((chunk.0, chunk.1.next_array()?));
+                    }
+                    let block = self.block_reader.build_block(arrays, None)?;
+                    block.filter(&result)
+                }
+                None => {
+                    for index in self.remain_columns.iter() {
+                        let chunk = chunks.get_mut(*index).unwrap();
+                        arrays.push((chunk.0, chunk.1.next_array()?));
+                    }
+                    self.block_reader.build_block(arrays, None)
+                }
+            }?;
 
             let progress_values = ProgressValues {
                 rows: data_block.num_rows(),

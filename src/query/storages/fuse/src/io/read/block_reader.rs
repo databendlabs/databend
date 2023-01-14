@@ -116,6 +116,7 @@ impl BlockReader {
         schema: TableSchemaRef,
         projection: Projection,
     ) -> Result<Arc<BlockReader>> {
+        println!("projection -> {:?}", projection);
         let projected_schema = match projection {
             Projection::Columns(ref indices) => TableSchemaRef::new(schema.project(indices)),
             Projection::InnerColumns(ref path_indices) => {

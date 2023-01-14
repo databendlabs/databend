@@ -597,6 +597,10 @@ impl Table for FuseTable {
     ) -> Result<()> {
         self.do_revert_to(ctx.as_ref(), point).await
     }
+    
+    fn support_prewhere(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Native)
+    }
 }
 
 #[derive(Clone, Copy)]

@@ -145,13 +145,19 @@ impl BlockReader {
         Ok((index, fuse_reader))
     }
 
-    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
+    pub fn build_block(
+        &self,
+        chunks: Vec<(usize, Box<dyn Array>)>,
+        prewhere: Option<&[usize]>,
+    ) -> Result<DataBlock> {
         let mut results = Vec::with_capacity(chunks.len());
         let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+
+        // they are already the leaf columns without inner
+        // TODO support tuple in native storage
         for column in &columns {
             let indices = &column.leaf_ids;
-
             for index in indices {
                 if let Some(array) = chunk_map.remove(index) {
                     results.push(array);
@@ -160,6 +166,10 @@ impl BlockReader {
             }
         }
         let chunk = Chunk::new(results);
-        DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
+        let schema = match prewhere {
+            Some(prewhere) => self.data_schema().project(prewhere),
+            None => self.data_schema(),
+        };
+        DataBlock::from_arrow_chunk(&chunk, &schema)
     }
 }
