@@ -13,13 +13,17 @@
 // limitations under the License.
 
 mod columns_table;
+mod key_column_usage_table;
 mod keywords_table;
 mod schemata_table;
+mod statistics_table;
 mod tables_table;
 mod views_table;
 
 pub use columns_table::ColumnsTable;
+pub use key_column_usage_table::KeyColumnUsageTable;
 pub use keywords_table::KeywordsTable;
 pub use schemata_table::SchemataTable;
+pub use statistics_table::StatisticsTable;
 pub use tables_table::TablesTable;
 pub use views_table::ViewsTable;

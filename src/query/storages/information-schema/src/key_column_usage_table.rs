@@ -22,45 +22,30 @@ use common_meta_app::schema::TableMeta;
 use common_storages_view::view_table::ViewTable;
 use common_storages_view::view_table::QUERY;
 
-pub struct ColumnsTable {}
+pub struct KeyColumnUsageTable {}
 
-impl ColumnsTable {
+impl KeyColumnUsageTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let query = "SELECT
-            database AS table_catalog,
-            database AS table_schema,
-            table AS table_name,
-            name AS column_name,
-            1 AS ordinal_position,
-            NULL AS column_default,
-            NULL AS column_comment,
-            NULL AS column_key,
-            is_nullable AS is_nullable,
-            type AS data_type,
-            type AS column_type,
-            NULL AS character_maximum_length,
-            NULL AS character_octet_length,
-            NULL AS numeric_precision,
-            NULL AS numeric_precision_radix,
-            NULL AS numeric_scale,
-            NULL AS datetime_precision,
-            NULL AS character_set_catalog,
-            NULL AS character_set_schema,
-            NULL AS character_set_name,
-            NULL AS collation_catalog,
-            NULL AS collation_schema,
-            NULL AS collation_name,
-            NULL AS domain_catalog,
-            NULL AS domain_schema,
-            NULL AS domain_name,
-            NULL AS extra
-        FROM system.columns;";
+        let query = "SELECT \
+        NULL as constraint_catalog, \
+        NULL as constraint_schema, \
+        NULL as constraint_name, \
+        NULL as table_catalog, \
+        NULL as table_schema, \
+        NULL as table_name, \
+        NULL as column_name, \
+        NULL as ordinal_position, \
+        NULL as position_in_unique_constraint, \
+        NULL as referenced_table_schema, \
+        NULL as referenced_table_name, \
+        NULL as referenced_column_name"
+            .to_string();
 
         let mut options = BTreeMap::new();
-        options.insert(QUERY.to_string(), query.to_string());
+        options.insert(QUERY.to_string(), query);
         let table_info = TableInfo {
-            desc: "'information_schema'.'columns'".to_string(),
-            name: "columns".to_string(),
+            desc: "'information_schema'.'key_column_usage'".to_string(),
+            name: "key_column_usage".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 options,
