@@ -19,8 +19,10 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_storages_information_schema::ColumnsTable;
+use common_storages_information_schema::KeyColumnUsageTable;
 use common_storages_information_schema::KeywordsTable;
 use common_storages_information_schema::SchemataTable;
+use common_storages_information_schema::StatisticsTable;
 use common_storages_information_schema::TablesTable;
 use common_storages_information_schema::ViewsTable;
 
@@ -41,6 +43,8 @@ impl InformationSchemaDatabase {
             KeywordsTable::create(sys_db_meta.next_table_id()),
             ViewsTable::create(sys_db_meta.next_table_id()),
             SchemataTable::create(sys_db_meta.next_table_id()),
+            StatisticsTable::create(sys_db_meta.next_table_id()),
+            KeyColumnUsageTable::create(sys_db_meta.next_table_id()),
         ];
 
         let db = "information_schema";
