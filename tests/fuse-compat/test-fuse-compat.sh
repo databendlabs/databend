@@ -12,7 +12,6 @@ BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
 logictest_path="tests/fuse-compat/compat-logictest"
-bend_repo_url="https://github.com/datafuselabs/databend"
 
 usage() {
     echo " === Assert that latest query being compatible with an old version query on fuse-table format"
@@ -88,15 +87,6 @@ git_partial_clone() {
 
 }
 
-# Run specified tests found in logic test suite dir
-run_logictest() {
-    (
-        # Only run test on mysql handler
-        cargo run -p sqllogictests -- --handlers mysql --suites "$logictest_path"
-    )
-
-}
-
 kill_proc() {
     local name="$1"
 
@@ -130,6 +120,7 @@ run_test() {
     local query_old="./bins/$query_old_ver/bin/databend-query"
     local query_new="./bins/current/databend-query"
     local metasrv="./bins/current/databend-meta"
+    local sqllogictests="./bins/current/databend-sqllogictests"
 
     echo " === metasrv version:"
     # TODO remove --single
@@ -176,7 +167,7 @@ run_test() {
 
     # download_logictest $query_old_ver old_logictest/$query_old_ver
     # run_logictest old_logictest/$query_old_ver fuse_compat_write
-    run_logictest fuse_compat_write
+    $sqllogictests --handlers mysql --suites "$logictest_path" --run_file fuse_compat_write
 
     kill_proc databend-query
 
@@ -190,7 +181,7 @@ run_test() {
     echo " === Run test: fuse_compat_read with current query"
 
     # download_logictest $query_old_ver old_logictest
-    run_logictest fuse_compat_read
+    $sqllogictests --handlers mysql --suites "$logictest_path" --run_file fuse_compat_read
 }
 
 # -- main --

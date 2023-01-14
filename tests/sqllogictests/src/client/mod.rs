@@ -16,24 +16,32 @@ mod clickhouse_client;
 mod http_client;
 mod mysql_client;
 
+use std::fmt;
+
 pub use clickhouse_client::ClickhouseHttpClient;
 pub use http_client::HttpClient;
-pub use mysql_client::MysqlClient;
+pub use mysql_client::MySQLClient;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use sqllogictest::DBOutput;
 
 use crate::error::Result;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum ClientType {
-    Mysql,
+    MySQL,
     Http,
     Clickhouse,
 }
 
+impl fmt::Display for ClientType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 pub enum Client {
-    Mysql(MysqlClient),
+    MySQL(MySQLClient),
     Http(HttpClient),
     Clickhouse(ClickhouseHttpClient),
 }
@@ -41,7 +49,7 @@ pub enum Client {
 impl Client {
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
         match self {
-            Client::Mysql(client) => client.query(sql).await,
+            Client::MySQL(client) => client.query(sql).await,
             Client::Http(client) => client.query(sql).await,
             Client::Clickhouse(client) => client.query(sql).await,
         }
@@ -49,7 +57,7 @@ impl Client {
 
     pub fn enable_debug(&mut self) {
         match self {
-            Client::Mysql(client) => client.debug = true,
+            Client::MySQL(client) => client.debug = true,
             Client::Http(client) => client.debug = true,
             Client::Clickhouse(client) => client.debug = true,
         }
@@ -70,7 +78,7 @@ impl Client {
 
     pub fn engine_name(&self) -> &str {
         match self {
-            Client::Mysql(_) => "mysql",
+            Client::MySQL(_) => "mysql",
             Client::Http(_) => "http",
             Client::Clickhouse(_) => "clickhouse",
         }
