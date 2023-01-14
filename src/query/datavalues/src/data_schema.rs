@@ -213,7 +213,7 @@ impl DataSchema {
     }
 
     pub fn is_column_deleted(&self, column_id: u32) -> bool {
-        self.column_id_set.as_ref().unwrap().contains(&column_id)
+        !self.column_id_set.as_ref().unwrap().contains(&column_id)
     }
 
     pub fn column_id_set(&self) -> &HashSet<u32> {

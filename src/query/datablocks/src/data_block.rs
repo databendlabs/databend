@@ -317,7 +317,7 @@ impl DataBlock {
                 let default_value = field.data_type().default_value();
                 field
                     .data_type()
-                    .create_constant_column(&default_value, num_rows)?
+                    .create_column(&vec![default_value; num_rows])?
             } else {
                 assert!(chunk_idx < chunk_columns.len());
                 let chunk_column = &chunk_columns[chunk_idx];
@@ -352,7 +352,7 @@ impl DataBlock {
                 let default_value = field.data_type().default_value();
                 let column = field
                     .data_type()
-                    .create_constant_column(&default_value, num_rows)?;
+                    .create_column(&vec![default_value; num_rows])?;
 
                 new_data_block = new_data_block.add_column(column, field.clone())?;
             } else {
