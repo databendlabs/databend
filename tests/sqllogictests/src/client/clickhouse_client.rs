@@ -32,10 +32,10 @@ pub struct ClickhouseHttpClient {
 }
 
 impl ClickhouseHttpClient {
-    pub fn create() -> Result<ClickhouseHttpClient> {
+    pub fn create() -> Result<Self> {
         let client = Client::new();
         let url = "http://127.0.0.1:8124".to_string();
-        Ok(ClickhouseHttpClient {
+        Ok(Self {
             client,
             database: "default".to_string(),
             settings: HashMap::new(),

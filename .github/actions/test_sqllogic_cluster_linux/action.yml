@@ -26,10 +26,6 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-    - name: Setup Build Tool
-      uses: ./.github/actions/setup_build_tool
-      with:
-        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
     - name: Run sqllogic Tests with Cluster mode
       shell: bash
       env:
