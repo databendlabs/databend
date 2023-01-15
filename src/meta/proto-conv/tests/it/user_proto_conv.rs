@@ -88,7 +88,7 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
             quote: "\'\'".to_string(),
         },
         copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+            on_error: mt::OnErrorMode::AbortNum(2),
             size_limit: 1038,
             split_size: 0,
             purge: true,
