@@ -53,7 +53,9 @@ pub struct NativeDeserializeDataTransform {
 
     prewhere_columns: Vec<usize>,
     remain_columns: Vec<usize>,
-    output_columns: Vec<usize>,
+
+    src_schema: DataSchema,
+    output_schema: DataSchema,
     prewhere_filter: Arc<Option<Expr>>,
 }
 
@@ -66,11 +68,11 @@ impl NativeDeserializeDataTransform {
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let reader_schema = block_reader.schema();
+        let src_schema: DataSchema = (block_reader.schema().as_ref()).into();
 
         let prewhere_columns: Vec<usize> =
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-                None => (0..reader_schema.num_fields()).collect(),
+                None => (0..src_schema.num_fields()).collect(),
                 Some(v) => {
                     let projected_arrow_schema = v
                         .prewhere_columns
@@ -78,32 +80,27 @@ impl NativeDeserializeDataTransform {
                     projected_arrow_schema
                         .fields()
                         .iter()
-                        .map(|f| reader_schema.index_of(f.name()).unwrap())
+                        .map(|f| src_schema.index_of(f.name()).unwrap())
                         .collect()
                 }
             };
 
-        let remain_columns: Vec<usize> = (0..reader_schema.num_fields())
+        let remain_columns: Vec<usize> = (0..src_schema.num_fields())
             .filter(|i| !prewhere_columns.contains(i))
             .collect();
 
-        let output_columns: Vec<usize> =
-            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-                None => (0..reader_schema.num_fields()).collect(),
-                Some(v) => {
-                    let projected = v
-                        .output_columns
-                        .project_schema(plan.source_info.schema().as_ref());
-                    projected
-                        .fields()
-                        .iter()
-                        .map(|f| reader_schema.index_of(f.name()).unwrap())
-                        .collect()
-                }
-            };
+        let output_schema: DataSchema = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs)
+        {
+            None => src_schema.clone(),
+            Some(v) => {
+                let projected = v
+                    .output_columns
+                    .project_schema(plan.source_info.schema().as_ref());
+                (&projected).into()
+            }
+        };
 
-        let prewhere_schema = reader_schema.project(&prewhere_columns);
-        let prewhere_schema: DataSchema = DataSchema::from(&prewhere_schema);
+        let prewhere_schema = src_schema.project(&prewhere_columns);
         let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
 
         Ok(ProcessorPtr::create(Box::new(
@@ -119,7 +116,8 @@ impl NativeDeserializeDataTransform {
 
                 prewhere_columns,
                 remain_columns,
-                output_columns,
+                src_schema,
+                output_schema,
                 prewhere_filter,
             },
         )))
@@ -214,9 +212,7 @@ impl Processor for NativeDeserializeDataTransform {
 
             let data_block = match self.prewhere_filter.as_ref() {
                 Some(filter) => {
-                    let prewhere_block = self
-                        .block_reader
-                        .build_block(arrays.clone(), Some(&self.prewhere_columns))?;
+                    let prewhere_block = self.block_reader.build_block(arrays.clone())?;
                     let evaluator = Evaluator::new(
                         &prewhere_block,
                         self.ctx.try_get_function_context()?,
@@ -246,18 +242,16 @@ impl Processor for NativeDeserializeDataTransform {
                         arrays.push((chunk.0, chunk.1.next_array()?));
                     }
 
-                    let block = self
-                        .block_reader
-                        .build_block(arrays, Some(&self.output_columns))?;
-                    block.filter(&result)
+                    let block = self.block_reader.build_block(arrays)?;
+                    let block = block.filter(&result)?;
+                    block.resort(&self.src_schema, &self.output_schema)
                 }
                 None => {
                     for index in self.remain_columns.iter() {
                         let chunk = chunks.get_mut(*index).unwrap();
                         arrays.push((chunk.0, chunk.1.next_array()?));
                     }
-                    self.block_reader
-                        .build_block(arrays, Some(&self.output_columns))
+                    self.block_reader.build_block(arrays)
                 }
             }?;
 
@@ -266,7 +260,6 @@ impl Processor for NativeDeserializeDataTransform {
                 bytes: data_block.memory_size(),
             };
             self.scan_progress.incr(&progress_values);
-
             self.output_data = Some(data_block);
         }
 

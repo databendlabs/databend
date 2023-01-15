@@ -23,6 +23,8 @@ use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::TableField;
 use opendal::Object;
 use storages_common_table_meta::meta::ColumnMeta;
 
@@ -145,14 +147,11 @@ impl BlockReader {
         Ok((index, fuse_reader))
     }
 
-    pub fn build_block(
-        &self,
-        chunks: Vec<(usize, Box<dyn Array>)>,
-        prewhere: Option<&[usize]>,
-    ) -> Result<DataBlock> {
+    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
         let mut results = Vec::with_capacity(chunks.len());
         let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        let mut data_types = Vec::with_capacity(chunk_map.len());
 
         // they are already the leaf columns without inner
         // TODO support tuple in native storage
@@ -160,16 +159,14 @@ impl BlockReader {
             let indices = &column.leaf_ids;
             for index in indices {
                 if let Some(array) = chunk_map.remove(index) {
+                    let data_field: TableField = (&column.field).into();
                     results.push(array);
+                    data_types.push(data_field.data_type().into());
                     break;
                 }
             }
         }
         let chunk = Chunk::new(results);
-        let schema = match prewhere {
-            Some(prewhere) => self.data_schema().project(prewhere),
-            None => self.data_schema(),
-        };
-        DataBlock::from_arrow_chunk(&chunk, &schema)
+        DataBlock::from_arrow_chunk_with_types(&chunk, &data_types)
     }
 }
