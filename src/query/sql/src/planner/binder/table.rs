@@ -45,7 +45,6 @@ use common_exception::Result;
 use common_expression::type_check::check_literal;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
-use common_expression::Domain;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileCompression;
@@ -545,18 +544,11 @@ impl<'a> Binder {
                 let box (scalar, _) = type_checker.resolve(expr, None).await?;
                 let scalar_expr = scalar.as_expr()?;
 
-                let input_domains = scalar_expr
-                    .column_refs()
-                    .into_iter()
-                    .map(|(name, ty)| {
-                        let domain = Domain::full(&ty);
-                        (name, domain)
-                    })
-                    .collect();
-
-                let ctx = self.ctx.try_get_function_context()?;
-                let folder = ConstantFolder::new(input_domains, ctx, &BUILTIN_FUNCTIONS);
-                let (new_expr, _) = folder.fold(&scalar_expr);
+                let (new_expr, _) = ConstantFolder::fold(
+                    &scalar_expr,
+                    self.ctx.try_get_function_context()?,
+                    &BUILTIN_FUNCTIONS,
+                );
 
                 match new_expr {
                     common_expression::Expr::Constant {

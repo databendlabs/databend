@@ -41,7 +41,7 @@ struct QueryResponse {
 }
 
 impl HttpClient {
-    pub fn create() -> Result<HttpClient> {
+    pub fn create() -> Result<Self> {
         let mut header = HeaderMap::new();
         header.insert(
             "Content-Type",
@@ -49,7 +49,7 @@ impl HttpClient {
         );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
         let client = ClientBuilder::new().default_headers(header).build()?;
-        Ok(HttpClient {
+        Ok(Self {
             client,
             session: None,
             debug: false,

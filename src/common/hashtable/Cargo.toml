@@ -21,7 +21,7 @@ ahash = { version = "0.8.2", features = ["no-rng"] }
 bumpalo = "3.10.0"
 cfg-if = "1.0.0"
 libc = "0.2.126"
-ordered-float = { version = "3.1.0", features = ["serde"] }
+ordered-float = { workspace = true, features = ["serde"] }
 primitive-types = "0.12.0"
 semver = "1.0.10"
 

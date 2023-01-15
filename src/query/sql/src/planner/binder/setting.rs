@@ -23,7 +23,6 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataSchema;
-use common_expression::Domain;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use super::BindContext;
@@ -65,17 +64,11 @@ impl<'a> Binder {
         let scalar = builder.build(&scalar)?;
         let expr = scalar.as_expr()?;
 
-        let input_domains = expr
-            .column_refs()
-            .into_iter()
-            .map(|(name, ty)| {
-                let domain = Domain::full(&ty);
-                (name, domain)
-            })
-            .collect();
-        let func_ctx = self.ctx.try_get_function_context()?;
-        let folder = ConstantFolder::new(input_domains, func_ctx, &BUILTIN_FUNCTIONS);
-        let (new_expr, _) = folder.fold(&expr);
+        let (new_expr, _) = ConstantFolder::fold(
+            &expr,
+            self.ctx.try_get_function_context()?,
+            &BUILTIN_FUNCTIONS,
+        );
         match new_expr {
             common_expression::Expr::Constant { scalar, .. } => {
                 let value = String::from_utf8(scalar.into_string().unwrap())?;

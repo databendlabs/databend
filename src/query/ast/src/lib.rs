@@ -28,6 +28,7 @@ pub use visitors::walk_expr;
 pub use visitors::walk_expr_mut;
 pub use visitors::walk_query;
 pub use visitors::walk_query_mut;
+pub use visitors::walk_statement_mut;
 pub use visitors::Visitor;
 pub use visitors::VisitorMut;
 

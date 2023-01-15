@@ -31,7 +31,6 @@ use common_expression::Column;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataField;
-use common_expression::Domain;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
@@ -249,17 +248,7 @@ impl BlockFilter {
             },
         )?;
 
-        let input_domains = expr
-            .column_refs()
-            .into_iter()
-            .map(|(name, ty)| {
-                let domain = Domain::full(&ty);
-                (name, domain)
-            })
-            .collect();
-
-        let folder = ConstantFolder::new(input_domains, self.func_ctx, &BUILTIN_FUNCTIONS);
-        let (new_expr, _) = folder.fold(&expr);
+        let (new_expr, _) = ConstantFolder::fold(&expr, self.func_ctx, &BUILTIN_FUNCTIONS);
 
         match new_expr {
             Expr::Constant {
