@@ -135,5 +135,4 @@ fn replace_stmt(stmt: &mut Statement) {
     for v in visitors.iter_mut() {
         walk_statement_mut(v, stmt)
     }
-    println!("a stmt {:?}", stmt);
 }

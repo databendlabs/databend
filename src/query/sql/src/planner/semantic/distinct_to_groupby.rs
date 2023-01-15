@@ -25,7 +25,6 @@ pub struct DistinctToGroupBy {}
 
 impl VisitorMut for DistinctToGroupBy {
     fn visit_select_stmt(&mut self, stmt: &mut SelectStmt<'_>) {
-        println!("got stmt {:?}", stmt);
         let SelectStmt {
             select_list,
             from,
@@ -46,9 +45,7 @@ impl VisitorMut for DistinctToGroupBy {
                         ..
                     } if (name.name.to_ascii_lowercase() == "count" && *distinct)
                         || name.name.to_ascii_lowercase() == "count_distinct" =>
-                    {   
-                        println!("{:?}", "IN");
-                    
+                    {
                         let tmp_token = span[0].clone();
                         let subquery = Query {
                             span: &[],
@@ -96,8 +93,6 @@ impl VisitorMut for DistinctToGroupBy {
                         };
 
                         *stmt = new_stmt;
-                        
-                        println!("{:?}", "replaced");
                     }
                     _ => {}
                 },
