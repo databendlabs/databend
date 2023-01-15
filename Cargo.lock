@@ -3056,6 +3056,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-sqllogictests"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "clap 4.0.32",
+ "common-exception",
+ "env_logger 0.10.0",
+ "futures-util",
+ "lazy_static",
+ "mysql_async",
+ "rand 0.8.5",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqllogictest",
+ "thiserror",
+ "tokio",
+ "walkdir",
+]
+
+[[package]]
 name = "databend-thrift"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7613,28 +7635,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
-]
-
-[[package]]
-name = "sqllogictests"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "clap 4.0.32",
- "common-exception",
- "env_logger 0.10.0",
- "futures-util",
- "lazy_static",
- "mysql_async",
- "rand 0.8.5",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "sqllogictest",
- "thiserror",
- "tokio",
- "walkdir",
 ]
 
 [[package]]

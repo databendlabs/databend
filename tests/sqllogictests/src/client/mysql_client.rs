@@ -22,17 +22,17 @@ use sqllogictest::DBOutput;
 use crate::error::Result;
 
 #[derive(Debug)]
-pub struct MysqlClient {
+pub struct MySQLClient {
     pub conn: Conn,
     pub debug: bool,
 }
 
-impl MysqlClient {
-    pub async fn create() -> Result<MysqlClient> {
+impl MySQLClient {
+    pub async fn create() -> Result<Self> {
         let url = "mysql://root:@127.0.0.1:3307/default";
         let pool = Pool::new(url);
         let conn = pool.get_conn().await?;
-        Ok(MysqlClient { conn, debug: false })
+        Ok(Self { conn, debug: false })
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
