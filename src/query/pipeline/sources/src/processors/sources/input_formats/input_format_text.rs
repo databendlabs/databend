@@ -257,7 +257,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
         error_count: &AtomicU64,
         e: ErrorCode,
     ) -> Result<()> {
-        if abort_num <= 1 && error_count.fetch_add(1, Ordering::Relaxed) >= abort_num {
+        if abort_num <= 1 || error_count.fetch_add(1, Ordering::Relaxed) >= abort_num - 1 {
             return Err(e);
         }
         columns.iter_mut().for_each(|c| {
