@@ -61,12 +61,15 @@ impl FuseTable {
             return Ok(());
         }
 
+        let mut filter = filter;
         if col_indices.is_empty() && filter.is_some() {
             let filter_expr = filter.clone().unwrap();
             if !self.try_eval_const(ctx.clone(), &self.schema(), &filter_expr)? {
                 // The condition is always false, do nothing.
                 return Ok(());
             }
+            // The condition is always true.
+            filter = None;
         }
 
         self.try_add_update_source(

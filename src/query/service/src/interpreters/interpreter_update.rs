@@ -122,7 +122,6 @@ impl Interpreter for UpdateInterpreter {
                         }
                     }
                     let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
-                    println!("right: {:?}", right);
                     let return_type = right.data_type();
                     Scalar::FunctionCall(FunctionCall {
                         params: vec![],
