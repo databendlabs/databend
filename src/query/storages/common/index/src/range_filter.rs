@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -33,6 +35,8 @@ use common_expression::Domain;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use storages_common_table_meta::meta::ColumnStatistics;
@@ -40,10 +44,11 @@ use storages_common_table_meta::meta::StatisticsOfColumns;
 
 #[derive(Clone)]
 pub struct RangeFilter {
-    schema: TableSchemaRef,
     expr: Expr<String>,
     func_ctx: FunctionContext,
+    column_indices: HashMap<String, usize>,
 }
+
 impl RangeFilter {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
@@ -62,10 +67,35 @@ impl RangeFilter {
 
         let (new_expr, _) = ConstantFolder::fold(&conjunction, func_ctx, &BUILTIN_FUNCTIONS);
 
+        let mut fields = VecDeque::new();
+        for field in schema.fields().iter() {
+            fields.push_back(field.clone());
+        }
+        let mut leaf_index = 0;
+        let mut column_indices: HashMap<String, usize> = HashMap::new();
+        while let Some(field) = fields.pop_front() {
+            if let TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } = field.data_type()
+            {
+                for (inner_field_name, inner_field_type) in
+                    fields_name.iter().rev().zip(fields_type.iter().rev())
+                {
+                    let inner_name = format!("{}:{}", field.name(), inner_field_name);
+                    let inner_field = TableField::new(&inner_name, inner_field_type.clone());
+                    fields.push_front(inner_field);
+                }
+            } else {
+                column_indices.insert(field.name().clone(), leaf_index);
+                leaf_index += 1;
+            }
+        }
+
         Ok(Self {
-            schema,
             expr: new_expr,
             func_ctx,
+            column_indices,
         })
     }
 
@@ -84,8 +114,11 @@ impl RangeFilter {
             .column_refs()
             .into_iter()
             .map(|(name, ty)| {
-                let offset = self.schema.index_of(&name)?;
-                let domain = statistics_to_domain(stats.get(&(offset as u32)), &ty);
+                let stat = match self.column_indices.get(&name) {
+                    Some(index) => stats.get(&(*index as u32)),
+                    None => None,
+                };
+                let domain = statistics_to_domain(stat, &ty);
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;

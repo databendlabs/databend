@@ -154,8 +154,7 @@ impl Metadata {
 
         // build leaf index in DFS order for primitive columns.
         let mut leaf_index = 0;
-        while !fields.is_empty() {
-            let (indices, field) = fields.pop_front().unwrap();
+        while let Some((indices, field)) = fields.pop_front() {
             let path_indices = if indices.len() > 1 {
                 Some(indices.clone())
             } else {
