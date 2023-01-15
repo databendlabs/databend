@@ -164,6 +164,7 @@ run_test() {
 
     local query="$(find_binary_path "./bins/$query_ver" "databend-query")"
     local metasrv="$(find_binary_path "./bins/$metasrv_ver" "databend-meta")"
+    local sqllogictests="$(find_binary_path "./bins/$query_ver" "databend-sqllogictests")"
 
     # "$metasrv" --single --cmd ver
 
@@ -209,7 +210,7 @@ run_test() {
 
     if [ "$query_ver" = "current" ]; then
         # Only run test on mysql handler
-        cargo run -p sqllogictests -- --handlers mysql --run_dir 05_ddl
+        $sqllogictests --handlers mysql --run_dir 05_ddl
     else
         (
             # download suites into ./old_suite
