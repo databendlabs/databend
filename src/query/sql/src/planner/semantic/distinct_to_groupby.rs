@@ -47,8 +47,9 @@ impl VisitorMut for DistinctToGroupBy {
                 alias,
             } = &select_list[0]
             {
-                if (name.name.to_ascii_lowercase() == "count" && *distinct)
-                    || name.name.to_ascii_lowercase() == "count_distinct"
+                if ((name.name.to_ascii_lowercase() == "count" && *distinct)
+                    || name.name.to_ascii_lowercase() == "count_distinct")
+                    && args.iter().all(|arg| !matches!(arg, Expr::Literal { .. }))
                 {
                     let tmp_token = span[0].clone();
                     let subquery = Query {
