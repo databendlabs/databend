@@ -23,7 +23,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 lexical-core = "0.8.5"
 micromarshal = "0.2.1"
-ordered-float = "3.1.0"
+ordered-float = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
