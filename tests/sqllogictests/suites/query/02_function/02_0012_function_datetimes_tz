@@ -15,7 +15,7 @@ select to_timestamp('2000-01-01 00:00:00')
 ----
 2000-01-01 00:00:00.000000
 
-## Asia/Shanghai: +8:00
+# Asia/Shanghai: +8:00
 statement ok
 set timezone='Asia/Shanghai'
 
