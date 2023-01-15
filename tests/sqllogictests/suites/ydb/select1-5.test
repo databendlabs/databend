@@ -94,7 +94,7 @@ insert into t1(e,c,b,a,d) values(242,244,240,243,241)
 statement ok
 insert into t1(e,d,c,b,a) values(246,248,247,249,245)
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1
@@ -213,7 +213,7 @@ order by col1
 2419
 2476
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -351,7 +351,7 @@ order by col4,col6,col1,col2,col3,col5
 243 242 3 243 222 -1
 245 246 -4 245 444 2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -365,7 +365,7 @@ where d not between 110 and 150
    and (c<=d-2 or c>=d+2)
 order by col4,col2,col1,col6,col5,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b-c as col1,
@@ -465,7 +465,7 @@ order by col1,col2,col3
 3629 240 3
 3706 249 -4
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -667,7 +667,7 @@ order by col1,col2,col3
 243 242.0 244
 245 247.0 247
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
@@ -786,7 +786,7 @@ order by col5,col3,col4,col2,col6,col1
 2 -3 129 4 4 333
 1 1 130 -4 4 444
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -800,7 +800,7 @@ select a+b*2+c*3+d*4 as col1,
 from t1
 order by col6,col3,col7,col2,col1,col5,col4
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4+e*5 as col1
@@ -832,7 +832,7 @@ order by col1,col2
 711 1416
 743 1484
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b-c as col1,
@@ -842,7 +842,7 @@ where c between b-2 and d+2
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -937,7 +937,7 @@ order by col1,col3,col4,col5,col2
 235 3 478 711 238
 244 3 486 723 241
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select d-e as col1,
@@ -1065,7 +1065,7 @@ order by col1,col2
 1 224
 2 247
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -1079,7 +1079,7 @@ where d>e
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col1,col3,col2,col5,col4
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1,
@@ -1190,7 +1190,7 @@ order by col1
 711
 723
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -1234,7 +1234,7 @@ order by col3,col5,col4,col2,col1,col6
 2 233 3 234 333 555
 1 169 4 168 333 333
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
@@ -1469,7 +1469,7 @@ order by col2,col4,col6,col5,col3,col1
 -2 444 529 177 176 1769
 -3 444 711 237 235 2368
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b as col1,

@@ -173,7 +173,7 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 100.00
 
-## check outer join is converted to inner join
+# check outer join is converted to inner join
 
 statement ok
 drop table if exists onecolumn
@@ -280,7 +280,7 @@ Filter
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
-## the following cases won't be converted to inner join
+# the following cases won't be converted to inner join
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or a.x < 43
