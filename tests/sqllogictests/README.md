@@ -2,7 +2,7 @@
 This is Databend's [sqllogictest](https://www.sqlite.org/sqllogictest/doc/trunk/about.wiki) implementation. It uses [sqllogictest-rs](https://github.com/risinglightdb/sqllogictest-rs) to parse test files and run test cases.
 
 ### Basic usage
-You can directly run the following commands under databend directory
+Before running the following commands, you should generate **databend-sqllogictests** binary file.
 
 ---
 Run all tests under the three handlers(mysql, http, clickhouse) in turn.

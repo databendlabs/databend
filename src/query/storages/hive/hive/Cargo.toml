@@ -33,8 +33,8 @@ async-trait = "0.1.57"
 backon = "0.2"
 chrono = { workspace = true }
 futures = "0.3.24"
-opendal = "0.24"
-ordered-float = "3.1.0"
+opendal = { workspace = true }
+ordered-float = { workspace = true }
 serde = { workspace = true }
 thrift = { package = "databend-thrift", version = "0.17.0" }
 tracing = "0.1.36"

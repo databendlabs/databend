@@ -5,7 +5,7 @@
   <a href="https://databend.rs/doc/cloud">Databend Serverless Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
   <a href="https://perf.databend.rs">Benchmarking</a>  |
-  <a href="https://github.com/datafuselabs/databend/issues/7052">Roadmap (v0.9)</a>
+  <a href="https://github.com/datafuselabs/databend/issues/9604">Roadmap (v1.0)</a>
 
 </h4>
 
@@ -29,7 +29,7 @@
 <br>
 
 <a href="https://github.com/datafuselabs/databend/actions">
-<img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/databend-release.yml?branch=main" alt="CI Status" />
+<img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/release.yml?branch=main" alt="CI Status" />
 </a>
 
 <img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
