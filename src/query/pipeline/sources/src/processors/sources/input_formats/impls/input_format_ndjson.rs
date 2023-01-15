@@ -14,14 +14,12 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
@@ -112,35 +110,20 @@ impl InputFormatTextBase for InputFormatNDJson {
                 if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
                     match builder.ctx.on_error_mode {
                         OnErrorMode::Continue => {
-                            columns.iter_mut().for_each(|c| {
-                                // check if parts of columns inserted data, if so, pop it.
-                                if c.len() > num_rows {
-                                    c.pop_data_value().expect("must success");
-                                }
-                            });
+                            Self::on_error_continue(columns, num_rows, e.clone(), &mut error_map);
                             start = *end;
-                            error_map
-                                .entry(e.code())
-                                .and_modify(|input_error| input_error.num += 1)
-                                .or_insert(InputError {
-                                    err: e.clone(),
-                                    num: 1,
-                                });
                             continue;
                         }
-                        OnErrorMode::AbortNum(n) if n == 1 => {
-                            return Err(batch.error(&e.message(), &builder.ctx, start, i));
-                        }
                         OnErrorMode::AbortNum(n) => {
-                            if builder.ctx.on_error_count.fetch_add(1, Ordering::Relaxed) >= n {
-                                return Err(batch.error(&e.message(), &builder.ctx, start, i));
-                            }
-                            columns.iter_mut().for_each(|c| {
-                                // check if parts of columns inserted data, if so, pop it.
-                                if c.len() > num_rows {
-                                    c.pop_data_value().expect("must success");
-                                }
-                            });
+                            Self::on_error_abort(
+                                columns,
+                                num_rows,
+                                n,
+                                &builder.ctx.on_error_count,
+                                e,
+                            )
+                            .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+
                             start = *end;
                             continue;
                         }

@@ -13,7 +13,6 @@
 //  limitations under the License.
 use std::collections::HashMap;
 use std::io::Cursor;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -234,39 +233,23 @@ impl InputFormatTextBase for InputFormatXML {
                             ) {
                                 match builder.ctx.on_error_mode {
                                     OnErrorMode::Continue => {
-                                        columns.iter_mut().for_each(|c| {
-                                            // check if parts of columns inserted data, if so, pop it.
-                                            if c.len() > num_rows {
-                                                c.pop_data_value().expect("must success");
-                                            }
-                                        });
-                                        error_map
-                                            .entry(e.code())
-                                            .and_modify(|input_error| input_error.num += 1)
-                                            .or_insert(InputError {
-                                                err: e.clone(),
-                                                num: 1,
-                                            });
+                                        Self::on_error_continue(
+                                            columns,
+                                            num_rows,
+                                            e.clone(),
+                                            &mut error_map,
+                                        );
                                         continue;
                                     }
-                                    OnErrorMode::AbortNum(n) if n == 1 => {
-                                        return Err(xml_error(&e.message(), path, num_rows));
-                                    }
                                     OnErrorMode::AbortNum(n) => {
-                                        if builder
-                                            .ctx
-                                            .on_error_count
-                                            .fetch_add(1, Ordering::Relaxed)
-                                            >= n
-                                        {
-                                            return Err(xml_error(&e.message(), path, num_rows));
-                                        }
-                                        columns.iter_mut().for_each(|c| {
-                                            // check if parts of columns inserted data, if so, pop it.
-                                            if c.len() > num_rows {
-                                                c.pop_data_value().expect("must success");
-                                            }
-                                        });
+                                        Self::on_error_abort(
+                                            columns,
+                                            num_rows,
+                                            n,
+                                            &builder.ctx.on_error_count,
+                                            e,
+                                        )
+                                        .map_err(|e| xml_error(&e.message(), path, num_rows))?;
                                         continue;
                                     }
                                     _ => return Err(xml_error(&e.message(), path, num_rows)),

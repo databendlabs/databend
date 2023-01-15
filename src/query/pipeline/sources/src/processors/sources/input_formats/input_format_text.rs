@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -229,6 +231,43 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
         builder: &mut BlockBuilder<Self>,
         batch: RowBatch,
     ) -> Result<HashMap<u16, InputError>>;
+
+    fn on_error_continue(
+        columns: &mut Vec<TypeDeserializerImpl>,
+        num_rows: usize,
+        e: ErrorCode,
+        error_map: &mut HashMap<u16, InputError>,
+    ) {
+        columns.iter_mut().for_each(|c| {
+            // check if parts of columns inserted data, if so, pop it.
+            if c.len() > num_rows {
+                c.pop_data_value().expect("must success");
+            }
+        });
+        error_map
+            .entry(e.code())
+            .and_modify(|input_error| input_error.num += 1)
+            .or_insert(InputError { err: e, num: 1 });
+    }
+
+    fn on_error_abort(
+        columns: &mut Vec<TypeDeserializerImpl>,
+        num_rows: usize,
+        abort_num: u64,
+        error_count: &AtomicU64,
+        e: ErrorCode,
+    ) -> Result<()> {
+        if abort_num <= 1 && error_count.fetch_add(1, Ordering::Relaxed) >= abort_num {
+            return Err(e);
+        }
+        columns.iter_mut().for_each(|c| {
+            // check if parts of columns inserted data, if so, pop it.
+            if c.len() > num_rows {
+                c.pop_data_value().expect("must success");
+            }
+        });
+        Ok(())
+    }
 }
 
 pub struct InputFormatTextPipe<T> {
