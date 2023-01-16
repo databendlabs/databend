@@ -63,9 +63,11 @@ impl ParquetTable {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
-                    expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
-                })),
+                Some(v) => Arc::new(Some(
+                    v.filter
+                        .as_expr(&BUILTIN_FUNCTIONS)
+                        .project_column_ref(|name| schema.index_of(name).unwrap()),
+                )),
             },
         )
     }
@@ -144,7 +146,7 @@ impl ParquetTable {
                 extra
                     .filters
                     .iter()
-                    .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                    .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
                     .collect::<Vec<_>>()
             });
             let row_group_pruner =

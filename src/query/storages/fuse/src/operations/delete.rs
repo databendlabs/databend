@@ -150,7 +150,6 @@ impl FuseTable {
 
         let filter_expr = filter
             .as_expr(&BUILTIN_FUNCTIONS)
-            .unwrap()
             .project_column_ref(|name| schema.index_of(name).unwrap());
         let func_ctx = ctx.try_get_function_context()?;
         let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
@@ -303,7 +302,6 @@ impl FuseTable {
         for remote_expr in &cluster_keys {
             let expr: Expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
-                .unwrap()
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
             let index = match &expr {
                 Expr::ColumnRef { id, .. } => *id,

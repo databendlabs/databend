@@ -27,7 +27,6 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use super::BindContext;
 use super::Binder;
-use crate::executor::PhysicalScalarBuilder;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CastExpr;
 use crate::plans::Plan;
@@ -61,9 +60,9 @@ impl<'a> Binder {
             from_type: Box::new(data_type),
             target_type: Box::new(DataType::String),
         });
-        let builder = PhysicalScalarBuilder::new(&schema);
-        let scalar = builder.build(&scalar)?;
-        let expr = scalar.as_expr()?;
+        let expr = scalar
+            .as_expr()?
+            .project_column_ref(|name| schema.index_of(name).unwrap());
 
         let (new_expr, _) = ConstantFolder::fold(
             &expr,

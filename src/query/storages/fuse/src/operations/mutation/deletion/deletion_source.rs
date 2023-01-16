@@ -207,7 +207,6 @@ impl Processor for DeletionSource {
                 let expr = self
                     .filter
                     .as_expr(&BUILTIN_FUNCTIONS)
-                    .unwrap()
                     .project_column_ref(|name| self.source_schema.index_of(name).unwrap());
                 let res = evaluator.run(&expr).map_err(|(_, e)| {
                     ErrorCode::Internal(format!("eval try eval const failed: {}.", e))

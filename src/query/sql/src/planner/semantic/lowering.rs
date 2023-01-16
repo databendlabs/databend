@@ -32,7 +32,16 @@ impl Scalar {
                 span: None,
                 id: column_ref.column.column_name.clone(),
                 data_type: *column_ref.column.data_type.clone(),
-                display_name: column_ref.column.column_name.clone(),
+                display_name: format!(
+                    "{}{} (#{})",
+                    column_ref
+                        .column
+                        .table_name
+                        .as_ref()
+                        .map_or("".to_string(), |t| t.to_string() + "."),
+                    column_ref.column.column_name.clone(),
+                    column_ref.column.index
+                ),
             },
             Scalar::ConstantExpr(constant) => RawExpr::Literal {
                 span: None,

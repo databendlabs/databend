@@ -68,7 +68,6 @@ use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::Visibility;
-use crate::executor::PhysicalScalarBuilder;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
@@ -988,23 +987,12 @@ impl<'a> Binder {
             &[],
         );
 
-        let data_fields = schema
-            .fields()
-            .iter()
-            .enumerate()
-            .map(|(idx, field)| {
-                let data_type = DataType::from(field.data_type());
-                DataField::new(&idx.to_string(), data_type)
-            })
-            .collect::<Vec<_>>();
-        let data_schema = DataSchemaRefExt::create(data_fields);
-        let physical_scalar_builder = PhysicalScalarBuilder::new(&data_schema);
-
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            let cluster_key = physical_scalar_builder.build(&cluster_key)?;
-            let expr = cluster_key.as_expr()?;
+            let expr = cluster_key
+                .as_expr()?
+                .project_column_ref(|name| name.parse::<usize>().unwrap());
             if is_expr_non_deterministic(&expr) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",

@@ -59,7 +59,7 @@ impl ColumnIndex for String {
 
 /// An unchecked expression that is directly desguared from SQL or constructed by the planner.
 /// It can be type-checked and then converted to an evaluatable [`Expr`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum RawExpr<Index: ColumnIndex = usize> {
     Literal {
         span: Span,
@@ -232,6 +232,38 @@ impl<Index: ColumnIndex> RawExpr<Index> {
         walk(self, &mut buf);
         buf
     }
+
+    pub fn sql_display(&self) -> String {
+        match self {
+            RawExpr::Literal { lit, .. } => format!("{lit}"),
+            RawExpr::ColumnRef { display_name, .. } => display_name.clone(),
+            RawExpr::Cast {
+                is_try,
+                expr,
+                dest_type,
+                ..
+            } => {
+                if *is_try {
+                    format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
+                } else {
+                    format!("CAST({} AS {dest_type})", expr.sql_display())
+                }
+            }
+            RawExpr::FunctionCall { name, args, .. } => {
+                let mut s = String::new();
+                s += name;
+                s += "(";
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        s += ", ";
+                    }
+                    s += &arg.sql_display();
+                }
+                s += ")";
+                s
+            }
+        }
+    }
 }
 
 impl<Index: ColumnIndex> Expr<Index> {
@@ -399,8 +431,8 @@ impl<Index: ColumnIndex> Expr<Index> {
 }
 
 impl<Index: ColumnIndex> RemoteExpr<Index> {
-    pub fn as_expr(&self, fn_registry: &FunctionRegistry) -> Option<Expr<Index>> {
-        Some(match self {
+    pub fn as_expr(&self, fn_registry: &FunctionRegistry) -> Expr<Index> {
+        match self {
             RemoteExpr::Constant {
                 span,
                 scalar,
@@ -429,7 +461,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
             } => Expr::Cast {
                 span: span.clone(),
                 is_try: *is_try,
-                expr: Box::new(expr.as_expr(fn_registry)?),
+                expr: Box::new(expr.as_expr(fn_registry)),
                 dest_type: dest_type.clone(),
             },
             RemoteExpr::FunctionCall {
@@ -439,19 +471,16 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 args,
                 return_type,
             } => {
-                let function = fn_registry.get(id)?;
+                let function = fn_registry.get(id).expect("function id not found");
                 Expr::FunctionCall {
                     span: span.clone(),
                     id: id.clone(),
                     function,
                     generics: generics.clone(),
-                    args: args
-                        .iter()
-                        .map(|arg| arg.as_expr(fn_registry))
-                        .collect::<Option<_>>()?,
+                    args: args.iter().map(|arg| arg.as_expr(fn_registry)).collect(),
                     return_type: return_type.clone(),
                 }
             }
-        })
+        }
     }
 }

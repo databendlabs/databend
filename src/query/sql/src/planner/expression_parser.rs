@@ -33,7 +33,6 @@ use common_expression::RemoteExpr;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
-use crate::executor::PhysicalScalarBuilder;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
@@ -48,16 +47,6 @@ pub fn parse_exprs(
     unwrap_tuple: bool,
     sql: &str,
 ) -> Result<Vec<Expr>> {
-    let sql_dialect = Dialect::MySQL;
-    let tokens = tokenize_sql(sql)?;
-    let backtrace = Backtrace::new();
-    let tokens = if unwrap_tuple {
-        &tokens[1..tokens.len() - 1]
-    } else {
-        &tokens
-    };
-    let exprs = parse_comma_separated_exprs(tokens, sql_dialect, &backtrace)?;
-
     let settings = Settings::default_settings("", GlobalConfig::instance())?;
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -104,20 +93,33 @@ pub fn parse_exprs(
         bind_context.add_column_binding(column_binding);
     }
 
+    let data_schema = DataSchemaRefExt::create(fields);
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker =
         TypeChecker::new(&bind_context, ctx, &name_resolution_ctx, metadata, &[]);
-    let mut expressions = Vec::with_capacity(exprs.len());
 
-    let data_schema = DataSchemaRefExt::create(fields);
-    let physical_scalar_builder = PhysicalScalarBuilder::new(&data_schema);
-    for expr in exprs.iter() {
-        let (scalar, _) =
-            *block_in_place(|| Handle::current().block_on(type_checker.resolve(expr, None)))?;
-        let scalar = physical_scalar_builder.build(&scalar)?;
-        expressions.push(scalar.as_expr()?);
-    }
-    Ok(expressions)
+    let sql_dialect = Dialect::MySQL;
+    let tokens = tokenize_sql(sql)?;
+    let backtrace = Backtrace::new();
+    let tokens = if unwrap_tuple {
+        &tokens[1..tokens.len() - 1]
+    } else {
+        &tokens
+    };
+    let ast_exprs = parse_comma_separated_exprs(tokens, sql_dialect, &backtrace)?;
+    let exprs = ast_exprs
+        .iter()
+        .map(|ast| {
+            let (scalar, _) =
+                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast, None)))?;
+            let expr = scalar
+                .as_expr()?
+                .project_column_ref(|name| data_schema.index_of(name).unwrap());
+            Ok(expr)
+        })
+        .collect::<Result<_>>()?;
+
+    Ok(exprs)
 }
 
 pub fn parse_to_remote_string_exprs(
