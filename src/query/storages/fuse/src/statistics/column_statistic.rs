@@ -166,18 +166,19 @@ pub mod traverse {
         leaves: &mut Vec<(Option<usize>, Option<Column>, DataType)>,
     ) -> Result<()> {
         match data_type.remove_nullable() {
-            DataType::Tuple(inner_types) => {
-                if !data_type.is_nullable() && column.is_some() {
-                    let (inner_columns, _) = column.unwrap().as_tuple().unwrap();
+            DataType::Tuple(inner_types) => match (data_type.is_nullable(), column) {
+                (false, Some(column)) => {
+                    let (inner_columns, _) = column.as_tuple().unwrap();
                     for (inner_column, inner_type) in inner_columns.iter().zip(inner_types.iter()) {
                         traverse_recursive(None, Some(inner_column), inner_type, leaves)?;
                     }
-                } else {
+                }
+                (_, _) => {
                     for inner_type in inner_types.iter() {
                         traverse_recursive(None, None, inner_type, leaves)?;
                     }
                 }
-            }
+            },
             DataType::Array(inner_type) => {
                 let mut inner_type = inner_type;
                 loop {
