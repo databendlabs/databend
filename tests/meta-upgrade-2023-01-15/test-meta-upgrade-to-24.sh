@@ -17,12 +17,12 @@ echo " === import into $meta_dir"
 cat $meta_json |
     ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"
 
-count_of_table_meta=$(cat "$meta_json" | wc -l)
+count_of_table_meta=$(cat "$meta_json" | grep '__fd_table_by_id/' | wc -l)
 
 sleep 1
 
 echo " === upgrade"
-./target/${BUILD_PROFILE}/databend-meta-upgrade-2023-01-15 --upgrade --raft-dir "$meta_dir"
+./target/${BUILD_PROFILE}/databend-meta-upgrade-2023-01-15 --cmd upgrade --raft-dir "$meta_dir"
 
 echo " === export from $meta_dir"
 ./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir "$meta_dir" >$exported
@@ -37,10 +37,10 @@ else
 fi
 
 echo " === check ver"
-count_of_v24=$(./target/${BUILD_PROFILE}/databend-meta-upgrade-2023-01-15 --print --raft-dir "$meta_dir" | grep ' ver: 24' | wc -l)
-if [ "$count_of_table_meta" == "$count_of_v24" ]; then
-    echo " === count of ver=24: $count_of_v24; OK"
+count_of_v25=$(./target/${BUILD_PROFILE}/databend-meta-upgrade-2023-01-15 --cmd print --raft-dir "$meta_dir" | grep ' ver: 25' | wc -l)
+if [ "$count_of_table_meta" == "$count_of_v25" ]; then
+    echo " === count of ver=25: $count_of_v25; OK"
 else
-    echo " === mismatching lines of ver=24: expect: $count_of_table_meta; got: $count_of_v24"
+    echo " === mismatching lines of ver=24: expect: $count_of_table_meta; got: $count_of_v25"
     exit 1
 fi
