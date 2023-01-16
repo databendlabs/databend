@@ -578,8 +578,6 @@ pub enum TokenKind {
     PROCESSLIST,
     #[token("PURGE", ignore(ascii_case))]
     PURGE,
-    #[token("STATISTIC", ignore(ascii_case))]
-    STATISTIC,
     #[token("QUARTER", ignore(ascii_case))]
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]
@@ -634,6 +632,8 @@ pub enum TokenKind {
     SETTINGS,
     #[token("STAGES", ignore(ascii_case))]
     STAGES,
+    #[token("STATISTIC", ignore(ascii_case))]
+    STATISTIC,
     #[token("SHA256_PASSWORD", ignore(ascii_case))]
     SHA256_PASSWORD,
     #[token("SHOW", ignore(ascii_case))]
