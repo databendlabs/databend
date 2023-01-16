@@ -80,10 +80,7 @@ pub struct TableSchema {
     // define new fields as Option for compatibility
     pub max_column_id: Option<u32>,
     column_id_map: Option<BTreeMap<String, u32>>,
-
-    // Never serialized.
-    #[serde(skip_serializing)]
-    column_id_set: HashSet<u32>,
+    column_id_set: Option<HashSet<u32>>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -252,7 +249,7 @@ impl TableSchema {
             metadata: BTreeMap::new(),
             max_column_id: Some(0),
             column_id_map: Some(BTreeMap::new()),
-            column_id_set: HashSet::new(),
+            column_id_set: Some(HashSet::new()),
         }
     }
 
@@ -356,7 +353,7 @@ impl TableSchema {
             metadata: BTreeMap::new(),
             max_column_id: Some(max_column_id),
             column_id_map: Some(column_id_map),
-            column_id_set,
+            column_id_set: Some(column_id_set),
         }
     }
 
@@ -368,7 +365,7 @@ impl TableSchema {
             metadata,
             max_column_id: Some(max_column_id),
             column_id_map: Some(column_id_map),
-            column_id_set,
+            column_id_set: Some(column_id_set),
         }
     }
 
@@ -385,7 +382,7 @@ impl TableSchema {
             metadata,
             max_column_id: Some(max_column_id),
             column_id_map: Some(column_id_map),
-            column_id_set,
+            column_id_set: Some(column_id_set),
         }
     }
 
@@ -414,11 +411,11 @@ impl TableSchema {
     }
 
     pub fn is_column_deleted(&self, column_id: u32) -> bool {
-        !self.column_id_set.contains(&column_id)
+        !self.column_id_set.as_ref().unwrap().contains(&column_id)
     }
 
     pub fn column_id_set(&self) -> &HashSet<u32> {
-        &self.column_id_set
+        self.column_id_set.as_ref().unwrap()
     }
 
     pub fn add_columns(&mut self, fields: &[TableField]) -> Result<()> {
@@ -435,7 +432,7 @@ impl TableSchema {
                 f.name(),
                 self.max_column_id.as_mut().unwrap(),
                 self.column_id_map.as_mut().unwrap(),
-                &mut self.column_id_set,
+                self.column_id_set.as_mut().unwrap(),
             );
             self.fields.push(f.to_owned());
         }
@@ -455,7 +452,7 @@ impl TableSchema {
         }
         let column_id = self.column_id_of(column_name)?;
         self.column_id_map.as_mut().unwrap().remove(column_name);
-        self.column_id_set.remove(&column_id);
+        self.column_id_set.as_mut().unwrap().remove(&column_id);
 
         Ok(())
     }
