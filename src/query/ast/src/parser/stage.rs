@@ -36,7 +36,7 @@ pub fn u64_to_string(i: Input) -> IResult<String> {
 
 pub fn parameter_to_string(i: Input) -> IResult<String> {
     map(
-        rule! { ( #literal_string | #ident_to_string | #u64_to_string ) },
+        rule! { ( #literal_string | #u64_to_string ) },
         |parameter| parameter,
     )(i)
 }
