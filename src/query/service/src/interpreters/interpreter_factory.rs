@@ -56,7 +56,7 @@ impl InterpreterFactory {
     }
 
     /// This is used for handlers to get the schema of the plan.
-    /// Some plan may miss the schema and return empty plan suck as `CallPlan`
+    /// Some plan may miss the schema and return empty plan such as `CallPlan`
     /// So we need to map the plan into to `Interpreter` and get the right schema.
     pub fn get_schema(ctx: Arc<QueryContext>, plan: &Plan) -> DataSchemaRef {
         let schema = plan.schema();
