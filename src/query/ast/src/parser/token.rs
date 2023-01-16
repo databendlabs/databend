@@ -314,6 +314,8 @@ pub enum TokenKind {
     CHAR,
     #[token("CHARACTER", ignore(ascii_case))]
     CHARACTER,
+    #[token("COMPRESSION", ignore(ascii_case))]
+    COMPRESSION,
     #[token("COPY_OPTIONS", ignore(ascii_case))]
     COPY_OPTIONS,
     #[token("COPY", ignore(ascii_case))]
@@ -390,6 +392,8 @@ pub enum TokenKind {
     ENGINES,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
+    #[token("ESCAPE", ignore(ascii_case))]
+    ESCAPE,
     #[token("EXISTS", ignore(ascii_case))]
     EXISTS,
     #[token("EXPLAIN", ignore(ascii_case))]
@@ -534,8 +538,12 @@ pub enum TokenKind {
     MINUTE,
     #[token("MONTH", ignore(ascii_case))]
     MONTH,
+    #[token("NON_DISPLAY", ignore(ascii_case))]
+    NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]
     NATURAL,
+    #[token("NDJSON", ignore(ascii_case))]
+    NDJSON,
     #[token("NO_PASSWORD", ignore(ascii_case))]
     NO_PASSWORD,
     #[token("NOT", ignore(ascii_case))]
@@ -582,6 +590,8 @@ pub enum TokenKind {
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]
     QUERY,
+    #[token("QUOTE", ignore(ascii_case))]
+    QUOTE,
     #[token("RECLUSTER", ignore(ascii_case))]
     RECLUSTER,
     #[token("RECORD_DELIMITER", ignore(ascii_case))]
@@ -592,6 +602,8 @@ pub enum TokenKind {
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
     RENAME,
+    #[token("ROW_TAG", ignore(ascii_case))]
+    ROW_TAG,
     #[token("GRANT", ignore(ascii_case))]
     GRANT,
     #[token("ROLE", ignore(ascii_case))]
@@ -716,6 +728,8 @@ pub enum TokenKind {
     TRUNCATE,
     #[token("TRY_CAST", ignore(ascii_case))]
     TRY_CAST,
+    #[token("TSV", ignore(ascii_case))]
+    TSV,
     #[token("TUPLE", ignore(ascii_case))]
     TUPLE,
     #[token("TYPE", ignore(ascii_case))]
@@ -762,6 +776,8 @@ pub enum TokenKind {
     WHERE,
     #[token("WITH", ignore(ascii_case))]
     WITH,
+    #[token("XML", ignore(ascii_case))]
+    XML,
     #[token("XOR", ignore(ascii_case))]
     XOR,
     #[token("YEAR", ignore(ascii_case))]
