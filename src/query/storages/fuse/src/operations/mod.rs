@@ -26,6 +26,7 @@ mod read_data;
 mod read_partitions;
 mod recluster;
 mod truncate;
+mod update;
 
 mod fuse_source;
 mod read;

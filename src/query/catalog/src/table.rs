@@ -240,6 +240,23 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    async fn update(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filter: Option<RemoteExpr<String>>,
+        col_indices: Vec<usize>,
+        update_list: Vec<(usize, RemoteExpr<String>)>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let (_, _, _, _, _) = (ctx, filter, col_indices, update_list, pipeline);
+
+        Err(ErrorCode::Unimplemented(format!(
+            "table {},  of engine type {}, does not support UPDATE",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
     fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
         BlockCompactThresholds {
             max_rows_per_block: 1000 * 1000,
