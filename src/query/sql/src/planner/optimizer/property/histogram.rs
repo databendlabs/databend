@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Debug;
 
 use common_exception::ErrorCode;
@@ -25,6 +26,12 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 ///
 /// We are constructing this in an "Equi-depth" fashion, which means
 /// every bucket has roughly the same number of rows.
+///
+/// Real-world data distribution is often skewed,
+/// so an equal-height histogram is better than an equal-width histogram,
+/// the former can use multiple buckets to show the skew data, but for the latter,
+/// it is difficult to give the exact frequency of the skew data
+/// when the skew data and other data fall into the same bucket
 ///
 /// We choose this approach because so far the histogram is originally
 /// constructed from NDV(number of distinct values) and the total number
@@ -82,14 +89,14 @@ pub fn histogram_from_ndv(
     num_buckets: usize,
 ) -> Result<Histogram> {
     if ndv <= 2 {
-        if num_rows != 0 {
-            return Err(ErrorCode::Internal(format!(
+        return if num_rows != 0 {
+            Err(ErrorCode::Internal(format!(
                 "NDV must be greater than 0 when the number of rows is greater than 0, got NDV: {}, num_rows: {}",
                 ndv, num_rows
-            )));
+            )))
         } else {
-            return Ok(Histogram { buckets: vec![] });
-        }
+            Ok(Histogram { buckets: vec![] })
+        };
     }
 
     if num_buckets < 2 {
@@ -127,6 +134,17 @@ pub fn histogram_from_ndv(
 
     for idx in 0..num_buckets {
         let upper_bound = sample_set.get_upper_bound(num_buckets, idx)?;
+        if idx == 0 {
+            // The first bucket is a dummy bucket
+            // which is used to record the min value of the column
+            // So we don't need to record the min value for each bucket
+            buckets.push(HistogramBucket {
+                upper_bound,
+                num_values: 1.0,
+                num_distinct: 1.0,
+            });
+            continue;
+        }
         let bucket = HistogramBucket {
             upper_bound,
             num_values: (num_rows / num_buckets as u64) as f64,
@@ -174,9 +192,29 @@ trait SampleSet {
     fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum>;
 }
 
-struct UniformSampleSet {
+pub struct UniformSampleSet {
     min: Datum,
     max: Datum,
+}
+
+impl UniformSampleSet {
+    pub fn new(min: Datum, max: Datum) -> Self {
+        UniformSampleSet { min, max }
+    }
+
+    // Check if two `UniformSampleSet` have intersection
+    pub fn has_intersection(&self, other: &UniformSampleSet) -> Result<bool> {
+        // If data type is string, we don't need to compare, just return true
+        if let Datum::Bytes(_) = self.min {
+            return Ok(true);
+        }
+        let r1 = self.min.compare(&other.max)?;
+        let r2 = self.max.compare(&other.min)?;
+        Ok(!matches!(
+            (r1, r2),
+            (Ordering::Greater, _) | (_, Ordering::Less)
+        ))
+    }
 }
 
 impl SampleSet for UniformSampleSet {
@@ -224,4 +262,11 @@ impl SampleSet for UniformSampleSet {
             ))),
         }
     }
+}
+
+pub struct InterleavedBucket {
+    pub left_ndv: f64,
+    pub right_ndv: f64,
+    pub left_num_rows: f64,
+    pub right_num_rows: f64,
 }

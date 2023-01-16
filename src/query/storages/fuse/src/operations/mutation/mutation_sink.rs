@@ -15,8 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
@@ -37,7 +35,7 @@ use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::commit::Conflict;
 use crate::operations::commit::MutatorConflictDetector;
 use crate::operations::mutation::AbortOperation;
-use crate::operations::mutation::MutationMeta;
+use crate::operations::mutation::MutationSinkMeta;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -65,7 +63,6 @@ pub struct MutationSink {
     ctx: Arc<dyn TableContext>,
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
-    scan_progress: Arc<Progress>,
 
     table: Arc<dyn Table>,
     base_snapshot: Arc<TableSnapshot>,
@@ -87,13 +84,11 @@ impl MutationSink {
         base_snapshot: Arc<TableSnapshot>,
         input: Arc<InputPort>,
     ) -> Result<ProcessorPtr> {
-        let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(MutationSink {
             state: State::None,
             ctx,
             dal: table.get_operator(),
             location_gen: table.meta_location_generator.clone(),
-            scan_progress,
             table: Arc::new(table.clone()),
             base_snapshot,
             merged_segments: vec![],
@@ -158,23 +153,7 @@ impl Processor for MutationSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::ReadMeta(input_meta) => {
-                let meta = MutationMeta::from_meta(&input_meta)?;
-
-                let affect_rows = self
-                    .base_snapshot
-                    .summary
-                    .row_count
-                    .abs_diff(meta.summary.row_count);
-                let affect_bytes = self
-                    .base_snapshot
-                    .summary
-                    .uncompressed_byte_size
-                    .abs_diff(meta.summary.uncompressed_byte_size);
-                let progress_values = ProgressValues {
-                    rows: affect_rows as usize,
-                    bytes: affect_bytes as usize,
-                };
-                self.scan_progress.incr(&progress_values);
+                let meta = MutationSinkMeta::from_meta(&input_meta)?;
 
                 self.merged_segments = meta.segments.clone();
                 self.merged_statistics = meta.summary.clone();
