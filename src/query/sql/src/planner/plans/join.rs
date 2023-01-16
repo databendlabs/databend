@@ -168,8 +168,8 @@ impl Join {
 
     fn inner_join_cardinality(
         &self,
-        left_prop: &RelationalProperty,
-        right_prop: &RelationalProperty,
+        left_prop: &mut RelationalProperty,
+        right_prop: &mut RelationalProperty,
     ) -> Result<f64> {
         let mut join_card = left_prop.cardinality * right_prop.cardinality;
         for (left_condition, right_condition) in self
@@ -188,11 +188,11 @@ impl Join {
             let left_col_stat = left_prop
                 .statistics
                 .column_stats
-                .get(left_condition.used_columns().iter().next().unwrap());
+                .get_mut(left_condition.used_columns().iter().next().unwrap());
             let right_col_stat = right_prop
                 .statistics
                 .column_stats
-                .get(right_condition.used_columns().iter().next().unwrap());
+                .get_mut(right_condition.used_columns().iter().next().unwrap());
             match (left_col_stat, right_col_stat) {
                 (Some(left_col_stat), Some(right_col_stat)) => {
                     if let Datum::Bytes(_) | Datum::Bool(_) = left_col_stat.min {
@@ -209,24 +209,19 @@ impl Join {
                         right_col_stat.min.clone(),
                         right_col_stat.max.clone(),
                     );
-                    if left_interval.has_intersection(&right_interval)? {
-                        let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
-                            (Some(left_hist), Some(right_hist)) => {
-                                // Evaluate join cardinality by histogram.
-                                evaluate_by_histogram(left_hist, right_hist)?
-                            }
-                            _ => evaluate_by_ndv(
-                                left_col_stat,
-                                right_col_stat,
-                                left_prop,
-                                right_prop,
-                            ),
-                        };
-                        if card < join_card {
-                            join_card = card;
-                        }
-                    } else {
+                    if !left_interval.has_intersection(&right_interval)? {
                         join_card = 0.0;
+                        continue;
+                    }
+                    let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
+                        (Some(left_hist), Some(right_hist)) => {
+                            // Evaluate join cardinality by histogram.
+                            evaluate_by_histogram(left_hist, right_hist)?
+                        }
+                        _ => evaluate_by_ndv(left_col_stat, right_col_stat, left_prop, right_prop),
+                    };
+                    if card < join_card {
+                        join_card = card;
                     }
                 }
                 _ => continue,
@@ -243,8 +238,8 @@ impl Operator for Join {
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
-        let left_prop = rel_expr.derive_relational_prop_child(0)?;
-        let right_prop = rel_expr.derive_relational_prop_child(1)?;
+        let mut left_prop = rel_expr.derive_relational_prop_child(0)?;
+        let mut right_prop = rel_expr.derive_relational_prop_child(1)?;
 
         // Derive output columns
         let mut output_columns = left_prop.output_columns.clone();
@@ -277,7 +272,7 @@ impl Operator for Join {
             JoinType::Inner | JoinType::Cross => {
                 // Evaluating join cardinality using histograms.
                 // If histogram is None, will evaluate using NDV.
-                self.inner_join_cardinality(&left_prop, &right_prop)?
+                self.inner_join_cardinality(&mut left_prop, &mut right_prop)?
             }
 
             JoinType::Left | JoinType::Right | JoinType::Full => {
@@ -298,6 +293,11 @@ impl Operator for Join {
         used_columns.extend(left_prop.used_columns);
         used_columns.extend(right_prop.used_columns);
 
+        // Derive column statistics
+        let mut column_stats = HashMap::new();
+        column_stats.extend(left_prop.statistics.column_stats);
+        column_stats.extend(right_prop.statistics.column_stats);
+
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
@@ -305,7 +305,7 @@ impl Operator for Join {
             cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
-                column_stats: Default::default(),
+                column_stats,
                 is_accurate: false,
             },
         })
