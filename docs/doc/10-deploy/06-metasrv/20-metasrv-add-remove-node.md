@@ -72,7 +72,7 @@ Remove a node with:
 
 This command can be used anywhere there is a `databend-meta` installed.
 It will send a `leave` request to the first `<node_addr_i>` it could connect to.
-And it will block until the `leave` request is done or an error occur.
+As part of the command, the node will be blocked from interacting with the cluster until the Leave request has been completed or an error has occurred.
 
 `databend-meta --leave-via` will quit at once when the `leave` RPC is done.
 
