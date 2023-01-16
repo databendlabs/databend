@@ -20,6 +20,7 @@ use chrono::NaiveDateTime;
 use chrono::NaiveTime;
 use chrono::Utc;
 use common_meta_types as mt;
+use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use common_proto_conv::FromToProto;
@@ -96,7 +97,12 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
             max_file_size: 0,
         },
         comment: "test".to_string(),
-        ..Default::default()
+
+        number_of_files: 100,
+        creator: Some(UserIdentity {
+            username: "databend".to_string(),
+            hostname: "databend.rs".to_string(),
+        }),
     }
 }
 
