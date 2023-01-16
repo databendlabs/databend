@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -460,6 +461,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        todo!()
+    }
+
+    fn set_on_error_map(&self, _map: Option<HashMap<String, ErrorCode>>) {
         todo!()
     }
 }

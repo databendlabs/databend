@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -33,6 +34,7 @@ use crate::processors::sources::input_formats::input_format_text::AligningStateR
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
+use crate::processors::sources::input_formats::InputError;
 
 pub struct InputFormatTSV {}
 
@@ -127,7 +129,10 @@ impl InputFormatTextBase for InputFormatTSV {
         Arc::new(FieldDecoderTSV::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>> {
         tracing::debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.split_info.file.path,
@@ -144,6 +149,7 @@ impl InputFormatTextBase for InputFormatTSV {
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let mut num_rows = 0usize;
+        let mut error_map: HashMap<u16, InputError> = HashMap::new();
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             if let Err(e) = Self::read_row(
@@ -153,23 +159,25 @@ impl InputFormatTextBase for InputFormatTSV {
                 columns,
                 schema,
             ) {
-                if builder.ctx.on_error_mode == OnErrorMode::Continue {
-                    columns.iter_mut().for_each(|c| {
-                        // check if parts of columns inserted data, if so, pop it.
-                        if c.len() > num_rows {
-                            c.pop_data_value().expect("must success");
-                        }
-                    });
-                    start = *end;
-                    continue;
-                } else {
-                    return Err(batch.error(&e.message(), &builder.ctx, start, i));
+                match builder.ctx.on_error_mode {
+                    OnErrorMode::Continue => {
+                        Self::on_error_continue(columns, num_rows, e.clone(), &mut error_map);
+                        start = *end;
+                        continue;
+                    }
+                    OnErrorMode::AbortNum(n) => {
+                        Self::on_error_abort(columns, num_rows, n, &builder.ctx.on_error_count, e)
+                            .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                        start = *end;
+                        continue;
+                    }
+                    _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
                 }
             }
             start = *end;
             num_rows += 1;
         }
-        Ok(())
+        Ok(error_map)
     }
 }
 
