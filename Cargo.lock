@@ -1686,6 +1686,7 @@ dependencies = [
  "common-tracing",
  "once_cell",
  "openraft",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "sled",
