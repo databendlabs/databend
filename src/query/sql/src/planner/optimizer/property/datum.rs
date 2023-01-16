@@ -25,7 +25,7 @@ use ordered_float::OrderedFloat;
 pub type F64 = OrderedFloat<f64>;
 
 /// Datum is the struct to represent a single value in optimizer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Datum {
     Bool(bool),
     Int(i64),
@@ -70,6 +70,18 @@ impl Datum {
             Literal::Float32(v) => Some(Datum::Float(F64::from(f32::from(*v) as f64))),
             Literal::String(v) => Some(Datum::Bytes(v.clone())),
             _ => None,
+        }
+    }
+
+    pub fn to_double(&self) -> Result<f64> {
+        match self {
+            Datum::Int(v) => Ok(*v as f64),
+            Datum::UInt(v) => Ok(*v as f64),
+            Datum::Float(v) => Ok(v.into_inner()),
+            _ => Err(ErrorCode::IllegalDataType(format!(
+                "Cannot convert {:?} to double",
+                self
+            ))),
         }
     }
 }

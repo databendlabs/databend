@@ -31,13 +31,13 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 ----
 Filter
 ├── filters: [or(gt(t1.a (#0), 3_u8), and(gt(t2.a (#2), 5_u8), gt(t1.a (#0), 1_u8)))]
-├── estimated rows: 0.56
+├── estimated rows: 0.19
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [t2.a (#2)]
     ├── filters: []
-    ├── estimated rows: 5.00
+    ├── estimated rows: 1.67
     ├── Filter(Build)
     │   ├── filters: [or(gt(t1.a (#0), 3_u8), gt(t1.a (#0), 1_u8))]
     │   ├── estimated rows: 0.33
@@ -66,7 +66,7 @@ HashJoin
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#2)]
 ├── filters: []
-├── estimated rows: 5.00
+├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
 │   ├── read rows: 1
