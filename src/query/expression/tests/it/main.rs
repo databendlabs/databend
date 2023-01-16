@@ -17,6 +17,7 @@
 #![feature(try_blocks)]
 
 mod common;
+mod data_schema;
 mod group_by;
 mod kernel;
 mod sort;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -190,6 +191,10 @@ impl QueryContext {
 
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
+    }
+
+    pub fn get_on_error_map(&self) -> Option<HashMap<String, ErrorCode>> {
+        self.shared.get_on_error_map()
     }
 }
 
@@ -372,6 +377,10 @@ impl TableContext for QueryContext {
     // Get Stage Attachment.
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         self.shared.get_stage_attachment()
+    }
+
+    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
+        self.shared.set_on_error_map(map);
     }
 }
 

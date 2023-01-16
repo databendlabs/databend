@@ -36,7 +36,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
-// use common_sql::ExpressionParser;
 use common_expression::RemoteExpr;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
@@ -559,6 +558,18 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_delete(ctx, filter, col_indices, pipeline).await
+    }
+
+    async fn update(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filter: Option<RemoteExpr<String>>,
+        col_indices: Vec<usize>,
+        update_list: Vec<(usize, RemoteExpr<String>)>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        self.do_update(ctx, filter, col_indices, update_list, pipeline)
+            .await
     }
 
     fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {

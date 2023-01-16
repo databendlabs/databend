@@ -121,13 +121,13 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 
 ### tenant_id
 
-* The ID for the databend-query server to store metadata to the Meta Service.
+* Identifies the tenant and is used for storing the tenant's metadata.
 * Default: `"admin"`
 * Env variable: `QUERY_TENANT_ID`
 
 ### cluster_id
 
-* The ID for the databend-query server to construct a cluster.
+* Identifies the cluster that the databend-query node belongs to.
 * Default: `""`
 * Env variable: `QUERY_CLUSTER_ID`
 

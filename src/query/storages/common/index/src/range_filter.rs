@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::collections::HashMap;
 
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_expression::types::nullable::NullableDomain;
@@ -40,13 +39,14 @@ use storages_common_table_meta::meta::StatisticsOfColumns;
 
 #[derive(Clone)]
 pub struct RangeFilter {
-    schema: TableSchemaRef,
     expr: Expr<String>,
     func_ctx: FunctionContext,
+    column_indices: HashMap<String, usize>,
 }
+
 impl RangeFilter {
     pub fn try_create(
-        ctx: Arc<dyn TableContext>,
+        func_ctx: FunctionContext,
         exprs: &[Expr<String>],
         schema: TableSchemaRef,
     ) -> Result<Self> {
@@ -58,14 +58,18 @@ impl RangeFilter {
             })
             .unwrap();
 
-        let func_ctx = ctx.try_get_function_context()?;
-
         let (new_expr, _) = ConstantFolder::fold(&conjunction, func_ctx, &BUILTIN_FUNCTIONS);
 
+        let leaf_fields = schema.leaf_fields();
+        let mut column_indices: HashMap<String, usize> = HashMap::new();
+        for (leaf_index, field) in leaf_fields.iter().enumerate() {
+            column_indices.insert(field.name().clone(), leaf_index);
+        }
+
         Ok(Self {
-            schema,
             expr: new_expr,
             func_ctx,
+            column_indices,
         })
     }
 
@@ -84,8 +88,11 @@ impl RangeFilter {
             .column_refs()
             .into_iter()
             .map(|(name, ty)| {
-                let offset = self.schema.index_of(&name)?;
-                let domain = statistics_to_domain(stats.get(&(offset as u32)), &ty);
+                let stat = match self.column_indices.get(&name) {
+                    Some(index) => stats.get(&(*index as u32)),
+                    None => None,
+                };
+                let domain = statistics_to_domain(stat, &ty);
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;

@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+mod sled_iter;
 mod sled_tree;
 mod sled_txn_tree;
 mod testing;
