@@ -13,21 +13,22 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+
 use common_exception::Result;
-use common_expression::TableSchema;
-use common_expression::TableField;
-use common_expression::TableDataType;
 use common_expression::types::NumberDataType;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use pretty_assertions::assert_eq;
 
 #[test]
 fn test_project_schema_from_tuple() -> Result<()> {
     let b1 = TableDataType::Tuple {
-        fields_name: vec!["b11", "b12"],
+        fields_name: vec!["b11".to_string(), "b12".to_string()],
         fields_type: vec![TableDataType::Boolean, TableDataType::String],
     };
     let b = TableDataType::Tuple {
-        fields_name: vec!["b1", "b2"],
+        fields_name: vec!["b1".to_string(), "b2".to_string()],
         fields_type: vec![b1, TableDataType::Number(NumberDataType::Int64)],
     };
     let fields = vec![
