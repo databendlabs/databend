@@ -54,7 +54,8 @@
 
 Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse.
 
-Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html) or [MinIO](https://min.io)).
+Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage:
+([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io)).
 
 - __Instant Elasticity__
 
