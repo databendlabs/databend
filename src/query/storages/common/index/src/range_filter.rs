@@ -48,7 +48,7 @@ pub struct RangeFilter {
 
 impl RangeFilter {
     pub fn try_create(
-        ctx: Arc<dyn TableContext>,
+        func_ctx: FunctionContext,
         exprs: &[Expr<String>],
         schema: TableSchemaRef,
     ) -> Result<Self> {
@@ -59,8 +59,6 @@ impl RangeFilter {
                 check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
             })
             .unwrap();
-
-        let func_ctx = ctx.try_get_function_context()?;
 
         let (new_expr, _) = ConstantFolder::fold(&conjunction, func_ctx, &BUILTIN_FUNCTIONS);
 

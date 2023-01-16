@@ -29,6 +29,8 @@ pub use enforcer::require_property;
 pub use histogram::histogram_from_ndv;
 pub use histogram::Histogram;
 pub use histogram::HistogramBucket;
+pub use histogram::InterleavedBucket;
+pub use histogram::UniformSampleSet;
 pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
 pub use property::ColumnSet;
 pub use property::Distribution;

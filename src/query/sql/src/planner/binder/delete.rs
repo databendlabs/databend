@@ -65,14 +65,6 @@ impl<'a> Binder {
             &[],
         );
 
-        let table = self
-            .ctx
-            .get_table(&catalog_name, &database_name, &table_name)
-            .await?;
-
-        let tbl_info = table.get_table_info();
-        let table_id = tbl_info.ident;
-
         let selection = if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
             Some(scalar)
@@ -84,8 +76,6 @@ impl<'a> Binder {
             catalog_name,
             database_name,
             table_name,
-            table_id,
-            metadata: self.metadata.clone(),
             selection,
         };
         Ok(Plan::Delete(Box::new(plan)))
