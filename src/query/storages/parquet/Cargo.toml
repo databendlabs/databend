@@ -32,3 +32,6 @@ glob = "0.3.0"
 opendal = { workspace = true }
 serde = { workspace = true }
 typetag = "0.2.3"
+
+[dev-dependencies]
+common-sql = { path = "../../sql" }
