@@ -5,7 +5,7 @@
   <a href="https://databend.rs/doc/cloud">Databend Serverless Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
   <a href="https://perf.databend.rs">Benchmarking</a>  |
-  <a href="https://github.com/datafuselabs/databend/issues/7052">Roadmap (v0.9)</a>
+  <a href="https://github.com/datafuselabs/databend/issues/9604">Roadmap (v1.0)</a>
 
 </h4>
 
@@ -29,7 +29,7 @@
 <br>
 
 <a href="https://github.com/datafuselabs/databend/actions">
-<img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/databend-release.yml?branch=main" alt="CI Status" />
+<img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/release.yml?branch=main" alt="CI Status" />
 </a>
 
 <img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
@@ -52,9 +52,10 @@
 
 ## What is Databend?
 
-Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse.
+Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse focusing on Low-Cost and Low-Complexity for your massive-scale analytics needs.
 
-Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html) or [MinIO](https://min.io)).
+Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage:
+([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io)).
 
 - __Instant Elasticity__
 
@@ -179,6 +180,7 @@ docker run --net=host  datafuselabs/databend
 ### Performance
 
 - [How to Benchmark Databend](https://databend.rs/doc/use-cases/analyze-ontime-with-databend-on-ec2-and-s3)
+- [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
 
 
 ## Contributing

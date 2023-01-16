@@ -81,11 +81,30 @@ pub struct QueryStats {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct QueryResponseField {
+    name: String,
+    r#type: String,
+}
+
+impl QueryResponseField {
+    fn from_schema(schema: DataSchemaRef) -> Vec<Self> {
+        schema
+            .fields()
+            .iter()
+            .map(|f| Self {
+                name: f.name().to_string(),
+                r#type: f.data_type().wrapped_display(),
+            })
+            .collect()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
     pub session: Option<HttpSessionConf>,
-    pub schema: Option<DataSchemaRef>,
+    pub schema: Vec<QueryResponseField>,
     pub data: Vec<Vec<JsonValue>>,
     pub state: ExecuteStateKind,
     // only sql query error
@@ -144,7 +163,7 @@ impl QueryResponse {
         Json(QueryResponse {
             data: data.into(),
             state: state.state,
-            schema: Some(schema),
+            schema: QueryResponseField::from_schema(schema),
             session_id: Some(session_id),
             session: r.session,
             stats,
@@ -168,7 +187,7 @@ impl QueryResponse {
             state: ExecuteStateKind::Failed,
             affect: None,
             data: vec![],
-            schema: None,
+            schema: vec![],
             session_id: None,
             session: None,
             next_uri: None,

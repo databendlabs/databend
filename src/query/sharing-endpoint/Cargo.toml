@@ -22,7 +22,7 @@ time = { version = "0.3", features = ["serde"] }
 anyhow = { workspace = true }
 base64 = "0.13.0"
 clap = { workspace = true }
-opendal = "0.24"
+opendal = { workspace = true }
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
