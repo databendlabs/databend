@@ -22,6 +22,7 @@ mod read_settings;
 mod snapshot_history_reader;
 mod versioned_reader;
 
+pub use block_reader_native::NativeReaderExt;
 pub use block_reader::BlockReader;
 pub use block_reader::MergeIOReadResult;
 pub use bloom_index_reader::load_bloom_filter_by_columns;

@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+
 use std::io::BufReader;
+use std::io::Seek;
 use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::chunk::Chunk;
+
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
+use common_expression::BlockEntry;
+use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::DataSchema;
-use common_expression::TableField;
+
+use common_expression::Value;
 use opendal::Object;
 use storages_common_table_meta::meta::ColumnMeta;
 
@@ -37,7 +40,10 @@ use crate::metrics::metrics_inc_remote_io_seeks;
 
 // Native storage format
 
-pub type Reader = Box<dyn NativeReadBuf + Send + Sync>;
+pub trait NativeReaderExt: NativeReadBuf + std::io::Seek + Send + Sync {}
+impl<T: NativeReadBuf + std::io::Seek + Send + Sync> NativeReaderExt for T {}
+
+pub type Reader = Box<dyn NativeReaderExt>;
 
 impl BlockReader {
     pub async fn async_read_native_columns_data(
@@ -50,15 +56,13 @@ impl BlockReader {
         }
 
         let part = FusePartInfo::from_part(&part)?;
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-        let mut join_handlers = Vec::with_capacity(indices.len());
+        let mut join_handlers = Vec::with_capacity(self.project_indices.len());
 
-        for (index, field) in indices {
+        for (index, (field, _)) in self.project_indices.iter() {
             let column_meta = &part.columns_meta[&index];
             join_handlers.push(Self::read_native_columns_data(
                 self.operator.object(&part.location),
-                index,
+                *index,
                 column_meta,
                 field.data_type().clone(),
             ));
@@ -109,11 +113,9 @@ impl BlockReader {
     ) -> Result<Vec<(usize, NativeReader<Reader>)>> {
         let part = FusePartInfo::from_part(&part)?;
 
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-        let mut results = Vec::with_capacity(indices.len());
+        let mut results = Vec::with_capacity(self.project_indices.len());
 
-        for (index, field) in indices {
+        for (index, (field, _)) in self.project_indices.iter() {
             let column_meta = &part.columns_meta[&index];
 
             let op = self.operator.clone();
@@ -121,7 +123,7 @@ impl BlockReader {
             let location = part.location.clone();
             let result = Self::sync_read_native_column(
                 op.object(&location),
-                index,
+                *index,
                 column_meta,
                 field.data_type().clone(),
             );
@@ -138,8 +140,13 @@ impl BlockReader {
         meta: &ColumnMeta,
         data_type: common_arrow::arrow::datatypes::DataType,
     ) -> Result<(usize, NativeReader<Reader>)> {
-        let (offset, length) = meta.offset_length();
-        let reader = o.blocking_range_reader(offset..offset + length)?;
+        let (offset, _) = meta.offset_length();
+        
+        // let reader = o.blocking_range_reader(offset..offset + length)?;
+        let path = format!("/home/sundy/work/databend/_data/{}", o.path());
+        let mut reader = std::fs::File::open(&path).unwrap();
+        reader.seek(std::io::SeekFrom::Start(offset)).unwrap();
+        
         let reader: Reader = Box::new(BufReader::new(reader));
 
         let page_metas = meta.as_native().unwrap().pages.clone();
@@ -148,25 +155,19 @@ impl BlockReader {
     }
 
     pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
-        let mut results = Vec::with_capacity(chunks.len());
-        let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let mut data_types = Vec::with_capacity(chunk_map.len());
-
+        let mut entries = Vec::with_capacity(chunks.len());
         // they are already the leaf columns without inner
         // TODO support tuple in native storage
-        for column in &columns {
-            let indices = &column.leaf_ids;
-            for index in indices {
-                if let Some(array) = chunk_map.remove(index) {
-                    let data_field: TableField = (&column.field).into();
-                    results.push(array);
-                    data_types.push(data_field.data_type().into());
-                    break;
-                }
+        let mut rows = 0;
+        for (id, (_, f)) in self.project_indices.iter() {
+            if let Some(array) = chunks.iter().find(|c| c.0 == *id).map(|c| c.1.clone()) {
+                entries.push(BlockEntry {
+                    data_type: f.clone(),
+                    value: Value::Column(Column::from_arrow(array.as_ref(), f)),
+                });
+                rows = array.len();
             }
         }
-        let chunk = Chunk::new(results);
-        DataBlock::from_arrow_chunk_with_types(&chunk, &data_types)
+        Ok(DataBlock::new(entries, rows))
     }
 }

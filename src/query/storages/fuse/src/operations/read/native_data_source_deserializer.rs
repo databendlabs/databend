@@ -23,10 +23,12 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
@@ -41,7 +43,7 @@ use crate::operations::read::native_data_source::DataChunks;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct NativeDeserializeDataTransform {
-    ctx: Arc<dyn TableContext>,
+    func_ctx: FunctionContext,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
 
@@ -57,6 +59,8 @@ pub struct NativeDeserializeDataTransform {
     src_schema: DataSchema,
     output_schema: DataSchema,
     prewhere_filter: Arc<Option<Expr>>,
+    
+    prewhere_skipped: usize,
 }
 
 impl NativeDeserializeDataTransform {
@@ -99,13 +103,14 @@ impl NativeDeserializeDataTransform {
                 (&projected).into()
             }
         };
-
+        
+        let func_ctx = ctx.try_get_function_context()?;
         let prewhere_schema = src_schema.project(&prewhere_columns);
-        let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
-
+        let prewhere_filter = Self::build_prewhere_filter_expr(plan, func_ctx.clone(), &prewhere_schema)?;
+        
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
-                ctx,
+                func_ctx,
                 scan_progress,
                 block_reader,
                 input,
@@ -119,19 +124,23 @@ impl NativeDeserializeDataTransform {
                 src_schema,
                 output_schema,
                 prewhere_filter,
+                prewhere_skipped:0,
             },
         )))
     }
 
     fn build_prewhere_filter_expr(
         plan: &DataSourcePlan,
+        ctx: FunctionContext,
         schema: &DataSchema,
     ) -> Result<Arc<Option<Expr>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
                 Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
-                    expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+                    let expr = expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0);
+                    let (expr, _ ) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
+                    expr
                 })),
             },
         )
@@ -188,6 +197,7 @@ impl Processor for NativeDeserializeDataTransform {
         }
 
         if self.input.is_finished() {
+            metrics_inc_pruning_prewhere_nums(self.prewhere_skipped as u64);
             self.output.finish();
             return Ok(Event::Finished);
         }
@@ -215,7 +225,7 @@ impl Processor for NativeDeserializeDataTransform {
                     let prewhere_block = self.block_reader.build_block(arrays.clone())?;
                     let evaluator = Evaluator::new(
                         &prewhere_block,
-                        self.ctx.try_get_function_context()?,
+                        self.func_ctx.clone(),
                         &BUILTIN_FUNCTIONS,
                     );
                     let result = evaluator.run(filter).map_err(|(_, e)| {
@@ -229,7 +239,7 @@ impl Processor for NativeDeserializeDataTransform {
                     };
 
                     if all_filtered {
-                        metrics_inc_pruning_prewhere_nums(1);
+                        self.prewhere_skipped += 1;
                         for index in self.remain_columns.iter() {
                             let chunk = chunks.get_mut(*index).unwrap();
                             chunk.1.skip_page()?;
