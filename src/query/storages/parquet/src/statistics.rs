@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,12 +13,10 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::fs::File;
 
 use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,57 +27,41 @@ use common_storage::ColumnLeaves;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
-use crate::ParquetReader;
+/// Collect statistics of a batch of row groups of the specified columns.
+///
+/// The retuened vector's length is the same as `rgs`.
+pub fn collect_row_group_stats(
+    column_leaves: &ColumnLeaves,
+    rgs: &[RowGroupMetaData],
+) -> Result<Vec<StatisticsOfColumns>> {
+    let mut stats = Vec::with_capacity(rgs.len());
+    let mut stats_of_row_groups = HashMap::with_capacity(rgs.len());
 
-impl ParquetReader {
-    pub fn read_meta(location: &str) -> Result<FileMetaData> {
-        let mut file = File::open(location).map_err(|e| {
-            ErrorCode::Internal(format!("Failed to open file '{}': {}", location, e))
-        })?;
-        pread::read_metadata(&mut file).map_err(|e| {
-            ErrorCode::Internal(format!(
-                "Read parquet file '{}''s meta error: {}",
-                location, e
-            ))
-        })
+    // Each row_group_stat is a `HashMap` holding key-value pairs.
+    // The first element of the pair is the offset in the schema,
+    // and the second element is the statistics of the column (according to the offset)
+    // `column_leaves` is parallel to the schema, so we can iterate `column_leaves` directly.
+    for (index, column_leaf) in column_leaves.column_leaves.iter().enumerate() {
+        let field = &column_leaf.field;
+        let table_type: TableDataType = field.into();
+        let data_type = (&table_type).into();
+        let column_stats = pread::statistics::deserialize(field, rgs)?;
+        stats_of_row_groups.insert(
+            index,
+            BatchStatistics::from_statistics(&column_stats, &data_type)?,
+        );
     }
 
-    /// Collect statistics of a batch of row groups of the specified columns.
-    ///
-    /// The retuened vector's length is the same as `rgs`.
-    pub fn collect_row_group_stats(
-        column_leaves: &ColumnLeaves,
-        rgs: &[RowGroupMetaData],
-    ) -> Result<Vec<StatisticsOfColumns>> {
-        let mut stats = Vec::with_capacity(rgs.len());
-        let mut stats_of_row_groups = HashMap::with_capacity(rgs.len());
-
-        // Each row_group_stat is a `HashMap` holding key-value pairs.
-        // The first element of the pair is the offset in the schema,
-        // and the second element is the statistics of the column (according to the offset)
-        // `column_leaves` is parallel to the schema, so we can iterate `column_leaves` directly.
-        for (index, column_leaf) in column_leaves.column_leaves.iter().enumerate() {
-            let field = &column_leaf.field;
-            let table_type: TableDataType = field.into();
-            let data_type = (&table_type).into();
-            let column_stats = pread::statistics::deserialize(field, rgs)?;
-            stats_of_row_groups.insert(
-                index,
-                BatchStatistics::from_statistics(column_stats, &data_type)?,
-            );
+    for (rg_idx, _) in rgs.iter().enumerate() {
+        let mut cols_stats = HashMap::with_capacity(stats.capacity());
+        for index in 0..column_leaves.column_leaves.len() {
+            let col_stats = stats_of_row_groups[&index].get(rg_idx);
+            cols_stats.insert(index as u32, col_stats);
         }
-
-        for (rg_idx, _) in rgs.iter().enumerate() {
-            let mut cols_stats = HashMap::with_capacity(stats.capacity());
-            for index in 0..column_leaves.column_leaves.len() {
-                let col_stats = stats_of_row_groups[&index].get(rg_idx);
-                cols_stats.insert(index as u32, col_stats);
-            }
-            stats.push(cols_stats);
-        }
-
-        Ok(stats)
+        stats.push(cols_stats);
     }
+
+    Ok(stats)
 }
 
 /// A temporary struct to present [`pread::statistics::Statistics`].
@@ -87,7 +69,7 @@ impl ParquetReader {
 /// Convert the inner fields into Databend data structures.
 pub struct BatchStatistics {
     pub null_count: Buffer<u64>,
-    pub distinct_count: Buffer<u64>,
+    pub distinct_count: Option<Buffer<u64>>,
     pub min_values: Column,
     pub max_values: Column,
 }
@@ -99,12 +81,12 @@ impl BatchStatistics {
             max: unsafe { self.max_values.index_unchecked(index).to_owned() },
             null_count: self.null_count[index],
             in_memory_size: 0, // this field is not used.
-            distinct_of_values: Some(self.distinct_count[index]),
+            distinct_of_values: self.distinct_count.as_ref().map(|d| d[index]),
         }
     }
 
     pub fn from_statistics(
-        stats: pread::statistics::Statistics,
+        stats: &pread::statistics::Statistics,
         data_type: &DataType,
     ) -> Result<Self> {
         let null_count = stats
@@ -123,19 +105,28 @@ impl BatchStatistics {
             .distinct_count
             .as_any()
             .downcast_ref::<UInt64Array>()
-            .ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "distinct_count should be UInt64Array, but is {:?}",
-                    stats.distinct_count.data_type()
-                ))
-            })?
-            .values()
-            .clone();
+            .map(|d| d.values())
+            .cloned();
         let min_values = Column::from_arrow(&*stats.min_value, data_type);
         let max_values = Column::from_arrow(&*stats.max_value, data_type);
         Ok(Self {
             null_count,
             distinct_count,
+            min_values,
+            max_values,
+        })
+    }
+
+    pub fn from_column_statistics(
+        stats: &pread::indexes::ColumnPageStatistics,
+        data_type: &DataType,
+    ) -> Result<Self> {
+        let null_count = stats.null_count.values().clone();
+        let min_values = Column::from_arrow(&*stats.min, data_type);
+        let max_values = Column::from_arrow(&*stats.max, data_type);
+        Ok(Self {
+            null_count,
+            distinct_count: None,
             min_values,
             max_values,
         })
