@@ -24,7 +24,7 @@ use common_meta_stoerr::MetaStorageError;
 /// The output json is in form of `(tree_name, {keyspace: {key, value}})`.
 /// In this impl the `tree_name` can be one of `state`, `log` and `sm`. See [`MetaRaftStore`].
 pub fn vec_kv_to_json(tree_name: &str, kv: &[Vec<u8>]) -> Result<String, MetaStorageError> {
-    let kv_entry = RaftStoreEntry::deserialize(kv)?;
+    let kv_entry = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
 
     let tree_kv = (tree_name, kv_entry);
     let line = serde_json::to_string(&tree_kv)?;
