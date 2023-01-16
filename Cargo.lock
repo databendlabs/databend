@@ -1377,6 +1377,7 @@ dependencies = [
  "num-traits",
  "ordered-float 3.4.0",
  "parking_lot 0.12.1",
+ "pretty_assertions",
  "primitive-types",
  "rand 0.8.5",
  "rust_decimal",

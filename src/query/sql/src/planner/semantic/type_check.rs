@@ -1814,7 +1814,7 @@ impl<'a> TypeChecker<'a> {
             if let Scalar::BoundColumnRef(BoundColumnRef { ref column }) = scalar {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn { data_type, .. } = column_entry {
-                    table_data_type = data_type.remove_nullable();
+                    table_data_type = data_type;
                     if let TableDataType::Tuple { .. } = table_data_type {
                         let box (inner_scalar, _inner_data_type) = self
                             .resolve_tuple_map_access_pushdown(
@@ -1911,7 +1911,6 @@ impl<'a> TypeChecker<'a> {
         names.push(column.column_name.clone());
         let mut index_with_types = VecDeque::with_capacity(paths.len());
         while paths.front().is_some() {
-            *table_data_type = table_data_type.remove_nullable();
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
