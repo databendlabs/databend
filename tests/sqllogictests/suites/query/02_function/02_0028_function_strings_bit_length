@@ -3,7 +3,7 @@ SELECT BIT_LENGTH('latin')
 ----
 40
 
-## cyrillic in russian
+# cyrillic in russian
 query I
 SELECT BIT_LENGTH('кириллица')
 ----

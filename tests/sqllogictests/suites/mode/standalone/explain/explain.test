@@ -768,6 +768,70 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 5.00
 
+query T
+explain select count(distinct a) from t1;
+----
+EvalScalar
+├── expressions: [count() (#3)]
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── group by: [a]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── AggregatePartial
+                ├── group by: [a]
+                ├── aggregate functions: []
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── read rows: 1
+                    ├── read bytes: 31
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    ├── output columns: [0]
+                    └── estimated rows: 1.00
+
+query T
+explain select count_distinct(a) from t1;
+----
+EvalScalar
+├── expressions: [count() (#3)]
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── group by: [a]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── AggregatePartial
+                ├── group by: [a]
+                ├── aggregate functions: []
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── read rows: 1
+                    ├── read bytes: 31
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    ├── output columns: [0]
+                    └── estimated rows: 1.00
+
 statement ok
 drop table t1
 

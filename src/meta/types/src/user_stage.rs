@@ -14,6 +14,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::str::FromStr;
 
 use chrono::DateTime;
@@ -296,16 +298,38 @@ pub struct StageParams {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum OnErrorMode {
-    None,
     Continue,
-    SkipFile,
     SkipFileNum(u64),
-    AbortStatement,
+    AbortNum(u64),
 }
 
 impl Default for OnErrorMode {
     fn default() -> Self {
-        Self::None
+        Self::AbortNum(1)
+    }
+}
+
+impl Display for OnErrorMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            OnErrorMode::Continue => {
+                write!(f, "continue")
+            }
+            OnErrorMode::SkipFileNum(n) => {
+                if *n <= 1 {
+                    write!(f, "skipfile")
+                } else {
+                    write!(f, "skipfile_{}", n)
+                }
+            }
+            OnErrorMode::AbortNum(n) => {
+                if *n <= 1 {
+                    write!(f, "abort")
+                } else {
+                    write!(f, "abort_{}", n)
+                }
+            }
+        }
     }
 }
 
@@ -313,19 +337,37 @@ impl FromStr for OnErrorMode {
     type Err = String;
     fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
-            "" => Ok(OnErrorMode::None),
+            "" | "ABORT" => Ok(OnErrorMode::AbortNum(1)),
             "CONTINUE" => Ok(OnErrorMode::Continue),
-            "SKIP_FILE" => Ok(OnErrorMode::SkipFile),
-            "ABORT" => Ok(OnErrorMode::AbortStatement),
+            "SKIP_FILE" => Ok(OnErrorMode::SkipFileNum(1)),
             v => {
-                let num_str = v.replace("SKIP_FILE_", "");
-                let nums = num_str.parse::<u64>();
-                match nums {
-                    Ok(v) => Ok(OnErrorMode::SkipFileNum(v)),
-                    Err(_) => Err(format!(
-                        "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT_STATEMENT }}",
-                        v
-                    )),
+                if v.starts_with("ABORT_") {
+                    let num_str = v.replace("ABORT_", "");
+                    let nums = num_str.parse::<u64>();
+                    match nums {
+                        Ok(n) if n < 1 => {
+                            Err("OnError mode `ABORT_<num>` num must be greater than 0".to_string())
+                        }
+                        Ok(n) => Ok(OnErrorMode::AbortNum(n)),
+                        Err(_) => Err(format!(
+                            "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT | ABORT_<num> }}",
+                            v
+                        )),
+                    }
+                } else {
+                    let num_str = v.replace("SKIP_FILE_", "");
+                    let nums = num_str.parse::<u64>();
+                    match nums {
+                        Ok(n) if n < 1 => {
+                            Err("OnError mode `SKIP_FILE_<num>` num must be greater than 0"
+                                .to_string())
+                        }
+                        Ok(n) => Ok(OnErrorMode::SkipFileNum(n)),
+                        Err(_) => Err(format!(
+                            "Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT | ABORT_<num> }}",
+                            v
+                        )),
+                    }
                 }
             }
         }

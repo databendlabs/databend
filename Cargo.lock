@@ -1812,6 +1812,7 @@ dependencies = [
  "common-settings",
  "crossbeam-channel",
  "csv-core",
+ "dashmap",
  "futures",
  "futures-util",
  "opendal",
@@ -3053,6 +3054,28 @@ dependencies = [
  "uuid",
  "walkdir",
  "wiremock",
+]
+
+[[package]]
+name = "databend-sqllogictests"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "clap 4.0.32",
+ "common-exception",
+ "env_logger 0.10.0",
+ "futures-util",
+ "lazy_static",
+ "mysql_async",
+ "rand 0.8.5",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqllogictest",
+ "thiserror",
+ "tokio",
+ "walkdir",
 ]
 
 [[package]]
@@ -7594,8 +7617,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.10.0"
-source = "git+https://github.com/risinglightdb/sqllogictest-rs.git?branch=main#879204b9b2dd5a81db4a9781c2e6c68d0713f5d3"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b2f781e2de5df40f526b3d7c93cb972f87425771a27cc8882a4178794b2ad11"
 dependencies = [
  "async-trait",
  "derivative",
@@ -7612,28 +7636,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
-]
-
-[[package]]
-name = "sqllogictests"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "clap 4.0.32",
- "common-exception",
- "env_logger 0.10.0",
- "futures-util",
- "lazy_static",
- "mysql_async",
- "rand 0.8.5",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "sqllogictest",
- "thiserror",
- "tokio",
- "walkdir",
 ]
 
 [[package]]

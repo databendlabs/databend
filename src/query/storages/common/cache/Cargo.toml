@@ -18,7 +18,7 @@ common-exception = { path = "../../../../common/exception" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 metrics = "0.20.1"
-opendal = "0.24"
+opendal = { workspace = true }
 parking_lot = "0.12.1"
 serde = { workspace = true }
 serde_json = { workspace = true }

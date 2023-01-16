@@ -14,16 +14,19 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::token::Token;
 use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
+use common_ast::walk_statement_mut;
 use common_ast::Backtrace;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use parking_lot::RwLock;
 
+use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
@@ -76,8 +79,8 @@ impl Planner {
             let res = async {
                 // Step 2: Parse the SQL.
                 let backtrace = Backtrace::new();
-                let (stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
-
+                let (mut stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
+                replace_stmt(&mut stmt);
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
                 let metadata = Arc::new(RwLock::new(Metadata::default()));
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -124,5 +127,12 @@ impl Planner {
                 return res;
             }
         }
+    }
+}
+
+fn replace_stmt(stmt: &mut Statement) {
+    let mut visitors = vec![DistinctToGroupBy::default()];
+    for v in visitors.iter_mut() {
+        walk_statement_mut(v, stmt)
     }
 }

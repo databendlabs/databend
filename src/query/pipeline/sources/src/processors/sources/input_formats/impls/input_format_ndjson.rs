@@ -13,13 +13,13 @@
 //  limitations under the License.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
@@ -31,6 +31,7 @@ use crate::processors::sources::input_formats::input_format_text::AligningStateR
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
+use crate::processors::sources::input_formats::InputError;
 
 pub struct InputFormatNDJson {}
 
@@ -88,7 +89,10 @@ impl InputFormatTextBase for InputFormatNDJson {
         Arc::new(FieldJsonAstDecoder::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>> {
         let field_decoder = builder
             .field_decoder
             .as_any()
@@ -98,29 +102,39 @@ impl InputFormatTextBase for InputFormatNDJson {
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let mut num_rows = 0usize;
+        let mut error_map: HashMap<u16, InputError> = HashMap::new();
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
             let buf = buf.trim();
             if !buf.is_empty() {
                 if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
-                    if builder.ctx.on_error_mode == OnErrorMode::Continue {
-                        columns.iter_mut().for_each(|c| {
-                            // check if parts of columns inserted data, if so, pop it.
-                            if c.len() > num_rows {
-                                c.pop_data_value().expect("must success");
-                            }
-                        });
-                        start = *end;
-                        continue;
-                    } else {
-                        return Err(batch.error(&e.message(), &builder.ctx, start, i));
+                    match builder.ctx.on_error_mode {
+                        OnErrorMode::Continue => {
+                            Self::on_error_continue(columns, num_rows, e.clone(), &mut error_map);
+                            start = *end;
+                            continue;
+                        }
+                        OnErrorMode::AbortNum(n) => {
+                            Self::on_error_abort(
+                                columns,
+                                num_rows,
+                                n,
+                                &builder.ctx.on_error_count,
+                                e,
+                            )
+                            .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+
+                            start = *end;
+                            continue;
+                        }
+                        _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
                     }
                 }
             }
             start = *end;
             num_rows += 1;
         }
-        Ok(())
+        Ok(error_map)
     }
 }
 
