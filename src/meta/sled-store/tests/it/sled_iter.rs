@@ -84,6 +84,11 @@ async fn test_sled_iter() -> anyhow::Result<()> {
             continue;
         }
 
+        if !trees.contains(&tree_name) {
+            // When tests run concurrently, there are other trees created by other test case.
+            continue;
+        }
+
         assert_eq!(trees.remove(0), tree_name);
 
         let mut got = vec![];
