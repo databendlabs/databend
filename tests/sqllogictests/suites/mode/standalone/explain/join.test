@@ -227,7 +227,7 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 Filter
 ├── filters: [or(gt(b.x (#1), 44_u8), lt(b.x (#1), 43_u8))]
-├── estimated rows: 1.33
+├── estimated rows: 2.22
 └── HashJoin
     ├── join type: LEFT OUTER
     ├── build keys: [b.x (#1)]
@@ -287,7 +287,7 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 Filter
 ├── filters: [or(gt(b.x (#1), 44_u8), lt(a.x (#0), 43_u8))]
-├── estimated rows: 1.33
+├── estimated rows: 2.22
 └── HashJoin
     ├── join type: LEFT OUTER
     ├── build keys: [b.x (#1)]
