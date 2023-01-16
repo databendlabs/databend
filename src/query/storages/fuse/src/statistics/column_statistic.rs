@@ -57,14 +57,17 @@ pub fn gen_columns_statistics(
 
     let leaves = get_traverse_columns_dfs(&data_block)?;
     for (idx, (col_idx, col, data_type)) in leaves.iter().enumerate() {
+        if col.is_none() {
+            continue;
+        }
         if !MinMaxIndex::is_supported_type(data_type) {
             continue;
         }
+        let col = col.as_ref().unwrap();
 
         // later, during the evaluation of expressions, name of field does not matter
         let mut min = Scalar::Null;
         let mut max = Scalar::Null;
-        let col = col.as_column().unwrap();
 
         let (mins, _) = eval_aggr("min", vec![], &[col.clone()], &[data_type.clone()], rows)?;
         let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], &[data_type.clone()], rows)?;
@@ -132,15 +135,13 @@ pub fn gen_columns_statistics(
 }
 
 pub mod traverse {
-    use common_expression::types::AnyType;
     use common_expression::types::DataType;
     use common_expression::BlockEntry;
     use common_expression::Column;
-    use common_expression::Value;
 
     use super::*;
 
-    pub type TraverseResult = Result<Vec<(Option<usize>, Value<AnyType>, DataType)>>;
+    pub type TraverseResult = Result<Vec<(Option<usize>, Option<Column>, DataType)>>;
 
     // traverses columns and collects the leaves in depth first manner
     pub fn traverse_columns_dfs(columns: &[BlockEntry]) -> TraverseResult {
@@ -148,28 +149,55 @@ pub mod traverse {
         for (idx, entry) in columns.iter().enumerate() {
             let data_type = &entry.data_type;
             let column = entry.value.as_column().unwrap();
-            traverse_recursive(Some(idx), column, data_type, &mut leaves)?;
+            traverse_recursive(Some(idx), Some(column), data_type, &mut leaves)?;
         }
         Ok(leaves)
     }
 
+    /// Traverse the columns in DFS order, convert them to a flatten columns array sorted by leaf_index.
+    /// We must ensure that each leaf node is traversed, otherwise we may get an incorrect leaf_index.
+    ///
+    /// For the `Tuple` type, we should expand its inner columns.
+    /// For the `Array` type, if there is a nested `Tuple` type inside, it also needs to be found and expanded.
     fn traverse_recursive(
         idx: Option<usize>,
-        column: &Column,
+        column: Option<&Column>,
         data_type: &DataType,
-        leaves: &mut Vec<(Option<usize>, Value<AnyType>, DataType)>,
+        leaves: &mut Vec<(Option<usize>, Option<Column>, DataType)>,
     ) -> Result<()> {
-        match data_type {
-            DataType::Tuple(inner_data_types) => {
-                let (inner_columns, _) = column.as_tuple().unwrap();
-                for (inner_column, inner_data_type) in
-                    inner_columns.iter().zip(inner_data_types.iter())
-                {
-                    traverse_recursive(None, inner_column, inner_data_type, leaves)?;
+        match data_type.remove_nullable() {
+            DataType::Tuple(inner_types) => {
+                if let Some(column) = column {
+                    let (inner_columns, _) = column.as_tuple().unwrap();
+                    for (inner_column, inner_type) in inner_columns.iter().zip(inner_types.iter()) {
+                        traverse_recursive(None, Some(inner_column), inner_type, leaves)?;
+                    }
+                } else {
+                    for inner_type in inner_types.iter() {
+                        traverse_recursive(None, None, inner_type, leaves)?;
+                    }
+                }
+            }
+            DataType::Array(inner_type) => {
+                let mut inner_type = inner_type;
+                loop {
+                    match inner_type.remove_nullable() {
+                        DataType::Tuple(tuple_inner_types) => {
+                            for tuple_inner_type in tuple_inner_types.iter() {
+                                traverse_recursive(None, None, tuple_inner_type, leaves)?;
+                            }
+                        }
+                        DataType::Array(array_inner_type) => {
+                            inner_type = array_inner_type;
+                            continue;
+                        }
+                        _ => leaves.push((idx, column.cloned(), data_type.clone())),
+                    }
+                    break;
                 }
             }
             _ => {
-                leaves.push((idx, Value::Column(column.clone()), data_type.clone()));
+                leaves.push((idx, column.cloned(), data_type.clone()));
             }
         }
         Ok(())

@@ -94,8 +94,11 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             let distinct_of_values = match data_block {
                 Some(data_block) => {
                     if let Some(col) = leaves.as_ref().unwrap().get(*id as usize) {
-                        let column = col.1.convert_to_full_column(&col.2, data_block.num_rows());
-                        calc_column_distinct_of_values(&column, &col.2, data_block.num_rows())?
+                        if let Some(column) = &col.1 {
+                            calc_column_distinct_of_values(column, &col.2, data_block.num_rows())?
+                        } else {
+                            0
+                        }
                     } else {
                         0
                     }
