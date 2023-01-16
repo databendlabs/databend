@@ -21,3 +21,4 @@ mod parquet_data_source_deserializer;
 mod parquet_data_source_reader;
 
 pub use fuse_source::build_fuse_parquet_source_pipeline;
+pub use parquet_data_source::DataSourceMeta;

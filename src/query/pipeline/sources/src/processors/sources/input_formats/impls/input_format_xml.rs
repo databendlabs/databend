@@ -35,6 +35,7 @@ use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 use crate::processors::sources::input_formats::InputContext;
+use crate::processors::sources::input_formats::InputError;
 use crate::processors::sources::input_formats::SplitInfo;
 
 pub struct InputFormatXML {}
@@ -137,7 +138,10 @@ impl InputFormatTextBase for InputFormatXML {
         Arc::new(FieldDecoderXML::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>> {
         let field_decoder = builder
             .field_decoder
             .as_any()
@@ -159,7 +163,10 @@ impl InputFormatTextBase for InputFormatXML {
 
         let mut key = None;
         let mut has_start_row = false;
-        let mut num_rows = 0;
+        // for deal with on_error mode
+        let mut num_rows = 0usize;
+        let mut error_map: HashMap<u16, InputError> = HashMap::new();
+
         for e in reader {
             if rows_to_skip != 0 {
                 match e {
@@ -224,16 +231,28 @@ impl InputFormatTextBase for InputFormatXML {
                                 &batch.split_info.file.path,
                                 num_rows,
                             ) {
-                                if builder.ctx.on_error_mode == OnErrorMode::Continue {
-                                    columns.iter_mut().for_each(|c| {
-                                        // check if parts of columns inserted data, if so, pop it.
-                                        if c.len() > num_rows {
-                                            c.pop_data_value().expect("must success");
-                                        }
-                                    });
-                                    continue;
-                                } else {
-                                    return Err(e);
+                                match builder.ctx.on_error_mode {
+                                    OnErrorMode::Continue => {
+                                        Self::on_error_continue(
+                                            columns,
+                                            num_rows,
+                                            e.clone(),
+                                            &mut error_map,
+                                        );
+                                        continue;
+                                    }
+                                    OnErrorMode::AbortNum(n) => {
+                                        Self::on_error_abort(
+                                            columns,
+                                            num_rows,
+                                            n,
+                                            &builder.ctx.on_error_count,
+                                            e,
+                                        )
+                                        .map_err(|e| xml_error(&e.message(), path, num_rows))?;
+                                        continue;
+                                    }
+                                    _ => return Err(xml_error(&e.message(), path, num_rows)),
                                 }
                             };
                             cols.clear();
@@ -253,7 +272,7 @@ impl InputFormatTextBase for InputFormatXML {
                 }
             }
         }
-        Ok(())
+        Ok(error_map)
     }
 }
 

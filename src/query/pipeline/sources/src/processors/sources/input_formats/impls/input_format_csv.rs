@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::io::Read;
 use std::mem;
@@ -40,6 +41,7 @@ use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 use crate::processors::sources::input_formats::InputContext;
+use crate::processors::sources::input_formats::InputError;
 use crate::processors::sources::input_formats::SplitInfo;
 
 pub struct InputFormatCSV {}
@@ -99,11 +101,15 @@ impl InputFormatTextBase for InputFormatCSV {
         Arc::new(FieldDecoderCSV::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>> {
         let columns = &mut builder.mutable_columns;
         let n_column = columns.len();
         let mut start = 0usize;
         let mut num_rows = 0usize;
+        let mut error_map: HashMap<u16, InputError> = HashMap::new();
         let mut field_end_idx = 0;
         let field_decoder = builder
             .field_decoder
@@ -119,25 +125,28 @@ impl InputFormatTextBase for InputFormatCSV {
                 &builder.ctx.schema,
                 &batch.field_ends[field_end_idx..field_end_idx + n_column],
             ) {
-                if builder.ctx.on_error_mode == OnErrorMode::Continue {
-                    columns.iter_mut().for_each(|c| {
-                        // check if parts of columns inserted data, if so, pop it.
-                        if c.len() > num_rows {
-                            c.pop_data_value().expect("must success");
-                        }
-                    });
-                    start = *end;
-                    field_end_idx += n_column;
-                    continue;
-                } else {
-                    return Err(batch.error(&e.message(), &builder.ctx, start, i));
+                match builder.ctx.on_error_mode {
+                    OnErrorMode::Continue => {
+                        Self::on_error_continue(columns, num_rows, e.clone(), &mut error_map);
+                        start = *end;
+                        field_end_idx += n_column;
+                        continue;
+                    }
+                    OnErrorMode::AbortNum(n) => {
+                        Self::on_error_abort(columns, num_rows, n, &builder.ctx.on_error_count, e)
+                            .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                        start = *end;
+                        field_end_idx += n_column;
+                        continue;
+                    }
+                    _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
                 }
             }
             start = *end;
             field_end_idx += n_column;
             num_rows += 1;
         }
-        Ok(())
+        Ok(error_map)
     }
 }
 

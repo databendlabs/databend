@@ -127,11 +127,14 @@ impl Operator for Scan {
                     let histogram = histogram_from_ndv(
                         col_stat.number_of_distinct_values,
                         num_rows,
-                        Some((min, max)),
+                        Some((min.clone(), max.clone())),
                         DEFAULT_HISTOGRAM_BUCKETS,
                     )
                     .ok();
                     let column_stat = ColumnStat {
+                        min,
+                        max,
+                        ndv: col_stat.number_of_distinct_values,
                         null_count: col_stat.null_count,
                         histogram,
                     };

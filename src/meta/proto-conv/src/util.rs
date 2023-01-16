@@ -80,9 +80,10 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         24,
         "2023-01-07: Add: new-schema pb::DataType to/from TableDataType",
     ),
+    (25, "2023-01-05: Add: user.proto/OnErrorMode::AbortNum"),
     (
-        25,
-        "2023-01-03: Add: metadata.proto/DataSchema::max_column_id",
+        26,
+        "2023-01-16: Add: metadata.proto/DataSchema::max_column_id",
     ),
 ];
 

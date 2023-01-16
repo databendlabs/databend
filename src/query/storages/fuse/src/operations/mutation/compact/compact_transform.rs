@@ -46,6 +46,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::metrics::*;
 use crate::operations::mutation::AbortOperation;
+use crate::operations::mutation::SerializeState;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -53,13 +54,6 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reducers::reduce_block_metas;
-
-struct SerializeState {
-    block_data: Vec<u8>,
-    block_location: String,
-    index_data: Option<Vec<u8>>,
-    index_location: Option<String>,
-}
 
 enum State {
     Consume,
