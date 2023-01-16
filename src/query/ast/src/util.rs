@@ -71,6 +71,20 @@ pub fn function_name(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_function_name(false))(i)
 }
 
+pub fn ident_no_quote(i: Input) -> IResult<Identifier> {
+    map(
+        alt((
+            rule! { Ident },
+            non_reserved_keyword(|token| token.is_reserved_ident(false)),
+        )),
+        |token| Identifier {
+            span: token.clone(),
+            name: token.text().to_string(),
+            quote: None,
+        },
+    )(i)
+}
+
 /// TODO(xuanwo): Do we need to remove this function?
 #[allow(dead_code)]
 pub fn function_name_after_as(i: Input) -> IResult<Identifier> {

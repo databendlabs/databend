@@ -27,7 +27,7 @@ use crate::util::*;
 use crate::ErrorKind;
 
 pub fn ident_to_string(i: Input) -> IResult<String> {
-    map_res(rule! { Ident }, |ident| Ok(ident.text().to_string()))(i)
+    map_res(ident_no_quote, |ident| Ok(ident.name))(i)
 }
 
 pub fn u64_to_string(i: Input) -> IResult<String> {
