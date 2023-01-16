@@ -52,7 +52,7 @@ enum State {
     ReadMeta(BlockMetaInfoPtr),
     TryCommit(TableSnapshot),
     RefreshTable,
-    DetectConfilct(Arc<TableSnapshot>),
+    DetectConflict(Arc<TableSnapshot>),
     MergeSegments(Vec<Location>),
     AbortOperation,
     Finish,
@@ -116,7 +116,7 @@ impl Processor for MutationSink {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(&self.state, State::DetectConfilct(_)) {
+        if matches!(&self.state, State::DetectConflict(_)) {
             return Ok(Event::Sync);
         }
 
@@ -185,7 +185,7 @@ impl Processor for MutationSink {
                 new_snapshot.summary = self.merged_statistics.clone();
                 self.state = State::TryCommit(new_snapshot);
             }
-            State::DetectConfilct(latest_snapshot) => {
+            State::DetectConflict(latest_snapshot) => {
                 // Check if there is only insertion during the operation.
                 match MutatorConflictDetector::detect_conflicts(
                     self.base_snapshot.as_ref(),
@@ -254,7 +254,7 @@ impl Processor for MutationSink {
                         "mutation meets empty snapshot during conflict reconciliation",
                     )
                 })?;
-                self.state = State::DetectConfilct(latest_snapshot);
+                self.state = State::DetectConflict(latest_snapshot);
             }
             State::MergeSegments(appended_segments) => {
                 let mut new_snapshot = TableSnapshot::from_previous(&self.base_snapshot);
