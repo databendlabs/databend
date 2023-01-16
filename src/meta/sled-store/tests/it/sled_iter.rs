@@ -75,7 +75,7 @@ async fn test_sled_iter() -> anyhow::Result<()> {
 
     // Iterator output IVec
 
-    let mut trees = vec![t1, t2];
+    let mut trees = vec![t1.clone(), t2.clone()];
 
     for tree_iter in common_meta_sled_store::iter::<IVec>() {
         let (tree_name, item_iter) = tree_iter?;
@@ -110,9 +110,16 @@ async fn test_sled_iter() -> anyhow::Result<()> {
 
     // Iterator outputs Vec<u8>
 
+    let trees = vec![t1, t2];
+
     let mut got = vec![];
     for tree_iter in common_meta_sled_store::iter::<Vec<u8>>() {
-        let (_tree_name, item_iter) = tree_iter?;
+        let (tree_name, item_iter) = tree_iter?;
+
+        if !trees.contains(&tree_name) {
+            // When tests run concurrently, there are other trees created by other test case.
+            continue;
+        }
 
         for item in item_iter {
             let (k, v) = item?;
