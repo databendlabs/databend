@@ -18,8 +18,10 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
+use common_expression::ConstantFolder;
 use common_expression::DataSchema;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 
@@ -51,7 +53,7 @@ impl ParquetTable {
     // Build the prewhere filter expression.
     fn build_prewhere_filter_expr(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: FunctionContext,
         plan: &DataSourcePlan,
         schema: &DataSchema,
     ) -> Result<Arc<Option<Expr>>> {
@@ -59,7 +61,10 @@ impl ParquetTable {
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
                 Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
-                    expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+                    let expr =
+                        expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0);
+                    let (expr, _) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
+                    expr
                 })),
             },
         )
@@ -166,8 +171,11 @@ impl ParquetTable {
         ));
 
         let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter =
-            self.build_prewhere_filter_expr(ctx.clone(), plan, prewhere_reader.output_schema())?;
+        let prewhere_filter = self.build_prewhere_filter_expr(
+            ctx.try_get_function_context()?,
+            plan,
+            prewhere_reader.output_schema(),
+        )?;
         let remain_reader = self.build_remain_reader(plan)?;
 
         // Add source pipe.
