@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -35,8 +34,6 @@ use common_expression::Domain;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_expression::TableDataType;
-use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use storages_common_table_meta::meta::ColumnStatistics;
@@ -67,29 +64,10 @@ impl RangeFilter {
 
         let (new_expr, _) = ConstantFolder::fold(&conjunction, func_ctx, &BUILTIN_FUNCTIONS);
 
-        let mut fields = VecDeque::new();
-        for field in schema.fields().iter() {
-            fields.push_back(field.clone());
-        }
-        let mut leaf_index = 0;
+        let leaf_fields = schema.leaf_fields();
         let mut column_indices: HashMap<String, usize> = HashMap::new();
-        while let Some(field) = fields.pop_front() {
-            if let TableDataType::Tuple {
-                fields_name,
-                fields_type,
-            } = field.data_type()
-            {
-                for (inner_field_name, inner_field_type) in
-                    fields_name.iter().rev().zip(fields_type.iter().rev())
-                {
-                    let inner_name = format!("{}:{}", field.name(), inner_field_name);
-                    let inner_field = TableField::new(&inner_name, inner_field_type.clone());
-                    fields.push_front(inner_field);
-                }
-            } else {
-                column_indices.insert(field.name().clone(), leaf_index);
-                leaf_index += 1;
-            }
+        for (leaf_index, field) in leaf_fields.iter().enumerate() {
+            column_indices.insert(field.name().clone(), leaf_index);
         }
 
         Ok(Self {

@@ -161,10 +161,11 @@ impl Metadata {
                 None
             };
 
+            // TODO handle Tuple inside Array.
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
-            } = field.data_type()
+            } = field.data_type().remove_nullable()
             {
                 self.add_base_table_column(
                     field.name().clone(),
@@ -176,7 +177,7 @@ impl Metadata {
 
                 let mut i = fields_type.len();
                 for (inner_field_name, inner_field_type) in
-                    fields_name.iter().rev().zip(fields_type.iter().rev())
+                    fields_name.iter().zip(fields_type.iter()).rev()
                 {
                     i -= 1;
                     let mut inner_indices = indices.clone();
