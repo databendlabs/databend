@@ -117,7 +117,7 @@ impl ParquetReader {
         HashSet<usize>,
     )> {
         // Full schema and column leaves.
-        let column_leaves = ColumnLeaves::new_from_schema(schema);
+        let column_leaves = ColumnLeaves::new_from_schema(schema, None);
         let schema_descriptors = to_parquet_schema(schema)?;
         // Project schema
         let projected_arrow_schema = match projection {
@@ -157,11 +157,17 @@ impl ParquetReader {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
         for index in &self.columns_to_read {
-            let meta = &part.column_metas[index];
-            let op = self.operator.clone();
-            let chunk =
-                Self::sync_read_one_column(op.object(&part.location), meta.offset, meta.length)?;
-            chunks.push((*index, chunk));
+            let column = &self.projected_column_leaves.column_leaves[*index];
+            let column_id = column.leaf_column_ids[0];
+            if let Some(meta) = part.column_metas.get(&column_id) {
+                let op = self.operator.clone();
+                let chunk = Self::sync_read_one_column(
+                    op.object(&part.location),
+                    meta.offset,
+                    meta.length,
+                )?;
+                chunks.push((*index, chunk));
+            }
         }
 
         Ok(chunks)

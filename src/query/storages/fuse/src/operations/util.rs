@@ -17,11 +17,15 @@ use std::collections::HashMap;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::SingleColumnMeta;
 
-pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, ColumnMeta>> {
+pub fn column_metas(
+    file_meta: &ThriftFileMetaData,
+    schema: &TableSchemaRef,
+) -> Result<HashMap<ColumnId, ColumnMeta>> {
     // currently we use one group only
     let num_row_groups = file_meta.row_groups.len();
     if num_row_groups != 1 {
@@ -30,6 +34,7 @@ pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, 
             num_row_groups
         )));
     }
+    let column_ids = schema.to_column_ids()?;
     let row_group = &file_meta.row_groups[0];
     let mut col_metas = HashMap::with_capacity(row_group.columns.len());
     for (idx, col_chunk) in row_group.columns.iter().enumerate() {
@@ -51,7 +56,9 @@ pub fn column_metas(file_meta: &ThriftFileMetaData) -> Result<HashMap<ColumnId, 
                     len: col_len as u64,
                     num_values,
                 };
-                col_metas.insert(idx as u32, ColumnMeta::Parquet(res));
+                // use column id as key instead of index
+                let column_id = column_ids[idx];
+                col_metas.insert(column_id, ColumnMeta::Parquet(res));
             }
             None => {
                 return Err(ErrorCode::ParquetFileInvalid(format!(

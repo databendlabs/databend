@@ -119,6 +119,7 @@ use super::super::v0;
 impl From<v0::TableSnapshot> for TableSnapshot {
     fn from(s: v0::TableSnapshot) -> Self {
         let schema = from_schema(&s.schema);
+        let schema = TableSchema::init_if_need(schema);
         let leaf_fields = schema.leaf_fields();
         let summary = Statistics::from_v0(s.summary, &leaf_fields);
         Self {
@@ -138,6 +139,7 @@ impl From<v0::TableSnapshot> for TableSnapshot {
 impl From<v1::TableSnapshot> for TableSnapshot {
     fn from(s: v1::TableSnapshot) -> Self {
         let schema = from_schema(&s.schema);
+        let schema = TableSchema::init_if_need(schema);
         let leaf_fields = schema.leaf_fields();
         let summary = Statistics::from_v0(s.summary, &leaf_fields);
         Self {

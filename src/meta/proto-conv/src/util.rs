@@ -80,6 +80,10 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         24,
         "2023-01-07: Add: new-schema pb::DataType to/from TableDataType",
     ),
+    (
+        25,
+        "2023-01-03: Add: metadata.proto/DataSchema::max_column_id",
+    ),
 ];
 
 /// The version to write into a message and it is also the version of the message reader.

@@ -42,7 +42,7 @@ impl FromToProto for ex::TableSchema {
             fs.push(ex::TableField::from_pb(f)?);
         }
 
-        let v = Self::new_from(fs, p.metadata);
+        let v = Self::new_from_column_id_map(fs, p.metadata, p.column_id_map, p.max_column_id);
         Ok(v)
     }
 
@@ -57,6 +57,8 @@ impl FromToProto for ex::TableSchema {
             min_reader_ver: MIN_READER_VER,
             fields: fs,
             metadata: self.meta().clone(),
+            column_id_map: self.column_id_map().clone(),
+            max_column_id: self.max_column_id(),
         };
         Ok(p)
     }

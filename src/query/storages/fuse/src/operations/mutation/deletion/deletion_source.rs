@@ -290,7 +290,11 @@ impl Processor for DeletionSource {
                 let column_distinct_count = bloom_index_state
                     .as_ref()
                     .map(|i| i.column_distinct_count.clone());
-                let col_stats = gen_columns_statistics(&block, column_distinct_count)?;
+                let col_stats = gen_columns_statistics(
+                    &block,
+                    column_distinct_count,
+                    Some(&self.source_schema),
+                )?;
 
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
@@ -301,7 +305,7 @@ impl Processor for DeletionSource {
                     &mut block_data,
                     self.table_compression,
                 )?;
-                let col_metas = util::column_metas(&meta_data)?;
+                let col_metas = util::column_metas(&meta_data, &schema)?;
 
                 let (index_data, index_location, index_size) =
                     if let Some(bloom_index_state) = bloom_index_state {

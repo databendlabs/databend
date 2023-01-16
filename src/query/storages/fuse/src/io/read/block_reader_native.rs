@@ -52,20 +52,21 @@ impl BlockReader {
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
 
-        for (index, field) in indices {
-            let column_meta = &part.columns_meta[&index];
-            join_handlers.push(Self::read_native_columns_data(
-                self.operator.object(&part.location),
-                index,
-                column_meta,
-                field.data_type().clone(),
-            ));
+        for (index, (column_id, field)) in indices {
+            if let Some(column_meta) = part.columns_meta.get(&column_id) {
+                join_handlers.push(Self::read_native_columns_data(
+                    self.operator.object(&part.location),
+                    index,
+                    column_meta,
+                    field.data_type().clone(),
+                ));
 
-            // Perf
-            {
-                let (_, len) = column_meta.offset_length();
-                metrics_inc_remote_io_seeks(1);
-                metrics_inc_remote_io_read_bytes(len);
+                // Perf
+                {
+                    let (_, len) = column_meta.offset_length();
+                    metrics_inc_remote_io_seeks(1);
+                    metrics_inc_remote_io_read_bytes(len);
+                }
             }
         }
 
@@ -111,20 +112,20 @@ impl BlockReader {
         let indices = Self::build_projection_indices(&columns);
         let mut results = Vec::with_capacity(indices.len());
 
-        for (index, field) in indices {
-            let column_meta = &part.columns_meta[&index];
+        for (index, (column_id, field)) in indices {
+            if let Some(column_meta) = part.columns_meta.get(&column_id) {
+                let op = self.operator.clone();
 
-            let op = self.operator.clone();
+                let location = part.location.clone();
+                let result = Self::sync_read_native_column(
+                    op.object(&location),
+                    index,
+                    column_meta,
+                    field.data_type().clone(),
+                );
 
-            let location = part.location.clone();
-            let result = Self::sync_read_native_column(
-                op.object(&location),
-                index,
-                column_meta,
-                field.data_type().clone(),
-            );
-
-            results.push(result?);
+                results.push(result?);
+            }
         }
 
         Ok(results)

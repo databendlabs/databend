@@ -59,18 +59,20 @@ impl ParquetReader {
             let indices = &column_leaf.leaf_ids;
             let mut metas = Vec::with_capacity(indices.len());
             let mut chunks = Vec::with_capacity(indices.len());
-            for index in indices {
-                let column_meta = &part.column_metas[index];
-                let cnt = cnt_map.get_mut(index).unwrap();
-                *cnt -= 1;
-                let column_chunk = if cnt > &mut 0 {
-                    chunk_map.get(index).unwrap().clone()
-                } else {
-                    chunk_map.remove(index).unwrap()
-                };
-                let descriptor = &self.projected_column_descriptors[index];
-                metas.push((column_meta, descriptor));
-                chunks.push(column_chunk);
+            for (i, index) in indices.iter().enumerate() {
+                let column_id = column_leaf.leaf_column_ids[i];
+                if let Some(column_meta) = part.column_metas.get(&column_id) {
+                    let cnt = cnt_map.get_mut(index).unwrap();
+                    *cnt -= 1;
+                    let column_chunk = if cnt > &mut 0 {
+                        chunk_map.get(index).unwrap().clone()
+                    } else {
+                        chunk_map.remove(index).unwrap()
+                    };
+                    let descriptor = &self.projected_column_descriptors[index];
+                    metas.push((column_meta, descriptor));
+                    chunks.push(column_chunk);
+                }
             }
             if let Some(ref bitmap) = filter {
                 // Filter push down for nested type is not supported now.

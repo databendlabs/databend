@@ -233,6 +233,7 @@ impl Processor for FuseTableSink {
                     block_location.0,
                     cluster_stats,
                     column_distinct_count,
+                    &self.source_schema,
                 )?;
 
                 // we need a configuration of block size threshold here
