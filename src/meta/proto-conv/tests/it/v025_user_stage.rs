@@ -41,7 +41,7 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
         160, 6, 25, 168, 6, 24, 160, 6, 25, 168, 6, 24,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = || mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::StageType::LegacyInternal,
         stage_params: mt::StageParams {
@@ -75,7 +75,8 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
             hostname: "databend.rs".to_string(),
         }),
     };
-    common::test_load_old(func_name!(), user_stage_info_v25.as_slice(), 25, want)?;
+    common::test_load_old(func_name!(), user_stage_info_v25.as_slice(), 25, want())?;
+    common::test_pb_from_to(func_name!(), want())?;
 
     Ok(())
 }
