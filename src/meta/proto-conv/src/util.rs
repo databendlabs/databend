@@ -80,6 +80,11 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         24,
         "2023-01-07: Add: new-schema pb::DataType to/from TableDataType",
     ),
+    (25, "2023-01-05: Add: user.proto/OnErrorMode::AbortNum"),
+    // Dear developer:
+    //      If you're gonna add a new metadata version, you'll have to add a test for it.
+    //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
+    //      and replace two of the variable `bytes` and `want`.
 ];
 
 /// The version to write into a message and it is also the version of the message reader.

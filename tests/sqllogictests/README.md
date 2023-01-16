@@ -2,54 +2,54 @@
 This is Databend's [sqllogictest](https://www.sqlite.org/sqllogictest/doc/trunk/about.wiki) implementation. It uses [sqllogictest-rs](https://github.com/risinglightdb/sqllogictest-rs) to parse test files and run test cases.
 
 ### Basic usage
-You can directly run the following commands under databend directory
+Before running the following commands, you should generate **databend-sqllogictests** binary file.
 
 ---
 Run all tests under the three handlers(mysql, http, clickhouse) in turn.
 ```shell
-cargo run -p sqllogictests
+databend-sqllogictests
 ```
 ---
 Run all tests with specific handler.
 ```shell
-cargo run -p sqllogictests -- --handlers <handler_name>
+databend-sqllogictests --handlers <handler_name>
 ```
 ---
 Run tests under specific directory.
 
 ```shell
-cargo run -p sqllogictests -- --run_dir <dir_name>
+databend-sqllogictests --run_dir <dir_name>
 ```
 ---
 Run tests under specific file. This is the most commonly used command because users do not need to run all tests at a time and only need to run their newly added test files or test files with changes
 ```shell
-cargo run -p sqllogictests -- --run_file <file_name>
+databend-sqllogictests --run_file <file_name>
 ```
 ---
 Auto complete test file which is very convenient. What you need to do is just a final check to see if the generated results meet expectations.
 ```
-cargo run -p sqllogictests -- --run_file <file_name> --complete
+databend-sqllogictests --run_file <file_name> --complete
 ```
 ---
 By default, sqllogictest will fail fast when a failed test is encountered. If you want to run the full test, even with a failed test, you can run the following command:
 ```
-cargo run -p sqllogictests -- --no-fail-fast
+databend-sqllogictests --no-fail-fast
 ```
 ---
 For more information, run help command:
 ```shell
-cargo run -p sqllogictests -- --help
+databend-sqllogictests --help
 ```
 
 ### Parallel
 If you want to run test files in parallel, please add the following args:
 ```shell
-cargo run -p sqllogictests --enable_sandbox --parallel <number>
+databend-sqllogictest --senable_sandbox --parallel <number>
 ```
 
 When start databend query, please add `--internal-enable-sandbox-tenant`, such as:
 ```shell
-./target/debug/databend-query  --meta-embedded-dir ./.databend/meta_embedded --internal-enable-sandbox-tenant
+./target/debug/databend-query --meta-embedded-dir ./.databend/meta_embedded --internal-enable-sandbox-tenant
 ```
 
 ### Sqllogictest
@@ -73,4 +73,3 @@ query <type_string> <sort_mode> <label>
 The SQL for the query is found on second an subsequent lines of the record up to first line of the form "----" or until the end of the record. Lines following the "----" are expected results of the query, one value per line. If the "----" and/or the results are omitted, then the query is expected to return an empty set.
 
 For more information about arguments, such as <type_string>, <sort_mode>, <label> please refer to [sqllogictest](https://www.sqlite.org/sqllogictest/doc/trunk/about.wiki).
-

@@ -28,9 +28,10 @@ async-trait = { version = "0.1.57", package = "async-trait-fn" }
 bstr = "1.0.1"
 crossbeam-channel = "0.5.6"
 csv-core = "0.1.10"
+dashmap = "5.4.0"
 futures = "0.3.24"
 futures-util = "0.3.24"
-opendal = { version = "0.24", features = ["compress"] }
+opendal = { workspace = true, features = ["compress"] }
 parking_lot = "0.12.1"
 serde = { workspace = true }
 serde_json = { workspace = true }

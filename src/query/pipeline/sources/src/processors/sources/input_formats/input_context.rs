@@ -12,9 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::mem;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -33,6 +35,7 @@ use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_settings::Settings;
+use dashmap::DashMap;
 use opendal::raw::CompressAlgorithm;
 use opendal::Operator;
 
@@ -43,6 +46,7 @@ use crate::processors::sources::input_formats::impls::input_format_tsv::InputFor
 use crate::processors::sources::input_formats::impls::input_format_xml::InputFormatXML;
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
+use crate::processors::sources::input_formats::InputError;
 use crate::processors::sources::input_formats::InputFormat;
 
 #[derive(Debug)]
@@ -118,6 +122,8 @@ pub struct InputContext {
 
     pub scan_progress: Arc<Progress>,
     pub on_error_mode: OnErrorMode,
+    pub on_error_count: AtomicU64,
+    pub on_error_map: Option<DashMap<String, HashMap<u16, InputError>>>,
 }
 
 impl Debug for InputContext {
@@ -180,6 +186,8 @@ impl InputContext {
             block_compact_thresholds,
             format_options: file_format_options,
             on_error_mode,
+            on_error_count: AtomicU64::new(0),
+            on_error_map: Some(DashMap::new()),
         })
     }
 
@@ -219,7 +227,9 @@ impl InputContext {
             splits: vec![],
             block_compact_thresholds,
             format_options: file_format_options,
-            on_error_mode: OnErrorMode::None,
+            on_error_mode: OnErrorMode::AbortNum(1),
+            on_error_count: AtomicU64::new(0),
+            on_error_map: None,
         })
     }
 
@@ -256,7 +266,9 @@ impl InputContext {
             splits: vec![],
             block_compact_thresholds,
             format_options: file_format_options,
-            on_error_mode: OnErrorMode::None,
+            on_error_mode: OnErrorMode::AbortNum(1),
+            on_error_count: AtomicU64::new(0),
+            on_error_map: None,
         })
     }
 
@@ -339,6 +351,22 @@ impl InputContext {
             self.schema.fields()
         );
         ErrorCode::BadBytes(msg)
+    }
+
+    pub fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+        if let Some(ref on_error_map) = self.on_error_map {
+            if on_error_map.is_empty() {
+                return None;
+            }
+            let mut m = HashMap::<String, ErrorCode>::new();
+            on_error_map.iter().for_each(|x| {
+                if let Some(max_v) = x.value().iter().max_by_key(|entry| entry.1.num) {
+                    m.insert(x.key().to_string(), max_v.1.err.clone());
+                }
+            });
+            return Some(m);
+        }
+        None
     }
 }
 

@@ -226,17 +226,20 @@ impl PipelineBuilder {
             .map(|name| schema.index_of(name.as_str()))
             .collect::<Result<Vec<usize>>>()?;
 
-        let ops = vec![BlockOperator::Project { projection }];
-
-        let func_ctx = self.ctx.try_get_function_context()?;
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(CompoundBlockOperator::create(
-                input,
-                output,
-                func_ctx,
-                ops.clone(),
-            ))
-        })
+        // if projection is sequential, no need to add projection
+        if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
+            let ops = vec![BlockOperator::Project { projection }];
+            let func_ctx = self.ctx.try_get_function_context()?;
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(CompoundBlockOperator::create(
+                    input,
+                    output,
+                    func_ctx,
+                    ops.clone(),
+                ))
+            })?;
+        }
+        Ok(())
     }
 
     fn build_filter(&mut self, filter: &Filter) -> Result<()> {

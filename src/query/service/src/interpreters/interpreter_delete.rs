@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
-use common_sql::plans::DeletePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
@@ -25,6 +24,7 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::plans::DeletePlan;
 use crate::sql::plans::ScalarExpr;
 
 /// interprets DeletePlan
@@ -34,7 +34,7 @@ pub struct DeleteInterpreter {
 }
 
 impl DeleteInterpreter {
-    /// Create the DelectInterpreter from DelectPlan
+    /// Create the DeleteInterpreter from DeletePlan
     pub fn try_create(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<Self> {
         Ok(DeleteInterpreter { ctx, plan })
     }
@@ -47,7 +47,7 @@ impl Interpreter for DeleteInterpreter {
         "DeleteInterpreter"
     }
 
-    /// Get the schema of SelectPlan
+    /// Get the schema of DeletePlan
     fn schema(&self) -> DataSchemaRef {
         self.plan.schema()
     }
@@ -59,6 +59,7 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
             let filter = scalar.as_expr()?.as_remote_expr();
             let col_indices = scalar.used_columns().into_iter().collect();

@@ -430,6 +430,19 @@ impl CopyInterpreterV2 {
                     )
                     .await?;
 
+                    // 4. log on_error mode errors.
+                    // todo(ariesdevil): persist errors with query_id
+                    if let Some(error_map) = ctx.get_on_error_map() {
+                        for (file_name, e) in error_map {
+                            error!(
+                                "copy(on_error={}): file {} encounter error {},",
+                                stage_info.copy_options.on_error,
+                                file_name,
+                                e.to_string()
+                            );
+                        }
+                    }
+
                     info!(
                         "copy: all copy finished, elapsed:{}",
                         start.elapsed().as_secs()

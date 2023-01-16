@@ -12,7 +12,6 @@ doctest = false
 test = false
 
 [dependencies]
-common-catalog = { path = "../../../../query/catalog" }
 common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
 

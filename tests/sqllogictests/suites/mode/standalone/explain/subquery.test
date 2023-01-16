@@ -74,7 +74,7 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 ----
 Filter
 ├── filters: [or(2 (#2), gt(t.number (#0), 1_u8))]
-├── estimated rows: 0.11
+├── estimated rows: 0.33
 └── HashJoin
     ├── join type: RIGHT MARK
     ├── build keys: [subquery_1 (#1)]

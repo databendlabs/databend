@@ -198,6 +198,7 @@ message UserStageInfo {
       Empty SkipFile = 3;
       uint64 SkipFileNum = 4;
       Empty AbortStatement = 5;
+      uint64 AbortNum = 6;
     }
   }
 

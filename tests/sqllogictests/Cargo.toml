@@ -1,10 +1,17 @@
 [package]
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
+categories = ["command-line-utilities", "development-tools::build-utils"]
+description = "Databend-Sqllogictests is a testing tool to verify the correctness of Databend."
 edition = "2021"
+keywords = ["sqllogictest"]
 license = "Apache-2.0"
-name = "sqllogictests"
-publish = false
+name = "databend-sqllogictests"
+readme = "README.md"
+repository = "https://github.com/datafuselabs/databend/"
 version = "0.1.0"
+
+[[bin]]
+name = "databend-sqllogictests"
 
 [dependencies]
 async-trait = "0.1.53"
@@ -19,7 +26,7 @@ regex = "1"
 reqwest = { workspace = true }
 serde = "1.0.150"
 serde_json = "1.0.89"
-sqllogictest = { git = "https://github.com/risinglightdb/sqllogictest-rs.git", branch = "main" }
+sqllogictest = "0.11.1"
 thiserror = "1.0.37"
 tokio = { version = "1.23.1", features = ["full"] }
 walkdir = "2.3.2"

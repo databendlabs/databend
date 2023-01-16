@@ -55,7 +55,21 @@ SELECT * FROM t where ta[1].b > 3
 [(7,8)]
 
 statement ok
+CREATE TABLE t1 (a int, b Tuple(Bool, Int64, Float64, String, Date, Timestamp), c Array(UInt8), d int);
+
+statement ok
+INSERT INTO TABLE t1 VALUES (1, (true, 100, 12.34, 'abc', '2020-01-01', '2020-01-01 00:00:00'), [101, 2], 4);
+
+query I
+SELECT a FROM t1 where d = 4
+----
+1
+
+statement ok
 DROP TABLE t
+
+statement ok
+DROP TABLE t1
 
 statement ok
 DROP DATABASE db_09_0021

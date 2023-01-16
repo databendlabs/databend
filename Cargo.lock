@@ -261,8 +261,8 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "xz2",
- "zstd",
- "zstd-safe",
+ "zstd 0.11.2+zstd.1.5.2",
+ "zstd-safe 5.0.2+zstd.1.5.2",
 ]
 
 [[package]]
@@ -1377,6 +1377,7 @@ dependencies = [
  "num-traits",
  "ordered-float 3.4.0",
  "parking_lot 0.12.1",
+ "pretty_assertions",
  "primitive-types",
  "rand 0.8.5",
  "rust_decimal",
@@ -1686,6 +1687,7 @@ dependencies = [
  "common-tracing",
  "once_cell",
  "openraft",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "sled",
@@ -1812,6 +1814,7 @@ dependencies = [
  "common-settings",
  "crossbeam-channel",
  "csv-core",
+ "dashmap",
  "futures",
  "futures-util",
  "opendal",
@@ -2226,6 +2229,7 @@ dependencies = [
  "common-functions",
  "common-meta-app",
  "common-pipeline-core",
+ "common-sql",
  "common-storage",
  "glob",
  "opendal",
@@ -2939,6 +2943,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-meta-upgrade-2022-01-15"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.23",
+ "common-meta-api",
+ "common-meta-app",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
+ "common-tracing",
+ "openraft",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
@@ -3053,6 +3078,28 @@ dependencies = [
  "uuid",
  "walkdir",
  "wiremock",
+]
+
+[[package]]
+name = "databend-sqllogictests"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "clap 4.0.32",
+ "common-exception",
+ "env_logger 0.10.0",
+ "futures-util",
+ "lazy_static",
+ "mysql_async",
+ "rand 0.8.5",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqllogictest",
+ "thiserror",
+ "tokio",
+ "walkdir",
 ]
 
 [[package]]
@@ -5829,7 +5876,7 @@ dependencies = [
 [[package]]
 name = "parquet2"
 version = "0.17.0"
-source = "git+https://github.com/jorgecarleitao/parquet2?rev=fb08b72#fb08b725aa15d700d2a67c19ef65889b032ae371"
+source = "git+https://github.com/jorgecarleitao/parquet2?rev=ed0e1ff#ed0e1ffb3a673f9f79ffc0e0b114e3d9f30144d7"
 dependencies = [
  "async-stream",
  "brotli",
@@ -5838,9 +5885,10 @@ dependencies = [
  "lz4",
  "parquet-format-safe",
  "seq-macro",
+ "serde",
  "snap",
  "streaming-decompression",
- "zstd",
+ "zstd 0.12.1+zstd.1.5.2",
 ]
 
 [[package]]
@@ -7594,8 +7642,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.10.0"
-source = "git+https://github.com/risinglightdb/sqllogictest-rs.git?branch=main#879204b9b2dd5a81db4a9781c2e6c68d0713f5d3"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b2f781e2de5df40f526b3d7c93cb972f87425771a27cc8882a4178794b2ad11"
 dependencies = [
  "async-trait",
  "derivative",
@@ -7612,28 +7661,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
-]
-
-[[package]]
-name = "sqllogictests"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "clap 4.0.32",
- "common-exception",
- "env_logger 0.10.0",
- "futures-util",
- "lazy_static",
- "mysql_async",
- "rand 0.8.5",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "sqllogictest",
- "thiserror",
- "tokio",
- "walkdir",
 ]
 
 [[package]]
@@ -7706,7 +7733,6 @@ dependencies = [
 name = "storages-common-pruner"
 version = "0.1.0"
 dependencies = [
- "common-catalog",
  "common-exception",
  "common-expression",
  "serde",
@@ -7754,7 +7780,7 @@ dependencies = [
  "serde",
  "serde_json",
  "snap",
- "zstd",
+ "zstd 0.11.2+zstd.1.5.2",
 ]
 
 [[package]]
@@ -9127,7 +9153,16 @@ version = "0.11.2+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20cc960326ece64f010d2d2107537f26dc589a6573a316bd5b1dba685fa5fde4"
 dependencies = [
- "zstd-safe",
+ "zstd-safe 5.0.2+zstd.1.5.2",
+]
+
+[[package]]
+name = "zstd"
+version = "0.12.1+zstd.1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c947d2adc84ff9a59f2e3c03b81aa4128acf28d6ad7d56273f7e8af14e47bea"
+dependencies = [
+ "zstd-safe 6.0.2+zstd.1.5.2",
 ]
 
 [[package]]
@@ -9135,6 +9170,16 @@ name = "zstd-safe"
 version = "5.0.2+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d2a5585e04f9eea4b2a3d1eca508c4dee9592a89ef6f450c11719da0726f4db"
+dependencies = [
+ "libc",
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "6.0.2+zstd.1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6cf39f730b440bab43da8fb5faf5f254574462f73f260f85f7987f32154ff17"
 dependencies = [
  "libc",
  "zstd-sys",

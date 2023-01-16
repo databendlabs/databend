@@ -130,6 +130,15 @@ jobs:
         with:
           profile: release
 
+  test_stateful_cluster_linux:
+    runs-on: ubuntu-latest
+    needs: build_linux
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_stateful_cluster_linux
+        with:
+          profile: release
+
   test_sqllogic_standalone_macos:
     runs-on: macos-11
     needs: build_macos

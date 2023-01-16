@@ -14,7 +14,6 @@
 
 mod deserialize;
 mod filter;
-mod meta;
 mod reader;
 
 pub use reader::IndexedChunk;

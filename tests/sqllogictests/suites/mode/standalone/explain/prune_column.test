@@ -68,7 +68,7 @@ HashJoin
 ├── build keys: [t1.b (#2)]
 ├── probe keys: [t2.b (#11)]
 ├── filters: []
-├── estimated rows: 1.00
+├── estimated rows: 0.33
 ├── Filter(Build)
 │   ├── filters: [eq(t1.c (#3), 1_u8)]
 │   ├── estimated rows: 0.33
@@ -123,7 +123,7 @@ Filter
     │               ├── build keys: [t2.b (#7)]
     │               ├── probe keys: [t3.b (#16)]
     │               ├── filters: []
-    │               ├── estimated rows: 1.00
+    │               ├── estimated rows: 0.33
     │               ├── Filter(Build)
     │               │   ├── filters: [eq(t2.c (#8), 1_u8)]
     │               │   ├── estimated rows: 0.33

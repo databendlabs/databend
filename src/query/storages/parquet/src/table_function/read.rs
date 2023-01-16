@@ -12,29 +12,26 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
+use common_expression::ConstantFolder;
 use common_expression::DataSchema;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
-use storages_common_pruner::RangePrunerCreator;
 
 use super::table::arrow_to_table_schema;
 use super::ParquetTable;
 use super::TableContext;
-use crate::parquet_part::ColumnMeta;
-use crate::parquet_part::ParquetRowGroupPart;
-use crate::ParquetLocationPart;
-use crate::ParquetReader;
-use crate::ParquetSource;
+use crate::parquet_part::ParquetLocationPart;
+use crate::parquet_reader::ParquetReader;
+use crate::parquet_source::ParquetSource;
+use crate::pruning::prune_and_set_partitions;
 
 impl ParquetTable {
     pub fn create_reader(&self, projection: Projection) -> Result<Arc<ParquetReader>> {
@@ -56,18 +53,21 @@ impl ParquetTable {
     // Build the prewhere filter expression.
     fn build_prewhere_filter_expr(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: FunctionContext,
         plan: &DataSourcePlan,
         schema: &DataSchema,
     ) -> Result<Arc<Option<Expr>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => Arc::new(Some(
-                    v.filter
+                Some(v) => {
+                    let expr = v
+                        .filter
                         .as_expr(&BUILTIN_FUNCTIONS)
-                        .project_column_ref(|name| schema.index_of(name).unwrap()),
-                )),
+                        .project_column_ref(|name| schema.index_of(name).unwrap());
+                    let (expr, _) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
+                    Arc::new(Some(expr))
+                }
             },
         )
     }
@@ -129,7 +129,7 @@ impl ParquetTable {
         // `projected_column_leaves` contains the smallest column set that is needed for the query.
         // Use `projected_arrow_schema` to create `row_group_pruner` (`RangePruner`).
         //
-        // During evaluation,
+        // During pruning evaluation,
         // `RangePruner` will use field name to find the offset in the schema,
         // and use the offset to find the column stat from `StatisticsOfColumns` (HashMap<offset, stat>).
         //
@@ -137,73 +137,27 @@ impl ParquetTable {
         let (projected_arrow_schema, projected_column_leaves, _, columns_to_read) =
             ParquetReader::do_projection(&self.arrow_schema, &columns_to_read)?;
         let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
+        let filters = push_downs.as_ref().map(|extra| {
+            extra
+                .filters
+                .iter()
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .collect::<Vec<_>>()
+        });
+
+        let read_options = self.read_options;
 
         pipeline.set_on_init(move || {
-            let mut partitions = Vec::with_capacity(locations.len());
-
-            // build row group pruner.
-            let filter_exprs = push_downs.as_ref().map(|extra| {
-                extra
-                    .filters
-                    .iter()
-                    .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
-                    .collect::<Vec<_>>()
-            });
-            let row_group_pruner =
-                RangePrunerCreator::try_create(&ctx_ref, filter_exprs.as_deref(), &schema)?;
-
-            for location in &locations {
-                let file_meta = ParquetReader::read_meta(location)?;
-                let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
-
-                let no_stats = file_meta.row_groups.iter().any(|r| {
-                    r.columns()
-                        .iter()
-                        .any(|c| c.metadata().statistics.is_none())
-                });
-
-                if !skip_pruning && !no_stats {
-                    // If collecting stats fails or `should_keep` is true, we still read the row group.
-                    // Otherwise, the row group will be pruned.
-                    if let Ok(row_group_stats) = ParquetReader::collect_row_group_stats(
-                        &projected_column_leaves,
-                        &file_meta.row_groups,
-                    ) {
-                        for (idx, (stats, _rg)) in row_group_stats
-                            .iter()
-                            .zip(file_meta.row_groups.iter())
-                            .enumerate()
-                        {
-                            row_group_pruned[idx] = !row_group_pruner.should_keep(stats);
-                        }
-                    }
-                }
-
-                for (idx, rg) in file_meta.row_groups.iter().enumerate() {
-                    if row_group_pruned[idx] {
-                        continue;
-                    }
-                    let mut column_metas = HashMap::with_capacity(columns_to_read.len());
-                    for index in &columns_to_read {
-                        let c = &rg.columns()[*index];
-                        let (offset, length) = c.byte_range();
-                        column_metas.insert(*index, ColumnMeta {
-                            offset,
-                            length,
-                            compression: c.compression().into(),
-                        });
-                    }
-
-                    partitions.push(ParquetRowGroupPart::create(
-                        location.clone(),
-                        rg.num_rows(),
-                        column_metas,
-                    ))
-                }
-            }
-            ctx_ref
-                .try_set_partitions(Partitions::create(PartitionsShuffleKind::Mod, partitions))?;
-            Ok(())
+            prune_and_set_partitions(
+                &ctx_ref,
+                &locations,
+                &schema,
+                &filters.as_deref(),
+                &columns_to_read,
+                &projected_column_leaves,
+                skip_pruning,
+                read_options,
+            )
         });
 
         // If there is a `PrewhereInfo`, the final output should be `PrehwereInfo.output_columns`.
@@ -219,8 +173,11 @@ impl ParquetTable {
         ));
 
         let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter =
-            self.build_prewhere_filter_expr(ctx.clone(), plan, prewhere_reader.output_schema())?;
+        let prewhere_filter = self.build_prewhere_filter_expr(
+            ctx.try_get_function_context()?,
+            plan,
+            prewhere_reader.output_schema(),
+        )?;
         let remain_reader = self.build_remain_reader(plan)?;
 
         // Add source pipe.
@@ -233,6 +190,7 @@ impl ParquetTable {
                     prewhere_reader.clone(),
                     prewhere_filter.clone(),
                     remain_reader.clone(),
+                    self.read_options,
                 )
             },
             max_io_requests,
