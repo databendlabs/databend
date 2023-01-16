@@ -165,12 +165,17 @@ pub mod traverse {
         data_type: &DataType,
         leaves: &mut Vec<(Option<usize>, Option<Column>, DataType)>,
     ) -> Result<()> {
-        // TODO The inner columns of Array and Tuple are ignored temporarily,
-        // because nested nullable bitmaps need to be considered.
         match data_type.remove_nullable() {
             DataType::Tuple(inner_types) => {
-                for inner_type in inner_types.iter() {
-                    traverse_recursive(None, None, inner_type, leaves)?;
+                if !data_type.is_nullable() && column.is_some() {
+                    let (inner_columns, _) = column.unwrap().as_tuple().unwrap();
+                    for (inner_column, inner_type) in inner_columns.iter().zip(inner_types.iter()) {
+                        traverse_recursive(None, Some(inner_column), inner_type, leaves)?;
+                    }
+                } else {
+                    for inner_type in inner_types.iter() {
+                        traverse_recursive(None, None, inner_type, leaves)?;
+                    }
                 }
             }
             DataType::Array(inner_type) => {
