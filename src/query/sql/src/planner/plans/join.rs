@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::max;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -464,10 +463,10 @@ fn evaluate_by_ndv(
     left_prop: &RelationalProperty,
     right_prop: &RelationalProperty,
 ) -> f64 {
-    let max_ndv = max(left_stat.ndv, right_stat.ndv);
-    if max_ndv == 0 {
+    let max_ndv = f64::max(left_stat.ndv, right_stat.ndv);
+    if max_ndv == 0.0 {
         0.0
     } else {
-        left_prop.cardinality * right_prop.cardinality / max_ndv as f64
+        left_prop.cardinality * right_prop.cardinality / max_ndv
     }
 }

@@ -102,6 +102,23 @@ impl Display for Datum {
 }
 
 impl Datum {
+    pub fn type_comparable(&self, other: &Datum) -> bool {
+        matches!(
+            (self, other),
+            (Datum::Bool(_), Datum::Bool(_))
+                | (Datum::Bytes(_), Datum::Bytes(_))
+                | (Datum::Int(_), Datum::UInt(_))
+                | (Datum::Int(_), Datum::Int(_))
+                | (Datum::Int(_), Datum::Float(_))
+                | (Datum::UInt(_), Datum::Int(_))
+                | (Datum::UInt(_), Datum::UInt(_))
+                | (Datum::UInt(_), Datum::Float(_))
+                | (Datum::Float(_), Datum::Float(_))
+                | (Datum::Float(_), Datum::Int(_))
+                | (Datum::Float(_), Datum::UInt(_))
+        )
+    }
+
     pub fn compare(&self, other: &Self) -> Result<std::cmp::Ordering> {
         match (self, other) {
             (Datum::Bool(l), Datum::Bool(r)) => Ok(l.cmp(r)),
