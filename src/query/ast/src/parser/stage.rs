@@ -52,14 +52,14 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
         rule! {
         (COMPRESSION ~ "=" ~ #parameter_to_string )
         },
-        |(_, _, v)| ("COMPRESSION".to_string(), v.clone()),
+        |(_, _, v)| ("COMPRESSION".to_string(), v),
     );
 
     let string_options = map(
         rule! {
             (TYPE | RECORD_DELIMITER | FIELD_DELIMITER | QUOTE | SKIP_HEADER | NON_DISPLAY | ESCAPE ) ~ "=" ~ #literal_string
         },
-        |(k, _, v)| (k.text().to_string(), v.clone()),
+        |(k, _, v)| (k.text().to_string(), v),
     );
 
     map(
