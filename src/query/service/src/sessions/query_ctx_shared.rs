@@ -79,6 +79,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
     pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
+    pub(in crate::sessions) on_error_map: Arc<RwLock<Option<HashMap<String, ErrorCode>>>>,
 }
 
 impl QueryContextShared {
@@ -108,12 +109,22 @@ impl QueryContextShared {
             precommit_blocks: Arc::new(RwLock::new(vec![])),
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
+            on_error_map: Arc::new(RwLock::new(None)),
         }))
     }
 
     pub fn set_error(&self, err: ErrorCode) {
         let mut guard = self.error.lock();
         *guard = Some(err);
+    }
+
+    pub fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
+        let mut guard = self.on_error_map.write();
+        *guard = map;
+    }
+
+    pub fn get_on_error_map(&self) -> Option<HashMap<String, ErrorCode>> {
+        self.on_error_map.read().as_ref().cloned()
     }
 
     pub fn kill(&self, cause: ErrorCode) {

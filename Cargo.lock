@@ -1812,6 +1812,7 @@ dependencies = [
  "common-settings",
  "crossbeam-channel",
  "csv-core",
+ "dashmap",
  "futures",
  "futures-util",
  "opendal",
