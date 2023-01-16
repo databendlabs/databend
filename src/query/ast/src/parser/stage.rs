@@ -41,6 +41,33 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
     )(i)
 }
 
+pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
+    let option_type = map(
+        rule! {
+        (TYPE ~ "=" ~ ((JSON | CSV | NDJSON | PARQUET | JSON | XML)) )
+        },
+        |(_, _, v)| ("type".to_string(), v.text().to_string()),
+    );
+    let option_compression = map(
+        rule! {
+        (COMPRESSION ~ "=" ~ #parameter_to_string )
+        },
+        |(_, _, v)| ("COMPRESSION".to_string(), v.clone()),
+    );
+
+    let string_options = map(
+        rule! {
+            (TYPE | RECORD_DELIMITER | FIELD_DELIMITER | QUOTE | SKIP_HEADER | NON_DISPLAY | ESCAPE ) ~ "=" ~ #literal_string
+        },
+        |(k, _, v)| (k.text().to_string(), v.clone()),
+    );
+
+    map(
+        rule! { "(" ~ (#option_type | #option_compression | #string_options)* ~ ")"},
+        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
+    )(i)
+}
+
 // parse: (k = v ...)* into a map
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
     let ident_with_format = alt((
