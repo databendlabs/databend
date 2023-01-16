@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_expression::types::nullable::NullableDomain;
