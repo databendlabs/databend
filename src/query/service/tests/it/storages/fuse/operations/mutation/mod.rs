@@ -13,8 +13,8 @@
 //  limitations under the License.
 
 mod block_compact_mutator;
-mod deletion_mutator;
+mod deletion;
 mod recluster_mutator;
 mod segments_compact_mutator;
 
-pub use deletion_mutator::do_deletion;
+pub use deletion::do_deletion;

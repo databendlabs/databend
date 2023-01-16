@@ -22,7 +22,7 @@ use common_expression::TableSchemaRef;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct BlockMetaIndex {
     pub segment_idx: usize,
     pub block_idx: usize,
