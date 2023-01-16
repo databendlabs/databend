@@ -113,7 +113,9 @@ impl HeuristicOptimizer {
             pub visited: bool,
         }
 
+        // runtime stack
         let mut to_optimize = VecDeque::new();
+
         let root_frame = TreeFrame {
             expr: Box::new(s_expr.clone()),
             optimized_children: Vec::new(),
@@ -129,7 +131,8 @@ impl HeuristicOptimizer {
                     to_optimize.push_back(frame.clone());
                     // all of its children are not optimized
                     // Note:
-                    // optimize starts from the first children!
+                    // optimize should starts from the first children
+                    // so we push the children into the stack in reverse order
                     for expr in frame.borrow().expr.children().iter().rev() {
                         let child_frame = TreeFrame {
                             expr: Box::new(expr.clone()),
@@ -160,7 +163,7 @@ impl HeuristicOptimizer {
                         frame.optimized_children = vec![];
                         frame.visited = false;
                     } else {
-                        // the result is optimized, push it up to the parent
+                        // the result is optimized, move to its parent
                         match &frame.borrow().parent {
                             None => {
                                 // is root node
@@ -190,7 +193,6 @@ impl HeuristicOptimizer {
     // set the last bool to true
     fn apply_transform_rules(&self, s_expr: &SExpr, rule_list: &RuleList) -> Result<(SExpr, bool)> {
         let mut s_expr = s_expr.clone();
-        println!("==apply transform rules==");
         for rule in rule_list.iter() {
             let mut state = TransformResult::new();
             if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
@@ -198,7 +200,6 @@ impl HeuristicOptimizer {
                 rule.apply(&s_expr, &mut state)?;
                 if !state.results().is_empty() {
                     let result = &state.results()[0];
-                    println!("rule applied outcome: {:#?}", result.applied_rules);
                     // set to true
                     // the optimizer will optimize it again
                     return Ok((result.clone(), true));
