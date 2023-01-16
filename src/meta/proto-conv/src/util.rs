@@ -80,6 +80,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         24,
         "2023-01-07: Add: new-schema pb::DataType to/from TableDataType",
     ),
+    (25, "2023-01-05: Add: user.proto/OnErrorMode::AbortNum"),
 ];
 
 /// The version to write into a message and it is also the version of the message reader.
