@@ -134,7 +134,7 @@ impl Operator for Scan {
                     let column_stat = ColumnStat {
                         min,
                         max,
-                        ndv: col_stat.number_of_distinct_values,
+                        ndv: col_stat.number_of_distinct_values as f64,
                         null_count: col_stat.null_count,
                         histogram,
                     };

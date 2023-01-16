@@ -30,7 +30,7 @@ pub struct ColumnStat {
     pub max: Datum,
 
     /// Number of distinct values
-    pub ndv: u64,
+    pub ndv: f64,
 
     /// Count of null values
     pub null_count: u64,
