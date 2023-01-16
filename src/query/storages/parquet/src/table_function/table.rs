@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::fs::File;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
@@ -42,8 +43,8 @@ use common_pipeline_core::Pipeline;
 use opendal::Operator;
 
 use super::TableContext;
-use crate::ParquetLocationPart;
-use crate::ParquetReader;
+use crate::parquet_part::ParquetLocationPart;
+use crate::ReadOptions;
 
 pub struct ParquetTable {
     table_args: Vec<Scalar>,
@@ -52,6 +53,7 @@ pub struct ParquetTable {
     pub(super) table_info: TableInfo,
     pub(super) arrow_schema: ArrowSchema,
     pub(super) operator: Operator,
+    pub(super) read_options: ReadOptions,
 }
 
 impl ParquetTable {
@@ -110,7 +112,16 @@ impl ParquetTable {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let first_meta = ParquetReader::read_meta(&file_locations[0])?;
+        let location = &file_locations[0];
+        let mut file = File::open(location).map_err(|e| {
+            ErrorCode::Internal(format!("Failed to open file '{}': {}", location, e))
+        })?;
+        let first_meta = pread::read_metadata(&mut file).map_err(|e| {
+            ErrorCode::Internal(format!(
+                "Read parquet file '{}''s meta error: {}",
+                location, e
+            ))
+        })?;
         let arrow_schema = pread::infer_schema(&first_meta)?;
 
         let table_info = TableInfo {
@@ -141,6 +152,10 @@ impl ParquetTable {
             table_info,
             arrow_schema,
             operator,
+            read_options: ReadOptions::new()
+                .with_prune_row_groups()
+                .with_prune_pages()
+                .with_do_prewhere(), // Now, `read_options` is hard-coded.
         }))
     }
 }
@@ -160,7 +175,7 @@ impl Table for ParquetTable {
     }
 
     fn support_prewhere(&self) -> bool {
-        true
+        self.read_options.do_prewhere()
     }
 
     fn has_exact_total_row_count(&self) -> bool {

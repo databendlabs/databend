@@ -36,7 +36,7 @@ use common_storage::ColumnLeaf;
 use super::filter::FilterState;
 use crate::parquet_part::ColumnMeta;
 use crate::parquet_part::ParquetRowGroupPart;
-use crate::ParquetReader;
+use crate::parquet_reader::ParquetReader;
 
 impl ParquetReader {
     pub fn deserialize(
@@ -150,8 +150,8 @@ impl ParquetReader {
                     std::io::Cursor::new(chunk),
                     PageMetaData {
                         column_start: meta.offset,
-                        num_values: meta.length as i64,
-                        compression: meta.compression.into(),
+                        num_values: rows as i64,
+                        compression: meta.compression,
                         descriptor: descriptor.descriptor.clone(),
                     },
                     Arc::new(|_, _| true),
@@ -193,8 +193,8 @@ impl ParquetReader {
                     std::io::Cursor::new(chunk),
                     PageMetaData {
                         column_start: meta.offset,
-                        num_values: meta.length as i64,
-                        compression: meta.compression.into(),
+                        num_values: rows as i64,
+                        compression: meta.compression,
                         descriptor: descriptor.descriptor.clone(),
                     },
                     Arc::new(move |_, header| {
