@@ -141,7 +141,7 @@ impl ParquetTable {
             extra
                 .filters
                 .iter()
-                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
                 .collect::<Vec<_>>()
         });
 

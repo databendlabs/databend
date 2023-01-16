@@ -198,10 +198,11 @@ impl FuseTable {
 
         let block_reader = self.create_block_reader(projection)?;
         let schema = block_reader.schema();
-        let filter =
-            Arc::new(filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
-                expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
-            }));
+        let filter = Arc::new(Some(
+            filter
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .project_column_ref(|name| schema.index_of(name).unwrap()),
+        ));
 
         let all_col_ids = self.all_the_columns_ids();
         let remain_col_ids: Vec<usize> = all_col_ids

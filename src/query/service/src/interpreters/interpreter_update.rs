@@ -95,6 +95,7 @@ impl Interpreter for UpdateInterpreter {
             |mut acc, (id, scalar)| {
                 let filed = schema.field(*id);
                 let left = Scalar::CastExpr(CastExpr {
+                    is_try: false,
                     argument: Box::new(scalar.clone()),
                     from_type: Box::new(scalar.data_type()),
                     target_type: Box::new(filed.data_type().clone()),
