@@ -566,7 +566,7 @@ mod tests {
         let metadata = read_metadata(&mut reader)?;
         let rgs = metadata.row_groups;
         let arrow_schema = schema.to_arrow();
-        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
+        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema, None);
 
         let row_group_stats = collect_row_group_stats(&column_leaves, &rgs)?;
 
