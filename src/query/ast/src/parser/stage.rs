@@ -13,7 +13,6 @@
 // limitations under the License.
 use std::collections::BTreeMap;
 
-use nom::branch::alt;
 use nom::combinator::map;
 use url::Url;
 
@@ -27,7 +26,7 @@ use crate::util::*;
 use crate::ErrorKind;
 
 pub fn ident_to_string(i: Input) -> IResult<String> {
-    map_res(ident_no_quote, |ident| Ok(ident.name))(i)
+    map_res(ident, |ident| Ok(ident.name))(i)
 }
 
 pub fn u64_to_string(i: Input) -> IResult<String> {
@@ -36,9 +35,43 @@ pub fn u64_to_string(i: Input) -> IResult<String> {
 
 pub fn parameter_to_string(i: Input) -> IResult<String> {
     map(
-        rule! { ( #literal_string | #ident_to_string |  #u64_to_string ) },
+        rule! { ( #literal_string | #ident_to_string | #u64_to_string ) },
         |parameter| parameter,
     )(i)
+}
+
+pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
+    let string_options = map(
+        rule! {
+            (ENDPOINT_URL | ACCESS_KEY_ID | SECRET_ACCESS_KEY | SESSION_TOKEN | REGION) ~ "=" ~ #literal_string
+        },
+        |(k, _, v)| (k.text().to_string(), v),
+    );
+
+    let bool_options = map(
+        rule! {
+            (ENABLE_VIRTUAL_HOST_STYLE) ~ "=" ~ #literal_bool
+        },
+        |(k, _, v)| (k.text().to_string(), v.to_string()),
+    );
+
+    map(
+        rule! { "(" ~ (#string_options | #bool_options)* ~ ")"},
+        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
+    )(i)
+}
+
+pub fn credentials_options(i: Input) -> IResult<BTreeMap<String, String>> {
+    let string_options = map(
+        rule! {
+            (AWS_KEY_ID | AWS_SECRET_KEY) ~ "=" ~ #literal_string
+        },
+        |(k, _, v)| (k.text().to_string(), v),
+    );
+
+    map(rule! { "(" ~ (#string_options)* ~ ")"}, |(_, opts, _)| {
+        BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone())))
+    })(i)
 }
 
 pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
@@ -113,8 +146,8 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
     map_res(
         rule! {
             #literal_string
-            ~ (CONNECTION ~ "=" ~ #options)?
-            ~ (CREDENTIALS ~ "=" ~ #options)?
+            ~ (CONNECTION ~ "=" ~ #connection_options)?
+            ~ (CREDENTIALS ~ "=" ~ #credentials_options)?
             ~ (ENCRYPTION ~ "=" ~ #options)?
             ~ (LOCATION_PREFIX ~ "=" ~ #literal_string)?
         },
