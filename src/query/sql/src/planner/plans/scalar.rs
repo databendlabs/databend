@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use std::hash::Hash;
 
 use common_ast::ast::BinaryOperator;
@@ -39,7 +40,7 @@ pub trait ScalarExpr {
     // fn contains_subquery(&self) -> bool;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Scalar {
     BoundColumnRef(BoundColumnRef),
     ConstantExpr(ConstantExpr),
@@ -53,6 +54,34 @@ pub enum Scalar {
     // after making functions static typed?
     CastExpr(CastExpr),
     SubqueryExpr(SubqueryExpr),
+}
+
+impl Debug for Scalar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Scalar::BoundColumnRef(expr) => write!(f, "{}", expr.column.column_name),
+            Scalar::ConstantExpr(expr) => write!(f, "{}", expr.value),
+            Scalar::AndExpr(expr) => write!(f, "{:?} AND {:?}", expr.left, expr.right),
+            Scalar::OrExpr(expr) => write!(f, "{:?} OR {:?}", expr.left, expr.right),
+            Scalar::NotExpr(expr) => write!(f, "NOT {:?}", expr.argument),
+            Scalar::ComparisonExpr(expr) => write!(
+                f,
+                "{:?} {} {:?}",
+                expr.left,
+                expr.op.to_func_name(),
+                expr.right
+            ),
+            Scalar::AggregateFunction(expr) => write!(f, "{}", expr.display_name),
+            Scalar::FunctionCall(expr) => write!(f, "{:?}", expr),
+            Scalar::CastExpr(expr) => write!(
+                f,
+                "CAST({:?} AS {})",
+                expr.argument,
+                expr.target_type.sql_name()
+            ),
+            Scalar::SubqueryExpr(expr) => write!(f, "(subquery #{})", expr.output_column),
+        }
+    }
 }
 
 impl ScalarExpr for Scalar {
@@ -449,13 +478,26 @@ impl ScalarExpr for AggregateFunction {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct FunctionCall {
     pub params: Vec<usize>,
     pub arguments: Vec<Scalar>,
 
     pub func_name: String,
     pub return_type: Box<DataType>,
+}
+
+impl Debug for FunctionCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}(", self.func_name)?;
+        for (i, arg) in self.arguments.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{:?}", arg)?;
+        }
+        write!(f, ")")
+    }
 }
 
 impl ScalarExpr for FunctionCall {
