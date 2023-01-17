@@ -41,7 +41,7 @@ Limit
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 0.33
     └── Filter
-        ├── filters: [gt(numbers.b (#0), 1_u8)]
+        ├── filters: [gt(numbers.b (#0), CAST(1_u8 AS UInt64))]
         ├── estimated rows: 0.33
         └── AggregateFinal
             ├── group by: [number, number, number, number]
@@ -70,7 +70,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.33
 ├── Filter(Build)
-│   ├── filters: [eq(t1.c (#3), 1_u8)]
+│   ├── filters: [eq(t1.c (#3), CAST(1_u8 AS UInt64))]
 │   ├── estimated rows: 0.33
 │   └── EvalScalar
 │       ├── expressions: [plus(numbers.number (#0), 1_u8), plus(numbers.number (#0), 1_u8), plus(numbers.number (#0), 1_u8)]
@@ -99,7 +99,7 @@ query T
 explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
 ----
 Filter
-├── filters: [eq(t1.a (#1), scalar_subquery_21 (#21))]
+├── filters: [eq(CAST(t1.a (#1) AS UInt64 NULL), scalar_subquery_21 (#21))]
 ├── estimated rows: 0.33
 └── HashJoin
     ├── join type: SINGLE
@@ -125,7 +125,7 @@ Filter
     │               ├── filters: []
     │               ├── estimated rows: 0.33
     │               ├── Filter(Build)
-    │               │   ├── filters: [eq(t2.c (#8), 1_u8)]
+    │               │   ├── filters: [eq(t2.c (#8), CAST(1_u8 AS UInt64))]
     │               │   ├── estimated rows: 0.33
     │               │   └── EvalScalar
     │               │       ├── expressions: [plus(numbers.number (#5), 1_u8), plus(numbers.number (#5), 1_u8)]
@@ -242,7 +242,7 @@ EvalScalar
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── Filter
-            ├── filters: [eq(t.b (#1), 2_u8)]
+            ├── filters: [eq(t.b (#1), CAST(2_u8 AS Int32))]
             ├── estimated rows: 0.67
             └── TableScan
                 ├── table: default.default.t
@@ -250,7 +250,7 @@ EvalScalar
                 ├── read bytes: 31
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── push downs: [filters: [eq(b, 2_i32)], limit: NONE]
+                ├── push downs: [filters: [eq(t.b (#1), 2_i32)], limit: NONE]
                 ├── output columns: [1]
                 └── estimated rows: 2.00
 

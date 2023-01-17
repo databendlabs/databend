@@ -44,7 +44,7 @@ EvalScalar
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── Filter
-            ├── filters: [gt(t.number (#0), 10_u8)]
+            ├── filters: [gt(t.number (#0), CAST(10_u8 AS UInt64))]
             ├── estimated rows: 989.89
             └── TableScan
                 ├── table: default.default.t
@@ -52,7 +52,7 @@ EvalScalar
                 ├── read bytes: 4028
                 ├── partitions total: 2
                 ├── partitions scanned: 1
-                ├── push downs: [filters: [gt(number, 10_u64)], limit: NONE]
+                ├── push downs: [filters: [gt(t.number (#0), 10_u64)], limit: NONE]
                 └── estimated rows: 1001.00
 
 statement ok

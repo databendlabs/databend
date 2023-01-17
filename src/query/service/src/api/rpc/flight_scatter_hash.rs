@@ -91,18 +91,21 @@ impl OneHashKeyFlightScatter {
             None,
             "modulo",
             &[],
-            &[check_function(
-                None,
-                "siphash",
-                &[],
-                &[hash_key.as_expr(&BUILTIN_FUNCTIONS), Expr::Constant {
+            &[
+                check_function(
+                    None,
+                    "siphash",
+                    &[],
+                    &[hash_key.as_expr(&BUILTIN_FUNCTIONS)],
+                    &BUILTIN_FUNCTIONS,
+                )
+                .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?,
+                Expr::Constant {
                     span: None,
                     scalar: Scalar::Number(NumberScalar::UInt64(scatter_size as u64)),
                     data_type: DataType::Number(NumberDataType::UInt64),
-                }],
-                &BUILTIN_FUNCTIONS,
-            )
-            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?],
+                },
+            ],
             &BUILTIN_FUNCTIONS,
         )
         .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;

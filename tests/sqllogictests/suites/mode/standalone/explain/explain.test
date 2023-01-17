@@ -14,7 +14,7 @@ query T
 explain select t1.a from t1 where a > 0
 ----
 Filter
-├── filters: [gt(t1.a (#0), 0_u8)]
+├── filters: [gt(t1.a (#0), CAST(0_u8 AS UInt64))]
 ├── estimated rows: 0.33
 └── TableScan
     ├── table: default.default.t1
@@ -22,7 +22,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 1
     ├── partitions scanned: 0
-    ├── push downs: [filters: [gt(a, 0_u64)], limit: NONE]
+    ├── push downs: [filters: [gt(t1.a (#0), 0_u64)], limit: NONE]
     ├── output columns: [0]
     └── estimated rows: 1.00
 
@@ -30,7 +30,7 @@ query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
 ----
 Filter
-├── filters: [or(gt(t1.a (#0), 3_u8), and(gt(t2.a (#2), 5_u8), gt(t1.a (#0), 1_u8)))]
+├── filters: [or(gt(t1.a (#0), CAST(3_u8 AS UInt64)), and(gt(t2.a (#2), CAST(5_u8 AS UInt64)), gt(t1.a (#0), CAST(1_u8 AS UInt64))))]
 ├── estimated rows: 1.13
 └── HashJoin
     ├── join type: INNER
@@ -39,7 +39,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 2.78
     ├── Filter(Build)
-    │   ├── filters: [or(gt(t1.a (#0), 3_u8), gt(t1.a (#0), 1_u8))]
+    │   ├── filters: [or(gt(t1.a (#0), CAST(3_u8 AS UInt64)), gt(t1.a (#0), CAST(1_u8 AS UInt64)))]
     │   ├── estimated rows: 0.56
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -47,7 +47,7 @@ Filter
     │       ├── read bytes: 0
     │       ├── partitions total: 1
     │       ├── partitions scanned: 0
-    │       ├── push downs: [filters: [or(gt(a, 3_u64), gt(a, 1_u64))], limit: NONE]
+    │       ├── push downs: [filters: [or(gt(t1.a (#0), 3_u64), gt(t1.a (#0), 1_u64))], limit: NONE]
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -540,7 +540,7 @@ query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4)
 ----
 Filter
-├── filters: [or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8)))]
+├── filters: [or(and(gt(t1.a (#0), CAST(1_u8 AS UInt64)), gt(t2.a (#2), CAST(2_u8 AS UInt64))), and(lt(t1.b (#1), CAST(3_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64))))]
 ├── estimated rows: 0.51
 └── HashJoin
     ├── join type: CROSS
@@ -549,7 +549,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 2.43
     ├── Filter(Build)
-    │   ├── filters: [or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 3_u8))]
+    │   ├── filters: [or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), lt(t1.b (#1), CAST(3_u8 AS UInt64)))]
     │   ├── estimated rows: 0.56
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -557,10 +557,10 @@ Filter
     │       ├── read bytes: 62
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [or(gt(a, 1_u64), lt(b, 3_u64))], limit: NONE]
+    │       ├── push downs: [filters: [or(gt(t1.a (#0), 1_u64), lt(t1.b (#1), 3_u64))], limit: NONE]
     │       └── estimated rows: 1.00
     └── Filter(Probe)
-        ├── filters: [or(gt(t2.a (#2), 2_u8), lt(t2.b (#3), 4_u8))]
+        ├── filters: [or(gt(t2.a (#2), CAST(2_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64)))]
         ├── estimated rows: 4.38
         └── TableScan
             ├── table: default.default.t2
@@ -568,14 +568,14 @@ Filter
             ├── read bytes: 94
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── push downs: [filters: [or(gt(a, 2_u64), lt(b, 4_u64))], limit: NONE]
+            ├── push downs: [filters: [or(gt(t2.a (#2), 2_u64), lt(t2.b (#3), 4_u64))], limit: NONE]
             └── estimated rows: 5.00
 
 query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t1.a = 2
 ----
 Filter
-├── filters: [or(or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8))), eq(t1.a (#0), 2_u8))]
+├── filters: [or(or(and(gt(t1.a (#0), CAST(1_u8 AS UInt64)), gt(t2.a (#2), CAST(2_u8 AS UInt64))), and(lt(t1.b (#1), CAST(3_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64)))), eq(t1.a (#0), CAST(2_u8 AS UInt64)))]
 ├── estimated rows: 1.67
 └── HashJoin
     ├── join type: CROSS
@@ -584,7 +584,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 3.52
     ├── Filter(Build)
-    │   ├── filters: [or(gt(t1.a (#0), 1_u8), or(lt(t1.b (#1), 3_u8), eq(t1.a (#0), 2_u8)))]
+    │   ├── filters: [or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), or(lt(t1.b (#1), CAST(3_u8 AS UInt64)), eq(t1.a (#0), CAST(2_u8 AS UInt64))))]
     │   ├── estimated rows: 0.70
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -592,7 +592,7 @@ Filter
     │       ├── read bytes: 62
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [or(gt(a, 1_u64), or(lt(b, 3_u64), eq(a, 2_u64)))], limit: NONE]
+    │       ├── push downs: [filters: [or(gt(t1.a (#0), 1_u64), or(lt(t1.b (#1), 3_u64), eq(t1.a (#0), 2_u64)))], limit: NONE]
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -613,7 +613,7 @@ query T
 explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t3.a = 2
 ----
 Filter
-├── filters: [or(or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8))), eq(t3.a (#4), 2_u8))]
+├── filters: [or(or(and(gt(t1.a (#0), CAST(1_u8 AS UInt64)), gt(t2.a (#2), CAST(2_u8 AS UInt64))), and(lt(t1.b (#1), CAST(3_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64)))), eq(t3.a (#4), CAST(2_u8 AS UInt64)))]
 ├── estimated rows: 23.66
 └── HashJoin
     ├── join type: CROSS
@@ -662,7 +662,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 4.53
 ├── Filter(Build)
-│   ├── filters: [or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8)))]
+│   ├── filters: [or(and(gt(t1.a (#0), CAST(1_u8 AS UInt64)), gt(t2.a (#2), CAST(2_u8 AS UInt64))), and(lt(t1.b (#1), CAST(3_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64))))]
 │   ├── estimated rows: 0.51
 │   └── HashJoin
 │       ├── join type: CROSS
@@ -671,7 +671,7 @@ HashJoin
 │       ├── filters: []
 │       ├── estimated rows: 2.43
 │       ├── Filter(Build)
-│       │   ├── filters: [or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 3_u8))]
+│       │   ├── filters: [or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), lt(t1.b (#1), CAST(3_u8 AS UInt64)))]
 │       │   ├── estimated rows: 0.56
 │       │   └── TableScan
 │       │       ├── table: default.default.t1
@@ -679,10 +679,10 @@ HashJoin
 │       │       ├── read bytes: 62
 │       │       ├── partitions total: 1
 │       │       ├── partitions scanned: 1
-│       │       ├── push downs: [filters: [or(gt(a, 1_u64), lt(b, 3_u64))], limit: NONE]
+│       │       ├── push downs: [filters: [or(gt(t1.a (#0), 1_u64), lt(t1.b (#1), 3_u64))], limit: NONE]
 │       │       └── estimated rows: 1.00
 │       └── Filter(Probe)
-│           ├── filters: [or(gt(t2.a (#2), 2_u8), lt(t2.b (#3), 4_u8))]
+│           ├── filters: [or(gt(t2.a (#2), CAST(2_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64)))]
 │           ├── estimated rows: 4.38
 │           └── TableScan
 │               ├── table: default.default.t2
@@ -690,10 +690,10 @@ HashJoin
 │               ├── read bytes: 94
 │               ├── partitions total: 1
 │               ├── partitions scanned: 1
-│               ├── push downs: [filters: [or(gt(a, 2_u64), lt(b, 4_u64))], limit: NONE]
+│               ├── push downs: [filters: [or(gt(t2.a (#2), 2_u64), lt(t2.b (#3), 4_u64))], limit: NONE]
 │               └── estimated rows: 5.00
 └── Filter(Probe)
-    ├── filters: [gt(t3.a (#4), 1_u8)]
+    ├── filters: [gt(t3.a (#4), CAST(1_u8 AS UInt64))]
     ├── estimated rows: 8.89
     └── TableScan
         ├── table: default.default.t3
@@ -701,14 +701,14 @@ HashJoin
         ├── read bytes: 136
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── push downs: [filters: [gt(a, 1_u64)], limit: NONE]
+        ├── push downs: [filters: [gt(t3.a (#4), 1_u64)], limit: NONE]
         └── estimated rows: 10.00
 
 query T
 explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b < 3 and t2.b < 4)
 ----
 Filter
-├── filters: [or(and(or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 2_u8)), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8)))]
+├── filters: [or(and(or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), lt(t1.b (#1), CAST(2_u8 AS UInt64))), gt(t2.a (#2), CAST(2_u8 AS UInt64))), and(lt(t1.b (#1), CAST(3_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64))))]
 ├── estimated rows: 0.85
 └── HashJoin
     ├── join type: CROSS
@@ -717,7 +717,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 3.08
     ├── Filter(Build)
-    │   ├── filters: [or(or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 2_u8)), lt(t1.b (#1), 3_u8))]
+    │   ├── filters: [or(or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), lt(t1.b (#1), CAST(2_u8 AS UInt64))), lt(t1.b (#1), CAST(3_u8 AS UInt64)))]
     │   ├── estimated rows: 0.70
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -725,10 +725,10 @@ Filter
     │       ├── read bytes: 62
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [or(or(gt(a, 1_u64), lt(b, 2_u64)), lt(b, 3_u64))], limit: NONE]
+    │       ├── push downs: [filters: [or(or(gt(t1.a (#0), 1_u64), lt(t1.b (#1), 2_u64)), lt(t1.b (#1), 3_u64))], limit: NONE]
     │       └── estimated rows: 1.00
     └── Filter(Probe)
-        ├── filters: [or(gt(t2.a (#2), 2_u8), lt(t2.b (#3), 4_u8))]
+        ├── filters: [or(gt(t2.a (#2), CAST(2_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64)))]
         ├── estimated rows: 4.38
         └── TableScan
             ├── table: default.default.t2
@@ -736,7 +736,7 @@ Filter
             ├── read bytes: 94
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── push downs: [filters: [or(gt(a, 2_u64), lt(b, 4_u64))], limit: NONE]
+            ├── push downs: [filters: [or(gt(t2.a (#2), 2_u64), lt(t2.b (#3), 4_u64))], limit: NONE]
             └── estimated rows: 5.00
 
 query T
@@ -749,7 +749,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 2.78
 ├── Filter(Build)
-│   ├── filters: [or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 2_u8))]
+│   ├── filters: [or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), lt(t1.b (#1), CAST(2_u8 AS UInt64)))]
 │   ├── estimated rows: 0.56
 │   └── TableScan
 │       ├── table: default.default.t1
@@ -757,7 +757,7 @@ HashJoin
 │       ├── read bytes: 62
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── push downs: [filters: [or(gt(a, 1_u64), lt(b, 2_u64))], limit: NONE]
+│       ├── push downs: [filters: [or(gt(t1.a (#0), 1_u64), lt(t1.b (#1), 2_u64))], limit: NONE]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2

@@ -140,12 +140,12 @@ Exchange
 ├── exchange type: Merge
 └── HashJoin
     ├── join type: INNER
-    ├── build keys: [CAST(t.number (#1) AS BIGINT UNSIGNED NULL)]
-    ├── probe keys: [CAST(t1.number (#4) AS BIGINT UNSIGNED NULL)]
+    ├── build keys: [t.number (#1)]
+    ├── probe keys: [TRY_CAST(t1.number (#4) AS UInt64 NULL)]
     ├── filters: []
     ├── estimated rows: 2.00
     ├── Exchange(Build)
-    │   ├── exchange type: Hash(CAST(t.number (#1) AS BIGINT UNSIGNED NULL))
+    │   ├── exchange type: Hash(t.number (#1))
     │   └── EvalScalar
     │       ├── expressions: [sum(number) (#3)]
     │       ├── estimated rows: 1.00
@@ -168,7 +168,7 @@ Exchange
     │                       ├── push downs: [filters: [], limit: NONE]
     │                       └── estimated rows: 1.00
     └── Exchange(Probe)
-        ├── exchange type: Hash(CAST(t1.number (#4) AS BIGINT UNSIGNED NULL))
+        ├── exchange type: Hash(TRY_CAST(t1.number (#4) AS UInt64 NULL))
         └── TableScan
             ├── table: default.system.numbers
             ├── read rows: 2
