@@ -36,6 +36,8 @@ pub fn column_metas(
     }
     let column_ids = schema.to_column_ids()?;
     let row_group = &file_meta.row_groups[0];
+    // Make sure that schema and row_group has the same number column, or else it is a panic error.
+    assert_eq!(column_ids.len(), row_group.columns.len());
     let mut col_metas = HashMap::with_capacity(row_group.columns.len());
     for (idx, col_chunk) in row_group.columns.iter().enumerate() {
         match &col_chunk.meta_data {

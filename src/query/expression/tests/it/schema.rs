@@ -84,8 +84,12 @@ fn create_a_complex_schema() -> TableSchema {
     let field3 = TableField::new("c", array);
     let field4 = TableField::new("d", nullarray);
     let field5 = TableField::new("e", maparray);
+    let field6 = TableField::new(
+        "f",
+        TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+    );
 
-    TableSchema::new(vec![field1, field2, field3, field4, field5])
+    TableSchema::new(vec![field1, field2, field3, field4, field5, field6])
 }
 
 #[test]
@@ -124,11 +128,12 @@ fn test_schema_from_struct() -> Result<()> {
         ("e", 7),
         ("e:0", 7),
         ("e:0:0", 7),
+        ("f", 8),
     ];
     for (name, column_id) in column_id_of_names {
         assert_eq!(schema.column_id_of(name).unwrap(), column_id,);
     }
-    assert_eq!(schema.next_column_id(), 8);
+    assert_eq!(schema.next_column_id(), 9);
 
     Ok(())
 }
@@ -184,6 +189,15 @@ fn test_schema_modify_field() -> Result<()> {
     assert_eq!(schema.column_id_of("s:0:1").unwrap(), 4);
     assert_eq!(schema.column_id_of("s:1").unwrap(), 5);
     assert_eq!(schema.next_column_id(), 6);
+
+    // add array column
+    let ary = TableDataType::Array(Box::new(TableDataType::Array(Box::new(
+        TableDataType::Number(NumberDataType::UInt64),
+    ))));
+    schema.add_columns(&[TableField::new("ary", ary)])?;
+    assert_eq!(schema.column_id_of("ary").unwrap(), 6);
+    assert_eq!(schema.column_id_of("ary:0").unwrap(), 6);
+    assert_eq!(schema.next_column_id(), 7);
 
     // drop column
     schema.drop_column("s")?;

@@ -502,6 +502,7 @@ impl TableSchema {
                 ref fields_name,
                 ref fields_type,
             } => {
+                column_ids.push(self.column_id_of(column_name)?);
                 for (i, inner_type) in fields_type.iter().enumerate() {
                     let inner_name = format!("{}:{}", column_name, fields_name[i]);
                     self.data_type_column_ids(&inner_name, inner_type, column_ids)?;
@@ -513,7 +514,6 @@ impl TableSchema {
                 self.data_type_column_ids(&inner_name, a.as_ref(), column_ids)?;
             }
             TableDataType::Nullable(a) => {
-                column_ids.push(self.column_id_of(column_name)?);
                 self.data_type_column_ids(column_name, a.as_ref(), column_ids)?;
             }
             _ => {

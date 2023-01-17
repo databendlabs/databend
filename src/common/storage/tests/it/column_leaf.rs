@@ -48,8 +48,12 @@ fn create_a_complex_schema() -> TableSchema {
     let field3 = TableField::new("c", array);
     let field4 = TableField::new("d", nullarray);
     let field5 = TableField::new("e", maparray);
+    let field6 = TableField::new(
+        "f",
+        TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+    );
 
-    TableSchema::new(vec![field1, field2, field3, field4, field5])
+    TableSchema::new(vec![field1, field2, field3, field4, field5, field6])
 }
 
 #[test]
@@ -63,12 +67,14 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
     let column_3_ids = vec![4, 5];
     let column_4_ids = vec![6];
     let column_5_ids = vec![7];
+    let column_6_ids = vec![8];
     let expeted_column_ids = vec![
         ("a", &column_1_ids),
         ("b", &column_2_ids),
         ("c", &column_3_ids),
         ("d", &column_4_ids),
         ("e", &column_5_ids),
+        ("f", &column_6_ids),
     ];
 
     for (i, column_leaf) in column_leaves.column_leaves.iter().enumerate() {
