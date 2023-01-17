@@ -266,9 +266,6 @@ fn test_statement() {
                     AWS_KEY_ID = 'access_key'
                     AWS_SECRET_KEY = 'secret_key'
                 )
-                ENCRYPTION = (
-                    MASTER_KEY = 'master_key'
-                )
                 FILE_FORMAT = (
                     type = 'CSV'
                     field_delimiter = ','

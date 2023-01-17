@@ -396,8 +396,6 @@ pub enum TokenKind {
     END,
     #[token("ENDPOINT_URL", ignore(ascii_case))]
     ENDPOINT_URL,
-    #[token("ENCRYPTION", ignore(ascii_case))]
-    ENCRYPTION,
     #[token("ENGINE", ignore(ascii_case))]
     ENGINE,
     #[token("ENGINES", ignore(ascii_case))]

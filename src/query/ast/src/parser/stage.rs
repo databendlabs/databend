@@ -150,10 +150,9 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
             #literal_string
             ~ (CONNECTION ~ "=" ~ #connection_options)?
             ~ (CREDENTIALS ~ "=" ~ #connection_options)?
-            ~ (ENCRYPTION ~ "=" ~ #options)?
             ~ (LOCATION_PREFIX ~ "=" ~ #literal_string)?
         },
-        |(location, connection_opt, credentials_opt, encryption_opt, location_prefix)| {
+        |(location, connection_opt, credentials_opt, location_prefix)| {
             let part_prefix = if let Some((_, _, p)) = location_prefix {
                 p
             } else {
@@ -173,10 +172,9 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
             let parsed =
                 Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
 
-            // TODO: We will use `CONNECTION` to replace `CREDENTIALS` and `ENCRYPTION`.
+            // TODO: We will use `CONNECTION` to replace `CREDENTIALS`.
             let mut conns = connection_opt.map(|v| v.2).unwrap_or_default();
             conns.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
-            conns.extend(encryption_opt.map(|v| v.2).unwrap_or_default());
 
             let protocol = parsed.scheme().to_string();
 
