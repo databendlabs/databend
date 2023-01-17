@@ -13,7 +13,6 @@
 // limitations under the License.
 use std::collections::BTreeMap;
 
-use nom::branch::alt;
 use nom::combinator::map;
 use url::Url;
 
@@ -41,16 +40,89 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
     )(i)
 }
 
-// parse: (k = v ...)* into a map
-pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let ident_with_format = alt((
-        ident_to_string,
-        map(rule! { FORMAT }, |_| "FORMAT".to_string()),
-    ));
+pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
+    let string_options = map(
+        rule! {
+            (AWS_KEY_ID
+                | AWS_SECRET_KEY
+                | ENDPOINT_URL
+                | ACCESS_KEY_ID
+                | SECRET_ACCESS_KEY
+                | SESSION_TOKEN
+                | REGION
+                | ENABLE_VIRTUAL_HOST_STYLE)
+            ~ "=" ~ #literal_string
+        },
+        |(k, _, v)| (k.text().to_string(), v),
+    );
+
+    let bool_options = map(
+        rule! {
+            (ENABLE_VIRTUAL_HOST_STYLE) ~ "=" ~ #literal_bool
+        },
+        |(k, _, v)| (k.text().to_string(), v.to_string()),
+    );
 
     map(
+        rule! { "(" ~ (#string_options | #bool_options)* ~ ")"},
+        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
+    )(i)
+}
+
+pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
+    let option_type = map(
         rule! {
-            "(" ~ ( #ident_with_format ~ "=" ~ #parameter_to_string )* ~ ")"
+        (TYPE ~ "=" ~ (JSON | CSV | NDJSON | PARQUET | JSON | XML) )
+        },
+        |(_, _, v)| ("type".to_string(), v.text().to_string()),
+    );
+
+    let option_compression = map(
+        rule! {
+        (COMPRESSION ~ "=" ~ (AUTO | NONE |GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ ) )
+        },
+        |(_, _, v)| ("COMPRESSION".to_string(), v.text().to_string()),
+    );
+
+    let string_options = map(
+        rule! {
+            (TYPE
+                | COMPRESSION
+                | RECORD_DELIMITER
+                | FIELD_DELIMITER
+                | QUOTE
+                | NON_DISPLAY
+                | ESCAPE
+                | ROW_TAG) ~ "=" ~ #literal_string
+        },
+        |(k, _, v)| (k.text().to_string(), v),
+    );
+
+    let int_options = map(
+        rule! {
+            SKIP_HEADER ~ "=" ~ #u64_to_string
+        },
+        |(k, _, v)| (k.text().to_string(), v),
+    );
+
+    let none_options = map(
+        rule! {
+            (RECORD_DELIMITER | FIELD_DELIMITER | QUOTE | SKIP_HEADER | NON_DISPLAY | ESCAPE ) ~ "=" ~ NONE
+        },
+        |(k, _, v)| (k.text().to_string(), v.text().to_string()),
+    );
+
+    map(
+        rule! { "(" ~ (#option_type | #option_compression | #string_options | #int_options | #none_options)* ~ ")"},
+        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
+    )(i)
+}
+
+// parse: (k = v ...)* into a map
+pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
+    map(
+        rule! {
+            "(" ~ ( #ident_to_string ~ "=" ~ #parameter_to_string )* ~ ")"
         },
         |(_, opts, _)| {
             BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))
@@ -76,12 +148,11 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
     map_res(
         rule! {
             #literal_string
-            ~ (CONNECTION ~ "=" ~ #options)?
-            ~ (CREDENTIALS ~ "=" ~ #options)?
-            ~ (ENCRYPTION ~ "=" ~ #options)?
+            ~ (CONNECTION ~ "=" ~ #connection_options)?
+            ~ (CREDENTIALS ~ "=" ~ #connection_options)?
             ~ (LOCATION_PREFIX ~ "=" ~ #literal_string)?
         },
-        |(location, connection_opt, credentials_opt, encryption_opt, location_prefix)| {
+        |(location, connection_opt, credentials_opt, location_prefix)| {
             let part_prefix = if let Some((_, _, p)) = location_prefix {
                 p
             } else {
@@ -101,10 +172,9 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
             let parsed =
                 Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
 
-            // TODO: We will use `CONNECTION` to replace `CREDENTIALS` and `ENCRYPTION`.
+            // TODO: We will use `CONNECTION` to replace `CREDENTIALS`.
             let mut conns = connection_opt.map(|v| v.2).unwrap_or_default();
             conns.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
-            conns.extend(encryption_opt.map(|v| v.2).unwrap_or_default());
 
             let protocol = parsed.scheme().to_string();
 
