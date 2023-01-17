@@ -70,14 +70,9 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
 
 // parse: (k = v ...)* into a map
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let ident_with_format = alt((
-        ident_to_string,
-        map(rule! { FORMAT }, |_| "FORMAT".to_string()),
-    ));
-
     map(
         rule! {
-            "(" ~ ( #ident_with_format ~ "=" ~ #parameter_to_string )* ~ ")"
+            "(" ~ ( #ident_to_string ~ "=" ~ #parameter_to_string )* ~ ")"
         },
         |(_, opts, _)| {
             BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))
