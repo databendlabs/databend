@@ -1,7 +1,7 @@
 ---
-title: How to Do Conversion Funnel Analysis With Databend
-sidebar_label: Conversion Funnel Analysis
-description: How to do conversion funnel analysis with simplicity and high performance.
+title: Analyzing Conversion Funnel with Databend
+sidebar_label: Analyzing Conversion Funnel
+description: Analyzing Conversion Funnel with Databend
 ---
 
 <p align="center">
@@ -127,5 +127,3 @@ Result:
 * User `100126` level is 2 (`login -> visit`) .
 * user `100125` level is 3 (`login -> visit -> cart`).
 * User `100123` level is 4 (`login -> visit -> cart -> purchase`).
-
-**Enjoy your journey.** 
