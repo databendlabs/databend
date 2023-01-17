@@ -246,10 +246,14 @@ pub enum TokenKind {
     //    reserved list.
     #[token("ALL", ignore(ascii_case))]
     ALL,
+    #[token("ACCESS_KEY_ID", ignore(ascii_case))]
+    ACCESS_KEY_ID,
     #[token("ADD", ignore(ascii_case))]
     ADD,
     #[token("ANY", ignore(ascii_case))]
     ANY,
+    #[token("AUTO", ignore(ascii_case))]
+    AUTO,
     #[token("SOME", ignore(ascii_case))]
     SOME,
     #[token("ALTER", ignore(ascii_case))]
@@ -288,6 +292,10 @@ pub enum TokenKind {
     BOTH,
     #[token("BY", ignore(ascii_case))]
     BY,
+    #[token("BROTLI", ignore(ascii_case))]
+    BROTLI,
+    #[token("BZ2", ignore(ascii_case))]
+    BZ2,
     #[token("CALL", ignore(ascii_case))]
     CALL,
     #[token("CASE", ignore(ascii_case))]
@@ -352,6 +360,8 @@ pub enum TokenKind {
     DECADE,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
+    #[token("DEFLATE", ignore(ascii_case))]
+    DEFLATE,
     #[token("DELETE", ignore(ascii_case))]
     DELETE,
     #[token("DESC", ignore(ascii_case))]
@@ -380,6 +390,8 @@ pub enum TokenKind {
     EXCLUDE,
     #[token("ELSE", ignore(ascii_case))]
     ELSE,
+    #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
+    ENABLE_VIRTUAL_HOST_STYLE,
     #[token("END", ignore(ascii_case))]
     END,
     #[token("ENDPOINT_URL", ignore(ascii_case))]
@@ -448,6 +460,8 @@ pub enum TokenKind {
     GRAPH,
     #[token("GROUP", ignore(ascii_case))]
     GROUP,
+    #[token("GZIP", ignore(ascii_case))]
+    GZIP,
     #[token("HAVING", ignore(ascii_case))]
     HAVING,
     #[token("HISTORY", ignore(ascii_case))]
@@ -516,6 +530,8 @@ pub enum TokenKind {
     LIMIT,
     #[token("LIST", ignore(ascii_case))]
     LIST,
+    #[token("LZO", ignore(ascii_case))]
+    LZO,
     #[token("MAP", ignore(ascii_case))]
     MAP,
     #[token("MAX_FILE_SIZE", ignore(ascii_case))]
@@ -546,6 +562,8 @@ pub enum TokenKind {
     NDJSON,
     #[token("NO_PASSWORD", ignore(ascii_case))]
     NO_PASSWORD,
+    #[token("NONE", ignore(ascii_case))]
+    NONE,
     #[token("NOT", ignore(ascii_case))]
     NOT,
     #[token("NOTENANTSETTING", ignore(ascii_case))]
@@ -592,6 +610,8 @@ pub enum TokenKind {
     QUERY,
     #[token("QUOTE", ignore(ascii_case))]
     QUOTE,
+    #[token("RAWDEFLATE", ignore(ascii_case))]
+    RAWDEFLATE,
     #[token("RECLUSTER", ignore(ascii_case))]
     RECLUSTER,
     #[token("RECORD_DELIMITER", ignore(ascii_case))]
@@ -612,6 +632,8 @@ pub enum TokenKind {
     PRESIGN,
     #[token("PRIVILEGES", ignore(ascii_case))]
     PRIVILEGES,
+    #[token("REGION", ignore(ascii_case))]
+    REGION,
     #[token("REMOVE", ignore(ascii_case))]
     REMOVE,
     #[token("REVOKE", ignore(ascii_case))]
@@ -632,10 +654,14 @@ pub enum TokenKind {
     SCHEMAS,
     #[token("SECOND", ignore(ascii_case))]
     SECOND,
+    #[token("SECRET_ACCESS_KEY", ignore(ascii_case))]
+    SECRET_ACCESS_KEY,
     #[token("SELECT", ignore(ascii_case))]
     SELECT,
     #[token("SEGMENT", ignore(ascii_case))]
     SEGMENT,
+    #[token("SESSION_TOKEN", ignore(ascii_case))]
+    SESSION_TOKEN,
     #[token("SET", ignore(ascii_case))]
     SET,
     #[token("UNSET", ignore(ascii_case))]
@@ -660,6 +686,8 @@ pub enum TokenKind {
     SKIP_HEADER,
     #[token("SMALLINT", ignore(ascii_case))]
     SMALLINT,
+    #[token("SNAPPY", ignore(ascii_case))]
+    SNAPPY,
     #[token("SNAPSHOT", ignore(ascii_case))]
     SNAPSHOT,
     #[token("SPLIT_SIZE", ignore(ascii_case))]
@@ -780,8 +808,12 @@ pub enum TokenKind {
     XML,
     #[token("XOR", ignore(ascii_case))]
     XOR,
+    #[token("XZ", ignore(ascii_case))]
+    XZ,
     #[token("YEAR", ignore(ascii_case))]
     YEAR,
+    #[token("ZSTD", ignore(ascii_case))]
+    ZSTD,
     #[token("NULLIF", ignore(ascii_case))]
     NULLIF,
     #[token("COALESCE", ignore(ascii_case))]
