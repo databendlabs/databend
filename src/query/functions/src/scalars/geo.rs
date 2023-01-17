@@ -170,7 +170,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_3_arg::<Float64Type, Float64Type, UInt8Type,StringType>(
             |lon, lat, precision, builder, ctx| {
                 let c = Coord { x: lon.0, y: lat.0 };
-                let precision = if precision < 1 || precision > 12 {12} else {precision};
+                let precision = if !(1..=12).contains(&precision) {12} else {precision};
                 match geohash::encode(c, precision as usize) {
                     Ok(r) => builder.put_str(&r),
                     Err(e) => {
@@ -335,7 +335,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn get_coord(fields: &Vec<ScalarRef>) -> Coord {
+fn get_coord(fields: &[ScalarRef]) -> Coord {
     let v = fields
         .iter()
         .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(s).unwrap()))
