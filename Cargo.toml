@@ -9,7 +9,7 @@ edition = "2021"
 members = [
     # Binaries
     "src/binaries",
-    "src/binaries/meta-upgrade-2023-01-15",
+    "src/binaries/meta-upgrade-09",
     # Common
     "src/common/arrow",
     "src/common/auth",

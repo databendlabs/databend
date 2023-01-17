@@ -22,7 +22,7 @@ use crate::Config;
 ///
 /// The `convert` rewrite an entry if needed.
 /// If nothing needs to do, it should return `Ok(None)`
-pub async fn rewrite<F>(config: &Config, convert: F) -> anyhow::Result<()>
+pub fn rewrite<F>(config: &Config, convert: F) -> anyhow::Result<()>
 where F: Fn(RaftStoreEntry) -> Result<Option<RaftStoreEntry>, anyhow::Error> {
     let raft_config = &config.raft_config;
 
