@@ -43,7 +43,7 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
 pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
     let string_options = map(
         rule! {
-            (ENDPOINT_URL | ACCESS_KEY_ID | SECRET_ACCESS_KEY | SESSION_TOKEN | REGION) ~ "=" ~ #literal_string
+            (AWS_KEY_ID | AWS_SECRET_KEY | ENDPOINT_URL | ACCESS_KEY_ID | SECRET_ACCESS_KEY | SESSION_TOKEN | REGION) ~ "=" ~ #literal_string
         },
         |(k, _, v)| (k.text().to_string(), v),
     );
