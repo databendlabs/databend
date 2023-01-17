@@ -44,26 +44,41 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
 pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     let option_type = map(
         rule! {
-        (TYPE ~ "=" ~ ((JSON | CSV | NDJSON | PARQUET | JSON | XML)) )
+        (TYPE ~ "=" ~ (JSON | CSV | NDJSON | PARQUET | JSON | XML) )
         },
         |(_, _, v)| ("type".to_string(), v.text().to_string()),
     );
+
     let option_compression = map(
         rule! {
-        (COMPRESSION ~ "=" ~ #parameter_to_string )
+        (COMPRESSION ~ "=" ~ (AUTO | NONE |GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ ) )
         },
-        |(_, _, v)| ("COMPRESSION".to_string(), v),
+        |(_, _, v)| ("COMPRESSION".to_string(), v.text().to_string()),
     );
 
     let string_options = map(
         rule! {
-            (TYPE | RECORD_DELIMITER | FIELD_DELIMITER | QUOTE | SKIP_HEADER | NON_DISPLAY | ESCAPE ) ~ "=" ~ #literal_string
+            (TYPE | RECORD_DELIMITER | FIELD_DELIMITER | QUOTE | NON_DISPLAY | ESCAPE ) ~ "=" ~ #literal_string
         },
         |(k, _, v)| (k.text().to_string(), v),
     );
 
+    let int_options = map(
+        rule! {
+            SKIP_HEADER ~ "=" ~ #u64_to_string
+        },
+        |(k, _, v)| (k.text().to_string(), v),
+    );
+
+    let none_options = map(
+        rule! {
+            (RECORD_DELIMITER | FIELD_DELIMITER | QUOTE | SKIP_HEADER | NON_DISPLAY | ESCAPE ) ~ "=" ~ NONE
+        },
+        |(k, _, v)| (k.text().to_string(), v.text().to_string()),
+    );
+
     map(
-        rule! { "(" ~ (#option_type | #option_compression | #string_options)* ~ ")"},
+        rule! { "(" ~ (#option_type | #option_compression | #string_options | #int_options | #none_options)* ~ ")"},
         |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
     )(i)
 }
