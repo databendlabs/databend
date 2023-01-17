@@ -337,9 +337,6 @@ fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<Scalar>> {
         }
     }
     origin_predicates.extend(new_predicates);
-    // Deduplicate predicates here to prevent handled by `EliminateFilter` rule later,
-    // which may cause infinite loop.
-    origin_predicates = origin_predicates.into_iter().unique().collect();
     Ok(origin_predicates)
 }
 
@@ -483,7 +480,9 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Res
     if !original_predicates.is_empty() {
         result = SExpr::create_unary(
             Filter {
-                predicates: original_predicates,
+                // Deduplicate predicates here to prevent handled by `EliminateFilter` rule later,
+                // which may cause infinite loop.
+                predicates: original_predicates.into_iter().unique().collect(),
                 is_having: false,
             }
             .into(),
