@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
-use storages_common_index::RangeFilter;
+use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
 pub trait RangePruner {
@@ -42,9 +42,9 @@ impl RangePruner for KeepFalse {
     }
 }
 
-impl RangePruner for RangeFilter {
+impl RangePruner for RangeIndex {
     fn should_keep(&self, stats: &StatisticsOfColumns) -> bool {
-        match self.eval(stats) {
+        match self.apply(stats) {
             Ok(r) => r,
             Err(e) => {
                 // swallow exceptions intentionally, corrupted index should not prevent execution
@@ -68,8 +68,8 @@ impl RangePrunerCreator {
     ) -> Result<Arc<dyn RangePruner + Send + Sync>> {
         Ok(match filter_expr {
             Some(exprs) if !exprs.is_empty() => {
-                let range_filter = RangeFilter::try_create(func_ctx, exprs, schema.clone())?;
-                match range_filter.try_eval_const() {
+                let range_filter = RangeIndex::try_create(func_ctx, exprs, schema.clone())?;
+                match range_filter.try_apply_const() {
                     Ok(v) => {
                         if v {
                             Arc::new(range_filter)

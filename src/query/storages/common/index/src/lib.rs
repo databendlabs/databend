@@ -14,29 +14,12 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod bloom;
+mod bloom_index;
 pub mod filters;
-pub mod index_min_max;
-pub mod range_filter;
+mod index;
+mod range_index;
 
-pub use bloom::BlockFilter;
-pub use bloom::FilterEvalResult;
-use common_expression::types::DataType;
-pub use index_min_max::*;
-pub use range_filter::*;
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum IndexSchemaVersion {
-    V1,
-}
-
-pub trait SupportedType {
-    fn is_supported_type(data_type: &DataType) -> bool {
-        // we support nullable column but Nulls are not added into the bloom filter.
-        let inner_type = data_type.remove_nullable();
-        matches!(
-            inner_type,
-            DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
-        )
-    }
-}
+pub use bloom_index::BloomIndex;
+pub use bloom_index::FilterEvalResult;
+pub use index::Index;
+pub use range_index::RangeIndex;
