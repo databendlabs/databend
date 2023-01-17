@@ -110,16 +110,6 @@ const config = {
                 },
                 items: [
                     {
-                        type: 'docsVersionDropdown',
-                        position: 'right',
-                        dropdownItemsAfter: [
-                            {
-                                href: 'databend-qe5h89pp4-databend.vercel.app',
-                                label: 'v0.8.177-nightly',
-                            },
-                        ]
-                    },
-                    {
                         to: '/doc',
                         label: 'Documentation',
                         position: 'right',
@@ -144,6 +134,16 @@ const config = {
                         href: 'https://github.com/datafuselabs/databend',
                         label: 'GitHub',
                         position: 'right',
+                    },
+                    {
+                        type: 'docsVersionDropdown',
+                        position: 'right',
+                        dropdownItemsAfter: [
+                            {
+                                href: 'databend-qe5h89pp4-databend.vercel.app',
+                                label: 'v0.8.177-nightly',
+                            },
+                        ]
                     },
                     {
                         type: 'localeDropdown',
