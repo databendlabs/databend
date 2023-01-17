@@ -53,7 +53,7 @@ use common_storage::DataOperator;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
-use storages_common_index::RangeFilter;
+use storages_common_index::RangeIndex;
 
 use super::hive_catalog::HiveCatalog;
 use super::hive_partition_pruner::HivePartitionPruner;
@@ -115,7 +115,7 @@ impl HiveTable {
                 .collect::<Vec<_>>()
         });
         let range_filter = match filter_expressions {
-            Some(exprs) if !exprs.is_empty() => Some(RangeFilter::try_create(
+            Some(exprs) if !exprs.is_empty() => Some(RangeIndex::try_create(
                 ctx.try_get_function_context()?,
                 &exprs,
                 self.table_info.schema(),

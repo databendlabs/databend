@@ -20,7 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Expr;
 use common_expression::TableSchema;
-use storages_common_index::range_filter::RangeFilter;
+use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
@@ -74,7 +74,7 @@ impl HivePartitionPruner {
     }
 
     pub fn prune(&self, partitions: Vec<String>) -> Result<Vec<String>> {
-        let range_filter = RangeFilter::try_create(
+        let range_filter = RangeIndex::try_create(
             self.ctx.try_get_function_context()?,
             &self.filters,
             self.full_schema.clone(),
@@ -92,7 +92,7 @@ impl HivePartitionPruner {
                 })
                 .collect();
 
-            if range_filter.eval(&block_stats)? {
+            if range_filter.apply(&block_stats)? {
                 filted_partitions.push(partitions[idx].clone());
             }
         }

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// MinMaxIndex is absorbed into the table meta statics
-use crate::SupportedType;
+use common_expression::types::DataType;
 
-/// Min and Max index.
-pub struct MinMaxIndex {}
-
-/// using the default implementation
-impl SupportedType for MinMaxIndex {}
+pub trait Index {
+    fn supported_type(data_type: &DataType) -> bool {
+        // we support nullable column but Nulls are not added into the bloom filter.
+        let inner_type = data_type.remove_nullable();
+        matches!(
+            inner_type,
+            DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
+        )
+    }
+}

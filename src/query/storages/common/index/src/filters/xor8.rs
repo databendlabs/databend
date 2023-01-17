@@ -25,7 +25,7 @@ use xorfilter::Xor8;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
-use crate::SupportedType;
+use crate::Index;
 
 /// A builder that builds a xor8 filter.
 ///
@@ -126,8 +126,8 @@ impl Filter for Xor8Filter {
     }
 }
 
-impl SupportedType for Xor8Filter {
-    fn is_supported_type(data_type: &DataType) -> bool {
+impl Index for Xor8Filter {
+    fn supported_type(data_type: &DataType) -> bool {
         let inner_type = data_type.remove_nullable();
         matches!(
             inner_type,

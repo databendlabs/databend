@@ -35,7 +35,7 @@ use rand::SeedableRng;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::FilterBuilder;
 use storages_common_index::filters::Xor8Builder;
-use storages_common_index::BlockFilter;
+use storages_common_index::BloomIndex;
 
 /// Benchmark building BlockFilter from DataBlock.
 ///
@@ -102,7 +102,7 @@ fn bench_u64_using_digests(c: &mut Criterion) {
 
     let mut builder = Xor8Builder::create();
     let func_ctx = FunctionContext::default();
-    let col = BlockFilter::calculate_column_digest(
+    let col = BloomIndex::calculate_column_digest(
         func_ctx,
         &column,
         &DataType::Number(NumberDataType::Int64),
@@ -124,7 +124,7 @@ fn bench_u64_using_digests(c: &mut Criterion) {
             b.iter(|| {
                 let mut builder = Xor8Builder::create();
                 let func_ctx = FunctionContext::default();
-                let col = BlockFilter::calculate_column_digest(
+                let col = BloomIndex::calculate_column_digest(
                     func_ctx,
                     &column,
                     &DataType::Number(NumberDataType::Int64),
@@ -144,7 +144,7 @@ fn bench_string_using_digests(c: &mut Criterion) {
 
     let mut builder = Xor8Builder::create();
     let func_ctx = FunctionContext::default();
-    let col = BlockFilter::calculate_column_digest(
+    let col = BloomIndex::calculate_column_digest(
         func_ctx,
         &column,
         &DataType::String,
@@ -166,7 +166,7 @@ fn bench_string_using_digests(c: &mut Criterion) {
             b.iter(|| {
                 let mut builder = Xor8Builder::create();
                 let func_ctx = FunctionContext::default();
-                let col = BlockFilter::calculate_column_digest(
+                let col = BloomIndex::calculate_column_digest(
                     func_ctx,
                     &column,
                     &DataType::String,

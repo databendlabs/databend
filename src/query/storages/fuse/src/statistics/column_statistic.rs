@@ -22,8 +22,8 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_functions::aggregates::eval_aggr;
-use storages_common_index::MinMaxIndex;
-use storages_common_index::SupportedType;
+use storages_common_index::Index;
+use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
@@ -60,7 +60,9 @@ pub fn gen_columns_statistics(
         if col.is_none() {
             continue;
         }
-        if !MinMaxIndex::is_supported_type(data_type) {
+
+        // Ignore the range index does not supported type.
+        if !RangeIndex::supported_type(data_type) {
             continue;
         }
         let col = col.as_ref().unwrap();

@@ -28,7 +28,7 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
-use storages_common_index::BlockFilter;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -232,7 +232,7 @@ impl Processor for CompactTransform {
 
                     // build block index.
                     let func_ctx = self.ctx.try_get_function_context()?;
-                    let bloom_index = BlockFilter::try_create(
+                    let bloom_index = BloomIndex::try_create(
                         func_ctx,
                         self.schema.clone(),
                         block_location.1,
