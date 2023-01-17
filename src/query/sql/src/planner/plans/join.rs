@@ -314,20 +314,20 @@ impl Operator for Join {
 
         // Evaluating join cardinality using histograms.
         // If histogram is None, will evaluate using NDV.
-        let inner_join_cardinality =  self.inner_join_cardinality(&mut left_prop, &mut right_prop)?;
+        let inner_join_cardinality =
+            self.inner_join_cardinality(&mut left_prop, &mut right_prop)?;
         let cardinality = match self.join_type {
-            JoinType::Inner | JoinType::Cross => {
-                inner_join_cardinality
+            JoinType::Inner | JoinType::Cross => inner_join_cardinality,
+            JoinType::Left => f64::max(left_prop.cardinality, inner_join_cardinality),
+            JoinType::Right => f64::max(right_prop.cardinality, inner_join_cardinality),
+            JoinType::Full => {
+                f64::max(left_prop.cardinality, inner_join_cardinality)
+                    + f64::max(right_prop.cardinality, inner_join_cardinality)
+                    - inner_join_cardinality
             }
-
-            JoinType::Left | JoinType::Right | JoinType::Full => {
-                f64::max(left_prop.cardinality, right_prop.cardinality)
-            }
-
             JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
                 left_prop.cardinality
             }
-
             JoinType::RightSemi | JoinType::RightAnti | JoinType::RightMark => {
                 right_prop.cardinality
             }
@@ -339,9 +339,14 @@ impl Operator for Join {
         used_columns.extend(right_prop.used_columns);
 
         // Derive column statistics
-        let mut column_stats = HashMap::new();
-        column_stats.extend(left_prop.statistics.column_stats);
-        column_stats.extend(right_prop.statistics.column_stats);
+        let mut column_stats = if cardinality == 0.0 {
+            HashMap::new()
+        } else {
+            let mut column_stats = HashMap::new();
+            column_stats.extend(left_prop.statistics.column_stats);
+            column_stats.extend(right_prop.statistics.column_stats);
+            column_stats
+        };
 
         Ok(RelationalProperty {
             output_columns,
