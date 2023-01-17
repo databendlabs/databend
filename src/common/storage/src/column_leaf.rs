@@ -88,7 +88,7 @@ impl ColumnLeaves {
             | ArrowType::FixedSizeList(inner_field, _) => {
                 let mut child_column_leaves = Vec::with_capacity(1);
                 let mut child_leaf_ids = Vec::with_capacity(1);
-                let inner_field_name = &inner_field.name;
+                let inner_field_name = &format!("{}:0", parent_name);
                 let child_column_leaf = Self::traverse_fields_dfs(
                     inner_field,
                     inner_field_name,

@@ -78,7 +78,7 @@ pub struct TableSchema {
     pub(crate) metadata: BTreeMap<String, String>,
 
     // define new fields as Option for compatibility
-    pub max_column_id: Option<u32>,
+    pub next_column_id: Option<u32>,
     column_id_map: Option<BTreeMap<String, u32>>,
     column_id_set: Option<HashSet<u32>>,
 }
@@ -247,15 +247,15 @@ impl TableSchema {
         Self {
             fields: vec![],
             metadata: BTreeMap::new(),
-            max_column_id: Some(0),
+            next_column_id: Some(0),
             column_id_map: Some(BTreeMap::new()),
             column_id_set: Some(HashSet::new()),
         }
     }
 
     pub fn init_if_need(data_schema: TableSchema) -> Self {
-        // If max_column_id is none, it is an old version needs to compatibility
-        if data_schema.max_column_id.is_none() {
+        // If next_column_id is none, it is an old version needs to compatibility
+        if data_schema.next_column_id.is_none() {
             Self::new_from(data_schema.fields, data_schema.metadata)
         } else {
             data_schema
@@ -265,40 +265,59 @@ impl TableSchema {
     fn build_from_data_type(
         data_type: &TableDataType,
         column_name: &str,
-        max_column_id: &mut u32,
+        next_column_id: &mut u32,
         column_id_map: &mut BTreeMap<String, u32>,
         column_id_set: &mut HashSet<u32>,
     ) {
-        if let TableDataType::Tuple {
-            ref fields_name,
-            ref fields_type,
-        } = data_type
-        {
-            column_id_map.insert(column_name.to_string(), *max_column_id);
-            column_id_set.insert(*max_column_id);
-            for (i, inner_type) in fields_type.iter().enumerate() {
-                let inner_name = format!("{}:{}", column_name, fields_name[i]);
+        column_id_map.insert(column_name.to_string(), *next_column_id);
+        column_id_set.insert(*next_column_id);
+        match data_type {
+            TableDataType::Tuple {
+                ref fields_name,
+                ref fields_type,
+            } => {
+                for (i, inner_type) in fields_type.iter().enumerate() {
+                    let inner_name = format!("{}:{}", column_name, fields_name[i]);
+                    Self::build_from_data_type(
+                        inner_type,
+                        &inner_name,
+                        next_column_id,
+                        column_id_map,
+                        column_id_set,
+                    );
+                }
+            }
+            TableDataType::Array(a) | TableDataType::Map(a) => {
+                let inner_name = format!("{}:0", column_name);
                 Self::build_from_data_type(
-                    inner_type,
+                    a.as_ref(),
                     &inner_name,
-                    max_column_id,
+                    next_column_id,
                     column_id_map,
                     column_id_set,
                 );
             }
-        } else {
-            column_id_map.insert(column_name.to_string(), *max_column_id);
-            column_id_set.insert(*max_column_id);
-            *max_column_id += 1;
+            TableDataType::Nullable(a) => {
+                Self::build_from_data_type(
+                    a.as_ref(),
+                    column_name,
+                    next_column_id,
+                    column_id_map,
+                    column_id_set,
+                );
+            }
+            _ => {
+                *next_column_id += 1;
+            }
         }
     }
 
     fn build_members_from_fields(
         fields: &[TableField],
         column_id_map: Option<BTreeMap<String, u32>>,
-        max_column_id_opt: Option<u32>,
+        next_column_id_opt: Option<u32>,
     ) -> (u32, BTreeMap<String, u32>, HashSet<u32>) {
-        let mut max_column_id = 0;
+        let mut next_column_id = 0;
         let mut has_column_id_map_inited = false;
         let mut column_id_map = match column_id_map {
             Some(column_id_map) => {
@@ -307,12 +326,12 @@ impl TableSchema {
             }
             None => BTreeMap::new(),
         };
-        let has_max_column_id_inited = match max_column_id_opt {
-            Some(max_column_id) => max_column_id > 0,
+        let has_next_column_id_inited = match next_column_id_opt {
+            Some(next_column_id) => next_column_id > 0,
             None => false,
         };
-        // make sure that column_id_map and max_column_id init at the same time
-        assert_eq!(has_column_id_map_inited, has_max_column_id_inited);
+        // make sure that column_id_map and next_column_id init at the same time
+        assert_eq!(has_column_id_map_inited, has_next_column_id_inited);
 
         let mut column_id_set = HashSet::new();
 
@@ -322,48 +341,48 @@ impl TableSchema {
                 column_id_set.insert(*id);
             });
         } else {
-            fields.iter().enumerate().for_each(|(_i, f)| {
+            fields.iter().for_each(|f| {
                 let data_type = f.data_type();
                 Self::build_from_data_type(
                     data_type,
                     f.name(),
-                    &mut max_column_id,
+                    &mut next_column_id,
                     &mut column_id_map,
                     &mut column_id_set,
                 );
             });
         }
 
-        let new_max_column_id = if has_max_column_id_inited {
-            max_column_id_opt.unwrap()
+        let new_next_column_id = if has_next_column_id_inited {
+            next_column_id_opt.unwrap()
         } else {
-            max_column_id
+            next_column_id
         };
-        // check max_column_id_opt value cannot fallback
-        assert!(new_max_column_id >= max_column_id);
+        // check next_column_id_opt value cannot fallback
+        assert!(new_next_column_id >= next_column_id);
 
-        (new_max_column_id, column_id_map, column_id_set)
+        (new_next_column_id, column_id_map, column_id_set)
     }
 
     pub fn new(fields: Vec<TableField>) -> Self {
-        let (max_column_id, column_id_map, column_id_set) =
+        let (next_column_id, column_id_map, column_id_set) =
             Self::build_members_from_fields(&fields, None, None);
         Self {
             fields,
             metadata: BTreeMap::new(),
-            max_column_id: Some(max_column_id),
+            next_column_id: Some(next_column_id),
             column_id_map: Some(column_id_map),
             column_id_set: Some(column_id_set),
         }
     }
 
     pub fn new_from(fields: Vec<TableField>, metadata: BTreeMap<String, String>) -> Self {
-        let (max_column_id, column_id_map, column_id_set) =
+        let (next_column_id, column_id_map, column_id_set) =
             Self::build_members_from_fields(&fields, None, None);
         Self {
             fields,
             metadata,
-            max_column_id: Some(max_column_id),
+            next_column_id: Some(next_column_id),
             column_id_map: Some(column_id_map),
             column_id_set: Some(column_id_set),
         }
@@ -373,22 +392,22 @@ impl TableSchema {
         fields: Vec<TableField>,
         metadata: BTreeMap<String, String>,
         column_id_map: BTreeMap<String, u32>,
-        max_column_id: u32,
+        next_column_id: u32,
     ) -> Self {
-        let (max_column_id, column_id_map, column_id_set) =
-            Self::build_members_from_fields(&fields, Some(column_id_map), Some(max_column_id));
+        let (next_column_id, column_id_map, column_id_set) =
+            Self::build_members_from_fields(&fields, Some(column_id_map), Some(next_column_id));
         Self {
             fields,
             metadata,
-            max_column_id: Some(max_column_id),
+            next_column_id: Some(next_column_id),
             column_id_map: Some(column_id_map),
             column_id_set: Some(column_id_set),
         }
     }
 
     #[inline]
-    pub fn max_column_id(&self) -> u32 {
-        *self.max_column_id.as_ref().unwrap()
+    pub fn next_column_id(&self) -> u32 {
+        *self.next_column_id.as_ref().unwrap()
     }
 
     #[inline]
@@ -430,7 +449,7 @@ impl TableSchema {
             Self::build_from_data_type(
                 data_type,
                 f.name(),
-                self.max_column_id.as_mut().unwrap(),
+                self.next_column_id.as_mut().unwrap(),
                 self.column_id_map.as_mut().unwrap(),
                 self.column_id_set.as_mut().unwrap(),
             );
@@ -478,17 +497,28 @@ impl TableSchema {
         data_type: &TableDataType,
         column_ids: &mut Vec<u32>,
     ) -> Result<()> {
-        if let TableDataType::Tuple {
-            ref fields_name,
-            ref fields_type,
-        } = data_type
-        {
-            for (i, inner_type) in fields_type.iter().enumerate() {
-                let inner_name = format!("{}:{}", column_name, fields_name[i]);
-                self.data_type_column_ids(&inner_name, inner_type, column_ids)?;
+        match data_type {
+            TableDataType::Tuple {
+                ref fields_name,
+                ref fields_type,
+            } => {
+                for (i, inner_type) in fields_type.iter().enumerate() {
+                    let inner_name = format!("{}:{}", column_name, fields_name[i]);
+                    self.data_type_column_ids(&inner_name, inner_type, column_ids)?;
+                }
             }
-        } else {
-            column_ids.push(self.column_id_of(column_name)?);
+            TableDataType::Array(a) | TableDataType::Map(a) => {
+                column_ids.push(self.column_id_of(column_name)?);
+                let inner_name = format!("{}:0", column_name);
+                self.data_type_column_ids(&inner_name, a.as_ref(), column_ids)?;
+            }
+            TableDataType::Nullable(a) => {
+                column_ids.push(self.column_id_of(column_name)?);
+                self.data_type_column_ids(column_name, a.as_ref(), column_ids)?;
+            }
+            _ => {
+                column_ids.push(self.column_id_of(column_name)?);
+            }
         }
 
         Ok(())
@@ -596,7 +626,7 @@ impl TableSchema {
             fields,
             self.meta().clone(),
             self.column_id_map.as_ref().unwrap().clone(),
-            *self.max_column_id.as_ref().unwrap(),
+            *self.next_column_id.as_ref().unwrap(),
         )
     }
 
@@ -611,7 +641,7 @@ impl TableSchema {
             fields,
             self.meta().clone(),
             self.column_id_map.as_ref().unwrap().clone(),
-            *self.max_column_id.as_ref().unwrap(),
+            *self.next_column_id.as_ref().unwrap(),
         )
     }
 
@@ -691,7 +721,7 @@ impl TableSchema {
             fields,
             self.meta().clone(),
             self.column_id_map.as_ref().unwrap().clone(),
-            *self.max_column_id.as_ref().unwrap(),
+            *self.next_column_id.as_ref().unwrap(),
         )
     }
 

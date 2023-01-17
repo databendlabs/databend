@@ -55,6 +55,39 @@ use pretty_assertions::assert_eq;
 // Ok(())
 // }
 
+// a complex schema to cover all data types.
+fn create_a_complex_schema() -> TableSchema {
+    let child_field11 = TableDataType::Number(NumberDataType::UInt64);
+    let child_field12 = TableDataType::Number(NumberDataType::UInt64);
+    let child_field22 = TableDataType::Number(NumberDataType::UInt64);
+
+    let s = TableDataType::Tuple {
+        fields_name: vec!["0".to_string(), "1".to_string()],
+        fields_type: vec![child_field11, child_field12],
+    };
+
+    let tuple = TableDataType::Tuple {
+        fields_name: vec!["0".to_string(), "1".to_string()],
+        fields_type: vec![s.clone(), TableDataType::Array(Box::new(child_field22))],
+    };
+
+    let array = TableDataType::Array(Box::new(s));
+    let nullarray = TableDataType::Nullable(Box::new(TableDataType::Array(Box::new(
+        TableDataType::Number(NumberDataType::UInt64),
+    ))));
+    let maparray = TableDataType::Map(Box::new(TableDataType::Array(Box::new(
+        TableDataType::Number(NumberDataType::UInt64),
+    ))));
+
+    let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
+    let field2 = TableField::new("b", tuple);
+    let field3 = TableField::new("c", array);
+    let field4 = TableField::new("d", nullarray);
+    let field5 = TableField::new("e", maparray);
+
+    TableSchema::new(vec![field1, field2, field3, field4, field5])
+}
+
 #[test]
 fn test_schema_new_from_field() -> Result<()> {
     let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
@@ -65,32 +98,14 @@ fn test_schema_new_from_field() -> Result<()> {
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.column_id_of("b").unwrap(), 1);
     assert_eq!(schema.column_id_of("c").unwrap(), 2);
-    assert_eq!(schema.max_column_id(), 3);
+    assert_eq!(schema.next_column_id(), 3);
 
     Ok(())
 }
 
 #[test]
 fn test_schema_from_struct() -> Result<()> {
-    let child_field11 = TableDataType::Number(NumberDataType::UInt64);
-    let child_field12 = TableDataType::Number(NumberDataType::UInt64);
-    let child_field22 = TableDataType::Number(NumberDataType::UInt64);
-
-    let s = TableDataType::Tuple {
-        fields_name: vec!["0".to_string(), "1".to_string()],
-        fields_type: vec![child_field11, child_field12],
-    };
-
-    let s2 = TableDataType::Tuple {
-        fields_name: vec!["0".to_string(), "1".to_string()],
-        fields_type: vec![s, child_field22],
-    };
-
-    let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
-    let field2 = TableField::new("b", s2);
-    let field3 = TableField::new("c", TableDataType::Number(NumberDataType::UInt64));
-
-    let schema = TableSchema::new(vec![field1, field2, field3]);
+    let schema = create_a_complex_schema();
 
     let column_id_of_names = vec![
         ("a", 0),
@@ -99,12 +114,21 @@ fn test_schema_from_struct() -> Result<()> {
         ("b:0:0", 1),
         ("b:0:1", 2),
         ("b:1", 3),
+        ("b:1:0", 3),
         ("c", 4),
+        ("c:0", 4),
+        ("c:0:0", 4),
+        ("c:0:1", 5),
+        ("d", 6),
+        ("d:0", 6),
+        ("e", 7),
+        ("e:0", 7),
+        ("e:0:0", 7),
     ];
     for (name, column_id) in column_id_of_names {
         assert_eq!(schema.column_id_of(name).unwrap(), column_id,);
     }
-    assert_eq!(schema.max_column_id(), 5);
+    assert_eq!(schema.next_column_id(), 8);
 
     Ok(())
 }
@@ -119,27 +143,27 @@ fn test_schema_modify_field() -> Result<()> {
 
     assert_eq!(schema.fields().to_owned(), vec![field1.clone()]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
-    assert_eq!(schema.max_column_id(), 1);
+    assert_eq!(schema.next_column_id(), 1);
 
     // add column b
     schema.add_columns(&[field2.clone()])?;
     assert_eq!(schema.fields().to_owned(), vec![field1.clone(), field2,]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.column_id_of("b").unwrap(), 1);
-    assert_eq!(schema.max_column_id(), 2);
+    assert_eq!(schema.next_column_id(), 2);
 
     // drop column b
     schema.drop_column("b")?;
     assert_eq!(schema.fields().to_owned(), vec![field1.clone(),]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
-    assert_eq!(schema.max_column_id(), 2);
+    assert_eq!(schema.next_column_id(), 2);
 
     // add column c
     schema.add_columns(&[field3.clone()])?;
     assert_eq!(schema.fields().to_owned(), vec![field1, field3]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.column_id_of("c").unwrap(), 2);
-    assert_eq!(schema.max_column_id(), 3);
+    assert_eq!(schema.next_column_id(), 3);
 
     // add struct column
     let child_field11 = TableDataType::Number(NumberDataType::UInt64);
@@ -159,7 +183,7 @@ fn test_schema_modify_field() -> Result<()> {
     assert_eq!(schema.column_id_of("s:0:0").unwrap(), 3);
     assert_eq!(schema.column_id_of("s:0:1").unwrap(), 4);
     assert_eq!(schema.column_id_of("s:1").unwrap(), 5);
-    assert_eq!(schema.max_column_id(), 6);
+    assert_eq!(schema.next_column_id(), 6);
 
     // drop column
     schema.drop_column("s")?;

@@ -19,6 +19,7 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_storage::ColumnLeaves;
 
+// a complex schema to cover all data types.
 fn create_a_complex_schema() -> TableSchema {
     let child_field11 = TableDataType::Number(NumberDataType::UInt64);
     let child_field12 = TableDataType::Number(NumberDataType::UInt64);
@@ -29,16 +30,26 @@ fn create_a_complex_schema() -> TableSchema {
         fields_type: vec![child_field11, child_field12],
     };
 
-    let s2 = TableDataType::Tuple {
+    let tuple = TableDataType::Tuple {
         fields_name: vec!["0".to_string(), "1".to_string()],
-        fields_type: vec![s, child_field22],
+        fields_type: vec![s.clone(), TableDataType::Array(Box::new(child_field22))],
     };
 
-    let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
-    let field2 = TableField::new("b", s2);
-    let field3 = TableField::new("c", TableDataType::Number(NumberDataType::UInt64));
+    let array = TableDataType::Array(Box::new(s));
+    let nullarray = TableDataType::Nullable(Box::new(TableDataType::Array(Box::new(
+        TableDataType::Number(NumberDataType::UInt64),
+    ))));
+    let maparray = TableDataType::Map(Box::new(TableDataType::Array(Box::new(
+        TableDataType::Number(NumberDataType::UInt64),
+    ))));
 
-    TableSchema::new(vec![field1, field2, field3])
+    let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
+    let field2 = TableField::new("b", tuple);
+    let field3 = TableField::new("c", array);
+    let field4 = TableField::new("d", nullarray);
+    let field5 = TableField::new("e", maparray);
+
+    TableSchema::new(vec![field1, field2, field3, field4, field5])
 }
 
 #[test]
@@ -49,11 +60,15 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
         ColumnLeaves::new_from_schema(&schema.to_arrow(), Some(schema.column_id_map()));
     let column_1_ids = vec![0];
     let column_2_ids = vec![1, 2, 3];
-    let column_3_ids = vec![4];
+    let column_3_ids = vec![4, 5];
+    let column_4_ids = vec![6];
+    let column_5_ids = vec![7];
     let expeted_column_ids = vec![
         ("a", &column_1_ids),
         ("b", &column_2_ids),
         ("c", &column_3_ids),
+        ("d", &column_4_ids),
+        ("e", &column_5_ids),
     ];
 
     for (i, column_leaf) in column_leaves.column_leaves.iter().enumerate() {
