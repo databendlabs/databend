@@ -1,8 +1,17 @@
 ---
-title: New DataValues system
+title: New DataValues System
 description:
   New DataValues system design RFC
 ---
+
+:::tip
+**Did You Know?** The content in this RFC is obsolete and Databend now has a formal type system.
+
+**Learn More**
+
+- [RFC: Formal Type System](https://github.com/datafuselabs/databend/discussions/5438)
+- [refactor: Merge new expression](https://github.com/datafuselabs/databend/pull/9411)
+:::
 
 ## Summary
 
