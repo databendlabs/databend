@@ -41,7 +41,7 @@ pub struct ColumnStat {
 
 #[derive(Debug, Clone)]
 pub struct NewStatistic {
-    pub min: Option<f64>,
-    pub max: Option<f64>,
+    pub min: Option<Datum>,
+    pub max: Option<Datum>,
     pub ndv: Option<f64>,
 }

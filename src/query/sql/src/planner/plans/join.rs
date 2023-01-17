@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::F64;
 
 use super::ScalarExpr;
 use crate::optimizer::ColumnSet;
@@ -548,12 +547,12 @@ fn update_statistic(
         .get_mut(right_condition.used_columns().iter().next().unwrap())
         .unwrap();
     if let Some(new_min) = new_stat.min {
-        left_col_stat.min = Datum::Float(F64::from(new_min));
-        right_col_stat.min = Datum::Float(F64::from(new_min));
+        left_col_stat.min = new_min.clone();
+        right_col_stat.min = new_min;
     }
     if let Some(new_max) = new_stat.max {
-        left_col_stat.max = Datum::Float(F64::from(new_max));
-        right_col_stat.max = Datum::Float(F64::from(new_max));
+        left_col_stat.max = new_max.clone();
+        right_col_stat.max = new_max;
     }
     if let Some(new_ndv) = new_stat.ndv {
         left_col_stat.ndv = new_ndv;
