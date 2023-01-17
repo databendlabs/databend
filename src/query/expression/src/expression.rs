@@ -35,27 +35,11 @@ use crate::values::Scalar;
 
 pub type Span = Option<std::ops::Range<usize>>;
 
-pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq {
-    // fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
-    // fn sql_display(&self) -> String {
-    //     let mut buf = String::new();
-    //     let mut formatter = std::fmt::Formatter::new(&mut buf);
-    //     self.sql_display_fmt(&mut formatter).unwrap();
-    //     buf
-    // }
-}
+pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq {}
 
-impl ColumnIndex for usize {
-    // fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    //     write!(f, "#{}", self)
-    // }
-}
+impl ColumnIndex for usize {}
 
-impl ColumnIndex for String {
-    // fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    //     write!(f, "{}", self)
-    // }
-}
+impl ColumnIndex for String {}
 
 /// An unchecked expression that is directly desguared from SQL or constructed by the planner.
 /// It can be type-checked and then converted to an evaluatable [`Expr`].

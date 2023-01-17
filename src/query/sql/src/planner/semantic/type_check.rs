@@ -516,7 +516,7 @@ impl<'a> TypeChecker<'a> {
                 let raw_expr = RawExpr::Cast {
                     span: None,
                     is_try: false,
-                    expr: Box::new(scalar.as_raw_expr()),
+                    expr: Box::new(scalar.as_raw_expr_with_col_name()),
                     dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
@@ -541,7 +541,7 @@ impl<'a> TypeChecker<'a> {
                 let raw_expr = RawExpr::Cast {
                     span: None,
                     is_try: true,
-                    expr: Box::new(scalar.as_raw_expr()),
+                    expr: Box::new(scalar.as_raw_expr_with_col_name()),
                     dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
@@ -1006,7 +1006,10 @@ impl<'a> TypeChecker<'a> {
         _required_type: Option<DataType>,
     ) -> Result<Box<(Scalar, DataType)>> {
         // Type check
-        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let arguments = args
+            .iter()
+            .map(|v| v.as_raw_expr_with_col_name())
+            .collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
             span: None,
             name: func_name.to_string(),

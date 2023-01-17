@@ -57,11 +57,9 @@ pub fn parse_exprs(
 
     let columns = metadata.read().columns_by_table_index(table_index);
     let table = metadata.read().table(table_index).clone();
-    let schema = table.table().schema();
-    for column in &columns {
+    for (index, column) in columns.iter().enumerate() {
         let column_binding = match column {
             ColumnEntry::BaseTableColumn {
-                column_index,
                 column_name,
                 data_type,
                 path_indices,
@@ -70,7 +68,7 @@ pub fn parse_exprs(
                 database_name: Some("default".to_string()),
                 table_name: Some(table.name().to_string()),
                 column_name: column_name.clone(),
-                index: *column_index,
+                index,
                 data_type: Box::new(data_type.into()),
                 visibility: if path_indices.is_some() {
                     Visibility::InVisible
@@ -105,9 +103,7 @@ pub fn parse_exprs(
         .map(|ast| {
             let (scalar, _) =
                 *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast, None)))?;
-            let expr = scalar
-                .as_expr()?
-                .project_column_ref(|name| schema.index_of(name).unwrap());
+            let expr = scalar.as_expr_with_col_index()?;
             Ok(expr)
         })
         .collect::<Result<_>>()?;

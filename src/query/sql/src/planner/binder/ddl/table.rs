@@ -968,12 +968,12 @@ impl<'a> Binder {
     ) -> Result<Vec<String>> {
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
-        for (idx, field) in schema.fields().iter().enumerate() {
+        for (index, field) in schema.fields().iter().enumerate() {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
                 column_name: field.name().clone(),
-                index: idx,
+                index,
                 data_type: Box::new(DataType::from(field.data_type())),
                 visibility: Visibility::Visible,
             };
@@ -990,9 +990,7 @@ impl<'a> Binder {
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            let expr = cluster_key
-                .as_expr()?
-                .project_column_ref(|name| name.parse::<usize>().unwrap());
+            let expr = cluster_key.as_expr_with_col_index()?;
             if is_expr_non_deterministic(&expr) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",

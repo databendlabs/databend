@@ -795,8 +795,8 @@ async fn fill_default_value(
             })
         }
         let expr = scalar
-            .as_expr()?
-            .project_column_ref(|name| schema.index_of(name).unwrap());
+            .as_expr_with_col_index()?
+            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
         operators.push(BlockOperator::Map { expr });
     } else {
         // If field data type is nullable, then we'll fill it with null.
@@ -869,8 +869,8 @@ async fn exprs_to_scalar<'a>(
             })
         }
         let expr = scalar
-            .as_expr()?
-            .project_column_ref(|name| schema.index_of(name).unwrap());
+            .as_expr_with_col_index()?
+            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
         operators.push(BlockOperator::Map { expr });
     }
 

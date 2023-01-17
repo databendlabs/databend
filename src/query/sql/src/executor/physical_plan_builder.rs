@@ -219,8 +219,10 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|scalar| {
                             Ok(scalar
-                                .as_expr()?
-                                .project_column_ref(|name| build_schema.index_of(name).unwrap())
+                                .as_expr_with_col_index()?
+                                .project_column_ref(|index| {
+                                    build_schema.index_of(&index.to_string()).unwrap()
+                                })
                                 .as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -229,8 +231,10 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|scalar| {
                             Ok(scalar
-                                .as_expr()?
-                                .project_column_ref(|name| probe_schema.index_of(name).unwrap())
+                                .as_expr_with_col_index()?
+                                .project_column_ref(|index| {
+                                    probe_schema.index_of(&index.to_string()).unwrap()
+                                })
                                 .as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -239,8 +243,10 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|scalar| {
                             Ok(scalar
-                                .as_expr()?
-                                .project_column_ref(|name| merged_schema.index_of(name).unwrap())
+                                .as_expr_with_col_index()?
+                                .project_column_ref(|index| {
+                                    merged_schema.index_of(&index.to_string()).unwrap()
+                                })
                                 .as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -262,8 +268,10 @@ impl PhysicalPlanBuilder {
                         .map(|item| {
                             Ok((
                                 item.scalar
-                                    .as_expr()?
-                                    .project_column_ref(|name| input_schema.index_of(name).unwrap())
+                                    .as_expr_with_col_index()?
+                                    .project_column_ref(|index| {
+                                        input_schema.index_of(&index.to_string()).unwrap()
+                                    })
                                     .as_remote_expr(),
                                 item.index,
                             ))
@@ -284,8 +292,10 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|scalar| {
                             Ok(scalar
-                                .as_expr()?
-                                .project_column_ref(|name| input_schema.index_of(name).unwrap())
+                                .as_expr_with_col_index()?
+                                .project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string()).unwrap()
+                                })
                                 .as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -508,8 +518,10 @@ impl PhysicalPlanBuilder {
                         for scalar in scalars {
                             keys.push(
                                 scalar
-                                    .as_expr()?
-                                    .project_column_ref(|name| input_schema.index_of(name).unwrap())
+                                    .as_expr_with_col_index()?
+                                    .project_column_ref(|index| {
+                                        input_schema.index_of(&index.to_string()).unwrap()
+                                    })
                                     .as_remote_expr(),
                             );
                         }
@@ -569,7 +581,7 @@ impl PhysicalPlanBuilder {
             .map(|predicates| -> Result<Vec<RemoteExpr<String>>> {
                 predicates
                     .into_iter()
-                    .map(|scalar| Ok(scalar.as_expr()?.as_remote_expr()))
+                    .map(|scalar| Ok(scalar.as_expr_with_col_name()?.as_remote_expr()))
                     .collect::<Result<Vec<_>>>()
             })
             .transpose()?;
@@ -622,7 +634,7 @@ impl PhysicalPlanBuilder {
                     &remain_columns,
                     has_inner_column,
                 );
-                let filter = predicate.unwrap().as_expr()?.as_remote_expr();
+                let filter = predicate.unwrap().as_expr_with_col_name()?.as_remote_expr();
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
                     output_columns,

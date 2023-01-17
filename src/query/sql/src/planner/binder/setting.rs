@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::UnSetSource;
@@ -22,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
-use common_expression::DataSchema;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use super::BindContext;
@@ -52,17 +49,14 @@ impl<'a> Binder {
         );
         let variable = variable.name.clone();
 
-        let box (scalar, data_type) = type_checker.resolve(value, None).await?;
-        let schema = Arc::new(DataSchema::empty());
+        let (scalar, data_type) = *type_checker.resolve(value, None).await?;
         let scalar = Scalar::CastExpr(CastExpr {
             is_try: false,
             argument: Box::new(scalar),
             from_type: Box::new(data_type),
             target_type: Box::new(DataType::String),
         });
-        let expr = scalar
-            .as_expr()?
-            .project_column_ref(|name| schema.index_of(name).unwrap());
+        let expr = scalar.as_expr_with_col_index()?;
 
         let (new_expr, _) = ConstantFolder::fold(
             &expr,

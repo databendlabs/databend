@@ -542,7 +542,7 @@ impl<'a> Binder {
                     &[],
                 );
                 let box (scalar, _) = type_checker.resolve(expr, None).await?;
-                let scalar_expr = scalar.as_expr()?;
+                let scalar_expr = scalar.as_expr_with_col_name()?;
 
                 let (new_expr, _) = ConstantFolder::fold(
                     &scalar_expr,
