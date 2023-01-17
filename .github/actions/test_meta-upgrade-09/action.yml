@@ -22,4 +22,4 @@ runs:
     - name: Test meta-upgrade-09
       shell: bash
       run: |
-        bash ./tests/meta-upgrade-09/test-meta-upgrade-to-24.sh
+        bash ./tests/meta-upgrade-09/test-meta-upgrade-09.sh
