@@ -1,5 +1,5 @@
 [package]
-name = "databend-meta-upgrade-2022-01-15"
+name = "databend-meta-upgrade-09"
 description = "upgrade meta-service data to VER=24"
 version = { workspace = true }
 authors = { workspace = true }
@@ -28,7 +28,7 @@ tokio = { version = "1.21.1", features = ["full"] }
 tracing = "0.1.36"
 
 [[bin]]
-name = "databend-meta-upgrade-2023-01-15"
+name = "databend-meta-upgrade-09"
 path = "src/main.rs"
 doctest = false
 test = false

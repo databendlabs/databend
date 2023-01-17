@@ -11,7 +11,7 @@ meta_dir="$SCRIPT_PATH/_meta_dir"
 meta_json="$SCRIPT_PATH/meta-v23.txt"
 exported="$SCRIPT_PATH/exported"
 
-chmod +x ./target/${BUILD_PROFILE}/databend-meta-upgrade-2023-01-15
+chmod +x ./target/${BUILD_PROFILE}/databend-meta-upgrade-09
 
 echo " === import into $meta_dir"
 cat $meta_json |
@@ -22,7 +22,7 @@ count_of_table_meta=$(cat "$meta_json" | grep '__fd_table_by_id/' | wc -l)
 sleep 1
 
 echo " === upgrade"
-./target/${BUILD_PROFILE}/databend-meta-upgrade-2023-01-15 --cmd upgrade --raft-dir "$meta_dir"
+./target/${BUILD_PROFILE}/databend-meta-upgrade-09 --cmd upgrade --raft-dir "$meta_dir"
 
 echo " === export from $meta_dir"
 ./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir "$meta_dir" >$exported
@@ -37,7 +37,7 @@ else
 fi
 
 echo " === check ver"
-count_of_v25=$(./target/${BUILD_PROFILE}/databend-meta-upgrade-2023-01-15 --cmd print --raft-dir "$meta_dir" | grep ' ver: 25' | wc -l)
+count_of_v25=$(./target/${BUILD_PROFILE}/databend-meta-upgrade-09 --cmd print --raft-dir "$meta_dir" | grep ' ver: 25' | wc -l)
 if [ "$count_of_table_meta" == "$count_of_v25" ]; then
     echo " === count of ver=25: $count_of_v25; OK"
 else

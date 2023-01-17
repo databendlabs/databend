@@ -2943,7 +2943,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-meta-upgrade-2022-01-15"
+name = "databend-meta-upgrade-09"
 version = "0.1.0"
 dependencies = [
  "anyhow",

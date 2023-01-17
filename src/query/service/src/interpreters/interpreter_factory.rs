@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
 use tracing::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
@@ -51,7 +52,23 @@ impl InterpreterFactory {
             error!("Access.denied(v2): {:?}", e);
             e
         })?;
+        Self::get_inner(ctx, plan)
+    }
 
+    /// This is used for handlers to get the schema of the plan.
+    /// Some plan may miss the schema and return empty plan such as `CallPlan`
+    /// So we need to map the plan into to `Interpreter` and get the right schema.
+    pub fn get_schema(ctx: Arc<QueryContext>, plan: &Plan) -> DataSchemaRef {
+        let schema = plan.schema();
+        if schema.num_fields() == 0 {
+            let executor = Self::get_inner(ctx, plan);
+            executor.map(|e| e.schema()).unwrap_or(schema)
+        } else {
+            schema
+        }
+    }
+
+    pub fn get_inner(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         match plan {
             Plan::Query {
                 s_expr,

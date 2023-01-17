@@ -87,15 +87,18 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     //      and replace two of the variable `bytes` and `want`.
 ];
 
+/// Attribute of both a reader and a message:
 /// The version to write into a message and it is also the version of the message reader.
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;
 
-/// The minimal reader version that can read message of version `VER`, i.e. `message.version=VER`.
+/// Attribute of a message:
+/// The minimal reader version that can read message of version `VER`, i.e. `message.ver=VER`.
 ///
 /// This is written to every message that needs to be serialized independently.
 pub const MIN_READER_VER: u64 = 24;
 
-/// The minimal message version(`message.version`) that a reader can read.
+/// Attribute of a reader:
+/// The minimal message version(`message.ver`) that a reader can read.
 pub const MIN_MSG_VER: u64 = 1;
 
 pub fn reader_check_msg(msg_ver: u64, msg_min_reader_ver: u64) -> Result<(), Incompatible> {

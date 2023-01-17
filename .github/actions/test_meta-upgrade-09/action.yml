@@ -1,4 +1,4 @@
-name: "Test meta-upgrade-2023-01-15"
+name: "Test meta-upgrade-09"
 description: ""
 inputs:
   profile:
@@ -19,7 +19,7 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 
-    - name: Test meta-upgrade-2023-01-15
+    - name: Test meta-upgrade-09
       shell: bash
       run: |
-        bash ./tests/meta-upgrade-2023-01-15/test-meta-upgrade-to-24.sh
+        bash ./tests/meta-upgrade-09/test-meta-upgrade-09.sh
