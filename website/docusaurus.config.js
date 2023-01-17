@@ -140,7 +140,7 @@ const config = {
                         position: 'right',
                         dropdownItemsAfter: [
                             {
-                                href: 'databend-qe5h89pp4-databend.vercel.app',
+                                href: 'https://databend-qe5h89pp4-databend.vercel.app',
                                 label: 'v0.8.177-nightly',
                             },
                         ]
