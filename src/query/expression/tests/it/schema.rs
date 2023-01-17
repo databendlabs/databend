@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 
 use common_exception::Result;
+use common_expression::create_test_complex_schema;
 use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -29,11 +30,11 @@ fn test_project_schema_from_tuple() -> Result<()> {
     };
     let b = TableDataType::Tuple {
         fields_name: vec!["b1".to_string(), "b2".to_string()],
-        fields_type: vec![b1.clone(), TableDataType::Number(NumberDataType::Int64)],
+        fields_type: vec![b1, TableDataType::Number(NumberDataType::Int64)],
     };
     let fields = vec![
         TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
-        TableField::new("b", b.clone()),
+        TableField::new("b", b),
         TableField::new("c", TableDataType::Number(NumberDataType::UInt64)),
     ];
     let schema = TableSchema::new(fields);
@@ -60,43 +61,6 @@ fn test_project_schema_from_tuple() -> Result<()> {
     Ok(())
 }
 
-// a complex schema to cover all data types.
-fn create_a_complex_schema() -> TableSchema {
-    let child_field11 = TableDataType::Number(NumberDataType::UInt64);
-    let child_field12 = TableDataType::Number(NumberDataType::UInt64);
-    let child_field22 = TableDataType::Number(NumberDataType::UInt64);
-
-    let s = TableDataType::Tuple {
-        fields_name: vec!["0".to_string(), "1".to_string()],
-        fields_type: vec![child_field11, child_field12],
-    };
-
-    let tuple = TableDataType::Tuple {
-        fields_name: vec!["0".to_string(), "1".to_string()],
-        fields_type: vec![s.clone(), TableDataType::Array(Box::new(child_field22))],
-    };
-
-    let array = TableDataType::Array(Box::new(s));
-    let nullarray = TableDataType::Nullable(Box::new(TableDataType::Array(Box::new(
-        TableDataType::Number(NumberDataType::UInt64),
-    ))));
-    let maparray = TableDataType::Map(Box::new(TableDataType::Array(Box::new(
-        TableDataType::Number(NumberDataType::UInt64),
-    ))));
-
-    let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
-    let field2 = TableField::new("b", tuple);
-    let field3 = TableField::new("c", array);
-    let field4 = TableField::new("d", nullarray);
-    let field5 = TableField::new("e", maparray);
-    let field6 = TableField::new(
-        "f",
-        TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-    );
-
-    TableSchema::new(vec![field1, field2, field3, field4, field5, field6])
-}
-
 #[test]
 fn test_schema_new_from_field() -> Result<()> {
     let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
@@ -114,7 +78,7 @@ fn test_schema_new_from_field() -> Result<()> {
 
 #[test]
 fn test_schema_from_struct() -> Result<()> {
-    let schema = create_a_complex_schema();
+    let schema = create_test_complex_schema();
 
     let column_id_of_names = vec![
         ("a", 0),
@@ -134,11 +98,22 @@ fn test_schema_from_struct() -> Result<()> {
         ("e:0", 7),
         ("e:0:0", 7),
         ("f", 8),
+        ("g", 9),
+        ("h", 10),
+        ("h:a", 10),
+        ("h:b", 11),
     ];
     for (name, column_id) in column_id_of_names {
         assert_eq!(schema.column_id_of(name).unwrap(), column_id,);
     }
-    assert_eq!(schema.next_column_id(), 9);
+    assert_eq!(schema.next_column_id(), 12);
+
+    // make sure column ids is adjacent integers(in case there is no add or drop column operations)
+    let column_ids = schema.to_column_ids()?;
+    assert_eq!(column_ids.len(), schema.next_column_id() as usize);
+    for i in 1..column_ids.len() {
+        assert_eq!(column_ids[i], column_ids[i - 1] + 1);
+    }
 
     Ok(())
 }

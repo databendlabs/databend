@@ -496,29 +496,44 @@ impl TableSchema {
         column_name: &str,
         data_type: &TableDataType,
         column_ids: &mut Vec<u32>,
+        last_column_id: Option<u32>,
     ) -> Result<()> {
+        let column_id = self.column_id_of(column_name)?;
+        match last_column_id {
+            Some(last_column_id) => {
+                // ignore parent column id
+                if last_column_id != column_id {
+                    column_ids.push(column_id);
+                }
+            }
+            None => {
+                column_ids.push(column_id);
+            }
+        };
+
         match data_type {
             TableDataType::Tuple {
                 ref fields_name,
                 ref fields_type,
             } => {
-                column_ids.push(self.column_id_of(column_name)?);
                 for (i, inner_type) in fields_type.iter().enumerate() {
                     let inner_name = format!("{}:{}", column_name, fields_name[i]);
-                    self.data_type_column_ids(&inner_name, inner_type, column_ids)?;
+                    self.data_type_column_ids(
+                        &inner_name,
+                        inner_type,
+                        column_ids,
+                        Some(column_id),
+                    )?;
                 }
             }
             TableDataType::Array(a) | TableDataType::Map(a) => {
-                column_ids.push(self.column_id_of(column_name)?);
                 let inner_name = format!("{}:0", column_name);
-                self.data_type_column_ids(&inner_name, a.as_ref(), column_ids)?;
+                self.data_type_column_ids(&inner_name, a.as_ref(), column_ids, Some(column_id))?;
             }
             TableDataType::Nullable(a) => {
-                self.data_type_column_ids(column_name, a.as_ref(), column_ids)?;
+                self.data_type_column_ids(column_name, a.as_ref(), column_ids, Some(column_id))?;
             }
-            _ => {
-                column_ids.push(self.column_id_of(column_name)?);
-            }
+            _ => {}
         }
 
         Ok(())
@@ -528,7 +543,7 @@ impl TableSchema {
         let mut column_ids = Vec::with_capacity(self.fields.len());
         for field in &self.fields {
             let data_type = field.data_type();
-            self.data_type_column_ids(field.name(), data_type, &mut column_ids)?;
+            self.data_type_column_ids(field.name(), data_type, &mut column_ids, None)?;
         }
 
         Ok(column_ids)
@@ -694,37 +709,13 @@ impl TableSchema {
 
     pub fn leaf_fields(&self) -> Vec<TableField> {
         fn collect_in_field(field: &TableField, fields: &mut Vec<TableField>) {
-            match field.data_type().remove_nullable() {
+            match field.data_type() {
                 TableDataType::Tuple {
                     fields_type,
                     fields_name,
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
-                        let full_name = format!("{}:{}", field.name(), name);
-                        collect_in_field(&TableField::new(&full_name, ty.clone()), fields);
-                    }
-                }
-                TableDataType::Array(inner_type) => {
-                    // TODO proper name for array inner column.
-                    let mut inner_name = format!("{}[]", field.name());
-                    let mut inner_type = inner_type;
-                    // find Tuple type inside an Array type to ensure all leaf fields are collected.
-                    loop {
-                        match inner_type.remove_nullable() {
-                            TableDataType::Tuple { .. } => {
-                                collect_in_field(
-                                    &TableField::new(&inner_name, *inner_type),
-                                    fields,
-                                );
-                            }
-                            TableDataType::Array(array_inner_type) => {
-                                inner_name = format!("{}[]", inner_name);
-                                inner_type = array_inner_type;
-                                continue;
-                            }
-                            _ => fields.push(field.clone()),
-                        }
-                        break;
+                        collect_in_field(&TableField::new(name, ty.clone()), fields);
                     }
                 }
                 _ => fields.push(field.clone()),
@@ -1378,4 +1369,54 @@ pub fn infer_table_schema(data_schema: &DataSchemaRef) -> Result<TableSchemaRef>
         fields.push(TableField::new(field.name(), field_type));
     }
     Ok(TableSchemaRefExt::create(fields))
+}
+
+// a complex schema to cover all data types tests.
+pub fn create_test_complex_schema() -> TableSchema {
+    let child_field11 = TableDataType::Number(NumberDataType::UInt64);
+    let child_field12 = TableDataType::Number(NumberDataType::UInt64);
+    let child_field22 = TableDataType::Number(NumberDataType::UInt64);
+
+    let s = TableDataType::Tuple {
+        fields_name: vec!["0".to_string(), "1".to_string()],
+        fields_type: vec![child_field11, child_field12],
+    };
+
+    let tuple = TableDataType::Tuple {
+        fields_name: vec!["0".to_string(), "1".to_string()],
+        fields_type: vec![s.clone(), TableDataType::Array(Box::new(child_field22))],
+    };
+
+    let array = TableDataType::Array(Box::new(s));
+    let nullarray = TableDataType::Nullable(Box::new(TableDataType::Array(Box::new(
+        TableDataType::Number(NumberDataType::UInt64),
+    ))));
+    let maparray = TableDataType::Map(Box::new(TableDataType::Array(Box::new(
+        TableDataType::Number(NumberDataType::UInt64),
+    ))));
+
+    let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
+    let field2 = TableField::new("b", tuple);
+    let field3 = TableField::new("c", array);
+    let field4 = TableField::new("d", nullarray);
+    let field5 = TableField::new("e", maparray);
+    let field6 = TableField::new(
+        "f",
+        TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+    );
+    let field7 = TableField::new(
+        "g",
+        TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+    );
+    let field8 = TableField::new("h", TableDataType::Tuple {
+        fields_name: vec!["a".to_string(), "b".to_string()],
+        fields_type: vec![
+            TableDataType::Number(NumberDataType::Int32),
+            TableDataType::Number(NumberDataType::Int32),
+        ],
+    });
+
+    TableSchema::new(vec![
+        field1, field2, field3, field4, field5, field6, field7, field8,
+    ])
 }

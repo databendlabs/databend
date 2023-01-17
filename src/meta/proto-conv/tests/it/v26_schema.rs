@@ -51,11 +51,11 @@ fn test_decode_v26_schema() -> anyhow::Result<()> {
     };
     let b = TableDataType::Tuple {
         fields_name: vec!["b1".to_string(), "b2".to_string()],
-        fields_type: vec![b1.clone(), TableDataType::Number(NumberDataType::Int64)],
+        fields_type: vec![b1, TableDataType::Number(NumberDataType::Int64)],
     };
     let fields = vec![
         TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
-        TableField::new("b", b.clone()),
+        TableField::new("b", b),
         TableField::new("c", TableDataType::Number(NumberDataType::UInt64)),
     ];
     let want = TableSchema::new(fields);
