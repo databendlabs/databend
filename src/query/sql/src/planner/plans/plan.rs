@@ -297,8 +297,9 @@ impl Display for Plan {
     }
 }
 
-// TODO the schema is not completed
 impl Plan {
+    /// Notice: This is incomplete and should be only used when you know it must has schema (Plan::Query | Plan::Insert ...).
+    /// If you want to get the real schema from plan use `InterpreterFactory::get_schema()` instead
     pub fn schema(&self) -> DataSchemaRef {
         match self {
             Plan::Query {

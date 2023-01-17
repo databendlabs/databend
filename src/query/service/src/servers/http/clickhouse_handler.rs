@@ -25,7 +25,6 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_expression::infer_table_schema;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
@@ -106,12 +105,12 @@ impl StatementHandlerParams {
 async fn execute(
     ctx: Arc<QueryContext>,
     interpreter: InterpreterPtr,
-    schema: DataSchemaRef,
     format: ClickhouseFormatType,
     params: StatementHandlerParams,
     handle: Option<JoinHandle<()>>,
 ) -> Result<WithContentType<Body>> {
     let format_typ = format.typ.clone();
+    let schema = interpreter.schema();
 
     // the reason of spawning new task to execute the interpreter:
     // (FIXME describe this in a more concise way)
@@ -262,7 +261,7 @@ pub async fn clickhouse_handler_get(
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
         .map_err(BadRequest)?;
-    execute(context, interpreter, plan.schema(), format, params, None)
+    execute(context, interpreter, format, params, None)
         .await
         .map_err(InternalServerError)
 }
@@ -406,7 +405,7 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(BadRequest)?;
 
-    execute(ctx, interpreter, plan.schema(), format, params, handle)
+    execute(ctx, interpreter, format, params, handle)
         .await
         .map_err(InternalServerError)
 }
