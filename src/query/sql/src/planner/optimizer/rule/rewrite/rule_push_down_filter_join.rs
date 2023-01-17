@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 use common_expression::type_check::common_super_type;
+use itertools::Itertools;
 
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::Rule;
@@ -336,6 +337,9 @@ fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<Scalar>> {
         }
     }
     origin_predicates.extend(new_predicates);
+    // Deduplicate predicates here to prevent handled by `EliminateFilter` rule later,
+    // which may cause infinite loop.
+    origin_predicates = origin_predicates.into_iter().unique().collect();
     Ok(origin_predicates)
 }
 

@@ -449,7 +449,7 @@ impl ScalarExpr for AggregateFunction {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FunctionCall {
     pub params: Vec<usize>,
     pub arguments: Vec<Scalar>,
