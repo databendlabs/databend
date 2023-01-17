@@ -83,19 +83,26 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (25, "2023-01-05: Add: user.proto/OnErrorMode::AbortNum"),
     (
         26,
-        "2023-01-16: Add: metadata.proto/DataSchema::max_column_id",
+        "2023-01-16: Add: metadata.proto/DataSchema::next_column_id",
     ),
+    // Dear developer:
+    //      If you're gonna add a new metadata version, you'll have to add a test for it.
+    //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
+    //      and replace two of the variable `bytes` and `want`.
 ];
 
+/// Attribute of both a reader and a message:
 /// The version to write into a message and it is also the version of the message reader.
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;
 
-/// The minimal reader version that can read message of version `VER`, i.e. `message.version=VER`.
+/// Attribute of a message:
+/// The minimal reader version that can read message of version `VER`, i.e. `message.ver=VER`.
 ///
 /// This is written to every message that needs to be serialized independently.
 pub const MIN_READER_VER: u64 = 24;
 
-/// The minimal message version(`message.version`) that a reader can read.
+/// Attribute of a reader:
+/// The minimal message version(`message.ver`) that a reader can read.
 pub const MIN_MSG_VER: u64 = 1;
 
 pub fn reader_check_msg(msg_ver: u64, msg_min_reader_ver: u64) -> Result<(), Incompatible> {

@@ -130,7 +130,11 @@ pub fn prune_and_set_partitions(
                 continue;
             }
 
-            let row_selection = if read_options.prune_pages() {
+            let row_selection = if read_options.prune_pages()
+                && rg.columns().iter().all(|c| {
+                    c.column_chunk().column_index_offset.is_some()
+                        && c.column_chunk().column_index_length.is_some()
+                }) {
                 page_pruners
                     .as_ref()
                     .map(|pruners| filter_pages(&mut file, schema, rg, pruners))

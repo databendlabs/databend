@@ -36,3 +36,4 @@ common-base = { path = "../../common/base" }
 common-tracing = { path = "../../common/tracing" }
 
 anyhow = { workspace = true }
+pretty_assertions = "1.3.0"

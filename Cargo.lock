@@ -1687,6 +1687,7 @@ dependencies = [
  "common-tracing",
  "once_cell",
  "openraft",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "sled",
@@ -2940,6 +2941,27 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "databend-meta-upgrade-09"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.23",
+ "common-meta-api",
+ "common-meta-app",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
+ "common-tracing",
+ "openraft",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

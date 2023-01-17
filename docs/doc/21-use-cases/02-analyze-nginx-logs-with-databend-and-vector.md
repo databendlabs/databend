@@ -1,7 +1,7 @@
 ---
-title: Analyzing Nginx Access Logs With Databend
-sidebar_label: Analyzing Nginx Logs
-description: Use Databend analyzing Nginx access logs step by step.
+title: Analyzing Nginx Access Logs with Databend
+sidebar_label: Analyzing Nginx Access Logs
+description: Analyzing Nginx Access Logs with Databend
 ---
 
 <p align="center">
@@ -12,7 +12,7 @@ Systems are producing all kinds metrics and logs time by time, do you want to ga
 
 Databend provides [integration with Vector](../11-integrations/10-data-tool/00-vector.md), easy to do it now!
 
-Lets ingesting Nginx access logs into Databend from Vector step by step.
+Let's load and analyze the  Nginx access logs into Databend from Vector step by step.
 
 
 ## Step 1. Databend
@@ -398,5 +398,3 @@ SELECT count(*) AS count, request_uri AS request FROM nginx.access_logs GROUP BY
 |    900 | /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=15249667263 HTTP/1.1 |
 +--------+-----------------------------------------------------------------------------------------------------+
 ```
-
-**Enjoy your journey.** 

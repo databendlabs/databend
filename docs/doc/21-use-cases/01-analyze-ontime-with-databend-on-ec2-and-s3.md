@@ -1,10 +1,10 @@
 ---
-title: Analyzing OnTime With Databend on Object Storage
+title: Analyzing OnTime Dataset with Databend
 sidebar_label: Analyzing OnTime Dataset
-description: Use Databend analyzing `OnTime` datasets on S3 step by step.
+description: Analyzing OnTime Dataset with Databend
 ---
 
-Analyzing `OnTime` datasets on S3 with Databend step by step.
+This usecase shows how to analyze the OnTime dataset with Databend.
 
 ## Step 1. Deploy Databend
 
@@ -91,7 +91,7 @@ All Queries:
 | Q14  |SELECT count(*) FROM ontime;     |
 
 
-## Benchmark Report
+## Benchmark Reports
 
 * [Amazon S3: Databend Ontime Datasets Benchmark Report](../70-performance/01-ec2-s3-performance.md)
 * [Tencent COS: Databend Ontime Datasets Benchmark Report](../70-performance/02-cvm-cos-performance.md)
