@@ -38,3 +38,10 @@ pub struct ColumnStat {
     /// Histogram of column
     pub histogram: Option<Histogram>,
 }
+
+#[derive(Debug, Clone)]
+pub struct NewStatistic {
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub ndv: Option<f64>,
+}

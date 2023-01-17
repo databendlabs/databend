@@ -24,6 +24,7 @@ mod selectivity;
 pub use builder::RelExpr;
 pub use column_stat::ColumnStat;
 pub use column_stat::ColumnStatSet;
+pub use column_stat::NewStatistic;
 pub use datum::Datum;
 pub use enforcer::require_property;
 pub use histogram::histogram_from_ndv;

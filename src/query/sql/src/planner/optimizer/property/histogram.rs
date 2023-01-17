@@ -215,6 +215,31 @@ impl UniformSampleSet {
             (Ordering::Greater, _) | (_, Ordering::Less)
         ))
     }
+
+    pub fn intersection(&self, other: &UniformSampleSet) -> Result<(Option<f64>, Option<f64>)> {
+        match (&self.min, &other.min) {
+            (Datum::Bytes(_), Datum::Bytes(_)) | (Datum::Bool(_), Datum::Bool(_)) => {
+                Ok((None, None))
+            }
+            _ => {
+                let left_min = self.min.to_double()?;
+                let left_max = self.max.to_double()?;
+                let right_min = other.min.to_double()?;
+                let right_max = other.max.to_double()?;
+                let new_min = if left_min <= right_min {
+                    right_min
+                } else {
+                    left_min
+                };
+                let new_max = if left_max >= right_max {
+                    right_max
+                } else {
+                    left_max
+                };
+                Ok((Some(new_min), Some(new_max)))
+            }
+        }
+    }
 }
 
 impl SampleSet for UniformSampleSet {
