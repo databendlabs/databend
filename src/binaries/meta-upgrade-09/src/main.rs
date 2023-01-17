@@ -14,18 +14,44 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-//! This program load meta-service data from a `raft-dir` and upgrade TableMeta to new version and write them back.
+//! This program upgrades metadata written by databend-query before 0.9 to a databend-query-0.9 compatible format.
 //!
+//! It loads metadata from a `raft-dir` and upgrade TableMeta to new version and write them back.
 //! Both in raft-log data and in state-machine data will be converted.
 //!
 //! Usage:
 //!
-//! - Shut down databend-meta
+//! - Shut down all databend-meta processes.
+//!
 //! - Backup before proceeding: https://databend.rs/doc/deploy/metasrv/metasrv-backup-restore
-//! - Build it with `cargo build --bin databend-meta-updater-2023-01-15` and run it:
-//! ```text
-//! databend-meta-updater-2023-01-15 --cmd upgrade --raft-dir "<./your/raft-dir/>"
-//! ```
+//!
+//! - Build it with `cargo build --bin databend-meta-upgrade-09`.
+//!
+//! - To view the current TableMeta version, print all TableMeta records with the following command:
+//!   It should display a list of TableMeta record.
+//!   You need to upgrade only if there is a `ver` that is lower than 24.
+//!
+//!    ```text
+//!    databend-meta-upgrade-09 --cmd print --raft-dir "<./your/raft-dir/>"
+//!    # output:
+//!    # TableMeta { ver: 23, ..
+//!    ```
+//!
+//! - Run it:
+//!
+//!   ```text
+//!   databend-meta-upgrade-09 --cmd upgrade --raft-dir "<./your/raft-dir/>"
+//!   ```
+//!
+//! - To assert upgrade has finished successfully, print all TableMeta records that are found in meta dir with the following command:
+//!   It should display a list of TableMeta record with a `ver` that is greater or equal 24.
+//!
+//!    ```text
+//!    databend-meta-upgrade-09 --cmd print --raft-dir "<./your/raft-dir/>"
+//!    # output:
+//!    # TableMeta { ver: 25, ..
+//!    # TableMeta { ver: 25, ..
+//!    ```
 
 mod rewrite;
 
@@ -92,7 +118,7 @@ impl Default for RaftConfig {
 async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
 
-    let _guards = init_logging("databend-meta-updater-2023-01-15", &LogConfig::default());
+    let _guards = init_logging("databend-meta-upgrade-09", &LogConfig::default());
 
     eprintln!();
     eprintln!("███╗   ███╗███████╗████████╗ █████╗ ");
@@ -101,20 +127,20 @@ async fn main() -> anyhow::Result<()> {
     eprintln!("██║╚██╔╝██║██╔══╝     ██║   ██╔══██║");
     eprintln!("██║ ╚═╝ ██║███████╗   ██║   ██║  ██║");
     eprintln!("╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝");
-    eprintln!("     --- Updater 2023-01-15 ---     ");
+    eprintln!("     --- Upgrade to 0.9 ---         ");
     eprintln!();
 
     eprintln!("config: {}", pretty(&config)?);
 
     match config.cmd.as_str() {
         "print" => {
-            print_all(&config)?;
+            print_table_meta(&config)?;
         }
         "upgrade" => {
             let p = GenericKVProcessor {
                 process_pb: conv_serialized_table_meta,
             };
-            rewrite::rewrite(&config, |x| p.process(x)).await?;
+            rewrite::rewrite(&config, |x| p.process(x))?;
         }
         _ => {
             return Err(anyhow::anyhow!("invalid cmd: {:?}", config.cmd));
@@ -124,7 +150,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn print_all(config: &Config) -> anyhow::Result<()> {
+/// Print TableMeta in protobuf message format that are found in log or state machine.
+pub fn print_table_meta(config: &Config) -> anyhow::Result<()> {
     let p = GenericKVProcessor {
         process_pb: print_serialized_table_meta,
     };
