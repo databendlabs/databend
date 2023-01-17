@@ -127,7 +127,7 @@ impl<'a> SelectivityEstimator<'a> {
                     let mut num_greater = 0.0;
                     for bucket in col_hist.buckets_iter() {
                         if let Ok(ord) = bucket.upper_bound().compare(&const_datum) {
-                            if ord == Ordering::Less {
+                            if ord == Ordering::Less || ord == Ordering::Equal {
                                 num_greater += bucket.num_values();
                             } else {
                                 break;

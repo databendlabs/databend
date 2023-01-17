@@ -33,7 +33,7 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t2.a (#2)]
 ├── filters: []
-├── estimated rows: 100.00
+├── estimated rows: 0.01
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
@@ -73,7 +73,7 @@ HashJoin
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#1)]
 ├── filters: []
-├── estimated rows: 100.00
+├── estimated rows: 0.01
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
@@ -113,7 +113,7 @@ HashJoin
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#2)]
 ├── filters: []
-├── estimated rows: 100.00
+├── estimated rows: 0.01
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
@@ -153,7 +153,7 @@ HashJoin
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#1)]
 ├── filters: []
-├── estimated rows: 100.00
+├── estimated rows: 0.01
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
@@ -193,7 +193,7 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t2.a (#0)]
 ├── filters: []
-├── estimated rows: 100.00
+├── estimated rows: 0.01
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
@@ -233,7 +233,7 @@ HashJoin
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#0)]
 ├── filters: []
-├── estimated rows: 100.00
+├── estimated rows: 0.01
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
@@ -273,7 +273,7 @@ HashJoin
 ├── build keys: [CAST(t.a (#0) AS BIGINT UNSIGNED NULL)]
 ├── probe keys: [CAST(t1.a (#1) AS BIGINT UNSIGNED NULL)]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1

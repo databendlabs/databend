@@ -305,7 +305,8 @@ impl HashJoinState for JoinHashTable {
         }
 
         if input_block.is_empty() {
-            return Ok(vec![]);
+            let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
+            return Ok(vec![null_block]);
         }
 
         let (bm, all_true, all_false) = self.get_other_filters(

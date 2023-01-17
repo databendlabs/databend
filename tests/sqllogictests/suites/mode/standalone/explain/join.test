@@ -138,7 +138,7 @@ HashJoin
 ├── build keys: [t1.number (#1)]
 ├── probe keys: [t2.number (#2)]
 ├── filters: []
-├── estimated rows: 333.33
+├── estimated rows: 0.01
 ├── HashJoin(Build)
 │   ├── join type: CROSS
 │   ├── build keys: []
@@ -198,7 +198,7 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 Filter
 ├── filters: [gt(b.x (#1), 42_u8)]
-├── estimated rows: 1.33
+├── estimated rows: 2.67
 └── HashJoin
     ├── join type: LEFT OUTER
     ├── build keys: [b.x (#1)]
@@ -256,7 +256,7 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 Filter
 ├── filters: [gt(b.x (#1), 42_u8), lt(b.x (#1), 45_u8)]
-├── estimated rows: 0.44
+├── estimated rows: 1.78
 └── HashJoin
     ├── join type: LEFT OUTER
     ├── build keys: [b.x (#1)]
@@ -287,7 +287,7 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 Filter
 ├── filters: [or(gt(b.x (#1), 44_u8), lt(a.x (#0), 43_u8))]
-├── estimated rows: 2.22
+├── estimated rows: 3.11
 └── HashJoin
     ├── join type: LEFT OUTER
     ├── build keys: [b.x (#1)]
@@ -319,10 +319,10 @@ HashJoin
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
 ├── filters: []
-├── estimated rows: 4.00
+├── estimated rows: 1.78
 ├── Filter(Build)
 │   ├── filters: [gt(b.x (#1), 42_u8), lt(b.x (#1), 45_u8)]
-│   ├── estimated rows: 2.67
+│   ├── estimated rows: 1.78
 │   └── TableScan
 │       ├── table: default.default.twocolumn
 │       ├── read rows: 4

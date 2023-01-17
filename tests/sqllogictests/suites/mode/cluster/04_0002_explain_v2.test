@@ -306,13 +306,13 @@ Limit
             ├── estimated rows: 3.00
             └── Sort
                 ├── sort keys: [number ASC NULLS LAST]
-                ├── estimated rows: 10.00
+                ├── estimated rows: 50.00
                 └── HashJoin
                     ├── join type: RIGHT OUTER
                     ├── build keys: [CAST(y.a (#1) AS BIGINT UNSIGNED NULL)]
                     ├── probe keys: [CAST(x.a (#0) AS BIGINT UNSIGNED NULL)]
                     ├── filters: []
-                    ├── estimated rows: 10.00
+                    ├── estimated rows: 50.00
                     ├── Exchange(Build)
                     │   ├── exchange type: Hash(CAST(y.a (#1) AS BIGINT UNSIGNED NULL))
                     │   └── TableScan

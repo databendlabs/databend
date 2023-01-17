@@ -31,13 +31,13 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 ----
 Filter
 ├── filters: [or(gt(t1.a (#0), 3_u8), and(gt(t2.a (#2), 5_u8), gt(t1.a (#0), 1_u8)))]
-├── estimated rows: 1.13
+├── estimated rows: 0.19
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [t2.a (#2)]
     ├── filters: []
-    ├── estimated rows: 2.78
+    ├── estimated rows: 0.56
     ├── Filter(Build)
     │   ├── filters: [or(gt(t1.a (#0), 3_u8), gt(t1.a (#0), 1_u8))]
     │   ├── estimated rows: 0.56
@@ -541,13 +541,13 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 Filter
 ├── filters: [or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8)))]
-├── estimated rows: 0.51
+├── estimated rows: 0.71
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 2.43
+    ├── estimated rows: 2.26
     ├── Filter(Build)
     │   ├── filters: [or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 3_u8))]
     │   ├── estimated rows: 0.56
@@ -561,7 +561,7 @@ Filter
     │       └── estimated rows: 1.00
     └── Filter(Probe)
         ├── filters: [or(gt(t2.a (#2), 2_u8), lt(t2.b (#3), 4_u8))]
-        ├── estimated rows: 4.38
+        ├── estimated rows: 4.06
         └── TableScan
             ├── table: default.default.t2
             ├── read rows: 5
@@ -576,7 +576,7 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 Filter
 ├── filters: [or(or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8))), eq(t1.a (#0), 2_u8))]
-├── estimated rows: 1.67
+├── estimated rows: 1.91
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
@@ -614,7 +614,7 @@ explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t
 ----
 Filter
 ├── filters: [or(or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8))), eq(t3.a (#4), 2_u8))]
-├── estimated rows: 23.66
+├── estimated rows: 19.44
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
@@ -660,16 +660,16 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── estimated rows: 4.53
+├── estimated rows: 5.49
 ├── Filter(Build)
 │   ├── filters: [or(and(gt(t1.a (#0), 1_u8), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8)))]
-│   ├── estimated rows: 0.51
+│   ├── estimated rows: 0.71
 │   └── HashJoin
 │       ├── join type: CROSS
 │       ├── build keys: []
 │       ├── probe keys: []
 │       ├── filters: []
-│       ├── estimated rows: 2.43
+│       ├── estimated rows: 2.26
 │       ├── Filter(Build)
 │       │   ├── filters: [or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 3_u8))]
 │       │   ├── estimated rows: 0.56
@@ -683,7 +683,7 @@ HashJoin
 │       │       └── estimated rows: 1.00
 │       └── Filter(Probe)
 │           ├── filters: [or(gt(t2.a (#2), 2_u8), lt(t2.b (#3), 4_u8))]
-│           ├── estimated rows: 4.38
+│           ├── estimated rows: 4.06
 │           └── TableScan
 │               ├── table: default.default.t2
 │               ├── read rows: 5
@@ -694,7 +694,7 @@ HashJoin
 │               └── estimated rows: 5.00
 └── Filter(Probe)
     ├── filters: [gt(t3.a (#4), 1_u8)]
-    ├── estimated rows: 8.89
+    ├── estimated rows: 7.78
     └── TableScan
         ├── table: default.default.t3
         ├── read rows: 10
@@ -709,13 +709,13 @@ explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b
 ----
 Filter
 ├── filters: [or(and(or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 2_u8)), gt(t2.a (#2), 2_u8)), and(lt(t1.b (#1), 3_u8), lt(t2.b (#3), 4_u8)))]
-├── estimated rows: 0.85
+├── estimated rows: 1.01
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 3.08
+    ├── estimated rows: 2.86
     ├── Filter(Build)
     │   ├── filters: [or(or(gt(t1.a (#0), 1_u8), lt(t1.b (#1), 2_u8)), lt(t1.b (#1), 3_u8))]
     │   ├── estimated rows: 0.70
@@ -729,7 +729,7 @@ Filter
     │       └── estimated rows: 1.00
     └── Filter(Probe)
         ├── filters: [or(gt(t2.a (#2), 2_u8), lt(t2.b (#3), 4_u8))]
-        ├── estimated rows: 4.38
+        ├── estimated rows: 4.06
         └── TableScan
             ├── table: default.default.t2
             ├── read rows: 5
