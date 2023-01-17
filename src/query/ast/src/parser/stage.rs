@@ -78,7 +78,14 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     let string_options = map(
         rule! {
-            (TYPE | COMPRESSION | RECORD_DELIMITER | FIELD_DELIMITER | QUOTE | NON_DISPLAY | ESCAPE ) ~ "=" ~ #literal_string
+            (TYPE
+                | COMPRESSION
+                | RECORD_DELIMITER
+                | FIELD_DELIMITER
+                | QUOTE
+                | NON_DISPLAY
+                | ESCAPE
+                | ROW_TAG) ~ "=" ~ #literal_string
         },
         |(k, _, v)| (k.text().to_string(), v),
     );
