@@ -59,6 +59,14 @@ impl HttpClient {
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
         if self.debug {
             println!("Running sql with http client: [{sql}]");
+            match &self.session {
+                None => {
+                    println!("Current http session: [None]")
+                }
+                Some(session) => {
+                    println!("Current http session: [{session:?}]")
+                }
+            }
         }
         let url = "http://127.0.0.1:8000/v1/query".to_string();
         let mut response = self.response(sql, &url, true).await?;
