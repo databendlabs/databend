@@ -91,7 +91,6 @@ impl Operator for Filter {
             selectivity *= sb.compute_selectivity(pred);
         }
         let cardinality = input_prop.cardinality * selectivity;
-
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);

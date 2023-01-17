@@ -21,7 +21,7 @@ HashJoin
 ├── build keys: [t2.a (#2), t.a (#0)]
 ├── probe keys: [t1.a (#1), t1.a (#1)]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 0.09
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
@@ -61,7 +61,7 @@ HashJoin
 ├── build keys: [t1.a (#2), t.a (#0)]
 ├── probe keys: [t2.a (#1), t2.a (#1)]
 ├── filters: []
-├── estimated rows: 100.00
+├── estimated rows: 0.01
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
@@ -101,7 +101,7 @@ HashJoin
 ├── build keys: [t2.a (#2), t.a (#1)]
 ├── probe keys: [t1.a (#0), t1.a (#0)]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 0.09
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
@@ -141,7 +141,7 @@ HashJoin
 ├── build keys: [t.a (#2), t2.a (#1)]
 ├── probe keys: [t1.a (#0), t1.a (#0)]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 0.09
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
@@ -181,7 +181,7 @@ HashJoin
 ├── build keys: [t.a (#2), t1.a (#1)]
 ├── probe keys: [t2.a (#0), t2.a (#0)]
 ├── filters: []
-├── estimated rows: 100.00
+├── estimated rows: 0.01
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
@@ -221,7 +221,7 @@ HashJoin
 ├── build keys: [t1.a (#2), t.a (#1)]
 ├── probe keys: [t2.a (#0), t2.a (#0)]
 ├── filters: []
-├── estimated rows: 100.00
+├── estimated rows: 0.01
 ├── HashJoin(Build)
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]

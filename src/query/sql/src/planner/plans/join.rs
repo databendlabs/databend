@@ -284,7 +284,6 @@ impl Operator for Join {
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
         let mut left_prop = rel_expr.derive_relational_prop_child(0)?;
         let mut right_prop = rel_expr.derive_relational_prop_child(1)?;
-
         // Derive output columns
         let mut output_columns = left_prop.output_columns.clone();
         if let Some(mark_index) = self.marker_index {
@@ -337,9 +336,8 @@ impl Operator for Join {
         let mut used_columns = self.used_columns()?;
         used_columns.extend(left_prop.used_columns);
         used_columns.extend(right_prop.used_columns);
-
         // Derive column statistics
-        let mut column_stats = if cardinality == 0.0 {
+        let column_stats = if cardinality == 0.0 {
             HashMap::new()
         } else {
             let mut column_stats = HashMap::new();
