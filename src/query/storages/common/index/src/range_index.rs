@@ -37,14 +37,16 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
+use crate::Index;
+
 #[derive(Clone)]
-pub struct RangeFilter {
+pub struct RangeIndex {
     expr: Expr<String>,
     func_ctx: FunctionContext,
     column_indices: HashMap<String, usize>,
 }
 
-impl RangeFilter {
+impl RangeIndex {
     pub fn try_create(
         func_ctx: FunctionContext,
         exprs: &[Expr<String>],
@@ -73,7 +75,7 @@ impl RangeFilter {
         })
     }
 
-    pub fn try_eval_const(&self) -> Result<bool> {
+    pub fn try_apply_const(&self) -> Result<bool> {
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
         Ok(!matches!(self.expr, Expr::Constant {
             scalar: Scalar::Boolean(false),
@@ -82,7 +84,7 @@ impl RangeFilter {
     }
 
     #[tracing::instrument(level = "debug", name = "range_filter_eval", skip_all)]
-    pub fn eval(&self, stats: &StatisticsOfColumns) -> Result<bool> {
+    pub fn apply(&self, stats: &StatisticsOfColumns) -> Result<bool> {
         let input_domains = self
             .expr
             .column_refs()
@@ -159,3 +161,5 @@ fn statistics_to_domain(stat: Option<&ColumnStatistics>, data_type: &DataType) -
         _ => Domain::full(data_type),
     })
 }
+
+impl Index for RangeIndex {}

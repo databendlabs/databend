@@ -31,7 +31,7 @@ use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
-use storages_common_index::RangeFilter;
+use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
@@ -40,14 +40,14 @@ use crate::hive_table::HIVE_DEFAULT_PARTITION;
 
 #[derive(Clone)]
 pub struct HiveBlockFilter {
-    range_filter: Option<RangeFilter>,
+    range_filter: Option<RangeIndex>,
     projections: Vec<TableField>,
     data_schema: Arc<TableSchema>,
 }
 
 impl HiveBlockFilter {
     pub fn create(
-        range_filter: Option<RangeFilter>,
+        range_filter: Option<RangeIndex>,
         projections: Vec<TableField>,
         data_schema: Arc<TableSchema>,
     ) -> Self {
@@ -116,7 +116,7 @@ impl HiveBlockFilter {
                 }
             }
 
-            if let Ok(ret) = filter.eval(&statistics) {
+            if let Ok(ret) = filter.apply(&statistics) {
                 if !ret {
                     return true;
                 }

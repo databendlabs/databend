@@ -48,7 +48,7 @@ use crate::filters::Filter;
 use crate::filters::FilterBuilder;
 use crate::filters::Xor8Builder;
 use crate::filters::Xor8Filter;
-use crate::SupportedType;
+use crate::Index;
 
 /// BlockFilter represents multiple per-column filters(bloom filter or xor filter etc) for data block.
 ///
@@ -69,7 +69,7 @@ use crate::SupportedType;
 ///         |  123456789abcd |  ac2345bcd   |
 ///         +----------------+--------------+
 /// ```
-pub struct BlockFilter {
+pub struct BloomIndex {
     pub func_ctx: FunctionContext,
 
     /// The schema of the source table, which the filter work for.
@@ -100,7 +100,7 @@ pub enum FilterEvalResult {
     Uncertain,
 }
 
-impl BlockFilter {
+impl BloomIndex {
     /// Load a filter directly from the source table's schema and the corresponding filter parquet file.
     #[tracing::instrument(level = "debug", skip_all)]
     pub fn from_filter_block(
@@ -137,7 +137,7 @@ impl BlockFilter {
         let mut columns = Vec::new();
         for i in 0..blocks[0].num_columns() {
             let data_type = &blocks[0].get_by_offset(i).data_type;
-            if Xor8Filter::is_supported_type(data_type) {
+            if Xor8Filter::supported_type(data_type) {
                 let source_field = source_schema.field(i);
                 let return_type = if data_type.is_nullable() {
                     DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64)))
@@ -227,7 +227,7 @@ impl BlockFilter {
     ///
     /// Otherwise return `Uncertain`.
     #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
-    pub fn eval(
+    pub fn apply(
         &self,
         mut expr: Expr<String>,
         scalar_map: &HashMap<Scalar, u64>,
@@ -303,7 +303,7 @@ impl BlockFilter {
     pub fn find_eq_columns(expr: &Expr<String>) -> Result<Vec<(String, Scalar, DataType)>> {
         let mut cols = Vec::new();
         visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, scalar, ty, _| {
-            if Xor8Filter::is_supported_type(ty) && !scalar.is_null() {
+            if Xor8Filter::supported_type(ty) && !scalar.is_null() {
                 cols.push((col_name.to_string(), scalar.clone(), ty.clone()));
             }
             Ok(None)
@@ -327,7 +327,7 @@ impl BlockFilter {
         let filter_column = &Self::build_filter_column_name(column_name);
 
         if !self.filter_schema.has_field(filter_column)
-            || !Xor8Filter::is_supported_type(ty)
+            || !Xor8Filter::supported_type(ty)
             || target.is_null()
         {
             // The column doesn't have a filter.

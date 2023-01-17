@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -26,6 +27,7 @@ use crate::optimizer::Datum;
 use crate::optimizer::Distribution;
 use crate::optimizer::Histogram;
 use crate::optimizer::InterleavedBucket;
+use crate::optimizer::NewStatistic;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -168,8 +170,8 @@ impl Join {
 
     fn inner_join_cardinality(
         &self,
-        left_prop: &RelationalProperty,
-        right_prop: &RelationalProperty,
+        left_prop: &mut RelationalProperty,
+        right_prop: &mut RelationalProperty,
     ) -> Result<f64> {
         let mut join_card = left_prop.cardinality * right_prop.cardinality;
         for (left_condition, right_condition) in self
@@ -195,12 +197,7 @@ impl Join {
                 .get(right_condition.used_columns().iter().next().unwrap());
             match (left_col_stat, right_col_stat) {
                 (Some(left_col_stat), Some(right_col_stat)) => {
-                    if let Datum::Bytes(_) | Datum::Bool(_) = left_col_stat.min {
-                        let card =
-                            evaluate_by_ndv(left_col_stat, right_col_stat, left_prop, right_prop);
-                        if card < join_card {
-                            join_card = card;
-                        }
+                    if !left_col_stat.min.type_comparable(&right_col_stat.min) {
                         continue;
                     }
                     let left_interval =
@@ -209,25 +206,66 @@ impl Join {
                         right_col_stat.min.clone(),
                         right_col_stat.max.clone(),
                     );
-                    if left_interval.has_intersection(&right_interval)? {
-                        let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
-                            (Some(left_hist), Some(right_hist)) => {
-                                // Evaluate join cardinality by histogram.
-                                evaluate_by_histogram(left_hist, right_hist)?
-                            }
-                            _ => evaluate_by_ndv(
-                                left_col_stat,
-                                right_col_stat,
-                                left_prop,
-                                right_prop,
-                            ),
-                        };
+                    if !left_interval.has_intersection(&right_interval)? {
+                        join_card = 0.0;
+                        continue;
+                    }
+
+                    // Update column min and max value
+                    let mut new_ndv = None;
+                    let (new_min, new_max) = left_interval.intersection(&right_interval)?;
+
+                    if let Datum::Bytes(_) | Datum::Bool(_) = left_col_stat.min {
+                        let card = evaluate_by_ndv(
+                            left_col_stat,
+                            right_col_stat,
+                            left_prop,
+                            right_prop,
+                            &mut new_ndv,
+                        );
                         if card < join_card {
                             join_card = card;
                         }
-                    } else {
-                        join_card = 0.0;
+                        update_statistic(
+                            left_prop,
+                            right_prop,
+                            left_condition,
+                            right_condition,
+                            NewStatistic {
+                                min: new_min,
+                                max: new_max,
+                                ndv: new_ndv,
+                            },
+                        );
+                        continue;
                     }
+                    let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
+                        (Some(left_hist), Some(right_hist)) => {
+                            // Evaluate join cardinality by histogram.
+                            evaluate_by_histogram(left_hist, right_hist, &mut new_ndv)?
+                        }
+                        _ => evaluate_by_ndv(
+                            left_col_stat,
+                            right_col_stat,
+                            left_prop,
+                            right_prop,
+                            &mut new_ndv,
+                        ),
+                    };
+                    if card < join_card {
+                        join_card = card;
+                    }
+                    update_statistic(
+                        left_prop,
+                        right_prop,
+                        left_condition,
+                        right_condition,
+                        NewStatistic {
+                            min: new_min,
+                            max: new_max,
+                            ndv: new_ndv,
+                        },
+                    );
                 }
                 _ => continue,
             }
@@ -243,9 +281,8 @@ impl Operator for Join {
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
-        let left_prop = rel_expr.derive_relational_prop_child(0)?;
-        let right_prop = rel_expr.derive_relational_prop_child(1)?;
-
+        let mut left_prop = rel_expr.derive_relational_prop_child(0)?;
+        let mut right_prop = rel_expr.derive_relational_prop_child(1)?;
         // Derive output columns
         let mut output_columns = left_prop.output_columns.clone();
         if let Some(mark_index) = self.marker_index {
@@ -273,21 +310,22 @@ impl Operator for Join {
         }
         outer_columns = outer_columns.difference(&output_columns).cloned().collect();
 
+        // Evaluating join cardinality using histograms.
+        // If histogram is None, will evaluate using NDV.
+        let inner_join_cardinality =
+            self.inner_join_cardinality(&mut left_prop, &mut right_prop)?;
         let cardinality = match self.join_type {
-            JoinType::Inner | JoinType::Cross => {
-                // Evaluating join cardinality using histograms.
-                // If histogram is None, will evaluate using NDV.
-                self.inner_join_cardinality(&left_prop, &right_prop)?
+            JoinType::Inner | JoinType::Cross => inner_join_cardinality,
+            JoinType::Left => f64::max(left_prop.cardinality, inner_join_cardinality),
+            JoinType::Right => f64::max(right_prop.cardinality, inner_join_cardinality),
+            JoinType::Full => {
+                f64::max(left_prop.cardinality, inner_join_cardinality)
+                    + f64::max(right_prop.cardinality, inner_join_cardinality)
+                    - inner_join_cardinality
             }
-
-            JoinType::Left | JoinType::Right | JoinType::Full => {
-                f64::max(left_prop.cardinality, right_prop.cardinality)
-            }
-
             JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
                 left_prop.cardinality
             }
-
             JoinType::RightSemi | JoinType::RightAnti | JoinType::RightMark => {
                 right_prop.cardinality
             }
@@ -297,6 +335,15 @@ impl Operator for Join {
         let mut used_columns = self.used_columns()?;
         used_columns.extend(left_prop.used_columns);
         used_columns.extend(right_prop.used_columns);
+        // Derive column statistics
+        let column_stats = if cardinality == 0.0 {
+            HashMap::new()
+        } else {
+            let mut column_stats = HashMap::new();
+            column_stats.extend(left_prop.statistics.column_stats);
+            column_stats.extend(right_prop.statistics.column_stats);
+            column_stats
+        };
 
         Ok(RelationalProperty {
             output_columns,
@@ -305,7 +352,7 @@ impl Operator for Join {
             cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
-                column_stats: Default::default(),
+                column_stats,
                 is_accurate: false,
             },
         })
@@ -359,8 +406,13 @@ impl Operator for Join {
     }
 }
 
-fn evaluate_by_histogram(left_hist: &Histogram, right_hist: &Histogram) -> Result<f64> {
+fn evaluate_by_histogram(
+    left_hist: &Histogram,
+    right_hist: &Histogram,
+    new_ndv: &mut Option<f64>,
+) -> Result<f64> {
     let mut interleaved_buckets = vec![];
+    let mut all_ndv = 0.0;
     for (left_idx, left_bucket) in left_hist.buckets.iter().enumerate() {
         if left_idx == 0 {
             continue;
@@ -448,12 +500,14 @@ fn evaluate_by_histogram(left_hist: &Histogram, right_hist: &Histogram) -> Resul
     }
     let mut card = 0.0;
     for bucket in interleaved_buckets {
+        all_ndv += bucket.left_ndv.min(bucket.right_ndv);
         let max_ndv = f64::max(bucket.left_ndv, bucket.right_ndv);
         if max_ndv == 0.0 {
             continue;
         }
         card += bucket.left_num_rows * bucket.right_num_rows / max_ndv;
     }
+    *new_ndv = Some(all_ndv);
     Ok(card)
 }
 
@@ -462,11 +516,46 @@ fn evaluate_by_ndv(
     right_stat: &ColumnStat,
     left_prop: &RelationalProperty,
     right_prop: &RelationalProperty,
+    new_ndv: &mut Option<f64>,
 ) -> f64 {
+    // Update column ndv
+    *new_ndv = Some(left_stat.ndv.min(right_stat.ndv));
+
     let max_ndv = f64::max(left_stat.ndv, right_stat.ndv);
     if max_ndv == 0.0 {
         0.0
     } else {
         left_prop.cardinality * right_prop.cardinality / max_ndv
+    }
+}
+
+fn update_statistic(
+    left_prop: &mut RelationalProperty,
+    right_prop: &mut RelationalProperty,
+    left_condition: &Scalar,
+    right_condition: &Scalar,
+    new_stat: NewStatistic,
+) {
+    let left_col_stat = left_prop
+        .statistics
+        .column_stats
+        .get_mut(left_condition.used_columns().iter().next().unwrap())
+        .unwrap();
+    let right_col_stat = right_prop
+        .statistics
+        .column_stats
+        .get_mut(right_condition.used_columns().iter().next().unwrap())
+        .unwrap();
+    if let Some(new_min) = new_stat.min {
+        left_col_stat.min = new_min.clone();
+        right_col_stat.min = new_min;
+    }
+    if let Some(new_max) = new_stat.max {
+        left_col_stat.max = new_max.clone();
+        right_col_stat.max = new_max;
+    }
+    if let Some(new_ndv) = new_stat.ndv {
+        left_col_stat.ndv = new_ndv;
+        right_col_stat.ndv = new_ndv;
     }
 }

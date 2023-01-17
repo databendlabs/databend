@@ -70,7 +70,7 @@ impl BloomIndexState {
         location: Location,
     ) -> Result<Option<Self>> {
         // write index
-        let bloom_index = BlockFilter::try_create(
+        let bloom_index = BloomIndex::try_create(
             ctx.try_get_function_context()?,
             source_schema,
             location.1,
