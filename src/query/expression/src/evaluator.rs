@@ -207,7 +207,9 @@ impl<'a> Evaluator<'a> {
         }
 
         if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
-            return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
+            if let Some(val) = self.run_simple_cast(span, src_type, dest_type, value, &cast_fn)? {
+                return Ok(val);
+            }
         }
 
         match (src_type, dest_type) {
@@ -354,9 +356,12 @@ impl<'a> Evaluator<'a> {
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
-            return self
+            if let Some(val) = self
                 .run_simple_cast(span, src_type, dest_type, value, &cast_fn)
-                .unwrap();
+                .expect("try_cast should not fail")
+            {
+                return val;
+            }
         }
 
         match (src_type, inner_dest_type) {
@@ -482,7 +487,7 @@ impl<'a> Evaluator<'a> {
         dest_type: &DataType,
         value: Value<AnyType>,
         cast_fn: &str,
-    ) -> Result<Value<AnyType>> {
+    ) -> Result<Option<Value<AnyType>>> {
         let num_rows = match &value {
             Value::Scalar(_) => 1,
             Value::Column(col) => col.len(),
@@ -496,8 +501,12 @@ impl<'a> Evaluator<'a> {
             num_rows,
             self.fn_registry,
         )?;
-        assert_eq!(&ty, dest_type);
-        Ok(val)
+
+        if &ty == dest_type {
+            Ok(Some(val))
+        } else {
+            Ok(None)
+        }
     }
 }
 
