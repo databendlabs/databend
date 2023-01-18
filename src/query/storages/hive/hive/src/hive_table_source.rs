@@ -197,7 +197,9 @@ impl HiveTableSource {
                     .zip(valids.iter())
                     .map(|(datablock, valid)| {
                         let datablock = DataBlock::filter(datablock, valid).unwrap();
-                        datablock.resort(&self.source_schema, &self.output_schema).unwrap()
+                        datablock
+                            .resort(&self.source_schema, &self.output_schema)
+                            .unwrap()
                     })
                     .filter(|x| !x.is_empty())
                     .collect();
