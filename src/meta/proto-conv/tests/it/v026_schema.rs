@@ -58,10 +58,10 @@ fn test_decode_v26_schema() -> anyhow::Result<()> {
         TableField::new("b", b),
         TableField::new("c", TableDataType::Number(NumberDataType::UInt64)),
     ];
-    let want = TableSchema::new(fields);
+    let want = || TableSchema::new(fields.clone());
 
-    common::test_load_old(func_name!(), schema_v26.as_slice(), 26, want.clone())?;
-    common::test_pb_from_to(func_name!(), want)?;
+    common::test_load_old(func_name!(), schema_v26.as_slice(), 26, want())?;
+    common::test_pb_from_to(func_name!(), want())?;
 
     Ok(())
 }

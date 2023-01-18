@@ -318,9 +318,9 @@ impl TableSchema {
     fn build_members_from_fields(
         fields: &[TableField],
         column_id_map: Option<BTreeMap<String, u32>>,
-        next_column_id_opt: Option<u32>,
+        next_column_id: u32,
     ) -> (u32, BTreeMap<String, u32>, HashSet<u32>) {
-        let mut next_column_id = 0;
+        let mut new_next_column_id = 0;
         let mut has_column_id_map_inited = false;
         let mut column_id_map = match column_id_map {
             Some(column_id_map) => {
@@ -329,10 +329,7 @@ impl TableSchema {
             }
             None => BTreeMap::new(),
         };
-        let has_next_column_id_inited = match next_column_id_opt {
-            Some(next_column_id) => next_column_id > 0,
-            None => false,
-        };
+        let has_next_column_id_inited = next_column_id > 0;
         // make sure that column_id_map and next_column_id init at the same time
         assert_eq!(has_column_id_map_inited, has_next_column_id_inited);
 
@@ -349,7 +346,7 @@ impl TableSchema {
                 Self::build_from_data_type(
                     data_type,
                     f.name(),
-                    &mut next_column_id,
+                    &mut new_next_column_id,
                     &mut column_id_map,
                     &mut column_id_set,
                 );
@@ -357,11 +354,11 @@ impl TableSchema {
         }
 
         let new_next_column_id = if has_next_column_id_inited {
-            next_column_id_opt.unwrap()
-        } else {
             next_column_id
+        } else {
+            new_next_column_id
         };
-        // check next_column_id_opt value cannot fallback
+        // make sure next_column_id value cannot fallback
         assert!(new_next_column_id >= next_column_id);
 
         (new_next_column_id, column_id_map, column_id_set)
@@ -369,7 +366,7 @@ impl TableSchema {
 
     pub fn new(fields: Vec<TableField>) -> Self {
         let (next_column_id, column_id_map, column_id_set) =
-            Self::build_members_from_fields(&fields, None, None);
+            Self::build_members_from_fields(&fields, None, 0);
         Self {
             fields,
             metadata: BTreeMap::new(),
@@ -381,7 +378,7 @@ impl TableSchema {
 
     pub fn new_from(fields: Vec<TableField>, metadata: BTreeMap<String, String>) -> Self {
         let (next_column_id, column_id_map, column_id_set) =
-            Self::build_members_from_fields(&fields, None, None);
+            Self::build_members_from_fields(&fields, None, 0);
         Self {
             fields,
             metadata,
@@ -398,7 +395,7 @@ impl TableSchema {
         next_column_id: u32,
     ) -> Self {
         let (next_column_id, column_id_map, column_id_set) =
-            Self::build_members_from_fields(&fields, Some(column_id_map), Some(next_column_id));
+            Self::build_members_from_fields(&fields, Some(column_id_map), next_column_id);
         Self {
             fields,
             metadata,
