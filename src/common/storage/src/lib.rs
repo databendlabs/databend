@@ -69,6 +69,6 @@ mod utils;
 mod cache;
 pub use cache::FuseCachePolicy;
 
-mod column_leaf;
-pub use column_leaf::ColumnLeaf;
-pub use column_leaf::ColumnLeaves;
+mod column_node;
+pub use column_node::ColumnNode;
+pub use column_node::ColumnNodes;

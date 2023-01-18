@@ -15,14 +15,14 @@
 use common_exception::Result;
 use common_expression::create_test_complex_schema;
 use common_expression::TableSchema;
-use common_storage::ColumnLeaves;
+use common_storage::ColumnNodes;
 
 #[test]
 fn test_column_leaf_schema_from_struct() -> Result<()> {
     let schema = create_test_complex_schema();
 
     let column_leaves =
-        ColumnLeaves::new_from_schema(&schema.to_arrow(), Some(schema.column_id_map()));
+        ColumnNodes::new_from_schema(&schema.to_arrow(), Some(schema.column_id_map()));
     let column_1_ids = vec![0];
     let column_2_ids = vec![1, 2, 3];
     let column_3_ids = vec![4, 5];
@@ -42,7 +42,7 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
         ("h", &column_8_ids),
     ];
 
-    for (i, column_leaf) in column_leaves.column_leaves.iter().enumerate() {
+    for (i, column_leaf) in column_leaves.column_nodes.iter().enumerate() {
         let expeted_column_id = expeted_column_ids[i];
         assert_eq!(expeted_column_id.0.to_string(), column_leaf.field.name);
         assert_eq!(*expeted_column_id.1, column_leaf.leaf_column_ids);
@@ -54,11 +54,11 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
 #[test]
 fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
     let old_schema = create_test_complex_schema();
-    let old_column_leaves = ColumnLeaves::new_from_schema(&old_schema.to_arrow(), None);
+    let old_column_leaves = ColumnNodes::new_from_schema(&old_schema.to_arrow(), None);
 
     let new_schema = TableSchema::init_if_need(old_schema);
     let new_column_leaves =
-        ColumnLeaves::new_from_schema(&new_schema.to_arrow(), Some(new_schema.column_id_map()));
+        ColumnNodes::new_from_schema(&new_schema.to_arrow(), Some(new_schema.column_id_map()));
 
     // make sure old and new schema build the same column id map
     assert_eq!(
@@ -66,9 +66,9 @@ fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
         new_column_leaves.build_column_id_map()
     );
     for (old_leaf, new_leaf) in old_column_leaves
-        .column_leaves
+        .column_nodes
         .iter()
-        .zip(new_column_leaves.column_leaves.iter())
+        .zip(new_column_leaves.column_nodes.iter())
     {
         assert_eq!(old_leaf.field.name, new_leaf.field.name);
         assert_eq!(old_leaf.leaf_ids, new_leaf.leaf_ids);

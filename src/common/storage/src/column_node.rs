@@ -24,28 +24,28 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 #[derive(Debug, Clone)]
-pub struct ColumnLeaves {
-    pub column_leaves: Vec<ColumnLeaf>,
+pub struct ColumnNodes {
+    pub column_nodes: Vec<ColumnNode>,
 }
 
-impl ColumnLeaves {
+impl ColumnNodes {
     pub fn new_from_schema(
         schema: &ArrowSchema,
         column_id_map: Option<&BTreeMap<String, u32>>,
     ) -> Self {
         let mut leaf_id = 0;
-        let mut column_leaves = Vec::with_capacity(schema.fields.len());
+        let mut column_nodes = Vec::with_capacity(schema.fields.len());
 
         for field in &schema.fields {
-            let column_leaf =
+            let column_node =
                 Self::traverse_fields_dfs(field, &field.name, column_id_map, &mut leaf_id);
-            column_leaves.push(column_leaf);
+            column_nodes.push(column_node);
         }
 
-        Self { column_leaves }
+        Self { column_nodes }
     }
 
-    /// Traverse the fields in DFS order to get [`ColumnLeaf`].
+    /// Traverse the fields in DFS order to get [`ColumnNode`].
     ///
     /// If the data type is [`ArrowType::Struct`], we should expand its inner fields.
     ///
@@ -58,50 +58,50 @@ impl ColumnLeaves {
         parent_name: &String,
         column_id_map: Option<&BTreeMap<String, u32>>,
         leaf_id: &mut usize,
-    ) -> ColumnLeaf {
+    ) -> ColumnNode {
         match &field.data_type {
             ArrowType::Struct(inner_fields) => {
-                let mut child_column_leaves = Vec::with_capacity(inner_fields.len());
+                let mut child_column_nodes = Vec::with_capacity(inner_fields.len());
                 let mut child_leaf_ids = Vec::with_capacity(inner_fields.len());
                 let mut child_leaf_column_ids = Vec::with_capacity(inner_fields.len());
                 for inner_field in inner_fields {
                     let inner_field_name = format!("{}:{}", parent_name, inner_field.name);
-                    let child_column_leaf = Self::traverse_fields_dfs(
+                    let child_column_node = Self::traverse_fields_dfs(
                         inner_field,
                         &inner_field_name,
                         column_id_map,
                         leaf_id,
                     );
-                    child_leaf_ids.extend(child_column_leaf.leaf_ids.clone());
-                    child_leaf_column_ids.extend(child_column_leaf.leaf_column_ids.clone());
-                    child_column_leaves.push(child_column_leaf);
+                    child_leaf_ids.extend(child_column_node.leaf_ids.clone());
+                    child_leaf_column_ids.extend(child_column_node.leaf_column_ids.clone());
+                    child_column_nodes.push(child_column_node);
                 }
-                ColumnLeaf::new(
+                ColumnNode::new(
                     field.clone(),
                     child_leaf_ids,
-                    Some(child_column_leaves),
+                    Some(child_column_nodes),
                     child_leaf_column_ids,
                 )
             }
             ArrowType::List(inner_field)
             | ArrowType::LargeList(inner_field)
             | ArrowType::FixedSizeList(inner_field, _) => {
-                let mut child_column_leaves = Vec::with_capacity(1);
+                let mut child_column_nodes = Vec::with_capacity(1);
                 let mut child_leaf_ids = Vec::with_capacity(1);
                 let inner_field_name = &format!("{}:0", parent_name);
-                let child_column_leaf = Self::traverse_fields_dfs(
+                let child_column_node = Self::traverse_fields_dfs(
                     inner_field,
                     inner_field_name,
                     column_id_map,
                     leaf_id,
                 );
-                child_leaf_ids.extend(child_column_leaf.leaf_ids.clone());
-                let child_leaf_column_ids = child_column_leaf.leaf_column_ids.clone();
-                child_column_leaves.push(child_column_leaf);
-                ColumnLeaf::new(
+                child_leaf_ids.extend(child_column_node.leaf_ids.clone());
+                let child_leaf_column_ids = child_column_node.leaf_column_ids.clone();
+                child_column_nodes.push(child_column_node);
+                ColumnNode::new(
                     field.clone(),
                     child_leaf_ids,
-                    Some(child_column_leaves),
+                    Some(child_column_nodes),
                     child_leaf_column_ids,
                 )
             }
@@ -112,37 +112,37 @@ impl ColumnLeaves {
                     }
                     None => vec![],
                 };
-                let column_leaf =
-                    ColumnLeaf::new(field.clone(), vec![*leaf_id], None, leaf_column_ids);
+                let column_node =
+                    ColumnNode::new(field.clone(), vec![*leaf_id], None, leaf_column_ids);
                 *leaf_id += 1;
-                column_leaf
+                column_node
             }
         }
     }
 
     pub fn traverse_path<'a>(
-        column_leaves: &'a [ColumnLeaf],
+        column_nodes: &'a [ColumnNode],
         path: &'a [usize],
-    ) -> Result<&'a ColumnLeaf> {
-        let column_leaf = &column_leaves[path[0]];
+    ) -> Result<&'a ColumnNode> {
+        let column_node = &column_nodes[path[0]];
         if path.len() > 1 {
-            return match &column_leaf.children {
+            return match &column_node.children {
                 Some(ref children) => Self::traverse_path(children, &path[1..]),
                 None => Err(ErrorCode::Internal(format!(
-                    "Cannot get column_leaf by path: {:?}",
+                    "Cannot get column_node by path: {:?}",
                     path
                 ))),
             };
         }
-        Ok(column_leaf)
+        Ok(column_node)
     }
 
     fn build_column_id_map_from_leaf(
         parent_name: &String,
-        leaf: &ColumnLeaf,
+        node: &ColumnNode,
         column_ids: &mut BTreeMap<String, u32>,
     ) {
-        match leaf.children {
+        match node.children {
             Some(ref children) => {
                 for child in children {
                     let inner_field_name = format!("{}:{}", parent_name, child.field.name);
@@ -150,17 +150,17 @@ impl ColumnLeaves {
                 }
             }
             None => {
-                column_ids.insert(parent_name.to_string(), leaf.leaf_ids[0] as u32);
+                column_ids.insert(parent_name.to_string(), node.leaf_ids[0] as u32);
             }
         }
     }
 
     pub fn build_column_id_map(&self) -> BTreeMap<String, u32> {
         let mut column_ids = BTreeMap::new();
-        for column_leaf in &self.column_leaves {
+        for column_node in &self.column_nodes {
             Self::build_column_id_map_from_leaf(
-                &column_leaf.field.name,
-                column_leaf,
+                &column_node.field.name,
+                column_node,
                 &mut column_ids,
             );
         }
@@ -169,24 +169,24 @@ impl ColumnLeaves {
     }
 }
 
-/// `ColumnLeaf` contains all the leaf column ids of the column.
+/// `ColumnNode` contains all the leaf column ids of the column.
 /// For the nested types, it may contain more than one leaf column.
 #[derive(Debug, Clone)]
-pub struct ColumnLeaf {
+pub struct ColumnNode {
     pub field: ArrowField,
     // `leaf_ids` is the indices of all the leaf columns in DFS order,
     // through which we can find the meta information of the leaf columns.
     pub leaf_ids: Vec<usize>,
-    pub leaf_column_ids: Vec<u32>,
     // Optional children column for nested types.
-    pub children: Option<Vec<ColumnLeaf>>,
+    pub children: Option<Vec<ColumnNode>>,
+    pub leaf_column_ids: Vec<u32>,
 }
 
-impl ColumnLeaf {
+impl ColumnNode {
     pub fn new(
         field: ArrowField,
         leaf_ids: Vec<usize>,
-        children: Option<Vec<ColumnLeaf>>,
+        children: Option<Vec<ColumnNode>>,
         leaf_column_ids: Vec<u32>,
     ) -> Self {
         Self {

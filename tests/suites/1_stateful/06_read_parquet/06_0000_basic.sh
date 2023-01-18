@@ -11,3 +11,9 @@ echo "select count(*) from read_parquet('/tmp/06_0000_basic.parquet', '/tmp/06_0
 
 echo "select tail_number from read_parquet('/tmp/06_0000_basic.parquet') where dayofmonth=1;" |  $MYSQL_CLIENT_CONNECT
 
+echo "select tail_number from read_parquet('/tmp/06_0000_basic.parquet', do_prewhere=>false) where dayofmonth=1;" |  $MYSQL_CLIENT_CONNECT
+
+echo "select tail_number from read_parquet('/tmp/06_0000_basic.parquet', push_down_bitmap=>true) where dayofmonth=1;" |  $MYSQL_CLIENT_CONNECT
+
+echo "select tail_number from read_parquet('/tmp/06_0000_basic.parquet', prune_pages=>true) where dayofmonth=1;" |  $MYSQL_CLIENT_CONNECT
+
