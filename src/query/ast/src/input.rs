@@ -91,8 +91,7 @@ impl Dialect {
         match self {
             Dialect::MySQL => c == '`',
             Dialect::Hive => c == '`',
-            // TODO: remove '`' quote support once mysql handler correctly set mysql dialect.
-            Dialect::PostgreSQL => c == '"' || c == '`',
+            Dialect::PostgreSQL => c == '"',
         }
     }
 
