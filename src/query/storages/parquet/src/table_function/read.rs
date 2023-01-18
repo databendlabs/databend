@@ -125,8 +125,8 @@ impl ParquetTable {
         // Therefore, if there is inner fields in projection, we skip the row group pruning.
         let skip_pruning = matches!(columns_to_read, Projection::InnerColumns(_));
 
-        // Use `projected_column_leaves` to collect stats from row groups for pruning.
-        // `projected_column_leaves` contains the smallest column set that is needed for the query.
+        // Use `projected_column_nodes` to collect stats from row groups for pruning.
+        // `projected_column_nodes` contains the smallest column set that is needed for the query.
         // Use `projected_arrow_schema` to create `row_group_pruner` (`RangePruner`).
         //
         // During pruning evaluation,
@@ -134,7 +134,7 @@ impl ParquetTable {
         // and use the offset to find the column stat from `StatisticsOfColumns` (HashMap<offset, stat>).
         //
         // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
-        let (projected_arrow_schema, projected_column_leaves, _, columns_to_read) =
+        let (projected_arrow_schema, projected_column_nodes, _, columns_to_read) =
             ParquetReader::do_projection(&self.arrow_schema, &columns_to_read)?;
         let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
         let filters = push_downs.as_ref().map(|extra| {
@@ -154,7 +154,7 @@ impl ParquetTable {
                 &schema,
                 &filters.as_deref(),
                 &columns_to_read,
-                &projected_column_leaves,
+                &projected_column_nodes,
                 skip_pruning,
                 read_options,
             )

@@ -29,8 +29,8 @@ use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
-use common_storage::ColumnLeaf;
-use common_storage::ColumnLeaves;
+use common_storage::ColumnNode;
+use common_storage::ColumnNodes;
 use futures::future::try_join_all;
 use opendal::Object;
 use opendal::Operator;
@@ -46,7 +46,7 @@ pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
-    pub(crate) column_leaves: ColumnLeaves,
+    pub(crate) column_nodes: ColumnNodes,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
 }
 
@@ -125,14 +125,14 @@ impl BlockReader {
 
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
-        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema);
 
         Ok(Arc::new(BlockReader {
             operator,
             projection,
             projected_schema,
             parquet_schema_descriptor,
-            column_leaves,
+            column_nodes,
         }))
     }
 
@@ -277,7 +277,7 @@ impl BlockReader {
             metrics_inc_remote_io_read_parts(1);
         }
 
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        let columns = self.projection.project_column_nodes(&self.column_nodes)?;
         let indices = Self::build_projection_indices(&columns);
 
         let mut ranges = vec![];
@@ -304,7 +304,7 @@ impl BlockReader {
         part: PartInfoPtr,
     ) -> Result<MergeIOReadResult> {
         let part = FusePartInfo::from_part(&part)?;
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        let columns = self.projection.project_column_nodes(&self.column_nodes)?;
         let indices = Self::build_projection_indices(&columns);
 
         let mut ranges = vec![];
@@ -319,11 +319,13 @@ impl BlockReader {
     }
 
     // Build non duplicate leaf_ids to avoid repeated read column from parquet
-    pub(crate) fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashMap<usize, Field> {
-        let mut indices = HashMap::with_capacity(columns.len());
-        for column in columns {
-            for index in &column.leaf_ids {
-                indices.insert(*index, column.field.clone());
+    pub(crate) fn build_projection_indices(
+        column_nodes: &Vec<&ColumnNode>,
+    ) -> HashMap<usize, Field> {
+        let mut indices = HashMap::with_capacity(column_nodes.len());
+        for column_node in column_nodes {
+            for index in &column_node.leaf_ids {
+                indices.insert(*index, column_node.field.clone());
             }
         }
         indices

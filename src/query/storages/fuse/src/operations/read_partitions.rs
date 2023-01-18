@@ -26,7 +26,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
-use common_storage::ColumnLeaves;
+use common_storage::ColumnNodes;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
@@ -137,11 +137,11 @@ impl FuseTable {
         partitions_total: usize,
     ) -> Result<(PartStatistics, Partitions)> {
         let arrow_schema = schema.to_arrow();
-        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema);
 
         let partitions_scanned = block_metas.len();
 
-        let (mut statistics, parts) = Self::to_partitions(&block_metas, &column_leaves, push_downs);
+        let (mut statistics, parts) = Self::to_partitions(&block_metas, &column_nodes, push_downs);
 
         // Update planner statistics.
         statistics.partitions_total = partitions_total;
@@ -158,7 +158,7 @@ impl FuseTable {
 
     pub fn to_partitions(
         blocks_metas: &[Arc<BlockMeta>],
-        column_leaves: &ColumnLeaves,
+        column_nodes: &ColumnNodes,
         push_down: Option<PushDownInfo>,
     ) -> (PartStatistics, Partitions) {
         let limit = push_down
@@ -172,7 +172,7 @@ impl FuseTable {
             Some(extras) => match &extras.projection {
                 None => Self::all_columns_partitions(blocks_metas, limit),
                 Some(projection) => {
-                    Self::projection_partitions(blocks_metas, column_leaves, projection, limit)
+                    Self::projection_partitions(blocks_metas, column_nodes, projection, limit)
                 }
             },
         };
@@ -225,7 +225,7 @@ impl FuseTable {
 
     fn projection_partitions(
         metas: &[Arc<BlockMeta>],
-        column_leaves: &ColumnLeaves,
+        column_nodes: &ColumnNodes,
         projection: &Projection,
         limit: usize,
     ) -> (PartStatistics, Partitions) {
@@ -239,15 +239,13 @@ impl FuseTable {
         let mut remaining = limit;
 
         for block_meta in metas {
-            partitions.partitions.push(Self::projection_part(
-                block_meta,
-                column_leaves,
-                projection,
-            ));
+            partitions
+                .partitions
+                .push(Self::projection_part(block_meta, column_nodes, projection));
             let rows = block_meta.row_count as usize;
 
             statistics.read_rows += rows;
-            let columns = projection.project_column_leaves(column_leaves).unwrap();
+            let columns = projection.project_column_nodes(column_nodes).unwrap();
             for column in &columns {
                 let indices = &column.leaf_ids;
                 for index in indices {
@@ -291,12 +289,12 @@ impl FuseTable {
 
     fn projection_part(
         meta: &BlockMeta,
-        column_leaves: &ColumnLeaves,
+        column_nodes: &ColumnNodes,
         projection: &Projection,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(projection.len());
 
-        let columns = projection.project_column_leaves(column_leaves).unwrap();
+        let columns = projection.project_column_nodes(column_nodes).unwrap();
         for column in &columns {
             let indices = &column.leaf_ids;
             for index in indices {

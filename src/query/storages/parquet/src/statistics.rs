@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::TableDataType;
-use common_storage::ColumnLeaves;
+use common_storage::ColumnNodes;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
@@ -31,7 +31,7 @@ use storages_common_table_meta::meta::StatisticsOfColumns;
 ///
 /// The retuened vector's length is the same as `rgs`.
 pub fn collect_row_group_stats(
-    column_leaves: &ColumnLeaves,
+    column_nodes: &ColumnNodes,
     rgs: &[RowGroupMetaData],
 ) -> Result<Vec<StatisticsOfColumns>> {
     let mut stats = Vec::with_capacity(rgs.len());
@@ -40,9 +40,9 @@ pub fn collect_row_group_stats(
     // Each row_group_stat is a `HashMap` holding key-value pairs.
     // The first element of the pair is the offset in the schema,
     // and the second element is the statistics of the column (according to the offset)
-    // `column_leaves` is parallel to the schema, so we can iterate `column_leaves` directly.
-    for (index, column_leaf) in column_leaves.column_leaves.iter().enumerate() {
-        let field = &column_leaf.field;
+    // `column_nodes` is parallel to the schema, so we can iterate `column_nodes` directly.
+    for (index, column_node) in column_nodes.column_nodes.iter().enumerate() {
+        let field = &column_node.field;
         let table_type: TableDataType = field.into();
         let data_type = (&table_type).into();
         let column_stats = pread::statistics::deserialize(field, rgs)?;
@@ -54,7 +54,7 @@ pub fn collect_row_group_stats(
 
     for (rg_idx, _) in rgs.iter().enumerate() {
         let mut cols_stats = HashMap::with_capacity(stats.capacity());
-        for index in 0..column_leaves.column_leaves.len() {
+        for index in 0..column_nodes.column_nodes.len() {
             let col_stats = stats_of_row_groups[&index].get(rg_idx);
             cols_stats.insert(index as u32, col_stats);
         }

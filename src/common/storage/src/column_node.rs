@@ -22,24 +22,24 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 #[derive(Debug, Clone)]
-pub struct ColumnLeaves {
-    pub column_leaves: Vec<ColumnLeaf>,
+pub struct ColumnNodes {
+    pub column_nodes: Vec<ColumnNode>,
 }
 
-impl ColumnLeaves {
+impl ColumnNodes {
     pub fn new_from_schema(schema: &ArrowSchema) -> Self {
         let mut leaf_id = 0;
-        let mut column_leaves = Vec::with_capacity(schema.fields.len());
+        let mut column_nodes = Vec::with_capacity(schema.fields.len());
 
         for field in &schema.fields {
-            let column_leaf = Self::traverse_fields_dfs(field, &mut leaf_id);
-            column_leaves.push(column_leaf);
+            let column_node = Self::traverse_fields_dfs(field, &mut leaf_id);
+            column_nodes.push(column_node);
         }
 
-        Self { column_leaves }
+        Self { column_nodes }
     }
 
-    /// Traverse the fields in DFS order to get [`ColumnLeaf`].
+    /// Traverse the fields in DFS order to get [`ColumnNode`].
     ///
     /// If the data type is [`ArrowType::Struct`], we should expand its inner fields.
     ///
@@ -47,68 +47,68 @@ impl ColumnLeaves {
     /// It's because the inner field can also be [`ArrowType::Struct`] or other nested types.
     /// If we don't dfs into it, the inner columns information will be lost.
     /// and we can not construct the arrow-parquet reader correctly.
-    fn traverse_fields_dfs(field: &ArrowField, leaf_id: &mut usize) -> ColumnLeaf {
+    fn traverse_fields_dfs(field: &ArrowField, leaf_id: &mut usize) -> ColumnNode {
         match &field.data_type {
             ArrowType::Struct(inner_fields) => {
-                let mut child_column_leaves = Vec::with_capacity(inner_fields.len());
+                let mut child_column_nodes = Vec::with_capacity(inner_fields.len());
                 let mut child_leaf_ids = Vec::with_capacity(inner_fields.len());
                 for inner_field in inner_fields {
-                    let child_column_leaf = Self::traverse_fields_dfs(inner_field, leaf_id);
-                    child_leaf_ids.extend(child_column_leaf.leaf_ids.clone());
-                    child_column_leaves.push(child_column_leaf);
+                    let child_column_node = Self::traverse_fields_dfs(inner_field, leaf_id);
+                    child_leaf_ids.extend(child_column_node.leaf_ids.clone());
+                    child_column_nodes.push(child_column_node);
                 }
-                ColumnLeaf::new(field.clone(), child_leaf_ids, Some(child_column_leaves))
+                ColumnNode::new(field.clone(), child_leaf_ids, Some(child_column_nodes))
             }
             ArrowType::List(inner_field)
             | ArrowType::LargeList(inner_field)
             | ArrowType::FixedSizeList(inner_field, _) => {
-                let mut child_column_leaves = Vec::with_capacity(1);
+                let mut child_column_nodes = Vec::with_capacity(1);
                 let mut child_leaf_ids = Vec::with_capacity(1);
-                let child_column_leaf = Self::traverse_fields_dfs(inner_field, leaf_id);
-                child_leaf_ids.extend(child_column_leaf.leaf_ids.clone());
-                child_column_leaves.push(child_column_leaf);
-                ColumnLeaf::new(field.clone(), child_leaf_ids, Some(child_column_leaves))
+                let child_column_node = Self::traverse_fields_dfs(inner_field, leaf_id);
+                child_leaf_ids.extend(child_column_node.leaf_ids.clone());
+                child_column_nodes.push(child_column_node);
+                ColumnNode::new(field.clone(), child_leaf_ids, Some(child_column_nodes))
             }
             _ => {
-                let column_leaf = ColumnLeaf::new(field.clone(), vec![*leaf_id], None);
+                let column_node = ColumnNode::new(field.clone(), vec![*leaf_id], None);
                 *leaf_id += 1;
-                column_leaf
+                column_node
             }
         }
     }
 
     pub fn traverse_path<'a>(
-        column_leaves: &'a [ColumnLeaf],
+        column_nodes: &'a [ColumnNode],
         path: &'a [usize],
-    ) -> Result<&'a ColumnLeaf> {
-        let column_leaf = &column_leaves[path[0]];
+    ) -> Result<&'a ColumnNode> {
+        let column_node = &column_nodes[path[0]];
         if path.len() > 1 {
-            return match &column_leaf.children {
+            return match &column_node.children {
                 Some(ref children) => Self::traverse_path(children, &path[1..]),
                 None => Err(ErrorCode::Internal(format!(
-                    "Cannot get column_leaf by path: {:?}",
+                    "Cannot get column_node by path: {:?}",
                     path
                 ))),
             };
         }
-        Ok(column_leaf)
+        Ok(column_node)
     }
 }
 
-/// `ColumnLeaf` contains all the leaf column ids of the column.
+/// `ColumnNode` contains all the leaf column ids of the column.
 /// For the nested types, it may contain more than one leaf column.
 #[derive(Debug, Clone)]
-pub struct ColumnLeaf {
+pub struct ColumnNode {
     pub field: ArrowField,
     // `leaf_ids` is the indices of all the leaf columns in DFS order,
     // through which we can find the meta information of the leaf columns.
     pub leaf_ids: Vec<usize>,
     // Optional children column for nested types.
-    pub children: Option<Vec<ColumnLeaf>>,
+    pub children: Option<Vec<ColumnNode>>,
 }
 
-impl ColumnLeaf {
-    pub fn new(field: ArrowField, leaf_ids: Vec<usize>, children: Option<Vec<ColumnLeaf>>) -> Self {
+impl ColumnNode {
+    pub fn new(field: ArrowField, leaf_ids: Vec<usize>, children: Option<Vec<ColumnNode>>) -> Self {
         Self {
             field,
             leaf_ids,
