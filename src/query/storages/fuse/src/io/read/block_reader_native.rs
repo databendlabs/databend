@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::io::BufReader;
-use std::io::Seek;
 use std::ops::Range;
 use std::time::Instant;
 
@@ -57,7 +56,7 @@ impl BlockReader {
         let mut join_handlers = Vec::with_capacity(self.project_indices.len());
 
         for (index, (field, _)) in self.project_indices.iter() {
-            let column_meta = &part.columns_meta[&index];
+            let column_meta = &part.columns_meta[index];
 
             join_handlers.push(Self::read_native_columns_data(
                 self.operator.object(&part.location),
@@ -122,7 +121,7 @@ impl BlockReader {
         let mut results = Vec::with_capacity(self.project_indices.len());
 
         for (index, (field, _)) in self.project_indices.iter() {
-            let column_meta = &part.columns_meta[&index];
+            let column_meta = &part.columns_meta[index];
             let op = self.operator.clone();
 
             let location = part.location.clone();
@@ -152,14 +151,12 @@ impl BlockReader {
         if let Some(range) = range {
             column_meta = column_meta.slice(range.start, range.end);
         }
-        let offset = column_meta.offset;
-        // let reader = o.blocking_range_reader(offset..offset + length)?;
-        let path = format!("/home/sundy/work/databend/_data/{}", o.path());
-        let mut reader = std::fs::File::open(&path).unwrap();
-        reader.seek(std::io::SeekFrom::Start(offset)).unwrap();
-
+        let (offset, length) = (
+            column_meta.offset,
+            column_meta.pages.iter().map(|p| p.length).sum::<u64>(),
+        );
+        let reader = o.blocking_range_reader(offset..offset + length)?;
         let reader: Reader = Box::new(BufReader::new(reader));
-
         let fuse_reader = NativeReader::new(reader, data_type, column_meta.pages, vec![]);
         Ok((index, fuse_reader))
     }

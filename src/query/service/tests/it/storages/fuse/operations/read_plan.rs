@@ -109,7 +109,7 @@ fn test_to_partitions() -> Result<()> {
     let column_leafs = ColumnLeaves { column_leaves };
 
     // CASE I:  no projection
-    let (s, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, None);
+    let (s, parts) = FuseTable::to_partitions(blocks_metas.as_slice(), &column_leafs, None);
     assert_eq!(parts.len(), num_of_block as usize);
     let expected_block_size: u64 = cols_metas
         .values()
@@ -141,7 +141,7 @@ fn test_to_partitions() -> Result<()> {
         prewhere: None,
     });
 
-    let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, push_down);
+    let (stats, parts) = FuseTable::to_partitions(blocks_metas.as_slice(), &column_leafs, push_down);
     assert_eq!(parts.len(), num_of_block as usize);
     assert_eq!(expected_block_size * num_of_block, stats.read_bytes as u64);
 

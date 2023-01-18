@@ -176,7 +176,7 @@ impl PageFilter {
                 in_memory_size: 0,
                 distinct_of_values: None,
             };
-            let domain = statistics_to_domain(Some(&stats), &f.data_type());
+            let domain = statistics_to_domain(Some(&stats), f.data_type());
             input_domains.insert(f.name().clone(), domain);
 
             // For Tuple scalars, if the first element is not equal, then the monotonically increasing property is broken.

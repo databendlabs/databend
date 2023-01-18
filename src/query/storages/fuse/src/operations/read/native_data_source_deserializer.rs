@@ -106,8 +106,7 @@ impl NativeDeserializeDataTransform {
 
         let func_ctx = ctx.try_get_function_context()?;
         let prewhere_schema = src_schema.project(&prewhere_columns);
-        let prewhere_filter =
-            Self::build_prewhere_filter_expr(plan, func_ctx.clone(), &prewhere_schema)?;
+        let prewhere_filter = Self::build_prewhere_filter_expr(plan, func_ctx, &prewhere_schema)?;
 
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
@@ -226,7 +225,7 @@ impl Processor for NativeDeserializeDataTransform {
                 Some(filter) => {
                     let prewhere_block = self.block_reader.build_block(arrays.clone())?;
                     let evaluator =
-                        Evaluator::new(&prewhere_block, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
+                        Evaluator::new(&prewhere_block, self.func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(filter).map_err(|(_, e)| {
                         ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
                     })?;
@@ -252,8 +251,8 @@ impl Processor for NativeDeserializeDataTransform {
                     }
 
                     let block = self.block_reader.build_block(arrays)?;
-                    let block = block.filter(&result)?;
-                    block.resort(&self.src_schema, &self.output_schema)
+                    let block = block.resort(&self.src_schema, &self.output_schema)?;
+                    block.filter(&result)
                 }
                 None => {
                     for index in self.remain_columns.iter() {

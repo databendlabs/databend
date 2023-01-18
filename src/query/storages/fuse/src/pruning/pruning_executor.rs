@@ -115,7 +115,7 @@ impl BlockPruner {
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
         let range_pruner =
-            RangePrunerCreator::try_create(func_context.clone(), filter_exprs.as_deref(), &schema)?;
+            RangePrunerCreator::try_create(func_context, filter_exprs.as_deref(), &schema)?;
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
@@ -124,7 +124,7 @@ impl BlockPruner {
 
         // prepare the page pruner, this is used in native format
         let page_pruner = PagePrunerCreator::try_create(
-            func_context.clone(),
+            func_context,
             cluster_key_meta,
             cluster_keys,
             filter_exprs.as_deref(),

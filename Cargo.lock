@@ -505,12 +505,6 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "base64"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ea22880d78093b0cbe17c89f64a7d457941e65759157ec6cb31a31d652b05e5"
-
-[[package]]
-name = "base64"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
@@ -5548,8 +5542,7 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 [[package]]
 name = "opendal"
 version = "0.24.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a657010a255640ce4b5e06b3bf275e3debe013208998cb22fa315eb40395919"
+source = "git+https://github.com/datafuselabs/opendal?rev=caab12d#caab12d0d3e6b438be87e5c5b56f0d100fe77a26"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5563,6 +5556,7 @@ dependencies = [
  "futures",
  "hdrs",
  "http",
+ "hyper",
  "log",
  "md-5",
  "metrics",
@@ -5581,6 +5575,7 @@ dependencies = [
  "time 0.3.17",
  "tokio",
  "tracing",
+ "trust-dns-resolver",
  "ureq",
  "uuid",
 ]
@@ -6748,13 +6743,13 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.7.5"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64f8427141aacf5f9011c2f83ebc109e57764587d562f91e387ec1ffcc54a5a2"
+checksum = "3f446438814fde3785305a59a85a6d1b361ce2c9d29e58dd87c9103a242c40b6"
 dependencies = [
  "anyhow",
  "backon",
- "base64 0.20.0",
+ "base64 0.21.0",
  "bytes",
  "dirs",
  "form_urlencoded",
@@ -7778,6 +7773,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.1.0"
+source = "git+https://github.com/sundy-li/strawboat?rev=92a8e4f#92a8e4fcf499827145ac7f32315b2228552507e5"
 dependencies = [
  "arrow2",
  "bytemuck",

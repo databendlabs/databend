@@ -118,11 +118,11 @@ impl FuseTable {
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
-                    Some(sp) => init_operator(&sp)?,
-                    None => DataOperator::instance().operator(),
+                    Some(sp) => Ok(init_operator(&sp)?),
+                    None => Ok(DataOperator::instance().operator()),
                 }
             }
-        };
+        }?;
 
         let data_metrics = Arc::new(StorageMetrics::default());
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
