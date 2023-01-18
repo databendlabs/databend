@@ -76,7 +76,7 @@ impl BlockPruner {
             extra
                 .filters
                 .iter()
-                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
                 .collect::<Vec<_>>()
         });
 
@@ -93,7 +93,11 @@ impl BlockPruner {
 
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
-        let range_pruner = RangePrunerCreator::try_create(ctx, filter_exprs.as_deref(), &schema)?;
+        let range_pruner = RangePrunerCreator::try_create(
+            ctx.try_get_function_context()?,
+            filter_exprs.as_deref(),
+            &schema,
+        )?;
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)

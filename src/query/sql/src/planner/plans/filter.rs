@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -67,7 +68,7 @@ impl Operator for Filter {
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
-        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+        let mut input_prop = rel_expr.derive_relational_prop_child(0)?;
         let output_columns = input_prop.output_columns;
 
         // Derive outer columns
@@ -90,10 +91,22 @@ impl Operator for Filter {
             selectivity *= sb.compute_selectivity(pred);
         }
         let cardinality = input_prop.cardinality * selectivity;
-
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
+
+        // Derive column statistics
+        let column_stats = if cardinality == 0.0 {
+            HashMap::new()
+        } else {
+            for (_, column_stat) in input_prop.statistics.column_stats.iter_mut() {
+                if cardinality < input_prop.cardinality {
+                    column_stat.ndv =
+                        (column_stat.ndv * cardinality / input_prop.cardinality).ceil();
+                }
+            }
+            input_prop.statistics.column_stats
+        };
 
         Ok(RelationalProperty {
             output_columns,
@@ -104,7 +117,7 @@ impl Operator for Filter {
             // precise cardinality
             statistics: Statistics {
                 precise_cardinality: None,
-                column_stats: Default::default(),
+                column_stats,
                 is_accurate: false,
             },
         })

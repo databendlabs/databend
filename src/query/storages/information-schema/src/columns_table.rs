@@ -34,6 +34,7 @@ impl ColumnsTable {
             1 AS ordinal_position,
             NULL AS column_default,
             NULL AS column_comment,
+            NULL AS column_key,
             is_nullable AS is_nullable,
             type AS data_type,
             type AS column_type,

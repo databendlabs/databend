@@ -160,7 +160,7 @@ order by col5,col2,col3,col6,col4,col1
 222 -3 -1 222.0 666 440
 111 -4 2 247.0 743 490
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a-b as col1
@@ -168,7 +168,7 @@ from t1
 where c between b-2 and d+2
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a-b as col1
@@ -176,7 +176,7 @@ from t1
 where c between b-2 and d+2
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a-b as col1,
@@ -191,7 +191,7 @@ from t1
 where (a>b-2 and a<b+2)
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a-b as col1,
@@ -284,7 +284,7 @@ NULL 1455 244 240
 247.0 1484 247 249
 NULL NULL NULL 236
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select d-e as col1,
@@ -297,7 +297,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or c>d
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select d-e as col1,
@@ -310,7 +310,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or c>d
 order by col5,col2,col4,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(a) as col1
@@ -319,7 +319,7 @@ where d not between 110 and 150
    and (c<=d-2 or c>=d+2)
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(a) as col1
@@ -328,7 +328,7 @@ where d not between 110 and 150
    and (c<=d-2 or c>=d+2)
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(a) as col1
@@ -337,7 +337,7 @@ where (c<=d-2 or c>=d+2)
    and d not between 110 and 150
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(a) as col1
@@ -346,7 +346,7 @@ where (c<=d-2 or c>=d+2)
    and d not between 110 and 150
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -362,7 +362,7 @@ from t1
 where (e>c or e<d)
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -378,7 +378,7 @@ from t1
 where (e>c or e<d)
 order by col5,col7,col1,col6,col4,col2,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(a) as col1,
@@ -392,7 +392,7 @@ from t1
 where (e>a and e<b)
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(a) as col1,
@@ -406,7 +406,7 @@ from t1
 where (e>a and e<b)
 order by col1,col5,col6,col4,col2,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -422,7 +422,7 @@ where (e>a and e<b)
    and a>b
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -438,7 +438,7 @@ where (e>a and e<b)
    and a>b
 order by col3,col2,col6,col4,col5,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -454,7 +454,7 @@ where a>b
    and (e>a and e<b)
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -470,7 +470,7 @@ where a>b
    and (e>a and e<b)
 order by col3,col6,col4,col5,col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(b-c) as col1,
@@ -485,7 +485,7 @@ where b>c
     or a>b
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(b-c) as col1,
@@ -500,7 +500,7 @@ where b>c
     or a>b
 order by col3,col2,col5,col1,col4
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(b-c) as col1,
@@ -515,7 +515,7 @@ where a>b
     or b>c
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(b-c) as col1,
@@ -530,7 +530,7 @@ where a>b
     or b>c
 order by col1,col4,col5,col2,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(b-c) as col1,
@@ -545,7 +545,7 @@ where b>c
     or (c<=d-2 or c>=d+2)
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(b-c) as col1,
@@ -560,7 +560,7 @@ where b>c
     or (c<=d-2 or c>=d+2)
 order by col3,col4,col1,col5,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2 as col1,
@@ -571,7 +571,7 @@ select a+b*2 as col1,
 from t1
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2 as col1,
@@ -664,7 +664,7 @@ order by col3,col2,col6,col1,col5,col4
 NULL NULL NULL NULL NULL NULL
 NULL NULL NULL NULL NULL NULL
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -674,7 +674,7 @@ where a>b
    and (c<=d-2 or c>=d+2)
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -684,7 +684,7 @@ where a>b
    and (c<=d-2 or c>=d+2)
 order by col1,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -694,7 +694,7 @@ where (c<=d-2 or c>=d+2)
    and a>b
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -788,7 +788,7 @@ NULL 104 444 NULL NULL NULL
 NULL 115 444 NULL NULL NULL
 NULL 201 444 NULL NULL NULL
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -805,7 +805,7 @@ where (c<=d-2 or c>=d+2)
    and (e>c or e<d)
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -822,7 +822,7 @@ where (c<=d-2 or c>=d+2)
    and (e>c or e<d)
 order by col6,col3,col2,col1,col5,col4
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -839,7 +839,7 @@ where (e>c or e<d)
    and d>e
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -856,7 +856,7 @@ where (e>c or e<d)
    and d>e
 order by col4,col1,col2,col6,col5,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b-c as col1,
@@ -868,7 +868,7 @@ from t1
 where d>e
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b-c as col1,
@@ -880,7 +880,7 @@ from t1
 where d>e
 order by col4,col1,col5,col2,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(a) as col1,
@@ -893,7 +893,7 @@ from t1
 where b>c
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(a) as col1,
@@ -906,7 +906,7 @@ from t1
 where b>c
 order by col3,col2,col6,col4,col5,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case when a<b-3 then 111 when a<=b then 222
@@ -918,7 +918,7 @@ where (e>a and e<b)
     or d not between 110 and 150
 order by col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case when a<b-3 then 111 when a<=b then 222
@@ -930,7 +930,7 @@ where (e>a and e<b)
     or d not between 110 and 150
 order by col3,col1,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case when a<b-3 then 111 when a<=b then 222
@@ -942,7 +942,7 @@ where d not between 110 and 150
     or (e>a and e<b)
 order by col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case when a<b-3 then 111 when a<=b then 222
@@ -954,7 +954,7 @@ where d not between 110 and 150
     or (e>a and e<b)
 order by col1,col2,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case when a<b-3 then 111 when a<=b then 222
@@ -963,7 +963,7 @@ from t1
 where c between b-2 and d+2
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case when a<b-3 then 111 when a<=b then 222
@@ -972,7 +972,7 @@ from t1
 where c between b-2 and d+2
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1,
@@ -986,7 +986,7 @@ where (e>a and e<b)
    and (a>b-2 and a<b+2)
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1,
@@ -1000,7 +1000,7 @@ where (e>a and e<b)
    and (a>b-2 and a<b+2)
 order by col4,col1,col6,col3,col5,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1,
@@ -1014,7 +1014,7 @@ where (a>b-2 and a<b+2)
    and (e>a and e<b)
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1,
@@ -1028,7 +1028,7 @@ where (a>b-2 and a<b+2)
    and (e>a and e<b)
 order by col4,col3,col1,col2,col6,col5
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1
@@ -1038,7 +1038,7 @@ where b>c
     or e+d between a+b-10 and c+130
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1
@@ -1048,7 +1048,7 @@ where b>c
     or e+d between a+b-10 and c+130
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1
@@ -1058,7 +1058,7 @@ where e+d between a+b-10 and c+130
     or b>c
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1
@@ -1068,7 +1068,7 @@ where e+d between a+b-10 and c+130
     or b>c
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1
@@ -1078,7 +1078,7 @@ where (e>c or e<d)
     or e+d between a+b-10 and c+130
 order by col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3 as col1
@@ -1164,7 +1164,7 @@ order by col2,col1
 NULL 444
 NULL 444
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a as col1,
@@ -1179,7 +1179,7 @@ where (e>c or e<d)
    and (c<=d-2 or c>=d+2)
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a as col1,
@@ -1194,7 +1194,7 @@ where (e>c or e<d)
    and (c<=d-2 or c>=d+2)
 order by col2,col1,col3,col4,col5
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a as col1,
@@ -1209,7 +1209,7 @@ where (c<=d-2 or c>=d+2)
    and (e>c or e<d)
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a as col1,
@@ -1224,7 +1224,7 @@ where (c<=d-2 or c>=d+2)
    and (e>c or e<d)
 order by col4,col3,col2,col5,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -1237,7 +1237,7 @@ select c as col1,
 from t1
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -1250,7 +1250,7 @@ select c as col1,
 from t1
 order by col2,col4,col6,col1,col7,col5,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a-b as col1,
@@ -1260,7 +1260,7 @@ select a-b as col1,
 from t1
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a-b as col1,
@@ -1270,7 +1270,7 @@ select a-b as col1,
 from t1
 order by col4,col1,col3,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -1284,7 +1284,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or d not between 110 and 150
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -1298,7 +1298,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or d not between 110 and 150
 order by col2,col3,col4,col5,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -1312,7 +1312,7 @@ where d not between 110 and 150
     or (a>b-2 and a<b+2)
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -1326,7 +1326,7 @@ where d not between 110 and 150
     or (a>b-2 and a<b+2)
 order by col4,col1,col5,col2,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -1340,7 +1340,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or (a>b-2 and a<b+2)
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -1354,7 +1354,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or (a>b-2 and a<b+2)
 order by col3,col5,col4,col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -1368,7 +1368,7 @@ where (a>b-2 and a<b+2)
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -1382,7 +1382,7 @@ where (a>b-2 and a<b+2)
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col4,col1,col3,col5,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -1396,7 +1396,7 @@ where d not between 110 and 150
    and a>b
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -1410,7 +1410,7 @@ where d not between 110 and 150
    and a>b
 order by col3,col2,col1,col4
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -1424,7 +1424,7 @@ where (a>b-2 and a<b+2)
    and d not between 110 and 150
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -1438,7 +1438,7 @@ where (a>b-2 and a<b+2)
    and d not between 110 and 150
 order by col2,col4,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -1453,7 +1453,7 @@ from t1
 where exists(select 1 from t1 as x where x.b<t1.b)
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -1468,7 +1468,7 @@ from t1
 where exists(select 1 from t1 as x where x.b<t1.b)
 order by col1,col5,col4,col2,col6,col7,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -1481,7 +1481,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and b>c
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -1494,7 +1494,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and b>c
 order by col3,col2,col1,col5,col4
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -1507,7 +1507,7 @@ where b>c
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -1520,7 +1520,7 @@ where b>c
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col3,col5,col4,col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -1536,7 +1536,7 @@ where (e>a and e<b)
     or b>c
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -1552,7 +1552,7 @@ where (e>a and e<b)
     or b>c
 order by col5,col4,col3,col6,col2,col1,col7
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -1568,7 +1568,7 @@ where (e>c or e<d)
     or (e>a and e<b)
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -1584,7 +1584,7 @@ where (e>c or e<d)
     or (e>a and e<b)
 order by col1,col4,col6,col2,col3,col5,col7
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -1600,7 +1600,7 @@ where b>c
     or (e>a and e<b)
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -1616,7 +1616,7 @@ where b>c
     or (e>a and e<b)
 order by col4,col3,col6,col5,col7,col1,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -1632,7 +1632,7 @@ where (e>c or e<d)
     or b>c
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -1648,7 +1648,7 @@ where (e>c or e<d)
     or b>c
 order by col5,col3,col6,col7,col4,col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -1661,7 +1661,7 @@ where b>c
     or (c<=d-2 or c>=d+2)
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -1674,7 +1674,7 @@ where b>c
     or (c<=d-2 or c>=d+2)
 order by col3,col4,col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -1687,7 +1687,7 @@ where (e>c or e<d)
     or (c<=d-2 or c>=d+2)
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -1700,7 +1700,7 @@ where (e>c or e<d)
     or (c<=d-2 or c>=d+2)
 order by col2,col3,col4,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -1713,7 +1713,7 @@ where b>c
     or (e>c or e<d)
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -1726,7 +1726,7 @@ where b>c
     or (e>c or e<d)
 order by col3,col2,col4,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -1739,7 +1739,7 @@ where (c<=d-2 or c>=d+2)
     or (e>c or e<d)
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
@@ -1828,7 +1828,7 @@ order by col1,col3,col2
 NULL NULL -2
 NULL NULL -1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -1842,7 +1842,7 @@ where (c<=d-2 or c>=d+2)
    and c between b-2 and d+2
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -1856,7 +1856,7 @@ where (c<=d-2 or c>=d+2)
    and c between b-2 and d+2
 order by col5,col1,col4,col2,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -1870,7 +1870,7 @@ where b>c
    and c between b-2 and d+2
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -1884,7 +1884,7 @@ where b>c
    and c between b-2 and d+2
 order by col5,col1,col3,col4,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -1898,7 +1898,7 @@ where b>c
    and (c<=d-2 or c>=d+2)
 order by col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -1912,7 +1912,7 @@ where b>c
    and (c<=d-2 or c>=d+2)
 order by col3,col2,col4,col5,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -1924,7 +1924,7 @@ select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
 from t1
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -2194,7 +2194,7 @@ order by col6,col1,col3,col5,col7,col4,col2
 3 159 555 1 1580 NULL 157
 NULL 239 555 3 2360 NULL 237
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c-d as col1,
@@ -2207,7 +2207,7 @@ where d not between 110 and 150
     or e+d between a+b-10 and c+130
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c-d as col1,
@@ -2220,7 +2220,7 @@ where d not between 110 and 150
     or e+d between a+b-10 and c+130
 order by col2,col4,col1,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c-d as col1,
@@ -2233,7 +2233,7 @@ where e+d between a+b-10 and c+130
     or d not between 110 and 150
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c-d as col1,
@@ -2320,7 +2320,7 @@ NULL 206
 NULL 240
 NULL NULL
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -2332,7 +2332,7 @@ select c as col1,
 from t1
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -2426,7 +2426,7 @@ NULL 176 NULL 4 NULL -1
 NULL 244 NULL 3 NULL -4
 NULL NULL 238 3 NULL NULL
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a as col1,
@@ -2437,7 +2437,7 @@ where (a>b-2 and a<b+2)
     or b>c
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a as col1,
@@ -2448,7 +2448,7 @@ where (a>b-2 and a<b+2)
     or b>c
 order by col1,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a as col1,
@@ -2459,7 +2459,7 @@ where b>c
     or (c<=d-2 or c>=d+2)
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a as col1,
@@ -2470,7 +2470,7 @@ where b>c
     or (c<=d-2 or c>=d+2)
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a as col1,
@@ -2481,7 +2481,7 @@ where (a>b-2 and a<b+2)
     or (c<=d-2 or c>=d+2)
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a as col1,
@@ -2492,7 +2492,7 @@ where (a>b-2 and a<b+2)
     or (c<=d-2 or c>=d+2)
 order by col1,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c-d as col1,
@@ -2503,7 +2503,7 @@ where (e>c or e<d)
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c-d as col1,
@@ -2514,7 +2514,7 @@ where (e>c or e<d)
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col1,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2 as col1,
@@ -2526,7 +2526,7 @@ where (a>b-2 and a<b+2)
    and e+d between a+b-10 and c+130
 order by col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select a+b*2 as col1,
@@ -2538,7 +2538,7 @@ where (a>b-2 and a<b+2)
    and e+d between a+b-10 and c+130
 order by col1,col3,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -2553,7 +2553,7 @@ where (c<=d-2 or c>=d+2)
    and (a>b-2 and a<b+2)
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -2568,7 +2568,7 @@ where (c<=d-2 or c>=d+2)
    and (a>b-2 and a<b+2)
 order by col1,col3,col6,col4,col5,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -2583,7 +2583,7 @@ where (a>b-2 and a<b+2)
    and (c<=d-2 or c>=d+2)
 order by col6,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -3130,7 +3130,7 @@ order by col1,col2,col3
 NULL 444 1120
 NULL 444 NULL
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -3143,7 +3143,7 @@ where a>b
     or e+d between a+b-10 and c+130
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -3156,7 +3156,7 @@ where a>b
     or e+d between a+b-10 and c+130
 order by col4,col3,col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -3169,7 +3169,7 @@ where a>b
     or c>d
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -3182,7 +3182,7 @@ where a>b
     or c>d
 order by col3,col1,col4,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -3194,7 +3194,7 @@ where b>c
    and d not between 110 and 150
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -3206,7 +3206,7 @@ where b>c
    and d not between 110 and 150
 order by col1,col4,col2,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -3218,7 +3218,7 @@ where d not between 110 and 150
    and b>c
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
@@ -3230,7 +3230,7 @@ where d not between 110 and 150
    and b>c
 order by col2,col1,col4,col3
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
@@ -3239,7 +3239,7 @@ from t1
 where exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
@@ -3330,7 +3330,7 @@ NULL NULL 555 NULL 175
 NULL NULL 555 NULL 236
 1 NULL 555 NULL NULL
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select d-e as col1,
@@ -3340,7 +3340,7 @@ where (e>c or e<d)
    and d not between 110 and 150
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select d-e as col1,
@@ -3350,7 +3350,7 @@ where (e>c or e<d)
    and d not between 110 and 150
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select d-e as col1,
@@ -3360,7 +3360,7 @@ where d not between 110 and 150
    and (e>c or e<d)
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select d-e as col1,
@@ -3370,7 +3370,7 @@ where d not between 110 and 150
    and (e>c or e<d)
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -3382,7 +3382,7 @@ where d>e
     or (a>b-2 and a<b+2)
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -3394,7 +3394,7 @@ where d>e
     or (a>b-2 and a<b+2)
 order by col3,col1,col2,col4
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -3406,7 +3406,7 @@ where (a>b-2 and a<b+2)
     or d>e
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -3538,7 +3538,7 @@ order by col2,col5,col4,col3,col6,col1
 114 NULL NULL 110 1120 NULL
 238 NULL NULL 237 2360 239
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -3553,7 +3553,7 @@ where (c<=d-2 or c>=d+2)
    and (a>b-2 and a<b+2)
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -3568,7 +3568,7 @@ where (c<=d-2 or c>=d+2)
    and (a>b-2 and a<b+2)
 order by col5,col1,col7,col6,col4,col3,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -3583,7 +3583,7 @@ where (a>b-2 and a<b+2)
    and (c<=d-2 or c>=d+2)
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select e as col1,
@@ -3598,7 +3598,7 @@ where (a>b-2 and a<b+2)
    and (c<=d-2 or c>=d+2)
 order by col2,col3,col1,col5,col4,col6,col7
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -3609,7 +3609,7 @@ from t1
 where (e>c or e<d)
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -3620,7 +3620,7 @@ from t1
 where (e>c or e<d)
 order by col1,col4,col3,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -3630,7 +3630,7 @@ select case a+1 when b then 111 when c then 222
 from t1
 order by col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
@@ -3640,7 +3640,7 @@ select case a+1 when b then 111 when c then 222
 from t1
 order by col3,col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b as col1,
@@ -3654,7 +3654,7 @@ where c between b-2 and d+2
    and (e>c or e<d)
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b as col1,
@@ -3668,7 +3668,7 @@ where c between b-2 and d+2
    and (e>c or e<d)
 order by col2,col4,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b as col1,
@@ -3682,7 +3682,7 @@ where c between b-2 and d+2
    and a>b
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b as col1,
@@ -3696,7 +3696,7 @@ where c between b-2 and d+2
    and a>b
 order by col2,col3,col1,col4
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b as col1,
@@ -3710,7 +3710,7 @@ where a>b
    and c between b-2 and d+2
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select b as col1,
@@ -3724,7 +3724,7 @@ where a>b
    and c between b-2 and d+2
 order by col2,col1,col3,col4
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -3736,7 +3736,7 @@ from t1
 where (a>b-2 and a<b+2)
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
@@ -4060,7 +4060,7 @@ NULL
 NULL
 NULL
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -4074,7 +4074,7 @@ from t1
 where b>c
 order by col6,col7,col4,col5,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select c as col1,
@@ -4136,7 +4136,7 @@ order by col1,col2
 1600 162
 2360 237
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -4145,7 +4145,7 @@ from t1
 where exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
@@ -4154,7 +4154,7 @@ from t1
 where exists(select 1 from t1 as x where x.b<t1.b)
 order by col1,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(b-c) as col1,
@@ -4165,7 +4165,7 @@ select abs(b-c) as col1,
 from t1
 order by col4,col2,col3,col1
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select abs(b-c) as col1,
@@ -4176,7 +4176,7 @@ select abs(b-c) as col1,
 from t1
 order by col3,col1,col4,col2
 
-## need to check the result later, currently just use ok to skip
+# need to check the result later, currently just use ok to skip
 onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,

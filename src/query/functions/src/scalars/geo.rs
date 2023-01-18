@@ -17,6 +17,7 @@ use std::num::Wrapping;
 use std::sync::Arc;
 use std::sync::Once;
 
+use common_expression::types::map::KvPair;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::number::NumberScalar;
@@ -26,7 +27,11 @@ use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
+use common_expression::types::StringType;
+use common_expression::types::UInt8Type;
 use common_expression::types::ValueType;
+use common_expression::vectorize_with_builder_1_arg;
+use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
 use common_expression::Column;
 use common_expression::EvalContext;
@@ -36,8 +41,14 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
+use geo::coord;
+use geo::Contains;
+use geo::Coord;
+use geo::LineString;
+use geo::Polygon;
 use h3o::LatLng;
 use h3o::Resolution;
 use once_cell::sync::OnceCell;
@@ -133,6 +144,65 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
+    registry.register_passthrough_nullable_2_arg::<Float64Type, Float64Type, StringType, _, _>(
+        "geohash_encode",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<Float64Type, Float64Type, StringType>(
+            |lon, lat, builder, ctx| {
+                let c = Coord { x: lon.0, y: lat.0 };
+                match geohash::encode(c, 12) {
+                    Ok(r) => builder.put_str(&r),
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.put_str("");
+                    }
+                }
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<Float64Type, Float64Type, UInt8Type,StringType, _, _>(
+        "geohash_encode",
+        FunctionProperty::default(),
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_3_arg::<Float64Type, Float64Type, UInt8Type,StringType>(
+            |lon, lat, precision, builder, ctx| {
+                let c = Coord { x: lon.0, y: lat.0 };
+                let precision = if !(1..=12).contains(&precision) {12} else {precision};
+                match geohash::encode(c, precision as usize) {
+                    Ok(r) => builder.put_str(&r),
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.put_str("");
+                    }
+                }
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry
+        .register_passthrough_nullable_1_arg::<StringType, KvPair<Float64Type, Float64Type>, _, _>(
+            "geohash_decode",
+            FunctionProperty::default(),
+            |_| FunctionDomain::Full,
+            vectorize_with_builder_1_arg::<StringType, KvPair<Float64Type, Float64Type>>(
+                |encoded, builder, ctx| match std::str::from_utf8(encoded)
+                    .map_err(|e| e.to_string())
+                    .and_then(|s| geohash::decode(s).map_err(|e| e.to_string()))
+                {
+                    Ok((c, _, _)) => builder.push((c.x.into(), c.y.into())),
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e);
+                        builder.push((F64::from(0.0), F64::from(0.0)))
+                    }
+                },
+            ),
+        );
+
+    // point in ellipses
     registry.register_function_factory("point_in_ellipses", |_, args_type| {
         if args_type.len() < 6 {
             return None;
@@ -148,6 +218,265 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: Box::new(point_in_ellipses_fn),
         }))
     });
+
+    // simple polygon
+    // point_in_polygon((x, y), [(x1, y1), (x2, y2), ...])
+    registry.register_function_factory("point_in_polygon", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+
+        let (arg1, arg2) = if args_type.len() == 2 {
+            let arg1 = match args_type.get(0)? {
+                DataType::Tuple(tys) => tys.clone(),
+                _ => return None,
+            };
+            let arg2 = match args_type.get(1)? {
+                DataType::Array(box DataType::Tuple(tys)) => (0..tys.len())
+                    .map(|_| DataType::Number(NumberDataType::Float64))
+                    .collect(),
+
+                _ => return None,
+            };
+            (arg1, arg2)
+        } else {
+            (vec![], vec![])
+        };
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "point_in_polygon".to_string(),
+                args_type: vec![
+                    DataType::Tuple(arg1),
+                    DataType::Array(Box::new(DataType::Tuple(arg2))),
+                ],
+                return_type: DataType::Number(NumberDataType::UInt8),
+                property: Default::default(),
+            },
+            calc_domain: Box::new(|_| FunctionDomain::Full),
+            eval: Box::new(point_in_polygon_fn),
+        }))
+    });
+
+    // polygon with a number of holes, all as multidimensional array.
+    // point_in_polygon((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
+    registry.register_function_factory("point_in_polygon", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+
+        let (arg1, arg2) = if args_type.len() == 2 {
+            let arg1 = match args_type.get(0)? {
+                DataType::Tuple(tys) => tys.clone(),
+                _ => return None,
+            };
+            let arg2 = match args_type.get(1)? {
+                DataType::Array(box DataType::Array(box DataType::Tuple(tys))) => (0..tys.len())
+                    .map(|_| DataType::Number(NumberDataType::Float64))
+                    .collect(),
+                _ => return None,
+            };
+            (arg1, arg2)
+        } else {
+            (vec![], vec![])
+        };
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "point_in_polygon".to_string(),
+                args_type: vec![
+                    DataType::Tuple(arg1),
+                    DataType::Array(Box::new(DataType::Array(Box::new(DataType::Tuple(arg2))))),
+                ],
+                return_type: DataType::Number(NumberDataType::UInt8),
+                property: Default::default(),
+            },
+            calc_domain: Box::new(|_| FunctionDomain::Full),
+            eval: Box::new(point_in_polygon_fn),
+        }))
+    });
+
+    // polygon with a number of holes, each hole as a subsequent argument.
+    // point_in_polygon((x, y), [(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...)
+    registry.register_function_factory("point_in_polygon", |_, args_type| {
+        if args_type.len() < 3 {
+            return None;
+        }
+
+        let mut args = vec![];
+
+        let arg1 = match args_type.get(0)? {
+            DataType::Tuple(tys) => tys.clone(),
+            _ => return None,
+        };
+        args.push(DataType::Tuple(arg1));
+
+        let arg2: Vec<DataType> = match args_type.get(1)? {
+            DataType::Array(box DataType::Tuple(tys)) => (0..tys.len())
+                .map(|_| DataType::Number(NumberDataType::Float64))
+                .collect(),
+
+            _ => return None,
+        };
+
+        (0..args_type.len() - 1)
+            .for_each(|_| args.push(DataType::Array(Box::new(DataType::Tuple(arg2.clone())))));
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "point_in_polygon".to_string(),
+                args_type: args,
+                return_type: DataType::Number(NumberDataType::UInt8),
+                property: Default::default(),
+            },
+            calc_domain: Box::new(|_| FunctionDomain::Full),
+            eval: Box::new(point_in_polygon_fn),
+        }))
+    });
+}
+
+fn get_coord(fields: &[ScalarRef]) -> Coord {
+    let v = fields
+        .iter()
+        .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(s).unwrap()))
+        .map(|x: ValueRef<Float64Type>| match x {
+            ValueRef::Scalar(v) => *v,
+            _ => 0_f64,
+        })
+        .collect::<Vec<_>>();
+    Coord { x: v[0], y: v[1] }
+}
+
+fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
+    let input_rows = len.unwrap_or(1);
+    let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt8, input_rows);
+    for idx in 0..input_rows {
+        let arg0: Vec<f64> = match &args[0] {
+            ValueRef::Scalar(ScalarRef::Tuple(fields)) => fields
+                .iter()
+                .cloned()
+                .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(&s).unwrap()))
+                .map(|x: ValueRef<Float64Type>| match x {
+                    ValueRef::Scalar(v) => *v,
+                    _ => unreachable!(),
+                })
+                .collect(),
+            ValueRef::Column(Column::Tuple { fields, .. }) => fields
+                .iter()
+                .cloned()
+                .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))
+                .map(|x: ValueRef<Float64Type>| match x {
+                    ValueRef::Column(c) => unsafe {
+                        Float64Type::index_column_unchecked(&c, idx).0
+                    },
+                    _ => unreachable!(),
+                })
+                .collect(),
+            _ => unreachable!(),
+        };
+
+        let point = coord! {x:arg0[0], y:arg0[1]};
+
+        let polys = if args.len() == 2 {
+            let polys: Vec<Vec<Coord>> = match &args[1] {
+                ValueRef::Scalar(ScalarRef::Array(c)) => c
+                    .iter()
+                    .map(|s| match s {
+                        // form type 1: ((x, y), [(x1, y1), (x2, y2), ...])
+                        // match arm return value type should be equal, so we wrap to a vec here.
+                        ScalarRef::Tuple(fields) => vec![get_coord(&fields)],
+                        // form type 2: ((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
+                        ScalarRef::Array(inner_c) => inner_c
+                            .iter()
+                            .map(|s| match s {
+                                ScalarRef::Tuple(fields) => get_coord(&fields),
+                                _ => unreachable!(),
+                            })
+                            .collect(),
+                        _ => unreachable!(),
+                    })
+                    .collect(),
+                ValueRef::Column(Column::Array(c)) => unsafe {
+                    c.index_unchecked(idx)
+                        .iter()
+                        .map(|s| match s {
+                            ScalarRef::Tuple(fields) => vec![get_coord(&fields)],
+                            ScalarRef::Array(inner_c) => inner_c
+                                .iter()
+                                .map(|s| match s {
+                                    ScalarRef::Tuple(fields) => get_coord(&fields),
+                                    _ => unreachable!(),
+                                })
+                                .collect(),
+                            _ => unreachable!(),
+                        })
+                        .collect::<Vec<_>>()
+                },
+                _ => unreachable!(),
+            };
+            polys
+        } else {
+            // form type 3: ((x, y), [(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...)
+            let mut polys: Vec<Vec<Coord>> = Vec::new();
+            for arg in &args[1..] {
+                let hole: Vec<Coord> = match arg {
+                    ValueRef::Scalar(ScalarRef::Array(c)) => c
+                        .iter()
+                        .map(|s| match s {
+                            ScalarRef::Tuple(fields) => get_coord(&fields),
+
+                            _ => unreachable!(),
+                        })
+                        .collect(),
+                    ValueRef::Column(Column::Array(c)) => unsafe {
+                        c.index_unchecked(idx)
+                            .iter()
+                            .map(|s| match s {
+                                ScalarRef::Tuple(fields) => get_coord(&fields),
+                                _ => unreachable!(),
+                            })
+                            .collect()
+                    },
+                    _ => unreachable!(),
+                };
+                polys.push(hole);
+            }
+            polys
+        };
+
+        // since we wrapped form type 1 to a vec before, we should flatten here.
+        // form type 1 [[coord1], [coord2], ...]  -> [coord1, coord2, ...]
+        let polys = if polys[0].len() == 1 {
+            vec![polys.into_iter().flatten().collect()]
+        } else {
+            polys
+        };
+
+        let outer = LineString::from(polys[0].clone());
+        let inners: Vec<LineString> = if polys.len() > 1 {
+            polys[1..]
+                .iter()
+                .map(|p| LineString::from(p.clone()))
+                .collect()
+        } else {
+            vec![]
+        };
+        let poly = Polygon::new(outer, inners);
+
+        let is_in = poly.contains(&point);
+
+        builder.push(NumberScalar::UInt8(u8::from(is_in)));
+    }
+
+    match len {
+        Some(_) => Value::Column(Column::Number(builder.build())),
+        _ => Value::Scalar(Scalar::Number(builder.build_scalar())),
+    }
 }
 
 fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {

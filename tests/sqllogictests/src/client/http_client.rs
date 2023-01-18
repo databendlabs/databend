@@ -41,7 +41,7 @@ struct QueryResponse {
 }
 
 impl HttpClient {
-    pub fn create() -> Result<HttpClient> {
+    pub fn create() -> Result<Self> {
         let mut header = HeaderMap::new();
         header.insert(
             "Content-Type",
@@ -49,7 +49,7 @@ impl HttpClient {
         );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
         let client = ClientBuilder::new().default_headers(header).build()?;
-        Ok(HttpClient {
+        Ok(Self {
             client,
             session: None,
             debug: false,
@@ -59,6 +59,14 @@ impl HttpClient {
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
         if self.debug {
             println!("Running sql with http client: [{sql}]");
+            match &self.session {
+                None => {
+                    println!("Current http session: [None]")
+                }
+                Some(session) => {
+                    println!("Current http session: [{session:?}]")
+                }
+            }
         }
         let url = "http://127.0.0.1:8000/v1/query".to_string();
         let mut response = self.response(sql, &url, true).await?;

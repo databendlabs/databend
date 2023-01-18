@@ -39,10 +39,12 @@ use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
-use crate::operations::mutation::DeletionPartInfo;
-use crate::operations::mutation::DeletionSource;
-use crate::operations::mutation::DeletionTransform;
+use crate::operations::mutation::MutationAction;
+use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSink;
+use crate::operations::mutation::MutationSource;
+use crate::operations::mutation::MutationTransform;
+use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipe;
@@ -53,13 +55,13 @@ use crate::FuseTable;
 
 impl FuseTable {
     /// The flow of Pipeline is as follows:
-    /// +---------------+
-    /// |DeletionSource1| ------
-    /// +---------------+       |      +-----------------+      +------------+
-    /// |     ...       | ...   | ---> |DeletionTransform| ---> |MutationSink|
-    /// +---------------+       |      +-----------------+      +------------+
-    /// |DeletionSourceN| ------
-    /// +---------------+
+    /// +---------------+      +-----------------------+
+    /// |MutationSource1| ---> |SerializeDataTransform1|   ------
+    /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
+    /// |     ...       | ---> |          ...          |   ...   | ---> |MutationTransform| ---> |MutationSink|
+    /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
+    /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
+    /// +---------------+      +-----------------------+
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -105,7 +107,7 @@ impl FuseTable {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            if self.try_eval_const(ctx.clone(), &self.table_info.schema(), &filter_expr)? {
+            if self.try_eval_const(ctx.clone(), &self.schema(), &filter_expr)? {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,
@@ -123,7 +125,18 @@ impl FuseTable {
         self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
             .await?;
 
-        self.try_add_deletion_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
+        let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
+        pipeline.add_transform(|input, output| {
+            SerializeDataTransform::try_create(
+                ctx.clone(),
+                input,
+                output,
+                self,
+                cluster_stats_gen.clone(),
+            )
+        })?;
+
+        self.try_add_mutation_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
 
         pipeline.add_sink(|input| {
             MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
@@ -131,7 +144,7 @@ impl FuseTable {
         Ok(())
     }
 
-    fn try_eval_const(
+    pub fn try_eval_const(
         &self,
         ctx: Arc<dyn TableContext>,
         schema: &TableSchema,
@@ -150,7 +163,6 @@ impl FuseTable {
 
         let filter_expr = filter
             .as_expr(&BUILTIN_FUNCTIONS)
-            .unwrap()
             .project_column_ref(|name| schema.index_of(name).unwrap());
         let func_ctx = ctx.try_get_function_context()?;
         let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
@@ -176,9 +188,70 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
+        self.mutation_block_purning(
+            ctx.clone(),
+            vec![filter.clone()],
+            projection.clone(),
+            base_snapshot,
+        )
+        .await?;
+
+        let block_reader = self.create_block_reader(projection)?;
+        let schema = block_reader.schema();
+        let filter = Arc::new(Some(
+            filter
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .project_column_ref(|name| schema.index_of(name).unwrap()),
+        ));
+
+        let all_col_ids = self.all_the_columns_ids();
+        let remain_col_ids: Vec<usize> = all_col_ids
+            .into_iter()
+            .filter(|id| !col_indices.contains(id))
+            .collect();
+        let mut source_col_ids = col_indices;
+        let remain_reader = if remain_col_ids.is_empty() {
+            Arc::new(None)
+        } else {
+            source_col_ids.extend_from_slice(&remain_col_ids);
+            Arc::new(Some(
+                (*self.create_block_reader(Projection::Columns(remain_col_ids))?).clone(),
+            ))
+        };
+
+        // resort the block.
+        let mut projection = (0..source_col_ids.len()).collect::<Vec<_>>();
+        projection.sort_by_key(|&i| source_col_ids[i]);
+        let ops = vec![BlockOperator::Project { projection }];
+
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        // Add source pipe.
+        pipeline.add_source(
+            |output| {
+                MutationSource::try_create(
+                    ctx.clone(),
+                    MutationAction::Deletion,
+                    output,
+                    filter.clone(),
+                    block_reader.clone(),
+                    remain_reader.clone(),
+                    ops.clone(),
+                )
+            },
+            max_threads,
+        )
+    }
+
+    pub async fn mutation_block_purning(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filters: Vec<RemoteExpr<String>>,
+        projection: Projection,
+        base_snapshot: &TableSnapshot,
+    ) -> Result<()> {
         let push_down = Some(PushDownInfo {
-            projection: Some(projection.clone()),
-            filters: vec![filter.clone()],
+            projection: Some(projection),
+            filters,
             ..PushDownInfo::default()
         });
 
@@ -212,43 +285,13 @@ impl FuseTable {
             index_stats
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
-                .map(|((a, b), c)| DeletionPartInfo::create(a, b, c))
+                .map(|((a, b), c)| MutationPartInfo::create(a, b, c))
                 .collect(),
         );
-        ctx.try_set_partitions(parts)?;
-
-        let block_reader = self.create_block_reader(projection.clone())?;
-        let all_col_ids = self.all_the_columns_ids();
-        let remain_col_ids: Vec<usize> = all_col_ids
-            .into_iter()
-            .filter(|id| !col_indices.contains(id))
-            .collect();
-        let remain_reader = if remain_col_ids.is_empty() {
-            Arc::new(None)
-        } else {
-            Arc::new(Some(
-                (*self.create_block_reader(Projection::Columns(remain_col_ids))?).clone(),
-            ))
-        };
-
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        // Add source pipe.
-        pipeline.add_source(
-            |output| {
-                DeletionSource::try_create(
-                    ctx.clone(),
-                    output,
-                    self,
-                    block_reader.clone(),
-                    Arc::new(filter.clone()),
-                    remain_reader.clone(),
-                )
-            },
-            max_threads,
-        )
+        ctx.try_set_partitions(parts)
     }
 
-    fn try_add_deletion_transform(
+    pub fn try_add_mutation_transform(
         &self,
         ctx: Arc<dyn TableContext>,
         base_segments: Vec<Location>,
@@ -266,7 +309,7 @@ impl FuseTable {
                     inputs_port.push(InputPort::create());
                 }
                 let output_port = OutputPort::create();
-                let processor = DeletionTransform::try_create(
+                let processor = MutationTransform::try_create(
                     ctx,
                     self.schema(),
                     inputs_port.clone(),
@@ -303,7 +346,6 @@ impl FuseTable {
         for remote_expr in &cluster_keys {
             let expr: Expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
-                .unwrap()
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
             let index = match &expr {
                 Expr::ColumnRef { id, .. } => *id,

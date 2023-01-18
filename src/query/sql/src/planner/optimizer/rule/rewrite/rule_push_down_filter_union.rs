@@ -192,6 +192,7 @@ fn replace_column_binding(
             return_type: expr.return_type,
         })),
         Scalar::CastExpr(expr) => Ok(Scalar::CastExpr(CastExpr {
+            is_try: expr.is_try,
             argument: Box::new(replace_column_binding(index_pairs, *(expr.argument))?),
             from_type: expr.from_type,
             target_type: expr.target_type,

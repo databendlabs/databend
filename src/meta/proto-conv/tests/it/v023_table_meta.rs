@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_expression as ce;
+use common_expression as ex;
 use common_expression::types::NumberDataType;
 use common_meta_app::schema as mt;
 use common_storage::StorageParams;
@@ -83,48 +83,48 @@ fn test_decode_v23_table_meta() -> anyhow::Result<()> {
     ];
 
     let want = || mt::TableMeta {
-        schema: Arc::new(ce::TableSchema::new_from(
+        schema: Arc::new(ex::TableSchema::new_from(
             vec![
-                ce::TableField::new(
+                ex::TableField::new(
                     "nullable",
-                    ce::TableDataType::Nullable(Box::new(ce::TableDataType::Number(
+                    ex::TableDataType::Nullable(Box::new(ex::TableDataType::Number(
                         NumberDataType::Int8,
                     ))),
                 )
                 .with_default_expr(Some("a + 3".to_string())),
-                ce::TableField::new("bool", ce::TableDataType::Boolean),
-                ce::TableField::new("int8", ce::TableDataType::Number(NumberDataType::Int8)),
-                ce::TableField::new("int16", ce::TableDataType::Number(NumberDataType::Int16)),
-                ce::TableField::new("int32", ce::TableDataType::Number(NumberDataType::Int32)),
-                ce::TableField::new("int64", ce::TableDataType::Number(NumberDataType::Int64)),
-                ce::TableField::new("uint8", ce::TableDataType::Number(NumberDataType::UInt8)),
-                ce::TableField::new("uint16", ce::TableDataType::Number(NumberDataType::UInt16)),
-                ce::TableField::new("uint32", ce::TableDataType::Number(NumberDataType::UInt32)),
-                ce::TableField::new("uint64", ce::TableDataType::Number(NumberDataType::UInt64)),
-                ce::TableField::new(
+                ex::TableField::new("bool", ex::TableDataType::Boolean),
+                ex::TableField::new("int8", ex::TableDataType::Number(NumberDataType::Int8)),
+                ex::TableField::new("int16", ex::TableDataType::Number(NumberDataType::Int16)),
+                ex::TableField::new("int32", ex::TableDataType::Number(NumberDataType::Int32)),
+                ex::TableField::new("int64", ex::TableDataType::Number(NumberDataType::Int64)),
+                ex::TableField::new("uint8", ex::TableDataType::Number(NumberDataType::UInt8)),
+                ex::TableField::new("uint16", ex::TableDataType::Number(NumberDataType::UInt16)),
+                ex::TableField::new("uint32", ex::TableDataType::Number(NumberDataType::UInt32)),
+                ex::TableField::new("uint64", ex::TableDataType::Number(NumberDataType::UInt64)),
+                ex::TableField::new(
                     "float32",
-                    ce::TableDataType::Number(NumberDataType::Float32),
+                    ex::TableDataType::Number(NumberDataType::Float32),
                 ),
-                ce::TableField::new(
+                ex::TableField::new(
                     "float64",
-                    ce::TableDataType::Number(NumberDataType::Float64),
+                    ex::TableDataType::Number(NumberDataType::Float64),
                 ),
-                ce::TableField::new("date", ce::TableDataType::Date),
-                ce::TableField::new("timestamp", ce::TableDataType::Timestamp),
-                ce::TableField::new("string", ce::TableDataType::String),
-                ce::TableField::new("struct", ce::TableDataType::Tuple {
+                ex::TableField::new("date", ex::TableDataType::Date),
+                ex::TableField::new("timestamp", ex::TableDataType::Timestamp),
+                ex::TableField::new("string", ex::TableDataType::String),
+                ex::TableField::new("struct", ex::TableDataType::Tuple {
                     fields_name: vec![s("foo"), s("bar")],
-                    fields_type: vec![ce::TableDataType::Boolean, ce::TableDataType::String],
+                    fields_type: vec![ex::TableDataType::Boolean, ex::TableDataType::String],
                 }),
-                ce::TableField::new(
+                ex::TableField::new(
                     "array",
-                    ce::TableDataType::Array(Box::new(ce::TableDataType::Boolean)),
+                    ex::TableDataType::Array(Box::new(ex::TableDataType::Boolean)),
                 ),
-                ce::TableField::new("variant", ce::TableDataType::Variant),
-                ce::TableField::new("variant_array", ce::TableDataType::Variant),
-                ce::TableField::new("variant_object", ce::TableDataType::Variant),
+                ex::TableField::new("variant", ex::TableDataType::Variant),
+                ex::TableField::new("variant_array", ex::TableDataType::Variant),
+                ex::TableField::new("variant_object", ex::TableDataType::Variant),
                 // NOTE: It is safe to convert Interval to NULL, because `Interval` is never really used.
-                ce::TableField::new("interval", ce::TableDataType::Null),
+                ex::TableField::new("interval", ex::TableDataType::Null),
             ],
             btreemap! {s("a") => s("b")},
         )),

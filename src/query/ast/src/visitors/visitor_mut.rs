@@ -344,7 +344,9 @@ pub trait VisitorMut: Sized {
         walk_query_mut(self, query);
     }
 
-    fn visit_explain(&mut self, _kind: &mut ExplainKind, _query: &mut Statement<'_>) {}
+    fn visit_explain(&mut self, _kind: &mut ExplainKind, stmt: &mut Statement<'_>) {
+        walk_statement_mut(self, stmt);
+    }
 
     fn visit_copy(&mut self, _copy: &mut CopyStmt<'_>) {}
 
@@ -370,7 +372,7 @@ pub trait VisitorMut: Sized {
         &mut self,
         _is_global: bool,
         _variable: &mut Identifier<'_>,
-        _value: &mut Literal,
+        _value: &mut Box<Expr<'_>>,
     ) {
     }
 

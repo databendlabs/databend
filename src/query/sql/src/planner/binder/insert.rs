@@ -96,13 +96,16 @@ impl<'a> Binder {
                     opts, start, None,
                 ))
             }
-            InsertSource::Values { rest_str } => match self.ctx.get_stage_attachment() {
-                Some(attachment) => Ok(InsertInputSource::Stage(Arc::new(attachment))),
-                None => {
-                    let data = rest_str.trim_end_matches(';').trim_start().to_owned();
-                    Ok(InsertInputSource::Values(data))
+            InsertSource::Values { rest_str } => {
+                let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
+                match self.ctx.get_stage_attachment() {
+                    Some(mut attachment) => {
+                        attachment.values_str = values_str;
+                        Ok(InsertInputSource::Stage(Arc::new(attachment)))
+                    }
+                    None => Ok(InsertInputSource::Values(values_str)),
                 }
-            },
+            }
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;

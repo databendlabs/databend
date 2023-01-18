@@ -8,6 +8,7 @@ echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone.sh
 
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
+BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 RUN_DIR=""
 if [ $# -gt 0 ]; then
@@ -16,4 +17,4 @@ fi
 echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
-cargo run -p sqllogictests -- --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --parallel 8
+target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --parallel 8 --debug

@@ -26,7 +26,7 @@ use crate::Incompatible;
 ///   similar to: test_user_stage_fs_v6() in tests/it/user_stage.rs;
 ///
 /// `VER` is the current metadata version and is automatically set to the last version.
-/// `MIN_COMPATIBLE_VER` is the oldest compatible version.
+/// `MIN_READER_VER` is the oldest compatible version.
 const META_CHANGE_LOG: &[(u64, &str)] = &[
     //
     (1, "----------: Initial"),
@@ -76,20 +76,33 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     ),
     (22, "2022-12-13: Add: users.proto/FileFormatOptions::quote"),
     (23, "2022-12-28: Add: table.proto/TableMeta::part_prefix"),
+    (
+        24,
+        "2023-01-07: Add: new-schema pb::DataType to/from TableDataType",
+    ),
+    (25, "2023-01-05: Add: user.proto/OnErrorMode::AbortNum"),
+    // Dear developer:
+    //      If you're gonna add a new metadata version, you'll have to add a test for it.
+    //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
+    //      and replace two of the variable `bytes` and `want`.
 ];
 
+/// Attribute of both a reader and a message:
 /// The version to write into a message and it is also the version of the message reader.
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;
 
-/// The minimal reader version that can read message of version `VER`, i.e. `message.version=VER`.
+/// Attribute of a message:
+/// The minimal reader version that can read message of version `VER`, i.e. `message.ver=VER`.
 ///
 /// This is written to every message that needs to be serialized independently.
-pub const MIN_READER_VER: u64 = 1;
+pub const MIN_READER_VER: u64 = 24;
 
-/// The minimal message version(`message.version`) that a reader can read.
+/// Attribute of a reader:
+/// The minimal message version(`message.ver`) that a reader can read.
 pub const MIN_MSG_VER: u64 = 1;
 
 pub fn reader_check_msg(msg_ver: u64, msg_min_reader_ver: u64) -> Result<(), Incompatible> {
+    // The reader version must be big enough
     if VER < msg_min_reader_ver {
         return Err(Incompatible {
             reason: format!(
@@ -98,6 +111,8 @@ pub fn reader_check_msg(msg_ver: u64, msg_min_reader_ver: u64) -> Result<(), Inc
             ),
         });
     }
+
+    // The message version must be big enough
     if msg_ver < MIN_MSG_VER {
         return Err(Incompatible {
             reason: format!(

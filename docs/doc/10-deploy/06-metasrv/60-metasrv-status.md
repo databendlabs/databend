@@ -154,4 +154,4 @@ None.
 
 ## CPU and Memory Profiling APIs
 
-Enables you to visualize performance data of your CPU and memory with [FlameGraph](https://github.com/brendangregg/FlameGraph). For more information, see [How to Profile Databend](../../100-faq/30-how-to-profiling.md).
+Enables you to visualize performance data of your CPU and memory with [FlameGraph](https://github.com/brendangregg/FlameGraph). For more information, see [How to Profile Databend](../../90-contributing/07-how-to-profiling.md).

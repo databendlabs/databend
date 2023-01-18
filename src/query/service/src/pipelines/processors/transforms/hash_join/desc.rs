@@ -15,13 +15,12 @@
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check;
+use common_expression::type_check::check_function;
 use common_expression::DataBlock;
 use common_expression::Expr;
-use common_expression::RawExpr;
+use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::HashJoin;
-use common_sql::executor::PhysicalScalar;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -76,13 +75,21 @@ impl HashJoinDesc {
     pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
         let other_predicate = Self::join_predicate(&join.non_equi_conditions)?;
 
-        let build_keys: Result<Vec<Expr>> = join.build_keys.iter().map(|k| k.as_expr()).collect();
-        let probe_keys: Result<Vec<Expr>> = join.probe_keys.iter().map(|k| k.as_expr()).collect();
+        let build_keys: Vec<Expr> = join
+            .build_keys
+            .iter()
+            .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
+            .collect();
+        let probe_keys: Vec<Expr> = join
+            .probe_keys
+            .iter()
+            .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
+            .collect();
 
         Ok(HashJoinDesc {
             join_type: join.join_type.clone(),
-            build_keys: build_keys?,
-            probe_keys: probe_keys?,
+            build_keys,
+            probe_keys,
             other_predicate,
             marker_join_desc: MarkJoinDesc {
                 has_null: RwLock::new(false),
@@ -93,25 +100,13 @@ impl HashJoinDesc {
         })
     }
 
-    fn join_predicate(non_equi_conditions: &[PhysicalScalar]) -> Result<Option<Expr>> {
-        if non_equi_conditions.is_empty() {
-            return Ok(None);
-        }
-
-        let mut condition = non_equi_conditions[0].clone().as_raw_expr();
-
-        for other_condition in non_equi_conditions.iter().skip(1) {
-            condition = RawExpr::FunctionCall {
-                span: None,
-                name: "and".to_string(),
-                params: vec![],
-                args: vec![condition, other_condition.as_raw_expr()],
-            };
-        }
-
-        let expr = type_check::check(&condition, &BUILTIN_FUNCTIONS)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
-
-        Ok(Some(expr))
+    fn join_predicate(non_equi_conditions: &[RemoteExpr]) -> Result<Option<Expr>> {
+        non_equi_conditions
+            .iter()
+            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+            .try_reduce(|lhs, rhs| {
+                check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                    .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))
+            })
     }
 }

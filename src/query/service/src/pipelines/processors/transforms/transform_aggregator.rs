@@ -34,8 +34,8 @@ pub struct TransformAggregator;
 
 impl TransformAggregator {
     pub fn try_create_final(
-        transform_params: AggregatorTransformParams,
         ctx: Arc<QueryContext>,
+        transform_params: AggregatorTransformParams,
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params.clone();
 

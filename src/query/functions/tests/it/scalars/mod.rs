@@ -39,6 +39,7 @@ mod datetime;
 mod geo;
 mod hash;
 mod math;
+mod misc;
 mod other;
 pub(crate) mod parser;
 mod regexp;
@@ -65,14 +66,15 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
             .enumerate()
             .collect::<HashMap<_, _>>();
 
-        let func_ctx = FunctionContext { tz: chrono_tz::UTC };
-
-        let constant_folder =
-            ConstantFolder::new(input_domains.clone(), func_ctx, &BUILTIN_FUNCTIONS);
-        let (optimized_expr, output_domain) = constant_folder.fold(&expr);
+        let (optimized_expr, output_domain) = ConstantFolder::fold_with_domain(
+            &expr,
+            input_domains.clone(),
+            FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        );
 
         let remote_expr = optimized_expr.as_remote_expr();
-        let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS).unwrap();
+        let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
 
         let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(1);
         let block = DataBlock::new(
@@ -90,7 +92,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
             test_arrow_conversion(col);
         });
 
-        let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&block, FunctionContext::default(), &BUILTIN_FUNCTIONS);
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {

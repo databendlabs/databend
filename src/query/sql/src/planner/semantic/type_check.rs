@@ -516,7 +516,7 @@ impl<'a> TypeChecker<'a> {
                 let raw_expr = RawExpr::Cast {
                     span: None,
                     is_try: false,
-                    expr: Box::new(scalar.as_raw_expr()),
+                    expr: Box::new(scalar.as_raw_expr_with_col_name()),
                     dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
@@ -524,6 +524,32 @@ impl<'a> TypeChecker<'a> {
                     .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
                 Box::new((
                     CastExpr {
+                        is_try: false,
+                        argument: Box::new(scalar),
+                        from_type: Box::new(data_type),
+                        target_type: Box::new(expr.data_type().clone()),
+                    }
+                    .into(),
+                    expr.data_type().clone(),
+                ))
+            }
+
+            Expr::TryCast {
+                expr, target_type, ..
+            } => {
+                let box (scalar, data_type) = self.resolve(expr, required_type).await?;
+                let raw_expr = RawExpr::Cast {
+                    span: None,
+                    is_try: true,
+                    expr: Box::new(scalar.as_raw_expr_with_col_name()),
+                    dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
+                };
+                let registry = &BUILTIN_FUNCTIONS;
+                let expr = type_check::check(&raw_expr, registry)
+                    .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
+                Box::new((
+                    CastExpr {
+                        is_try: true,
                         argument: Box::new(scalar),
                         from_type: Box::new(data_type),
                         target_type: Box::new(expr.data_type().clone()),
@@ -821,30 +847,6 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_map_access(expr, paths).await?
             }
 
-            Expr::TryCast {
-                expr, target_type, ..
-            } => {
-                let box (scalar, data_type) = self.resolve(expr, required_type).await?;
-                let raw_expr = RawExpr::Cast {
-                    span: None,
-                    is_try: true,
-                    expr: Box::new(scalar.as_raw_expr()),
-                    dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
-                };
-                let registry = &BUILTIN_FUNCTIONS;
-                let expr = type_check::check(&raw_expr, registry)
-                    .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
-                Box::new((
-                    CastExpr {
-                        argument: Box::new(scalar),
-                        from_type: Box::new(data_type),
-                        target_type: Box::new(expr.data_type().clone()),
-                    }
-                    .into(),
-                    expr.data_type().clone(),
-                ))
-            }
-
             Expr::Extract {
                 span, kind, expr, ..
             } => {
@@ -1004,7 +1006,10 @@ impl<'a> TypeChecker<'a> {
         _required_type: Option<DataType>,
     ) -> Result<Box<(Scalar, DataType)>> {
         // Type check
-        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let arguments = args
+            .iter()
+            .map(|v| v.as_raw_expr_with_col_name())
+            .collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
             span: None,
             name: func_name.to_string(),
@@ -1814,7 +1819,7 @@ impl<'a> TypeChecker<'a> {
             if let Scalar::BoundColumnRef(BoundColumnRef { ref column }) = scalar {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn { data_type, .. } = column_entry {
-                    table_data_type = data_type.remove_nullable();
+                    table_data_type = data_type;
                     if let TableDataType::Tuple { .. } = table_data_type {
                         let box (inner_scalar, _inner_data_type) = self
                             .resolve_tuple_map_access_pushdown(
@@ -1911,7 +1916,6 @@ impl<'a> TypeChecker<'a> {
         names.push(column.column_name.clone());
         let mut index_with_types = VecDeque::with_capacity(paths.len());
         while paths.front().is_some() {
-            *table_data_type = table_data_type.remove_nullable();
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,

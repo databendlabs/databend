@@ -25,7 +25,6 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_expression::infer_table_schema;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
@@ -106,22 +105,22 @@ impl StatementHandlerParams {
 async fn execute(
     ctx: Arc<QueryContext>,
     interpreter: InterpreterPtr,
-    schema: DataSchemaRef,
     format: ClickhouseFormatType,
     params: StatementHandlerParams,
     handle: Option<JoinHandle<()>>,
 ) -> Result<WithContentType<Body>> {
     let format_typ = format.typ.clone();
+    let schema = interpreter.schema();
 
     // the reason of spawning new task to execute the interpreter:
-    // (sorry, I failed to describe it in a more concise way)
+    // (FIXME describe this in a more concise way)
     //
     // - there are executions of interpreters that will block the caller (NOT async wait)
     //   e.g. PipelineCompleteExecutor::execute, will spawn thread that executes the pipeline,
     //   and then, join the thread handle.
     // - async mutex (tokio::sync::Mutex) are used while executing the queries/statements
     //   An async task may yield while holding the lock of an async mutex. e.g. embedded meta store
-    // - this method(execute) is running with default tokio runtime
+    // - this method(execute) is running with default tokio runtime (the "tokio-runtime-worker" thread)
     //
     // if executes the interpreter "directly" (by using current thread), the following deadlock may happen:
     //
@@ -145,79 +144,79 @@ async fn execute(
     //
     //  P.S. I think it will be better/more reasonable if we could avoid using pthread_join inside an async stack.
 
-    let mut data_stream = ctx
-        .try_spawn({
-            let ctx = ctx.clone();
-            async move { interpreter.execute(ctx.clone()).await }
-        })?
-        .await
-        .map_err(|err| {
-            ErrorCode::from_string(format!(
-                "clickhouse handler failed to join interpreter thread: {err:?}"
-            ))
-        })??;
+    ctx.try_spawn({
+        let ctx = ctx.clone();
+        async move {
+            let mut data_stream = interpreter.execute(ctx.clone()).await?;
+            let table_schema = infer_table_schema(&schema)?;
+            let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
+                format,
+                table_schema,
+                &ctx.get_settings(),
+            )?;
 
-    let table_schema = infer_table_schema(&schema)?;
-    let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
-        format,
-        table_schema,
-        &ctx.get_settings(),
-    )?;
+            let prefix = Ok(output_format.serialize_prefix()?);
 
-    let prefix = Ok(output_format.serialize_prefix()?);
-
-    let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
-        if params.compress() {
-            match rb {
-                Ok(b) => compress_block(b),
-                Err(e) => Err(e),
-            }
-        } else {
-            rb
-        }
-    };
-
-    // try to catch runtime error before http response, so user can client can get http 500
-    let first_block = match data_stream.next().await {
-        Some(block) => match block {
-            Ok(block) => Some(compress_fn(output_format.serialize_block(&block))),
-            Err(err) => return Err(err),
-        },
-        None => None,
-    };
-
-    let session = ctx.get_current_session();
-    let stream = stream! {
-        yield compress_fn(prefix);
-        let mut ok = true;
-        // do not pull data_stream if we already meet a None
-        if let Some(block) = first_block {
-            yield block;
-            while let Some(block) = data_stream.next().await {
-                match block{
-                    Ok(block) => {
-                        yield compress_fn(output_format.serialize_block(&block));
-                    },
-                    Err(err) => {
-                        let message = format!("{}", err);
-                        yield compress_fn(Ok(message.into_bytes()));
-                        ok = false;
-                        break
+            let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
+                if params.compress() {
+                    match rb {
+                        Ok(b) => compress_block(b),
+                        Err(e) => Err(e),
                     }
-                };
-            }
-        }
-        if ok {
-            yield compress_fn(output_format.finalize());
-        }
-        // to hold session ref until stream is all consumed
-        let _ = session.get_id();
-    };
-    if let Some(handle) = handle {
-        handle.await.expect("must")
-    }
+                } else {
+                    rb
+                }
+            };
 
-    Ok(Body::from_bytes_stream(stream).with_content_type(format_typ.get_content_type()))
+            // try to catch runtime error before http response, so user can client can get http 500
+            let first_block = match data_stream.next().await {
+                Some(block) => match block {
+                    Ok(block) => Some(compress_fn(output_format.serialize_block(&block))),
+                    Err(err) => return Err(err),
+                },
+                None => None,
+            };
+
+            let session = ctx.get_current_session();
+            let stream = stream! {
+                yield compress_fn(prefix);
+                let mut ok = true;
+                // do not pull data_stream if we already meet a None
+                if let Some(block) = first_block {
+                    yield block;
+                    while let Some(block) = data_stream.next().await {
+                        match block{
+                            Ok(block) => {
+                                yield compress_fn(output_format.serialize_block(&block));
+                            },
+                            Err(err) => {
+                                let message = format!("{}", err);
+                                yield compress_fn(Ok(message.into_bytes()));
+                                ok = false;
+                                break
+                            }
+                        };
+                    }
+                }
+                if ok {
+                    yield compress_fn(output_format.finalize());
+                }
+                // to hold session ref until stream is all consumed
+                let _ = session.get_id();
+            };
+            if let Some(handle) = handle {
+                handle.await.expect("must")
+            }
+
+            Ok(Body::from_bytes_stream(stream).with_content_type(format_typ.get_content_type()))
+        }
+    })?
+    .await
+    .map_err(|err| {
+        ErrorCode::from_string(format!(
+            "clickhouse handler failed to join interpreter thread: {err:?}"
+        ))
+    })?
 }
 
 #[poem::handler]
@@ -262,7 +261,7 @@ pub async fn clickhouse_handler_get(
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
         .map_err(BadRequest)?;
-    execute(context, interpreter, plan.schema(), format, params, None)
+    execute(context, interpreter, format, params, None)
         .await
         .map_err(InternalServerError)
 }
@@ -406,7 +405,7 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(BadRequest)?;
 
-    execute(ctx, interpreter, plan.schema(), format, params, handle)
+    execute(ctx, interpreter, format, params, handle)
         .await
         .map_err(InternalServerError)
 }

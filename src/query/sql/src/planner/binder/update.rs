@@ -23,6 +23,7 @@ use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::normalize_identifier;
 use crate::plans::Plan;
+use crate::plans::Scalar;
 use crate::plans::UpdatePlan;
 use crate::BindContext;
 
@@ -67,7 +68,6 @@ impl<'a> Binder {
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
-        let table_id = table.get_id();
 
         let mut scalar_binder = ScalarBinder::new(
             &context,
@@ -88,12 +88,23 @@ impl<'a> Binder {
                 )));
             }
 
+            // TODO(zhyass): selection and update_list support subquery.
             let (scalar, _) = scalar_binder.bind(&update_expr.expr).await?;
+            if matches!(scalar, Scalar::SubqueryExpr(_)) {
+                return Err(ErrorCode::Internal(
+                    "Update does not support subquery temporarily",
+                ));
+            }
             update_columns.insert(index, scalar);
         }
 
         let push_downs = if let Some(expr) = selection {
             let (scalar, _) = scalar_binder.bind(expr).await?;
+            if matches!(scalar, Scalar::SubqueryExpr(_)) {
+                return Err(ErrorCode::Internal(
+                    "Update does not support subquery temporarily",
+                ));
+            }
             Some(scalar)
         } else {
             None
@@ -103,9 +114,9 @@ impl<'a> Binder {
             catalog: catalog_name,
             database: database_name,
             table: table_name,
-            table_id,
             update_list: update_columns,
             selection: push_downs,
+            bind_context: Box::new(context.clone()),
         };
         Ok(Plan::Update(Box::new(plan)))
     }

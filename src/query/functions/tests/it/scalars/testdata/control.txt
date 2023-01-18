@@ -62,8 +62,8 @@ output         : NULL
 
 
 ast            : multi_if(cond_a, expr_true, expr_else)
-raw expr       : multi_if(#0::Boolean, #1::Int64, #2::Int64 NULL)
-checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST(#0 AS Boolean NULL), CAST(#1 AS Int64 NULL), #2)
+raw expr       : multi_if(cond_a::Boolean, expr_true::Int64, expr_else::Int64 NULL)
+checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), CAST(expr_true AS Int64 NULL), expr_else)
 evaluation:
 +--------+---------------+-----------+------------------+------------------+
 |        | cond_a        | expr_true | expr_else        | Output           |
@@ -87,8 +87,8 @@ evaluation (internal):
 
 
 ast            : multi_if(cond_a, expr_true, expr_else)
-raw expr       : multi_if(#0::Boolean, #1::Int64, #2::Int64 NULL)
-checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST(#0 AS Boolean NULL), CAST(#1 AS Int64 NULL), #2)
+raw expr       : multi_if(cond_a::Boolean, expr_true::Int64, expr_else::Int64 NULL)
+checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), CAST(expr_true AS Int64 NULL), expr_else)
 evaluation:
 +--------+---------------+-----------+------------------+------------------+
 |        | cond_a        | expr_true | expr_else        | Output           |
@@ -112,8 +112,8 @@ evaluation (internal):
 
 
 ast            : multi_if(cond_a, expr_a, cond_b, expr_b, expr_else)
-raw expr       : multi_if(#0::Boolean, #1::Int64, #2::Boolean NULL, #3::Int64, #4::Int64 NULL)
-checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(#0 AS Boolean NULL), CAST(#1 AS Int64 NULL), #2, CAST(#3 AS Int64 NULL), #4)
+raw expr       : multi_if(cond_a::Boolean, expr_a::Int64, cond_b::Boolean NULL, expr_b::Int64, expr_else::Int64 NULL)
+checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), CAST(expr_a AS Int64 NULL), cond_b, CAST(expr_b AS Int64 NULL), expr_else)
 evaluation:
 +--------+---------------+---------+-----------------+---------+-------------------+-------------------+
 |        | cond_a        | expr_a  | cond_b          | expr_b  | expr_else         | Output            |
@@ -139,8 +139,8 @@ evaluation (internal):
 
 
 ast            : multi_if(cond_a, expr_a, cond_b, expr_b, expr_else)
-raw expr       : multi_if(#0::Boolean, #1::Int64, #2::Boolean, #3::Int64, #4::Int64)
-checked expr   : multi_if<T0=Int64><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(#0 AS Boolean NULL), #1, CAST(#2 AS Boolean NULL), #3, #4)
+raw expr       : multi_if(cond_a::Boolean, expr_a::Int64, cond_b::Boolean, expr_b::Int64, expr_else::Int64)
+checked expr   : multi_if<T0=Int64><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), expr_a, CAST(cond_b AS Boolean NULL), expr_b, expr_else)
 evaluation:
 +--------+---------------+---------+---------------+---------+-----------+----------+
 |        | cond_a        | expr_a  | cond_b        | expr_b  | expr_else | Output   |
@@ -220,8 +220,8 @@ output         : false
 
 
 ast            : is_not_null(null_col)
-raw expr       : is_not_null(#0::NULL)
-checked expr   : is_not_null<NULL>(#0)
+raw expr       : is_not_null(null_col::NULL)
+checked expr   : is_not_null<NULL>(null_col)
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -229,8 +229,8 @@ output         : false
 
 
 ast            : is_not_null(int64_col)
-raw expr       : is_not_null(#0::Int64)
-checked expr   : is_not_null<T0=Int64><T0 NULL>(CAST(#0 AS Int64 NULL))
+raw expr       : is_not_null(int64_col::Int64)
+checked expr   : is_not_null<T0=Int64><T0 NULL>(CAST(int64_col AS Int64 NULL))
 optimized expr : true
 evaluation:
 +--------+-----------+---------+
@@ -253,8 +253,8 @@ evaluation (internal):
 
 
 ast            : is_not_null(nullable_col)
-raw expr       : is_not_null(#0::Int64 NULL)
-checked expr   : is_not_null<T0=Int64><T0 NULL>(#0)
+raw expr       : is_not_null(nullable_col::Int64 NULL)
+checked expr   : is_not_null<T0=Int64><T0 NULL>(nullable_col)
 evaluation:
 +--------+-------------------+---------------+
 |        | nullable_col      | Output        |

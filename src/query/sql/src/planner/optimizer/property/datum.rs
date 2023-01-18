@@ -25,7 +25,7 @@ use ordered_float::OrderedFloat;
 pub type F64 = OrderedFloat<f64>;
 
 /// Datum is the struct to represent a single value in optimizer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Datum {
     Bool(bool),
     Int(i64),
@@ -72,6 +72,18 @@ impl Datum {
             _ => None,
         }
     }
+
+    pub fn to_double(&self) -> Result<f64> {
+        match self {
+            Datum::Int(v) => Ok(*v as f64),
+            Datum::UInt(v) => Ok(*v as f64),
+            Datum::Float(v) => Ok(v.into_inner()),
+            _ => Err(ErrorCode::IllegalDataType(format!(
+                "Cannot convert {:?} to double",
+                self
+            ))),
+        }
+    }
 }
 
 impl Display for Datum {
@@ -90,6 +102,23 @@ impl Display for Datum {
 }
 
 impl Datum {
+    pub fn type_comparable(&self, other: &Datum) -> bool {
+        matches!(
+            (self, other),
+            (Datum::Bool(_), Datum::Bool(_))
+                | (Datum::Bytes(_), Datum::Bytes(_))
+                | (Datum::Int(_), Datum::UInt(_))
+                | (Datum::Int(_), Datum::Int(_))
+                | (Datum::Int(_), Datum::Float(_))
+                | (Datum::UInt(_), Datum::Int(_))
+                | (Datum::UInt(_), Datum::UInt(_))
+                | (Datum::UInt(_), Datum::Float(_))
+                | (Datum::Float(_), Datum::Float(_))
+                | (Datum::Float(_), Datum::Int(_))
+                | (Datum::Float(_), Datum::UInt(_))
+        )
+    }
+
     pub fn compare(&self, other: &Self) -> Result<std::cmp::Ordering> {
         match (self, other) {
             (Datum::Bool(l), Datum::Bool(r)) => Ok(l.cmp(r)),

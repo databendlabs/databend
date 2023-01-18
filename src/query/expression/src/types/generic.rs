@@ -19,7 +19,6 @@ use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ValueType;
-use crate::upcast_gat;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::ColumnIterator;
@@ -39,7 +38,7 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
-        upcast_gat(long)
+        long
     }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {

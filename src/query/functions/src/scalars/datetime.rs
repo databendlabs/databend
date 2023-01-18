@@ -144,13 +144,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
             match string_to_timestamp(val, ctx.tz) {
                 Some(ts) => output.push(ts.timestamp_micros()),
                 None => {
-                    ctx.set_error(
-                        output.len(),
-                        format!(
-                            "unable to cast {} to TimestampType",
-                            String::from_utf8_lossy(val)
-                        ),
-                    );
+                    ctx.set_error(output.len(), "unable to parse string to type `TIMESTAMP`");
                     output.push(0);
                 }
             }
@@ -258,13 +252,7 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
             |val, output, ctx| match string_to_date(val, ctx.tz) {
                 Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 None => {
-                    ctx.set_error(
-                        output.len(),
-                        format!(
-                            "unable to cast {} to DateType",
-                            String::from_utf8_lossy(val)
-                        ),
-                    );
+                    ctx.set_error(output.len(), "unable to parse string to type `DATE`");
                     output.push(0);
                 }
             },

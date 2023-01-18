@@ -154,18 +154,18 @@ impl Metadata {
 
         // build leaf index in DFS order for primitive columns.
         let mut leaf_index = 0;
-        while !fields.is_empty() {
-            let (indices, field) = fields.pop_front().unwrap();
+        while let Some((indices, field)) = fields.pop_front() {
             let path_indices = if indices.len() > 1 {
                 Some(indices.clone())
             } else {
                 None
             };
 
+            // TODO handle Tuple inside Array.
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
-            } = field.data_type()
+            } = field.data_type().remove_nullable()
             {
                 self.add_base_table_column(
                     field.name().clone(),
@@ -177,7 +177,7 @@ impl Metadata {
 
                 let mut i = fields_type.len();
                 for (inner_field_name, inner_field_type) in
-                    fields_name.iter().rev().zip(fields_type.iter().rev())
+                    fields_name.iter().zip(fields_type.iter()).rev()
                 {
                     i -= 1;
                     let mut inner_indices = indices.clone();

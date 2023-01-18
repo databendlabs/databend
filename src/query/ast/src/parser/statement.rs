@@ -31,6 +31,7 @@ use nom::Slice;
 
 use crate::ast::*;
 use crate::input::Input;
+use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::query::*;
 use crate::parser::stage::*;
@@ -160,12 +161,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let set_variable = map(
         rule! {
-            SET ~ (GLOBAL)? ~ #ident ~ "=" ~ #literal
+            SET ~ (GLOBAL)? ~ #ident ~ "=" ~ #subexpr(0)
         },
         |(_, opt_is_global, variable, _, value)| Statement::SetVariable {
             is_global: opt_is_global.is_some(),
             variable,
-            value,
+            value: Box::new(value),
         },
     );
 
@@ -767,7 +768,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #stage_name )
             ~ ( URL ~ "=" ~ #uri_location)?
-            ~ ( FILE_FORMAT ~ "=" ~ #options)?
+            ~ ( FILE_FORMAT ~ "=" ~ #format_options)?
             ~ ( ON_ERROR ~ "=" ~ #ident)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
             ~ ( VALIDATION_MODE ~ "=" ~ #ident)?
@@ -1115,7 +1116,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     );
     let streaming_v2 = map(
         rule! {
-            FILE_FORMAT ~ "=" ~ #options ~ #rest_str
+            FILE_FORMAT ~ "=" ~ #format_options ~ #rest_str
         },
         |(_, _, options, (_, start))| InsertSource::StreamingV2 {
             settings: options,
@@ -1708,9 +1709,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
             rule! { PATTERN ~ "=" ~ #literal_string },
             |(_, _, pattern)| CopyOption::Pattern(pattern),
         ),
-        map(rule! { FILE_FORMAT ~ "=" ~ #options }, |(_, _, options)| {
-            CopyOption::FileFormat(options)
-        }),
+        map(
+            rule! { FILE_FORMAT ~ "=" ~ #format_options },
+            |(_, _, options)| CopyOption::FileFormat(options),
+        ),
         map(
             rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
             |(_, _, validation_mode)| CopyOption::ValidationMode(validation_mode),

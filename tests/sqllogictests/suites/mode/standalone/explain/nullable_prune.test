@@ -37,7 +37,7 @@ Filter
     ├── read bytes: 37
     ├── partitions total: 2
     ├── partitions scanned: 1
-    ├── push downs: [filters: [is_not_null(a)], limit: NONE]
+    ├── push downs: [filters: [is_not_null(t_nullable_prune.a (#0))], limit: NONE]
     └── estimated rows: 6.00
 
 query T
@@ -52,7 +52,7 @@ Filter
     ├── read bytes: 25
     ├── partitions total: 2
     ├── partitions scanned: 1
-    ├── push downs: [filters: [not(is_not_null(a))], limit: NONE]
+    ├── push downs: [filters: [not(is_not_null(t_nullable_prune.a (#0)))], limit: NONE]
     └── estimated rows: 6.00
 
 statement ok

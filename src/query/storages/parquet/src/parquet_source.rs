@@ -15,6 +15,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::parquet::indexes::Interval;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
@@ -38,6 +41,7 @@ use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_reader::IndexedChunk;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::State::Generated;
+use crate::ReadOptions;
 
 struct PrewhereData {
     data_block: DataBlock,
@@ -47,9 +51,14 @@ struct PrewhereData {
 /// The states for [`ParquetSource`]. The states will recycle for each row group of a parquet file.
 enum State {
     ReadDataPrewhere(Option<PartInfoPtr>),
-    ReadDataRemain(PartInfoPtr, PrewhereData),
-    PrewhereFilter(PartInfoPtr, Vec<IndexedChunk>),
-    Deserialize(PartInfoPtr, Vec<IndexedChunk>, Option<PrewhereData>),
+    ReadDataRemain(PartInfoPtr, PrewhereData, Option<Bitmap>),
+    PrewhereFilter(PartInfoPtr, Vec<IndexedChunk>, Option<Bitmap>),
+    Deserialize(
+        PartInfoPtr,
+        Vec<IndexedChunk>,
+        Option<PrewhereData>,
+        Option<Bitmap>,
+    ),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
@@ -67,6 +76,8 @@ pub struct ParquetSource {
     prewhere_reader: Arc<ParquetReader>,
     prewhere_filter: Arc<Option<Expr>>,
     remain_reader: Arc<Option<ParquetReader>>,
+
+    read_options: ReadOptions,
 }
 
 impl ParquetSource {
@@ -77,6 +88,7 @@ impl ParquetSource {
         prewhere_reader: Arc<ParquetReader>,
         prewhere_filter: Arc<Option<Expr>>,
         remain_reader: Arc<Option<ParquetReader>>,
+        read_options: ReadOptions,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let mut src_fields = prewhere_reader.output_schema().fields().clone();
@@ -96,6 +108,7 @@ impl ParquetSource {
             prewhere_reader,
             prewhere_filter,
             remain_reader,
+            read_options,
         })))
     }
 
@@ -103,12 +116,18 @@ impl ParquetSource {
         &mut self,
         part: PartInfoPtr,
         raw_chunks: Vec<IndexedChunk>,
+        row_selection: Option<Bitmap>,
     ) -> Result<()> {
         let rg_part = ParquetRowGroupPart::from_part(&part)?;
         // deserialize prewhere data block first
-        let data_block = self
-            .prewhere_reader
-            .deserialize(rg_part, raw_chunks, None)?;
+        let data_block = if let Some(row_selection) = &row_selection {
+            self.prewhere_reader
+                .deserialize(rg_part, raw_chunks, Some(row_selection.clone()))?
+        } else {
+            self.prewhere_reader
+                .deserialize(rg_part, raw_chunks, None)?
+        };
+
         if let Some(filter) = self.prewhere_filter.as_ref() {
             // do filter
             let func_ctx = self.ctx.try_get_function_context()?;
@@ -165,10 +184,14 @@ impl ParquetSource {
                     filtered_block.resort(self.src_schema.as_ref(), self.output_schema.as_ref())?;
                 self.state = Generated(self.ctx.try_get_part(), block);
             } else {
-                self.state = State::ReadDataRemain(part, PrewhereData {
-                    data_block: filtered_block,
-                    filter,
-                });
+                self.state = State::ReadDataRemain(
+                    part,
+                    PrewhereData {
+                        data_block: filtered_block,
+                        filter,
+                    },
+                    row_selection,
+                );
             }
             Ok(())
         } else {
@@ -183,6 +206,7 @@ impl ParquetSource {
         part: PartInfoPtr,
         raw_chunks: Vec<IndexedChunk>,
         prewhere_data: Option<PrewhereData>,
+        row_selection: Option<Bitmap>,
     ) -> Result<()> {
         let rg_part = ParquetRowGroupPart::from_part(&part)?;
         let output_block = if let Some(PrewhereData {
@@ -193,6 +217,7 @@ impl ParquetSource {
             let block = if raw_chunks.is_empty() {
                 prewhere_block
             } else if let Some(remain_reader) = self.remain_reader.as_ref() {
+                // If reach in this branch, it means `read_options.do_prewhere = true`
                 let remain_block = match filter {
                     Value::Scalar(_) => {
                         // The case of all filtered is already covered in `do_prewhere_filter`.
@@ -200,9 +225,17 @@ impl ParquetSource {
                         remain_reader.deserialize(rg_part, raw_chunks, None)?
                     }
                     Value::Column(bitmap) => {
-                        if bitmap.unset_bits() == 0 {
-                            // don't need filter
-                            remain_reader.deserialize(rg_part, raw_chunks, None)?
+                        if !self.read_options.push_down_bitmap() || bitmap.unset_bits() == 0 {
+                            let block = if let Some(row_selection) = &row_selection {
+                                remain_reader.deserialize(
+                                    rg_part,
+                                    raw_chunks,
+                                    Some(row_selection.clone()),
+                                )?
+                            } else {
+                                remain_reader.deserialize(rg_part, raw_chunks, None)?
+                            };
+                            DataBlock::filter_with_bitmap(block, &bitmap)?
                         } else {
                             remain_reader.deserialize(rg_part, raw_chunks, Some(bitmap))?
                         }
@@ -290,9 +323,9 @@ impl Processor for ParquetSource {
         match self.state {
             State::Finish => Ok(Event::Finished),
             State::ReadDataPrewhere(_)
-            | State::ReadDataRemain(_, _)
-            | State::PrewhereFilter(_, _)
-            | State::Deserialize(_, _, _) => Ok(Event::Sync),
+            | State::ReadDataRemain(_, _, _)
+            | State::PrewhereFilter(_, _, _)
+            | State::Deserialize(_, _, _, _) => Ok(Event::Sync),
             State::Generated(_, _) => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
@@ -301,32 +334,59 @@ impl Processor for ParquetSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadDataPrewhere(Some(part)) => {
                 let rg_part = ParquetRowGroupPart::from_part(&part)?;
+                let row_selection = rg_part
+                    .row_selection
+                    .as_ref()
+                    .map(|sel| intervals_to_bitmap(sel, rg_part.num_rows));
                 let chunks = self.prewhere_reader.sync_read_columns(rg_part)?;
                 if self.prewhere_filter.is_some() {
-                    self.state = State::PrewhereFilter(part, chunks);
+                    self.state = State::PrewhereFilter(part, chunks, row_selection);
                 } else {
                     // If there is no prewhere filter, it means there is only the prewhere reader.
                     assert!(self.remain_reader.is_none());
                     // So all the needed columns are read.
-                    self.state = State::Deserialize(part, chunks, None)
+                    self.state = State::Deserialize(part, chunks, None, row_selection)
                 }
                 Ok(())
             }
-            State::ReadDataRemain(part, prewhere_data) => {
+            State::ReadDataRemain(part, prewhere_data, row_selection) => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let rg_part = ParquetRowGroupPart::from_part(&part)?;
                     let chunks = remain_reader.sync_read_columns(rg_part)?;
-                    self.state = State::Deserialize(part, chunks, Some(prewhere_data));
+                    self.state =
+                        State::Deserialize(part, chunks, Some(prewhere_data), row_selection);
                     Ok(())
                 } else {
                     Err(ErrorCode::Internal("It's a bug. No remain reader"))
                 }
             }
-            State::PrewhereFilter(part, chunks) => self.do_prewhere_filter(part, chunks),
-            State::Deserialize(part, chunks, prewhere_data) => {
-                self.do_deserialize(part, chunks, prewhere_data)
+            State::PrewhereFilter(part, chunks, row_selection) => {
+                self.do_prewhere_filter(part, chunks, row_selection)
+            }
+            State::Deserialize(part, chunks, prewhere_data, row_selection) => {
+                self.do_deserialize(part, chunks, prewhere_data, row_selection)
             }
             _ => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
+}
+
+/// Convert intervals to a bitmap. The `intervals` represents the row selection across `num_rows`.
+fn intervals_to_bitmap(interval: &[Interval], num_rows: usize) -> Bitmap {
+    debug_assert!(
+        interval.is_empty()
+            || interval.last().unwrap().start + interval.last().unwrap().length < num_rows
+    );
+
+    let mut bitmap = MutableBitmap::with_capacity(num_rows);
+    let mut offset = 0;
+
+    for intv in interval {
+        bitmap.extend_constant(intv.start - offset, false);
+        bitmap.extend_constant(intv.length, true);
+        offset = intv.start + intv.length;
+    }
+    bitmap.extend_constant(num_rows - offset, false);
+
+    bitmap.into()
 }

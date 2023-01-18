@@ -101,7 +101,7 @@ DROP TABLE t3
 statement ok
 DROP TABLE t4
 
-## Table Compression:None
+# Table Compression:None
 statement ok
 CREATE TABLE IF NOT EXISTS t_compression_none(a Boolean, b Timestamp, c Date) Engine = fuse  COMPRESSION = 'NONE';
 
@@ -117,7 +117,7 @@ SELECT * FROM t_compression_none order by a desc;
 statement ok
 DROP TABLE t_compression_none
 
-## Table Compression:ZSTD
+# Table Compression:ZSTD
 
 statement ok
 CREATE TABLE IF NOT EXISTS t_compression_zstd(a Boolean, b Timestamp, c Date) Engine = fuse COMPRESSION = 'ZSTD';

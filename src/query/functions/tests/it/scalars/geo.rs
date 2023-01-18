@@ -30,6 +30,9 @@ fn test_geo() {
     test_geo_distance(file);
     test_great_circle_angle(file);
     test_point_in_ellipses(file);
+    test_point_in_polygon(file);
+    test_geohash_encode(file);
+    test_geohash_decode(file);
 }
 
 fn test_geo_to_h3(file: &mut impl Write) {
@@ -122,4 +125,77 @@ fn test_point_in_ellipses(file: &mut impl Write) {
         ("a", Float64Type::from_data(vec![1.0, 1.1, 1.2])),
         ("b", Float64Type::from_data(vec![0.9999, 0.9998, 0.9997])),
     ]);
+}
+
+fn test_point_in_polygon(file: &mut impl Write) {
+    // form 1: ((x, y), [(x1, y1), (x2, y2), ...])
+    run_ast(
+        file,
+        "point_in_polygon((3., 3.), [(6, 0), (8, 4), (5, 8), (0, 2)])",
+        &[],
+    );
+    run_ast(
+        file,
+        "point_in_polygon((a, b), [(6, 0), (8, 4), (5, 8), (0, 2)])",
+        &[
+            ("a", Float64Type::from_data(vec![3.0, 3.1, 3.2])),
+            ("b", Float64Type::from_data(vec![3.0, 3.1, 3.2])),
+        ],
+    );
+
+    // form 2: ((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
+    run_ast(
+        file,
+        "point_in_polygon((1., 1.), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (3., 5.), (5., 5.), (5., 3.)]])",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "point_in_polygon((2.5, 2.5), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (3., 5.), (5., 5.), (5., 3.)]])",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "point_in_polygon((2.5, 2.5), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (a, b), (5., 5.), (5., 3.)]])",
+        &[
+            ("a", Float64Type::from_data(vec![3.0, 3.1])),
+            ("b", Float64Type::from_data(vec![5.0, 5.0])),
+        ],
+    );
+
+    // form 3: ((x, y), [(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...)
+    run_ast(
+        file,
+        "point_in_polygon((2.5, 2.5), [(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (3., 5.), (5., 5.), (5., 3.)])",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "point_in_polygon((2.5, 2.5), [(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (a, b), (5., 5.), (5., 3.)])",
+        &[
+            ("a", Float64Type::from_data(vec![3.0, 3.0])),
+            ("b", Float64Type::from_data(vec![5.0, 5.0])),
+        ],
+    );
+}
+
+fn test_geohash_encode(file: &mut impl Write) {
+    run_ast(file, "geohash_encode(-5.60302734375, 42.593994140625)", &[]);
+    run_ast(
+        file,
+        "geohash_encode(-5.60302734375, 42.593994140625, 11)",
+        &[],
+    );
+    run_ast(
+        file,
+        "geohash_encode(-5.60302734375, 42.593994140625, 0)",
+        &[],
+    );
+}
+
+fn test_geohash_decode(file: &mut impl Write) {
+    run_ast(file, "geohash_decode('ezs42')", &[]);
 }
