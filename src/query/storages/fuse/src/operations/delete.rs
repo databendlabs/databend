@@ -265,11 +265,17 @@ impl FuseTable {
         )
         .await?;
 
+        let range_block_metas = block_metas
+            .clone()
+            .into_iter()
+            .map(|(a, b)| (a.range, b))
+            .collect::<Vec<_>>();
+
         let (_, inner_parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.table_info.schema(),
             None,
-            &block_metas,
+            &range_block_metas,
             base_snapshot.summary.block_count as usize,
         )?;
 

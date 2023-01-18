@@ -30,7 +30,6 @@ use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
-use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::FuseTableSink;
@@ -114,15 +113,10 @@ impl FuseTable {
 
         let partitions_total = mutator.partitions_total();
 
-        let dummy_index = BlockMetaIndex {
-            segment_idx: 0,
-            block_idx: 0,
-            range: None,
-        };
         let block_metas: Vec<_> = mutator
             .selected_blocks()
             .iter()
-            .map(|meta| (dummy_index.clone(), meta.clone()))
+            .map(|meta| (None, meta.clone()))
             .collect();
         let (statistics, parts) = self.read_partitions_with_metas(
             ctx.clone(),
