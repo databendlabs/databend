@@ -48,7 +48,7 @@ impl BlockReader {
         }
 
         let part = FusePartInfo::from_part(&part)?;
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        let columns = self.projection.project_column_nodes(&self.column_nodes)?;
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
 
@@ -107,7 +107,7 @@ impl BlockReader {
     ) -> Result<Vec<(usize, NativeReader<Reader>)>> {
         let part = FusePartInfo::from_part(&part)?;
 
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        let columns = self.projection.project_column_nodes(&self.column_nodes)?;
         let indices = Self::build_projection_indices(&columns);
         let mut results = Vec::with_capacity(indices.len());
 
@@ -148,7 +148,7 @@ impl BlockReader {
     pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
         let mut results = Vec::with_capacity(chunks.len());
         let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        let columns = self.projection.project_column_nodes(&self.column_nodes)?;
         for column in &columns {
             let indices = &column.leaf_ids;
 
