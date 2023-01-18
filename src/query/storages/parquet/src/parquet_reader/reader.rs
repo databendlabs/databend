@@ -24,7 +24,7 @@ use common_catalog::plan::Projection;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_storage::ColumnLeaves;
+use common_storage::ColumnNodes;
 use opendal::Object;
 use opendal::Operator;
 
@@ -65,8 +65,8 @@ pub struct ParquetReader {
     /// There are some types that Databend not support such as Timestamp of nanoseconds.
     /// Such types will be convert to supported types after deserialization.
     pub(crate) projected_arrow_schema: ArrowSchema,
-    /// [`ColumnLeaves`] corresponding to the `projected_arrow_schema`.
-    pub(crate) projected_column_leaves: ColumnLeaves,
+    /// [`ColumnNodes`] corresponding to the `projected_arrow_schema`.
+    pub(crate) projected_column_nodes: ColumnNodes,
     /// [`ColumnDescriptor`]s corresponding to the `projected_arrow_schema`.
     pub(crate) projected_column_descriptors: HashMap<usize, ColumnDescriptor>,
 }
@@ -79,7 +79,7 @@ impl ParquetReader {
     ) -> Result<Arc<ParquetReader>> {
         let (
             projected_arrow_schema,
-            projected_column_leaves,
+            projected_column_nodes,
             projected_column_descriptors,
             columns_to_read,
         ) = Self::do_projection(&schema, &projection)?;
@@ -92,7 +92,7 @@ impl ParquetReader {
             columns_to_read,
             output_schema: Arc::new(output_schema),
             projected_arrow_schema,
-            projected_column_leaves,
+            projected_column_nodes,
             projected_column_descriptors,
         }))
     }
@@ -112,12 +112,12 @@ impl ParquetReader {
         projection: &Projection,
     ) -> Result<(
         ArrowSchema,
-        ColumnLeaves,
+        ColumnNodes,
         HashMap<usize, ColumnDescriptor>,
         HashSet<usize>,
     )> {
         // Full schema and column leaves.
-        let column_leaves = ColumnLeaves::new_from_schema(schema);
+        let column_nodes = ColumnNodes::new_from_schema(schema);
         let schema_descriptors = to_parquet_schema(schema)?;
         // Project schema
         let projected_arrow_schema = match projection {
@@ -125,20 +125,20 @@ impl ParquetReader {
             Projection::InnerColumns(path_indices) => ap::inner_project(schema, path_indices),
         };
         // Project column leaves
-        let projected_column_leaves = ColumnLeaves {
-            column_leaves: projection
-                .project_column_leaves(&column_leaves)?
+        let projected_column_nodes = ColumnNodes {
+            column_nodes: projection
+                .project_column_nodes(&column_nodes)?
                 .iter()
                 .map(|&leaf| leaf.clone())
                 .collect(),
         };
-        let column_leaves = &projected_column_leaves.column_leaves;
+        let column_nodes = &projected_column_nodes.column_nodes;
         // Project column descriptors and collect columns to read
-        let mut projected_column_descriptors = HashMap::with_capacity(column_leaves.len());
+        let mut projected_column_descriptors = HashMap::with_capacity(column_nodes.len());
         let mut columns_to_read =
-            HashSet::with_capacity(column_leaves.iter().map(|leaf| leaf.leaf_ids.len()).sum());
-        for column_leaf in column_leaves {
-            for index in &column_leaf.leaf_ids {
+            HashSet::with_capacity(column_nodes.iter().map(|leaf| leaf.leaf_ids.len()).sum());
+        for column_node in column_nodes {
+            for index in &column_node.leaf_ids {
                 columns_to_read.insert(*index);
                 projected_column_descriptors
                     .insert(*index, schema_descriptors.columns()[*index].clone());
@@ -146,7 +146,7 @@ impl ParquetReader {
         }
         Ok((
             projected_arrow_schema,
-            projected_column_leaves,
+            projected_column_nodes,
             projected_column_descriptors,
             columns_to_read,
         ))
