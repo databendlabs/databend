@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Copy, Clone, Debug, Default)]
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_expression::Scalar;
+
+#[derive(Copy, Clone, Debug)]
 pub struct ReadOptions {
     /// Prune row groups before reading. Require Chunk level statistics.
     /// Filter row groups don't need to read.
@@ -29,8 +33,10 @@ pub struct ReadOptions {
     /// Notice:
     ///
     /// - `push_down_bitmap` and  `prune_pages` are exclusive. (`push_down_bitmap && prune_pages == false`)
-    /// - If `do_prewhere` is disabled, `push_down_bitmap` is useless.
+    /// - If `push_down_bitmap` is true, `do_prewhere` should be true, too.
     push_down_bitmap: bool,
+    // /// If refresh the file meta data cache.
+    // refresh_meta_cache: bool,
 }
 
 impl ReadOptions {
@@ -40,30 +46,37 @@ impl ReadOptions {
     }
 
     #[inline]
-    pub fn with_prune_row_groups(mut self) -> Self {
-        self.prune_row_groups = true;
+    pub fn with_prune_row_groups(mut self, v: bool) -> Self {
+        self.prune_row_groups = v;
         self
     }
 
     #[inline]
-    pub fn with_prune_pages(mut self) -> Self {
-        self.prune_pages = true;
-        self.push_down_bitmap = false;
+    pub fn with_prune_pages(mut self, v: bool) -> Self {
+        self.prune_pages = v;
+        self.push_down_bitmap = self.push_down_bitmap && !v;
         self
     }
 
     #[inline]
-    pub fn with_push_down_bitmap(mut self) -> Self {
-        self.push_down_bitmap = true;
-        self.prune_pages = false;
+    pub fn with_push_down_bitmap(mut self, v: bool) -> Self {
+        self.push_down_bitmap = v;
+        self.do_prewhere = v;
+        self.prune_pages = self.prune_pages && !v;
         self
     }
 
     #[inline]
-    pub fn with_do_prewhere(mut self) -> Self {
-        self.do_prewhere = true;
+    pub fn with_do_prewhere(mut self, v: bool) -> Self {
+        self.do_prewhere = v;
         self
     }
+
+    // #[inline]
+    // pub fn with_refresh_meta_cache(mut self, v: bool) -> Self {
+    //     self.refresh_meta_cache = v;
+    //     self
+    // }
 
     #[inline]
     pub fn prune_row_groups(&self) -> bool {
@@ -83,5 +96,91 @@ impl ReadOptions {
     #[inline]
     pub fn do_prewhere(&self) -> bool {
         self.do_prewhere
+    }
+
+    // #[inline]
+    // pub fn refresh_meta_cache(&self) -> bool {
+    //     self.refresh_meta_cache
+    // }
+}
+
+impl Default for ReadOptions {
+    fn default() -> Self {
+        ReadOptions {
+            do_prewhere: true,
+            prune_row_groups: true,
+            prune_pages: false,
+            push_down_bitmap: false,
+            // refresh_meta_cache: false,
+        }
+    }
+}
+
+/// Convert ReadOptions into tuples.
+impl From<ReadOptions> for Vec<Scalar> {
+    fn from(value: ReadOptions) -> Self {
+        vec![
+            make_pair("prune_row_groups", value.prune_row_groups),
+            make_pair("prune_pages", value.prune_pages),
+            make_pair("do_prewhere", value.do_prewhere),
+            make_pair("push_down_bitmap", value.push_down_bitmap),
+            // make_pair("refresh_meta_cache", value.refresh_meta_cache),
+        ]
+    }
+}
+
+fn make_pair(name: &str, value: bool) -> Scalar {
+    Scalar::Tuple(vec![
+        Scalar::String(name.to_string().into_bytes()),
+        Scalar::Boolean(value),
+    ])
+}
+
+impl TryFrom<&[Scalar]> for ReadOptions {
+    type Error = ErrorCode;
+    fn try_from(values: &[Scalar]) -> Result<Self> {
+        let mut opts = ReadOptions::default();
+        for value in values {
+            let (name, v) = get_boolean_option(value)?;
+            opts = match name {
+                b"prune_row_groups" => opts.with_prune_row_groups(v),
+                b"prune_pages" => opts.with_prune_pages(v),
+                b"do_prewhere" => opts.with_do_prewhere(v),
+                b"push_down_bitmap" => opts.with_push_down_bitmap(v),
+                // b"refresh_meta_cache" => opts.with_refresh_meta_cache(v),
+                _ => {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Unknown option: {}",
+                        String::from_utf8(name.to_vec())?
+                    )));
+                }
+            };
+        }
+
+        Ok(opts)
+    }
+}
+
+fn get_boolean_option(pair: &Scalar) -> Result<(&[u8], bool)> {
+    match pair {
+        Scalar::Tuple(p) => {
+            if p.len() != 2 {
+                return Err(ErrorCode::BadArguments(format!(
+                    "expect a pair of (string, bool), found: {:?}",
+                    pair,
+                )));
+            }
+            match (&p[0], &p[1]) {
+                (Scalar::String(name), Scalar::Boolean(value)) => Ok((name, *value)),
+                (_, _) => Err(ErrorCode::BadArguments(format!(
+                    "expect a pair of (string, bool), found: {:?}",
+                    pair,
+                ))),
+            }
+        }
+        _ => Err(ErrorCode::BadArguments(format!(
+            "expect a pair of (string, bool), found: {:?}",
+            pair,
+        ))),
     }
 }
