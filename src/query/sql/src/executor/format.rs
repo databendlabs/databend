@@ -84,7 +84,7 @@ fn table_scan_to_format_tree(
                 .filters
                 .iter()
                 .map(|f| {
-                    let expr = f.as_expr(&BUILTIN_FUNCTIONS).unwrap();
+                    let expr = f.as_expr(&BUILTIN_FUNCTIONS);
                     let (new_expr, _) =
                         ConstantFolder::fold(&expr, FunctionContext::default(), &BUILTIN_FUNCTIONS);
                     new_expr.sql_display()
@@ -149,8 +149,7 @@ fn filter_to_format_tree(plan: &Filter, metadata: &MetadataRef) -> Result<Format
     let filter = plan
         .predicates
         .iter()
-        .map(|scalar| scalar.pretty_display())
-        .collect::<Vec<_>>()
+        .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .join(", ");
     let mut children = vec![FormatTreeNode::new(format!("filters: [{filter}]"))];
 
@@ -207,9 +206,9 @@ fn eval_scalar_to_format_tree(
     metadata: &MetadataRef,
 ) -> Result<FormatTreeNode<String>> {
     let scalars = plan
-        .scalars
+        .exprs
         .iter()
-        .map(|(scalar, _)| scalar.pretty_display())
+        .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
     let mut children = vec![FormatTreeNode::new(format!("expressions: [{scalars}]"))];
@@ -393,19 +392,19 @@ fn hash_join_to_format_tree(
     let build_keys = plan
         .build_keys
         .iter()
-        .map(|scalar| scalar.pretty_display())
+        .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
     let probe_keys = plan
         .probe_keys
         .iter()
-        .map(|scalar| scalar.pretty_display())
+        .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
     let filters = plan
         .non_equi_conditions
         .iter()
-        .map(|filter| filter.pretty_display())
+        .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -447,7 +446,7 @@ fn exchange_to_format_tree(
                 "Hash({})",
                 plan.keys
                     .iter()
-                    .map(|scalar| { scalar.pretty_display() })
+                    .map(|key| { key.as_expr(&BUILTIN_FUNCTIONS).sql_display() })
                     .collect::<Vec<_>>()
                     .join(", ")
             ),

@@ -61,7 +61,7 @@ impl Interpreter for DeleteInterpreter {
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
-            let filter = scalar.as_expr()?.as_remote_expr();
+            let filter = scalar.as_expr_with_col_name()?.as_remote_expr();
             let col_indices = scalar.used_columns().into_iter().collect();
             (Some(filter), col_indices)
         } else {

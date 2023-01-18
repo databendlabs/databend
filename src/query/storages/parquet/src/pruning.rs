@@ -596,7 +596,7 @@ mod tests {
                 func_name: "gt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruner = RangePrunerCreator::try_create(
                 FunctionContext::default(),
                 Some(&filters),
@@ -628,7 +628,7 @@ mod tests {
                 func_name: "lt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruner = RangePrunerCreator::try_create(
                 FunctionContext::default(),
                 Some(&filters),
@@ -660,7 +660,7 @@ mod tests {
                 func_name: "lte".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruner = RangePrunerCreator::try_create(
                 FunctionContext::default(),
                 Some(&filters),
@@ -702,7 +702,7 @@ mod tests {
                 func_name: "gt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
@@ -732,7 +732,7 @@ mod tests {
                 func_name: "lte".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
@@ -762,7 +762,7 @@ mod tests {
                 func_name: "gt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
@@ -792,7 +792,7 @@ mod tests {
                 func_name: "lte".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 

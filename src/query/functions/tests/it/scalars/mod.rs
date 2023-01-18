@@ -74,7 +74,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         );
 
         let remote_expr = optimized_expr.as_remote_expr();
-        let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS).unwrap();
+        let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
 
         let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(1);
         let block = DataBlock::new(

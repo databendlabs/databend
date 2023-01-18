@@ -319,9 +319,12 @@ impl<Index: ColumnIndex> Display for RawExpr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RawExpr::Literal { lit, .. } => write!(f, "{lit}"),
-            RawExpr::ColumnRef { id, data_type, .. } => {
-                id.sql_display_fmt(f)?;
-                write!(f, "::{data_type}")
+            RawExpr::ColumnRef {
+                display_name,
+                data_type,
+                ..
+            } => {
+                write!(f, "{}::{}", display_name, data_type)
             }
             RawExpr::Cast {
                 is_try,
@@ -469,7 +472,7 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::Constant { scalar, .. } => write!(f, "{:?}", scalar.as_ref()),
-            Expr::ColumnRef { id, .. } => id.sql_display_fmt(f),
+            Expr::ColumnRef { display_name, .. } => write!(f, "{display_name}"),
             Expr::Cast {
                 is_try,
                 expr,

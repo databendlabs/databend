@@ -35,8 +35,8 @@ output         : 0_i32
 
 
 ast            : running_difference(a)
-raw expr       : running_difference(#0::UInt16)
-checked expr   : running_difference<Int64>(CAST(#0 AS Int64))
+raw expr       : running_difference(a::UInt16)
+checked expr   : running_difference<Int64>(CAST(a AS Int64))
 evaluation:
 +--------+-------------+---------+
 |        | a           | Output  |
@@ -57,8 +57,8 @@ evaluation (internal):
 
 
 ast            : running_difference(a)
-raw expr       : running_difference(#0::Float64)
-checked expr   : running_difference<Float64>(#0)
+raw expr       : running_difference(a::Float64)
+checked expr   : running_difference<Float64>(a)
 evaluation:
 +--------+-------------------------+---------+
 |        | a                       | Output  |
@@ -124,8 +124,8 @@ output         : "VARCHAR"
 
 
 ast            : typeof(a)
-raw expr       : typeof(#0::Float64)
-checked expr   : typeof<T0=Float64><T0>(#0)
+raw expr       : typeof(a::Float64)
+checked expr   : typeof<T0=Float64><T0>(a)
 output type    : String
 output domain  : {""..}
 output         : "DOUBLE"
@@ -176,8 +176,8 @@ output         : false
 
 
 ast            : assume_not_null(a2)
-raw expr       : assume_not_null(#0::UInt8 NULL)
-checked expr   : assume_not_null<T0=UInt8><T0 NULL>(#0)
+raw expr       : assume_not_null(a2::UInt8 NULL)
+checked expr   : assume_not_null<T0=UInt8><T0 NULL>(a2)
 evaluation:
 +--------+------------------+---------+
 |        | a2               | Output  |

@@ -8,8 +8,8 @@ output         : 644325524701193974_u64
 
 
 ast            : geo_to_h3(lon, lat, 15)
-raw expr       : geo_to_h3(#0::Float64, #1::Float64, 15_u8)
-checked expr   : geo_to_h3<Float64, Float64, UInt8>(#0, #1, 15_u8)
+raw expr       : geo_to_h3(lon::Float64, lat::Float64, 15_u8)
+checked expr   : geo_to_h3<Float64, Float64, UInt8>(lon, lat, 15_u8)
 evaluation:
 +--------+-------------------------+---------------------------+----------------------------+
 |        | lon                     | lat                       | Output                     |
@@ -40,8 +40,8 @@ output         : 14128353_f32
 
 
 ast            : great_circle_distance(lon1, lat1, lon2, lat2)
-raw expr       : great_circle_distance(#0::Float64, #1::Float64, #2::Float64, #3::Float64)
-checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(#0, #1, #2, #3)
+raw expr       : great_circle_distance(lon1::Float64, lat1::Float64, lon2::Float64, lat2::Float64)
+checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(lon1, lat1, lon2, lat2)
 evaluation:
 +--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
 |        | lon1                    | lat1                    | lon2                      | lat2                      | Output       |
@@ -74,8 +74,8 @@ output         : 14128353_f32
 
 
 ast            : geo_distance(lon1, lat1, lon2, lat2)
-raw expr       : geo_distance(#0::Float64, #1::Float64, #2::Float64, #3::Float64)
-checked expr   : geo_distance<Float64, Float64, Float64, Float64>(#0, #1, #2, #3)
+raw expr       : geo_distance(lon1::Float64, lat1::Float64, lon2::Float64, lat2::Float64)
+checked expr   : geo_distance<Float64, Float64, Float64, Float64>(lon1, lat1, lon2, lat2)
 evaluation:
 +--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
 |        | lon1                    | lat1                    | lon2                      | lat2                      | Output       |
@@ -108,9 +108,9 @@ output         : 44.99998_f32
 
 
 ast            : great_circle_angle(0, 0, a, 0)
-raw expr       : great_circle_angle(0_u8, 0_u8, #0::Float64, 0_u8)
-checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(CAST(0_u8 AS Float64), CAST(0_u8 AS Float64), #0, CAST(0_u8 AS Float64))
-optimized expr : great_circle_angle<Float64, Float64, Float64, Float64>(0_f64, 0_f64, #0, 0_f64)
+raw expr       : great_circle_angle(0_u8, 0_u8, a::Float64, 0_u8)
+checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(CAST(0_u8 AS Float64), CAST(0_u8 AS Float64), a, CAST(0_u8 AS Float64))
+optimized expr : great_circle_angle<Float64, Float64, Float64, Float64>(0_f64, 0_f64, a, 0_f64)
 evaluation:
 +--------+-----------+--------------+
 |        | a         | Output       |
@@ -140,8 +140,8 @@ output         : 1_u8
 
 
 ast            : point_in_ellipses(10., 10., 10., 9.1, a, b)
-raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, #0::Float64, #1::Float64)
-checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, #0, #1)
+raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, a::Float64, b::Float64)
+checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, a, b)
 evaluation:
 +--------+-----------+-------------------+-----------+
 |        | a         | b                 | Output    |
@@ -172,9 +172,9 @@ output         : 1_u8
 
 
 ast            : point_in_polygon((a, b), [(6, 0), (8, 4), (5, 8), (0, 2)])
-raw expr       : point_in_polygon(tuple(#0::Float64, #1::Float64), array(tuple(6_u8, 0_u8), tuple(8_u8, 4_u8), tuple(5_u8, 8_u8), tuple(0_u8, 2_u8)))
-checked expr   : point_in_polygon<(Float64, Float64), Array((Float64, Float64))>(tuple<Float64, Float64>(#0, #1), CAST(array<T0=(UInt8, UInt8)><T0, T0, T0, T0>(tuple<UInt8, UInt8>(6_u8, 0_u8), tuple<UInt8, UInt8>(8_u8, 4_u8), tuple<UInt8, UInt8>(5_u8, 8_u8), tuple<UInt8, UInt8>(0_u8, 2_u8)) AS Array((Float64, Float64))))
-optimized expr : point_in_polygon<(Float64, Float64), Array((Float64, Float64))>(tuple<Float64, Float64>(#0, #1), [(6_f64, 0_f64), (8_f64, 4_f64), (5_f64, 8_f64), (0_f64, 2_f64)])
+raw expr       : point_in_polygon(tuple(a::Float64, b::Float64), array(tuple(6_u8, 0_u8), tuple(8_u8, 4_u8), tuple(5_u8, 8_u8), tuple(0_u8, 2_u8)))
+checked expr   : point_in_polygon<(Float64, Float64), Array((Float64, Float64))>(tuple<Float64, Float64>(a, b), CAST(array<T0=(UInt8, UInt8)><T0, T0, T0, T0>(tuple<UInt8, UInt8>(6_u8, 0_u8), tuple<UInt8, UInt8>(8_u8, 4_u8), tuple<UInt8, UInt8>(5_u8, 8_u8), tuple<UInt8, UInt8>(0_u8, 2_u8)) AS Array((Float64, Float64))))
+optimized expr : point_in_polygon<(Float64, Float64), Array((Float64, Float64))>(tuple<Float64, Float64>(a, b), [(6_f64, 0_f64), (8_f64, 4_f64), (5_f64, 8_f64), (0_f64, 2_f64)])
 evaluation:
 +--------+-----------+-----------+-----------+
 |        | a         | b         | Output    |

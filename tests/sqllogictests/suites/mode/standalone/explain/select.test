@@ -14,7 +14,7 @@ query T
 explain select * from (select * from numbers(1)) as t1 where number = 1
 ----
 Filter
-├── filters: [eq(t1.number (#0), 1_u8)]
+├── filters: [eq(t1.number (#0), CAST(1_u8 AS UInt64))]
 ├── estimated rows: 0.33
 └── TableScan
     ├── table: default.system.numbers
@@ -22,14 +22,14 @@ Filter
     ├── read bytes: 8
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [eq(number, 1_u64)], limit: NONE]
+    ├── push downs: [filters: [eq(t1.number (#0), 1_u64)], limit: NONE]
     └── estimated rows: 1.00
 
 query T
 explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1 and b = 1
 ----
 Filter
-├── filters: [eq(t1.a (#0), 1_u8), eq(t1.b (#1), 1_u8)]
+├── filters: [eq(t1.a (#0), CAST(1_u8 AS UInt64)), eq(t1.b (#1), CAST(1_u8 AS UInt64))]
 ├── estimated rows: 0.11
 └── EvalScalar
     ├── expressions: [plus(numbers.number (#0), 1_u8)]
@@ -50,7 +50,7 @@ EvalScalar
 ├── expressions: [plus(numbers.number (#0), 1_u8)]
 ├── estimated rows: 0.33
 └── Filter
-    ├── filters: [eq(t1.a (#0), 1_u8)]
+    ├── filters: [eq(t1.a (#0), CAST(1_u8 AS UInt64))]
     ├── estimated rows: 0.33
     └── TableScan
         ├── table: default.system.numbers
@@ -58,14 +58,14 @@ EvalScalar
         ├── read bytes: 8
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── push downs: [filters: [eq(a, 1_u64)], limit: NONE]
+        ├── push downs: [filters: [eq(t1.a (#0), 1_u64)], limit: NONE]
         └── estimated rows: 1.00
 
 query T
 explain select * from numbers(1) where number = pow(1, 1 + 1)
 ----
 Filter
-├── filters: [eq(numbers.number (#0), pow(1_u8, plus(1_u8, 1_u8)))]
+├── filters: [eq(CAST(numbers.number (#0) AS Float64), pow(CAST(1_u8 AS Float64), CAST(plus(1_u8, 1_u8) AS Float64)))]
 ├── estimated rows: 0.33
 └── TableScan
     ├── table: default.system.numbers
@@ -73,7 +73,7 @@ Filter
     ├── read bytes: 8
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [eq(CAST(number AS Float64), 1_f64)], limit: NONE]
+    ├── push downs: [filters: [eq(CAST(numbers.number (#0) AS Float64), 1_f64)], limit: NONE]
     └── estimated rows: 1.00
 
 query T

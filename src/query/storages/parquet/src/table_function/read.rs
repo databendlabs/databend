@@ -60,12 +60,14 @@ impl ParquetTable {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
-                    let expr =
-                        expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0);
+                Some(v) => {
+                    let expr = v
+                        .filter
+                        .as_expr(&BUILTIN_FUNCTIONS)
+                        .project_column_ref(|name| schema.index_of(name).unwrap());
                     let (expr, _) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
-                    expr
-                })),
+                    Arc::new(Some(expr))
+                }
             },
         )
     }
@@ -139,7 +141,7 @@ impl ParquetTable {
             extra
                 .filters
                 .iter()
-                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
                 .collect::<Vec<_>>()
         });
 
