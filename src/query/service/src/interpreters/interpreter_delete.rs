@@ -54,7 +54,6 @@ impl Interpreter for DeleteInterpreter {
 
     #[tracing::instrument(level = "debug", name = "delete_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // TODO check privilege
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
