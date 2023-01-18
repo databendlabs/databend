@@ -126,12 +126,13 @@ error:
 
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(NULL AS VARIANT)
-  | ^^^^^^^^^^^^^^^^^^^^^ unable to cast NULL to Variant
-
+ast            : CAST(NULL AS VARIANT)
+raw expr       : CAST(NULL AS Variant)
+checked expr   : to_variant<T0=NULL><T0>(NULL)
+optimized expr : 0x2000000000000000
+output type    : Variant
+output domain  : Undefined
+output         : null
 
 
 ast            : CAST(0 AS VARIANT)
@@ -269,12 +270,26 @@ output domain  : Undefined
 output         : {"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(a AS VARIANT)
-  | ^^^^^^^^^^^^^^^^^^ unable to cast String NULL to Variant
-
+ast            : CAST(a AS VARIANT)
+raw expr       : CAST(a::String NULL AS Variant)
+checked expr   : to_variant<T0=String NULL><T0>(a)
+evaluation:
++--------+------------------------+-----------+
+|        | a                      | Output    |
++--------+------------------------+-----------+
+| Type   | String NULL            | Variant   |
+| Domain | {"a"..="def"} ∪ {NULL} | Undefined |
+| Row 0  | "a"                    | "a"       |
+| Row 1  | NULL                   | null      |
+| Row 2  | "def"                  | "def"     |
++--------+------------------------+-----------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                            |
++--------+-----------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn { data: 0x616263646566, offsets: [0, 1, 3, 6] }, validity: [0b_____101] } |
+| Output | StringColumn { data: 0x20000000100000016120000000000000002000000010000003646566, offsets: [0, 9, 17, 28] }      |
++--------+-----------------------------------------------------------------------------------------------------------------+
 
 
 error: 

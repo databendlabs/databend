@@ -25,7 +25,7 @@ use crate::expression::Expr;
 use crate::expression::Span;
 use crate::function::EvalContext;
 use crate::property::Domain;
-use crate::type_check::check_simple_cast;
+use crate::type_check::get_simple_cast_function;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
 use crate::types::nullable::NullableColumn;
@@ -206,7 +206,7 @@ impl<'a> Evaluator<'a> {
             return Ok(value);
         }
 
-        if let Some(cast_fn) = check_simple_cast(src_type, false, dest_type) {
+        if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
             return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
         }
 
@@ -353,7 +353,7 @@ impl<'a> Evaluator<'a> {
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
-        if let Some(cast_fn) = check_simple_cast(src_type, true, inner_dest_type) {
+        if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
             return self
                 .run_simple_cast(span, src_type, dest_type, value, &cast_fn)
                 .unwrap();
@@ -742,7 +742,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return Some(domain.clone());
         }
 
-        if let Some(cast_fn) = check_simple_cast(src_type, false, dest_type) {
+        if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
             return self
                 .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
                 .unwrap();
@@ -822,7 +822,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
-        if let Some(cast_fn) = check_simple_cast(src_type, true, inner_dest_type) {
+        if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
             return self
                 .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
                 .unwrap();
