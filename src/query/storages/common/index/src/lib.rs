@@ -17,12 +17,14 @@
 mod bloom;
 pub mod filters;
 pub mod index_min_max;
+mod page_filter;
 pub mod range_filter;
 
 pub use bloom::BlockFilter;
 pub use bloom::FilterEvalResult;
 use common_expression::types::DataType;
 pub use index_min_max::*;
+pub use page_filter::*;
 pub use range_filter::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

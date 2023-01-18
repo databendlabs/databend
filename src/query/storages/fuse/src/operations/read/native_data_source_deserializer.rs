@@ -59,7 +59,7 @@ pub struct NativeDeserializeDataTransform {
     src_schema: DataSchema,
     output_schema: DataSchema,
     prewhere_filter: Arc<Option<Expr>>,
-    
+
     prewhere_skipped: usize,
 }
 
@@ -103,11 +103,12 @@ impl NativeDeserializeDataTransform {
                 (&projected).into()
             }
         };
-        
+
         let func_ctx = ctx.try_get_function_context()?;
         let prewhere_schema = src_schema.project(&prewhere_columns);
-        let prewhere_filter = Self::build_prewhere_filter_expr(plan, func_ctx.clone(), &prewhere_schema)?;
-        
+        let prewhere_filter =
+            Self::build_prewhere_filter_expr(plan, func_ctx.clone(), &prewhere_schema)?;
+
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
                 func_ctx,
@@ -124,7 +125,7 @@ impl NativeDeserializeDataTransform {
                 src_schema,
                 output_schema,
                 prewhere_filter,
-                prewhere_skipped:0,
+                prewhere_skipped: 0,
             },
         )))
     }
@@ -138,8 +139,9 @@ impl NativeDeserializeDataTransform {
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
                 Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
-                    let expr = expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0);
-                    let (expr, _ ) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
+                    let expr =
+                        expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0);
+                    let (expr, _) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
                     expr
                 })),
             },
@@ -223,11 +225,8 @@ impl Processor for NativeDeserializeDataTransform {
             let data_block = match self.prewhere_filter.as_ref() {
                 Some(filter) => {
                     let prewhere_block = self.block_reader.build_block(arrays.clone())?;
-                    let evaluator = Evaluator::new(
-                        &prewhere_block,
-                        self.func_ctx.clone(),
-                        &BUILTIN_FUNCTIONS,
-                    );
+                    let evaluator =
+                        Evaluator::new(&prewhere_block, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(filter).map_err(|(_, e)| {
                         ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
                     })?;

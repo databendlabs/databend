@@ -168,6 +168,10 @@ impl FuseTable {
         }
     }
 
+    pub fn is_native(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Native)
+    }
+
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
     }

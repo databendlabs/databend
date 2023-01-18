@@ -363,10 +363,17 @@ impl FuseTable {
             cluster_key_index.push(index);
         }
 
+        let max_page_size = if self.is_native() {
+            Some(self.get_write_settings().max_page_size)
+        } else {
+            None
+        };
+
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             extra_key_num,
+            max_page_size,
             0,
             self.get_block_compact_thresholds(),
             operators,

@@ -30,6 +30,8 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use futures::future;
 use opendal::Operator;
 use storages_common_pruner::BlockMetaIndex;
+use storages_common_pruner::PagePruner;
+use storages_common_pruner::PagePrunerCreator;
 use storages_common_pruner::LimiterPruner;
 use storages_common_pruner::LimiterPrunerCreator;
 use storages_common_pruner::RangePruner;
@@ -53,6 +55,7 @@ struct PruningContext {
     limiter: LimiterPruner,
     range_pruner: Arc<dyn RangePruner + Send + Sync>,
     filter_pruner: Option<Arc<dyn Pruner + Send + Sync>>,
+    page_pruner: Arc<dyn PagePruner + Send + Sync>,
     rt: Arc<Runtime>,
     semaphore: Arc<Semaphore>,
 }
@@ -103,6 +106,10 @@ impl BlockPruner {
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
         let filter_pruner =
             pruner::new_filter_pruner(ctx, filter_exprs.as_deref(), &schema, dal.clone())?;
+            
+        
+        let page_pruner =
+            PagePrunerCreator::try_create(ctx, filter_exprs.as_deref(), &schema, dal.clone())?;
 
         // 2. constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -131,6 +138,7 @@ impl BlockPruner {
             limiter: limiter.clone(),
             range_pruner: range_pruner.clone(),
             filter_pruner,
+            page_pruner,
             rt: pruning_runtime.clone(),
             semaphore: semaphore.clone(),
         });
@@ -230,6 +238,10 @@ impl BlockPruner {
         } else {
             vec![]
         };
+        
+        // prune pages 
+        
+        
         Ok(result)
     }
 
@@ -265,7 +277,13 @@ impl BlockPruner {
                             let _permit = permit;
                             let keep = filter_pruner.should_keep(&index_location, index_size).await
                                 && ctx.limiter.within_limit(row_count);
-                            (block_idx, keep)
+                                
+                            if keep {
+                                let (keep, range) = pruning_ctx.page_pruner.should_keep(&block_meta.cluster_stats);
+                                (block_idx, keep, range)
+                            } else {
+                                (block_idx, keep, None)
+                            }
                         })
                     });
                     v
@@ -273,7 +291,7 @@ impl BlockPruner {
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
-                            (block_idx, false)
+                            (block_idx, false, None)
                         })
                     });
                     v
@@ -351,7 +369,97 @@ impl BlockPruner {
         }
         result
     }
+    
+    
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn prune_blocks(
+        pruning_ctx: &Arc<PruningContext>,
+        filter_pruner: &Arc<dyn Pruner + Send + Sync>,
+        segment_idx: usize,
+        segment_info: &SegmentInfo,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let mut blocks = segment_info.blocks.iter().enumerate();
+        let pruning_runtime = &pruning_ctx.rt;
+        let semaphore = &pruning_ctx.semaphore;
 
+        let tasks = std::iter::from_fn(|| {
+            // check limit speculatively
+            if pruning_ctx.limiter.exceeded() {
+                return None;
+            }
+            type BlockPruningFutureReturn = Pin<Box<dyn Future<Output = (usize, bool)> + Send>>;
+            type BlockPruningFuture =
+                Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
+            blocks.next().map(|(block_idx, block_meta)| {
+                let row_count = block_meta.row_count;
+                if pruning_ctx.range_pruner.should_keep(&block_meta.col_stats) {
+                    // not pruned by block zone map index,
+                    let ctx = pruning_ctx.clone();
+                    let filter_pruner = filter_pruner.clone();
+                    let index_location = block_meta.bloom_filter_index_location.clone();
+                    let index_size = block_meta.bloom_filter_index_size;
+                    let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
+                        Box::pin(async move {
+                            let _permit = permit;
+                            let keep = filter_pruner.should_keep(&index_location, index_size).await
+                                && ctx.limiter.within_limit(row_count);
+                            if keep {
+                                let (keep, range) = pruning_ctx.page_pruner.should_keep(&block_meta.cluster_stats);
+                                (block_idx, keep, None)
+                            } else {
+                                (block_idx, keep, None)
+                            }
+                        })
+                    });
+                    v
+                } else {
+                    let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
+                        Box::pin(async move {
+                            let _permit = permit;
+                            (block_idx, false, None)
+                        })
+                    });
+                    v
+                }
+            })
+        });
+
+        let start = Instant::now();
+
+        let join_handlers = pruning_runtime
+            .try_spawn_batch_with_owned_semaphore(semaphore.clone(), tasks)
+            .await?;
+
+        let joint = future::try_join_all(join_handlers)
+            .await
+            .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
+
+        let mut result = Vec::with_capacity(segment_info.blocks.len());
+        for item in joint {
+            let (block_idx, keep) = item;
+            if keep {
+                let block = segment_info.blocks[block_idx].clone();
+                result.push((
+                    BlockMetaIndex {
+                        segment_idx,
+                        block_idx,
+                    },
+                    block,
+                ))
+            }
+        }
+
+        // Perf
+        {
+            metrics_inc_pruning_before_block_nums(segment_info.blocks.len() as u64);
+            metrics_inc_pruning_after_block_nums(result.len() as u64);
+            metrics_inc_pruning_milliseconds(start.elapsed().as_millis() as u64);
+        }
+
+        Ok(result)
+    }
+
+    
     #[inline]
     #[tracing::instrument(level = "debug", skip_all)]
     async fn join_flatten_result(

@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use std::io::BufReader;
 use std::io::Seek;
 use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
-
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
@@ -26,7 +24,6 @@ use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
-
 use common_expression::Value;
 use opendal::Object;
 use storages_common_table_meta::meta::ColumnMeta;
@@ -141,12 +138,12 @@ impl BlockReader {
         data_type: common_arrow::arrow::datatypes::DataType,
     ) -> Result<(usize, NativeReader<Reader>)> {
         let (offset, _) = meta.offset_length();
-        
+
         // let reader = o.blocking_range_reader(offset..offset + length)?;
         let path = format!("/home/sundy/work/databend/_data/{}", o.path());
         let mut reader = std::fs::File::open(&path).unwrap();
         reader.seek(std::io::SeekFrom::Start(offset)).unwrap();
-        
+
         let reader: Reader = Box::new(BufReader::new(reader));
 
         let page_metas = meta.as_native().unwrap().pages.clone();

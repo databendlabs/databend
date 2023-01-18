@@ -112,7 +112,7 @@ impl RangeFilter {
     }
 }
 
-fn statistics_to_domain(stat: Option<&ColumnStatistics>, data_type: &DataType) -> Domain {
+pub fn statistics_to_domain(stat: Option<&ColumnStatistics>, data_type: &DataType) -> Domain {
     if stat.is_none() {
         return Domain::full(data_type);
     }
