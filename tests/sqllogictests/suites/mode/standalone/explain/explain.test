@@ -621,36 +621,36 @@ Filter
     ├── probe keys: []
     ├── filters: []
     ├── estimated rows: 50.00
-    ├── HashJoin(Build)
-    │   ├── join type: CROSS
-    │   ├── build keys: []
-    │   ├── probe keys: []
-    │   ├── filters: []
-    │   ├── estimated rows: 5.00
-    │   ├── TableScan(Build)
-    │   │   ├── table: default.default.t1
-    │   │   ├── read rows: 1
-    │   │   ├── read bytes: 62
-    │   │   ├── partitions total: 1
-    │   │   ├── partitions scanned: 1
-    │   │   ├── push downs: [filters: [], limit: NONE]
-    │   │   └── estimated rows: 1.00
-    │   └── TableScan(Probe)
-    │       ├── table: default.default.t2
-    │       ├── read rows: 5
-    │       ├── read bytes: 94
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [], limit: NONE]
-    │       └── estimated rows: 5.00
-    └── TableScan(Probe)
-        ├── table: default.default.t3
-        ├── read rows: 10
-        ├── read bytes: 136
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 10.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t2
+    │   ├── read rows: 5
+    │   ├── read bytes: 94
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 5.00
+    └── HashJoin(Probe)
+        ├── join type: CROSS
+        ├── build keys: []
+        ├── probe keys: []
+        ├── filters: []
+        ├── estimated rows: 10.00
+        ├── TableScan(Build)
+        │   ├── table: default.default.t1
+        │   ├── read rows: 1
+        │   ├── read bytes: 62
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 1.00
+        └── TableScan(Probe)
+            ├── table: default.default.t3
+            ├── read rows: 10
+            ├── read bytes: 136
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 10.00
 
 query T
 explain select * from t1,t2, t3 where ((t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4)) and t3.a > 1
