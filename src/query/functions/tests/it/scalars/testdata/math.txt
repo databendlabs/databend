@@ -26,8 +26,8 @@ output         : NULL
 
 
 ast            : abs(a)
-raw expr       : abs(#0::Int64)
-checked expr   : abs<Int64>(#0)
+raw expr       : abs(a::Int64)
+checked expr   : abs<Int64>(a)
 evaluation:
 +--------+--------------+------------+
 |        | a            | Output     |
@@ -75,8 +75,8 @@ output         : NULL
 
 
 ast            : sign(a)
-raw expr       : sign(#0::Int64)
-checked expr   : sign<Float64>(CAST(#0 AS Float64))
+raw expr       : sign(a::Int64)
+checked expr   : sign<Float64>(CAST(a AS Float64))
 evaluation:
 +--------+--------------+----------+
 |        | a            | Output   |
@@ -169,9 +169,9 @@ output         : NULL
 
 
 ast            : atan2(a, 4)
-raw expr       : atan2(#0::Int64, 4_u8)
-checked expr   : atan2<Float64, Float64>(CAST(#0 AS Float64), CAST(4_u8 AS Float64))
-optimized expr : atan2<Float64, Float64>(CAST(#0 AS Float64), 4_f64)
+raw expr       : atan2(a::Int64, 4_u8)
+checked expr   : atan2<Float64, Float64>(CAST(a AS Float64), CAST(4_u8 AS Float64))
+optimized expr : atan2<Float64, Float64>(CAST(a AS Float64), 4_f64)
 evaluation:
 +--------+-------------+--------------------------------+
 |        | a           | Output                         |
@@ -210,8 +210,8 @@ output         : 6_f64
 
 
 ast            : ceil(a)
-raw expr       : ceil(#0::Float64)
-checked expr   : ceil<Float64>(#0)
+raw expr       : ceil(a::Float64)
+checked expr   : ceil<Float64>(a)
 evaluation:
 +--------+----------------+--------------+
 |        | a              | Output       |
@@ -258,8 +258,8 @@ output         : 1_f64
 
 
 ast            : exp(a)
-raw expr       : exp(#0::Int64)
-checked expr   : exp<Int64>(#0)
+raw expr       : exp(a::Int64)
+checked expr   : exp<Int64>(a)
 evaluation:
 +--------+-----------+----------------------+
 |        | a         | Output               |
@@ -325,8 +325,8 @@ output         : 0.123456789_f64
 
 
 ast            : round(a)
-raw expr       : round(#0::Float64)
-checked expr   : round<Float64>(#0)
+raw expr       : round(a::Float64)
+checked expr   : round<Float64>(a)
 evaluation:
 +--------+------------------+--------------+
 |        | a                | Output       |
@@ -356,8 +356,8 @@ output         : 2_f64
 
 
 ast            : sqrt(a)
-raw expr       : sqrt(#0::Int64)
-checked expr   : sqrt<Int64>(#0)
+raw expr       : sqrt(a::Int64)
+checked expr   : sqrt<Int64>(a)
 evaluation:
 +--------+-------------+------------------+
 |        | a           | Output           |
@@ -423,9 +423,9 @@ output         : 1028_f64
 
 
 ast            : truncate(a, 1)
-raw expr       : truncate(#0::Float64, 1_u8)
-checked expr   : truncate<Float64, Int64>(#0, CAST(1_u8 AS Int64))
-optimized expr : truncate<Float64, Int64>(#0, 1_i64)
+raw expr       : truncate(a::Float64, 1_u8)
+checked expr   : truncate<Float64, Int64>(a, CAST(1_u8 AS Int64))
+optimized expr : truncate<Float64, Int64>(a, 1_i64)
 evaluation:
 +--------+------------------+--------------+
 |        | a                | Output       |
@@ -491,8 +491,8 @@ output         : 0.6931471805_f64
 
 
 ast            : round(2, a)
-raw expr       : round(2_u8, #0::Int64)
-checked expr   : round<UInt8, Int64>(2_u8, #0)
+raw expr       : round(2_u8, a::Int64)
+checked expr   : round<UInt8, Int64>(2_u8, a)
 evaluation:
 +--------+--------------+--------------+
 |        | a            | Output       |

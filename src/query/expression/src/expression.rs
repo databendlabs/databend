@@ -35,29 +35,15 @@ use crate::values::Scalar;
 
 pub type Span = Option<std::ops::Range<usize>>;
 
-pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq {
-    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
-    fn sql_display(&self) -> String {
-        let mut buf = String::new();
-        let mut formatter = std::fmt::Formatter::new(&mut buf);
-        self.sql_display_fmt(&mut formatter).unwrap();
-        buf
-    }
-}
+pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq {}
 
-impl ColumnIndex for usize {
-    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "#{}", self)
-    }
-}
+impl ColumnIndex for usize {}
 
-impl ColumnIndex for String {
-    fn sql_display_fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
-    }
-}
+impl ColumnIndex for String {}
 
-#[derive(Debug, Clone)]
+/// An unchecked expression that is directly desguared from SQL or constructed by the planner.
+/// It can be type-checked and then converted to an evaluatable [`Expr`].
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum RawExpr<Index: ColumnIndex = usize> {
     Literal {
         span: Span,
@@ -67,6 +53,9 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
         span: Span,
         id: Index,
         data_type: DataType,
+
+        // The name used to pretty print the expression.
+        display_name: String,
     },
     Cast {
         span: Span,
@@ -82,6 +71,8 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
     },
 }
 
+/// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
+/// It is .
 #[derive(Debug, Clone, Educe, EnumAsInner)]
 #[educe(PartialEq)]
 pub enum Expr<Index: ColumnIndex = usize> {
@@ -94,6 +85,9 @@ pub enum Expr<Index: ColumnIndex = usize> {
         span: Span,
         id: Index,
         data_type: DataType,
+
+        // The name used to pretty print the expression.
+        display_name: String,
     },
     Cast {
         span: Span,
@@ -127,6 +121,9 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         span: Span,
         id: Index,
         data_type: DataType,
+
+        // The name used to pretty print the expression.
+        display_name: String,
     },
     Cast {
         span: Span,
@@ -219,6 +216,38 @@ impl<Index: ColumnIndex> RawExpr<Index> {
         walk(self, &mut buf);
         buf
     }
+
+    pub fn sql_display(&self) -> String {
+        match self {
+            RawExpr::Literal { lit, .. } => format!("{lit}"),
+            RawExpr::ColumnRef { display_name, .. } => display_name.clone(),
+            RawExpr::Cast {
+                is_try,
+                expr,
+                dest_type,
+                ..
+            } => {
+                if *is_try {
+                    format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
+                } else {
+                    format!("CAST({} AS {dest_type})", expr.sql_display())
+                }
+            }
+            RawExpr::FunctionCall { name, args, .. } => {
+                let mut s = String::new();
+                s += name;
+                s += "(";
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        s += ", ";
+                    }
+                    s += &arg.sql_display();
+                }
+                s += ")";
+                s
+            }
+        }
+    }
 }
 
 impl<Index: ColumnIndex> Expr<Index> {
@@ -251,7 +280,7 @@ impl<Index: ColumnIndex> Expr<Index> {
     pub fn sql_display(&self) -> String {
         match self {
             Expr::Constant { scalar, .. } => format!("{}", scalar.as_ref()),
-            Expr::ColumnRef { id, .. } => id.sql_display(),
+            Expr::ColumnRef { display_name, .. } => display_name.clone(),
             Expr::Cast {
                 is_try,
                 expr,
@@ -298,10 +327,12 @@ impl<Index: ColumnIndex> Expr<Index> {
                 span,
                 id,
                 data_type,
+                display_name,
             } => Expr::ColumnRef {
                 span: span.clone(),
                 id: f(id),
                 data_type: data_type.clone(),
+                display_name: display_name.clone(),
             },
             Expr::Cast {
                 span,
@@ -347,10 +378,12 @@ impl<Index: ColumnIndex> Expr<Index> {
                 span,
                 id,
                 data_type,
+                display_name,
             } => RemoteExpr::ColumnRef {
                 span: span.clone(),
                 id: id.clone(),
                 data_type: data_type.clone(),
+                display_name: display_name.clone(),
             },
             Expr::Cast {
                 span,
@@ -382,8 +415,8 @@ impl<Index: ColumnIndex> Expr<Index> {
 }
 
 impl<Index: ColumnIndex> RemoteExpr<Index> {
-    pub fn as_expr(&self, fn_registry: &FunctionRegistry) -> Option<Expr<Index>> {
-        Some(match self {
+    pub fn as_expr(&self, fn_registry: &FunctionRegistry) -> Expr<Index> {
+        match self {
             RemoteExpr::Constant {
                 span,
                 scalar,
@@ -397,10 +430,12 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 span,
                 id,
                 data_type,
+                display_name,
             } => Expr::ColumnRef {
                 span: span.clone(),
                 id: id.clone(),
                 data_type: data_type.clone(),
+                display_name: display_name.clone(),
             },
             RemoteExpr::Cast {
                 span,
@@ -410,7 +445,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
             } => Expr::Cast {
                 span: span.clone(),
                 is_try: *is_try,
-                expr: Box::new(expr.as_expr(fn_registry)?),
+                expr: Box::new(expr.as_expr(fn_registry)),
                 dest_type: dest_type.clone(),
             },
             RemoteExpr::FunctionCall {
@@ -420,19 +455,16 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 args,
                 return_type,
             } => {
-                let function = fn_registry.get(id)?;
+                let function = fn_registry.get(id).expect("function id not found");
                 Expr::FunctionCall {
                     span: span.clone(),
                     id: id.clone(),
                     function,
                     generics: generics.clone(),
-                    args: args
-                        .iter()
-                        .map(|arg| arg.as_expr(fn_registry))
-                        .collect::<Option<_>>()?,
+                    args: args.iter().map(|arg| arg.as_expr(fn_registry)).collect(),
                     return_type: return_type.clone(),
                 }
             }
-        })
+        }
     }
 }

@@ -174,6 +174,7 @@ pub fn contain_subquery(scalar: &Scalar) -> bool {
 /// Wrap a cast expression with given target type
 pub fn wrap_cast(scalar: &Scalar, target_type: &DataType) -> Scalar {
     Scalar::CastExpr(CastExpr {
+        is_try: false,
         argument: Box::new(scalar.clone()),
         from_type: Box::new(scalar.data_type()),
         target_type: Box::new(target_type.clone()),

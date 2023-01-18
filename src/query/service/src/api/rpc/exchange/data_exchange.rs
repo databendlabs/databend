@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_sql::executor::PhysicalScalar;
+use common_expression::RemoteExpr;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DataExchange {
@@ -42,11 +42,11 @@ impl DataExchange {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ShuffleDataExchange {
     pub destination_ids: Vec<String>,
-    pub shuffle_keys: Vec<PhysicalScalar>,
+    pub shuffle_keys: Vec<RemoteExpr>,
 }
 
 impl ShuffleDataExchange {
-    pub fn create(destination_ids: Vec<String>, shuffle_keys: Vec<PhysicalScalar>) -> DataExchange {
+    pub fn create(destination_ids: Vec<String>, shuffle_keys: Vec<RemoteExpr>) -> DataExchange {
         DataExchange::ShuffleDataExchange(ShuffleDataExchange {
             destination_ids,
             shuffle_keys,

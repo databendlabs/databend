@@ -15,8 +15,8 @@ error:
 
 
 ast            : CAST(a AS INT64)
-raw expr       : CAST(#0::Int16 AS Int64)
-checked expr   : to_int64<Int16>(#0)
+raw expr       : CAST(a::Int16 AS Int64)
+checked expr   : to_int64<Int16>(a)
 evaluation:
 +--------+----------+----------+
 |        | a        | Output   |
@@ -63,8 +63,8 @@ error:
 
 
 ast            : CAST(a AS INT16)
-raw expr       : CAST(#0::Float64 AS Int16)
-checked expr   : to_int16<Float64>(#0)
+raw expr       : CAST(a::Float64 AS Int16)
+checked expr   : to_int16<Float64>(a)
 evaluation:
 +--------+--------------+----------+
 |        | a            | Output   |
@@ -87,8 +87,8 @@ evaluation (internal):
 
 
 ast            : CAST(b AS INT16)
-raw expr       : CAST(#0::Int8 AS Int16)
-checked expr   : to_int16<Int8>(#0)
+raw expr       : CAST(b::Int8 AS Int16)
+checked expr   : to_int16<Int8>(b)
 evaluation:
 +--------+----------+----------+
 |        | b        | Output   |
@@ -366,8 +366,8 @@ error:
 
 
 ast            : CAST(a AS TIMESTAMP)
-raw expr       : CAST(#0::Int64 AS Timestamp)
-checked expr   : to_timestamp<Int64>(#0)
+raw expr       : CAST(a::Int64 AS Timestamp)
+checked expr   : to_timestamp<Int64>(a)
 evaluation:
 +--------+--------------------------------------+--------------------------------------+
 |        | a                                    | Output                               |
@@ -464,8 +464,8 @@ output         : 315360000000000_i64
 
 
 ast            : CAST(a AS INT64)
-raw expr       : CAST(#0::Timestamp AS Int64)
-checked expr   : to_int64<Timestamp>(#0)
+raw expr       : CAST(a::Timestamp AS Int64)
+checked expr   : to_int64<Timestamp>(a)
 evaluation:
 +--------+--------------------------------------+--------------------------------------+
 |        | a                                    | Output                               |
@@ -560,8 +560,8 @@ error:
 
 
 ast            : CAST(a AS DATE)
-raw expr       : CAST(#0::Int32 AS Date)
-checked expr   : to_date<Int64>(CAST(#0 AS Int64))
+raw expr       : CAST(a::Int32 AS Date)
+checked expr   : to_date<Int64>(CAST(a AS Int64))
 evaluation:
 +--------+---------------------+---------------------+
 |        | a                   | Output              |
@@ -638,8 +638,8 @@ output         : 2932896_i64
 
 
 ast            : CAST(a AS INT64)
-raw expr       : CAST(#0::Date AS Int64)
-checked expr   : to_int64<Date>(#0)
+raw expr       : CAST(a::Date AS Int64)
+checked expr   : to_int64<Date>(a)
 evaluation:
 +--------+---------------------+---------------------+
 |        | a                   | Output              |
@@ -703,8 +703,8 @@ output         : 1_u64
 
 
 ast            : CAST(str AS INT64)
-raw expr       : CAST(#0::String AS Int64)
-checked expr   : to_int64<String>(#0)
+raw expr       : CAST(str::String AS Int64)
+checked expr   : to_int64<String>(str)
 evaluation:
 +--------+--------------------------------+--------------------------+
 |        | str                            | Output                   |
@@ -727,8 +727,8 @@ evaluation (internal):
 
 
 ast            : CAST(num AS STRING)
-raw expr       : CAST(#0::Int64 AS String)
-checked expr   : to_string<Int64>(#0)
+raw expr       : CAST(num::Int64 AS String)
+checked expr   : to_string<Int64>(num)
 evaluation:
 +--------+----------------------------------------------+------------------------+
 |        | num                                          | Output                 |
@@ -751,8 +751,8 @@ evaluation (internal):
 
 
 ast            : CAST(num AS STRING)
-raw expr       : CAST(#0::UInt64 AS String)
-checked expr   : to_string<UInt64>(#0)
+raw expr       : CAST(num::UInt64 AS String)
+checked expr   : to_string<UInt64>(num)
 evaluation:
 +--------+----------------------------+------------------------+
 |        | num                        | Output                 |
@@ -841,8 +841,8 @@ output         : false
 
 
 ast            : CAST(bool AS STRING)
-raw expr       : CAST(#0::Boolean AS String)
-checked expr   : to_string<Boolean>(#0)
+raw expr       : CAST(bool::Boolean AS String)
+checked expr   : to_string<Boolean>(bool)
 evaluation:
 +--------+---------------+---------+
 |        | bool          | Output  |
@@ -898,8 +898,8 @@ output         : 1_i64
 
 
 ast            : CAST(num AS BOOLEAN)
-raw expr       : CAST(#0::Int64 AS Boolean)
-checked expr   : to_boolean<Int64>(#0)
+raw expr       : CAST(num::Int64 AS Boolean)
+checked expr   : to_boolean<Int64>(num)
 evaluation:
 +--------+----------+---------------+
 |        | num      | Output        |
@@ -921,8 +921,8 @@ evaluation (internal):
 
 
 ast            : CAST(num AS BOOLEAN)
-raw expr       : CAST(#0::UInt64 AS Boolean)
-checked expr   : to_boolean<UInt64>(#0)
+raw expr       : CAST(num::UInt64 AS Boolean)
+checked expr   : to_boolean<UInt64>(num)
 evaluation:
 +--------+---------+---------------+
 |        | num     | Output        |
@@ -943,8 +943,8 @@ evaluation (internal):
 
 
 ast            : CAST(bool AS UINT64)
-raw expr       : CAST(#0::Boolean AS UInt64)
-checked expr   : to_uint64<Boolean>(#0)
+raw expr       : CAST(bool::Boolean AS UInt64)
+checked expr   : to_uint64<Boolean>(bool)
 evaluation:
 +--------+---------------+---------+
 |        | bool          | Output  |
@@ -964,8 +964,8 @@ evaluation (internal):
 
 
 ast            : CAST(bool AS INT64)
-raw expr       : CAST(#0::Boolean AS Int64)
-checked expr   : to_int64<Boolean>(#0)
+raw expr       : CAST(bool::Boolean AS Int64)
+checked expr   : to_int64<Boolean>(bool)
 evaluation:
 +--------+---------------+---------+
 |        | bool          | Output  |
@@ -1003,8 +1003,8 @@ output         : 1970-01-01
 
 
 ast            : CAST(a AS DATE)
-raw expr       : CAST(#0::Timestamp AS Date)
-checked expr   : to_date<Timestamp>(#0)
+raw expr       : CAST(a::Timestamp AS Date)
+checked expr   : to_date<Timestamp>(a)
 evaluation:
 +--------+--------------------------------------+----------------+
 |        | a                                    | Output         |
@@ -1029,8 +1029,8 @@ evaluation (internal):
 
 
 ast            : CAST(a AS TIMESTAMP)
-raw expr       : CAST(#0::Date AS Timestamp)
-checked expr   : to_timestamp<Date>(#0)
+raw expr       : CAST(a::Date AS Timestamp)
+checked expr   : to_timestamp<Date>(a)
 evaluation:
 +--------+---------------------+-------------------------------------------+
 |        | a                   | Output                                    |
@@ -1053,8 +1053,8 @@ evaluation (internal):
 
 
 ast            : CAST(TO_DATE(a) AS TIMESTAMP)
-raw expr       : CAST(TO_DATE(#0::Int32) AS Timestamp)
-checked expr   : to_timestamp<Date>(to_date<Int64>(CAST(#0 AS Int64)))
+raw expr       : CAST(TO_DATE(a::Int32) AS Timestamp)
+checked expr   : to_timestamp<Date>(to_date<Int64>(CAST(a AS Int64)))
 evaluation:
 +--------+---------------------+-------------------------------------------+
 |        | a                   | Output                                    |
@@ -1171,8 +1171,8 @@ output         : 2022-01-02 01:00:00.000000
 
 
 ast            : TO_TIMESTAMP(a)
-raw expr       : TO_TIMESTAMP(#0::String)
-checked expr   : to_timestamp<String>(#0)
+raw expr       : TO_TIMESTAMP(a::String)
+checked expr   : to_timestamp<String>(a)
 evaluation:
 +--------+-----------------------------------------------------+----------------------------+
 |        | a                                                   | Output                     |
@@ -1267,8 +1267,8 @@ output         : "1979-12-30 00:00:00.000000"
 
 
 ast            : CAST(a AS VARCHAR)
-raw expr       : CAST(#0::Timestamp AS String)
-checked expr   : to_string<Timestamp>(#0)
+raw expr       : CAST(a::Timestamp AS String)
+checked expr   : to_string<Timestamp>(a)
 evaluation:
 +--------+--------------------------------------+------------------------------+
 |        | a                                    | Output                       |
@@ -1371,8 +1371,8 @@ output         : 2022-01-02
 
 
 ast            : TO_DATE(a)
-raw expr       : TO_DATE(#0::String)
-checked expr   : to_date<String>(#0)
+raw expr       : TO_DATE(a::String)
+checked expr   : to_date<String>(a)
 evaluation:
 +--------+-----------------------------------------------------+------------+
 |        | a                                                   | Output     |
@@ -1449,8 +1449,8 @@ output         : "9999-12-31"
 
 
 ast            : CAST(a AS VARCHAR)
-raw expr       : CAST(#0::Date AS String)
-checked expr   : to_string<Date>(#0)
+raw expr       : CAST(a::Date AS String)
+checked expr   : to_string<Date>(a)
 evaluation:
 +--------+---------------------+--------------+
 |        | a                   | Output       |
@@ -1473,8 +1473,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(a AS UINT8)
-raw expr       : TRY_CAST(#0::UInt16 AS UInt8)
-checked expr   : try_to_uint8<UInt16>(#0)
+raw expr       : TRY_CAST(a::UInt16 AS UInt8)
+checked expr   : try_to_uint8<UInt16>(a)
 evaluation:
 +--------+------------+--------------------+
 |        | a          | Output             |
@@ -1497,8 +1497,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(a AS UINT16)
-raw expr       : TRY_CAST(#0::Int16 AS UInt16)
-checked expr   : try_to_uint16<Int16>(#0)
+raw expr       : TRY_CAST(a::Int16 AS UInt16)
+checked expr   : try_to_uint16<Int16>(a)
 evaluation:
 +--------+----------+------------------+
 |        | a        | Output           |
@@ -1521,8 +1521,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(a AS INT64)
-raw expr       : TRY_CAST(#0::Int16 AS Int64)
-checked expr   : try_to_int64<Int16>(#0)
+raw expr       : TRY_CAST(a::Int16 AS Int64)
+checked expr   : try_to_int64<Int16>(a)
 evaluation:
 +--------+----------+------------+
 |        | a        | Output     |
@@ -1545,8 +1545,8 @@ evaluation (internal):
 
 
 ast            : (TRY_CAST(a AS FLOAT32), TRY_CAST(a AS INT32), TRY_CAST(b AS FLOAT32), TRY_CAST(b AS INT32))
-raw expr       : tuple(TRY_CAST(#0::UInt64 AS Float32), TRY_CAST(#0::UInt64 AS Int32), TRY_CAST(#1::Float64 AS Float32), TRY_CAST(#1::Float64 AS Int32))
-checked expr   : tuple<Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL>(try_to_float32<UInt64>(#0), try_to_int32<UInt64>(#0), try_to_float32<Float64>(#1), try_to_int32<Float64>(#1))
+raw expr       : tuple(TRY_CAST(a::UInt64 AS Float32), TRY_CAST(a::UInt64 AS Int32), TRY_CAST(b::Float64 AS Float32), TRY_CAST(b::Float64 AS Int32))
+checked expr   : tuple<Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL>(try_to_float32<UInt64>(a), try_to_int32<UInt64>(a), try_to_float32<Float64>(b), try_to_int32<Float64>(b))
 evaluation:
 +--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------+
 |        | a                          | b                                                                                                                                                                                                                                                                                                                              | Output                                                                                                     |
@@ -1571,9 +1571,9 @@ evaluation (internal):
 
 
 ast            : TRY_CAST([[a, b], NULL, NULL] AS Array(Array(Int8)))
-raw expr       : TRY_CAST(array(array(#0::Int16, #1::Int16), NULL, NULL) AS Array(Array(Int8)))
-checked expr   : TRY_CAST(array<T0=Array(Int16) NULL><T0, T0, T0>(CAST(array<T0=Int16><T0, T0>(#0, #1) AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL)) AS Array(Array(Int8 NULL) NULL) NULL)
-optimized expr : TRY_CAST(array<T0=Array(Int16) NULL><T0, T0, T0>(CAST(array<T0=Int16><T0, T0>(#0, #1) AS Array(Int16) NULL), NULL, NULL) AS Array(Array(Int8 NULL) NULL) NULL)
+raw expr       : TRY_CAST(array(array(a::Int16, b::Int16), NULL, NULL) AS Array(Array(Int8)))
+checked expr   : TRY_CAST(array<T0=Array(Int16) NULL><T0, T0, T0>(CAST(array<T0=Int16><T0, T0>(a, b) AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL)) AS Array(Array(Int8 NULL) NULL) NULL)
+optimized expr : TRY_CAST(array<T0=Array(Int16) NULL><T0, T0, T0>(CAST(array<T0=Int16><T0, T0>(a, b) AS Array(Int16) NULL), NULL, NULL) AS Array(Array(Int8 NULL) NULL) NULL)
 evaluation:
 +--------+-----------+------------+------------------------------------+
 |        | a         | b          | Output                             |
@@ -1597,8 +1597,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))
-raw expr       : TRY_CAST(tuple(#0::Int16, #1::Int16, NULL) AS (Int8, UInt8, Boolean NULL))
-checked expr   : TRY_CAST(tuple<Int16, Int16, NULL>(#0, #1, NULL) AS (Int8 NULL, UInt8 NULL, Boolean NULL) NULL)
+raw expr       : TRY_CAST(tuple(a::Int16, b::Int16, NULL) AS (Int8, UInt8, Boolean NULL))
+checked expr   : TRY_CAST(tuple<Int16, Int16, NULL>(a, b, NULL) AS (Int8 NULL, UInt8 NULL, Boolean NULL) NULL)
 evaluation:
 +--------+-----------+------------+------------------------------------------------+
 |        | a         | b          | Output                                         |
@@ -1622,8 +1622,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(a AS INT16)
-raw expr       : TRY_CAST(#0::Float64 AS Int16)
-checked expr   : try_to_int16<Float64>(#0)
+raw expr       : TRY_CAST(a::Float64 AS Int16)
+checked expr   : try_to_int16<Float64>(a)
 evaluation:
 +--------+--------------+------------+
 |        | a            | Output     |
@@ -1646,8 +1646,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(b AS INT16)
-raw expr       : TRY_CAST(#0::Int8 AS Int16)
-checked expr   : try_to_int16<Int8>(#0)
+raw expr       : TRY_CAST(b::Int8 AS Int16)
+checked expr   : try_to_int16<Int8>(b)
 evaluation:
 +--------+----------+------------+
 |        | b        | Output     |
@@ -1670,8 +1670,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(a AS UINT16)
-raw expr       : TRY_CAST(#0::Int16 AS UInt16)
-checked expr   : try_to_uint16<Int16>(#0)
+raw expr       : TRY_CAST(a::Int16 AS UInt16)
+checked expr   : try_to_uint16<Int16>(a)
 evaluation:
 +--------+----------+------------------+
 |        | a        | Output           |
@@ -1694,8 +1694,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(c AS INT16)
-raw expr       : TRY_CAST(#0::Int64 AS Int16)
-checked expr   : try_to_int16<Int64>(#0)
+raw expr       : TRY_CAST(c::Int64 AS Int16)
+checked expr   : try_to_int16<Int64>(c)
 evaluation:
 +--------+--------------------+-----------------------+
 |        | c                  | Output                |
@@ -1862,8 +1862,8 @@ output         : {"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}
 
 
 ast            : TRY_CAST(a AS VARIANT)
-raw expr       : TRY_CAST(#0::String NULL AS Variant)
-checked expr   : try_to_variant<T0=String NULL><T0>(#0)
+raw expr       : TRY_CAST(a::String NULL AS Variant)
+checked expr   : try_to_variant<T0=String NULL><T0>(a)
 evaluation:
 +--------+------------------------+--------------+
 |        | a                      | Output       |
@@ -1974,8 +1974,8 @@ output         : NULL
 
 
 ast            : TRY_CAST(a AS TIMESTAMP)
-raw expr       : TRY_CAST(#0::Int64 AS Timestamp)
-checked expr   : try_to_timestamp<Int64>(#0)
+raw expr       : TRY_CAST(a::Int64 AS Timestamp)
+checked expr   : try_to_timestamp<Int64>(a)
 evaluation:
 +--------+--------------------------------------+--------------------------------------+
 |        | a                                    | Output                               |
@@ -2072,8 +2072,8 @@ output         : 315360000000000_i64
 
 
 ast            : TRY_CAST(a AS INT64)
-raw expr       : TRY_CAST(#0::Timestamp AS Int64)
-checked expr   : try_to_int64<Timestamp>(#0)
+raw expr       : TRY_CAST(a::Timestamp AS Int64)
+checked expr   : try_to_int64<Timestamp>(a)
 evaluation:
 +--------+--------------------------------------+--------------------------------------+
 |        | a                                    | Output                               |
@@ -2170,8 +2170,8 @@ output         : NULL
 
 
 ast            : TRY_CAST(a AS DATE)
-raw expr       : TRY_CAST(#0::Int32 AS Date)
-checked expr   : try_to_date<Int64>(CAST(#0 AS Int64))
+raw expr       : TRY_CAST(a::Int32 AS Date)
+checked expr   : try_to_date<Int64>(CAST(a AS Int64))
 evaluation:
 +--------+---------------------+---------------------+
 |        | a                   | Output              |
@@ -2248,8 +2248,8 @@ output         : 2932896_i64
 
 
 ast            : TRY_CAST(a AS INT64)
-raw expr       : TRY_CAST(#0::Date AS Int64)
-checked expr   : try_to_int64<Date>(#0)
+raw expr       : TRY_CAST(a::Date AS Int64)
+checked expr   : try_to_int64<Date>(a)
 evaluation:
 +--------+---------------------+---------------------+
 |        | a                   | Output              |
@@ -2317,8 +2317,8 @@ output         : 1_u64
 
 
 ast            : TRY_CAST(str AS INT64)
-raw expr       : TRY_CAST(#0::String AS Int64)
-checked expr   : try_to_int64<String>(#0)
+raw expr       : TRY_CAST(str::String AS Int64)
+checked expr   : try_to_int64<String>(str)
 evaluation:
 +--------+--------------------------------+-------------------------------------------------------+
 |        | str                            | Output                                                |
@@ -2341,8 +2341,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(num AS STRING)
-raw expr       : TRY_CAST(#0::Int64 AS String)
-checked expr   : try_to_string<Int64>(#0)
+raw expr       : TRY_CAST(num::Int64 AS String)
+checked expr   : try_to_string<Int64>(num)
 evaluation:
 +--------+----------------------------------------------+------------------------+
 |        | num                                          | Output                 |
@@ -2365,8 +2365,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(num AS STRING)
-raw expr       : TRY_CAST(#0::UInt64 AS String)
-checked expr   : try_to_string<UInt64>(#0)
+raw expr       : TRY_CAST(num::UInt64 AS String)
+checked expr   : try_to_string<UInt64>(num)
 evaluation:
 +--------+----------------------------+------------------------+
 |        | num                        | Output                 |
@@ -2459,8 +2459,8 @@ output         : false
 
 
 ast            : TRY_CAST(bool AS STRING)
-raw expr       : TRY_CAST(#0::Boolean AS String)
-checked expr   : try_to_string<Boolean>(#0)
+raw expr       : TRY_CAST(bool::Boolean AS String)
+checked expr   : try_to_string<Boolean>(bool)
 evaluation:
 +--------+---------------+-----------------+
 |        | bool          | Output          |
@@ -2516,8 +2516,8 @@ output         : 1_i64
 
 
 ast            : TRY_CAST(num AS BOOLEAN)
-raw expr       : TRY_CAST(#0::Int64 AS Boolean)
-checked expr   : try_to_boolean<Int64>(#0)
+raw expr       : TRY_CAST(num::Int64 AS Boolean)
+checked expr   : try_to_boolean<Int64>(num)
 evaluation:
 +--------+----------+---------------+
 |        | num      | Output        |
@@ -2539,8 +2539,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(num AS BOOLEAN)
-raw expr       : TRY_CAST(#0::UInt64 AS Boolean)
-checked expr   : try_to_boolean<UInt64>(#0)
+raw expr       : TRY_CAST(num::UInt64 AS Boolean)
+checked expr   : try_to_boolean<UInt64>(num)
 evaluation:
 +--------+---------+---------------+
 |        | num     | Output        |
@@ -2561,8 +2561,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(bool AS UINT64)
-raw expr       : TRY_CAST(#0::Boolean AS UInt64)
-checked expr   : try_to_uint64<Boolean>(#0)
+raw expr       : TRY_CAST(bool::Boolean AS UInt64)
+checked expr   : try_to_uint64<Boolean>(bool)
 evaluation:
 +--------+---------------+-------------+
 |        | bool          | Output      |
@@ -2582,8 +2582,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(bool AS INT64)
-raw expr       : TRY_CAST(#0::Boolean AS Int64)
-checked expr   : try_to_int64<Boolean>(#0)
+raw expr       : TRY_CAST(bool::Boolean AS Int64)
+checked expr   : try_to_int64<Boolean>(bool)
 evaluation:
 +--------+---------------+------------+
 |        | bool          | Output     |
@@ -2621,8 +2621,8 @@ output         : 1970-01-01
 
 
 ast            : TRY_CAST(a AS DATE)
-raw expr       : TRY_CAST(#0::Timestamp AS Date)
-checked expr   : try_to_date<Timestamp>(#0)
+raw expr       : TRY_CAST(a::Timestamp AS Date)
+checked expr   : try_to_date<Timestamp>(a)
 evaluation:
 +--------+--------------------------------------+----------------+
 |        | a                                    | Output         |
@@ -2647,8 +2647,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(a AS TIMESTAMP)
-raw expr       : TRY_CAST(#0::Date AS Timestamp)
-checked expr   : try_to_timestamp<Date>(#0)
+raw expr       : TRY_CAST(a::Date AS Timestamp)
+checked expr   : try_to_timestamp<Date>(a)
 evaluation:
 +--------+---------------------+-------------------------------------------+
 |        | a                   | Output                                    |
@@ -2671,8 +2671,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(TO_DATE(a) AS TIMESTAMP)
-raw expr       : TRY_CAST(TO_DATE(#0::Int32) AS Timestamp)
-checked expr   : try_to_timestamp<Date>(to_date<Int64>(CAST(#0 AS Int64)))
+raw expr       : TRY_CAST(TO_DATE(a::Int32) AS Timestamp)
+checked expr   : try_to_timestamp<Date>(to_date<Int64>(CAST(a AS Int64)))
 evaluation:
 +--------+---------------------+-------------------------------------------+
 |        | a                   | Output                                    |
@@ -2695,8 +2695,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(a AS TIMESTAMP)
-raw expr       : TRY_CAST(#0::Int64 AS Timestamp)
-checked expr   : try_to_timestamp<Int64>(#0)
+raw expr       : TRY_CAST(a::Int64 AS Timestamp)
+checked expr   : try_to_timestamp<Int64>(a)
 optimized expr : NULL
 evaluation:
 +--------+---------------------------------------------+----------------+
@@ -2716,8 +2716,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(a AS DATE)
-raw expr       : TRY_CAST(#0::Int64 AS Date)
-checked expr   : try_to_date<Int64>(#0)
+raw expr       : TRY_CAST(a::Int64 AS Date)
+checked expr   : try_to_date<Int64>(a)
 optimized expr : NULL
 evaluation:
 +--------+---------------------------------------------+-----------+
@@ -2818,8 +2818,8 @@ output         : 2022-01-02 01:00:00.000000
 
 
 ast            : TRY_TO_TIMESTAMP(a)
-raw expr       : TRY_TO_TIMESTAMP(#0::String)
-checked expr   : try_to_timestamp<String>(#0)
+raw expr       : TRY_TO_TIMESTAMP(a::String)
+checked expr   : try_to_timestamp<String>(a)
 evaluation:
 +--------+-----------------------------------------------------+----------------------------------------------------+
 |        | a                                                   | Output                                             |
@@ -2914,8 +2914,8 @@ output         : "1979-12-30 00:00:00.000000"
 
 
 ast            : TRY_CAST(a AS VARCHAR)
-raw expr       : TRY_CAST(#0::Timestamp AS String)
-checked expr   : try_to_string<Timestamp>(#0)
+raw expr       : TRY_CAST(a::Timestamp AS String)
+checked expr   : try_to_string<Timestamp>(a)
 evaluation:
 +--------+--------------------------------------+------------------------------+
 |        | a                                    | Output                       |
@@ -3021,8 +3021,8 @@ output         : 2022-01-02
 
 
 ast            : TRY_TO_DATE(a)
-raw expr       : TRY_TO_DATE(#0::String)
-checked expr   : try_to_date<String>(#0)
+raw expr       : TRY_TO_DATE(a::String)
+checked expr   : try_to_date<String>(a)
 evaluation:
 +--------+-----------------------------------------------------+------------------------------+
 |        | a                                                   | Output                       |
@@ -3099,8 +3099,8 @@ output         : "9999-12-31"
 
 
 ast            : TRY_CAST(a AS VARCHAR)
-raw expr       : TRY_CAST(#0::Date AS String)
-checked expr   : try_to_string<Date>(#0)
+raw expr       : TRY_CAST(a::Date AS String)
+checked expr   : try_to_string<Date>(a)
 evaluation:
 +--------+---------------------+--------------+
 |        | a                   | Output       |

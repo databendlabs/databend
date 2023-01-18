@@ -93,6 +93,7 @@ impl<'a> Evaluator<'a> {
                         span: None,
                         id: *index,
                         data_type: column.data_type.clone(),
+                        display_name: String::new(),
                     }),
                     dest_type: datatype.clone(),
                 })?;
@@ -516,9 +517,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         let input_domains = expr
             .column_refs()
             .into_iter()
-            .map(|(name, ty)| {
+            .map(|(id, ty)| {
                 let domain = Domain::full(&ty);
-                (name, domain)
+                (id, domain)
             })
             .collect();
 
@@ -580,6 +581,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 span,
                 id,
                 data_type,
+                ..
             } => {
                 let domain = &self.input_domains[id];
                 let expr = domain

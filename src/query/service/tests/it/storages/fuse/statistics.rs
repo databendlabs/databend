@@ -274,6 +274,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
                 span: None,
                 id: 0usize,
                 data_type: schema.field(0).data_type().clone(),
+                display_name: schema.field(0).name().clone(),
             },
             RawExpr::Literal {
                 span: None,

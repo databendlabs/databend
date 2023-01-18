@@ -492,6 +492,7 @@ impl<'a> Binder {
                     visibility: Visibility::Visible,
                 };
                 let left_coercion_expr = CastExpr {
+                    is_try: false,
                     argument: Box::new(
                         BoundColumnRef {
                             column: left_col.clone(),
@@ -517,6 +518,7 @@ impl<'a> Binder {
                     .write()
                     .add_derived_column(right_col.column_name.clone(), coercion_types[idx].clone());
                 let right_coercion_expr = CastExpr {
+                    is_try: false,
                     argument: Box::new(
                         BoundColumnRef {
                             column: right_col.clone(),

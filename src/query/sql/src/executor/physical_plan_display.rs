@@ -15,6 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::DistributedInsertSelect;
@@ -83,13 +84,13 @@ impl Display for TableScan {
 
 impl Display for Filter {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let scalars = self
+        let predicates = self
             .predicates
             .iter()
-            .map(|scalar| format!("{}", scalar))
-            .collect::<Vec<String>>();
+            .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .join(", ");
 
-        write!(f, "Filter: [{}]", scalars.join(", "))
+        write!(f, "Filter: [{predicates}]")
     }
 }
 
@@ -132,9 +133,9 @@ impl Display for Sort {
 impl Display for EvalScalar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let scalars = self
-            .scalars
+            .exprs
             .iter()
-            .map(|(scalar, _)| format!("{}", scalar))
+            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).to_string())
             .collect::<Vec<String>>();
 
         write!(f, "EvalScalar: [{}]", scalars.join(", "))
@@ -164,7 +165,6 @@ impl Display for AggregateFinal {
                         .join(", ")
                 )
             })
-            .collect::<Vec<String>>()
             .join(", ");
 
         write!(
@@ -198,7 +198,6 @@ impl Display for AggregatePartial {
                         .join(", ")
                 )
             })
-            .collect::<Vec<String>>()
             .join(", ");
 
         write!(
@@ -226,21 +225,21 @@ impl Display for HashJoin {
                 let build_keys = self
                     .build_keys
                     .iter()
-                    .map(|scalar| format!("{}", scalar))
+                    .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
                     .collect::<Vec<String>>()
                     .join(", ");
 
                 let probe_keys = self
                     .probe_keys
                     .iter()
-                    .map(|scalar| format!("{}", scalar))
+                    .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
                     .collect::<Vec<String>>()
                     .join(", ");
 
                 let join_filters = self
                     .non_equi_conditions
                     .iter()
-                    .map(|scalar| format!("{}", scalar))
+                    .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
                     .collect::<Vec<String>>()
                     .join(", ");
 
@@ -259,8 +258,7 @@ impl Display for Exchange {
         let keys = self
             .keys
             .iter()
-            .map(|scalar| format!("{}", scalar))
-            .collect::<Vec<String>>()
+            .map(|key| key.as_expr(&BUILTIN_FUNCTIONS).sql_display())
             .join(", ");
 
         write!(f, "Exchange: [kind: {:?}, keys: {}]", self.kind, keys)

@@ -48,10 +48,12 @@ pub fn check<Index: ColumnIndex>(
             span,
             id,
             data_type,
+            display_name,
         } => Ok(Expr::ColumnRef {
             span: span.clone(),
             id: id.clone(),
             data_type: data_type.clone(),
+            display_name: display_name.clone(),
         }),
         RawExpr::Cast {
             span,
