@@ -27,7 +27,7 @@ use super::Binder;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CastExpr;
 use crate::plans::Plan;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::SettingPlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::VarValue;
@@ -50,7 +50,7 @@ impl<'a> Binder {
         let variable = variable.name.clone();
 
         let (scalar, data_type) = *type_checker.resolve(value, None).await?;
-        let scalar = Scalar::CastExpr(CastExpr {
+        let scalar = ScalarExpr::CastExpr(CastExpr {
             is_try: false,
             argument: Box::new(scalar),
             from_type: Box::new(data_type),
