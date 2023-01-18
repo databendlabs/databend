@@ -58,6 +58,7 @@ fn test_project_schema_from_tuple() -> Result<()> {
     }
     assert_eq!(project_schema.next_column_id(), schema.next_column_id());
     assert_eq!(project_schema.column_id_map(), schema.column_id_map());
+    assert_eq!(project_schema.column_id_set(), schema.column_id_set());
     Ok(())
 }
 
@@ -128,6 +129,7 @@ fn test_schema_modify_field() -> Result<()> {
 
     assert_eq!(schema.fields().to_owned(), vec![field1.clone()]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.next_column_id(), 1);
 
     // add column b
@@ -135,12 +137,16 @@ fn test_schema_modify_field() -> Result<()> {
     assert_eq!(schema.fields().to_owned(), vec![field1.clone(), field2,]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.column_id_of("b").unwrap(), 1);
+    assert_eq!(schema.is_column_deleted(0), false);
+    assert_eq!(schema.is_column_deleted(1), false);
     assert_eq!(schema.next_column_id(), 2);
 
     // drop column b
     schema.drop_column("b")?;
     assert_eq!(schema.fields().to_owned(), vec![field1.clone(),]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    assert_eq!(schema.is_column_deleted(0), false);
+    assert_eq!(schema.is_column_deleted(1), true);
     assert_eq!(schema.next_column_id(), 2);
 
     // add column c
@@ -148,6 +154,9 @@ fn test_schema_modify_field() -> Result<()> {
     assert_eq!(schema.fields().to_owned(), vec![field1, field3]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.column_id_of("c").unwrap(), 2);
+    assert_eq!(schema.is_column_deleted(0), false);
+    assert_eq!(schema.is_column_deleted(1), true);
+    assert_eq!(schema.is_column_deleted(2), false);
     assert_eq!(schema.next_column_id(), 3);
 
     // add struct column
@@ -168,6 +177,10 @@ fn test_schema_modify_field() -> Result<()> {
     assert_eq!(schema.column_id_of("s:0:0").unwrap(), 3);
     assert_eq!(schema.column_id_of("s:0:1").unwrap(), 4);
     assert_eq!(schema.column_id_of("s:1").unwrap(), 5);
+    assert_eq!(schema.is_column_deleted(0), false);
+    assert_eq!(schema.is_column_deleted(1), true);
+    assert_eq!(schema.is_column_deleted(2), false);
+    assert_eq!(schema.is_column_deleted(3), false);
     assert_eq!(schema.next_column_id(), 6);
 
     // add array column
@@ -177,10 +190,20 @@ fn test_schema_modify_field() -> Result<()> {
     schema.add_columns(&[TableField::new("ary", ary)])?;
     assert_eq!(schema.column_id_of("ary").unwrap(), 6);
     assert_eq!(schema.column_id_of("ary:0").unwrap(), 6);
+    assert_eq!(schema.is_column_deleted(0), false);
+    assert_eq!(schema.is_column_deleted(1), true);
+    assert_eq!(schema.is_column_deleted(2), false);
+    assert_eq!(schema.is_column_deleted(3), false);
+    assert_eq!(schema.is_column_deleted(6), false);
     assert_eq!(schema.next_column_id(), 7);
 
     // drop column
     schema.drop_column("s")?;
+    assert_eq!(schema.is_column_deleted(0), false);
+    assert_eq!(schema.is_column_deleted(1), true);
+    assert_eq!(schema.is_column_deleted(2), false);
+    assert_eq!(schema.is_column_deleted(3), true);
+    assert_eq!(schema.is_column_deleted(6), false);
     assert!(schema.column_id_of("s").is_err());
     assert!(schema.column_id_of("s:0").is_err());
     assert!(schema.column_id_of("s:1").is_err());

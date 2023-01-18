@@ -71,7 +71,7 @@ pub fn blocks_to_parquet(
         version: Version::V2,
     };
 
-    match write_parquet_file(write_buffer, row_groups, arrow_schema.clone(), options) {
+    match write_parquet_file(write_buffer, row_groups, arrow_schema, options) {
         Ok(result) => Ok(result),
         Err(cause) => Err(ErrorCode::Internal(format!(
             "write_parquet_file: {:?}",

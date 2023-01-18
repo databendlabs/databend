@@ -80,6 +80,9 @@ pub struct TableSchema {
     // define new fields as Option for compatibility
     pub next_column_id: Option<u32>,
     column_id_map: Option<BTreeMap<String, u32>>,
+
+    // column_id_set will be calculate every time init a TableSchema, so it need not to be serialize.
+    #[serde(skip_serializing)]
     column_id_set: Option<HashSet<u32>>,
 }
 
