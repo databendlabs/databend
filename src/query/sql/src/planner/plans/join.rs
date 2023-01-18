@@ -35,7 +35,7 @@ use crate::optimizer::Statistics;
 use crate::optimizer::UniformSampleSet;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
@@ -131,9 +131,9 @@ impl Display for JoinType {
 /// the probe side.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Join {
-    pub left_conditions: Vec<Scalar>,
-    pub right_conditions: Vec<Scalar>,
-    pub non_equi_conditions: Vec<Scalar>,
+    pub left_conditions: Vec<ScalarExpr>,
+    pub right_conditions: Vec<ScalarExpr>,
+    pub non_equi_conditions: Vec<ScalarExpr>,
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
@@ -531,8 +531,8 @@ fn evaluate_by_ndv(
 fn update_statistic(
     left_prop: &mut RelationalProperty,
     right_prop: &mut RelationalProperty,
-    left_condition: &Scalar,
-    right_condition: &Scalar,
+    left_condition: &ScalarExpr,
+    right_condition: &ScalarExpr,
     new_stat: NewStatistic,
 ) {
     let left_col_stat = left_prop

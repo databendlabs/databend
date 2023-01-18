@@ -55,7 +55,7 @@ use crate::plans::AggregateMode;
 use crate::plans::AndExpr;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::ColumnEntry;
 use crate::IndexType;
@@ -309,7 +309,7 @@ impl PhysicalPlanBuilder {
                 let result = match &agg.mode {
                     AggregateMode::Partial => {
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
-                            if let Scalar::AggregateFunction(agg) = &v.scalar {
+                            if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
                                     sig: AggregateFunctionSignature {
                                         name: agg.func_name.clone(),
@@ -321,7 +321,7 @@ impl PhysicalPlanBuilder {
                                     },
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
-                                        if let Scalar::BoundColumnRef(col) = arg {
+                                        if let ScalarExpr::BoundColumnRef(col) = arg {
                                             let col_index = input_schema.index_of(&col.column.index.to_string())?;
                                             Ok(col_index)
                                         } else {
@@ -331,7 +331,7 @@ impl PhysicalPlanBuilder {
                                         }
                                     }).collect::<Result<_>>()?,
                                     arg_indices: agg.args.iter().map(|arg| {
-                                        if let Scalar::BoundColumnRef(col) = arg {
+                                        if let ScalarExpr::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
                                         } else {
                                             Err(ErrorCode::Internal(
@@ -407,7 +407,7 @@ impl PhysicalPlanBuilder {
                         };
 
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
-                            if let Scalar::AggregateFunction(agg) = &v.scalar {
+                            if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
                                     sig: AggregateFunctionSignature {
                                         name: agg.func_name.clone(),
@@ -419,7 +419,7 @@ impl PhysicalPlanBuilder {
                                     },
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
-                                        if let Scalar::BoundColumnRef(col) = arg {
+                                        if let ScalarExpr::BoundColumnRef(col) = arg {
                                             input_schema.index_of(&col.column.index.to_string())
                                         } else {
                                             Err(ErrorCode::Internal(
@@ -428,7 +428,7 @@ impl PhysicalPlanBuilder {
                                         }
                                     }).collect::<Result<_>>()?,
                                     arg_indices: agg.args.iter().map(|arg| {
-                                        if let Scalar::BoundColumnRef(col) = arg {
+                                        if let ScalarExpr::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
                                         } else {
                                             Err(ErrorCode::Internal(
@@ -594,7 +594,7 @@ impl PhysicalPlanBuilder {
                 } else {
                     let mut scalar = prewhere.predicates[0].clone();
                     for predicate in prewhere.predicates.iter().skip(1) {
-                        scalar = Scalar::AndExpr(AndExpr {
+                        scalar = ScalarExpr::AndExpr(AndExpr {
                             left: Box::new(scalar),
                             right: Box::new(predicate.clone()),
                             return_type: Box::new(DataType::Boolean),

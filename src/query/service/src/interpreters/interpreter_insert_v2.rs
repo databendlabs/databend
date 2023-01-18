@@ -68,7 +68,7 @@ use common_sql::plans::CastExpr;
 use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
-use common_sql::plans::Scalar;
+use common_sql::plans::ScalarExpr;
 use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
@@ -787,7 +787,7 @@ async fn fill_default_value(
         let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
         let (mut scalar, ty) = binder.bind(&ast).await?;
         if !field.data_type().eq(&ty) {
-            scalar = Scalar::CastExpr(CastExpr {
+            scalar = ScalarExpr::CastExpr(CastExpr {
                 is_try: false,
                 argument: Box::new(scalar),
                 from_type: Box::new(ty),
@@ -861,7 +861,7 @@ async fn exprs_to_scalar<'a>(
         let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
         if &data_type != field_data_type {
-            scalar = Scalar::CastExpr(CastExpr {
+            scalar = ScalarExpr::CastExpr(CastExpr {
                 is_try: false,
                 argument: Box::new(scalar),
                 from_type: Box::new(data_type),

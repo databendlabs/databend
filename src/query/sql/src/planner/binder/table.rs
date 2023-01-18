@@ -67,7 +67,7 @@ use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ConstantExpr;
-use crate::plans::Scalar as ScalarExpr;
+use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BindContext;
