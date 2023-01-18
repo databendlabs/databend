@@ -329,7 +329,7 @@ impl TableSchema {
             }
             None => BTreeMap::new(),
         };
-        let has_next_column_id_inited = next_column_id > 0;
+        let has_next_column_id_inited = next_column_id != 0;
         // make sure that column_id_map and next_column_id init at the same time
         assert_eq!(has_column_id_map_inited, has_next_column_id_inited);
 
@@ -358,7 +358,7 @@ impl TableSchema {
         } else {
             new_next_column_id
         };
-        // make sure next_column_id value cannot fallback
+        // check next_column_id value cannot fallback
         assert!(new_next_column_id >= next_column_id);
 
         (new_next_column_id, column_id_map, column_id_set)
@@ -641,7 +641,7 @@ impl TableSchema {
             fields,
             self.meta().clone(),
             self.column_id_map.as_ref().unwrap().clone(),
-            *self.next_column_id.as_ref().unwrap(),
+            self.next_column_id.unwrap_or(0),
         )
     }
 
@@ -656,7 +656,7 @@ impl TableSchema {
             fields,
             self.meta().clone(),
             self.column_id_map.as_ref().unwrap().clone(),
-            *self.next_column_id.as_ref().unwrap(),
+            self.next_column_id.unwrap_or(0),
         )
     }
 
@@ -736,7 +736,7 @@ impl TableSchema {
             fields,
             self.meta().clone(),
             self.column_id_map.as_ref().unwrap().clone(),
-            *self.next_column_id.as_ref().unwrap(),
+            self.next_column_id.unwrap_or(0),
         )
     }
 
