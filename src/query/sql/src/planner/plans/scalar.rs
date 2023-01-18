@@ -55,7 +55,6 @@ impl ScalarExpr {
             ScalarExpr::CastExpr(scalar) => (*scalar.target_type).clone(),
             ScalarExpr::SubqueryExpr(scalar) => match &scalar.typ {
                 SubqueryType::Scalar => (*scalar.data_type).clone(),
-
                 SubqueryType::Any
                 | SubqueryType::All
                 | SubqueryType::Exists
