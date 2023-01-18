@@ -147,7 +147,18 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::OptimizeTable(_) => {}
+            Plan::OptimizeTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Super,
+                    )
+                    .await?;
+            }
             Plan::AnalyzeTable(_) => {}
             Plan::ExistsTable(_) => {}
 
