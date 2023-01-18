@@ -25,6 +25,7 @@ use crate::expression::Expr;
 use crate::expression::Span;
 use crate::function::EvalContext;
 use crate::property::Domain;
+use crate::type_check::check_function;
 use crate::type_check::get_simple_cast_function;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
@@ -33,7 +34,6 @@ use crate::types::nullable::NullableDomain;
 use crate::types::DataType;
 use crate::utils::arrow::constant_bitmap;
 use crate::utils::calculate_function_domain;
-use crate::utils::eval_function;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
@@ -207,7 +207,9 @@ impl<'a> Evaluator<'a> {
         }
 
         if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
-            if let Some(val) = self.run_simple_cast(span, src_type, dest_type, value, &cast_fn)? {
+            if let Some(val) =
+                self.run_simple_cast(span.clone(), src_type, dest_type, value.clone(), &cast_fn)?
+            {
                 return Ok(val);
             }
         }
@@ -337,6 +339,7 @@ impl<'a> Evaluator<'a> {
                 }
                 other => unreachable!("source: {}", other),
             },
+
             _ => Err((span, (format!("unable to cast {src_type} to {dest_type}")))),
         }
     }
@@ -357,7 +360,7 @@ impl<'a> Evaluator<'a> {
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
             if let Some(val) = self
-                .run_simple_cast(span, src_type, dest_type, value, &cast_fn)
+                .run_simple_cast(span.clone(), src_type, dest_type, value.clone(), &cast_fn)
                 .expect("try_cast should not fail")
             {
                 return val;
@@ -467,16 +470,7 @@ impl<'a> Evaluator<'a> {
                 other => unreachable!("source: {}", other),
             },
 
-            _ => match value {
-                Value::Scalar(_) => Value::Scalar(Scalar::Null),
-                Value::Column(col) => {
-                    let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
-                    for _ in 0..col.len() {
-                        builder.push_default();
-                    }
-                    Value::Column(builder.build())
-                }
-            },
+            _ => Value::Scalar(Scalar::Null),
         }
     }
 
@@ -488,25 +482,32 @@ impl<'a> Evaluator<'a> {
         value: Value<AnyType>,
         cast_fn: &str,
     ) -> Result<Option<Value<AnyType>>> {
+        let expr = Expr::ColumnRef {
+            span: span.clone(),
+            id: 0,
+            data_type: src_type.clone(),
+            display_name: String::new(),
+        };
+
+        let cast_expr = check_function(span, cast_fn, &[], &[expr.clone()], self.fn_registry)?;
+
+        if cast_expr.data_type() != dest_type {
+            return Ok(None);
+        }
+
         let num_rows = match &value {
             Value::Scalar(_) => 1,
             Value::Column(col) => col.len(),
         };
-
-        let (val, ty) = eval_function(
-            span,
-            cast_fn,
-            [(value, src_type.clone())],
-            self.func_ctx,
+        let block = DataBlock::new(
+            vec![BlockEntry {
+                data_type: src_type.clone(),
+                value,
+            }],
             num_rows,
-            self.fn_registry,
-        )?;
-
-        if &ty == dest_type {
-            Ok(Some(val))
-        } else {
-            Ok(None)
-        }
+        );
+        let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+        Ok(Some(evaluator.run(&expr)?))
     }
 }
 
