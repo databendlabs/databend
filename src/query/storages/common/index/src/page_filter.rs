@@ -19,20 +19,8 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
-use common_expression::types::nullable::NullableDomain;
-use common_expression::types::number::SimpleDomain;
-use common_expression::types::string::StringDomain;
-use common_expression::types::DataType;
-use common_expression::types::DateType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::StringType;
-use common_expression::types::TimestampType;
-use common_expression::types::ValueType;
-use common_expression::with_number_mapped_type;
 use common_expression::ConstantFolder;
 use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::Domain;
 use common_expression::Expr;
@@ -42,7 +30,6 @@ use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::statistics_to_domain;
 
@@ -88,6 +75,17 @@ impl PageFilter {
     }
 
     pub fn try_eval_const(&self) -> Result<bool> {
+        // if the exprs did not contains the first cluster key, we should return true
+        if self.cluster_key_fields.is_empty()
+            || !self
+                .expr
+                .column_refs()
+                .iter()
+                .any(|c| c.0 == self.cluster_key_fields[0].name())
+        {
+            return Ok(true);
+        }
+
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
         Ok(!matches!(self.expr, Expr::Constant {
             scalar: Scalar::Boolean(false),
@@ -96,10 +94,7 @@ impl PageFilter {
     }
 
     #[tracing::instrument(level = "debug", name = "page_filter_eval", skip_all)]
-    pub fn eval(
-        &self,
-        stats: &Option<ClusterStatistics>
-    ) -> Result<(bool, Option<Range<usize>>)> {
+    pub fn eval(&self, stats: &Option<ClusterStatistics>) -> Result<(bool, Option<Range<usize>>)> {
         let stats = match stats {
             Some(stats) => stats,
             None => return Ok((true, None)),
@@ -108,13 +103,13 @@ impl PageFilter {
             Some(ref pages) => pages,
             None => return Ok((true, None)),
         };
-        
+
         let max_value = Scalar::Tuple(stats.max.clone());
-        
+
         if self.cluster_key_id != stats.cluster_key_id {
             return Ok((true, None));
         }
-        
+
         let pages = min_values.len();
         let mut start = 0;
         let mut end = pages - 1;
@@ -146,6 +141,14 @@ impl PageFilter {
             }
             end -= 1;
         }
+        if end - start + 1 < pages {
+            tracing::debug!("range cut from {pages} to : {:?} --> {:?}", start, end);
+        }
+
+        // no page is pruned
+        if start + pages == end + 1 {
+            return Ok((true, None));
+        }
 
         if start > end {
             Ok((false, None))
@@ -175,10 +178,17 @@ impl PageFilter {
             };
             let domain = statistics_to_domain(Some(&stats), &f.data_type());
             input_domains.insert(f.name().clone(), domain);
-            
+
             // For Tuple scalars, if the first element is not equal, then the monotonically increasing property is broken.
             if min != max {
                 break;
+            }
+        }
+
+        // Fill missing stats to be full domain
+        for (name, ty) in self.expr.column_refs().into_iter() {
+            if !input_domains.contains_key(name.as_str()) {
+                input_domains.insert(name.clone(), Domain::full(&ty));
             }
         }
 

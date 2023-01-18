@@ -13,12 +13,11 @@
 //  limitations under the License.
 
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::FunctionContext;
-use common_expression::ScalarRef;
+use common_expression::Scalar;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::ClusterStatistics;
 
@@ -130,10 +129,10 @@ impl ClusterStatsGenerator {
         for key in self.cluster_key_index.iter() {
             let val = data_block.get_by_offset(*key);
             let val_ref = val.value.as_ref();
-            let mut left = unsafe { val_ref.index_unchecked(0) };
+            let left = unsafe { val_ref.index_unchecked(0) };
             min.push(left.to_owned());
 
-            let mut right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
+            let right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
             max.push(right.to_owned());
         }
 
@@ -150,12 +149,14 @@ impl ClusterStatsGenerator {
         let pages = if let Some(max_page_size) = self.max_page_size {
             let mut values = Vec::with_capacity(data_block.num_rows() / max_page_size + 1);
             for start in (0..data_block.num_rows()).step_by(max_page_size) {
+                let mut tuple_values = Vec::with_capacity(self.cluster_key_index.len());
                 for key in self.cluster_key_index.iter() {
                     let val = data_block.get_by_offset(*key);
                     let val_ref = val.value.as_ref();
                     let left = unsafe { val_ref.index_unchecked(start) };
-                    values.push(left.to_owned());
+                    tuple_values.push(left.to_owned());
                 }
+                values.push(Scalar::Tuple(tuple_values));
             }
             Some(values)
         } else {

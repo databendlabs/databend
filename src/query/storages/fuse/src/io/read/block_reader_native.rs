@@ -14,6 +14,7 @@
 
 use std::io::BufReader;
 use std::io::Seek;
+use std::ops::Range;
 use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
@@ -57,10 +58,12 @@ impl BlockReader {
 
         for (index, (field, _)) in self.project_indices.iter() {
             let column_meta = &part.columns_meta[&index];
+
             join_handlers.push(Self::read_native_columns_data(
                 self.operator.object(&part.location),
                 *index,
                 column_meta,
+                &part.range,
                 field.data_type().clone(),
             ));
 
@@ -87,13 +90,19 @@ impl BlockReader {
         o: Object,
         index: usize,
         meta: &ColumnMeta,
+        range: &Option<Range<usize>>,
         data_type: common_arrow::arrow::datatypes::DataType,
     ) -> Result<(usize, NativeReader<Reader>)> {
         use backon::ExponentialBackoff;
         use backon::Retryable;
 
         let (offset, length) = meta.offset_length();
-        let meta = meta.as_native().unwrap();
+        let mut meta = meta.as_native().unwrap().clone();
+
+        if let Some(range) = range {
+            meta = meta.slice(range.start, range.end);
+        }
+
         let reader = { || async { o.range_read(offset..offset + length).await } }
             .retry(ExponentialBackoff::default())
             .when(|err| err.is_temporary())
@@ -114,7 +123,6 @@ impl BlockReader {
 
         for (index, (field, _)) in self.project_indices.iter() {
             let column_meta = &part.columns_meta[&index];
-
             let op = self.operator.clone();
 
             let location = part.location.clone();
@@ -122,6 +130,7 @@ impl BlockReader {
                 op.object(&location),
                 *index,
                 column_meta,
+                &part.range,
                 field.data_type().clone(),
             );
 
@@ -134,11 +143,16 @@ impl BlockReader {
     pub fn sync_read_native_column(
         o: Object,
         index: usize,
-        meta: &ColumnMeta,
+        column_meta: &ColumnMeta,
+        range: &Option<Range<usize>>,
         data_type: common_arrow::arrow::datatypes::DataType,
     ) -> Result<(usize, NativeReader<Reader>)> {
-        let (offset, _) = meta.offset_length();
+        let mut column_meta = column_meta.as_native().unwrap().clone();
 
+        if let Some(range) = range {
+            column_meta = column_meta.slice(range.start, range.end);
+        }
+        let offset = column_meta.offset;
         // let reader = o.blocking_range_reader(offset..offset + length)?;
         let path = format!("/home/sundy/work/databend/_data/{}", o.path());
         let mut reader = std::fs::File::open(&path).unwrap();
@@ -146,8 +160,7 @@ impl BlockReader {
 
         let reader: Reader = Box::new(BufReader::new(reader));
 
-        let page_metas = meta.as_native().unwrap().pages.clone();
-        let fuse_reader = NativeReader::new(reader, data_type, page_metas, vec![]);
+        let fuse_reader = NativeReader::new(reader, data_type, column_meta.pages, vec![]);
         Ok((index, fuse_reader))
     }
 

@@ -265,27 +265,20 @@ impl FuseTable {
         )
         .await?;
 
-        let mut index_stats = Vec::with_capacity(block_metas.len());
-        let mut metas = Vec::with_capacity(block_metas.len());
-        for (index, block_meta) in block_metas.into_iter() {
-            index_stats.push((index, block_meta.cluster_stats.clone()));
-            metas.push(block_meta);
-        }
-
         let (_, inner_parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.table_info.schema(),
             None,
-            metas,
+            &block_metas,
             base_snapshot.summary.block_count as usize,
         )?;
 
         let parts = Partitions::create(
             PartitionsShuffleKind::Mod,
-            index_stats
+            block_metas
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
-                .map(|((a, b), c)| MutationPartInfo::create(a, b, c))
+                .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
                 .collect(),
         );
         ctx.try_set_partitions(parts)
