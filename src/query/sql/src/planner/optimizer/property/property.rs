@@ -15,7 +15,7 @@
 use std::collections::HashSet;
 
 use super::column_stat::ColumnStatSet;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 use crate::IndexType;
 
 pub type ColumnSet = HashSet<IndexType>;
@@ -71,7 +71,7 @@ pub enum Distribution {
     Random,
     Serial,
     Broadcast,
-    Hash(Vec<ScalarExpr>),
+    Hash(Vec<Scalar>),
 }
 
 impl Default for Distribution {

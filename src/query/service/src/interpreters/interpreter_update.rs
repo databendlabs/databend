@@ -25,7 +25,7 @@ use common_sql::plans::CastExpr;
 use common_sql::plans::FunctionCall;
 use common_sql::BindContext;
 use common_sql::ColumnBinding;
-use common_sql::ScalarExpr;
+use common_sql::Scalar;
 use common_sql::Visibility;
 
 use crate::interpreters::Interpreter;
@@ -77,7 +77,7 @@ impl Interpreter for UpdateInterpreter {
             (None, vec![])
         };
 
-        let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef {
+        let predicate = Scalar::BoundColumnRef(BoundColumnRef {
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
@@ -93,7 +93,7 @@ impl Interpreter for UpdateInterpreter {
             Vec::with_capacity(self.plan.update_list.len()),
             |mut acc, (id, scalar)| {
                 let filed = schema.field(*id);
-                let left = ScalarExpr::CastExpr(CastExpr {
+                let left = Scalar::CastExpr(CastExpr {
                     is_try: false,
                     argument: Box::new(scalar.clone()),
                     from_type: Box::new(scalar.data_type()),
@@ -115,7 +115,7 @@ impl Interpreter for UpdateInterpreter {
                             filed.name(),
                             column_binding,
                         ) {
-                            right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            right = Some(Scalar::BoundColumnRef(BoundColumnRef {
                                 column: column_binding.clone(),
                             }));
                             break;
@@ -123,7 +123,7 @@ impl Interpreter for UpdateInterpreter {
                     }
                     let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
                     let return_type = right.data_type();
-                    ScalarExpr::FunctionCall(FunctionCall {
+                    Scalar::FunctionCall(FunctionCall {
                         params: vec![],
                         arguments: vec![predicate.clone(), left, right],
                         func_name: "if".to_string(),

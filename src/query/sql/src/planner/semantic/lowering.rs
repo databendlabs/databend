@@ -18,17 +18,17 @@ use common_expression::Expr;
 use common_expression::RawExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 
 const DUMMY_NAME: &str = "DUMMY";
 const DUMMY_INDEX: usize = usize::MAX;
 
-impl ScalarExpr {
+impl Scalar {
     /// Lowering `Scalar` into `RawExpr` to utilize with `common_expression::types::type_check`.
     /// Specific variants will be replaced with a `RawExpr::ColumnRef` with a dummy name.
     pub fn as_raw_expr_with_col_name(&self) -> RawExpr<String> {
         match self {
-            ScalarExpr::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
+            Scalar::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
                 span: None,
                 id: column_ref.column.column_name.clone(),
                 data_type: *column_ref.column.data_type.clone(),
@@ -43,11 +43,11 @@ impl ScalarExpr {
                     column_ref.column.index
                 ),
             },
-            ScalarExpr::ConstantExpr(constant) => RawExpr::Literal {
+            Scalar::ConstantExpr(constant) => RawExpr::Literal {
                 span: None,
                 lit: constant.value.clone(),
             },
-            ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
+            Scalar::AndExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: "and".to_string(),
                 params: vec![],
@@ -56,7 +56,7 @@ impl ScalarExpr {
                     expr.right.as_raw_expr_with_col_name(),
                 ],
             },
-            ScalarExpr::OrExpr(expr) => RawExpr::FunctionCall {
+            Scalar::OrExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: "or".to_string(),
                 params: vec![],
@@ -65,13 +65,13 @@ impl ScalarExpr {
                     expr.right.as_raw_expr_with_col_name(),
                 ],
             },
-            ScalarExpr::NotExpr(expr) => RawExpr::FunctionCall {
+            Scalar::NotExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: "not".to_string(),
                 params: vec![],
                 args: vec![expr.argument.as_raw_expr_with_col_name()],
             },
-            ScalarExpr::ComparisonExpr(expr) => RawExpr::FunctionCall {
+            Scalar::ComparisonExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: expr.op.to_func_name().to_string(),
                 params: vec![],
@@ -80,23 +80,23 @@ impl ScalarExpr {
                     expr.right.as_raw_expr_with_col_name(),
                 ],
             },
-            ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
+            Scalar::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
                 id: agg.display_name.clone(),
                 data_type: (*agg.return_type).clone(),
                 display_name: agg.display_name.clone(),
             },
-            ScalarExpr::FunctionCall(func) => RawExpr::FunctionCall {
+            Scalar::FunctionCall(func) => RawExpr::FunctionCall {
                 span: None,
                 name: func.func_name.clone(),
                 params: func.params.clone(),
                 args: func
                     .arguments
                     .iter()
-                    .map(ScalarExpr::as_raw_expr_with_col_name)
+                    .map(Scalar::as_raw_expr_with_col_name)
                     .collect(),
             },
-            ScalarExpr::CastExpr(cast) => {
+            Scalar::CastExpr(cast) => {
                 let is_try = cast.target_type.is_nullable();
                 RawExpr::Cast {
                     span: None,
@@ -105,7 +105,7 @@ impl ScalarExpr {
                     dest_type: (*cast.target_type).clone(),
                 }
             }
-            ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
+            Scalar::SubqueryExpr(subquery) => RawExpr::ColumnRef {
                 span: None,
                 id: DUMMY_NAME.to_string(),
                 data_type: (*subquery.data_type).clone(),
@@ -126,7 +126,7 @@ impl ScalarExpr {
 
     pub fn as_raw_expr_with_col_index(&self) -> RawExpr {
         match self {
-            ScalarExpr::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
+            Scalar::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
                 span: None,
                 id: column_ref.column.index,
                 data_type: *column_ref.column.data_type.clone(),
@@ -141,11 +141,11 @@ impl ScalarExpr {
                     column_ref.column.index
                 ),
             },
-            ScalarExpr::ConstantExpr(constant) => RawExpr::Literal {
+            Scalar::ConstantExpr(constant) => RawExpr::Literal {
                 span: None,
                 lit: constant.value.clone(),
             },
-            ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
+            Scalar::AndExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: "and".to_string(),
                 params: vec![],
@@ -154,7 +154,7 @@ impl ScalarExpr {
                     expr.right.as_raw_expr_with_col_index(),
                 ],
             },
-            ScalarExpr::OrExpr(expr) => RawExpr::FunctionCall {
+            Scalar::OrExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: "or".to_string(),
                 params: vec![],
@@ -163,13 +163,13 @@ impl ScalarExpr {
                     expr.right.as_raw_expr_with_col_index(),
                 ],
             },
-            ScalarExpr::NotExpr(expr) => RawExpr::FunctionCall {
+            Scalar::NotExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: "not".to_string(),
                 params: vec![],
                 args: vec![expr.argument.as_raw_expr_with_col_index()],
             },
-            ScalarExpr::ComparisonExpr(expr) => RawExpr::FunctionCall {
+            Scalar::ComparisonExpr(expr) => RawExpr::FunctionCall {
                 span: None,
                 name: expr.op.to_func_name().to_string(),
                 params: vec![],
@@ -178,23 +178,23 @@ impl ScalarExpr {
                     expr.right.as_raw_expr_with_col_index(),
                 ],
             },
-            ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
+            Scalar::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
                 id: DUMMY_INDEX,
                 data_type: (*agg.return_type).clone(),
                 display_name: agg.display_name.clone(),
             },
-            ScalarExpr::FunctionCall(func) => RawExpr::FunctionCall {
+            Scalar::FunctionCall(func) => RawExpr::FunctionCall {
                 span: None,
                 name: func.func_name.clone(),
                 params: func.params.clone(),
                 args: func
                     .arguments
                     .iter()
-                    .map(ScalarExpr::as_raw_expr_with_col_index)
+                    .map(Scalar::as_raw_expr_with_col_index)
                     .collect(),
             },
-            ScalarExpr::CastExpr(cast) => {
+            Scalar::CastExpr(cast) => {
                 let is_try = cast.target_type.is_nullable();
                 RawExpr::Cast {
                     span: None,
@@ -203,7 +203,7 @@ impl ScalarExpr {
                     dest_type: (*cast.target_type).clone(),
                 }
             }
-            ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
+            Scalar::SubqueryExpr(subquery) => RawExpr::ColumnRef {
                 span: None,
                 id: DUMMY_INDEX,
                 data_type: (*subquery.data_type).clone(),

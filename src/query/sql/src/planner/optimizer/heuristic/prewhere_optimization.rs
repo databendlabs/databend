@@ -20,7 +20,7 @@ use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::Prewhere;
 use crate::plans::RelOp;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 use crate::plans::Scan;
 use crate::MetadataRef;
 
@@ -48,32 +48,32 @@ impl PrewhereOptimizer {
         }
     }
 
-    fn collect_columns_impl(expr: &ScalarExpr, columns: &mut ColumnSet) {
+    fn collect_columns_impl(expr: &Scalar, columns: &mut ColumnSet) {
         match expr {
-            ScalarExpr::BoundColumnRef(column) => {
+            Scalar::BoundColumnRef(column) => {
                 columns.insert(column.column.index);
             }
-            ScalarExpr::AndExpr(and) => {
+            Scalar::AndExpr(and) => {
                 Self::collect_columns_impl(and.left.as_ref(), columns);
                 Self::collect_columns_impl(and.right.as_ref(), columns);
             }
-            ScalarExpr::OrExpr(or) => {
+            Scalar::OrExpr(or) => {
                 Self::collect_columns_impl(or.left.as_ref(), columns);
                 Self::collect_columns_impl(or.right.as_ref(), columns);
             }
-            ScalarExpr::NotExpr(not) => {
+            Scalar::NotExpr(not) => {
                 Self::collect_columns_impl(not.argument.as_ref(), columns);
             }
-            ScalarExpr::ComparisonExpr(cmp) => {
+            Scalar::ComparisonExpr(cmp) => {
                 Self::collect_columns_impl(cmp.left.as_ref(), columns);
                 Self::collect_columns_impl(cmp.right.as_ref(), columns);
             }
-            ScalarExpr::FunctionCall(func) => {
+            Scalar::FunctionCall(func) => {
                 for arg in func.arguments.iter() {
                     Self::collect_columns_impl(arg, columns);
                 }
             }
-            ScalarExpr::CastExpr(cast) => {
+            Scalar::CastExpr(cast) => {
                 Self::collect_columns_impl(cast.argument.as_ref(), columns);
             }
             // 1. ConstantExpr is not collected.
@@ -83,7 +83,7 @@ impl PrewhereOptimizer {
     }
 
     // analyze if the expression can be moved to prewhere
-    fn collect_columns(expr: &ScalarExpr) -> ColumnSet {
+    fn collect_columns(expr: &Scalar) -> ColumnSet {
         let mut columns = ColumnSet::new();
         // columns in subqueries are not considered
         Self::collect_columns_impl(expr, &mut columns);

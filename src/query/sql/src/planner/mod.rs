@@ -34,7 +34,7 @@ pub use expression_parser::parse_exprs;
 pub use expression_parser::parse_to_remote_string_exprs;
 pub use metadata::*;
 pub use planner::Planner;
-pub use plans::ScalarExpr;
+pub use plans::Scalar;
 pub use semantic::normalize_identifier;
 pub use semantic::validate_function_arg;
 pub use semantic::IdentifierNormalizer;

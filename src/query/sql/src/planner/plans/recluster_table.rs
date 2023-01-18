@@ -16,7 +16,7 @@ use std::sync::Arc;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
@@ -27,7 +27,7 @@ pub struct ReclusterTablePlan {
     pub table: String,
     pub is_final: bool,
     pub metadata: MetadataRef,
-    pub push_downs: Option<ScalarExpr>,
+    pub push_downs: Option<Scalar>,
 }
 
 impl ReclusterTablePlan {

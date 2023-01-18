@@ -28,7 +28,7 @@ use dashmap::DashMap;
 use super::AggregateInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 use crate::IndexType;
 use crate::NameResolutionContext;
 
@@ -77,7 +77,7 @@ impl Hash for ColumnBinding {
 #[derive(Debug, Clone)]
 pub enum NameResolutionResult {
     Column(ColumnBinding),
-    Alias { alias: String, scalar: ScalarExpr },
+    Alias { alias: String, scalar: Scalar },
 }
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
@@ -185,7 +185,7 @@ impl BindContext {
         table: Option<&str>,
         column: &str,
         span: &Token<'_>,
-        available_aliases: &[(String, ScalarExpr)],
+        available_aliases: &[(String, Scalar)],
     ) -> Result<NameResolutionResult> {
         let mut result = vec![];
 

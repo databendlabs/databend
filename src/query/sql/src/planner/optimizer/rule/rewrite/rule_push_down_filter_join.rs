@@ -30,7 +30,7 @@ use crate::plans::JoinType;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 use crate::ColumnSet;
 use crate::IndexType;
 
@@ -80,19 +80,19 @@ impl RulePushDownFilterJoin {
     #[allow(dead_code)]
     fn find_nullable_columns(
         &self,
-        predicate: &ScalarExpr,
+        predicate: &Scalar,
         left_output_columns: &ColumnSet,
         right_output_columns: &ColumnSet,
         nullable_columns: &mut Vec<IndexType>,
     ) -> Result<()> {
         match predicate {
-            ScalarExpr::BoundColumnRef(column_binding) => {
+            Scalar::BoundColumnRef(column_binding) => {
                 nullable_columns.push(column_binding.column.index);
             }
-            ScalarExpr::AndExpr(_) => {
+            Scalar::AndExpr(_) => {
                 unreachable!("`Scalar::AndExpr` should have been split in binder")
             }
-            ScalarExpr::OrExpr(expr) => {
+            Scalar::OrExpr(expr) => {
                 let mut left_cols = vec![];
                 let mut right_cols = vec![];
                 self.find_nullable_columns(
@@ -122,7 +122,7 @@ impl RulePushDownFilterJoin {
                     }
                 }
             }
-            ScalarExpr::NotExpr(expr) => {
+            Scalar::NotExpr(expr) => {
                 self.find_nullable_columns(
                     &expr.argument,
                     left_output_columns,
@@ -130,7 +130,7 @@ impl RulePushDownFilterJoin {
                     nullable_columns,
                 )?;
             }
-            ScalarExpr::ComparisonExpr(expr) => {
+            Scalar::ComparisonExpr(expr) => {
                 // For any comparison expr, if input is null, the compare result is false
                 self.find_nullable_columns(
                     &expr.left,
@@ -145,7 +145,7 @@ impl RulePushDownFilterJoin {
                     nullable_columns,
                 )?;
             }
-            ScalarExpr::CastExpr(expr) => {
+            Scalar::CastExpr(expr) => {
                 self.find_nullable_columns(
                     &expr.argument,
                     left_output_columns,
@@ -240,7 +240,7 @@ impl RulePushDownFilterJoin {
         let has_disjunction = filter
             .predicates
             .iter()
-            .any(|predicate| matches!(predicate, ScalarExpr::OrExpr(_)));
+            .any(|predicate| matches!(predicate, Scalar::OrExpr(_)));
         if !join.join_type.is_mark_join() || has_disjunction {
             return Ok(s_expr.clone());
         }
@@ -249,15 +249,15 @@ impl RulePushDownFilterJoin {
 
         // remove mark index filter
         for (idx, predicate) in filter.predicates.iter().enumerate() {
-            if let ScalarExpr::BoundColumnRef(col) = predicate {
+            if let Scalar::BoundColumnRef(col) = predicate {
                 if col.column.index == mark_index {
                     filter.predicates.remove(idx);
                     break;
                 }
             }
-            if let ScalarExpr::NotExpr(not_expr) = predicate {
+            if let Scalar::NotExpr(not_expr) = predicate {
                 // Check if the argument is mark index, if so, we won't convert it to semi join
-                if let ScalarExpr::BoundColumnRef(col) = not_expr.argument.as_ref() {
+                if let Scalar::BoundColumnRef(col) = not_expr.argument.as_ref() {
                     if col.column.index == mark_index {
                         return Ok(s_expr.clone());
                     }
@@ -319,13 +319,13 @@ impl Rule for RulePushDownFilterJoin {
     }
 }
 
-fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<ScalarExpr>> {
+fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<Scalar>> {
     let filter: Filter = s_expr.plan().clone().try_into()?;
     let join = s_expr.child(0)?;
     let mut new_predicates = Vec::new();
     let mut origin_predicates = filter.predicates.clone();
     for predicate in filter.predicates.iter() {
-        if let ScalarExpr::OrExpr(or_expr) = predicate {
+        if let Scalar::OrExpr(or_expr) = predicate {
             for join_child in join.children().iter() {
                 let rel_expr = RelExpr::with_s_expr(join_child);
                 let used_columns = rel_expr.derive_relational_prop()?.used_columns;
@@ -343,18 +343,15 @@ fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<ScalarExpr>> {
 }
 
 // Only need to be executed once
-fn extract_or_predicate(
-    or_expr: &OrExpr,
-    required_columns: &ColumnSet,
-) -> Result<Option<ScalarExpr>> {
+fn extract_or_predicate(or_expr: &OrExpr, required_columns: &ColumnSet) -> Result<Option<Scalar>> {
     let or_args = flatten_ors(or_expr.clone());
     let mut extracted_scalars = Vec::new();
     for or_arg in or_args.iter() {
         let mut sub_scalars = Vec::new();
-        if let ScalarExpr::AndExpr(and_expr) = or_arg {
+        if let Scalar::AndExpr(and_expr) = or_arg {
             let and_args = flatten_ands(and_expr.clone());
             for and_arg in and_args.iter() {
-                if let ScalarExpr::OrExpr(or_expr) = and_arg {
+                if let Scalar::OrExpr(or_expr) = and_arg {
                     if let Some(scalar) = extract_or_predicate(or_expr, required_columns)? {
                         sub_scalars.push(scalar);
                     }
@@ -385,10 +382,7 @@ fn extract_or_predicate(
     Ok(None)
 }
 
-pub fn try_push_down_filter_join(
-    s_expr: &SExpr,
-    predicates: Vec<ScalarExpr>,
-) -> Result<(bool, SExpr)> {
+pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Result<(bool, SExpr)> {
     let join_expr = s_expr.child(0)?;
     let mut join: Join = join_expr.plan().clone().try_into()?;
 
@@ -500,12 +494,12 @@ pub fn try_push_down_filter_join(
 
 // Flatten nested ORs, such as `a=1 or b=1 or c=1`
 // It'll be flatten to [a=1, b=1, c=1]
-fn flatten_ors(or_expr: OrExpr) -> Vec<ScalarExpr> {
+fn flatten_ors(or_expr: OrExpr) -> Vec<Scalar> {
     let mut flattened_ors = Vec::new();
     let or_args = vec![*or_expr.left, *or_expr.right];
     for or_arg in or_args.iter() {
         match or_arg {
-            ScalarExpr::OrExpr(or_expr) => flattened_ors.extend(flatten_ors(or_expr.clone())),
+            Scalar::OrExpr(or_expr) => flattened_ors.extend(flatten_ors(or_expr.clone())),
             _ => flattened_ors.push(or_arg.clone()),
         }
     }
@@ -514,12 +508,12 @@ fn flatten_ors(or_expr: OrExpr) -> Vec<ScalarExpr> {
 
 // Flatten nested ORs, such as `a=1 and b=1 and c=1`
 // It'll be flatten to [a=1, b=1, c=1]
-fn flatten_ands(and_expr: AndExpr) -> Vec<ScalarExpr> {
+fn flatten_ands(and_expr: AndExpr) -> Vec<Scalar> {
     let mut flattened_ands = Vec::new();
     let and_args = vec![*and_expr.left, *and_expr.right];
     for and_arg in and_args.iter() {
         match and_arg {
-            ScalarExpr::AndExpr(and_expr) => flattened_ands.extend(flatten_ands(and_expr.clone())),
+            Scalar::AndExpr(and_expr) => flattened_ands.extend(flatten_ands(and_expr.clone())),
             _ => flattened_ands.push(and_arg.clone()),
         }
     }
@@ -527,11 +521,11 @@ fn flatten_ands(and_expr: AndExpr) -> Vec<ScalarExpr> {
 }
 
 // Merge predicates to AND scalar
-fn make_and_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
+fn make_and_expr(scalars: &[Scalar]) -> Scalar {
     if scalars.len() == 1 {
         return scalars[0].clone();
     }
-    ScalarExpr::AndExpr(AndExpr {
+    Scalar::AndExpr(AndExpr {
         left: Box::new(scalars[0].clone()),
         right: Box::new(make_and_expr(&scalars[1..])),
         return_type: Box::new(scalars[0].data_type()),
@@ -539,11 +533,11 @@ fn make_and_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
 }
 
 // Merge predicates to OR scalar
-fn make_or_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
+fn make_or_expr(scalars: &[Scalar]) -> Scalar {
     if scalars.len() == 1 {
         return scalars[0].clone();
     }
-    ScalarExpr::OrExpr(OrExpr {
+    Scalar::OrExpr(OrExpr {
         left: Box::new(scalars[0].clone()),
         right: Box::new(make_or_expr(&scalars[1..])),
         return_type: Box::new(scalars[0].data_type()),

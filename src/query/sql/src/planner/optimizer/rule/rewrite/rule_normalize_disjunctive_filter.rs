@@ -27,25 +27,25 @@ use crate::plans::Filter;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 
 #[derive(Clone, PartialEq, Debug)]
 enum PredicateScalar {
     And { args: Vec<PredicateScalar> },
     Or { args: Vec<PredicateScalar> },
-    Other { expr: Box<ScalarExpr> },
+    Other { expr: Box<Scalar> },
 }
 
-fn predicate_scalar(scalar: &ScalarExpr) -> PredicateScalar {
+fn predicate_scalar(scalar: &Scalar) -> PredicateScalar {
     match scalar {
-        ScalarExpr::AndExpr(and_expr) => {
+        Scalar::AndExpr(and_expr) => {
             let args = vec![
                 predicate_scalar(&and_expr.left),
                 predicate_scalar(&and_expr.right),
             ];
             PredicateScalar::And { args }
         }
-        ScalarExpr::OrExpr(or_expr) => {
+        Scalar::OrExpr(or_expr) => {
             let args = vec![
                 predicate_scalar(&or_expr.left),
                 predicate_scalar(&or_expr.right),
@@ -58,17 +58,14 @@ fn predicate_scalar(scalar: &ScalarExpr) -> PredicateScalar {
     }
 }
 
-fn normalize_predicate_scalar(
-    predicate_scalar: PredicateScalar,
-    return_type: DataType,
-) -> ScalarExpr {
+fn normalize_predicate_scalar(predicate_scalar: PredicateScalar, return_type: DataType) -> Scalar {
     match predicate_scalar {
         PredicateScalar::And { args } => {
             assert!(args.len() >= 2);
             args.into_iter()
                 .map(|arg| normalize_predicate_scalar(arg, return_type.clone()))
                 .reduce(|lhs, rhs| {
-                    ScalarExpr::AndExpr(AndExpr {
+                    Scalar::AndExpr(AndExpr {
                         left: Box::from(lhs),
                         right: Box::from(rhs),
                         return_type: Box::new(return_type.clone()),
@@ -81,7 +78,7 @@ fn normalize_predicate_scalar(
             args.into_iter()
                 .map(|arg| normalize_predicate_scalar(arg, return_type.clone()))
                 .reduce(|lhs, rhs| {
-                    ScalarExpr::OrExpr(OrExpr {
+                    Scalar::OrExpr(OrExpr {
                         left: Box::from(lhs),
                         right: Box::from(rhs),
                         return_type: Box::new(return_type.clone()),
@@ -146,7 +143,7 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
                 predicate.data_type(),
             ));
         }
-        let mut split_predicates: Vec<ScalarExpr> = Vec::with_capacity(rewritten_predicates.len());
+        let mut split_predicates: Vec<Scalar> = Vec::with_capacity(rewritten_predicates.len());
         for predicate in rewritten_predicates.iter() {
             split_predicates.extend_from_slice(&split_conjunctions(predicate));
         }
@@ -221,7 +218,7 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> (PredicateScalar, 
     if or_args.is_empty() {
         return (
             PredicateScalar::Other {
-                expr: Box::from(ScalarExpr::ConstantExpr(ConstantExpr {
+                expr: Box::from(Scalar::ConstantExpr(ConstantExpr {
                     value: Literal::Boolean(false),
                     data_type: Box::new(DataType::Boolean),
                 })),

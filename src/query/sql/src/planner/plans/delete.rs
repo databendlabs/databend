@@ -17,14 +17,14 @@ use std::sync::Arc;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 
 #[derive(Clone, Debug)]
 pub struct DeletePlan {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
-    pub selection: Option<ScalarExpr>,
+    pub selection: Option<Scalar>,
 }
 
 impl DeletePlan {

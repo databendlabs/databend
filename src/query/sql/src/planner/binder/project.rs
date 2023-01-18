@@ -35,7 +35,7 @@ use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -49,7 +49,7 @@ impl<'a> Binder {
         let mut columns = Vec::with_capacity(select_list.items.len());
         let mut scalars = HashMap::new();
         for item in select_list.items.iter() {
-            let column_binding = if let ScalarExpr::BoundColumnRef(ref column_ref) = item.scalar {
+            let column_binding = if let Scalar::BoundColumnRef(ref column_ref) = item.scalar {
                 let mut column_binding = column_ref.column.clone();
                 // We should apply alias for the ColumnBinding, since it comes from table
                 column_binding.column_name = item.alias.clone();
@@ -57,7 +57,7 @@ impl<'a> Binder {
             } else {
                 self.create_column_binding(None, None, item.alias.clone(), item.scalar.data_type())
             };
-            let scalar = if let ScalarExpr::SubqueryExpr(SubqueryExpr {
+            let scalar = if let Scalar::SubqueryExpr(SubqueryExpr {
                 typ,
                 subquery,
                 child_expr,
@@ -70,7 +70,7 @@ impl<'a> Binder {
             }) = item.scalar.clone()
             {
                 if typ == SubqueryType::Any || typ == SubqueryType::Exists {
-                    ScalarExpr::SubqueryExpr(SubqueryExpr {
+                    Scalar::SubqueryExpr(SubqueryExpr {
                         typ,
                         subquery,
                         child_expr,

@@ -24,12 +24,12 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Exchange {
     Random,
-    Hash(Vec<ScalarExpr>),
+    Hash(Vec<Scalar>),
     Broadcast,
     Merge,
 }

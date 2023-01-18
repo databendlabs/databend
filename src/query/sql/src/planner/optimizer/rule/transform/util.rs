@@ -20,9 +20,9 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::Join;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 
-pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
+pub fn get_join_predicates(join: &Join) -> Result<Vec<Scalar>> {
     Ok(join
         .left_conditions
         .iter()
@@ -40,7 +40,7 @@ pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
             };
             let expr = type_check::check(&raw_expr, registry)
                 .map_err(|(_, e)| common_exception::ErrorCode::SemanticError(e))?;
-            Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
+            Ok(Scalar::ComparisonExpr(ComparisonExpr {
                 left: Box::new(left_cond.clone()),
                 right: Box::new(right_cond.clone()),
                 op: ComparisonOp::Equal,

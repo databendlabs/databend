@@ -39,7 +39,7 @@ use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
@@ -100,10 +100,7 @@ impl<'a> Binder {
                                 need_eval_scalar: scalar_items.get(&item.index).map_or(
                                     false,
                                     |scalar_item| {
-                                        !matches!(
-                                            &scalar_item.scalar,
-                                            ScalarExpr::BoundColumnRef(_)
-                                        )
+                                        !matches!(&scalar_item.scalar, Scalar::BoundColumnRef(_))
                                     },
                                 ),
                             });
@@ -180,9 +177,7 @@ impl<'a> Binder {
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
                     let rewrite_scalar = self
                         .rewrite_scalar_with_replacement(&bound_expr, &|nest_scalar| {
-                            if let ScalarExpr::BoundColumnRef(BoundColumnRef { column }) =
-                                nest_scalar
-                            {
+                            if let Scalar::BoundColumnRef(BoundColumnRef { column }) = nest_scalar {
                                 if let Some(scalar_item) = scalar_items.get(&column.index) {
                                     return Ok(Some(scalar_item.scalar.clone()));
                                 }
@@ -317,7 +312,7 @@ impl<'a> Binder {
                 Expr::ColumnRef { .. } => {
                     let scalar = scalar_binder.bind(&order.expr).await?.0;
                     match scalar {
-                        ScalarExpr::BoundColumnRef(BoundColumnRef { column }) => {
+                        Scalar::BoundColumnRef(BoundColumnRef { column }) => {
                             let order_by_item = SortItem {
                                 index: column.index,
                                 asc: order.asc.unwrap_or(true),
@@ -350,17 +345,17 @@ impl<'a> Binder {
     #[allow(clippy::only_used_in_recursion)]
     fn rewrite_scalar_with_replacement<F>(
         &self,
-        original_scalar: &ScalarExpr,
+        original_scalar: &Scalar,
         replacement_fn: &F,
-    ) -> Result<ScalarExpr>
+    ) -> Result<Scalar>
     where
-        F: Fn(&ScalarExpr) -> Result<Option<ScalarExpr>>,
+        F: Fn(&Scalar) -> Result<Option<Scalar>>,
     {
         let replacement_opt = replacement_fn(original_scalar)?;
         match replacement_opt {
             Some(replacement) => Ok(replacement),
             None => match original_scalar {
-                ScalarExpr::AndExpr(AndExpr {
+                Scalar::AndExpr(AndExpr {
                     left,
                     right,
                     return_type,
@@ -369,13 +364,13 @@ impl<'a> Binder {
                         Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
                     let right =
                         Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
-                    Ok(ScalarExpr::AndExpr(AndExpr {
+                    Ok(Scalar::AndExpr(AndExpr {
                         left,
                         right,
                         return_type: return_type.clone(),
                     }))
                 }
-                ScalarExpr::OrExpr(OrExpr {
+                Scalar::OrExpr(OrExpr {
                     left,
                     right,
                     return_type,
@@ -384,24 +379,24 @@ impl<'a> Binder {
                         Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
                     let right =
                         Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
-                    Ok(ScalarExpr::OrExpr(OrExpr {
+                    Ok(Scalar::OrExpr(OrExpr {
                         left,
                         right,
                         return_type: return_type.clone(),
                     }))
                 }
-                ScalarExpr::NotExpr(NotExpr {
+                Scalar::NotExpr(NotExpr {
                     argument,
                     return_type,
                 }) => {
                     let argument =
                         Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
-                    Ok(ScalarExpr::NotExpr(NotExpr {
+                    Ok(Scalar::NotExpr(NotExpr {
                         argument,
                         return_type: return_type.clone(),
                     }))
                 }
-                ScalarExpr::ComparisonExpr(ComparisonExpr {
+                Scalar::ComparisonExpr(ComparisonExpr {
                     op,
                     left,
                     right,
@@ -411,14 +406,14 @@ impl<'a> Binder {
                         Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
                     let right =
                         Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
-                    Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
+                    Ok(Scalar::ComparisonExpr(ComparisonExpr {
                         op: op.clone(),
                         left,
                         right,
                         return_type: return_type.clone(),
                     }))
                 }
-                ScalarExpr::AggregateFunction(AggregateFunction {
+                Scalar::AggregateFunction(AggregateFunction {
                     display_name,
                     func_name,
                     distinct,
@@ -430,7 +425,7 @@ impl<'a> Binder {
                         .iter()
                         .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
                         .collect::<Result<Vec<_>>>()?;
-                    Ok(ScalarExpr::AggregateFunction(AggregateFunction {
+                    Ok(Scalar::AggregateFunction(AggregateFunction {
                         display_name: display_name.clone(),
                         func_name: func_name.clone(),
                         distinct: *distinct,
@@ -439,7 +434,7 @@ impl<'a> Binder {
                         return_type: return_type.clone(),
                     }))
                 }
-                ScalarExpr::FunctionCall(FunctionCall {
+                Scalar::FunctionCall(FunctionCall {
                     params,
                     arguments,
                     func_name,
@@ -449,14 +444,14 @@ impl<'a> Binder {
                         .iter()
                         .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
                         .collect::<Result<Vec<_>>>()?;
-                    Ok(ScalarExpr::FunctionCall(FunctionCall {
+                    Ok(Scalar::FunctionCall(FunctionCall {
                         params: params.clone(),
                         arguments,
                         func_name: func_name.clone(),
                         return_type: return_type.clone(),
                     }))
                 }
-                ScalarExpr::CastExpr(CastExpr {
+                Scalar::CastExpr(CastExpr {
                     is_try,
                     argument,
                     from_type,
@@ -464,7 +459,7 @@ impl<'a> Binder {
                 }) => {
                     let argument =
                         Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
-                    Ok(ScalarExpr::CastExpr(CastExpr {
+                    Ok(Scalar::CastExpr(CastExpr {
                         is_try: *is_try,
                         argument,
                         from_type: from_type.clone(),

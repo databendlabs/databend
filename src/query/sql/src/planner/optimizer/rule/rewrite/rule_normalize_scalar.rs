@@ -23,39 +23,39 @@ use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 
-fn normalize_predicates(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
+fn normalize_predicates(predicates: Vec<Scalar>) -> Vec<Scalar> {
     [remove_true_predicate, normalize_falsy_predicate]
         .into_iter()
         .fold(predicates, |acc, f| f(acc))
 }
 
-fn is_true(predicate: &ScalarExpr) -> bool {
+fn is_true(predicate: &Scalar) -> bool {
     matches!(
         predicate,
-        ScalarExpr::ConstantExpr(ConstantExpr {
+        Scalar::ConstantExpr(ConstantExpr {
             value: Literal::Boolean(true),
             ..
         })
     )
 }
 
-fn is_falsy(predicate: &ScalarExpr) -> bool {
+fn is_falsy(predicate: &Scalar) -> bool {
     matches!(
         predicate,
-        ScalarExpr::ConstantExpr(ConstantExpr {
+        Scalar::ConstantExpr(ConstantExpr {
             value,
             ..
         }) if value == &Literal::Boolean(false) || value == &Literal::Null
     )
 }
 
-fn remove_true_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
+fn remove_true_predicate(predicates: Vec<Scalar>) -> Vec<Scalar> {
     predicates.into_iter().filter(|p| !is_true(p)).collect()
 }
 
-fn normalize_falsy_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
+fn normalize_falsy_predicate(predicates: Vec<Scalar>) -> Vec<Scalar> {
     if predicates.iter().any(is_falsy) {
         vec![
             ConstantExpr {

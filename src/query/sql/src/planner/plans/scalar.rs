@@ -26,7 +26,7 @@ use crate::optimizer::SExpr;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ScalarExpr {
+pub enum Scalar {
     BoundColumnRef(BoundColumnRef),
     ConstantExpr(ConstantExpr),
     AndExpr(AndExpr),
@@ -41,19 +41,19 @@ pub enum ScalarExpr {
     SubqueryExpr(SubqueryExpr),
 }
 
-impl ScalarExpr {
+impl Scalar {
     pub fn data_type(&self) -> DataType {
         match self {
-            ScalarExpr::BoundColumnRef(scalar) => (*scalar.column.data_type).clone(),
-            ScalarExpr::ConstantExpr(scalar) => (*scalar.data_type).clone(),
-            ScalarExpr::AndExpr(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::OrExpr(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::NotExpr(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::ComparisonExpr(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::AggregateFunction(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::FunctionCall(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::CastExpr(scalar) => (*scalar.target_type).clone(),
-            ScalarExpr::SubqueryExpr(scalar) => match &scalar.typ {
+            Scalar::BoundColumnRef(scalar) => (*scalar.column.data_type).clone(),
+            Scalar::ConstantExpr(scalar) => (*scalar.data_type).clone(),
+            Scalar::AndExpr(scalar) => (*scalar.return_type).clone(),
+            Scalar::OrExpr(scalar) => (*scalar.return_type).clone(),
+            Scalar::NotExpr(scalar) => (*scalar.return_type).clone(),
+            Scalar::ComparisonExpr(scalar) => (*scalar.return_type).clone(),
+            Scalar::AggregateFunction(scalar) => (*scalar.return_type).clone(),
+            Scalar::FunctionCall(scalar) => (*scalar.return_type).clone(),
+            Scalar::CastExpr(scalar) => (*scalar.target_type).clone(),
+            Scalar::SubqueryExpr(scalar) => match &scalar.typ {
                 SubqueryType::Scalar => (*scalar.data_type).clone(),
                 SubqueryType::Any
                 | SubqueryType::All
@@ -65,54 +65,54 @@ impl ScalarExpr {
 
     pub fn used_columns(&self) -> ColumnSet {
         match self {
-            ScalarExpr::BoundColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
-            ScalarExpr::ConstantExpr(_) => ColumnSet::new(),
-            ScalarExpr::AndExpr(scalar) => {
+            Scalar::BoundColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
+            Scalar::ConstantExpr(_) => ColumnSet::new(),
+            Scalar::AndExpr(scalar) => {
                 let left: ColumnSet = scalar.left.used_columns();
                 let right: ColumnSet = scalar.right.used_columns();
                 left.union(&right).cloned().collect()
             }
-            ScalarExpr::OrExpr(scalar) => {
+            Scalar::OrExpr(scalar) => {
                 let left: ColumnSet = scalar.left.used_columns();
                 let right: ColumnSet = scalar.right.used_columns();
                 left.union(&right).cloned().collect()
             }
-            ScalarExpr::NotExpr(scalar) => scalar.argument.used_columns(),
-            ScalarExpr::ComparisonExpr(scalar) => {
+            Scalar::NotExpr(scalar) => scalar.argument.used_columns(),
+            Scalar::ComparisonExpr(scalar) => {
                 let left: ColumnSet = scalar.left.used_columns();
                 let right: ColumnSet = scalar.right.used_columns();
                 left.union(&right).cloned().collect()
             }
-            ScalarExpr::AggregateFunction(scalar) => {
+            Scalar::AggregateFunction(scalar) => {
                 let mut result = ColumnSet::new();
                 for scalar in &scalar.args {
                     result = result.union(&scalar.used_columns()).cloned().collect();
                 }
                 result
             }
-            ScalarExpr::FunctionCall(scalar) => {
+            Scalar::FunctionCall(scalar) => {
                 let mut result = ColumnSet::new();
                 for scalar in &scalar.arguments {
                     result = result.union(&scalar.used_columns()).cloned().collect();
                 }
                 result
             }
-            ScalarExpr::CastExpr(scalar) => scalar.argument.used_columns(),
-            ScalarExpr::SubqueryExpr(scalar) => scalar.outer_columns.clone(),
+            Scalar::CastExpr(scalar) => scalar.argument.used_columns(),
+            Scalar::SubqueryExpr(scalar) => scalar.outer_columns.clone(),
         }
     }
 }
 
-impl From<BoundColumnRef> for ScalarExpr {
+impl From<BoundColumnRef> for Scalar {
     fn from(v: BoundColumnRef) -> Self {
         Self::BoundColumnRef(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for BoundColumnRef {
+impl TryFrom<Scalar> for BoundColumnRef {
     type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::BoundColumnRef(value) = value {
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::BoundColumnRef(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(
@@ -122,16 +122,16 @@ impl TryFrom<ScalarExpr> for BoundColumnRef {
     }
 }
 
-impl From<ConstantExpr> for ScalarExpr {
+impl From<ConstantExpr> for Scalar {
     fn from(v: ConstantExpr) -> Self {
         Self::ConstantExpr(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for ConstantExpr {
+impl TryFrom<Scalar> for ConstantExpr {
     type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::ConstantExpr(value) = value {
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::ConstantExpr(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(
@@ -141,16 +141,16 @@ impl TryFrom<ScalarExpr> for ConstantExpr {
     }
 }
 
-impl From<AndExpr> for ScalarExpr {
+impl From<AndExpr> for Scalar {
     fn from(v: AndExpr) -> Self {
         Self::AndExpr(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for AndExpr {
+impl TryFrom<Scalar> for AndExpr {
     type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::AndExpr(value) = value {
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::AndExpr(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal("Cannot downcast Scalar to AndExpr"))
@@ -158,16 +158,16 @@ impl TryFrom<ScalarExpr> for AndExpr {
     }
 }
 
-impl From<OrExpr> for ScalarExpr {
+impl From<OrExpr> for Scalar {
     fn from(v: OrExpr) -> Self {
         Self::OrExpr(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for OrExpr {
+impl TryFrom<Scalar> for OrExpr {
     type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::OrExpr(value) = value {
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::OrExpr(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal("Cannot downcast Scalar to OrExpr"))
@@ -175,16 +175,16 @@ impl TryFrom<ScalarExpr> for OrExpr {
     }
 }
 
-impl From<NotExpr> for ScalarExpr {
+impl From<NotExpr> for Scalar {
     fn from(v: NotExpr) -> Self {
         Self::NotExpr(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for NotExpr {
+impl TryFrom<Scalar> for NotExpr {
     type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::NotExpr(value) = value {
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::NotExpr(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal("Cannot downcast Scalar to NotExpr"))
@@ -192,16 +192,16 @@ impl TryFrom<ScalarExpr> for NotExpr {
     }
 }
 
-impl From<ComparisonExpr> for ScalarExpr {
+impl From<ComparisonExpr> for Scalar {
     fn from(v: ComparisonExpr) -> Self {
         Self::ComparisonExpr(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for ComparisonExpr {
+impl TryFrom<Scalar> for ComparisonExpr {
     type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::ComparisonExpr(value) = value {
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::ComparisonExpr(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(
@@ -211,16 +211,16 @@ impl TryFrom<ScalarExpr> for ComparisonExpr {
     }
 }
 
-impl From<AggregateFunction> for ScalarExpr {
+impl From<AggregateFunction> for Scalar {
     fn from(v: AggregateFunction) -> Self {
         Self::AggregateFunction(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for AggregateFunction {
+impl TryFrom<Scalar> for AggregateFunction {
     type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::AggregateFunction(value) = value {
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::AggregateFunction(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(
@@ -230,16 +230,16 @@ impl TryFrom<ScalarExpr> for AggregateFunction {
     }
 }
 
-impl From<FunctionCall> for ScalarExpr {
+impl From<FunctionCall> for Scalar {
     fn from(v: FunctionCall) -> Self {
         Self::FunctionCall(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for FunctionCall {
+impl TryFrom<Scalar> for FunctionCall {
     type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::FunctionCall(value) = value {
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::FunctionCall(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(
@@ -249,16 +249,16 @@ impl TryFrom<ScalarExpr> for FunctionCall {
     }
 }
 
-impl From<CastExpr> for ScalarExpr {
+impl From<CastExpr> for Scalar {
     fn from(v: CastExpr) -> Self {
         Self::CastExpr(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for CastExpr {
+impl TryFrom<Scalar> for CastExpr {
     type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::CastExpr(value) = value {
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::CastExpr(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal("Cannot downcast Scalar to CastExpr"))
@@ -266,16 +266,16 @@ impl TryFrom<ScalarExpr> for CastExpr {
     }
 }
 
-impl From<SubqueryExpr> for ScalarExpr {
+impl From<SubqueryExpr> for Scalar {
     fn from(v: SubqueryExpr) -> Self {
         Self::SubqueryExpr(v)
     }
 }
 
-impl TryFrom<ScalarExpr> for SubqueryExpr {
+impl TryFrom<Scalar> for SubqueryExpr {
     type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::SubqueryExpr(value) = value {
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::SubqueryExpr(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(
@@ -299,21 +299,21 @@ pub struct ConstantExpr {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AndExpr {
-    pub left: Box<ScalarExpr>,
-    pub right: Box<ScalarExpr>,
+    pub left: Box<Scalar>,
+    pub right: Box<Scalar>,
     pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct OrExpr {
-    pub left: Box<ScalarExpr>,
-    pub right: Box<ScalarExpr>,
+    pub left: Box<Scalar>,
+    pub right: Box<Scalar>,
     pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NotExpr {
-    pub argument: Box<ScalarExpr>,
+    pub argument: Box<Scalar>,
     pub return_type: Box<DataType>,
 }
 
@@ -369,8 +369,8 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ComparisonExpr {
     pub op: ComparisonOp,
-    pub left: Box<ScalarExpr>,
-    pub right: Box<ScalarExpr>,
+    pub left: Box<Scalar>,
+    pub right: Box<Scalar>,
     pub return_type: Box<DataType>,
 }
 
@@ -381,14 +381,14 @@ pub struct AggregateFunction {
     pub func_name: String,
     pub distinct: bool,
     pub params: Vec<Literal>,
-    pub args: Vec<ScalarExpr>,
+    pub args: Vec<Scalar>,
     pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FunctionCall {
     pub params: Vec<usize>,
-    pub arguments: Vec<ScalarExpr>,
+    pub arguments: Vec<Scalar>,
 
     pub func_name: String,
     pub return_type: Box<DataType>,
@@ -397,7 +397,7 @@ pub struct FunctionCall {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct CastExpr {
     pub is_try: bool,
-    pub argument: Box<ScalarExpr>,
+    pub argument: Box<Scalar>,
     pub from_type: Box<DataType>,
     pub target_type: Box<DataType>,
 }
@@ -416,7 +416,7 @@ pub struct SubqueryExpr {
     pub typ: SubqueryType,
     pub subquery: Box<SExpr>,
     // The expr that is used to compare the result of the subquery (IN/ANY/ALL), such as `t1.a in (select t2.a from t2)`, t1.a is `child_expr`.
-    pub child_expr: Option<Box<ScalarExpr>>,
+    pub child_expr: Option<Box<Scalar>>,
     // Comparison operator for Any/All, such as t1.a = Any (...), `compare_op` is `=`.
     pub compare_op: Option<ComparisonOp>,
     // Output column of Any/All and scalar subqueries.

@@ -28,7 +28,7 @@ use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 
 /// Fold simple `COUNT(*)` aggregate with statistics information.
 pub struct RuleFoldCountAggregate {
@@ -76,7 +76,7 @@ impl Rule for RuleFoldCountAggregate {
 
         let is_simple_count = agg.group_items.is_empty()
             && agg.aggregate_functions.iter().all(|agg| match &agg.scalar {
-                ScalarExpr::AggregateFunction(agg_func) => {
+                Scalar::AggregateFunction(agg_func) => {
                     agg_func.func_name == "count"
                         && (agg_func.args.is_empty()
                             || !matches!(
@@ -90,7 +90,7 @@ impl Rule for RuleFoldCountAggregate {
 
         let simple_nullable_count = agg.group_items.is_empty()
             && agg.aggregate_functions.iter().all(|agg| match &agg.scalar {
-                ScalarExpr::AggregateFunction(agg_func) => {
+                Scalar::AggregateFunction(agg_func) => {
                     agg_func.func_name == "count"
                         && (agg_func.args.is_empty()
                             || matches!(agg_func.args[0].data_type(), DataType::Nullable(_)))
@@ -102,7 +102,7 @@ impl Rule for RuleFoldCountAggregate {
         if let (true, Some(card)) = (is_simple_count, input_prop.statistics.precise_cardinality) {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {
-                item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                item.scalar = Scalar::ConstantExpr(ConstantExpr {
                     value: Literal::UInt64(card),
                     data_type: Box::new(item.scalar.data_type()),
                 });
@@ -121,9 +121,9 @@ impl Rule for RuleFoldCountAggregate {
         ) {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {
-                if let ScalarExpr::AggregateFunction(agg_func) = item.scalar.clone() {
+                if let Scalar::AggregateFunction(agg_func) = item.scalar.clone() {
                     if agg_func.args.is_empty() {
-                        item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                        item.scalar = Scalar::ConstantExpr(ConstantExpr {
                             value: Literal::UInt64(table_card),
                             data_type: Box::new(item.scalar.data_type()),
                         });
@@ -133,7 +133,7 @@ impl Rule for RuleFoldCountAggregate {
                         for index in col_set {
                             let col_stat = column_stats.get(&index);
                             if let Some(card) = col_stat {
-                                item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                                item.scalar = Scalar::ConstantExpr(ConstantExpr {
                                     value: Literal::UInt64(table_card - card.null_count),
                                     data_type: Box::new(item.scalar.data_type()),
                                 });

@@ -47,7 +47,7 @@ use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-use crate::plans::ScalarExpr;
+use crate::plans::Scalar;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Statistics;
@@ -311,7 +311,7 @@ impl SubqueryRewriter {
                 )?;
                 let index = subquery.output_column;
                 let column_name = format!("subquery_{}", index);
-                let right_condition = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                let right_condition = Scalar::BoundColumnRef(BoundColumnRef {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
@@ -325,7 +325,7 @@ impl SubqueryRewriter {
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
                 // Because it's not null-safe.
-                let non_equi_conditions = vec![ScalarExpr::ComparisonExpr(ComparisonExpr {
+                let non_equi_conditions = vec![Scalar::ComparisonExpr(ComparisonExpr {
                     op,
                     left: Box::new(child_expr),
                     right: Box::new(right_condition),
@@ -463,7 +463,7 @@ impl SubqueryRewriter {
                         visibility: Visibility::Visible,
                     };
                     items.push(ScalarItem {
-                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        scalar: Scalar::BoundColumnRef(BoundColumnRef {
                             column: column_binding,
                         }),
                         index: *derived_column,
@@ -576,7 +576,7 @@ impl SubqueryRewriter {
                         }
                     };
                     group_items.push(ScalarItem {
-                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        scalar: Scalar::BoundColumnRef(BoundColumnRef {
                             column: column_binding,
                         }),
                         index: *derived_column,
@@ -585,8 +585,7 @@ impl SubqueryRewriter {
                 let mut agg_items = Vec::with_capacity(aggregate.aggregate_functions.len());
                 for item in aggregate.aggregate_functions.iter() {
                     let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
-                    if let ScalarExpr::AggregateFunction(AggregateFunction { func_name, .. }) =
-                        &scalar
+                    if let Scalar::AggregateFunction(AggregateFunction { func_name, .. }) = &scalar
                     {
                         if func_name.eq_ignore_ascii_case("count") || func_name.eq("count_distinct")
                         {
@@ -666,15 +665,15 @@ impl SubqueryRewriter {
 
     fn flatten_scalar(
         &mut self,
-        scalar: &ScalarExpr,
+        scalar: &Scalar,
         correlated_columns: &ColumnSet,
-    ) -> Result<ScalarExpr> {
+    ) -> Result<Scalar> {
         match scalar {
-            ScalarExpr::BoundColumnRef(bound_column) => {
+            Scalar::BoundColumnRef(bound_column) => {
                 let column_binding = bound_column.column.clone();
                 if correlated_columns.contains(&column_binding.index) {
                     let index = self.derived_columns.get(&column_binding.index).unwrap();
-                    return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    return Ok(Scalar::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -687,48 +686,48 @@ impl SubqueryRewriter {
                 }
                 Ok(scalar.clone())
             }
-            ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
-            ScalarExpr::AndExpr(and_expr) => {
+            Scalar::ConstantExpr(_) => Ok(scalar.clone()),
+            Scalar::AndExpr(and_expr) => {
                 let left = self.flatten_scalar(&and_expr.left, correlated_columns)?;
                 let right = self.flatten_scalar(&and_expr.right, correlated_columns)?;
-                Ok(ScalarExpr::AndExpr(AndExpr {
+                Ok(Scalar::AndExpr(AndExpr {
                     left: Box::new(left),
                     right: Box::new(right),
                     return_type: and_expr.return_type.clone(),
                 }))
             }
-            ScalarExpr::OrExpr(or_expr) => {
+            Scalar::OrExpr(or_expr) => {
                 let left = self.flatten_scalar(&or_expr.left, correlated_columns)?;
                 let right = self.flatten_scalar(&or_expr.right, correlated_columns)?;
-                Ok(ScalarExpr::OrExpr(OrExpr {
+                Ok(Scalar::OrExpr(OrExpr {
                     left: Box::new(left),
                     right: Box::new(right),
                     return_type: or_expr.return_type.clone(),
                 }))
             }
-            ScalarExpr::NotExpr(not_expr) => {
+            Scalar::NotExpr(not_expr) => {
                 let argument = self.flatten_scalar(&not_expr.argument, correlated_columns)?;
-                Ok(ScalarExpr::NotExpr(NotExpr {
+                Ok(Scalar::NotExpr(NotExpr {
                     argument: Box::new(argument),
                     return_type: not_expr.return_type.clone(),
                 }))
             }
-            ScalarExpr::ComparisonExpr(comparison_expr) => {
+            Scalar::ComparisonExpr(comparison_expr) => {
                 let left = self.flatten_scalar(&comparison_expr.left, correlated_columns)?;
                 let right = self.flatten_scalar(&comparison_expr.right, correlated_columns)?;
-                Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
+                Ok(Scalar::ComparisonExpr(ComparisonExpr {
                     op: comparison_expr.op.clone(),
                     left: Box::new(left),
                     right: Box::new(right),
                     return_type: comparison_expr.return_type.clone(),
                 }))
             }
-            ScalarExpr::AggregateFunction(agg) => {
+            Scalar::AggregateFunction(agg) => {
                 let mut args = Vec::with_capacity(agg.args.len());
                 for arg in &agg.args {
                     args.push(self.flatten_scalar(arg, correlated_columns)?);
                 }
-                Ok(ScalarExpr::AggregateFunction(AggregateFunction {
+                Ok(Scalar::AggregateFunction(AggregateFunction {
                     display_name: agg.display_name.clone(),
                     func_name: agg.func_name.clone(),
                     distinct: agg.distinct,
@@ -737,21 +736,21 @@ impl SubqueryRewriter {
                     return_type: agg.return_type.clone(),
                 }))
             }
-            ScalarExpr::FunctionCall(fun_call) => {
+            Scalar::FunctionCall(fun_call) => {
                 let mut arguments = Vec::with_capacity(fun_call.arguments.len());
                 for arg in &fun_call.arguments {
                     arguments.push(self.flatten_scalar(arg, correlated_columns)?);
                 }
-                Ok(ScalarExpr::FunctionCall(FunctionCall {
+                Ok(Scalar::FunctionCall(FunctionCall {
                     params: fun_call.params.clone(),
                     arguments,
                     func_name: fun_call.func_name.clone(),
                     return_type: fun_call.return_type.clone(),
                 }))
             }
-            ScalarExpr::CastExpr(cast_expr) => {
+            Scalar::CastExpr(cast_expr) => {
                 let scalar = self.flatten_scalar(&cast_expr.argument, correlated_columns)?;
-                Ok(ScalarExpr::CastExpr(CastExpr {
+                Ok(Scalar::CastExpr(CastExpr {
                     is_try: cast_expr.is_try,
                     argument: Box::new(scalar),
                     from_type: cast_expr.from_type.clone(),
@@ -767,8 +766,8 @@ impl SubqueryRewriter {
     fn add_equi_conditions(
         &self,
         correlated_columns: &HashSet<IndexType>,
-        left_conditions: &mut Vec<ScalarExpr>,
-        right_conditions: &mut Vec<ScalarExpr>,
+        left_conditions: &mut Vec<Scalar>,
+        right_conditions: &mut Vec<Scalar>,
     ) -> Result<()> {
         for correlated_column in correlated_columns.iter() {
             let metadata = self.metadata.read();
@@ -777,7 +776,7 @@ impl SubqueryRewriter {
                 ColumnEntry::BaseTableColumn { data_type, .. } => DataType::from(data_type),
                 ColumnEntry::DerivedColumn { data_type, .. } => data_type.clone(),
             };
-            let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            let right_column = Scalar::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
@@ -788,7 +787,7 @@ impl SubqueryRewriter {
                 },
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
-            let left_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            let left_column = Scalar::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
@@ -818,15 +817,13 @@ impl SubqueryRewriter {
                 .iter()
                 .any(|column| correlated_columns.contains(column))
             {
-                if let ScalarExpr::ComparisonExpr(ComparisonExpr {
+                if let Scalar::ComparisonExpr(ComparisonExpr {
                     left, right, op, ..
                 }) = predicate
                 {
                     if op == &ComparisonOp::Equal {
-                        if let (
-                            ScalarExpr::BoundColumnRef(left),
-                            ScalarExpr::BoundColumnRef(right),
-                        ) = (&**left, &**right)
+                        if let (Scalar::BoundColumnRef(left), Scalar::BoundColumnRef(right)) =
+                            (&**left, &**right)
                         {
                             if correlated_columns.contains(&left.column.index)
                                 && !correlated_columns.contains(&right.column.index)
