@@ -837,3 +837,40 @@ drop table t1
 
 statement ok
 drop table t2
+
+query T
+explain syntax select * from read_parquet('p1', 'p2', 'p3');
+----
+SELECT *
+FROM
+    read_parquet('p1', 'p2', 'p3')
+
+query T
+explain syntax select * from read_parquet(prune_page=>true, refresh_meta_cache=>true);
+----
+SELECT *
+FROM
+    read_parquet(prune_page=>TRUE, refresh_meta_cache=>TRUE)
+
+query T
+explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
+----
+SELECT *
+FROM
+    read_parquet('p1', 'p2', 'p3', prune_page=>TRUE, refresh_meta_cache=>TRUE)
+
+query T
+explain ast select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
+----
+Query (children 1)
+└── QueryBody (children 1)
+    └── SelectQuery (children 2)
+        ├── SelectList (children 1)
+        │   └── Target *
+        └── TableList (children 1)
+            └── TableFunction read_parquet (children 5)
+                ├── Literal String("p1")
+                ├── Literal String("p2")
+                ├── Literal String("p3")
+                ├── prune_page=>Literal Boolean(true)
+                └── refresh_meta_cache=>Literal Boolean(true)
