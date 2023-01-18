@@ -2963,6 +2963,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-meta-upgrade-09"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.23",
+ "common-meta-api",
+ "common-meta-app",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
+ "common-tracing",
+ "openraft",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
@@ -3879,9 +3900,9 @@ dependencies = [
 
 [[package]]
 name = "geohash"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2531fb8e2edacf602fd1f2672da559dc1527509cf90940b7a0ebd06b998a004f"
+checksum = "8a18b809b13fa4f1c9ccfd94179cc429021a3517856b5160422c3d810c1e8546"
 dependencies = [
  "geo-types",
  "libm",

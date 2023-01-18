@@ -134,13 +134,25 @@ impl Operator for Aggregate {
             .cloned()
             .collect();
 
-        // Derive cardinality. We can not estimate the cardinality of an aggregate with group by, until
-        // we have information about distribution of group keys. So we pass through the cardinality.
         let cardinality = if self.group_items.is_empty() {
             // Scalar aggregation
             1.0
-        } else {
+        } else if self.group_items.iter().any(|item| {
+            input_prop
+                .statistics
+                .column_stats
+                .get(&item.index)
+                .is_none()
+        }) {
             input_prop.cardinality
+        } else {
+            // A upper bound
+            let res = self.group_items.iter().fold(1.0, |acc, item| {
+                let item_stat = input_prop.statistics.column_stats.get(&item.index).unwrap();
+                acc * item_stat.ndv
+            });
+            // To avoid res is very large
+            f64::min(res, input_prop.cardinality)
         };
 
         let precise_cardinality = if self.group_items.is_empty() {

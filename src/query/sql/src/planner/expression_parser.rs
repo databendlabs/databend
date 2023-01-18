@@ -26,14 +26,11 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
-use crate::executor::PhysicalScalarBuilder;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
@@ -48,16 +45,6 @@ pub fn parse_exprs(
     unwrap_tuple: bool,
     sql: &str,
 ) -> Result<Vec<Expr>> {
-    let sql_dialect = Dialect::MySQL;
-    let tokens = tokenize_sql(sql)?;
-    let backtrace = Backtrace::new();
-    let tokens = if unwrap_tuple {
-        &tokens[1..tokens.len() - 1]
-    } else {
-        &tokens
-    };
-    let exprs = parse_comma_separated_exprs(tokens, sql_dialect, &backtrace)?;
-
     let settings = Settings::default_settings("", GlobalConfig::instance())?;
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -69,12 +56,10 @@ pub fn parse_exprs(
     );
 
     let columns = metadata.read().columns_by_table_index(table_index);
-    let mut fields = Vec::with_capacity(columns.len());
     let table = metadata.read().table(table_index).clone();
     for (index, column) in columns.iter().enumerate() {
         let column_binding = match column {
             ColumnEntry::BaseTableColumn {
-                column_index,
                 column_name,
                 data_type,
                 path_indices,
@@ -83,7 +68,7 @@ pub fn parse_exprs(
                 database_name: Some("default".to_string()),
                 table_name: Some(table.name().to_string()),
                 column_name: column_name.clone(),
-                index: *column_index,
+                index,
                 data_type: Box::new(data_type.into()),
                 visibility: if path_indices.is_some() {
                     Visibility::InVisible
@@ -97,27 +82,33 @@ pub fn parse_exprs(
             }
         };
 
-        fields.push(DataField::new(
-            &index.to_string(),
-            *column_binding.data_type.clone(),
-        ));
         bind_context.add_column_binding(column_binding);
     }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker =
         TypeChecker::new(&bind_context, ctx, &name_resolution_ctx, metadata, &[]);
-    let mut expressions = Vec::with_capacity(exprs.len());
 
-    let data_schema = DataSchemaRefExt::create(fields);
-    let physical_scalar_builder = PhysicalScalarBuilder::new(&data_schema);
-    for expr in exprs.iter() {
-        let (scalar, _) =
-            *block_in_place(|| Handle::current().block_on(type_checker.resolve(expr, None)))?;
-        let scalar = physical_scalar_builder.build(&scalar)?;
-        expressions.push(scalar.as_expr()?);
-    }
-    Ok(expressions)
+    let sql_dialect = Dialect::MySQL;
+    let tokens = tokenize_sql(sql)?;
+    let backtrace = Backtrace::new();
+    let tokens = if unwrap_tuple {
+        &tokens[1..tokens.len() - 1]
+    } else {
+        &tokens
+    };
+    let ast_exprs = parse_comma_separated_exprs(tokens, sql_dialect, &backtrace)?;
+    let exprs = ast_exprs
+        .iter()
+        .map(|ast| {
+            let (scalar, _) =
+                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast, None)))?;
+            let expr = scalar.as_expr_with_col_index()?;
+            Ok(expr)
+        })
+        .collect::<Result<_>>()?;
+
+    Ok(exprs)
 }
 
 pub fn parse_to_remote_string_exprs(

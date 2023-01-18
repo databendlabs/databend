@@ -71,6 +71,7 @@ pub fn eval_function(
                     span: span.clone(),
                     id,
                     data_type: ty.clone(),
+                    display_name: String::new(),
                 },
                 BlockEntry {
                     data_type: ty,
@@ -108,6 +109,7 @@ pub fn calculate_function_domain(
                     span: span.clone(),
                     id,
                     data_type: ty,
+                    display_name: String::new(),
                 },
                 (id, domain),
             )

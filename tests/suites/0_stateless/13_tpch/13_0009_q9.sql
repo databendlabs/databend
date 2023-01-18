@@ -2,13 +2,13 @@
 select
     nation,
     o_year,
-    truncate(sum(amount),3) as sum_profit
+    truncate(truncate(sum(amount),0)/10, 0) as sum_profit
 from
     (
         select
             n_name as nation,
             extract(year from o_orderdate) as o_year,
-            l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
+            truncate(l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity, 100) as amount
         from
             part,
             supplier,
@@ -29,6 +29,5 @@ group by
     nation,
     o_year
 order by
-    nation,
-    o_year desc
+    sum_profit
 limit 5;

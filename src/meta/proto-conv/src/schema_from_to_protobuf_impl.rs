@@ -166,10 +166,6 @@ impl FromToProto for ex::TableDataType {
                     Dt::IntervalType(_) => ex::TableDataType::Null,
                 };
                 Ok(x)
-
-                // let x = dv::DataTypeImpl::from_pb(p)?;
-                // let y = from_type(&x);
-                // Ok(y)
             }
             (None, Some(_)) => {
                 // Convert from version 24 or higher:

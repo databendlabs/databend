@@ -31,10 +31,10 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::ColumnStatistics;
 
-use crate::statistics_to_domain;
+use crate::range_index::statistics_to_domain;
 
 #[derive(Clone)]
-pub struct PageFilter {
+pub struct PageIndex {
     expr: Expr<String>,
     func_ctx: FunctionContext,
     cluster_key_id: u32,
@@ -43,7 +43,7 @@ pub struct PageFilter {
     cluster_key_fields: Vec<DataField>,
 }
 
-impl PageFilter {
+impl PageIndex {
     pub fn try_create(
         func_ctx: FunctionContext,
         cluster_key_id: u32,
@@ -74,7 +74,7 @@ impl PageFilter {
         })
     }
 
-    pub fn try_eval_const(&self) -> Result<bool> {
+    pub fn try_apply_const(&self) -> Result<bool> {
         // if the exprs did not contains the first cluster key, we should return true
         if self.cluster_key_fields.is_empty()
             || !self
@@ -93,8 +93,8 @@ impl PageFilter {
         }))
     }
 
-    #[tracing::instrument(level = "debug", name = "page_filter_eval", skip_all)]
-    pub fn eval(&self, stats: &Option<ClusterStatistics>) -> Result<(bool, Option<Range<usize>>)> {
+    #[tracing::instrument(level = "debug", name = "page_index_eval", skip_all)]
+    pub fn apply(&self, stats: &Option<ClusterStatistics>) -> Result<(bool, Option<Range<usize>>)> {
         let stats = match stats {
             Some(stats) => stats,
             None => return Ok((true, None)),

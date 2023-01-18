@@ -128,12 +128,12 @@ fn test_point_in_ellipses(file: &mut impl Write) {
 }
 
 fn test_point_in_polygon(file: &mut impl Write) {
+    // form 1: ((x, y), [(x1, y1), (x2, y2), ...])
     run_ast(
         file,
         "point_in_polygon((3., 3.), [(6, 0), (8, 4), (5, 8), (0, 2)])",
         &[],
     );
-
     run_ast(
         file,
         "point_in_polygon((a, b), [(6, 0), (8, 4), (5, 8), (0, 2)])",
@@ -142,10 +142,58 @@ fn test_point_in_polygon(file: &mut impl Write) {
             ("b", Float64Type::from_data(vec![3.0, 3.1, 3.2])),
         ],
     );
+
+    // form 2: ((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
+    run_ast(
+        file,
+        "point_in_polygon((1., 1.), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (3., 5.), (5., 5.), (5., 3.)]])",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "point_in_polygon((2.5, 2.5), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (3., 5.), (5., 5.), (5., 3.)]])",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "point_in_polygon((2.5, 2.5), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (a, b), (5., 5.), (5., 3.)]])",
+        &[
+            ("a", Float64Type::from_data(vec![3.0, 3.1])),
+            ("b", Float64Type::from_data(vec![5.0, 5.0])),
+        ],
+    );
+
+    // form 3: ((x, y), [(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...)
+    run_ast(
+        file,
+        "point_in_polygon((2.5, 2.5), [(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (3., 5.), (5., 5.), (5., 3.)])",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "point_in_polygon((2.5, 2.5), [(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (a, b), (5., 5.), (5., 3.)])",
+        &[
+            ("a", Float64Type::from_data(vec![3.0, 3.0])),
+            ("b", Float64Type::from_data(vec![5.0, 5.0])),
+        ],
+    );
 }
 
 fn test_geohash_encode(file: &mut impl Write) {
     run_ast(file, "geohash_encode(-5.60302734375, 42.593994140625)", &[]);
+    run_ast(
+        file,
+        "geohash_encode(-5.60302734375, 42.593994140625, 11)",
+        &[],
+    );
+    run_ast(
+        file,
+        "geohash_encode(-5.60302734375, 42.593994140625, 0)",
+        &[],
+    );
 }
 
 fn test_geohash_decode(file: &mut impl Write) {

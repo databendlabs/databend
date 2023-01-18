@@ -54,7 +54,7 @@ impl Interpreter for ReclusterTableInterpreter {
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
-            let filter = scalar.as_expr()?.as_remote_expr();
+            let filter = scalar.as_expr_with_col_name()?.as_remote_expr();
 
             Some(PushDownInfo {
                 filters: vec![filter],

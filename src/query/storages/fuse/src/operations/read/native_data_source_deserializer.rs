@@ -137,12 +137,13 @@ impl NativeDeserializeDataTransform {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
+                Some(v) => {
+                    let expr = v.filter.as_expr(&BUILTIN_FUNCTIONS);
                     let expr =
                         expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0);
                     let (expr, _) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
-                    expr
-                })),
+                    Arc::new(Some(expr))
+                }
             },
         )
     }

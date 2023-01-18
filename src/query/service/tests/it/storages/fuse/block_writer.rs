@@ -23,7 +23,7 @@ use common_storages_fuse::io::WriteSettings;
 use common_storages_fuse::FuseStorageFormat;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
-use storages_common_index::BlockFilter;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::Compression;
@@ -104,7 +104,7 @@ impl<'a> BlockWriter<'a> {
             .block_bloom_index_location(&block_id);
 
         let bloom_index =
-            BlockFilter::try_create(FunctionContext::default(), schema, location.1, &[block])?;
+            BloomIndex::try_create(FunctionContext::default(), schema, location.1, &[block])?;
         if let Some(bloom_index) = bloom_index {
             let index_block = bloom_index.filter_block;
             let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);

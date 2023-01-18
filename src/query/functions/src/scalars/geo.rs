@@ -28,6 +28,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
+use common_expression::types::UInt8Type;
 use common_expression::types::ValueType;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
@@ -48,8 +49,6 @@ use geo::Contains;
 use geo::Coord;
 use geo::LineString;
 use geo::Polygon;
-#[allow(deprecated)]
-use geohash::Coordinate;
 use h3o::LatLng;
 use h3o::Resolution;
 use once_cell::sync::OnceCell;
@@ -151,10 +150,28 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<Float64Type, Float64Type, StringType>(
             |lon, lat, builder, ctx| {
-                // todo(ariesdevil): wait geohash update to new geo_types or fire a PR
-                #[allow(deprecated)]
-                let c = Coordinate { x: lon.0, y: lat.0 };
+                let c = Coord { x: lon.0, y: lat.0 };
                 match geohash::encode(c, 12) {
+                    Ok(r) => builder.put_str(&r),
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.put_str("");
+                    }
+                }
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<Float64Type, Float64Type, UInt8Type,StringType, _, _>(
+        "geohash_encode",
+        FunctionProperty::default(),
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_3_arg::<Float64Type, Float64Type, UInt8Type,StringType>(
+            |lon, lat, precision, builder, ctx| {
+                let c = Coord { x: lon.0, y: lat.0 };
+                let precision = if !(1..=12).contains(&precision) {12} else {precision};
+                match geohash::encode(c, precision as usize) {
                     Ok(r) => builder.put_str(&r),
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
@@ -202,9 +219,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         }))
     });
 
-    // point in polygon
+    // simple polygon
+    // point_in_polygon((x, y), [(x1, y1), (x2, y2), ...])
     registry.register_function_factory("point_in_polygon", |_, args_type| {
-        if args_type.len() < 2 {
+        if args_type.len() != 2 {
             return None;
         }
 
@@ -217,6 +235,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 DataType::Array(box DataType::Tuple(tys)) => (0..tys.len())
                     .map(|_| DataType::Number(NumberDataType::Float64))
                     .collect(),
+
                 _ => return None,
             };
             (arg1, arg2)
@@ -238,6 +257,94 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: Box::new(point_in_polygon_fn),
         }))
     });
+
+    // polygon with a number of holes, all as multidimensional array.
+    // point_in_polygon((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
+    registry.register_function_factory("point_in_polygon", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+
+        let (arg1, arg2) = if args_type.len() == 2 {
+            let arg1 = match args_type.get(0)? {
+                DataType::Tuple(tys) => tys.clone(),
+                _ => return None,
+            };
+            let arg2 = match args_type.get(1)? {
+                DataType::Array(box DataType::Array(box DataType::Tuple(tys))) => (0..tys.len())
+                    .map(|_| DataType::Number(NumberDataType::Float64))
+                    .collect(),
+                _ => return None,
+            };
+            (arg1, arg2)
+        } else {
+            (vec![], vec![])
+        };
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "point_in_polygon".to_string(),
+                args_type: vec![
+                    DataType::Tuple(arg1),
+                    DataType::Array(Box::new(DataType::Array(Box::new(DataType::Tuple(arg2))))),
+                ],
+                return_type: DataType::Number(NumberDataType::UInt8),
+                property: Default::default(),
+            },
+            calc_domain: Box::new(|_| FunctionDomain::Full),
+            eval: Box::new(point_in_polygon_fn),
+        }))
+    });
+
+    // polygon with a number of holes, each hole as a subsequent argument.
+    // point_in_polygon((x, y), [(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...)
+    registry.register_function_factory("point_in_polygon", |_, args_type| {
+        if args_type.len() < 3 {
+            return None;
+        }
+
+        let mut args = vec![];
+
+        let arg1 = match args_type.get(0)? {
+            DataType::Tuple(tys) => tys.clone(),
+            _ => return None,
+        };
+        args.push(DataType::Tuple(arg1));
+
+        let arg2: Vec<DataType> = match args_type.get(1)? {
+            DataType::Array(box DataType::Tuple(tys)) => (0..tys.len())
+                .map(|_| DataType::Number(NumberDataType::Float64))
+                .collect(),
+
+            _ => return None,
+        };
+
+        (0..args_type.len() - 1)
+            .for_each(|_| args.push(DataType::Array(Box::new(DataType::Tuple(arg2.clone())))));
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "point_in_polygon".to_string(),
+                args_type: args,
+                return_type: DataType::Number(NumberDataType::UInt8),
+                property: Default::default(),
+            },
+            calc_domain: Box::new(|_| FunctionDomain::Full),
+            eval: Box::new(point_in_polygon_fn),
+        }))
+    });
+}
+
+fn get_coord(fields: &[ScalarRef]) -> Coord {
+    let v = fields
+        .iter()
+        .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(s).unwrap()))
+        .map(|x: ValueRef<Float64Type>| match x {
+            ValueRef::Scalar(v) => *v,
+            _ => 0_f64,
+        })
+        .collect::<Vec<_>>();
+    Coord { x: v[0], y: v[1] }
 }
 
 fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
@@ -275,31 +382,91 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
 
         let point = coord! {x:arg0[0], y:arg0[1]};
 
-        let arg1 = match &args[1] {
-            ValueRef::Scalar(ScalarRef::Array(c)) => {
-                let v: Vec<Coord> = c
+        let polys = if args.len() == 2 {
+            let polys: Vec<Vec<Coord>> = match &args[1] {
+                ValueRef::Scalar(ScalarRef::Array(c)) => c
                     .iter()
                     .map(|s| match s {
-                        ScalarRef::Tuple(fields) => fields
+                        // form type 1: ((x, y), [(x1, y1), (x2, y2), ...])
+                        // match arm return value type should be equal, so we wrap to a vec here.
+                        ScalarRef::Tuple(fields) => vec![get_coord(&fields)],
+                        // form type 2: ((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
+                        ScalarRef::Array(inner_c) => inner_c
                             .iter()
-                            .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(s).unwrap()))
-                            .map(|x: ValueRef<Float64Type>| match x {
-                                ValueRef::Scalar(v) => *v,
-                                _ => 0_f64,
+                            .map(|s| match s {
+                                ScalarRef::Tuple(fields) => get_coord(&fields),
+                                _ => unreachable!(),
                             })
-                            .collect::<Vec<_>>(),
+                            .collect(),
                         _ => unreachable!(),
                     })
-                    .map(|v| {
-                        coord! {x: v[0], y: v[1]}
-                    })
-                    .collect();
-                v
+                    .collect(),
+                ValueRef::Column(Column::Array(c)) => unsafe {
+                    c.index_unchecked(idx)
+                        .iter()
+                        .map(|s| match s {
+                            ScalarRef::Tuple(fields) => vec![get_coord(&fields)],
+                            ScalarRef::Array(inner_c) => inner_c
+                                .iter()
+                                .map(|s| match s {
+                                    ScalarRef::Tuple(fields) => get_coord(&fields),
+                                    _ => unreachable!(),
+                                })
+                                .collect(),
+                            _ => unreachable!(),
+                        })
+                        .collect::<Vec<_>>()
+                },
+                _ => unreachable!(),
+            };
+            polys
+        } else {
+            // form type 3: ((x, y), [(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...)
+            let mut polys: Vec<Vec<Coord>> = Vec::new();
+            for arg in &args[1..] {
+                let hole: Vec<Coord> = match arg {
+                    ValueRef::Scalar(ScalarRef::Array(c)) => c
+                        .iter()
+                        .map(|s| match s {
+                            ScalarRef::Tuple(fields) => get_coord(&fields),
+
+                            _ => unreachable!(),
+                        })
+                        .collect(),
+                    ValueRef::Column(Column::Array(c)) => unsafe {
+                        c.index_unchecked(idx)
+                            .iter()
+                            .map(|s| match s {
+                                ScalarRef::Tuple(fields) => get_coord(&fields),
+                                _ => unreachable!(),
+                            })
+                            .collect()
+                    },
+                    _ => unreachable!(),
+                };
+                polys.push(hole);
             }
-            _ => unreachable!(),
+            polys
         };
 
-        let poly = Polygon::new(LineString(arg1), vec![]);
+        // since we wrapped form type 1 to a vec before, we should flatten here.
+        // form type 1 [[coord1], [coord2], ...]  -> [coord1, coord2, ...]
+        let polys = if polys[0].len() == 1 {
+            vec![polys.into_iter().flatten().collect()]
+        } else {
+            polys
+        };
+
+        let outer = LineString::from(polys[0].clone());
+        let inners: Vec<LineString> = if polys.len() > 1 {
+            polys[1..]
+                .iter()
+                .map(|p| LineString::from(p.clone()))
+                .collect()
+        } else {
+            vec![]
+        };
+        let poly = Polygon::new(outer, inners);
 
         let is_in = poly.contains(&point);
 

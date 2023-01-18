@@ -24,7 +24,7 @@ use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use opendal::Operator;
-use storages_common_index::BlockFilter;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::Location;
 
 use crate::io::BlockFilterReader;
@@ -132,7 +132,7 @@ pub fn new_filter_pruner(
 
         let (optimized_expr, _) =
             ConstantFolder::fold(&expr, ctx.try_get_function_context()?, &BUILTIN_FUNCTIONS);
-        let point_query_cols = BlockFilter::find_eq_columns(&optimized_expr)?;
+        let point_query_cols = BloomIndex::find_eq_columns(&optimized_expr)?;
 
         tracing::debug!(
             "Bloom filter expr {:?}, optimized {:?}, point_query_cols: {:?}",
@@ -147,9 +147,9 @@ pub fn new_filter_pruner(
             let mut scalar_map = HashMap::<Scalar, u64>::new();
             let func_ctx = ctx.try_get_function_context()?;
             for (col_name, scalar, ty) in point_query_cols.iter() {
-                filter_block_cols.push(BlockFilter::build_filter_column_name(col_name));
+                filter_block_cols.push(BloomIndex::build_filter_column_name(col_name));
                 if !scalar_map.contains_key(scalar) {
-                    let digest = BlockFilter::calculate_scalar_digest(func_ctx, scalar, ty)?;
+                    let digest = BloomIndex::calculate_scalar_digest(func_ctx, scalar, ty)?;
                     scalar_map.insert(scalar.clone(), digest);
                 }
             }
@@ -192,14 +192,14 @@ mod util {
             .await;
 
         match maybe_filter {
-            Ok(filter) => Ok(BlockFilter::from_filter_block(
+            Ok(filter) => Ok(BloomIndex::from_filter_block(
                 ctx.try_get_function_context()?,
                 schema.clone(),
                 filter.filter_schema,
                 filter.filter_block,
                 index_location.1,
             )?
-            .eval(filter_expr.clone(), scalar_map)?
+            .apply(filter_expr.clone(), scalar_map)?
                 != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
                 // In case that the index is no longer supported, just return ture to indicate

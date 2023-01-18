@@ -69,16 +69,29 @@ impl ParquetTable {
             ));
         }
 
-        if table_args.is_none() || table_args.as_ref().unwrap().is_empty() {
+        // Syntax:
+        // read_parquet('path1', 'path2', ..., prune_pages=>true, refresh_meta_cache=>true, ...)
+        // The options should be behind the file paths.
+
+        if table_args.is_none() {
             return Err(ErrorCode::BadArguments(
                 "read_parquet needs at least one argument",
             ));
         }
 
-        let table_args = table_args.unwrap();
+        let args = table_args.unwrap();
+        let path_num = args
+            .iter()
+            .position(|arg| matches!(arg, Scalar::Tuple(_)))
+            .unwrap_or(args.len());
+        if path_num == 0 {
+            return Err(ErrorCode::BadArguments(
+                "read_parquet needs at least one file path",
+            ));
+        }
 
-        let mut file_locations = Vec::with_capacity(table_args.len());
-        for arg in table_args.iter() {
+        let mut file_locations = Vec::with_capacity(args.len());
+        for arg in args.iter().take(path_num) {
             match arg {
                 Scalar::String(path) => {
                     let maybe_glob_path = std::str::from_utf8(path).unwrap();
@@ -109,6 +122,13 @@ impl ParquetTable {
             ));
         }
 
+        let mut builder = opendal::services::fs::Builder::default();
+        builder.root("/");
+        let operator = Operator::new(builder.build()?);
+
+        // Now, `read_options` is hard-coded.
+        let read_options = ReadOptions::try_from(&args[path_num..])?;
+
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
@@ -131,8 +151,6 @@ impl ParquetTable {
             meta: TableMeta {
                 schema: arrow_to_table_schema(arrow_schema.clone()).into(),
                 engine: "SystemReadParquet".to_string(),
-                // Assuming that created_on is unnecessary for function table,
-                // we could make created_on fixed to pass test_shuffle_action_try_into.
                 created_on: Utc
                     .from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
                 updated_on: Utc
@@ -142,20 +160,13 @@ impl ParquetTable {
             ..Default::default()
         };
 
-        let mut builder = opendal::services::fs::Builder::default();
-        builder.root("/");
-        let operator = Operator::new(builder.build()?);
-
         Ok(Arc::new(ParquetTable {
-            table_args,
+            table_args: args,
             file_locations,
             table_info,
             arrow_schema,
             operator,
-            read_options: ReadOptions::new()
-                .with_prune_row_groups()
-                .with_prune_pages()
-                .with_do_prewhere(), // Now, `read_options` is hard-coded.
+            read_options,
         }))
     }
 }

@@ -60,12 +60,14 @@ impl ParquetTable {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
-                    let expr =
-                        expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0);
+                Some(v) => {
+                    let expr = v
+                        .filter
+                        .as_expr(&BUILTIN_FUNCTIONS)
+                        .project_column_ref(|name| schema.index_of(name).unwrap());
                     let (expr, _) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
-                    expr
-                })),
+                    Arc::new(Some(expr))
+                }
             },
         )
     }
@@ -123,8 +125,8 @@ impl ParquetTable {
         // Therefore, if there is inner fields in projection, we skip the row group pruning.
         let skip_pruning = matches!(columns_to_read, Projection::InnerColumns(_));
 
-        // Use `projected_column_leaves` to collect stats from row groups for pruning.
-        // `projected_column_leaves` contains the smallest column set that is needed for the query.
+        // Use `projected_column_nodes` to collect stats from row groups for pruning.
+        // `projected_column_nodes` contains the smallest column set that is needed for the query.
         // Use `projected_arrow_schema` to create `row_group_pruner` (`RangePruner`).
         //
         // During pruning evaluation,
@@ -132,14 +134,14 @@ impl ParquetTable {
         // and use the offset to find the column stat from `StatisticsOfColumns` (HashMap<offset, stat>).
         //
         // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
-        let (projected_arrow_schema, projected_column_leaves, _, columns_to_read) =
+        let (projected_arrow_schema, projected_column_nodes, _, columns_to_read) =
             ParquetReader::do_projection(&self.arrow_schema, &columns_to_read)?;
         let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
         let filters = push_downs.as_ref().map(|extra| {
             extra
                 .filters
                 .iter()
-                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
                 .collect::<Vec<_>>()
         });
 
@@ -152,7 +154,7 @@ impl ParquetTable {
                 &schema,
                 &filters.as_deref(),
                 &columns_to_read,
-                &projected_column_leaves,
+                &projected_column_nodes,
                 skip_pruning,
                 read_options,
             )

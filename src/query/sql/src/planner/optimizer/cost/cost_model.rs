@@ -20,6 +20,7 @@ use super::CostModel;
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
 use crate::plans::Join;
+use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 
@@ -61,14 +62,20 @@ fn compute_cost_scan(memo: &Memo, m_expr: &MExpr, _plan: &Scan) -> Result<Cost> 
     Ok(Cost(cost))
 }
 
-fn compute_cost_join(memo: &Memo, m_expr: &MExpr, _plan: &Join) -> Result<Cost> {
+fn compute_cost_join(memo: &Memo, m_expr: &MExpr, plan: &Join) -> Result<Cost> {
     let build_group = m_expr.child_group(memo, 1)?;
     let probe_group = m_expr.child_group(memo, 0)?;
     let build_card = build_group.relational_prop.cardinality;
     let probe_card = probe_group.relational_prop.cardinality;
 
-    let cost =
+    let mut cost =
         build_card * COST_FACTOR_HASH_TABLE_PER_ROW + probe_card * COST_FACTOR_COMPUTE_PER_ROW;
+
+    if matches!(plan.join_type, JoinType::RightAnti | JoinType::RightSemi) {
+        // Due to implementation reasons, right semi join is more expensive than left semi join
+        // So if join type is right anti or right semi, cost needs multiply three (an approximate value)
+        cost *= 3.0;
+    }
     Ok(Cost(cost))
 }
 

@@ -917,6 +917,8 @@ geohash_decode(String) :: (Float64, Float64)
 geohash_decode(String NULL) :: (Float64, Float64) NULL
 geohash_encode(Float64, Float64) :: String
 geohash_encode(Float64 NULL, Float64 NULL) :: String NULL
+geohash_encode(Float64, Float64, UInt8) :: String
+geohash_encode(Float64 NULL, Float64 NULL, UInt8 NULL) :: String NULL
 get(Array(Nothing) NULL, UInt64 NULL) :: NULL
 get(Array(T0 NULL), UInt64) :: T0 NULL
 get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL

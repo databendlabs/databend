@@ -29,11 +29,11 @@ use common_expression::HashMethod;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodKind;
 use common_expression::HashMethodSerializer;
+use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::UnsizedHashMap;
-use common_sql::executor::PhysicalScalar;
 use common_sql::plans::JoinType;
 use parking_lot::RwLock;
 use primitive_types::U256;
@@ -87,14 +87,14 @@ pub struct JoinHashTable {
 impl JoinHashTable {
     pub fn create_join_state(
         ctx: Arc<QueryContext>,
-        build_keys: &[PhysicalScalar],
+        build_keys: &[RemoteExpr],
         build_schema: DataSchemaRef,
         probe_schema: DataSchemaRef,
         hash_join_desc: HashJoinDesc,
     ) -> Result<Arc<JoinHashTable>> {
         let hash_key_types = build_keys
             .iter()
-            .map(|expr| expr.data_type())
+            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
         Ok(match method {

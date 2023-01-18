@@ -109,7 +109,7 @@ impl HttpService {
         let tls_config = Self::build_tls(&self.config)?;
         let addr = self
             .shutdown_handler
-            .start_service(listening, Some(tls_config), self.build_router())
+            .start_service(listening, Some(tls_config), self.build_router(), None)
             .await?;
         Ok(addr)
     }
@@ -119,7 +119,7 @@ impl HttpService {
 
         let addr = self
             .shutdown_handler
-            .start_service(listening, None, self.build_router())
+            .start_service(listening, None, self.build_router(), None)
             .await?;
         Ok(addr)
     }

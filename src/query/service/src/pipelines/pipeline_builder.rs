@@ -18,12 +18,11 @@ use async_channel::Receiver;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check;
+use common_expression::type_check::check_function;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
-use common_expression::RawExpr;
 use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
@@ -246,31 +245,26 @@ impl PipelineBuilder {
     fn build_filter(&mut self, filter: &Filter) -> Result<()> {
         self.build_pipeline(&filter.input)?;
 
-        if filter.predicates.is_empty() {
-            return Err(ErrorCode::Internal(
-                "Invalid empty predicate list".to_string(),
-            ));
-        }
-        let mut predicate = filter.predicates[0].clone().as_raw_expr();
-        for pred in filter.predicates.iter().skip(1) {
-            let pred = pred.as_raw_expr();
-            predicate = RawExpr::FunctionCall {
-                span: None,
-                name: "and".to_string(),
-                params: vec![],
-                args: vec![predicate, pred],
-            };
-        }
-
-        let func_ctx = self.ctx.try_get_function_context()?;
-        let predicate = check(&predicate, &BUILTIN_FUNCTIONS)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+        let predicate = filter
+            .predicates
+            .iter()
+            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+            .try_reduce(|lhs, rhs| {
+                check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                    .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))
+            })
+            .transpose()
+            .unwrap_or_else(|| {
+                Err(ErrorCode::Internal(
+                    "Invalid empty predicate list".to_string(),
+                ))
+            })?;
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundBlockOperator::create(
                 input,
                 output,
-                func_ctx,
+                self.ctx.try_get_function_context()?,
                 vec![BlockOperator::Filter {
                     expr: predicate.clone(),
                 }],
@@ -300,11 +294,11 @@ impl PipelineBuilder {
         self.build_pipeline(&eval_scalar.input)?;
 
         let operators = eval_scalar
-            .scalars
+            .exprs
             .iter()
             .map(|(scalar, _)| {
                 Ok(BlockOperator::Map {
-                    expr: scalar.as_expr()?,
+                    expr: scalar.as_expr(&BUILTIN_FUNCTIONS),
                 })
             })
             .collect::<Result<Vec<_>>>()?;

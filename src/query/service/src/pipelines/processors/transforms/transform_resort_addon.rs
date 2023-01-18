@@ -75,6 +75,7 @@ where Self: Transform
                     span: None,
                     id,
                     data_type: field.data_type().clone(),
+                    display_name: field.name().clone(),
                 }
             };
             ops.push(BlockOperator::Map { expr });

@@ -21,12 +21,12 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::Literal;
+use common_expression::RemoteExpr;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 
-use super::AggregateFunctionDesc;
-use super::SortDesc;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalScalar;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::ColumnBinding;
@@ -60,7 +60,7 @@ impl TableScan {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
     pub input: Box<PhysicalPlan>,
-    pub predicates: Vec<PhysicalScalar>,
+    pub predicates: Vec<RemoteExpr>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -96,7 +96,7 @@ impl Project {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvalScalar {
     pub input: Box<PhysicalPlan>,
-    pub scalars: Vec<(PhysicalScalar, IndexType)>,
+    pub exprs: Vec<(RemoteExpr, IndexType)>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -106,9 +106,9 @@ impl EvalScalar {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
-        for (scalar, index) in self.scalars.iter() {
+        for (expr, index) in self.exprs.iter() {
             let name = index.to_string();
-            let data_type = scalar.data_type();
+            let data_type = expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
             fields.push(DataField::new(&name, data_type));
         }
         Ok(DataSchemaRefExt::create(fields))
@@ -221,9 +221,9 @@ impl Limit {
 pub struct HashJoin {
     pub build: Box<PhysicalPlan>,
     pub probe: Box<PhysicalPlan>,
-    pub build_keys: Vec<PhysicalScalar>,
-    pub probe_keys: Vec<PhysicalScalar>,
-    pub non_equi_conditions: Vec<PhysicalScalar>,
+    pub build_keys: Vec<RemoteExpr>,
+    pub probe_keys: Vec<RemoteExpr>,
+    pub non_equi_conditions: Vec<RemoteExpr>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
@@ -317,7 +317,7 @@ impl HashJoin {
 pub struct Exchange {
     pub input: Box<PhysicalPlan>,
     pub kind: FragmentKind,
-    pub keys: Vec<PhysicalScalar>,
+    pub keys: Vec<RemoteExpr>,
 }
 
 impl Exchange {
@@ -359,7 +359,7 @@ pub struct ExchangeSink {
     /// Input schema of exchanged data
     pub schema: DataSchemaRef,
     pub kind: FragmentKind,
-    pub keys: Vec<PhysicalScalar>,
+    pub keys: Vec<RemoteExpr>,
 
     /// Fragment ID of sink fragment
     pub destination_fragment_id: usize,
@@ -504,4 +504,27 @@ impl PhysicalPlan {
             }
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AggregateFunctionDesc {
+    pub sig: AggregateFunctionSignature,
+    pub output_column: IndexType,
+    pub args: Vec<usize>,
+    pub arg_indices: Vec<IndexType>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AggregateFunctionSignature {
+    pub name: String,
+    pub args: Vec<DataType>,
+    pub params: Vec<Literal>,
+    pub return_type: DataType,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SortDesc {
+    pub asc: bool,
+    pub nulls_first: bool,
+    pub order_by: IndexType,
 }

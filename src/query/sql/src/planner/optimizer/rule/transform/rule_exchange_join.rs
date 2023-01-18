@@ -243,6 +243,7 @@ impl Rule for RuleExchangeJoin {
 
         // Disable the following rules for join 4
         result.set_applied_rule(&RuleID::CommuteJoin);
+        result.set_applied_rule(&RuleID::CommuteJoinBaseTable);
         result.set_applied_rule(&RuleID::LeftAssociateJoin);
         result.set_applied_rule(&RuleID::LeftExchangeJoin);
         result.set_applied_rule(&RuleID::RightAssociateJoin);

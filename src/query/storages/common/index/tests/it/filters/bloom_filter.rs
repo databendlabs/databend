@@ -34,7 +34,7 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use storages_common_index::BlockFilter;
+use storages_common_index::BloomIndex;
 use storages_common_index::FilterEvalResult;
 use storages_common_table_meta::meta::BlockFilter as LatestBloom;
 use storages_common_table_meta::meta::Versioned;
@@ -66,7 +66,7 @@ fn test_bloom_filter() -> Result<()> {
     ];
     let blocks_ref = blocks.iter().collect::<Vec<_>>();
 
-    let index = BlockFilter::try_create(
+    let index = BloomIndex::try_create(
         FunctionContext::default(),
         schema,
         LatestBloom::VERSION,
@@ -117,7 +117,7 @@ fn test_bloom_filter() -> Result<()> {
     Ok(())
 }
 
-fn eval_index(index: &BlockFilter, col_name: &str, val: Scalar, ty: DataType) -> FilterEvalResult {
+fn eval_index(index: &BloomIndex, col_name: &str, val: Scalar, ty: DataType) -> FilterEvalResult {
     let expr = check_function(
         None,
         "eq",
@@ -127,6 +127,7 @@ fn eval_index(index: &BlockFilter, col_name: &str, val: Scalar, ty: DataType) ->
                 span: None,
                 id: col_name.to_string(),
                 data_type: ty.clone(),
+                display_name: col_name.to_string(),
             },
             Expr::Constant {
                 span: None,
@@ -138,16 +139,16 @@ fn eval_index(index: &BlockFilter, col_name: &str, val: Scalar, ty: DataType) ->
     )
     .unwrap();
 
-    let point_query_cols = BlockFilter::find_eq_columns(&expr).unwrap();
+    let point_query_cols = BloomIndex::find_eq_columns(&expr).unwrap();
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
     let func_ctx = FunctionContext::default();
     for (_, scalar, ty) in point_query_cols.iter() {
         if !scalar_map.contains_key(scalar) {
-            let digest = BlockFilter::calculate_scalar_digest(func_ctx, scalar, ty).unwrap();
+            let digest = BloomIndex::calculate_scalar_digest(func_ctx, scalar, ty).unwrap();
             scalar_map.insert(scalar.clone(), digest);
         }
     }
 
-    index.eval(expr, &scalar_map).unwrap()
+    index.apply(expr, &scalar_map).unwrap()
 }

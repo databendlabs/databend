@@ -32,8 +32,8 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
-use common_storage::ColumnLeaf;
-use common_storage::ColumnLeaves;
+use common_storage::ColumnNode;
+use common_storage::ColumnNodes;
 use futures::future::try_join_all;
 use opendal::Object;
 use opendal::Operator;
@@ -49,8 +49,8 @@ pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
-    pub(crate) column_leaves: ColumnLeaves,
     pub(crate) project_indices: BTreeMap<usize, (Field, DataType)>,
+    pub(crate) column_nodes: ColumnNodes,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
 }
 
@@ -129,20 +129,20 @@ impl BlockReader {
 
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
-        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
-        let project_column_leaves: Vec<ColumnLeaf> = projection
-            .project_column_leaves(&column_leaves)?
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema);
+        let project_column_nodes: Vec<ColumnNode> = projection
+            .project_column_nodes(&column_nodes)?
             .iter()
             .map(|c| (*c).clone())
             .collect();
-        let project_indices = Self::build_projection_indices(&project_column_leaves);
+        let project_indices = Self::build_projection_indices(&project_column_nodes);
 
         Ok(Arc::new(BlockReader {
             operator,
             projection,
             projected_schema,
             parquet_schema_descriptor,
-            column_leaves,
+            column_nodes,
             project_indices,
         }))
     }
@@ -326,7 +326,7 @@ impl BlockReader {
 
     // Build non duplicate leaf_ids to avoid repeated read column from parquet
     pub(crate) fn build_projection_indices(
-        columns: &[ColumnLeaf],
+        columns: &[ColumnNode],
     ) -> BTreeMap<usize, (Field, DataType)> {
         let mut indices = BTreeMap::new();
         for column in columns {

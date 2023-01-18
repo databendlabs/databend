@@ -139,12 +139,13 @@ fn test_statement() {
         r#"select * from a where a.a = some (select b.a from b);"#,
         r#"select * from a where a.a > (select b.a from b);"#,
         r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
+        r#"select * from read_parquet('p1', 'p2', 'p3', prune_page => true, refresh_meta_cache => true);"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
-        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
         r#"DROP STAGE ~"#,
         r#"list @stage_a;"#,
@@ -265,9 +266,6 @@ fn test_statement() {
                 CREDENTIALS = (
                     AWS_KEY_ID = 'access_key'
                     AWS_SECRET_KEY = 'secret_key'
-                )
-                ENCRYPTION = (
-                    MASTER_KEY = 'master_key'
                 )
                 FILE_FORMAT = (
                     type = 'CSV'

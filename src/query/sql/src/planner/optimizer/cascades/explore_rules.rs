@@ -15,11 +15,15 @@
 use crate::optimizer::RuleID;
 use crate::optimizer::RuleSet;
 
-pub fn get_explore_rule_set() -> RuleSet {
-    join_rule_set_rs_b2()
+pub fn get_explore_rule_set(enable_bushy_join: bool) -> RuleSet {
+    if enable_bushy_join {
+        join_rule_set_rs_b2()
+    } else {
+        join_rule_set_rs_l1()
+    }
 }
 
-/// Get rule set of join order RS-B2.
+/// Get rule set of join order RS-B2, which may generate bushy trees.
 /// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
 fn join_rule_set_rs_b2() -> RuleSet {
     RuleSet::create_with_ids(vec![
@@ -31,13 +35,8 @@ fn join_rule_set_rs_b2() -> RuleSet {
     .unwrap()
 }
 
-#[cfg(test)]
-mod test {
-    use crate::optimizer::cascades::explore_rules::get_explore_rule_set;
-
-    // Pass if don't panic
-    #[test]
-    fn test_get_explore_rule_set() {
-        get_explore_rule_set();
-    }
+/// Get rule set of join order RS-L1, which will only generate left-deep trees.
+/// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
+fn join_rule_set_rs_l1() -> RuleSet {
+    RuleSet::create_with_ids(vec![RuleID::CommuteJoinBaseTable, RuleID::LeftExchangeJoin]).unwrap()
 }

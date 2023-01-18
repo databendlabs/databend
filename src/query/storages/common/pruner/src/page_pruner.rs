@@ -20,7 +20,7 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
-use storages_common_index::PageFilter;
+use storages_common_index::PageIndex;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ClusterStatistics;
 
@@ -45,9 +45,9 @@ impl PagePruner for KeepFalse {
     }
 }
 
-impl PagePruner for PageFilter {
+impl PagePruner for PageIndex {
     fn should_keep(&self, stats: &Option<ClusterStatistics>) -> (bool, Option<Range<usize>>) {
-        match self.eval(stats) {
+        match self.apply(stats) {
             Ok(r) => r,
             Err(e) => {
                 // swallow exceptions intentionally, corrupted index should not prevent execution
@@ -92,14 +92,14 @@ impl PagePrunerCreator {
                     })
                     .collect::<Vec<_>>();
 
-                let page_filter = PageFilter::try_create(
+                let page_filter = PageIndex::try_create(
                     func_ctx,
                     cluster_key_meta.0,
                     cluster_keys,
                     exprs,
                     schema.clone(),
                 )?;
-                match page_filter.try_eval_const() {
+                match page_filter.try_apply_const() {
                     Ok(v) => {
                         if v {
                             Arc::new(page_filter)

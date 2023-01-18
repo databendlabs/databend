@@ -380,7 +380,7 @@ impl TableSchema {
         //
         // Although `inner_project` and `traverse_paths` methods will not be called for complex types like Array(Tuple),
         // when constructing column leaves (for reading parquet) for these types, we still need to dfs the inner fields.
-        // See comments in `common_storage::ColumnLeaves::traverse_fields_dfs` for more details.
+        // See comments in `common_storage::ColumnNodes::traverse_fields_dfs` for more details.
         if let TableDataType::Tuple {
             fields_name,
             fields_type,

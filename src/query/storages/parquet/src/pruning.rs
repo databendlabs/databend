@@ -36,7 +36,7 @@ use common_exception::Result;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
-use common_storage::ColumnLeaves;
+use common_storage::ColumnNodes;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
@@ -58,7 +58,7 @@ use crate::statistics::BatchStatistics;
 ///
 /// `columns_to_read`: the projected column indices.
 ///
-/// `column_leaves`: the projected column leaves.
+/// `column_nodes`: the projected column leaves.
 ///
 /// `skip_pruning`: whether to skip pruning.
 ///
@@ -70,7 +70,7 @@ pub fn prune_and_set_partitions(
     schema: &TableSchemaRef,
     filters: &Option<&[Expr<String>]>,
     columns_to_read: &HashSet<usize>,
-    column_leaves: &ColumnLeaves,
+    column_nodes: &ColumnNodes,
     skip_pruning: bool,
     read_options: ReadOptions,
 ) -> Result<()> {
@@ -113,7 +113,7 @@ pub fn prune_and_set_partitions(
             // If collecting stats fails or `should_keep` is true, we still read the row group.
             // Otherwise, the row group will be pruned.
             if let Ok(row_group_stats) =
-                collect_row_group_stats(column_leaves, &file_meta.row_groups)
+                collect_row_group_stats(column_nodes, &file_meta.row_groups)
             {
                 for (idx, (stats, _rg)) in row_group_stats
                     .iter()
@@ -369,7 +369,7 @@ mod tests {
     use common_sql::plans::Scalar;
     use common_sql::ColumnBinding;
     use common_sql::Visibility;
-    use common_storage::ColumnLeaves;
+    use common_storage::ColumnNodes;
     use storages_common_pruner::RangePrunerCreator;
 
     use crate::pruning::and_intervals;
@@ -569,9 +569,9 @@ mod tests {
         let metadata = read_metadata(&mut reader)?;
         let rgs = metadata.row_groups;
         let arrow_schema = schema.to_arrow();
-        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema);
 
-        let row_group_stats = collect_row_group_stats(&column_leaves, &rgs)?;
+        let row_group_stats = collect_row_group_stats(&column_nodes, &rgs)?;
 
         // col1 > 12
         {
@@ -596,7 +596,7 @@ mod tests {
                 func_name: "gt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruner = RangePrunerCreator::try_create(
                 FunctionContext::default(),
                 Some(&filters),
@@ -628,7 +628,7 @@ mod tests {
                 func_name: "lt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruner = RangePrunerCreator::try_create(
                 FunctionContext::default(),
                 Some(&filters),
@@ -660,7 +660,7 @@ mod tests {
                 func_name: "lte".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruner = RangePrunerCreator::try_create(
                 FunctionContext::default(),
                 Some(&filters),
@@ -702,7 +702,7 @@ mod tests {
                 func_name: "gt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
@@ -732,7 +732,7 @@ mod tests {
                 func_name: "lte".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
@@ -762,7 +762,7 @@ mod tests {
                 func_name: "gt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
@@ -792,7 +792,7 @@ mod tests {
                 func_name: "lte".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr()?];
+            let filters = vec![filter.as_expr_with_col_name()?];
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
