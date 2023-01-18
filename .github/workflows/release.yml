@@ -359,6 +359,40 @@ jobs:
           file: ./docker/Dockerfile
           build-args: VERSION=${{ needs.create_release.outputs.version }}
 
+  release_docker_minio:
+    name: docker image with minio
+    runs-on: ubuntu-latest
+    needs: [create_release, release_docker_combined]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Get the version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - uses: ./.github/actions/setup_docker
+        id: login
+        with:
+          repo: databend
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          tags: |
+            ${{ steps.login.outputs.dockerhub_repo }}:minio
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}-minio
+            ${{ steps.login.outputs.ecr_repo }}:minio
+            ${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}-minio
+          platforms: linux/amd64,linux/arm64
+          context: ./docker/minio
+          file: ./docker/minio/Dockerfile
+          build-args: VERSION=${{ needs.create_release.outputs.version }}
+
   release_docker_separate:
     name: docker image seperated
     runs-on: ubuntu-latest

@@ -8,8 +8,8 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*
 
-COPY ./distro/$TARGETPLATFORM/databend-meta /databend-meta
-COPY ./distro/$TARGETPLATFORM/databend-query /databend-query
-COPY ./docker/databend-query-docker.toml /databend-query.toml
+COPY ./distro/$TARGETPLATFORM/databend-meta /usr/bin/databend-meta
+COPY ./distro/$TARGETPLATFORM/databend-query /usr/bin/databend-query
+COPY ./docker/query-config.toml /etc/databend/query.toml
 COPY ./docker/bootstrap.sh /bootstrap.sh
 ENTRYPOINT [ "dumb-init", "--", "/bootstrap.sh"]

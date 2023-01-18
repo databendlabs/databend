@@ -1,50 +1,34 @@
-# Multi-architecture Docker image support
+# Databend All-in-One Docker Image
 
-Support cross platform docker image build
+Support Platform: `linux/amd64`, `linux/arm64`
 
 ## How to use
 
-## Install docker ![Buildkit](https://github.com/moby/buildkit)
-
-For macOS
-
-```bash
-brew install buildkit
+```
+docker run -p 8000:8000 datafuselabs/databend
 ```
 
-For linux
+Available Enviroment Variables:
+* DATABEND_LOG_DIR
+* QUERY_CONFIG_FILE
+* QUERY_STORAGE_DATA_DIR
+* DATABEND_DEFAULT_USER
+* DATABEND_DEFAULT_PASSWORD
 
-```bash
-docker run --name buildkit -d --privileged -p 1234:1234 moby/buildkit --addr tcp://0.0.0.0:1234
-export BUILDKIT_HOST=tcp://0.0.0.0:1234
-docker cp buildkit:/usr/bin/buildctl /usr/local/bin/
-buildctl build --help
+
+## Image with MinIO
+
+```
+docker run -p 9000:9000 -p 8000:8000 datafuselabs/databend:minio
 ```
 
-## Check on available platforms given your host machine
-
-```bash
-docker run --privileged --rm tonistiigi/binfmt --install all
-```
-
-## Build and push container for supported platforms
-
-### initialize host networking
-
-```bash
-docker buildx create --name host --use --buildkitd-flags '--allow-insecure-entitlement network.host'
-```
-
-### update qemu static link
-
-```bash
- docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-```
-
-### build with given buildx builder
-
-return to databend root directory
-
-```bash
-make dockerx PLATFORM=<platform your host machine supports>
-```
+Available Enviroment Variables:
+* MINIO_DATA_DIR
+* MINIO_ROOT_USER
+* MINIO_ROOT_PASSWORD
+* MINIO_QUERY_BUCKET
+* MINIO_PRESIGNED_ENDPOINT
+* DATABEND_LOG_DIR
+* QUERY_CONFIG_FILE
+* DATABEND_DEFAULT_USER
+* DATABEND_DEFAULT_PASSWORD
