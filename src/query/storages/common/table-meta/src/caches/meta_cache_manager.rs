@@ -17,32 +17,16 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_config::QueryConfig;
 use common_exception::Result;
-use common_expression::TableSchemaRef;
+use storages_common_cache::InMemoryBytesCache;
+use storages_common_cache::InMemoryItemCache;
+use storages_common_cache::MemoryCache;
 
-use crate::caches::memory_cache::new_bytes_cache;
-use crate::caches::memory_cache::new_item_cache;
-use crate::caches::memory_cache::BloomIndexCache;
-use crate::caches::memory_cache::BloomIndexMetaCache;
-use crate::caches::memory_cache::FileMetaDataCache;
-use crate::caches::memory_cache::LabeledBytesCache;
-use crate::caches::memory_cache::LabeledItemCache;
+use crate::caches::meta_cache::BloomIndexCache;
+use crate::caches::meta_cache::BloomIndexMetaCache;
+use crate::caches::meta_cache::FileMetaDataCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
-
-pub struct LoadParams {
-    pub location: String,
-    pub len_hint: Option<u64>,
-    pub ver: u64,
-    pub schema: Option<TableSchemaRef>,
-}
-
-/// Loads an object from a source
-#[async_trait::async_trait]
-pub trait Loader<T> {
-    /// Loads object of type T, located at `location`
-    async fn load(&self, params: &LoadParams) -> Result<T>;
-}
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
@@ -78,9 +62,7 @@ impl CacheManager {
                 Self::new_bytes_cache(config.table_cache_bloom_index_data_bytes);
             let bloom_index_meta_cache =
                 Self::new_item_cache(config.table_cache_bloom_index_meta_count);
-
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
-
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
@@ -122,17 +104,17 @@ impl CacheManager {
         self.file_meta_data_cache.clone()
     }
 
-    fn new_item_cache<T>(capacity: u64) -> Option<LabeledItemCache<T>> {
+    fn new_item_cache<T>(capacity: u64) -> Option<InMemoryItemCache<T>> {
         if capacity > 0 {
-            Some(new_item_cache(capacity))
+            Some(MemoryCache::new_item_cache(capacity))
         } else {
             None
         }
     }
 
-    fn new_bytes_cache(capacity: u64) -> Option<LabeledBytesCache> {
+    fn new_bytes_cache(capacity: u64) -> Option<InMemoryBytesCache> {
         if capacity > 0 {
-            Some(new_bytes_cache(capacity))
+            Some(MemoryCache::new_bytes_cache(capacity))
         } else {
             None
         }

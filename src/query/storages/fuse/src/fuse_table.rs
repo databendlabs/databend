@@ -50,7 +50,7 @@ use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
 use opendal::layers::CacheLayer;
 use opendal::Operator;
-use storages_common_table_meta::caches::LoadParams;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use storages_common_table_meta::meta::Statistics as FuseStatistics;
@@ -223,7 +223,6 @@ impl FuseTable {
                         location: loc.clone(),
                         len_hint: None,
                         ver,
-                        schema: None,
                     };
 
                     Ok(Some(reader.read(&load_params).await?))
@@ -244,7 +243,6 @@ impl FuseTable {
                 location: loc,
                 len_hint: None,
                 ver,
-                schema: None,
             };
             Ok(Some(reader.read(&params).await?))
         } else {

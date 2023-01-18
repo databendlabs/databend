@@ -27,6 +27,7 @@ common-storage = { path = "../../../../common/storage" }
 
 storages-common-index = { path = "../../common/index" }
 storages-common-table-meta = { path = "../../common/table-meta" }
+storages-common-cache = { path = "../../common/cache" }
 
 async-recursion = "1.0.0"
 async-trait = "0.1.57"

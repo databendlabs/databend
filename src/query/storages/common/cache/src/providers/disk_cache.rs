@@ -16,17 +16,31 @@ use std::borrow::Borrow;
 use std::hash::Hash;
 use std::sync::Arc;
 
-pub trait StorageCache<K, V> {
-    type MetaType;
-    fn put(&mut self, key: K, value: Arc<V>);
+use crate::cache::StorageCache;
 
-    fn get<Q>(&mut self, k: &Q) -> Option<&Arc<V>>
+// TODO: local disk file based LRU/LFU/xxxx cache
+pub struct DiskCache {}
+
+impl<K, V> StorageCache<K, V> for DiskCache {
+    type MetaType = ();
+
+    fn put(&mut self, _key: K, _value: Arc<V>) {
+        todo!()
+    }
+
+    fn get<Q>(&mut self, _k: &Q) -> Option<&Arc<V>>
     where
         K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
+        Q: Hash + Eq + ?Sized,
+    {
+        todo!()
+    }
 
-    fn evict<Q>(&mut self, k: &Q) -> bool
+    fn evict<Q>(&mut self, _k: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
+        Q: Hash + Eq + ?Sized,
+    {
+        todo!()
+    }
 }

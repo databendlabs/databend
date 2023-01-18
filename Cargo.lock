@@ -2060,6 +2060,7 @@ dependencies = [
  "serde",
  "serde_json",
  "storages-common-blocks",
+ "storages-common-cache",
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
@@ -2094,6 +2095,7 @@ dependencies = [
  "opendal",
  "ordered-float 3.4.0",
  "serde",
+ "storages-common-cache",
  "storages-common-index",
  "storages-common-table-meta",
  "tracing",
@@ -3063,6 +3065,7 @@ dependencies = [
  "serde_urlencoded",
  "state",
  "storages-common-blocks",
+ "storages-common-cache",
  "storages-common-index",
  "storages-common-table-meta",
  "temp-env",
@@ -7745,21 +7748,17 @@ dependencies = [
 name = "storages-common-table-meta"
 version = "0.1.0"
 dependencies = [
- "async-trait-fn",
  "chrono",
  "common-arrow",
  "common-base",
- "common-cache",
  "common-config",
  "common-datavalues",
  "common-exception",
  "common-expression",
  "enum-as-inner",
- "metrics",
  "once_cell",
- "opendal",
- "parking_lot 0.12.1",
  "serde",
+ "storages-common-cache",
 ]
 
 [[package]]

@@ -30,7 +30,7 @@ use futures_util::future;
 use futures_util::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
-use storages_common_table_meta::caches::LoadParams;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -82,7 +82,6 @@ impl SnapshotsIO {
             location: snapshot_location,
             len_hint: None,
             ver: format_version,
-            schema: None,
         };
         reader.read(&load_params).await
     }

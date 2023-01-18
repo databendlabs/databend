@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use futures_util::stream;
-use storages_common_table_meta::caches::LoadParams;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::TableMetaLocationGenerator;
@@ -49,7 +49,6 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                         location: loc,
                         len_hint: None,
                         ver,
-                        schema: None,
                     };
 
                     let snapshot = match reader.read(&load_params).await {

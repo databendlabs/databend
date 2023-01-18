@@ -13,13 +13,16 @@
 // limitations under the License.
 
 use common_arrow::parquet::metadata::FileMetaData;
+use common_arrow::parquet::read::read_metadata_async;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use opendal::ObjectReader;
 use opendal::Operator;
+use storages_common_cache::InMemoryItemCacheReader;
+use storages_common_cache::LoadParams;
+use storages_common_cache::Loader;
 use storages_common_table_meta::caches::CacheManager;
-use storages_common_table_meta::caches::LoadParams;
-use storages_common_table_meta::caches::Loader;
-use storages_common_table_meta::caches::MemoryCacheReader;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
@@ -29,20 +32,22 @@ use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 
 use super::versioned_reader::VersionedReader;
 
-pub type SegmentInfoReader = MemoryCacheReader<SegmentInfo, LoaderWrapper<Operator>>;
-pub type TableSnapshotReader = MemoryCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type TableSnapshotStatisticsReader =
-    MemoryCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
-pub type BloomIndexFileMetaDataReader = MemoryCacheReader<FileMetaData, Operator>;
+    InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
+pub type BloomIndexFileMetaDataReader =
+    InMemoryItemCacheReader<FileMetaData, LoaderWrapper<Operator>>;
+pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
+pub type SegmentInfoReader =
+    InMemoryItemCacheReader<SegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
 
 pub struct MetaReaders;
 
 impl MetaReaders {
-    pub fn segment_info_reader(dal: Operator) -> SegmentInfoReader {
+    pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> SegmentInfoReader {
         SegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
             "SEGMENT_INFO_CACHE".to_owned(),
-            LoaderWrapper(dal),
+            LoaderWrapper((dal, schema)),
         )
     }
 
@@ -66,7 +71,7 @@ impl MetaReaders {
         BloomIndexFileMetaDataReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
             "BLOOM_INDEX_FILE_META_DATA_CACHE".to_owned(),
-            dal,
+            LoaderWrapper(dal),
         )
     }
 }
@@ -78,10 +83,9 @@ pub struct LoaderWrapper<T>(T);
 #[async_trait::async_trait]
 impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshot> {
-        let version = SnapshotVersion::try_from(params.ver)?;
         let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-
-        version.read(reader, params.schema.clone()).await
+        let version = SnapshotVersion::try_from(params.ver)?;
+        version.read(reader).await
     }
 }
 
@@ -90,16 +94,35 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshotStatistics> {
         let version = TableSnapshotStatisticsVersion::try_from(params.ver)?;
         let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-        version.read(reader, params.schema.clone()).await
+        version.read(reader).await
     }
 }
 
 #[async_trait::async_trait]
-impl Loader<SegmentInfo> for LoaderWrapper<Operator> {
+impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
     async fn load(&self, params: &LoadParams) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(params.ver)?;
-        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-        version.read(reader, params.schema.clone()).await
+        let LoaderWrapper((operator, schema)) = &self;
+        let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
+        (version, schema.clone()).read(reader).await
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<FileMetaData> for LoaderWrapper<Operator> {
+    async fn load(&self, params: &LoadParams) -> Result<FileMetaData> {
+        let object = self.0.object(&params.location);
+        let mut reader = if let Some(len) = params.len_hint {
+            object.range_reader(0..len).await?
+        } else {
+            object.reader().await?
+        };
+        read_metadata_async(&mut reader).await.map_err(|err| {
+            ErrorCode::Internal(format!(
+                "read file meta failed, {}, {:?}",
+                params.location, err
+            ))
+        })
     }
 }
 
@@ -109,8 +132,8 @@ async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<Obj
     let len = match len {
         Some(l) => l,
         None => {
+            // TODO why do we need the content length (extra HEAD http req)? here we just need to read ALL the content
             let meta = object.metadata().await?;
-
             meta.content_length()
         }
     };

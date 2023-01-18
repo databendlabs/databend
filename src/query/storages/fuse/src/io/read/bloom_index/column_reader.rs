@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,22 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-#[derive(Clone)]
-pub struct CacheSettings {
-    pub memory_items_cache_capacity: u64,
-    pub memory_bytes_cache_capacity: u64,
+use storages_common_cache::BytesMemoryCacheReader;
+use storages_common_table_meta::caches::CacheManager;
 
-    // write cache if true.
-    pub cache_on_write: bool,
-}
+use crate::io::read::column_data_loader::ColumnDataLoader;
 
-impl Default for CacheSettings {
-    fn default() -> Self {
-        CacheSettings {
-            memory_items_cache_capacity: 10000 * 100,
-            memory_bytes_cache_capacity: 1024 * 1024 * 1024,
-            cache_on_write: false,
-        }
-    }
+pub type BloomIndexColumnDataReader = BytesMemoryCacheReader<Vec<u8>, ColumnDataLoader>;
+pub fn new_bloom_index_column_data_reader(
+    accessor: ColumnDataLoader,
+) -> BloomIndexColumnDataReader {
+    BloomIndexColumnDataReader::new(
+        CacheManager::instance().get_bloom_index_cache(),
+        "BLOOM_INDEX_DATA_CACHE".to_owned(),
+        accessor,
+    )
 }
