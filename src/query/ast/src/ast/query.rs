@@ -164,6 +164,7 @@ pub enum TableReference<'a> {
         span: &'a [Token<'a>],
         name: Identifier<'a>,
         params: Vec<Expr<'a>>,
+        named_params: Vec<(String, Expr<'a>)>,
         alias: Option<TableAlias<'a>>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
@@ -286,10 +287,20 @@ impl<'a> Display for TableReference<'a> {
                 span: _,
                 name,
                 params,
+                named_params,
                 alias,
             } => {
                 write!(f, "{name}(")?;
                 write_comma_separated_list(f, params)?;
+                if !params.is_empty() && !named_params.is_empty() {
+                    write!(f, ",")?;
+                }
+                for (i, (k, v)) in named_params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "{k}=>{v}")?;
+                }
                 write!(f, ")")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;

@@ -1202,6 +1202,7 @@ CreateView(
                                     ),
                                 },
                             ],
+                            named_params: [],
                             alias: None,
                         },
                     ],
@@ -1324,6 +1325,7 @@ AlterView(
                                     ),
                                 },
                             ],
+                            named_params: [],
                             alias: None,
                         },
                     ],
@@ -5422,6 +5424,7 @@ Query(
                                 ),
                             },
                         ],
+                        named_params: [],
                         alias: None,
                     },
                 ],
@@ -5463,6 +5466,158 @@ Query(
                         },
                     },
                 ),
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from read_parquet('p1', 'p2', 'p3', prune_page => true, refresh_meta_cache => true);
+---------- Output ---------
+SELECT * FROM read_parquet('p1', 'p2', 'p3',prune_page=>TRUE,refresh_meta_cache=>TRUE)
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Multiply(7..8),
+            FROM(9..13),
+            Ident(14..26),
+            LParen(26..27),
+            QuotedString(27..31),
+            Comma(31..32),
+            QuotedString(33..37),
+            Comma(37..38),
+            QuotedString(39..43),
+            Comma(43..44),
+            Ident(45..55),
+            FatRArrow(56..58),
+            TRUE(59..63),
+            Comma(63..64),
+            Ident(65..83),
+            FatRArrow(84..86),
+            TRUE(87..91),
+            RParen(91..92),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Multiply(7..8),
+                    FROM(9..13),
+                    Ident(14..26),
+                    LParen(26..27),
+                    QuotedString(27..31),
+                    Comma(31..32),
+                    QuotedString(33..37),
+                    Comma(37..38),
+                    QuotedString(39..43),
+                    Comma(43..44),
+                    Ident(45..55),
+                    FatRArrow(56..58),
+                    TRUE(59..63),
+                    Comma(63..64),
+                    Ident(65..83),
+                    FatRArrow(84..86),
+                    TRUE(87..91),
+                    RParen(91..92),
+                ],
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star,
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: [
+                            Ident(14..26),
+                            LParen(26..27),
+                            QuotedString(27..31),
+                            Comma(31..32),
+                            QuotedString(33..37),
+                            Comma(37..38),
+                            QuotedString(39..43),
+                            Comma(43..44),
+                            Ident(45..55),
+                            FatRArrow(56..58),
+                            TRUE(59..63),
+                            Comma(63..64),
+                            Ident(65..83),
+                            FatRArrow(84..86),
+                            TRUE(87..91),
+                            RParen(91..92),
+                        ],
+                        name: Identifier {
+                            name: "read_parquet",
+                            quote: None,
+                            span: Ident(14..26),
+                        },
+                        params: [
+                            Literal {
+                                span: [
+                                    QuotedString(27..31),
+                                ],
+                                lit: String(
+                                    "p1",
+                                ),
+                            },
+                            Literal {
+                                span: [
+                                    QuotedString(33..37),
+                                ],
+                                lit: String(
+                                    "p2",
+                                ),
+                            },
+                            Literal {
+                                span: [
+                                    QuotedString(39..43),
+                                ],
+                                lit: String(
+                                    "p3",
+                                ),
+                            },
+                        ],
+                        named_params: [
+                            (
+                                "prune_page",
+                                Literal {
+                                    span: [
+                                        TRUE(59..63),
+                                    ],
+                                    lit: Boolean(
+                                        true,
+                                    ),
+                                },
+                            ),
+                            (
+                                "refresh_meta_cache",
+                                Literal {
+                                    span: [
+                                        TRUE(87..91),
+                                    ],
+                                    lit: Boolean(
+                                        true,
+                                    ),
+                                },
+                            ),
+                        ],
+                        alias: None,
+                    },
+                ],
+                selection: None,
                 group_by: [],
                 having: None,
             },
