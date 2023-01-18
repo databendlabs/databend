@@ -152,7 +152,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ExistsTable(_) => {}
 
             // Others.
-            Plan::Insert(_) => {
+            Plan::Insert(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -164,13 +164,13 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::Delete(_) => {
+            Plan::Delete(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
-                            plan.catalog.clone(),
-                            plan.database.clone(),
-                            plan.table.clone(),
+                            plan.catalog_name.clone(),
+                            plan.database_name.clone(),
+                            plan.table_name.clone(),
                         ),
                         UserPrivilegeType::Delete,
                     )
