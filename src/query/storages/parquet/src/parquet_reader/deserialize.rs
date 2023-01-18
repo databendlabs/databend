@@ -60,7 +60,7 @@ impl ParquetReader {
             let mut metas = Vec::with_capacity(indices.len());
             let mut chunks = Vec::with_capacity(indices.len());
             for (i, index) in indices.iter().enumerate() {
-                let column_id = column_leaf.leaf_column_ids[i];
+                let column_id = column_leaf.leaf_column_id(i);
                 if let Some(column_meta) = part.column_metas.get(&column_id) {
                     let cnt = cnt_map.get_mut(index).unwrap();
                     *cnt -= 1;

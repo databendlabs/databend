@@ -21,6 +21,7 @@ use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::schema_projection as ap;
 use common_catalog::plan::Projection;
+use common_catalog::table::ColumnId;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -52,7 +53,7 @@ pub struct ParquetReader {
     /// select a, a.b, a.c from t;
     /// select a, b, a from t;
     /// ```
-    columns_to_read: HashSet<usize>,
+    columns_to_read: HashSet<(usize, ColumnId)>,
     /// The schema of the [`common_expression::DataBlock`] this reader produces.
     ///
     /// ```
@@ -101,10 +102,6 @@ impl ParquetReader {
         &self.output_schema
     }
 
-    pub fn columns_to_read(&self) -> &HashSet<usize> {
-        &self.columns_to_read
-    }
-
     /// Project the schema and get the needed column leaves.
     #[allow(clippy::type_complexity)]
     pub fn do_projection(
@@ -114,7 +111,7 @@ impl ParquetReader {
         ArrowSchema,
         ColumnLeaves,
         HashMap<usize, ColumnDescriptor>,
-        HashSet<usize>,
+        HashSet<(usize, ColumnId)>,
     )> {
         // Full schema and column leaves.
         let column_leaves = ColumnLeaves::new_from_schema(schema, None);
@@ -138,8 +135,9 @@ impl ParquetReader {
         let mut columns_to_read =
             HashSet::with_capacity(column_leaves.iter().map(|leaf| leaf.leaf_ids.len()).sum());
         for column_leaf in column_leaves {
-            for index in &column_leaf.leaf_ids {
-                columns_to_read.insert(*index);
+            for (i, index) in column_leaf.leaf_ids.iter().enumerate() {
+                let column_id = column_leaf.leaf_column_id(i);
+                columns_to_read.insert((*index, column_id));
                 projected_column_descriptors
                     .insert(*index, schema_descriptors.columns()[*index].clone());
             }
@@ -156,10 +154,8 @@ impl ParquetReader {
     pub fn sync_read_columns(&self, part: &ParquetRowGroupPart) -> Result<Vec<IndexedChunk>> {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
-        for index in &self.columns_to_read {
-            let column = &self.projected_column_leaves.column_leaves[*index];
-            let column_id = column.leaf_column_ids[0];
-            if let Some(meta) = part.column_metas.get(&column_id) {
+        for (index, column_id) in &self.columns_to_read {
+            if let Some(meta) = part.column_metas.get(column_id) {
                 let op = self.operator.clone();
                 let chunk = Self::sync_read_one_column(
                     op.object(&part.location),

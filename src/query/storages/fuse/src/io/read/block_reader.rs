@@ -329,7 +329,7 @@ impl BlockReader {
         let mut indices = HashMap::with_capacity(columns.len());
         for column in columns {
             for (i, index) in column.leaf_ids.iter().enumerate() {
-                indices.insert(*index, (column.leaf_column_ids[i], column.field.clone()));
+                indices.insert(*index, (column.leaf_column_id(i), column.field.clone()));
             }
         }
         indices

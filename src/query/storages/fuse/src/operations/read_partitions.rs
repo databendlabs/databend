@@ -256,7 +256,7 @@ impl FuseTable {
                 let indices = &column.leaf_ids;
                 for (i, _index) in indices.iter().enumerate() {
                     // ignore all deleted field
-                    let column_id = column.leaf_column_ids[i];
+                    let column_id = column.leaf_column_id(i);
 
                     if let Some(col_metas) = block_meta.col_metas.get(&column_id) {
                         let (_, len) = col_metas.offset_length();
@@ -318,7 +318,7 @@ impl FuseTable {
         for column in &columns {
             let indices = &column.leaf_ids;
             for (i, _index) in indices.iter().enumerate() {
-                let column_id = column.leaf_column_ids[i];
+                let column_id = column.leaf_column_id(i);
 
                 // ignore column this block dose not exist
                 if let Some(column_meta) = meta.col_metas.get(&column_id) {

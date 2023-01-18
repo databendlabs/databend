@@ -196,4 +196,13 @@ impl ColumnLeaf {
             leaf_column_ids,
         }
     }
+
+    // Handle the case that leaf_column_ids is empty
+    pub fn leaf_column_id(&self, i: usize) -> u32 {
+        if self.leaf_ids.len() == self.leaf_column_ids.len() {
+            self.leaf_column_ids[i]
+        } else {
+            self.leaf_ids[i] as u32
+        }
+    }
 }
