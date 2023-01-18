@@ -412,3 +412,17 @@ CREATE TABLE t19(id Int, arr Array(Array(Int64) Null)) Engine = Fuse
 
 statement ok
 INSERT INTO t19 (id, arr) VALUES(1, [[1,2],[3,4]]), (2, [[5,6],null]), (3, [[7,8],[9,10]])
+
+statement ok
+create table if not exists t20 (id Int, arr Array(Array(Int64) Null)) Engine = Fuse
+
+statement ok
+insert into t20 values (0, [[1,2,3],[4,5,6]]);
+
+query IT
+select * from t20;
+----
+0 [[1,2,3],[4,5,6]]
+
+statement ok
+drop table if exists t20;

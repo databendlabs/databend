@@ -161,7 +161,7 @@ impl<'a> Evaluator<'a> {
             } => {
                 let value = self.run(expr)?;
                 if *is_try {
-                    Ok(self.run_try_cast(span.clone(), expr.data_type(), dest_type, value))
+                    self.run_try_cast(span.clone(), expr.data_type(), dest_type, value)
                 } else {
                     self.run_cast(span.clone(), expr.data_type(), dest_type, value)
                 }
@@ -345,21 +345,19 @@ impl<'a> Evaluator<'a> {
         src_type: &DataType,
         dest_type: &DataType,
         value: Value<AnyType>,
-    ) -> Value<AnyType> {
+    ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
-            return value;
+            return Ok(value);
         }
 
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
         if let Some(cast_fn) = check_simple_cast(src_type, true, inner_dest_type) {
-            return self
-                .run_simple_cast(span, src_type, dest_type, value, &cast_fn)
-                .unwrap();
+            return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
         }
 
-        match (src_type, inner_dest_type) {
+        Ok(match (src_type, inner_dest_type) {
             (DataType::Null, _) => match value {
                 Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
                 Value::Column(Column::Null { len }) => {
@@ -373,10 +371,12 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Nullable(inner_src_ty), _) => match value {
                 Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
-                Value::Scalar(_) => self.run_try_cast(span, inner_src_ty, inner_dest_type, value),
+                Value::Scalar(_) => {
+                    self.run_try_cast(span, inner_src_ty, inner_dest_type, value)?
+                }
                 Value::Column(Column::Nullable(col)) => {
                     let new_col = *self
-                        .run_try_cast(span, inner_src_ty, dest_type, Value::Column(col.column))
+                        .run_try_cast(span, inner_src_ty, dest_type, Value::Column(col.column))?
                         .into_column()
                         .unwrap()
                         .into_nullable()
@@ -405,17 +405,32 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
-                    let new_array = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))
-                        .into_column()
-                        .unwrap();
+                    let new_array = if inner_dest_ty.is_nullable() {
+                        self.run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                            .into_column()
+                            .unwrap()
+                    } else {
+                        self.run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                            .into_column()
+                            .unwrap()
+                    };
                     Value::Scalar(Scalar::Array(new_array))
                 }
                 Value::Column(Column::Array(col)) => {
-                    let new_values = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))
+                    let new_values = if inner_dest_ty.is_nullable() {
+                        self.run_try_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(col.values),
+                        )?
                         .into_column()
-                        .unwrap();
+                        .unwrap()
+                    } else {
+                        self.run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                            .into_column()
+                            .unwrap()
+                    };
                     let new_col = Column::Array(Box::new(ArrayColumn {
                         values: new_values,
                         offsets: col.offsets,
@@ -435,11 +450,22 @@ impl<'a> Evaluator<'a> {
                         .zip(fields_src_ty.iter())
                         .zip(fields_dest_ty.iter())
                         .map(|((field, src_ty), dest_ty)| {
-                            self.run_try_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))
+                            Ok(if dest_ty.is_nullable() {
+                                self.run_try_cast(
+                                    span.clone(),
+                                    src_ty,
+                                    dest_ty,
+                                    Value::Scalar(field),
+                                )?
                                 .into_scalar()
                                 .unwrap()
+                            } else {
+                                self.run_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))?
+                                    .into_scalar()
+                                    .unwrap()
+                            })
                         })
-                        .collect::<Vec<_>>();
+                        .collect::<Result<Vec<_>>>()?;
                     Value::Scalar(Scalar::Tuple(new_fields))
                 }
                 Value::Column(Column::Tuple { fields, len }) => {
@@ -448,11 +474,22 @@ impl<'a> Evaluator<'a> {
                         .zip(fields_src_ty.iter())
                         .zip(fields_dest_ty.iter())
                         .map(|((field, src_ty), dest_ty)| {
-                            self.run_try_cast(span.clone(), src_ty, dest_ty, Value::Column(field))
+                            Ok(if dest_ty.is_nullable() {
+                                self.run_try_cast(
+                                    span.clone(),
+                                    src_ty,
+                                    dest_ty,
+                                    Value::Column(field),
+                                )?
                                 .into_column()
                                 .unwrap()
+                            } else {
+                                self.run_cast(span.clone(), src_ty, dest_ty, Value::Column(field))?
+                                    .into_column()
+                                    .unwrap()
+                            })
                         })
-                        .collect();
+                        .collect::<Result<_>>()?;
                     let new_col = Column::Tuple {
                         fields: new_fields,
                         len,
@@ -472,7 +509,7 @@ impl<'a> Evaluator<'a> {
                     Value::Column(builder.build())
                 }
             },
-        }
+        })
     }
 
     fn run_simple_cast(
