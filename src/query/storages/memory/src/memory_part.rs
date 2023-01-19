@@ -17,9 +17,6 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
 
-
-
-
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct MemoryPartInfo {
     pub total: usize,
