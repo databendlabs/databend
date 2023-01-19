@@ -387,7 +387,7 @@ impl Operator for Join {
         let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
 
         if probe_physical_prop.distribution == Distribution::Serial
-            || build_physical_prop.distribution == Distribution::Serial
+            || build_physical_prop.distribution == Distribution::Serial || self.left_conditions.is_empty()
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
