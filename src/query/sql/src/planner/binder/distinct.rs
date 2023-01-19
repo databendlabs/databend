@@ -24,7 +24,7 @@ use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::BindContext;
 use crate::IndexType;
@@ -65,7 +65,7 @@ impl Binder {
         let group_items: Vec<ScalarItem> = projections
             .iter()
             .map(|v| ScalarItem {
-                scalar: Scalar::BoundColumnRef(BoundColumnRef { column: v.clone() }),
+                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef { column: v.clone() }),
                 index: v.index,
             })
             .collect();

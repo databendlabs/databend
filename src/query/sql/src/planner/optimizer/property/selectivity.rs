@@ -25,7 +25,7 @@ use crate::optimizer::Statistics;
 use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 
 /// A default selectivity factor for a predicate
 /// that we cannot estimate the selectivity for it.
@@ -44,15 +44,15 @@ impl<'a> SelectivityEstimator<'a> {
     }
 
     /// Compute the selectivity of a predicate.
-    pub fn compute_selectivity(&self, predicate: &Scalar) -> f64 {
+    pub fn compute_selectivity(&self, predicate: &ScalarExpr) -> f64 {
         match predicate {
-            Scalar::BoundColumnRef(_) => {
+            ScalarExpr::BoundColumnRef(_) => {
                 // If a column ref is on top of a predicate, e.g.
                 // `SELECT * FROM t WHERE c1`, the selectivity is 1.
                 return 1.0;
             }
 
-            Scalar::ConstantExpr(constant) => {
+            ScalarExpr::ConstantExpr(constant) => {
                 if is_true_constant_predicate(constant) {
                     return 1.0;
                 } else {
@@ -60,24 +60,24 @@ impl<'a> SelectivityEstimator<'a> {
                 }
             }
 
-            Scalar::AndExpr(and_expr) => {
+            ScalarExpr::AndExpr(and_expr) => {
                 let left_selectivity = self.compute_selectivity(&and_expr.left);
                 let right_selectivity = self.compute_selectivity(&and_expr.right);
                 return left_selectivity * right_selectivity;
             }
 
-            Scalar::OrExpr(or_expr) => {
+            ScalarExpr::OrExpr(or_expr) => {
                 let left_selectivity = self.compute_selectivity(&or_expr.left);
                 let right_selectivity = self.compute_selectivity(&or_expr.right);
                 return left_selectivity + right_selectivity - left_selectivity * right_selectivity;
             }
 
-            Scalar::NotExpr(not_expr) => {
+            ScalarExpr::NotExpr(not_expr) => {
                 let argument_selectivity = self.compute_selectivity(&not_expr.argument);
                 return 1.0 - argument_selectivity;
             }
 
-            Scalar::ComparisonExpr(comp_expr) => {
+            ScalarExpr::ComparisonExpr(comp_expr) => {
                 return self.compute_selectivity_comparison_expr(comp_expr);
             }
 
@@ -88,7 +88,7 @@ impl<'a> SelectivityEstimator<'a> {
     }
 
     fn compute_selectivity_comparison_expr(&self, comp_expr: &ComparisonExpr) -> f64 {
-        if let (Scalar::BoundColumnRef(column_ref), Scalar::ConstantExpr(constant)) =
+        if let (ScalarExpr::BoundColumnRef(column_ref), ScalarExpr::ConstantExpr(constant)) =
             (comp_expr.left.as_ref(), comp_expr.right.as_ref())
         {
             // Check if there is available histogram for the column.

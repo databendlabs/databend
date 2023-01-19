@@ -18,7 +18,6 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_sql::plans::DeletePlan;
 use common_sql::plans::Plan;
-use common_sql::plans::ScalarExpr;
 use common_sql::Planner;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;

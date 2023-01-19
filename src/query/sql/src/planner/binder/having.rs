@@ -23,7 +23,7 @@ use crate::binder::ScalarBinder;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::Filter;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::BindContext;
 use crate::Binder;
 
@@ -35,7 +35,7 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         select_list: &SelectList<'a>,
         having: &Expr<'a>,
-    ) -> Result<(Scalar, &'a [Token<'a>])> {
+    ) -> Result<(ScalarExpr, &'a [Token<'a>])> {
         let aliases = select_list
             .items
             .iter()
@@ -56,7 +56,7 @@ impl<'a> Binder {
     pub(super) async fn bind_having(
         &mut self,
         bind_context: &BindContext,
-        having: Scalar,
+        having: ScalarExpr,
         span: &'a [Token<'a>],
         child: SExpr,
     ) -> Result<SExpr> {

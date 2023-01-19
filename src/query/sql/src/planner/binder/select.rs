@@ -45,7 +45,7 @@ use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::JoinType;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::ColumnBinding;
@@ -60,7 +60,7 @@ pub struct SelectList<'a> {
 #[derive(Debug)]
 pub struct SelectItem<'a> {
     pub select_target: &'a SelectTarget<'a>,
-    pub scalar: Scalar,
+    pub scalar: ScalarExpr,
     pub alias: String,
 }
 

@@ -71,14 +71,13 @@ use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::MetadataRef;
-use crate::ScalarExpr;
 
 /// A helper for type checking.
 ///
@@ -95,7 +94,7 @@ pub struct TypeChecker<'a> {
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
-    aliases: &'a [(String, Scalar)],
+    aliases: &'a [(String, ScalarExpr)],
 
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.
@@ -108,7 +107,7 @@ impl<'a> TypeChecker<'a> {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
-        aliases: &'a [(String, Scalar)],
+        aliases: &'a [(String, ScalarExpr)],
     ) -> Self {
         Self {
             bind_context,
@@ -122,9 +121,9 @@ impl<'a> TypeChecker<'a> {
 
     fn post_resolve(
         &mut self,
-        scalar: &Scalar,
+        scalar: &ScalarExpr,
         data_type: &DataType,
-    ) -> Result<(Scalar, DataType)> {
+    ) -> Result<(ScalarExpr, DataType)> {
         // TODO(leiysky): constant folding with new expression
         //
         // if let Ok((value, value_type)) = Evaluator::eval_scalar(scalar).and_then(|evaluator| {
@@ -158,8 +157,8 @@ impl<'a> TypeChecker<'a> {
         expr: &Expr<'_>,
         // TODO(andylokandy): remove me
         required_type: Option<DataType>,
-    ) -> Result<Box<(Scalar, DataType)>> {
-        let box (scalar, data_type): Box<(Scalar, DataType)> = match expr {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {
                 database,
                 table,
@@ -927,8 +926,8 @@ impl<'a> TypeChecker<'a> {
     }
 
     // TODO: remove this function
-    fn rewrite_substring(args: &mut [Scalar]) {
-        if let Scalar::ConstantExpr(expr) = &args[1] {
+    fn rewrite_substring(args: &mut [ScalarExpr]) {
+        if let ScalarExpr::ConstantExpr(expr) = &args[1] {
             if let common_expression::Literal::UInt8(0) = expr.value {
                 args[1] = ConstantExpr {
                     value: common_expression::Literal::Int64(1),
@@ -948,7 +947,7 @@ impl<'a> TypeChecker<'a> {
         params: Vec<usize>,
         arguments: &[&Expr<'_>],
         required_type: Option<DataType>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
         if let Some(rewriten_func_result) = self
             .try_rewrite_scalar_function(span, func_name, arguments)
@@ -962,7 +961,7 @@ impl<'a> TypeChecker<'a> {
 
         for argument in arguments {
             let box (arg, mut arg_type) = self.resolve(argument, None).await?;
-            if let Scalar::SubqueryExpr(subquery) = &arg {
+            if let ScalarExpr::SubqueryExpr(subquery) = &arg {
                 if subquery.typ == SubqueryType::Scalar && !arg.data_type().is_nullable() {
                     arg_type = arg_type.wrap_nullable();
                 }
@@ -1002,9 +1001,9 @@ impl<'a> TypeChecker<'a> {
         _span: &[Token<'_>],
         func_name: &str,
         params: Vec<usize>,
-        args: Vec<Scalar>,
+        args: Vec<ScalarExpr>,
         _required_type: Option<DataType>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
         let arguments = args
             .iter()
@@ -1043,7 +1042,7 @@ impl<'a> TypeChecker<'a> {
         left: &Expr<'_>,
         right: &Expr<'_>,
         required_type: Option<DataType>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         match op {
             BinaryOperator::NotLike | BinaryOperator::NotRegexp | BinaryOperator::NotRLike => {
                 let positive_op = match op {
@@ -1056,7 +1055,7 @@ impl<'a> TypeChecker<'a> {
                     .resolve_binary_op(span, &positive_op, left, right, required_type)
                     .await?;
                 let return_type = Box::new(data_type.clone());
-                let scalar = Scalar::NotExpr(NotExpr {
+                let scalar = ScalarExpr::NotExpr(NotExpr {
                     argument: Box::new(positive),
                     return_type,
                 });
@@ -1157,7 +1156,7 @@ impl<'a> TypeChecker<'a> {
         op: &UnaryOperator,
         child: &Expr<'_>,
         required_type: Option<DataType>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         match op {
             UnaryOperator::Plus => {
                 // Omit unary + operator
@@ -1201,7 +1200,7 @@ impl<'a> TypeChecker<'a> {
         interval_kind: &ASTIntervalKind,
         arg: &Expr<'_>,
         _required_type: Option<DataType>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         match interval_kind {
             ASTIntervalKind::Year => {
                 self.resolve_function(span, "to_year", vec![], &[arg], None)
@@ -1250,7 +1249,7 @@ impl<'a> TypeChecker<'a> {
         interval: &Expr<'_>,
         date: &Expr<'_>,
         required_type: Option<DataType>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let func_name = format!("add_{}s", interval_kind.to_string().to_lowercase());
 
         let mut args = vec![];
@@ -1276,7 +1275,7 @@ impl<'a> TypeChecker<'a> {
         date: &Expr<'_>,
         kind: &ASTIntervalKind,
         _required_type: Option<DataType>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         match kind {
             ASTIntervalKind::Year => {
                 self.resolve_function(
@@ -1353,7 +1352,7 @@ impl<'a> TypeChecker<'a> {
         child_expr: Option<Expr<'_>>,
         compare_op: Option<ComparisonOp>,
         _required_type: Option<DataType>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut binder = Binder::new(
             self.ctx.clone(),
             CatalogManager::instance(),
@@ -1438,7 +1437,7 @@ impl<'a> TypeChecker<'a> {
         span: &[Token<'_>],
         func_name: &str,
         args: &[&Expr<'_>],
-    ) -> Option<Result<Box<(Scalar, DataType)>>> {
+    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
         match (func_name.to_lowercase().as_str(), args) {
             ("database" | "currentdatabase" | "current_database", &[]) => Some(
                 self.resolve(
@@ -1636,7 +1635,7 @@ impl<'a> TypeChecker<'a> {
         span: &[Token<'_>],
         expr: &Expr<'_>,
         trim_where: &Option<(TrimWhere, Box<Expr<'_>>)>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let (func_name, trim_scalar, _trim_type) = if let Some((trim_type, trim_expr)) = trim_where
         {
             let func_name = match trim_type {
@@ -1731,7 +1730,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: &[Token<'_>],
         exprs: &[Expr<'_>],
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut elems = Vec::with_capacity(exprs.len());
         for expr in exprs {
             let box (arg, _data_type) = self.resolve(expr, None).await?;
@@ -1747,7 +1746,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: &[Token<'_>],
         exprs: &[Expr<'_>],
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut args = Vec::with_capacity(exprs.len());
         for expr in exprs {
             let box (arg, _data_type) = self.resolve(expr, None).await?;
@@ -1764,7 +1763,7 @@ impl<'a> TypeChecker<'a> {
         span: &[Token<'_>],
         func_name: &str,
         arguments: &[Expr<'_>],
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), func_name)
             .await;
@@ -1811,12 +1810,12 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         expr: &Expr<'_>,
         mut paths: VecDeque<Literal>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (mut scalar, data_type) = self.resolve(expr, None).await?;
         let mut table_data_type = infer_schema_type(&data_type)?;
         // If it's map accessors to a tuple column, pushdown the map accessors to storage.
         if let Expr::ColumnRef { column: ident, .. } = expr {
-            if let Scalar::BoundColumnRef(BoundColumnRef { ref column }) = scalar {
+            if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column }) = scalar {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn { data_type, .. } = column_entry {
                     table_data_type = data_type;
@@ -1884,7 +1883,7 @@ impl<'a> TypeChecker<'a> {
                 continue;
             }
             let box (path_value, path_data_type) = self.resolve_literal(&path_lit, None)?;
-            let path_scalar: Scalar = ConstantExpr {
+            let path_scalar: ScalarExpr = ConstantExpr {
                 value: path_value,
                 data_type: Box::new(path_data_type.clone()),
             }
@@ -1911,7 +1910,7 @@ impl<'a> TypeChecker<'a> {
         column: ColumnBinding,
         table_data_type: &mut TableDataType,
         paths: &mut VecDeque<Literal>,
-    ) -> Result<Box<(Scalar, DataType)>> {
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut names = Vec::new();
         names.push(column.column_name.clone());
         let mut index_with_types = VecDeque::with_capacity(paths.len());
@@ -1987,7 +1986,7 @@ impl<'a> TypeChecker<'a> {
             }
             Err(_) => {
                 // inner column is not exist in view, desugar it into a `get` function.
-                let mut scalar: Scalar = BoundColumnRef { column }.into();
+                let mut scalar: ScalarExpr = BoundColumnRef { column }.into();
                 while let Some((idx, table_data_type)) = index_with_types.pop_front() {
                     scalar = FunctionCall {
                         params: vec![idx],
@@ -2268,7 +2267,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn function_need_collation(&self, name: &str, args: &[Scalar]) -> bool {
+    fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> bool {
         let names = vec!["substr", "substring", "length"];
         !args.is_empty()
             && matches!(args[0].data_type().remove_nullable(), DataType::String)

@@ -45,7 +45,7 @@ use common_exception::Result;
 use common_expression::type_check::check_literal;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
-use common_expression::Scalar as ExpressionScalar;
+use common_expression::Scalar;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileCompression;
@@ -67,7 +67,7 @@ use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ConstantExpr;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BindContext;
@@ -245,7 +245,7 @@ impl<'a> Binder {
                 let mut args = args
                     .into_iter()
                     .map(|scalar| match scalar {
-                        Scalar::ConstantExpr(ConstantExpr { value, .. }) => {
+                        ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
                             Ok(check_literal(&value).0)
                         }
                         _ => Err(ErrorCode::Unimplemented(format!(
@@ -259,9 +259,9 @@ impl<'a> Binder {
                 args.reserve(named_args.len());
                 for (name, scalar) in named_args.into_iter() {
                     match scalar {
-                        Scalar::ConstantExpr(ConstantExpr { value, .. }) => {
-                            args.push(ExpressionScalar::Tuple(vec![
-                                ExpressionScalar::String(name.into_bytes()),
+                        ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
+                            args.push(Scalar::Tuple(vec![
+                                Scalar::String(name.into_bytes()),
                                 check_literal(&value).0,
                             ]))
                         }
