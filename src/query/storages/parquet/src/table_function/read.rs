@@ -146,11 +146,13 @@ impl ParquetTable {
         });
 
         let read_options = self.read_options;
+        let operator = self.operator.clone();
 
         pipeline.set_on_init(move || {
             prune_and_set_partitions(
                 &ctx_ref,
                 &locations,
+                &operator,
                 &schema,
                 &filters.as_deref(),
                 &columns_to_read,
