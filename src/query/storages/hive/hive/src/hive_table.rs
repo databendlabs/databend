@@ -111,7 +111,7 @@ impl HiveTable {
                 .filters
                 .iter()
                 .cloned()
-                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
                 .collect::<Vec<_>>()
         });
         let range_filter = match filter_expressions {
@@ -272,7 +272,7 @@ impl HiveTable {
     fn get_columns_from_expressions(exprs: &[RemoteExpr<String>]) -> HashSet<String> {
         let mut cols = HashSet::new();
         for expr in exprs {
-            for (col_name, _) in expr.as_expr(&BUILTIN_FUNCTIONS).unwrap().column_refs() {
+            for (col_name, _) in expr.as_expr(&BUILTIN_FUNCTIONS).column_refs() {
                 cols.insert(col_name);
             }
         }
@@ -340,9 +340,11 @@ impl HiveTable {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => Arc::new(v.filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
-                    expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
-                })),
+                Some(v) => Arc::new(Some(
+                    v.filter
+                        .as_expr(&BUILTIN_FUNCTIONS)
+                        .project_column_ref(|name| schema.index_of(name).unwrap()),
+                )),
             },
         )
     }
@@ -474,7 +476,7 @@ impl HiveTable {
                     .map(|p| {
                         p.filters
                             .iter()
-                            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).unwrap())
+                            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
                             .collect()
                     })
                     .unwrap_or_default();

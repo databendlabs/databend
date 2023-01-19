@@ -321,49 +321,45 @@ statement ok
 drop table if exists t15
 
 statement ok
-CREATE TABLE t15(id Int, arr Array(String) Null) Engine = Fuse
+CREATE TABLE t15(id Int, arr Array(String)) Engine = Fuse
 
 statement ok
-INSERT INTO t15 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']), (3, null), (4, ['ee', 'ff'])
+INSERT INTO t15 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']), (3, ['ee', 'ff'])
 
 query IT
 select * from t15
 ----
 1 ['aa','bb']
 2 ['cc','dd']
-3 NULL
-4 ['ee','ff']
+3 ['ee','ff']
 
 query TT
 select arr[1], arr[2] from t15
 ----
 aa bb
 cc dd
-NULL NULL
 ee ff
 
 statement ok
 drop table if exists t16
 
 statement ok
-CREATE TABLE t16(id Int, arr Array(Int64) Null) Engine = Fuse
+CREATE TABLE t16(id Int, arr Array(Int64)) Engine = Fuse
 
 statement ok
-INSERT INTO t16 (id, arr) VALUES(1, [1,2,3,4]), (2, [5,6,7,8]), (3, null)
+INSERT INTO t16 (id, arr) VALUES(1, [1,2,3,4]), (2, [5,6,7,8])
 
 query IT
 select * from t16
 ----
 1 [1,2,3,4]
 2 [5,6,7,8]
-3 NULL
 
 query II
 select arr[1], arr[2] from t16
 ----
 1 2
 5 6
-NULL NULL
 
 query II
 select arr[1], arr[2] from t16 where arr[2] = 6 order by arr[3] desc
@@ -408,7 +404,17 @@ statement ok
 drop table if exists t19
 
 statement ok
-CREATE TABLE t19(id Int, arr Array(Array(Int64) Null)) Engine = Fuse
+CREATE TABLE t19(id Int, arr Array(Array(Int64))) Engine = Fuse
 
 statement ok
-INSERT INTO t19 (id, arr) VALUES(1, [[1,2],[3,4]]), (2, [[5,6],null]), (3, [[7,8],[9,10]])
+INSERT INTO t19 (id, arr) VALUES(1, [[1,2],[3,4]]), (2, [[5,6]]), (3, [[7,8],[9,10]])
+
+query IT
+SELECT * FROM t19
+----
+1 [[1,2],[3,4]]
+2 [[5,6]]
+3 [[7,8],[9,10]]
+
+statement ok
+drop table if exists t19

@@ -2199,12 +2199,22 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 span: _,
                 name,
                 params,
+                named_params,
                 alias,
             } => {
                 let mut children = Vec::with_capacity(params.len());
                 for param in params.iter() {
                     self.visit_expr(param);
                     children.push(self.children.pop().unwrap());
+                }
+                for (name, param) in named_params.iter() {
+                    self.visit_expr(param);
+                    let child = self.children.pop().unwrap();
+                    let node = FormatTreeNode::with_children(
+                        AstFormatContext::new(format!("{}=>{}", name, child.payload)),
+                        child.children,
+                    );
+                    children.push(node);
                 }
                 let func_name = format!("TableFunction {}", name);
                 let format_ctx = if let Some(alias) = alias {

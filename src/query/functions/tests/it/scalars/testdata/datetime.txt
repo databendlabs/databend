@@ -87,8 +87,8 @@ error:
 
 
 ast            : to_timestamp(a)
-raw expr       : to_timestamp(#0::Int64)
-checked expr   : to_timestamp<Int64>(#0)
+raw expr       : to_timestamp(a::Int64)
+checked expr   : to_timestamp<Int64>(a)
 evaluation:
 +--------+--------------------------------------+--------------------------------------+
 |        | a                                    | Output                               |
@@ -201,8 +201,8 @@ error:
 
 
 ast            : to_datetime(a)
-raw expr       : to_datetime(#0::Int64)
-checked expr   : to_timestamp<Int64>(#0)
+raw expr       : to_datetime(a::Int64)
+checked expr   : to_timestamp<Int64>(a)
 evaluation:
 +--------+--------------------------------------+--------------------------------------+
 |        | a                                    | Output                               |
@@ -297,8 +297,8 @@ error:
 
 
 ast            : to_date(a)
-raw expr       : to_date(#0::Int32)
-checked expr   : to_date<Int64>(CAST(#0 AS Int64))
+raw expr       : to_date(a::Int32)
+checked expr   : to_date<Int64>(CAST(a AS Int64))
 evaluation:
 +--------+---------------------+---------------------+
 |        | a                   | Output              |
@@ -392,8 +392,8 @@ output         : 1969-09-23
 
 
 ast            : add_years(a, b)
-raw expr       : add_years(#0::Date, #1::Int32)
-checked expr   : add_years<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_years(a::Date, b::Int32)
+checked expr   : add_years<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -415,8 +415,8 @@ evaluation (internal):
 
 
 ast            : add_quarters(a, b)
-raw expr       : add_quarters(#0::Date, #1::Int32)
-checked expr   : add_quarters<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_quarters(a::Date, b::Int32)
+checked expr   : add_quarters<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -438,8 +438,8 @@ evaluation (internal):
 
 
 ast            : add_months(a, b)
-raw expr       : add_months(#0::Date, #1::Int32)
-checked expr   : add_months<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_months(a::Date, b::Int32)
+checked expr   : add_months<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -461,8 +461,8 @@ evaluation (internal):
 
 
 ast            : add_days(a, b)
-raw expr       : add_days(#0::Date, #1::Int32)
-checked expr   : add_days<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_days(a::Date, b::Int32)
+checked expr   : add_days<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -484,8 +484,8 @@ evaluation (internal):
 
 
 ast            : subtract_years(a, b)
-raw expr       : subtract_years(#0::Date, #1::Int32)
-checked expr   : subtract_years<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_years(a::Date, b::Int32)
+checked expr   : subtract_years<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -507,8 +507,8 @@ evaluation (internal):
 
 
 ast            : subtract_quarters(a, b)
-raw expr       : subtract_quarters(#0::Date, #1::Int32)
-checked expr   : subtract_quarters<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_quarters(a::Date, b::Int32)
+checked expr   : subtract_quarters<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -530,8 +530,8 @@ evaluation (internal):
 
 
 ast            : subtract_months(a, b)
-raw expr       : subtract_months(#0::Date, #1::Int32)
-checked expr   : subtract_months<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_months(a::Date, b::Int32)
+checked expr   : subtract_months<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -553,8 +553,8 @@ evaluation (internal):
 
 
 ast            : subtract_days(a, b)
-raw expr       : subtract_days(#0::Date, #1::Int32)
-checked expr   : subtract_days<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_days(a::Date, b::Int32)
+checked expr   : subtract_days<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -710,8 +710,8 @@ output         : 1969-12-31 23:58:20.000000
 
 
 ast            : add_years(a, b)
-raw expr       : add_years(#0::Timestamp, #1::Int32)
-checked expr   : add_years<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_years(a::Timestamp, b::Int32)
+checked expr   : add_years<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -733,8 +733,8 @@ evaluation (internal):
 
 
 ast            : add_quarters(a, b)
-raw expr       : add_quarters(#0::Timestamp, #1::Int32)
-checked expr   : add_quarters<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_quarters(a::Timestamp, b::Int32)
+checked expr   : add_quarters<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -756,8 +756,8 @@ evaluation (internal):
 
 
 ast            : add_months(a, b)
-raw expr       : add_months(#0::Timestamp, #1::Int32)
-checked expr   : add_months<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_months(a::Timestamp, b::Int32)
+checked expr   : add_months<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -779,8 +779,8 @@ evaluation (internal):
 
 
 ast            : add_days(a, b)
-raw expr       : add_days(#0::Timestamp, #1::Int32)
-checked expr   : add_days<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_days(a::Timestamp, b::Int32)
+checked expr   : add_days<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -802,8 +802,8 @@ evaluation (internal):
 
 
 ast            : add_hours(a, b)
-raw expr       : add_hours(#0::Timestamp, #1::Int32)
-checked expr   : add_hours<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_hours(a::Timestamp, b::Int32)
+checked expr   : add_hours<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -825,8 +825,8 @@ evaluation (internal):
 
 
 ast            : add_minutes(a, b)
-raw expr       : add_minutes(#0::Timestamp, #1::Int32)
-checked expr   : add_minutes<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_minutes(a::Timestamp, b::Int32)
+checked expr   : add_minutes<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -848,8 +848,8 @@ evaluation (internal):
 
 
 ast            : add_seconds(a, b)
-raw expr       : add_seconds(#0::Timestamp, #1::Int32)
-checked expr   : add_seconds<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_seconds(a::Timestamp, b::Int32)
+checked expr   : add_seconds<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -871,8 +871,8 @@ evaluation (internal):
 
 
 ast            : subtract_years(a, b)
-raw expr       : subtract_years(#0::Timestamp, #1::Int32)
-checked expr   : subtract_years<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_years(a::Timestamp, b::Int32)
+checked expr   : subtract_years<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -894,8 +894,8 @@ evaluation (internal):
 
 
 ast            : subtract_quarters(a, b)
-raw expr       : subtract_quarters(#0::Timestamp, #1::Int32)
-checked expr   : subtract_quarters<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_quarters(a::Timestamp, b::Int32)
+checked expr   : subtract_quarters<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -917,8 +917,8 @@ evaluation (internal):
 
 
 ast            : subtract_months(a, b)
-raw expr       : subtract_months(#0::Timestamp, #1::Int32)
-checked expr   : subtract_months<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_months(a::Timestamp, b::Int32)
+checked expr   : subtract_months<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -940,8 +940,8 @@ evaluation (internal):
 
 
 ast            : subtract_days(a, b)
-raw expr       : subtract_days(#0::Timestamp, #1::Int32)
-checked expr   : subtract_days<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_days(a::Timestamp, b::Int32)
+checked expr   : subtract_days<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -963,8 +963,8 @@ evaluation (internal):
 
 
 ast            : subtract_hours(a, b)
-raw expr       : subtract_hours(#0::Timestamp, #1::Int32)
-checked expr   : subtract_hours<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_hours(a::Timestamp, b::Int32)
+checked expr   : subtract_hours<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -986,8 +986,8 @@ evaluation (internal):
 
 
 ast            : subtract_minutes(a, b)
-raw expr       : subtract_minutes(#0::Timestamp, #1::Int32)
-checked expr   : subtract_minutes<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_minutes(a::Timestamp, b::Int32)
+checked expr   : subtract_minutes<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1009,8 +1009,8 @@ evaluation (internal):
 
 
 ast            : subtract_seconds(a, b)
-raw expr       : subtract_seconds(#0::Timestamp, #1::Int32)
-checked expr   : subtract_seconds<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_seconds(a::Timestamp, b::Int32)
+checked expr   : subtract_seconds<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1112,8 +1112,8 @@ output         : 1969-09-23
 
 
 ast            : date_add(year, b, a)
-raw expr       : add_years(#0::Date, #1::Int32)
-checked expr   : add_years<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_years(a::Date, b::Int32)
+checked expr   : add_years<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1135,8 +1135,8 @@ evaluation (internal):
 
 
 ast            : date_add(quarter, b, a)
-raw expr       : add_quarters(#0::Date, #1::Int32)
-checked expr   : add_quarters<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_quarters(a::Date, b::Int32)
+checked expr   : add_quarters<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1158,8 +1158,8 @@ evaluation (internal):
 
 
 ast            : date_add(month, b, a)
-raw expr       : add_months(#0::Date, #1::Int32)
-checked expr   : add_months<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_months(a::Date, b::Int32)
+checked expr   : add_months<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1181,8 +1181,8 @@ evaluation (internal):
 
 
 ast            : date_add(day, b, a)
-raw expr       : add_days(#0::Date, #1::Int32)
-checked expr   : add_days<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_days(a::Date, b::Int32)
+checked expr   : add_days<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1204,8 +1204,8 @@ evaluation (internal):
 
 
 ast            : date_sub(year, b, a)
-raw expr       : subtract_years(#0::Date, #1::Int32)
-checked expr   : subtract_years<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_years(a::Date, b::Int32)
+checked expr   : subtract_years<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1227,8 +1227,8 @@ evaluation (internal):
 
 
 ast            : date_sub(quarter, b, a)
-raw expr       : subtract_quarters(#0::Date, #1::Int32)
-checked expr   : subtract_quarters<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_quarters(a::Date, b::Int32)
+checked expr   : subtract_quarters<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1250,8 +1250,8 @@ evaluation (internal):
 
 
 ast            : date_sub(month, b, a)
-raw expr       : subtract_months(#0::Date, #1::Int32)
-checked expr   : subtract_months<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_months(a::Date, b::Int32)
+checked expr   : subtract_months<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1273,8 +1273,8 @@ evaluation (internal):
 
 
 ast            : date_sub(day, b, a)
-raw expr       : subtract_days(#0::Date, #1::Int32)
-checked expr   : subtract_days<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_days(a::Date, b::Int32)
+checked expr   : subtract_days<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1430,8 +1430,8 @@ output         : 1969-12-31 23:58:20.000000
 
 
 ast            : date_add(year, b, a)
-raw expr       : add_years(#0::Timestamp, #1::Int32)
-checked expr   : add_years<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_years(a::Timestamp, b::Int32)
+checked expr   : add_years<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1453,8 +1453,8 @@ evaluation (internal):
 
 
 ast            : date_add(quarter, b, a)
-raw expr       : add_quarters(#0::Timestamp, #1::Int32)
-checked expr   : add_quarters<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_quarters(a::Timestamp, b::Int32)
+checked expr   : add_quarters<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1476,8 +1476,8 @@ evaluation (internal):
 
 
 ast            : date_add(month, b, a)
-raw expr       : add_months(#0::Timestamp, #1::Int32)
-checked expr   : add_months<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_months(a::Timestamp, b::Int32)
+checked expr   : add_months<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1499,8 +1499,8 @@ evaluation (internal):
 
 
 ast            : date_add(day, b, a)
-raw expr       : add_days(#0::Timestamp, #1::Int32)
-checked expr   : add_days<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_days(a::Timestamp, b::Int32)
+checked expr   : add_days<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1522,8 +1522,8 @@ evaluation (internal):
 
 
 ast            : date_add(hour, b, a)
-raw expr       : add_hours(#0::Timestamp, #1::Int32)
-checked expr   : add_hours<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_hours(a::Timestamp, b::Int32)
+checked expr   : add_hours<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1545,8 +1545,8 @@ evaluation (internal):
 
 
 ast            : date_add(minute, b, a)
-raw expr       : add_minutes(#0::Timestamp, #1::Int32)
-checked expr   : add_minutes<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_minutes(a::Timestamp, b::Int32)
+checked expr   : add_minutes<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1568,8 +1568,8 @@ evaluation (internal):
 
 
 ast            : date_add(second, b, a)
-raw expr       : add_seconds(#0::Timestamp, #1::Int32)
-checked expr   : add_seconds<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_seconds(a::Timestamp, b::Int32)
+checked expr   : add_seconds<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1591,8 +1591,8 @@ evaluation (internal):
 
 
 ast            : date_sub(year, b, a)
-raw expr       : subtract_years(#0::Timestamp, #1::Int32)
-checked expr   : subtract_years<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_years(a::Timestamp, b::Int32)
+checked expr   : subtract_years<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1614,8 +1614,8 @@ evaluation (internal):
 
 
 ast            : date_sub(quarter, b, a)
-raw expr       : subtract_quarters(#0::Timestamp, #1::Int32)
-checked expr   : subtract_quarters<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_quarters(a::Timestamp, b::Int32)
+checked expr   : subtract_quarters<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1637,8 +1637,8 @@ evaluation (internal):
 
 
 ast            : date_sub(month, b, a)
-raw expr       : subtract_months(#0::Timestamp, #1::Int32)
-checked expr   : subtract_months<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_months(a::Timestamp, b::Int32)
+checked expr   : subtract_months<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1660,8 +1660,8 @@ evaluation (internal):
 
 
 ast            : date_sub(day, b, a)
-raw expr       : subtract_days(#0::Timestamp, #1::Int32)
-checked expr   : subtract_days<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_days(a::Timestamp, b::Int32)
+checked expr   : subtract_days<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1683,8 +1683,8 @@ evaluation (internal):
 
 
 ast            : date_sub(hour, b, a)
-raw expr       : subtract_hours(#0::Timestamp, #1::Int32)
-checked expr   : subtract_hours<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_hours(a::Timestamp, b::Int32)
+checked expr   : subtract_hours<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1706,8 +1706,8 @@ evaluation (internal):
 
 
 ast            : date_sub(minute, b, a)
-raw expr       : subtract_minutes(#0::Timestamp, #1::Int32)
-checked expr   : subtract_minutes<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_minutes(a::Timestamp, b::Int32)
+checked expr   : subtract_minutes<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1729,8 +1729,8 @@ evaluation (internal):
 
 
 ast            : date_sub(second, b, a)
-raw expr       : subtract_seconds(#0::Timestamp, #1::Int32)
-checked expr   : subtract_seconds<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_seconds(a::Timestamp, b::Int32)
+checked expr   : subtract_seconds<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -1832,8 +1832,8 @@ output         : 1969-09-23
 
 
 ast            : a + interval b year
-raw expr       : add_years(#0::Date, #1::Int32)
-checked expr   : add_years<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_years(a::Date, b::Int32)
+checked expr   : add_years<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1855,8 +1855,8 @@ evaluation (internal):
 
 
 ast            : a + interval b quarter
-raw expr       : add_quarters(#0::Date, #1::Int32)
-checked expr   : add_quarters<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_quarters(a::Date, b::Int32)
+checked expr   : add_quarters<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1878,8 +1878,8 @@ evaluation (internal):
 
 
 ast            : a + interval b month
-raw expr       : add_months(#0::Date, #1::Int32)
-checked expr   : add_months<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_months(a::Date, b::Int32)
+checked expr   : add_months<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1901,8 +1901,8 @@ evaluation (internal):
 
 
 ast            : a + interval b day
-raw expr       : add_days(#0::Date, #1::Int32)
-checked expr   : add_days<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_days(a::Date, b::Int32)
+checked expr   : add_days<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1924,8 +1924,8 @@ evaluation (internal):
 
 
 ast            : a - interval b year
-raw expr       : subtract_years(#0::Date, #1::Int32)
-checked expr   : subtract_years<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_years(a::Date, b::Int32)
+checked expr   : subtract_years<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1947,8 +1947,8 @@ evaluation (internal):
 
 
 ast            : a - interval b quarter
-raw expr       : subtract_quarters(#0::Date, #1::Int32)
-checked expr   : subtract_quarters<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_quarters(a::Date, b::Int32)
+checked expr   : subtract_quarters<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1970,8 +1970,8 @@ evaluation (internal):
 
 
 ast            : a - interval b month
-raw expr       : subtract_months(#0::Date, #1::Int32)
-checked expr   : subtract_months<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_months(a::Date, b::Int32)
+checked expr   : subtract_months<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -1993,8 +1993,8 @@ evaluation (internal):
 
 
 ast            : a - interval b day
-raw expr       : subtract_days(#0::Date, #1::Int32)
-checked expr   : subtract_days<Date, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_days(a::Date, b::Int32)
+checked expr   : subtract_days<Date, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+--------------+---------+------------+
 |        | a            | b       | Output     |
@@ -2150,8 +2150,8 @@ output         : 1969-12-31 23:58:20.000000
 
 
 ast            : a + interval b year
-raw expr       : add_years(#0::Timestamp, #1::Int32)
-checked expr   : add_years<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_years(a::Timestamp, b::Int32)
+checked expr   : add_years<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2173,8 +2173,8 @@ evaluation (internal):
 
 
 ast            : a + interval b quarter
-raw expr       : add_quarters(#0::Timestamp, #1::Int32)
-checked expr   : add_quarters<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_quarters(a::Timestamp, b::Int32)
+checked expr   : add_quarters<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2196,8 +2196,8 @@ evaluation (internal):
 
 
 ast            : a + interval b month
-raw expr       : add_months(#0::Timestamp, #1::Int32)
-checked expr   : add_months<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_months(a::Timestamp, b::Int32)
+checked expr   : add_months<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2219,8 +2219,8 @@ evaluation (internal):
 
 
 ast            : a + interval b day
-raw expr       : add_days(#0::Timestamp, #1::Int32)
-checked expr   : add_days<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_days(a::Timestamp, b::Int32)
+checked expr   : add_days<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2242,8 +2242,8 @@ evaluation (internal):
 
 
 ast            : a + interval b hour
-raw expr       : add_hours(#0::Timestamp, #1::Int32)
-checked expr   : add_hours<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_hours(a::Timestamp, b::Int32)
+checked expr   : add_hours<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2265,8 +2265,8 @@ evaluation (internal):
 
 
 ast            : a + interval b minute
-raw expr       : add_minutes(#0::Timestamp, #1::Int32)
-checked expr   : add_minutes<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_minutes(a::Timestamp, b::Int32)
+checked expr   : add_minutes<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2288,8 +2288,8 @@ evaluation (internal):
 
 
 ast            : a + interval b second
-raw expr       : add_seconds(#0::Timestamp, #1::Int32)
-checked expr   : add_seconds<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : add_seconds(a::Timestamp, b::Int32)
+checked expr   : add_seconds<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2311,8 +2311,8 @@ evaluation (internal):
 
 
 ast            : a - interval b year
-raw expr       : subtract_years(#0::Timestamp, #1::Int32)
-checked expr   : subtract_years<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_years(a::Timestamp, b::Int32)
+checked expr   : subtract_years<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2334,8 +2334,8 @@ evaluation (internal):
 
 
 ast            : a - interval b quarter
-raw expr       : subtract_quarters(#0::Timestamp, #1::Int32)
-checked expr   : subtract_quarters<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_quarters(a::Timestamp, b::Int32)
+checked expr   : subtract_quarters<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2357,8 +2357,8 @@ evaluation (internal):
 
 
 ast            : a - interval b month
-raw expr       : subtract_months(#0::Timestamp, #1::Int32)
-checked expr   : subtract_months<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_months(a::Timestamp, b::Int32)
+checked expr   : subtract_months<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2380,8 +2380,8 @@ evaluation (internal):
 
 
 ast            : a - interval b day
-raw expr       : subtract_days(#0::Timestamp, #1::Int32)
-checked expr   : subtract_days<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_days(a::Timestamp, b::Int32)
+checked expr   : subtract_days<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2403,8 +2403,8 @@ evaluation (internal):
 
 
 ast            : a - interval b hour
-raw expr       : subtract_hours(#0::Timestamp, #1::Int32)
-checked expr   : subtract_hours<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_hours(a::Timestamp, b::Int32)
+checked expr   : subtract_hours<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2426,8 +2426,8 @@ evaluation (internal):
 
 
 ast            : a - interval b minute
-raw expr       : subtract_minutes(#0::Timestamp, #1::Int32)
-checked expr   : subtract_minutes<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_minutes(a::Timestamp, b::Int32)
+checked expr   : subtract_minutes<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2449,8 +2449,8 @@ evaluation (internal):
 
 
 ast            : a - interval b second
-raw expr       : subtract_seconds(#0::Timestamp, #1::Int32)
-checked expr   : subtract_seconds<Timestamp, Int64>(#0, CAST(#1 AS Int64))
+raw expr       : subtract_seconds(a::Timestamp, b::Int32)
+checked expr   : subtract_seconds<Timestamp, Int64>(a, CAST(b AS Int64))
 evaluation:
 +--------+----------------------------+---------+----------------------------+
 |        | a                          | b       | Output                     |
@@ -2544,8 +2544,8 @@ output         : 7_u8
 
 
 ast            : to_yyyymm(a)
-raw expr       : to_yyyymm(#0::Date)
-checked expr   : to_yyyymm<Date>(#0)
+raw expr       : to_yyyymm(a::Date)
+checked expr   : to_yyyymm<Date>(a)
 evaluation:
 +--------+--------------+------------------+
 |        | a            | Output           |
@@ -2566,8 +2566,8 @@ evaluation (internal):
 
 
 ast            : to_yyyymmdd(a)
-raw expr       : to_yyyymmdd(#0::Date)
-checked expr   : to_yyyymmdd<Date>(#0)
+raw expr       : to_yyyymmdd(a::Date)
+checked expr   : to_yyyymmdd<Date>(a)
 evaluation:
 +--------+--------------+------------------+
 |        | a            | Output           |
@@ -2588,8 +2588,8 @@ evaluation (internal):
 
 
 ast            : to_yyyymmddhhmmss(a)
-raw expr       : to_yyyymmddhhmmss(#0::Date)
-checked expr   : to_yyyymmddhhmmss<Date>(#0)
+raw expr       : to_yyyymmddhhmmss(a::Date)
+checked expr   : to_yyyymmddhhmmss<Date>(a)
 evaluation:
 +--------+--------------+----------------------------+
 |        | a            | Output                     |
@@ -2610,8 +2610,8 @@ evaluation (internal):
 
 
 ast            : to_year(a)
-raw expr       : to_year(#0::Date)
-checked expr   : to_year<Date>(#0)
+raw expr       : to_year(a::Date)
+checked expr   : to_year<Date>(a)
 evaluation:
 +--------+--------------+-------------+
 |        | a            | Output      |
@@ -2632,8 +2632,8 @@ evaluation (internal):
 
 
 ast            : to_month(a)
-raw expr       : to_month(#0::Date)
-checked expr   : to_month<Date>(#0)
+raw expr       : to_month(a::Date)
+checked expr   : to_month<Date>(a)
 evaluation:
 +--------+--------------+-----------+
 |        | a            | Output    |
@@ -2654,8 +2654,8 @@ evaluation (internal):
 
 
 ast            : to_day_of_year(a)
-raw expr       : to_day_of_year(#0::Date)
-checked expr   : to_day_of_year<Date>(#0)
+raw expr       : to_day_of_year(a::Date)
+checked expr   : to_day_of_year<Date>(a)
 evaluation:
 +--------+--------------+-------------+
 |        | a            | Output      |
@@ -2676,8 +2676,8 @@ evaluation (internal):
 
 
 ast            : to_day_of_month(a)
-raw expr       : to_day_of_month(#0::Date)
-checked expr   : to_day_of_month<Date>(#0)
+raw expr       : to_day_of_month(a::Date)
+checked expr   : to_day_of_month<Date>(a)
 evaluation:
 +--------+--------------+-----------+
 |        | a            | Output    |
@@ -2698,8 +2698,8 @@ evaluation (internal):
 
 
 ast            : to_day_of_week(a)
-raw expr       : to_day_of_week(#0::Date)
-checked expr   : to_day_of_week<Date>(#0)
+raw expr       : to_day_of_week(a::Date)
+checked expr   : to_day_of_week<Date>(a)
 evaluation:
 +--------+--------------+-----------+
 |        | a            | Output    |
@@ -2819,8 +2819,8 @@ output         : 6_u8
 
 
 ast            : to_yyyymm(a)
-raw expr       : to_yyyymm(#0::Timestamp)
-checked expr   : to_yyyymm<Timestamp>(#0)
+raw expr       : to_yyyymm(a::Timestamp)
+checked expr   : to_yyyymm<Timestamp>(a)
 evaluation:
 +--------+----------------------------+------------------+
 |        | a                          | Output           |
@@ -2841,8 +2841,8 @@ evaluation (internal):
 
 
 ast            : to_yyyymmdd(a)
-raw expr       : to_yyyymmdd(#0::Timestamp)
-checked expr   : to_yyyymmdd<Timestamp>(#0)
+raw expr       : to_yyyymmdd(a::Timestamp)
+checked expr   : to_yyyymmdd<Timestamp>(a)
 evaluation:
 +--------+----------------------------+------------------+
 |        | a                          | Output           |
@@ -2863,8 +2863,8 @@ evaluation (internal):
 
 
 ast            : to_yyyymmddhhmmss(a)
-raw expr       : to_yyyymmddhhmmss(#0::Timestamp)
-checked expr   : to_yyyymmddhhmmss<Timestamp>(#0)
+raw expr       : to_yyyymmddhhmmss(a::Timestamp)
+checked expr   : to_yyyymmddhhmmss<Timestamp>(a)
 evaluation:
 +--------+----------------------------+----------------------------+
 |        | a                          | Output                     |
@@ -2885,8 +2885,8 @@ evaluation (internal):
 
 
 ast            : to_year(a)
-raw expr       : to_year(#0::Timestamp)
-checked expr   : to_year<Timestamp>(#0)
+raw expr       : to_year(a::Timestamp)
+checked expr   : to_year<Timestamp>(a)
 evaluation:
 +--------+----------------------------+-------------+
 |        | a                          | Output      |
@@ -2907,8 +2907,8 @@ evaluation (internal):
 
 
 ast            : to_month(a)
-raw expr       : to_month(#0::Timestamp)
-checked expr   : to_month<Timestamp>(#0)
+raw expr       : to_month(a::Timestamp)
+checked expr   : to_month<Timestamp>(a)
 evaluation:
 +--------+----------------------------+-----------+
 |        | a                          | Output    |
@@ -2929,8 +2929,8 @@ evaluation (internal):
 
 
 ast            : to_day_of_year(a)
-raw expr       : to_day_of_year(#0::Timestamp)
-checked expr   : to_day_of_year<Timestamp>(#0)
+raw expr       : to_day_of_year(a::Timestamp)
+checked expr   : to_day_of_year<Timestamp>(a)
 evaluation:
 +--------+----------------------------+-------------+
 |        | a                          | Output      |
@@ -2951,8 +2951,8 @@ evaluation (internal):
 
 
 ast            : to_day_of_month(a)
-raw expr       : to_day_of_month(#0::Timestamp)
-checked expr   : to_day_of_month<Timestamp>(#0)
+raw expr       : to_day_of_month(a::Timestamp)
+checked expr   : to_day_of_month<Timestamp>(a)
 evaluation:
 +--------+----------------------------+-----------+
 |        | a                          | Output    |
@@ -2973,8 +2973,8 @@ evaluation (internal):
 
 
 ast            : to_day_of_week(a)
-raw expr       : to_day_of_week(#0::Timestamp)
-checked expr   : to_day_of_week<Timestamp>(#0)
+raw expr       : to_day_of_week(a::Timestamp)
+checked expr   : to_day_of_week<Timestamp>(a)
 evaluation:
 +--------+----------------------------+-----------+
 |        | a                          | Output    |
@@ -2995,8 +2995,8 @@ evaluation (internal):
 
 
 ast            : to_hour(a)
-raw expr       : to_hour(#0::Timestamp)
-checked expr   : to_hour<Timestamp>(#0)
+raw expr       : to_hour(a::Timestamp)
+checked expr   : to_hour<Timestamp>(a)
 evaluation:
 +--------+----------------------------+-----------+
 |        | a                          | Output    |
@@ -3017,8 +3017,8 @@ evaluation (internal):
 
 
 ast            : to_minute(a)
-raw expr       : to_minute(#0::Timestamp)
-checked expr   : to_minute<Timestamp>(#0)
+raw expr       : to_minute(a::Timestamp)
+checked expr   : to_minute<Timestamp>(a)
 evaluation:
 +--------+----------------------------+-----------+
 |        | a                          | Output    |
@@ -3039,8 +3039,8 @@ evaluation (internal):
 
 
 ast            : to_second(a)
-raw expr       : to_second(#0::Timestamp)
-checked expr   : to_second<Timestamp>(#0)
+raw expr       : to_second(a::Timestamp)
+checked expr   : to_second<Timestamp>(a)
 evaluation:
 +--------+----------------------------+-----------+
 |        | a                          | Output    |

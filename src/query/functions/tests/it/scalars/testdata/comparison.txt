@@ -179,8 +179,8 @@ output         : false
 
 
 ast            : lhs = rhs
-raw expr       : eq(#0::UInt8, #1::Int64)
-checked expr   : eq<Int64, Int64>(CAST(#0 AS Int64), #1)
+raw expr       : eq(lhs::UInt8, rhs::Int64)
+checked expr   : eq<Int64, Int64>(CAST(lhs AS Int64), rhs)
 evaluation:
 +--------+----------+-----------+---------------+
 |        | lhs      | rhs       | Output        |
@@ -228,8 +228,8 @@ output         : true
 
 
 ast            : parse_json(lhs) = parse_json(rhs)
-raw expr       : eq(parse_json(#0::String), parse_json(#1::String))
-checked expr   : eq<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1))
+raw expr       : eq(parse_json(lhs::String), parse_json(rhs::String))
+checked expr   : eq<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
 evaluation:
 +--------+------------------------------------------+------------------------------------------+---------+
 |        | lhs                                      | rhs                                      | Output  |
@@ -255,8 +255,8 @@ evaluation (internal):
 
 
 ast            : lhs = rhs
-raw expr       : eq(#0::String, #1::String)
-checked expr   : eq<String, String>(#0, #1)
+raw expr       : eq(lhs::String, rhs::String)
+checked expr   : eq<String, String>(lhs, rhs)
 evaluation:
 +--------+------------------------------------------+------------------------------------------+---------------+
 |        | lhs                                      | rhs                                      | Output        |
@@ -444,8 +444,8 @@ output         : false
 
 
 ast            : parse_json(lhs) != parse_json(rhs)
-raw expr       : noteq(parse_json(#0::String), parse_json(#1::String))
-checked expr   : noteq<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1))
+raw expr       : noteq(parse_json(lhs::String), parse_json(rhs::String))
+checked expr   : noteq<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
 evaluation:
 +--------+----------------------------------+----------------------------------+---------+
 |        | lhs                              | rhs                              | Output  |
@@ -468,8 +468,8 @@ evaluation (internal):
 
 
 ast            : lhs != rhs
-raw expr       : noteq(#0::String, #1::String)
-checked expr   : noteq<String, String>(#0, #1)
+raw expr       : noteq(lhs::String, rhs::String)
+checked expr   : noteq<String, String>(lhs, rhs)
 evaluation:
 +--------+----------------------------------+----------------------------------+---------------+
 |        | lhs                              | rhs                              | Output        |
@@ -609,8 +609,8 @@ output         : false
 
 
 ast            : parse_json(lhs) >= parse_json(rhs)
-raw expr       : gte(parse_json(#0::String), parse_json(#1::String))
-checked expr   : gte<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1))
+raw expr       : gte(parse_json(lhs::String), parse_json(rhs::String))
+checked expr   : gte<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
 evaluation:
 +--------+-------------------------------+-------------------------------+---------+
 |        | lhs                           | rhs                           | Output  |
@@ -636,8 +636,8 @@ evaluation (internal):
 
 
 ast            : lhs < rhs
-raw expr       : lt(#0::String, #1::String)
-checked expr   : lt<String, String>(#0, #1)
+raw expr       : lt(lhs::String, rhs::String)
+checked expr   : lt<String, String>(lhs, rhs)
 evaluation:
 +--------+-------------------------------+-------------------------------+---------------+
 |        | lhs                           | rhs                           | Output        |
@@ -789,8 +789,8 @@ output         : true
 
 
 ast            : parse_json(lhs) <= parse_json(rhs)
-raw expr       : lte(parse_json(#0::String), parse_json(#1::String))
-checked expr   : lte<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1))
+raw expr       : lte(parse_json(lhs::String), parse_json(rhs::String))
+checked expr   : lte<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
 evaluation:
 +--------+------------------------------------------------+------------------------------------------------+---------+
 |        | lhs                                            | rhs                                            | Output  |
@@ -812,8 +812,8 @@ evaluation (internal):
 
 
 ast            : lhs <= rhs
-raw expr       : lte(#0::String, #1::String)
-checked expr   : lte<String, String>(#0, #1)
+raw expr       : lte(lhs::String, rhs::String)
+checked expr   : lte<String, String>(lhs, rhs)
 evaluation:
 +--------+------------------------------------------------+------------------------------------------------+---------------+
 |        | lhs                                            | rhs                                            | Output        |
@@ -961,8 +961,8 @@ output         : false
 
 
 ast            : parse_json(lhs) > parse_json(rhs)
-raw expr       : gt(parse_json(#0::String), parse_json(#1::String))
-checked expr   : gt<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1))
+raw expr       : gt(parse_json(lhs::String), parse_json(rhs::String))
+checked expr   : gt<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
 evaluation:
 +--------+-----------------------+-----------------------+---------+
 |        | lhs                   | rhs                   | Output  |
@@ -986,8 +986,8 @@ evaluation (internal):
 
 
 ast            : lhs > rhs
-raw expr       : gt(#0::String, #1::String)
-checked expr   : gt<String, String>(#0, #1)
+raw expr       : gt(lhs::String, rhs::String)
+checked expr   : gt<String, String>(lhs, rhs)
 evaluation:
 +--------+-----------------------+-----------------------+---------------+
 |        | lhs                   | rhs                   | Output        |
@@ -1137,8 +1137,8 @@ output         : true
 
 
 ast            : parse_json(lhs) >= parse_json(rhs)
-raw expr       : gte(parse_json(#0::String), parse_json(#1::String))
-checked expr   : gte<Variant, Variant>(parse_json<String>(#0), parse_json<String>(#1))
+raw expr       : gte(parse_json(lhs::String), parse_json(rhs::String))
+checked expr   : gte<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
 evaluation:
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------+
 |        | lhs                                                       | rhs                                                       | Output  |
@@ -1164,8 +1164,8 @@ evaluation (internal):
 
 
 ast            : lhs >= rhs
-raw expr       : gte(#0::String, #1::String)
-checked expr   : gte<String, String>(#0, #1)
+raw expr       : gte(lhs::String, rhs::String)
+checked expr   : gte<String, String>(lhs, rhs)
 evaluation:
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------------+
 |        | lhs                                                       | rhs                                                       | Output        |
@@ -1238,8 +1238,8 @@ output         : true
 
 
 ast            : lhs like 'a%'
-raw expr       : like(#0::String, "a%")
-checked expr   : like<String, String>(#0, "a%")
+raw expr       : like(lhs::String, "a%")
+checked expr   : like<String, String>(lhs, "a%")
 evaluation:
 +--------+-----------------+---------------+
 |        | lhs             | Output        |
@@ -1261,8 +1261,8 @@ evaluation (internal):
 
 
 ast            : lhs like rhs
-raw expr       : like(#0::String, #1::String)
-checked expr   : like<String, String>(#0, #1)
+raw expr       : like(lhs::String, rhs::String)
+checked expr   : like<String, String>(lhs, rhs)
 evaluation:
 +--------+-----------------+-----------------+---------------+
 |        | lhs             | rhs             | Output        |
@@ -1285,8 +1285,8 @@ evaluation (internal):
 
 
 ast            : lhs regexp rhs
-raw expr       : regexp(#0::String, #1::String)
-checked expr   : regexp<String, String>(#0, #1)
+raw expr       : regexp(lhs::String, rhs::String)
+checked expr   : regexp<String, String>(lhs, rhs)
 evaluation:
 +--------+--------------+--------------+---------------+
 |        | lhs          | rhs          | Output        |
@@ -1311,8 +1311,8 @@ evaluation (internal):
 
 
 ast            : lhs rlike rhs
-raw expr       : rlike(#0::String, #1::String)
-checked expr   : regexp<String, String>(#0, #1)
+raw expr       : rlike(lhs::String, rhs::String)
+checked expr   : regexp<String, String>(lhs, rhs)
 evaluation:
 +--------+--------------+--------------+---------------+
 |        | lhs          | rhs          | Output        |

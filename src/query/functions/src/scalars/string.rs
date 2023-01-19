@@ -100,11 +100,23 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, _| 8 * val.len() as u64,
     );
 
-    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, NumberType<u64>, _, _>(
         "length",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        |val, _| val.len() as u64,
+        |val, _| match val {
+            ValueRef::Scalar(s) => Value::Scalar(s.len() as u64),
+            ValueRef::Column(c) => {
+                let diffs = c
+                    .offsets
+                    .iter()
+                    .zip(c.offsets.iter().skip(1))
+                    .map(|(a, b)| b - a)
+                    .collect::<Vec<_>>();
+
+                Value::Column(diffs.into())
+            }
+        },
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, NumberType<u64>, _, _>(

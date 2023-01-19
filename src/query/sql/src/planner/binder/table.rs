@@ -45,6 +45,7 @@ use common_exception::Result;
 use common_expression::type_check::check_literal;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
+use common_expression::Scalar;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileCompression;
@@ -66,7 +67,7 @@ use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ConstantExpr;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BindContext;
@@ -221,6 +222,7 @@ impl<'a> Binder {
                 span: _,
                 name,
                 params,
+                named_params,
                 alias,
             } => {
                 let mut scalar_binder = ScalarBinder::new(
@@ -232,13 +234,18 @@ impl<'a> Binder {
                 );
                 let mut args = Vec::with_capacity(params.len());
                 for arg in params.iter() {
-                    args.push(scalar_binder.bind(arg).await?);
+                    args.push(scalar_binder.bind(arg).await?.0);
                 }
 
-                let args = args
+                let mut named_args = Vec::with_capacity(named_params.len());
+                for (name, arg) in named_params.iter() {
+                    named_args.push((name.clone(), scalar_binder.bind(arg).await?.0));
+                }
+
+                let mut args = args
                     .into_iter()
-                    .map(|(scalar, _)| match scalar {
-                        Scalar::ConstantExpr(ConstantExpr { value, .. }) => {
+                    .map(|scalar| match scalar {
+                        ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
                             Ok(check_literal(&value).0)
                         }
                         _ => Err(ErrorCode::Unimplemented(format!(
@@ -247,6 +254,25 @@ impl<'a> Binder {
                         ))),
                     })
                     .collect::<Result<Vec<_>>>()?;
+
+                // Convert named params into Tuple(String, Scalar) and append to `args`.
+                args.reserve(named_args.len());
+                for (name, scalar) in named_args.into_iter() {
+                    match scalar {
+                        ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
+                            args.push(Scalar::Tuple(vec![
+                                Scalar::String(name.into_bytes()),
+                                check_literal(&value).0,
+                            ]))
+                        }
+                        _ => {
+                            return Err(ErrorCode::Unimplemented(format!(
+                                "Unsupported table named argument type: {:?}",
+                                scalar
+                            )));
+                        }
+                    }
+                }
 
                 let table_args = Some(args);
 
@@ -542,7 +568,7 @@ impl<'a> Binder {
                     &[],
                 );
                 let box (scalar, _) = type_checker.resolve(expr, None).await?;
-                let scalar_expr = scalar.as_expr()?;
+                let scalar_expr = scalar.as_expr_with_col_name()?;
 
                 let (new_expr, _) = ConstantFolder::fold(
                     &scalar_expr,

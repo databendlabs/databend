@@ -64,12 +64,11 @@ use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::executor::PhysicalScalarBuilder;
 use common_sql::plans::CastExpr;
 use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
-use common_sql::plans::Scalar;
+use common_sql::plans::ScalarExpr;
 use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
@@ -780,7 +779,7 @@ async fn fill_default_value(
     binder: &mut ScalarBinder<'_>,
     operators: &mut Vec<BlockOperator>,
     field: &DataField,
-    builder: &PhysicalScalarBuilder<'_>,
+    schema: &DataSchema,
 ) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
         let tokens = tokenize_sql(default_expr)?;
@@ -788,16 +787,17 @@ async fn fill_default_value(
         let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
         let (mut scalar, ty) = binder.bind(&ast).await?;
         if !field.data_type().eq(&ty) {
-            scalar = Scalar::CastExpr(CastExpr {
+            scalar = ScalarExpr::CastExpr(CastExpr {
+                is_try: false,
                 argument: Box::new(scalar),
                 from_type: Box::new(ty),
                 target_type: Box::new(field.data_type().clone()),
             })
         }
-        let scalar = builder.build(&scalar)?;
-        operators.push(BlockOperator::Map {
-            expr: scalar.as_expr()?,
-        });
+        let expr = scalar
+            .as_expr_with_col_index()?
+            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+        operators.push(BlockOperator::Map { expr });
     } else {
         // If field data type is nullable, then we'll fill it with null.
         if field.data_type().is_nullable() {
@@ -848,19 +848,12 @@ async fn exprs_to_scalar<'a>(
         &[],
     );
 
-    let physical_scalar_builder = PhysicalScalarBuilder::new(schema);
     for (i, expr) in exprs.iter().enumerate() {
         // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
         if let AExpr::ColumnRef { column, .. } = expr {
             if column.name.eq_ignore_ascii_case("default") {
                 let field = schema.field(i);
-                fill_default_value(
-                    &mut scalar_binder,
-                    &mut operators,
-                    field,
-                    &physical_scalar_builder,
-                )
-                .await?;
+                fill_default_value(&mut scalar_binder, &mut operators, field, schema).await?;
                 continue;
             }
         }
@@ -868,16 +861,17 @@ async fn exprs_to_scalar<'a>(
         let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
         if &data_type != field_data_type {
-            scalar = Scalar::CastExpr(CastExpr {
+            scalar = ScalarExpr::CastExpr(CastExpr {
+                is_try: false,
                 argument: Box::new(scalar),
                 from_type: Box::new(data_type),
                 target_type: Box::new(field_data_type.clone()),
             })
         }
-        let scalar = physical_scalar_builder.build(&scalar)?;
-        operators.push(BlockOperator::Map {
-            expr: scalar.as_expr()?,
-        });
+        let expr = scalar
+            .as_expr_with_col_index()?
+            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+        operators.push(BlockOperator::Map { expr });
     }
 
     let one_row_chunk = DataBlock::new(

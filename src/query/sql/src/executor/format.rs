@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_ast::ast::FormatTreeNode;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
@@ -34,14 +33,17 @@ use super::Sort;
 use super::TableScan;
 use super::UnionAll;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::DistributedInsertSelect;
+use crate::executor::ExchangeSink;
+use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 use crate::ColumnEntry;
 
 impl PhysicalPlan {
-    pub fn format(&self, metadata: MetadataRef) -> Result<String> {
-        to_format_tree(self, &metadata)?.format_pretty()
+    pub fn format(&self, metadata: MetadataRef) -> Result<FormatTreeNode<String>> {
+        to_format_tree(self, &metadata)
     }
 }
 
@@ -58,10 +60,10 @@ fn to_format_tree(plan: &PhysicalPlan, metadata: &MetadataRef) -> Result<FormatT
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata),
         PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata),
         PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata),
-        PhysicalPlan::ExchangeSource(_)
-        | PhysicalPlan::ExchangeSink(_)
-        | PhysicalPlan::DistributedInsertSelect(_) => {
-            Err(ErrorCode::Internal("Invalid physical plan"))
+        PhysicalPlan::ExchangeSource(plan) => exchange_source_to_format_tree(plan),
+        PhysicalPlan::ExchangeSink(plan) => exchange_sink_to_format_tree(plan, metadata),
+        PhysicalPlan::DistributedInsertSelect(plan) => {
+            distributed_insert_to_format_tree(plan.as_ref(), metadata)
         }
     }
 }
@@ -84,7 +86,7 @@ fn table_scan_to_format_tree(
                 .filters
                 .iter()
                 .map(|f| {
-                    let expr = f.as_expr(&BUILTIN_FUNCTIONS).unwrap();
+                    let expr = f.as_expr(&BUILTIN_FUNCTIONS);
                     let (new_expr, _) =
                         ConstantFolder::fold(&expr, FunctionContext::default(), &BUILTIN_FUNCTIONS);
                     new_expr.sql_display()
@@ -149,8 +151,7 @@ fn filter_to_format_tree(plan: &Filter, metadata: &MetadataRef) -> Result<Format
     let filter = plan
         .predicates
         .iter()
-        .map(|scalar| scalar.pretty_display())
-        .collect::<Vec<_>>()
+        .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .join(", ");
     let mut children = vec![FormatTreeNode::new(format!("filters: [{filter}]"))];
 
@@ -207,9 +208,9 @@ fn eval_scalar_to_format_tree(
     metadata: &MetadataRef,
 ) -> Result<FormatTreeNode<String>> {
     let scalars = plan
-        .scalars
+        .exprs
         .iter()
-        .map(|(scalar, _)| scalar.pretty_display())
+        .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
     let mut children = vec![FormatTreeNode::new(format!("expressions: [{scalars}]"))];
@@ -393,19 +394,19 @@ fn hash_join_to_format_tree(
     let build_keys = plan
         .build_keys
         .iter()
-        .map(|scalar| scalar.pretty_display())
+        .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
     let probe_keys = plan
         .probe_keys
         .iter()
-        .map(|scalar| scalar.pretty_display())
+        .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
     let filters = plan
         .non_equi_conditions
         .iter()
-        .map(|filter| filter.pretty_display())
+        .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -447,7 +448,7 @@ fn exchange_to_format_tree(
                 "Hash({})",
                 plan.keys
                     .iter()
-                    .map(|scalar| { scalar.pretty_display() })
+                    .map(|key| { key.as_expr(&BUILTIN_FUNCTIONS).sql_display() })
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -485,4 +486,49 @@ fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNode<St
         "estimated rows: {0:.2}",
         info.estimated_rows
     ))]
+}
+
+fn exchange_source_to_format_tree(plan: &ExchangeSource) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![];
+
+    children.push(FormatTreeNode::new(format!(
+        "source fragment: [{}]",
+        plan.source_fragment_id
+    )));
+
+    Ok(FormatTreeNode::with_children(
+        "ExchangeSource".to_string(),
+        children,
+    ))
+}
+
+fn exchange_sink_to_format_tree(
+    plan: &ExchangeSink,
+    metadata: &MetadataRef,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![];
+
+    children.push(FormatTreeNode::new(format!(
+        "destination fragment: [{}]",
+        plan.destination_fragment_id
+    )));
+
+    children.push(to_format_tree(&plan.input, metadata)?);
+
+    Ok(FormatTreeNode::with_children(
+        "ExchangeSink".to_string(),
+        children,
+    ))
+}
+
+fn distributed_insert_to_format_tree(
+    plan: &DistributedInsertSelect,
+    metadata: &MetadataRef,
+) -> Result<FormatTreeNode<String>> {
+    let children = vec![to_format_tree(&plan.input, metadata)?];
+
+    Ok(FormatTreeNode::with_children(
+        "DistributedInsertSelect".to_string(),
+        children,
+    ))
 }

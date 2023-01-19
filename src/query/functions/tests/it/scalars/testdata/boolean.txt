@@ -86,9 +86,9 @@ has tried possible overloads:
 
 
 ast            : (a < 1) AND (a < 1)
-raw expr       : and(lt(#0::UInt8 NULL, 1_u8), lt(#0::UInt8 NULL, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : and(lt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -107,9 +107,9 @@ evaluation (internal):
 
 
 ast            : (a > 1) AND (a < 1)
-raw expr       : and(gt(#0::UInt8 NULL, 1_u8), lt(#0::UInt8 NULL, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : and(gt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -128,9 +128,9 @@ evaluation (internal):
 
 
 ast            : (a < 1) AND (a > 1)
-raw expr       : and(lt(#0::UInt8 NULL, 1_u8), gt(#0::UInt8 NULL, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : and(lt(a::UInt8 NULL, 1_u8), gt(a::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -149,9 +149,9 @@ evaluation (internal):
 
 
 ast            : (a < 1) AND (a < 1)
-raw expr       : and(lt(#0::UInt8 NULL, 1_u8), lt(#0::UInt8 NULL, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : and(lt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -170,9 +170,9 @@ evaluation (internal):
 
 
 ast            : (a > 1) AND (0 > 1)
-raw expr       : and(gt(#0::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), false)
+raw expr       : and(gt(a::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), false)
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -191,9 +191,9 @@ evaluation (internal):
 
 
 ast            : (a > 1) AND (0 < 1)
-raw expr       : and(gt(#0::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), true)
+raw expr       : and(gt(a::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), true)
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -212,9 +212,9 @@ evaluation (internal):
 
 
 ast            : (a < 1) AND (0 > 1)
-raw expr       : and(lt(#0::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), false)
+raw expr       : and(lt(a::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), false)
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -233,9 +233,9 @@ evaluation (internal):
 
 
 ast            : (a < 1) AND (0 < 1)
-raw expr       : and(lt(#0::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), true)
+raw expr       : and(lt(a::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), true)
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -254,9 +254,9 @@ evaluation (internal):
 
 
 ast            : (0 > 1) AND (a > 1)
-raw expr       : and(gt(0_u8, 1_u8), gt(#0::UInt8 NULL, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : and<Boolean NULL, Boolean NULL>(false, gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : and(gt(0_u8, 1_u8), gt(a::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(false, gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -275,9 +275,9 @@ evaluation (internal):
 
 
 ast            : (0 > 1) AND (a < 1)
-raw expr       : and(gt(0_u8, 1_u8), lt(#0::UInt8 NULL, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : and<Boolean NULL, Boolean NULL>(false, lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : and(gt(0_u8, 1_u8), lt(a::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(false, lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -296,9 +296,9 @@ evaluation (internal):
 
 
 ast            : (0 < 1) AND (a > 1)
-raw expr       : and(lt(0_u8, 1_u8), gt(#0::UInt8 NULL, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : and<Boolean NULL, Boolean NULL>(true, gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : and(lt(0_u8, 1_u8), gt(a::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(true, gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -317,9 +317,9 @@ evaluation (internal):
 
 
 ast            : (0 < 1) AND (a < 1)
-raw expr       : and(lt(0_u8, 1_u8), lt(#0::UInt8 NULL, 1_u8))
-checked expr   : and<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : and<Boolean NULL, Boolean NULL>(true, lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : and(lt(0_u8, 1_u8), lt(a::UInt8 NULL, 1_u8))
+checked expr   : and<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : and<Boolean NULL, Boolean NULL>(true, lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -338,8 +338,8 @@ evaluation (internal):
 
 
 ast            : NOT a
-raw expr       : not(#0::NULL)
-checked expr   : not<Boolean NULL>(CAST(#0 AS Boolean NULL))
+raw expr       : not(a::NULL)
+checked expr   : not<Boolean NULL>(CAST(a AS Boolean NULL))
 optimized expr : NULL
 evaluation:
 +--------+--------+--------------+
@@ -363,8 +363,8 @@ evaluation (internal):
 
 
 ast            : NOT a
-raw expr       : not(#0::Boolean)
-checked expr   : not<Boolean>(#0)
+raw expr       : not(a::Boolean)
+checked expr   : not<Boolean>(a)
 evaluation:
 +--------+---------------+---------------+
 |        | a             | Output        |
@@ -385,8 +385,8 @@ evaluation (internal):
 
 
 ast            : NOT a
-raw expr       : not(#0::Boolean NULL)
-checked expr   : not<Boolean NULL>(#0)
+raw expr       : not(a::Boolean NULL)
+checked expr   : not<Boolean NULL>(a)
 evaluation:
 +--------+------------------------+------------------------+
 |        | a                      | Output                 |
@@ -407,8 +407,8 @@ evaluation (internal):
 
 
 ast            : NOT a
-raw expr       : not(#0::Boolean NULL)
-checked expr   : not<Boolean NULL>(#0)
+raw expr       : not(a::Boolean NULL)
+checked expr   : not<Boolean NULL>(a)
 evaluation:
 +--------+------------------+-----------------+
 |        | a                | Output          |
@@ -447,9 +447,9 @@ output         : NULL
 
 
 ast            : (a < 1) OR (a < 1)
-raw expr       : or(lt(#0::UInt8 NULL, 1_u8), lt(#0::UInt8 NULL, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : or(lt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -468,9 +468,9 @@ evaluation (internal):
 
 
 ast            : (a > 1) OR (a < 1)
-raw expr       : or(gt(#0::UInt8 NULL, 1_u8), lt(#0::UInt8 NULL, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : or(gt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -489,9 +489,9 @@ evaluation (internal):
 
 
 ast            : (a < 1) OR (a > 1)
-raw expr       : or(lt(#0::UInt8 NULL, 1_u8), gt(#0::UInt8 NULL, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : or(lt(a::UInt8 NULL, 1_u8), gt(a::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -510,9 +510,9 @@ evaluation (internal):
 
 
 ast            : (a < 1) OR (a < 1)
-raw expr       : or(lt(#0::UInt8 NULL, 1_u8), lt(#0::UInt8 NULL, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : or(lt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -531,9 +531,9 @@ evaluation (internal):
 
 
 ast            : (a > 1) OR (0 > 1)
-raw expr       : or(gt(#0::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), false)
+raw expr       : or(gt(a::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), false)
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -552,9 +552,9 @@ evaluation (internal):
 
 
 ast            : (a > 1) OR (0 < 1)
-raw expr       : or(gt(#0::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), true)
+raw expr       : or(gt(a::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), true)
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -573,9 +573,9 @@ evaluation (internal):
 
 
 ast            : (a < 1) OR (0 > 1)
-raw expr       : or(lt(#0::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), false)
+raw expr       : or(lt(a::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), false)
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -594,9 +594,9 @@ evaluation (internal):
 
 
 ast            : (a < 1) OR (0 < 1)
-raw expr       : or(lt(#0::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8), true)
+raw expr       : or(lt(a::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
+optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), true)
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -615,9 +615,9 @@ evaluation (internal):
 
 
 ast            : (0 > 1) OR (a > 1)
-raw expr       : or(gt(0_u8, 1_u8), gt(#0::UInt8 NULL, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(false, gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : or(gt(0_u8, 1_u8), gt(a::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(false, gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -636,9 +636,9 @@ evaluation (internal):
 
 
 ast            : (0 > 1) OR (a < 1)
-raw expr       : or(gt(0_u8, 1_u8), lt(#0::UInt8 NULL, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(false, lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : or(gt(0_u8, 1_u8), lt(a::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(false, lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -657,9 +657,9 @@ evaluation (internal):
 
 
 ast            : (0 < 1) OR (a > 1)
-raw expr       : or(lt(0_u8, 1_u8), gt(#0::UInt8 NULL, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(true, gt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : or(lt(0_u8, 1_u8), gt(a::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(true, gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |
@@ -678,9 +678,9 @@ evaluation (internal):
 
 
 ast            : (0 < 1) OR (a < 1)
-raw expr       : or(lt(0_u8, 1_u8), lt(#0::UInt8 NULL, 1_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(#0, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(true, lt<UInt8 NULL, UInt8 NULL>(#0, 1_u8))
+raw expr       : or(lt(0_u8, 1_u8), lt(a::UInt8 NULL, 1_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(true, lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
 +--------+------------------+------------------------+
 |        | a                | Output                 |

@@ -162,7 +162,6 @@ impl FuseTable {
         for (id, remote_expr) in update_list.into_iter() {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
-                .unwrap()
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
             ops.push(BlockOperator::Map { expr });
             offset_map.insert(id, pos);
@@ -177,9 +176,11 @@ impl FuseTable {
         let (filter_expr, filters) = if let Some(remote_expr) = filter {
             let schema = block_reader.schema();
             (
-                Arc::new(remote_expr.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
-                    expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
-                })),
+                Arc::new(Some(
+                    remote_expr
+                        .as_expr(&BUILTIN_FUNCTIONS)
+                        .project_column_ref(|name| schema.index_of(name).unwrap()),
+                )),
                 vec![remote_expr],
             )
         } else {

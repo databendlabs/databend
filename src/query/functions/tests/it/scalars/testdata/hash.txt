@@ -17,8 +17,8 @@ output         : NULL
 
 
 ast            : md5(a)
-raw expr       : md5(#0::String)
-checked expr   : md5<String>(#0)
+raw expr       : md5(a::String)
+checked expr   : md5<String>(a)
 evaluation:
 +--------+-------------------+------------------------------------+
 |        | a                 | Output                             |
@@ -57,8 +57,8 @@ output         : NULL
 
 
 ast            : sha1(a)
-raw expr       : sha1(#0::String)
-checked expr   : sha<String>(#0)
+raw expr       : sha1(a::String)
+checked expr   : sha<String>(a)
 evaluation:
 +--------+-------------------+--------------------------------------------+
 |        | a                 | Output                                     |
@@ -97,8 +97,8 @@ output         : NULL
 
 
 ast            : blake3(a)
-raw expr       : blake3(#0::String)
-checked expr   : blake3<String>(#0)
+raw expr       : blake3(a::String)
+checked expr   : blake3<String>(a)
 evaluation:
 +--------+-------------------+--------------------------------------------------------------------+
 |        | a                 | Output                                                             |
@@ -146,8 +146,8 @@ output         : NULL
 
 
 ast            : sha2(a,b)
-raw expr       : sha2(#0::String, #1::UInt16)
-checked expr   : sha2<String, UInt64>(#0, CAST(#1 AS UInt64))
+raw expr       : sha2(a::String, b::UInt16)
+checked expr   : sha2<String, UInt64>(a, CAST(b AS UInt64))
 evaluation:
 +--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
 |        | a                 | b           | Output                                                                                                                             |
@@ -259,8 +259,8 @@ output         : NULL
 
 
 ast            : city64withseed(a,b)
-raw expr       : city64withseed(#0::String, #1::UInt16)
-checked expr   : city64withseed<String, UInt16>(#0, #1)
+raw expr       : city64withseed(a::String, b::UInt16)
+checked expr   : city64withseed<String, UInt16>(a, b)
 evaluation:
 +--------+-------------------+-----------+----------------------------+
 |        | a                 | b         | Output                     |
@@ -354,8 +354,8 @@ output         : 4952851536318644461_u64
 
 
 ast            : siphash64(a)
-raw expr       : siphash64(#0::String)
-checked expr   : siphash64<String>(#0)
+raw expr       : siphash64(a::String)
+checked expr   : siphash64<String>(a)
 evaluation:
 +--------+-------------------------+----------------------------+
 |        | a                       | Output                     |
@@ -447,8 +447,8 @@ output         : 9962287286179718960_u64
 
 
 ast            : xxhash64(a)
-raw expr       : xxhash64(#0::String)
-checked expr   : xxhash64<String>(#0)
+raw expr       : xxhash64(a::String)
+checked expr   : xxhash64<String>(a)
 evaluation:
 +--------+-------------------------+----------------------------+
 |        | a                       | Output                     |
@@ -540,8 +540,8 @@ output         : 949155633_u32
 
 
 ast            : xxhash32(a)
-raw expr       : xxhash32(#0::String)
-checked expr   : xxhash32<String>(#0)
+raw expr       : xxhash32(a::String)
+checked expr   : xxhash32<String>(a)
 evaluation:
 +--------+-------------------------+------------------+
 |        | a                       | Output           |

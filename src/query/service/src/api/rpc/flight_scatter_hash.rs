@@ -17,21 +17,22 @@ use std::hash::Hasher;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check;
+use common_expression::type_check::check_function;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::AnyType;
+use common_expression::types::DataType;
 use common_expression::types::NullableType;
+use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
-use common_expression::Literal;
-use common_expression::RawExpr;
+use common_expression::RemoteExpr;
+use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_sql::executor::PhysicalScalar;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 
@@ -45,31 +46,30 @@ pub struct HashFlightScatter {
 impl HashFlightScatter {
     pub fn try_create(
         func_ctx: FunctionContext,
-        scalars: Vec<PhysicalScalar>,
+        hash_keys: Vec<RemoteExpr>,
         scatter_size: usize,
     ) -> Result<Box<dyn FlightScatter>> {
-        if scalars.len() == 1 {
-            return OneHashKeyFlightScatter::try_create(func_ctx, &scalars[0], scatter_size);
+        if hash_keys.len() == 1 {
+            return OneHashKeyFlightScatter::try_create(func_ctx, &hash_keys[0], scatter_size);
         }
-        let hash_keys: Vec<RawExpr> = scalars.iter().map(|e| e.as_raw_expr()).collect();
-
-        let mut keys: Vec<Expr> = vec![];
-        for hash_key in hash_keys {
-            let hash_raw = RawExpr::FunctionCall {
-                span: None,
-                name: "siphash".to_string(),
-                params: vec![],
-                args: vec![hash_key],
-            };
-            let expr = check(&hash_raw, &BUILTIN_FUNCTIONS)
-                .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
-            keys.push(expr);
-        }
+        let hash_key = hash_keys
+            .iter()
+            .map(|key| {
+                check_function(
+                    None,
+                    "siphash",
+                    &[],
+                    &[key.as_expr(&BUILTIN_FUNCTIONS)],
+                    &BUILTIN_FUNCTIONS,
+                )
+                .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))
+            })
+            .collect::<Result<_>>()?;
 
         Ok(Box::new(Self {
             func_ctx,
             scatter_size,
-            hash_key: keys,
+            hash_key,
         }))
     }
 }
@@ -84,29 +84,31 @@ struct OneHashKeyFlightScatter {
 impl OneHashKeyFlightScatter {
     pub fn try_create(
         func_ctx: FunctionContext,
-        scalar: &PhysicalScalar,
+        hash_key: &RemoteExpr,
         scatter_size: usize,
     ) -> Result<Box<dyn FlightScatter>> {
-        let hash_key = scalar.as_raw_expr();
-        let hash_raw = RawExpr::FunctionCall {
-            span: None,
-            name: "siphash".to_string(),
-            params: vec![],
-            args: vec![hash_key],
-        };
-        let size_raw = RawExpr::Literal {
-            span: None,
-            lit: Literal::UInt64(scatter_size as u64),
-        };
-        let mod_raw = RawExpr::FunctionCall {
-            span: None,
-            name: "modulo".to_string(),
-            params: vec![],
-            args: vec![hash_raw, size_raw],
-        };
-
-        let indices_scalar = check(&mod_raw, &BUILTIN_FUNCTIONS)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+        let indices_scalar = check_function(
+            None,
+            "modulo",
+            &[],
+            &[
+                check_function(
+                    None,
+                    "siphash",
+                    &[],
+                    &[hash_key.as_expr(&BUILTIN_FUNCTIONS)],
+                    &BUILTIN_FUNCTIONS,
+                )
+                .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?,
+                Expr::Constant {
+                    span: None,
+                    scalar: Scalar::Number(NumberScalar::UInt64(scatter_size as u64)),
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                },
+            ],
+            &BUILTIN_FUNCTIONS,
+        )
+        .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
 
         Ok(Box::new(OneHashKeyFlightScatter {
             scatter_size,

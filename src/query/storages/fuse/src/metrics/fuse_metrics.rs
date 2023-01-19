@@ -137,6 +137,10 @@ pub fn metrics_inc_pruning_before_block_nums(c: u64) {
     increment_gauge!(key!("pruning_before_block_nums"), c as f64);
 }
 
+pub fn metrics_inc_pruning_prewhere_nums(c: u64) {
+    increment_gauge!(key!("pruning_prewhere_nums"), c as f64);
+}
+
 pub fn metrics_inc_pruning_after_block_nums(c: u64) {
     increment_gauge!(key!("pruning_after_block_nums"), c as f64);
 }
@@ -178,6 +182,7 @@ pub fn metrics_reset() {
 
     // Pruning metrics.
     gauge!(key!("pruning_before_block_nums"), c);
+    gauge!(key!("pruning_prewhere_nums"), c);
     gauge!(key!("pruning_after_block_nums"), c);
     gauge!(key!("pruning_milliseconds"), c);
 }

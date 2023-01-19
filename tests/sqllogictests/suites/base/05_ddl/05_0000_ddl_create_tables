@@ -225,3 +225,18 @@ create table t as select number, number from numbers(1)
 
 statement error 1005
 create table tb101 (id int ,c1 datetime) 's3://wubx/tb101' connection=(aws_key_id='minioadmin' aws_ssecret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
+
+statement error 1007
+create table invalid_tb(a array(int) null);
+
+statement error 1007
+create table invalid_tb(a tuple(int) null);
+
+statement error 1007
+create table invalid_tb(a tuple(int, tuple(int) null));
+
+statement error 1007
+create table invalid_tb(a array(tuple(int) null));
+
+statement error 1007
+create table invalid_tb(a array(array(int) null));

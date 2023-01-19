@@ -18,7 +18,6 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_sql::plans::DeletePlan;
 use common_sql::plans::Plan;
-use common_sql::plans::ScalarExpr;
 use common_sql::Planner;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
@@ -87,7 +86,7 @@ pub async fn do_deletion(
 ) -> Result<()> {
     let (filter, col_indices) = if let Some(scalar) = &plan.selection {
         (
-            Some(scalar.as_expr()?.as_remote_expr()),
+            Some(scalar.as_expr_with_col_name()?.as_remote_expr()),
             scalar.used_columns().into_iter().collect(),
         )
     } else {

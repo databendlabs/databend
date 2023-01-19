@@ -80,7 +80,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::EvalScalar(EvalScalar {
             input: Box::new(input),
-            scalars: plan.scalars.clone(),
+            exprs: plan.exprs.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }

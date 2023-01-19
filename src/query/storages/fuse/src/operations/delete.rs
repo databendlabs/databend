@@ -163,7 +163,6 @@ impl FuseTable {
 
         let filter_expr = filter
             .as_expr(&BUILTIN_FUNCTIONS)
-            .unwrap()
             .project_column_ref(|name| schema.index_of(name).unwrap());
         let func_ctx = ctx.try_get_function_context()?;
         let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
@@ -199,10 +198,11 @@ impl FuseTable {
 
         let block_reader = self.create_block_reader(projection)?;
         let schema = block_reader.schema();
-        let filter =
-            Arc::new(filter.as_expr(&BUILTIN_FUNCTIONS).map(|expr| {
-                expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0)
-            }));
+        let filter = Arc::new(Some(
+            filter
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .project_column_ref(|name| schema.index_of(name).unwrap()),
+        ));
 
         let all_col_ids = self.all_the_columns_ids();
         let remain_col_ids: Vec<usize> = all_col_ids
@@ -265,27 +265,26 @@ impl FuseTable {
         )
         .await?;
 
-        let mut index_stats = Vec::with_capacity(block_metas.len());
-        let mut metas = Vec::with_capacity(block_metas.len());
-        for (index, block_meta) in block_metas.into_iter() {
-            index_stats.push((index, block_meta.cluster_stats.clone()));
-            metas.push(block_meta);
-        }
+        let range_block_metas = block_metas
+            .clone()
+            .into_iter()
+            .map(|(a, b)| (a.range, b))
+            .collect::<Vec<_>>();
 
         let (_, inner_parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.table_info.schema(),
             None,
-            metas,
+            &range_block_metas,
             base_snapshot.summary.block_count as usize,
         )?;
 
         let parts = Partitions::create(
             PartitionsShuffleKind::Mod,
-            index_stats
+            block_metas
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
-                .map(|((a, b), c)| MutationPartInfo::create(a, b, c))
+                .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
                 .collect(),
         );
         ctx.try_set_partitions(parts)
@@ -346,7 +345,6 @@ impl FuseTable {
         for remote_expr in &cluster_keys {
             let expr: Expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
-                .unwrap()
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
             let index = match &expr {
                 Expr::ColumnRef { id, .. } => *id,
@@ -363,10 +361,17 @@ impl FuseTable {
             cluster_key_index.push(index);
         }
 
+        let max_page_size = if self.is_native() {
+            Some(self.get_write_settings().max_page_size)
+        } else {
+            None
+        };
+
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             extra_key_num,
+            max_page_size,
             0,
             self.get_block_compact_thresholds(),
             operators,

@@ -15,19 +15,25 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_sql::MetadataRef;
+
 use crate::api::DataExchange;
 use crate::api::FragmentPayload;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 
 impl QueryFragmentsActions {
-    pub fn display_indent(&self) -> impl Display + '_ {
-        QueryFragmentsActionsWrap { inner: self }
+    pub fn display_indent<'a>(&'a self, metadata: &'a MetadataRef) -> impl Display + '_ {
+        QueryFragmentsActionsWrap {
+            inner: self,
+            metadata,
+        }
     }
 }
 
 struct QueryFragmentsActionsWrap<'a> {
     inner: &'a QueryFragmentsActions,
+    metadata: &'a MetadataRef,
 }
 
 impl<'a> Display for QueryFragmentsActionsWrap<'a> {
@@ -37,7 +43,7 @@ impl<'a> Display for QueryFragmentsActionsWrap<'a> {
                 writeln!(f)?;
             }
 
-            writeln!(f, "{}", fragment_actions.display_indent())?;
+            writeln!(f, "{}", fragment_actions.display_indent(self.metadata))?;
         }
 
         Ok(())
@@ -45,13 +51,17 @@ impl<'a> Display for QueryFragmentsActionsWrap<'a> {
 }
 
 impl QueryFragmentActions {
-    pub fn display_indent(&self) -> impl Display + '_ {
-        QueryFragmentActionsWrap { inner: self }
+    pub fn display_indent<'a>(&'a self, metadata: &'a MetadataRef) -> impl Display + '_ {
+        QueryFragmentActionsWrap {
+            inner: self,
+            metadata,
+        }
     }
 }
 
 struct QueryFragmentActionsWrap<'a> {
     inner: &'a QueryFragmentActions,
+    metadata: &'a MetadataRef,
 }
 
 impl<'a> Display for QueryFragmentActionsWrap<'a> {
@@ -70,7 +80,11 @@ impl<'a> Display for QueryFragmentActionsWrap<'a> {
             let fragment_action = &self.inner.fragment_actions[0];
             match &fragment_action.payload {
                 FragmentPayload::Plan(node) => {
-                    write!(f, "{}", node.format_indent(1))?;
+                    let plan_display_string = node
+                        .format(self.metadata.clone())
+                        .and_then(|node| node.format_pretty_with_prefix("    "))
+                        .unwrap();
+                    write!(f, "{}", plan_display_string)?;
                 }
             };
         }

@@ -107,6 +107,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 span: transform_span(span),
                 id: col_id,
                 data_type: columns[col_id].1.clone(),
+                display_name: columns[col_id].0.to_string(),
             }
         }
         AExpr::Cast {

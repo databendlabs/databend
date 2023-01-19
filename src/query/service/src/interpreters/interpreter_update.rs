@@ -25,7 +25,7 @@ use common_sql::plans::CastExpr;
 use common_sql::plans::FunctionCall;
 use common_sql::BindContext;
 use common_sql::ColumnBinding;
-use common_sql::Scalar;
+use common_sql::ScalarExpr;
 use common_sql::Visibility;
 
 use crate::interpreters::Interpreter;
@@ -34,7 +34,6 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::UpdatePlan;
 
 /// interprets UpdatePlan
@@ -64,21 +63,20 @@ impl Interpreter for UpdateInterpreter {
 
     #[tracing::instrument(level = "debug", name = "update_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // TODO check privilege
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
-            let filter = scalar.as_expr()?.as_remote_expr();
+            let filter = scalar.as_expr_with_col_name()?.as_remote_expr();
             let col_indices = scalar.used_columns().into_iter().collect();
             (Some(filter), col_indices)
         } else {
             (None, vec![])
         };
 
-        let predicate = Scalar::BoundColumnRef(BoundColumnRef {
+        let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef {
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
@@ -94,7 +92,8 @@ impl Interpreter for UpdateInterpreter {
             Vec::with_capacity(self.plan.update_list.len()),
             |mut acc, (id, scalar)| {
                 let filed = schema.field(*id);
-                let left = Scalar::CastExpr(CastExpr {
+                let left = ScalarExpr::CastExpr(CastExpr {
+                    is_try: false,
                     argument: Box::new(scalar.clone()),
                     from_type: Box::new(scalar.data_type()),
                     target_type: Box::new(filed.data_type().clone()),
@@ -115,7 +114,7 @@ impl Interpreter for UpdateInterpreter {
                             filed.name(),
                             column_binding,
                         ) {
-                            right = Some(Scalar::BoundColumnRef(BoundColumnRef {
+                            right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
                                 column: column_binding.clone(),
                             }));
                             break;
@@ -123,14 +122,14 @@ impl Interpreter for UpdateInterpreter {
                     }
                     let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
                     let return_type = right.data_type();
-                    Scalar::FunctionCall(FunctionCall {
+                    ScalarExpr::FunctionCall(FunctionCall {
                         params: vec![],
                         arguments: vec![predicate.clone(), left, right],
                         func_name: "if".to_string(),
                         return_type: Box::new(return_type),
                     })
                 };
-                acc.push((*id, scalar.as_expr()?.as_remote_expr()));
+                acc.push((*id, scalar.as_expr_with_col_name()?.as_remote_expr()));
                 Ok::<_, ErrorCode>(acc)
             },
         )?;

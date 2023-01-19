@@ -223,6 +223,7 @@ fn parse_oss_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         })?;
     let sp = StorageParams::Oss(StorageOssConfig {
         endpoint_url: endpoint,
+        presign_endpoint_url: "".to_string(),
         bucket: l.name.to_string(),
         access_key_id: l
             .connection

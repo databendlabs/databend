@@ -22,7 +22,7 @@ use crate::optimizer::SExpr;
 use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 
 pub struct RuleEliminateFilter {
     id: RuleID,
@@ -65,7 +65,7 @@ impl Rule for RuleEliminateFilter {
             .predicates
             .into_iter()
             .unique()
-            .collect::<Vec<Scalar>>();
+            .collect::<Vec<ScalarExpr>>();
         if predicates.is_empty() {
             state.add_result(s_expr.child(0)?.clone());
         } else if origin_predicates.len() != predicates.len() {

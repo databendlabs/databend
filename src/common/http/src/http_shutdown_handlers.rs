@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use common_base::base::tokio::sync::broadcast;
 use common_base::base::tokio::sync::oneshot;
@@ -51,6 +52,7 @@ impl HttpShutdownHandler {
         listening: SocketAddr,
         tls_config: Option<RustlsConfig>,
         ep: impl Endpoint + 'static,
+        graceful_shutdown_timeout: Option<Duration>,
     ) -> Result<SocketAddr> {
         assert!(self.join_handle.is_none());
         assert!(self.abort_handle.is_none());
@@ -80,11 +82,9 @@ impl HttpShutdownHandler {
 
         let (tx, rx) = oneshot::channel();
         let join_handle = common_base::base::tokio::spawn(
-            poem::Server::new_with_acceptor(acceptor).run_with_graceful_shutdown(
-                ep,
-                rx.map(|_| ()),
-                None,
-            ),
+            poem::Server::new_with_acceptor(acceptor)
+                .name(self.service_name.clone())
+                .run_with_graceful_shutdown(ep, rx.map(|_| ()), graceful_shutdown_timeout),
         );
         self.join_handle = Some(join_handle);
         self.abort_handle = Some(tx);

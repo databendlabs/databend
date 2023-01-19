@@ -17,8 +17,8 @@ use std::fmt::Formatter;
 
 use common_exception::Result;
 use common_expression::TableSchema;
-use common_storage::ColumnLeaf;
-use common_storage::ColumnLeaves;
+use common_storage::ColumnNode;
+use common_storage::ColumnNodes;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {
@@ -53,26 +53,26 @@ impl Projection {
         }
     }
 
-    pub fn project_column_leaves<'a>(
+    pub fn project_column_nodes<'a>(
         &'a self,
-        column_leaves: &'a ColumnLeaves,
-    ) -> Result<Vec<&ColumnLeaf>> {
-        let column_leaves = match self {
+        column_nodes: &'a ColumnNodes,
+    ) -> Result<Vec<&ColumnNode>> {
+        let column_nodes = match self {
             Projection::Columns(indices) => indices
                 .iter()
-                .map(|idx| &column_leaves.column_leaves[*idx])
+                .map(|idx| &column_nodes.column_nodes[*idx])
                 .collect(),
             Projection::InnerColumns(path_indices) => {
                 let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                 paths
                     .iter()
                     .map(|path| {
-                        ColumnLeaves::traverse_path(&column_leaves.column_leaves, path).unwrap()
+                        ColumnNodes::traverse_path(&column_nodes.column_nodes, path).unwrap()
                     })
                     .collect()
             }
         };
-        Ok(column_leaves)
+        Ok(column_nodes)
     }
 }
 

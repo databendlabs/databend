@@ -136,6 +136,16 @@ const config = {
                         position: 'right',
                     },
                     {
+                        type: 'docsVersionDropdown',
+                        position: 'right',
+                        dropdownItemsAfter: [
+                            {
+                                href: 'https://databend-qe5h89pp4-databend.vercel.app',
+                                label: 'v0.8.177-nightly',
+                            },
+                        ]
+                    },
+                    {
                         type: 'localeDropdown',
                         position: 'right',
                         dropdownItemsAfter: [
