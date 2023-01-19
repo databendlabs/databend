@@ -14,14 +14,18 @@
 
 use std::cmp::Ordering;
 
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Literal;
 
+use crate::optimizer::ColumnStat;
 use crate::optimizer::Datum;
+use crate::optimizer::Histogram;
 use crate::optimizer::Statistics;
 use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 
 /// A default selectivity factor for a predicate
 /// that we cannot estimate the selectivity for it.
@@ -40,15 +44,15 @@ impl<'a> SelectivityEstimator<'a> {
     }
 
     /// Compute the selectivity of a predicate.
-    pub fn compute_selectivity(&self, predicate: &Scalar) -> f64 {
+    pub fn compute_selectivity(&self, predicate: &ScalarExpr) -> f64 {
         match predicate {
-            Scalar::BoundColumnRef(_) => {
+            ScalarExpr::BoundColumnRef(_) => {
                 // If a column ref is on top of a predicate, e.g.
                 // `SELECT * FROM t WHERE c1`, the selectivity is 1.
                 return 1.0;
             }
 
-            Scalar::ConstantExpr(constant) => {
+            ScalarExpr::ConstantExpr(constant) => {
                 if is_true_constant_predicate(constant) {
                     return 1.0;
                 } else {
@@ -56,19 +60,24 @@ impl<'a> SelectivityEstimator<'a> {
                 }
             }
 
-            Scalar::AndExpr(and_expr) => {
+            ScalarExpr::AndExpr(and_expr) => {
                 let left_selectivity = self.compute_selectivity(&and_expr.left);
                 let right_selectivity = self.compute_selectivity(&and_expr.right);
                 return left_selectivity * right_selectivity;
             }
 
-            Scalar::OrExpr(or_expr) => {
+            ScalarExpr::OrExpr(or_expr) => {
                 let left_selectivity = self.compute_selectivity(&or_expr.left);
                 let right_selectivity = self.compute_selectivity(&or_expr.right);
-                return f64::min(left_selectivity, right_selectivity);
+                return left_selectivity + right_selectivity - left_selectivity * right_selectivity;
             }
 
-            Scalar::ComparisonExpr(comp_expr) => {
+            ScalarExpr::NotExpr(not_expr) => {
+                let argument_selectivity = self.compute_selectivity(&not_expr.argument);
+                return 1.0 - argument_selectivity;
+            }
+
+            ScalarExpr::ComparisonExpr(comp_expr) => {
                 return self.compute_selectivity_comparison_expr(comp_expr);
             }
 
@@ -79,7 +88,7 @@ impl<'a> SelectivityEstimator<'a> {
     }
 
     fn compute_selectivity_comparison_expr(&self, comp_expr: &ComparisonExpr) -> f64 {
-        if let (Scalar::BoundColumnRef(column_ref), Scalar::ConstantExpr(constant)) =
+        if let (ScalarExpr::BoundColumnRef(column_ref), ScalarExpr::ConstantExpr(constant)) =
             (comp_expr.left.as_ref(), comp_expr.right.as_ref())
         {
             // Check if there is available histogram for the column.
@@ -105,11 +114,11 @@ impl<'a> SelectivityEstimator<'a> {
                     // For equal predicate, we just use cardinality of a single
                     // value to estimate the selectivity. This assumes that
                     // the column is in a uniform distribution.
-                    return 1.0 / col_hist.num_distinct_values();
+                    return evaluate_equal(col_hist, column_stat, constant);
                 }
                 ComparisonOp::NotEqual => {
                     // For not equal predicate, we treat it as opposite of equal predicate.
-                    return 1.0 - 1.0 / col_hist.num_distinct_values();
+                    return 1.0 - evaluate_equal(col_hist, column_stat, constant);
                 }
                 ComparisonOp::GT => {
                     // For greater than predicate, we use the number of values
@@ -118,7 +127,7 @@ impl<'a> SelectivityEstimator<'a> {
                     let mut num_greater = 0.0;
                     for bucket in col_hist.buckets_iter() {
                         if let Ok(ord) = bucket.upper_bound().compare(&const_datum) {
-                            if ord == Ordering::Less {
+                            if ord == Ordering::Less || ord == Ordering::Equal {
                                 num_greater += bucket.num_values();
                             } else {
                                 break;
@@ -194,4 +203,44 @@ fn is_true_constant_predicate(constant: &ConstantExpr) -> bool {
         Literal::Float64(v) => *v != 0.0,
         _ => true,
     }
+}
+
+fn evaluate_equal(col_hist: &Histogram, column_stat: &ColumnStat, constant: &ConstantExpr) -> f64 {
+    let constant_datum = Datum::from_literal(&constant.value);
+    match *constant.data_type {
+        DataType::Null => 0.0,
+        DataType::Number(number) => match number {
+            NumberDataType::UInt8
+            | NumberDataType::UInt16
+            | NumberDataType::UInt32
+            | NumberDataType::UInt64
+            | NumberDataType::Int8
+            | NumberDataType::Int16
+            | NumberDataType::Int32
+            | NumberDataType::Int64
+            | NumberDataType::Float32
+            | NumberDataType::Float64 => compare_equal(&constant_datum, col_hist, column_stat),
+        },
+        DataType::Boolean | DataType::String => {
+            compare_equal(&constant_datum, col_hist, column_stat)
+        }
+        _ => 1.0 / col_hist.num_distinct_values(),
+    }
+}
+
+fn compare_equal(datum: &Option<Datum>, col_hist: &Histogram, column_stat: &ColumnStat) -> f64 {
+    let col_min = &column_stat.min;
+    let col_max = &column_stat.max;
+    if let Some(constant_datum) = datum {
+        if col_min.type_comparable(constant_datum) {
+            // Safe to unwrap, because type is comparable.
+            if constant_datum.compare(col_min).unwrap() == Ordering::Less
+                || constant_datum.compare(col_max).unwrap() == Ordering::Greater
+            {
+                return 0.0;
+            }
+        }
+    }
+
+    1.0 / col_hist.num_distinct_values()
 }

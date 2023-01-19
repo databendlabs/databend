@@ -16,12 +16,6 @@ use core::fmt;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
-use common_exception::ErrorCode;
-use common_exception::Result;
-
-use crate::types::data_type::DataTypeImpl;
 use crate::DataField;
 
 /// memory layout.
@@ -61,147 +55,16 @@ impl DataSchema {
         self.fields.len()
     }
 
-    #[inline]
-    pub fn has_field(&self, name: &str) -> bool {
-        for i in 0..self.fields.len() {
-            if self.fields[i].name() == name {
-                return true;
-            }
-        }
-        false
-    }
-
-    pub fn fields_map(&self) -> BTreeMap<usize, DataField> {
-        let x = self.fields().iter().cloned().enumerate();
-        x.collect::<BTreeMap<_, _>>()
-    }
-
     /// Returns an immutable reference of a specific `Field` instance selected using an
     /// offset within the internal `fields` vector.
     pub fn field(&self, i: usize) -> &DataField {
         &self.fields[i]
     }
 
-    /// Returns an immutable reference of a specific `Field` instance selected by name.
-    pub fn field_with_name(&self, name: &str) -> Result<&DataField> {
-        Ok(&self.fields[self.index_of(name)?])
-    }
-
     /// Returns an immutable reference to field `metadata`.
     #[inline]
     pub const fn meta(&self) -> &BTreeMap<String, String> {
         &self.metadata
-    }
-
-    /// Find the index of the column with the given name.
-    pub fn index_of(&self, name: &str) -> Result<usize> {
-        for i in 0..self.fields.len() {
-            if self.fields[i].name() == name {
-                return Ok(i);
-            }
-        }
-        let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name().clone()).collect();
-        Err(ErrorCode::BadArguments(format!(
-            "Unable to get field named \"{}\". Valid fields: {:?}",
-            name, valid_fields
-        )))
-    }
-
-    /// Look up a column by name and return a immutable reference to the column along with
-    /// its index.
-    pub fn column_with_name(&self, name: &str) -> Option<(usize, &DataField)> {
-        self.fields
-            .iter()
-            .enumerate()
-            .find(|&(_, c)| c.name() == name)
-    }
-
-    /// Check to see if `self` is a superset of `other` schema. Here are the comparision rules:
-    pub fn contains(&self, other: &DataSchema) -> bool {
-        if self.fields.len() != other.fields.len() {
-            return false;
-        }
-
-        for (i, field) in other.fields.iter().enumerate() {
-            if !self.fields[i].contains(field) {
-                return false;
-            }
-        }
-        true
-    }
-
-    /// project will do column pruning.
-    #[must_use]
-    pub fn project(&self, projection: &[usize]) -> Self {
-        let fields = projection
-            .iter()
-            .map(|idx| self.fields()[*idx].clone())
-            .collect();
-        Self::new_from(fields, self.meta().clone())
-    }
-
-    /// project with inner columns by path.
-    pub fn inner_project(&self, path_indices: &BTreeMap<usize, Vec<usize>>) -> Self {
-        let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
-        let fields = paths
-            .iter()
-            .map(|path| Self::traverse_paths(self.fields(), path).unwrap())
-            .collect();
-        Self::new_from(fields, self.meta().clone())
-    }
-
-    fn traverse_paths(fields: &[DataField], path: &[usize]) -> Result<DataField> {
-        if path.is_empty() {
-            return Err(ErrorCode::BadArguments("path should not be empty"));
-        }
-        let field = &fields[path[0]];
-        if path.len() == 1 {
-            return Ok(field.clone());
-        }
-
-        let field_name = field.name();
-        if let DataTypeImpl::Struct(struct_type) = &field.data_type() {
-            let inner_types = struct_type.types();
-            let inner_names = match struct_type.names() {
-                Some(inner_names) => inner_names
-                    .iter()
-                    .map(|name| format!("{}:{}", field_name, name.to_lowercase()))
-                    .collect::<Vec<_>>(),
-                None => (0..inner_types.len())
-                    .map(|i| format!("{}:{}", field_name, i + 1))
-                    .collect::<Vec<_>>(),
-            };
-
-            let inner_fields = inner_names
-                .iter()
-                .zip(inner_types.iter())
-                .map(|(inner_name, inner_type)| {
-                    DataField::new(&inner_name.clone(), inner_type.clone())
-                })
-                .collect::<Vec<DataField>>();
-            return Self::traverse_paths(&inner_fields, &path[1..]);
-        }
-        let valid_fields: Vec<String> = fields.iter().map(|f| f.name().clone()).collect();
-        Err(ErrorCode::BadArguments(format!(
-            "Unable to get field paths. Valid fields: {:?}",
-            valid_fields
-        )))
-    }
-
-    /// project will do column pruning.
-    #[must_use]
-    pub fn project_by_fields(&self, fields: Vec<DataField>) -> Self {
-        Self::new_from(fields, self.meta().clone())
-    }
-
-    pub fn to_arrow(&self) -> ArrowSchema {
-        let fields = self
-            .fields()
-            .iter()
-            .map(|f| f.to_arrow())
-            .collect::<Vec<_>>();
-
-        ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
 }
 
@@ -212,31 +75,6 @@ pub struct DataSchemaRefExt;
 impl DataSchemaRefExt {
     pub fn create(fields: Vec<DataField>) -> DataSchemaRef {
         Arc::new(DataSchema::new(fields))
-    }
-}
-
-impl From<&ArrowSchema> for DataSchema {
-    fn from(a_schema: &ArrowSchema) -> Self {
-        let fields = a_schema
-            .fields
-            .iter()
-            .map(|arrow_f| arrow_f.into())
-            .collect::<Vec<_>>();
-
-        DataSchema::new(fields)
-    }
-}
-
-#[allow(clippy::needless_borrow)]
-impl From<ArrowSchema> for DataSchema {
-    fn from(a_schema: ArrowSchema) -> Self {
-        (&a_schema).into()
-    }
-}
-
-impl From<ArrowSchemaRef> for DataSchema {
-    fn from(a_schema: ArrowSchemaRef) -> Self {
-        (a_schema.as_ref()).into()
     }
 }
 

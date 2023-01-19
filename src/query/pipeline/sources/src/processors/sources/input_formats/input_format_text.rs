@@ -12,8 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -43,6 +46,7 @@ use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
 use crate::processors::sources::input_formats::input_split::split_by_size;
 use crate::processors::sources::input_formats::input_split::FileInfo;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
+use crate::processors::sources::input_formats::InputError;
 
 pub trait AligningStateTextBased: Sync + Sized + Send {
     fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self>;
@@ -135,7 +139,16 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
             return Ok(vec![]);
         }
 
-        let mut output = RowBatch::default();
+        let mut output = RowBatch {
+            data: vec![],
+            row_ends: vec![],
+            field_ends: vec![],
+            split_info: self.split_info.clone(),
+            batch_id: self.common.batch_id,
+            start_offset_in_split: self.common.offset,
+            start_row_in_split: self.common.rows,
+            start_row_of_split: self.split_info.start_row_text(),
+        };
         let rows = &mut output.row_ends;
         for (i, b) in buf.iter().enumerate() {
             if *b == b'\n' {
@@ -151,10 +164,6 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
             output.data.extend_from_slice(&buf[..batch_end]);
             self.tail_of_last_batch.extend_from_slice(&buf[batch_end..]);
             let size = output.data.len();
-            output.path = self.split_info.file.path.to_string();
-            output.start_row = Some(self.common.rows);
-            output.offset = self.common.offset;
-            output.batch_id = self.common.batch_id;
             self.common.offset += size;
             self.common.rows += rows.len();
             self.common.batch_id += 1;
@@ -181,10 +190,11 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
                 data,
                 row_ends: vec![end],
                 field_ends: vec![],
-                path: self.split_info.file.path.clone(),
+                split_info: self.split_info.clone(),
                 batch_id: self.common.batch_id,
-                offset: self.common.offset,
-                start_row: Some(self.common.rows),
+                start_offset_in_split: self.common.offset,
+                start_row_in_split: self.common.rows,
+                start_row_of_split: self.split_info.start_row_text(),
             };
             tracing::debug!(
                 "align flush batch {}, bytes = {}, start_row = {}",
@@ -217,18 +227,46 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
 
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder>;
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
-}
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>>;
 
-pub struct InputFormatText<T: InputFormatTextBase> {
-    phantom: PhantomData<T>,
-}
+    fn on_error_continue(
+        columns: &mut Vec<TypeDeserializerImpl>,
+        num_rows: usize,
+        e: ErrorCode,
+        error_map: &mut HashMap<u16, InputError>,
+    ) {
+        columns.iter_mut().for_each(|c| {
+            // check if parts of columns inserted data, if so, pop it.
+            if c.len() > num_rows {
+                c.pop_data_value().expect("must success");
+            }
+        });
+        error_map
+            .entry(e.code())
+            .and_modify(|input_error| input_error.num += 1)
+            .or_insert(InputError { err: e, num: 1 });
+    }
 
-impl<T: InputFormatTextBase> InputFormatText<T> {
-    pub fn create() -> Self {
-        Self {
-            phantom: Default::default(),
+    fn on_error_abort(
+        columns: &mut Vec<TypeDeserializerImpl>,
+        num_rows: usize,
+        abort_num: u64,
+        error_count: &AtomicU64,
+        e: ErrorCode,
+    ) -> Result<()> {
+        if abort_num <= 1 || error_count.fetch_add(1, Ordering::Relaxed) >= abort_num - 1 {
+            return Err(e);
         }
+        columns.iter_mut().for_each(|c| {
+            // check if parts of columns inserted data, if so, pop it.
+            if c.len() > num_rows {
+                c.pop_data_value().expect("must success");
+            }
+        });
+        Ok(())
     }
 }
 
@@ -246,21 +284,7 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
-    fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
-    }
-
-    fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
-    }
-
-    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<TableSchemaRef> {
-        Err(ErrorCode::Unimplemented(
-            "infer_schema is not implemented for this format yet.",
-        ))
-    }
-
+impl<T: InputFormatTextBase> InputFormat for T {
     async fn get_splits(
         &self,
         files: &[String],
@@ -322,19 +346,45 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
         }
         Ok(infos)
     }
+
+    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<TableSchemaRef> {
+        Err(ErrorCode::Unimplemented(
+            "infer_schema is not implemented for this format yet.",
+        ))
+    }
+
+    fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
+        InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
+    }
+
+    fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
+        InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
+    }
 }
 
-#[derive(Default)]
 pub struct RowBatch {
     pub data: Vec<u8>,
     pub row_ends: Vec<usize>,
     pub field_ends: Vec<usize>,
 
+    pub split_info: Arc<SplitInfo>,
     // for error info
-    pub path: String,
     pub batch_id: usize,
-    pub offset: usize,
-    pub start_row: Option<usize>,
+    pub start_offset_in_split: usize,
+    pub start_row_in_split: usize,
+    pub start_row_of_split: Option<usize>,
+}
+
+impl RowBatch {
+    pub fn error(&self, msg: &str, ctx: &InputContext, offset: usize, row: usize) -> ErrorCode {
+        ctx.parse_error_row_based(
+            msg,
+            &self.split_info,
+            offset + self.start_offset_in_split,
+            self.start_row_in_split + row,
+            self.start_row_of_split,
+        )
+    }
 }
 
 impl RowBatchTrait for RowBatch {
@@ -430,6 +480,19 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
     fn memory_size(&self) -> usize {
         self.mutable_columns.iter().map(|x| x.memory_size()).sum()
     }
+
+    fn merge_map(&self, error_map: HashMap<u16, InputError>, file_name: String) {
+        if let Some(ref on_error_map) = self.ctx.on_error_map {
+            on_error_map
+                .entry(file_name)
+                .and_modify(|x| {
+                    for (k, v) in error_map.clone() {
+                        x.entry(k).and_modify(|y| y.num += v.num).or_insert(v);
+                    }
+                })
+                .or_insert(error_map);
+        }
+    }
 }
 
 impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
@@ -452,8 +515,10 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
 
     fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<DataBlock>> {
         if let Some(b) = batch {
+            let file_name = b.split_info.file.path.clone();
             self.num_rows += b.row_ends.len();
-            T::deserialize(self, b)?;
+            let r = T::deserialize(self, b)?;
+            self.merge_map(r, file_name);
             let mem = self.memory_size();
             tracing::debug!(
                 "chunk builder added new batch: row {} size {}",

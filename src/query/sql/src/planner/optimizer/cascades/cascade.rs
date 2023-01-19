@@ -49,7 +49,8 @@ pub struct CascadesOptimizer {
 impl CascadesOptimizer {
     pub fn create(ctx: Arc<dyn TableContext>) -> Result<Self> {
         let explore_rules = if ctx.get_settings().get_enable_cbo()? {
-            get_explore_rule_set()
+            let enable_bushy_join = ctx.get_settings().get_enable_bushy_join()? != 0;
+            get_explore_rule_set(enable_bushy_join)
         } else {
             RuleSet::create_with_ids(vec![]).unwrap()
         };

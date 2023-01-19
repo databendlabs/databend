@@ -16,19 +16,15 @@ use std::sync::Arc;
 
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_meta_app::schema::TableIdent;
 
-use crate::plans::Scalar;
-use crate::MetadataRef;
+use crate::plans::ScalarExpr;
 
 #[derive(Clone, Debug)]
 pub struct DeletePlan {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
-    pub table_id: TableIdent,
-    pub metadata: MetadataRef,
-    pub selection: Option<Scalar>,
+    pub selection: Option<ScalarExpr>,
 }
 
 impl DeletePlan {

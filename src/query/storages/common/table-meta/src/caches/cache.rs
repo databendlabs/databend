@@ -41,7 +41,7 @@ pub struct LoadParams {
 #[async_trait::async_trait]
 pub trait Loader<T> {
     /// Loads object of type T, located at `location`
-    async fn load(&self, prams: &LoadParams) -> Result<T>;
+    async fn load(&self, params: &LoadParams) -> Result<T>;
 }
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;

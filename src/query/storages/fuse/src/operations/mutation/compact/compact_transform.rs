@@ -28,7 +28,7 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
-use storages_common_index::BlockFilter;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -46,6 +46,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::metrics::*;
 use crate::operations::mutation::AbortOperation;
+use crate::operations::mutation::SerializeState;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -53,14 +54,6 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reducers::reduce_block_metas;
-use crate::FuseStorageFormat;
-
-struct SerializeState {
-    block_data: Vec<u8>,
-    block_location: String,
-    index_data: Vec<u8>,
-    index_location: String,
-}
 
 enum State {
     Consume,
@@ -96,8 +89,6 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     schema: TableSchemaRef,
-    storage_format: FuseStorageFormat,
-    table_compression: TableCompression,
 
     // Limit the memory size of the block read.
     max_memory: u64,
@@ -106,6 +97,7 @@ pub struct CompactTransform {
     block_metas: Vec<Arc<BlockMeta>>,
     order: usize,
     thresholds: BlockCompactThresholds,
+    write_settings: WriteSettings,
     abort_operation: AbortOperation,
 }
 
@@ -120,9 +112,8 @@ impl CompactTransform {
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
         schema: TableSchemaRef,
-        storage_format: FuseStorageFormat,
-        table_compression: TableCompression,
         thresholds: BlockCompactThresholds,
+        write_settings: WriteSettings,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
         let max_memory_usage = (settings.get_max_memory_usage()? as f64 * 0.8) as u64;
@@ -140,14 +131,13 @@ impl CompactTransform {
             location_gen,
             dal,
             schema,
-            storage_format,
-            table_compression,
             max_memory,
             max_io_requests,
             compact_tasks: VecDeque::new(),
             block_metas: Vec::new(),
             order: 0,
             thresholds,
+            write_settings,
             abort_operation: AbortOperation::default(),
         })))
     }
@@ -241,38 +231,40 @@ impl Processor for CompactTransform {
                     let (block_location, block_id) = self.location_gen.gen_block_location();
 
                     // build block index.
-                    let (index_data, index_size, index_location) = {
-                        // write index
-                        let func_ctx = self.ctx.try_get_function_context()?;
-                        let bloom_index = BlockFilter::try_create(
-                            func_ctx,
-                            self.schema.clone(),
-                            block_location.1,
-                            &[&new_block],
-                        )?;
-                        let index_block = bloom_index.filter_block;
-                        let location = self.location_gen.block_bloom_index_location(&block_id);
-                        let mut data = Vec::with_capacity(100 * 1024);
-                        let index_block_schema = &bloom_index.filter_schema;
-                        let (size, _) = blocks_to_parquet(
-                            index_block_schema,
-                            vec![index_block],
-                            &mut data,
-                            TableCompression::None,
-                        )?;
-                        (data, size, location)
-                    };
+                    let func_ctx = self.ctx.try_get_function_context()?;
+                    let bloom_index = BloomIndex::try_create(
+                        func_ctx,
+                        self.schema.clone(),
+                        block_location.1,
+                        &[&new_block],
+                    )?;
 
-                    let write_settings = WriteSettings {
-                        storage_format: self.storage_format,
-                        table_compression: self.table_compression,
-                        ..Default::default()
+                    let (index_data, index_size, index_location) = match bloom_index {
+                        Some(bloom_index) => {
+                            // write index
+                            let index_block = bloom_index.filter_block;
+                            let location = self.location_gen.block_bloom_index_location(&block_id);
+                            let mut data = Vec::with_capacity(100 * 1024);
+                            let index_block_schema = &bloom_index.filter_schema;
+                            let (size, _) = blocks_to_parquet(
+                                index_block_schema,
+                                vec![index_block],
+                                &mut data,
+                                TableCompression::None,
+                            )?;
+                            (Some(data), size, Some(location))
+                        }
+                        None => (None, 0u64, None),
                     };
 
                     // serialize data block.
                     let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
-                    let (file_size, col_metas) =
-                        io::write_block(&write_settings, &self.schema, new_block, &mut block_data)?;
+                    let (file_size, col_metas) = io::write_block(
+                        &self.write_settings,
+                        &self.schema,
+                        new_block,
+                        &mut block_data,
+                    )?;
 
                     // new block meta.
                     let new_meta = BlockMeta::new(
@@ -283,9 +275,9 @@ impl Processor for CompactTransform {
                         col_metas,
                         None,
                         block_location.clone(),
-                        Some(index_location.clone()),
+                        index_location.clone(),
                         index_size,
-                        self.table_compression.into(),
+                        self.write_settings.table_compression.into(),
                     );
                     self.abort_operation.add_block(&new_meta);
                     self.block_metas.push(Arc::new(new_meta));
@@ -294,7 +286,7 @@ impl Processor for CompactTransform {
                         block_data,
                         block_location: block_location.0,
                         index_data,
-                        index_location: index_location.0,
+                        index_location: index_location.map(|l| l.0),
                     });
                 }
                 self.state = State::SerializedBlocks(serialize_states);
@@ -417,10 +409,14 @@ impl Processor for CompactTransform {
                             metrics_inc_compact_block_write_bytes(state.block_data.len() as u64);
                         }
 
-                        // write block data.
-                        write_data(&state.block_data, dal, &state.block_location).await?;
                         // write index data.
-                        write_data(&state.index_data, dal, &state.index_location).await
+                        if let (Some(index_data), Some(index_location)) =
+                            (state.index_data, state.index_location)
+                        {
+                            write_data(&index_data, dal, &index_location).await?;
+                        }
+                        // write block data.
+                        write_data(&state.block_data, dal, &state.block_location).await
                     });
                 }
 

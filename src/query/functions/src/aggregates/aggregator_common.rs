@@ -111,12 +111,11 @@ pub fn eval_aggr(
     name: &str,
     params: Vec<Scalar>,
     columns: &[Column],
-    types: &[DataType],
     rows: usize,
 ) -> Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
-    let arguments = types.to_owned();
     let cols: Vec<Column> = columns.to_owned();
+    let arguments = columns.iter().map(|x| x.data_type()).collect();
 
     let func = factory.get(name, params, arguments)?;
     let data_type = func.return_type()?;

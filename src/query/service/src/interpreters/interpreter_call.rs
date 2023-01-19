@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use common_exception::Result;
 use common_expression::DataSchemaRef;
@@ -21,23 +20,21 @@ use common_sql::plans::CallPlan;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::procedures::Procedure;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 pub struct CallInterpreter {
+    func: Box<dyn Procedure>,
     ctx: Arc<QueryContext>,
     plan: CallPlan,
-    schema: RwLock<Option<DataSchemaRef>>,
 }
 
 impl CallInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CallPlan) -> Result<Self> {
-        Ok(CallInterpreter {
-            ctx,
-            plan,
-            schema: RwLock::new(None),
-        })
+        let func = ProcedureFactory::instance().get(plan.name.clone())?;
+        Ok(CallInterpreter { func, ctx, plan })
     }
 }
 
@@ -48,33 +45,19 @@ impl Interpreter for CallInterpreter {
     }
 
     fn schema(&self) -> DataSchemaRef {
-        self.schema
-            .read()
-            .unwrap()
-            .as_ref()
-            .expect("schema has not been initialized before execution")
-            .clone()
+        self.func.schema()
     }
 
     #[tracing::instrument(level = "debug", name = "call_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let plan = &self.plan;
-
-        let name = plan.name.clone();
-        let func = ProcedureFactory::instance().get(name)?;
-        let last_schema = func.schema();
-        {
-            let mut schema = self.schema.write().unwrap();
-            *schema = Some(last_schema);
-        }
-
         let mut build_res = PipelineBuildResult::create();
-        func.eval(
-            self.ctx.clone(),
-            plan.args.clone(),
-            &mut build_res.main_pipeline,
-        )
-        .await?;
+        self.func
+            .eval(
+                self.ctx.clone(),
+                self.plan.args.clone(),
+                &mut build_res.main_pipeline,
+            )
+            .await?;
 
         Ok(build_res)
     }

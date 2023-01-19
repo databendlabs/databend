@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field;
-
 use super::data_type::DataType;
 use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
@@ -47,15 +44,6 @@ impl DataType for ArrayType {
 
     fn name(&self) -> String {
         format!("Array({})", self.inner.name())
-    }
-
-    fn arrow_type(&self) -> ArrowType {
-        let field = Field::new(
-            "_array".to_string(),
-            self.inner.arrow_type(),
-            self.inner.is_nullable(),
-        );
-        ArrowType::LargeList(Box::new(field))
     }
 }
 

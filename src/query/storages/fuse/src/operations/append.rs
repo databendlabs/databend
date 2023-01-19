@@ -35,8 +35,6 @@ use common_sql::evaluator::CompoundBlockOperator;
 use crate::operations::FuseTableSink;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 impl FuseTable {
     pub fn do_append_data(
@@ -46,10 +44,9 @@ impl FuseTable {
         append_mode: AppendMode,
         need_output: bool,
     ) -> Result<()> {
-        let block_per_seg =
-            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
-
         let block_compact_thresholds = self.get_block_compact_thresholds();
+        let write_settings = self.get_write_settings();
+
         match append_mode {
             AppendMode::Normal => {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -74,8 +71,18 @@ impl FuseTable {
             }
         }
 
-        let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compact_thresholds)?;
+        let max_page_size = if self.is_native() {
+            Some(write_settings.max_page_size)
+        } else {
+            None
+        };
+        let cluster_stats_gen = self.get_cluster_stats_gen(
+            ctx.clone(),
+            max_page_size,
+            pipeline,
+            0,
+            block_compact_thresholds,
+        )?;
 
         let cluster_keys = &cluster_stats_gen.cluster_key_index;
         if !cluster_keys.is_empty() {
@@ -103,14 +110,12 @@ impl FuseTable {
                 FuseTableSink::try_create(
                     transform_input_port,
                     ctx.clone(),
-                    block_per_seg,
+                    write_settings.clone(),
                     self.operator.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     block_compact_thresholds,
                     self.table_info.schema(),
-                    self.storage_format,
-                    self.table_compression,
                     Some(transform_output_port),
                 )
             })?;
@@ -119,14 +124,12 @@ impl FuseTable {
                 FuseTableSink::try_create(
                     input,
                     ctx.clone(),
-                    block_per_seg,
+                    write_settings.clone(),
                     self.operator.clone(),
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     block_compact_thresholds,
                     self.table_info.schema(),
-                    self.storage_format,
-                    self.table_compression,
                     None,
                 )
             })?;
@@ -137,6 +140,7 @@ impl FuseTable {
     pub fn get_cluster_stats_gen(
         &self,
         ctx: Arc<dyn TableContext>,
+        max_page_size: Option<usize>,
         pipeline: &mut Pipeline,
         level: i32,
         block_compactor: BlockCompactThresholds,
@@ -157,7 +161,6 @@ impl FuseTable {
         for remote_expr in &cluster_keys {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
-                .unwrap()
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
             let offset = match &expr {
                 Expr::ColumnRef { id, .. } => *id,
@@ -191,6 +194,7 @@ impl FuseTable {
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             extra_key_num,
+            max_page_size,
             level,
             block_compactor,
             vec![],

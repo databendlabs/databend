@@ -2,7 +2,7 @@
 title: GET
 ---
 
-Extracts value from an `ARRAY` by `index`, an `OBJECT` by `field_name`, or a `VARIANT` that contains either `ARRAY` or `OBJECT`.
+Extracts value from a `Variant` that contains `ARRAY` by `index`, or a `Variant` that contains `OBJECT` by `field_name`.
 The value is returned as a `Variant` or `NULL` if either of the arguments is `NULL`.
 
 `GET` applies case-sensitive matching to `field_name`. For case-insensitive matching, use `GET_IGNORE_CASE`.
@@ -10,10 +10,8 @@ The value is returned as a `Variant` or `NULL` if either of the arguments is `NU
 ## Syntax
 
 ```sql
-GET( <array>, <index> )
 GET( <variant>, <index> )
 
-GET( <object>, <field_name> )
 GET( <variant>, <field_name> )
 ```
 
@@ -21,8 +19,6 @@ GET( <variant>, <field_name> )
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| `<array>`       | The ARRAY value
-| `<object>`      | The OBJECT value
 | `<variant>`     | The VARIANT value that contains either an ARRAY or an OBJECT
 | `<index>`       | The Uint32 value specifies the position of the value in ARRAY  
 | `<field_name>`  | The String value specifies the key in a key-value pair of OBJECT

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Error as IOError;
+
 use common_exception::ErrorCode;
 use mysql_async::Error as MysqlClientError;
 use reqwest::Error as HttpClientError;
@@ -31,7 +33,7 @@ pub enum DSqlLogicTestError {
     #[error("Databend error: {0}")]
     Databend(ErrorCode),
     // Error from mysql client
-    #[error("Mysql client error: {0}")]
+    #[error("mysql client error: {0}")]
     MysqlClient(MysqlClientError),
     // Error from http client
     #[error("Http client error(from reqwest crate): {0}")]
@@ -39,6 +41,9 @@ pub enum DSqlLogicTestError {
     // Error from WalkDir
     #[error("Walk dir error: {0}")]
     WalkDir(WalkDirError),
+    // Error from IOError
+    #[error("io error: {0}")]
+    IO(IOError),
     // Error from serde json
     #[error("Serde json error: {0}")]
     SerdeJson(SerdeJsonError),
@@ -74,6 +79,12 @@ impl From<HttpClientError> for DSqlLogicTestError {
 impl From<WalkDirError> for DSqlLogicTestError {
     fn from(value: WalkDirError) -> Self {
         DSqlLogicTestError::WalkDir(value)
+    }
+}
+
+impl From<IOError> for DSqlLogicTestError {
+    fn from(value: IOError) -> Self {
+        DSqlLogicTestError::IO(value)
     }
 }
 

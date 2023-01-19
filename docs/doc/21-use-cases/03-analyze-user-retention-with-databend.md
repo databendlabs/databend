@@ -1,7 +1,7 @@
 ---
-title: How to Analyze User Retention With Databend
-sidebar_label: User Retention Analysis
-description: How to do user retention analysis with simplicity and high performance.
+title: Analyzing User Retention with Databend
+sidebar_label: Analyzing User Retention
+description: Analyzing User Retention with Databend
 ---
 
 User retention helps you analyze how many users return to your product or service. Let's go through an example and see how to analyze it in Databend.
@@ -81,5 +81,3 @@ The retention result is:
 | 1000000 | 900000 | 100000 |
 +---------+--------+--------+
 ```
-
-**Enjoy your journey.** 

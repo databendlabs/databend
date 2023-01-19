@@ -14,6 +14,8 @@
 
 pub mod arithmetics_type;
 pub mod arrow;
+pub mod block_compact_thresholds;
+pub mod block_debug;
 mod column_from;
 pub mod date_helper;
 pub mod display;
@@ -69,6 +71,7 @@ pub fn eval_function(
                     span: span.clone(),
                     id,
                     data_type: ty.clone(),
+                    display_name: String::new(),
                 },
                 BlockEntry {
                     data_type: ty,
@@ -94,7 +97,7 @@ pub fn calculate_function_domain(
     span: Span,
     fn_name: &str,
     args: impl IntoIterator<Item = (Domain, DataType)>,
-    fn_ctx: FunctionContext,
+    func_ctx: FunctionContext,
     fn_registry: &FunctionRegistry,
 ) -> Result<(Option<Domain>, DataType)> {
     let (args, args_domain): (Vec<_>, HashMap<_, _>) = args
@@ -106,6 +109,7 @@ pub fn calculate_function_domain(
                     span: span.clone(),
                     id,
                     data_type: ty,
+                    display_name: String::new(),
                 },
                 (id, domain),
             )
@@ -118,8 +122,8 @@ pub fn calculate_function_domain(
         args,
     };
     let expr = crate::type_check::check(&raw_expr, fn_registry)?;
-    let constant_folder = ConstantFolder::new(args_domain, fn_ctx, fn_registry);
-    let (_, output_domain) = constant_folder.fold(&expr);
+    let (_, output_domain) =
+        ConstantFolder::fold_with_domain(&expr, args_domain, func_ctx, fn_registry);
     Ok((output_domain, expr.data_type().clone()))
 }
 

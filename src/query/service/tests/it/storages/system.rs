@@ -31,6 +31,7 @@ use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 // use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
+use common_storages_system::BuildOptionsTable;
 use common_storages_system::CatalogsTable;
 use common_storages_system::ClustersTable;
 use common_storages_system::ColumnsTable;
@@ -89,6 +90,21 @@ async fn run_table_tests(
         writeln!(file, "{}", line).unwrap();
     }
     write!(file, "\n\n").unwrap();
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_build_options_table() -> Result<()> {
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+
+    let table = BuildOptionsTable::create(1);
+    let source_plan = table.read_plan(ctx.clone(), None).await?;
+
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 2);
+    assert!(block.num_rows() > 0);
     Ok(())
 }
 

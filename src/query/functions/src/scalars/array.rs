@@ -60,7 +60,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "array",
         FunctionProperty::default(),
         || FunctionDomain::Full,
-        |_| Ok(Value::Scalar(())),
+        |_| Value::Scalar(()),
     );
 
     registry.register_function_factory("array", |_, args_type| {
@@ -100,10 +100,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 match len {
-                    Some(_) => Ok(Value::Column(Column::Array(Box::new(
-                        builder.build().upcast(),
-                    )))),
-                    None => Ok(Value::Scalar(Scalar::Array(builder.build_scalar()))),
+                    Some(_) => Value::Column(Column::Array(Box::new(builder.build().upcast()))),
+                    None => Value::Scalar(Scalar::Array(builder.build_scalar())),
                 }
             }),
         }))
@@ -127,7 +125,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "get",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
-        |_, _, _| Ok(Value::Scalar(())),
+        |_, _, _| Value::Scalar(()),
     );
 
     registry.register_combine_nullable_2_arg::<ArrayType<NullableType<GenericType<0>>>, UInt64Type, GenericType<0>, _, _>(
@@ -147,7 +145,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         _ => output.push_null(),
                     }
                 }
-                Ok(())
             }
         ),
     );
@@ -169,7 +166,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         None => output.push_null(),
                     }
                 }
-                Ok(())
             }
         ),
     );
@@ -181,7 +177,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_3_arg::<EmptyArrayType, UInt64Type, UInt64Type, EmptyArrayType>(
             |_, _, _, output, _| {
                 *output += 1;
-                Ok(())
             }
         ),
     );
@@ -210,7 +205,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let arr_slice = arr.slice(range);
                     output.push(arr_slice);
                 }
-                Ok(())
             }
         ),
     );
@@ -221,7 +215,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
             *output += 1;
-            Ok(())
         }),
     );
 
@@ -238,7 +231,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let arr_slice = arr.slice(range);
                     output.push(arr_slice);
                 }
-                Ok(())
             }
         ),
     );
@@ -249,7 +241,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
             *output += 1;
-            Ok(())
         }),
     );
 
@@ -266,7 +257,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let arr_slice = arr.slice(range);
                     output.push(arr_slice);
                 }
-                Ok(())
             }
         ),
     );
@@ -274,7 +264,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     fn eval_contains<T: ArgType>(
         lhs: ValueRef<ArrayType<T>>,
         rhs: ValueRef<T>,
-    ) -> Result<Value<BooleanType>, String>
+    ) -> Value<BooleanType>
     where
         T::Scalar: HashtableKeyable,
     {
@@ -285,13 +275,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let _ = set.set_insert(T::to_owned_scalar(val));
                 }
                 match rhs {
-                    ValueRef::Scalar(c) => Ok(Value::Scalar(set.contains(&T::to_owned_scalar(c)))),
+                    ValueRef::Scalar(c) => Value::Scalar(set.contains(&T::to_owned_scalar(c))),
                     ValueRef::Column(col) => {
                         let result = BooleanType::column_from_iter(
                             T::iter_column(&col).map(|c| set.contains(&T::to_owned_scalar(c))),
                             &[],
                         );
-                        Ok(Value::Column(result))
+                        Value::Column(result)
                     }
                 }
             }
@@ -311,7 +301,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         &[],
                     ),
                 };
-                Ok(Value::Column(result))
+                Value::Column(result)
             }
         }
     }
@@ -355,14 +345,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                     match rhs {
                         ValueRef::Scalar(val) =>  {
                             let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
-                            Ok(Value::Scalar(set.contains( &key_ref)))
+                            Value::Scalar(set.contains( &key_ref))
                         },
                         ValueRef::Column(col) => {
                             let result = BooleanType::column_from_iter(StringType::iter_column(&col).map(|val| {
                                 let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
                                 set.contains(&key_ref)
                             }), &[]);
-                            Ok(Value::Column(result))
+                            Value::Column(result)
                         }
                     }
                 },
@@ -376,7 +366,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             .zip(StringType::iter_column(&col))
                             .map(|(array, c)| StringType::iter_column(&array).contains(&c)), &[]),
                     };
-                    Ok(Value::Column(result))
+                    Value::Column(result)
                 }
             }
         }
@@ -441,13 +431,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                     match rhs {
                         ValueRef::Scalar(val) =>  {
-                            Ok(Value::Scalar(set.contains( &(val as u8))))
+                            Value::Scalar(set.contains( &(val as u8)))
                         },
                         ValueRef::Column(col) => {
                             let result = BooleanType::column_from_iter(BooleanType::iter_column(&col).map(|val| {
                                 set.contains(&(val as u8))
                             }), &[]);
-                            Ok(Value::Column(result))
+                            Value::Column(result)
                         }
                     }
                 },
@@ -461,7 +451,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             .zip(BooleanType::iter_column(&col))
                             .map(|(array, c)| BooleanType::iter_column(&array).contains(&c)), &[]),
                     };
-                    Ok(Value::Column(result))
+                    Value::Column(result)
                 }
             }
         }

@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -20,6 +21,7 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
@@ -58,8 +60,9 @@ pub struct ProcessInfo {
 #[derive(Debug, Clone)]
 pub struct StageAttachment {
     pub location: String,
-    pub file_format_options: BTreeMap<String, String>,
-    pub copy_options: BTreeMap<String, String>,
+    pub file_format_options: Option<BTreeMap<String, String>>,
+    pub copy_options: Option<BTreeMap<String, String>>,
+    pub values_str: String,
 }
 
 #[async_trait::async_trait]
@@ -109,4 +112,5 @@ pub trait TableContext: Send + Sync {
     -> Result<Arc<dyn Table>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
+    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>);
 }

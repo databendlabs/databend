@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -33,21 +34,20 @@ use crate::processors::sources::input_formats::input_format_text::AligningStateR
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
+use crate::processors::sources::input_formats::InputError;
 
 pub struct InputFormatTSV {}
 
 impl InputFormatTSV {
-    #[allow(clippy::too_many_arguments)]
+    pub fn create() -> Self {
+        Self {}
+    }
     fn read_row(
         field_delimiter: u8,
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
         deserializers: &mut Vec<TypeDeserializerImpl>,
         schema: &TableSchemaRef,
-        path: &str,
-        batch_id: usize,
-        offset: usize,
-        row_index: Option<usize>,
     ) -> Result<()> {
         let num_columns = deserializers.len();
         let mut column_index = 0;
@@ -105,19 +105,7 @@ impl InputFormatTSV {
         }
 
         if let Some(m) = err_msg {
-            let row_info = if let Some(r) = row_index {
-                format!("at row {},", r)
-            } else {
-                String::new()
-            };
-            let mut msg = format!(
-                "fail to parse tsv {} batch {} at offset {}, {} reason={}, row data: ",
-                path,
-                batch_id,
-                offset + pos,
-                row_info,
-                m
-            );
+            let mut msg = format!("{}, row data: ", m);
             verbose_string(buf, &mut msg);
             Err(ErrorCode::BadBytes(msg))
         } else {
@@ -141,13 +129,16 @@ impl InputFormatTextBase for InputFormatTSV {
         Arc::new(FieldDecoderTSV::create(options))
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(
+        builder: &mut BlockBuilder<Self>,
+        batch: RowBatch,
+    ) -> Result<HashMap<u16, InputError>> {
         tracing::debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
-            batch.path,
+            batch.split_info.file.path,
             batch.batch_id,
-            batch.start_row,
-            batch.offset
+            batch.start_row_in_split,
+            batch.start_offset_in_split
         );
         let field_decoder = builder
             .field_decoder
@@ -158,7 +149,7 @@ impl InputFormatTextBase for InputFormatTSV {
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let mut num_rows = 0usize;
-        let start_row = batch.start_row;
+        let mut error_map: HashMap<u16, InputError> = HashMap::new();
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             if let Err(e) = Self::read_row(
@@ -167,28 +158,26 @@ impl InputFormatTextBase for InputFormatTSV {
                 buf,
                 columns,
                 schema,
-                &batch.path,
-                batch.batch_id,
-                batch.offset + start,
-                start_row.map(|n| n + i),
             ) {
-                if builder.ctx.on_error_mode == OnErrorMode::Continue {
-                    columns.iter_mut().for_each(|c| {
-                        // check if parts of columns inserted data, if so, pop it.
-                        if c.len() > num_rows {
-                            c.pop_data_value().expect("must success");
-                        }
-                    });
-                    start = *end;
-                    continue;
-                } else {
-                    return Err(e);
+                match builder.ctx.on_error_mode {
+                    OnErrorMode::Continue => {
+                        Self::on_error_continue(columns, num_rows, e.clone(), &mut error_map);
+                        start = *end;
+                        continue;
+                    }
+                    OnErrorMode::AbortNum(n) => {
+                        Self::on_error_abort(columns, num_rows, n, &builder.ctx.on_error_count, e)
+                            .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                        start = *end;
+                        continue;
+                    }
+                    _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
                 }
             }
             start = *end;
             num_rows += 1;
         }
-        Ok(())
+        Ok(error_map)
     }
 }
 

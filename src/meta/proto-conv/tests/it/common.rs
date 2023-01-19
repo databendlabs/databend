@@ -17,6 +17,7 @@ use std::fmt::Display;
 
 use common_proto_conv::FromToProto;
 use common_proto_conv::VER;
+use convert_case::Casing;
 use pretty_assertions::assert_eq;
 
 /// Tests converting rust types from/to protobuf defined types.
@@ -28,12 +29,21 @@ where
 {
     let p = m.to_pb()?;
 
+    let n = std::any::type_name::<MT>();
+
     let mut buf = vec![];
     common_protos::prost::Message::encode(&p, &mut buf)?;
+
+    let var_name = n.split("::").last().unwrap();
     // The encoded data should be saved for compatability test.
-    println!("// Encoded data of version {} of {}:", VER, name);
-    println!("// It is generated with common::test_pb_from_to.");
-    println!("let {}_v{} = vec!{:?};", name, VER, buf);
+    println!("// Encoded data of version {} of {}:", VER, n);
+    println!("// It is generated with common::test_pb_from_to().");
+    println!(
+        "let {}_v{} = vec!{:?};",
+        var_name.to_case(convert_case::Case::Snake),
+        VER,
+        buf
+    );
 
     let got = MT::from_pb(p)?;
     assert_eq!(m, got, "convert from/to protobuf: {}", name);
@@ -41,12 +51,21 @@ where
 }
 
 /// Tests loading old version data.
-pub(crate) fn test_load_old<MT>(name: impl Display, buf: &[u8], want: MT) -> anyhow::Result<()>
+///
+/// Returns the message version.
+pub(crate) fn test_load_old<MT>(
+    name: impl Display,
+    buf: &[u8],
+    want_msg_ver: u64,
+    want: MT,
+) -> anyhow::Result<()>
 where
     MT: FromToProto + PartialEq + Debug,
     MT::PB: common_protos::prost::Message + Default,
 {
     let p: MT::PB = common_protos::prost::Message::decode(buf).map_err(print_err)?;
+    assert_eq!(want_msg_ver, MT::get_pb_ver(&p), "loading {}", name);
+
     let got = MT::from_pb(p).map_err(print_err)?;
 
     assert_eq!(want, got, "loading {} with version {} program", name, VER);

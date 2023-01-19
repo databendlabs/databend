@@ -23,6 +23,7 @@ use aho_corasick::AhoCorasick;
 use common_ast::ast::Expr as AExpr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::parse_expr;
+use common_ast::parser::parser_values_with_placeholder;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
@@ -51,6 +52,7 @@ use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
@@ -62,12 +64,11 @@ use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::executor::PhysicalScalarBuilder;
 use common_sql::plans::CastExpr;
 use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
-use common_sql::plans::Scalar;
+use common_sql::plans::ScalarExpr;
 use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
@@ -85,6 +86,7 @@ use tracing::info;
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
@@ -153,6 +155,51 @@ impl InsertInterpreterV2 {
         }
     }
 
+    async fn prepared_values(&self, values_str: &str) -> Result<(DataSchemaRef, Vec<DataScalar>)> {
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let tokens = tokenize_sql(values_str)?;
+        let backtrace = Backtrace::new();
+        let expr_or_placeholders =
+            parser_values_with_placeholder(&tokens, sql_dialect, &backtrace)?;
+        let source_schema = self.plan.schema();
+
+        if source_schema.num_fields() != expr_or_placeholders.len() {
+            return Err(ErrorCode::SemanticError(format!(
+                "need {} fields in values, got only {}",
+                source_schema.num_fields(),
+                expr_or_placeholders.len()
+            )));
+        }
+
+        let mut attachment_fields = vec![];
+        let mut const_fields = vec![];
+        let mut exprs = vec![];
+        for (i, eo) in expr_or_placeholders.into_iter().enumerate() {
+            match eo {
+                Some(e) => {
+                    exprs.push(e);
+                    const_fields.push(source_schema.fields()[i].clone());
+                }
+                None => attachment_fields.push(source_schema.fields()[i].clone()),
+            }
+        }
+        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+        let bind_context = BindContext::new();
+        let metadata = Arc::new(RwLock::new(Metadata::default()));
+        let const_schema = Arc::new(DataSchema::new(const_fields));
+        let const_values = exprs_to_scalar(
+            exprs,
+            &const_schema,
+            self.ctx.clone(),
+            &name_resolution_ctx,
+            &bind_context,
+            metadata,
+        )
+        .await?;
+        Ok((Arc::new(DataSchema::new(attachment_fields)), const_values))
+    }
+
     async fn build_insert_from_stage_pipeline(
         &self,
         table: Arc<dyn Table>,
@@ -166,17 +213,24 @@ impl InsertInterpreterV2 {
         let catalog_name = self.plan.catalog.clone();
         let overwrite = self.plan.overwrite;
 
-        let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
-        stage_info
-            .file_format_options
-            .apply(&attachment.file_format_options, true)?;
-        stage_info
-            .copy_options
-            .apply(&attachment.copy_options, true)?;
+        let (attachment_data_schema, const_columns) = if attachment.values_str.is_empty() {
+            (source_schema.clone(), vec![])
+        } else {
+            self.prepared_values(&attachment.values_str).await?
+        };
 
-        let table_schema = infer_table_schema(&source_schema)?;
+        let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
+
+        if let Some(ref options) = attachment.file_format_options {
+            stage_info.file_format_options = FileFormatOptions::from_map(options)?;
+        }
+        if let Some(ref options) = attachment.copy_options {
+            stage_info.copy_options.apply(options, true)?;
+        }
+
+        let attachment_table_schema = infer_table_schema(&attachment_data_schema)?;
         let mut stage_table_info = StageTableInfo {
-            schema: table_schema,
+            schema: attachment_table_schema,
             user_stage_info: stage_info,
             path: path.to_string(),
             files: vec![],
@@ -186,7 +240,7 @@ impl InsertInterpreterV2 {
 
         let all_source_files = StageTable::list_files(&stage_table_info).await?;
 
-        tracing::info!(
+        info!(
             "insert: read all stage attachment files finished: {}, elapsed:{}",
             all_source_files.len(),
             start.elapsed().as_secs()
@@ -202,13 +256,26 @@ impl InsertInterpreterV2 {
 
         stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
 
+        if !const_columns.is_empty() {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformAddConstColumns::try_create(
+                    ctx.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    attachment_data_schema.clone(),
+                    source_schema.clone(),
+                    const_columns.clone(),
+                )
+            })?;
+        }
+
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformResortAddOn::try_create(
+                ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 source_schema.clone(),
                 table.clone(),
-                ctx.clone(),
             )
         })?;
 
@@ -712,7 +779,7 @@ async fn fill_default_value(
     binder: &mut ScalarBinder<'_>,
     operators: &mut Vec<BlockOperator>,
     field: &DataField,
-    builder: &PhysicalScalarBuilder<'_>,
+    schema: &DataSchema,
 ) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
         let tokens = tokenize_sql(default_expr)?;
@@ -720,16 +787,17 @@ async fn fill_default_value(
         let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
         let (mut scalar, ty) = binder.bind(&ast).await?;
         if !field.data_type().eq(&ty) {
-            scalar = Scalar::CastExpr(CastExpr {
+            scalar = ScalarExpr::CastExpr(CastExpr {
+                is_try: false,
                 argument: Box::new(scalar),
                 from_type: Box::new(ty),
                 target_type: Box::new(field.data_type().clone()),
             })
         }
-        let scalar = builder.build(&scalar)?;
-        operators.push(BlockOperator::Map {
-            expr: scalar.as_expr()?,
-        });
+        let expr = scalar
+            .as_expr_with_col_index()?
+            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+        operators.push(BlockOperator::Map { expr });
     } else {
         // If field data type is nullable, then we'll fill it with null.
         if field.data_type().is_nullable() {
@@ -780,19 +848,12 @@ async fn exprs_to_scalar<'a>(
         &[],
     );
 
-    let physical_scalar_builder = PhysicalScalarBuilder::new(schema);
     for (i, expr) in exprs.iter().enumerate() {
         // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
         if let AExpr::ColumnRef { column, .. } = expr {
             if column.name.eq_ignore_ascii_case("default") {
                 let field = schema.field(i);
-                fill_default_value(
-                    &mut scalar_binder,
-                    &mut operators,
-                    field,
-                    &physical_scalar_builder,
-                )
-                .await?;
+                fill_default_value(&mut scalar_binder, &mut operators, field, schema).await?;
                 continue;
             }
         }
@@ -800,16 +861,17 @@ async fn exprs_to_scalar<'a>(
         let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
         if &data_type != field_data_type {
-            scalar = Scalar::CastExpr(CastExpr {
+            scalar = ScalarExpr::CastExpr(CastExpr {
+                is_try: false,
                 argument: Box::new(scalar),
                 from_type: Box::new(data_type),
                 target_type: Box::new(field_data_type.clone()),
             })
         }
-        let scalar = physical_scalar_builder.build(&scalar)?;
-        operators.push(BlockOperator::Map {
-            expr: scalar.as_expr()?,
-        });
+        let expr = scalar
+            .as_expr_with_col_index()?
+            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+        operators.push(BlockOperator::Map { expr });
     }
 
     let one_row_chunk = DataBlock::new(

@@ -207,7 +207,7 @@ impl ExecuteState {
     pub(crate) async fn get_schema(sql: &str, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, _) = planner.plan_sql(sql).await?;
-        Ok(plan.schema())
+        Ok(InterpreterFactory::get_schema(ctx, &plan))
     }
 
     pub(crate) async fn try_start_query(

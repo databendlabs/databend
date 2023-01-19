@@ -380,7 +380,7 @@ impl TableSchema {
         //
         // Although `inner_project` and `traverse_paths` methods will not be called for complex types like Array(Tuple),
         // when constructing column leaves (for reading parquet) for these types, we still need to dfs the inner fields.
-        // See comments in `common_storage::ColumnLeaves::traverse_fields_dfs` for more details.
+        // See comments in `common_storage::ColumnNodes::traverse_fields_dfs` for more details.
         if let TableDataType::Tuple {
             fields_name,
             fields_type,
@@ -405,13 +405,37 @@ impl TableSchema {
 
     pub fn leaf_fields(&self) -> Vec<TableField> {
         fn collect_in_field(field: &TableField, fields: &mut Vec<TableField>) {
-            match field.data_type() {
+            match field.data_type().remove_nullable() {
                 TableDataType::Tuple {
                     fields_type,
                     fields_name,
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
-                        collect_in_field(&TableField::new(name, ty.clone()), fields);
+                        let full_name = format!("{}:{}", field.name(), name);
+                        collect_in_field(&TableField::new(&full_name, ty.clone()), fields);
+                    }
+                }
+                TableDataType::Array(inner_type) => {
+                    // TODO proper name for array inner column.
+                    let mut inner_name = format!("{}[]", field.name());
+                    let mut inner_type = inner_type;
+                    // find Tuple type inside an Array type to ensure all leaf fields are collected.
+                    loop {
+                        match inner_type.remove_nullable() {
+                            TableDataType::Tuple { .. } => {
+                                collect_in_field(
+                                    &TableField::new(&inner_name, *inner_type),
+                                    fields,
+                                );
+                            }
+                            TableDataType::Array(array_inner_type) => {
+                                inner_name = format!("{}[]", inner_name);
+                                inner_type = array_inner_type;
+                                continue;
+                            }
+                            _ => fields.push(field.clone()),
+                        }
+                        break;
                     }
                 }
                 _ => fields.push(field.clone()),

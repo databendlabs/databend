@@ -1,10 +1,10 @@
 ---
-title: Analyzing hits dataset With Databend on Object Storage
-sidebar_label: Analyzing hits Dataset
-description: Use Databend analyzing `hits` datasets on S3 step by step.
+title: Analyzing Hits Dataset with Databend
+sidebar_label: Analyzing Hits Dataset
+description: Analyzing Hits Dataset with Databend
 ---
 
-Analyzing [`hits`](https://clickhouse.com/docs/en/getting-started/example-datasets/metrica) datasets on S3 with Databend step by step.
+This usecase shows how to analyze the [Hits](https://clickhouse.com/docs/en/getting-started/example-datasets/metrica) dataset with Databend.
 
 ## Step 1. Deploy Databend
 

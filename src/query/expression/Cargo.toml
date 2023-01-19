@@ -33,16 +33,18 @@ lexical-core = "0.8.5"
 match-template = "0.0.1"
 micromarshal = "0.2.1"
 num-traits = "0.2.15"
-ordered-float = { version = "3.1.0", features = ["serde", "rand"] }
+ordered-float = { workspace = true, features = ["serde", "rand"] }
 parking_lot = "0.12.1"
 primitive-types = "0.12.0"
 rand = { version = "0.8.5", features = ["small_rng"] }
 rust_decimal = "1.26"
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = "0.1.36"
 typetag = "0.2.3"
 
 [dev-dependencies]
 common-ast = { path = "../ast" }
 goldenfile = "1.4"
+pretty_assertions = "1.3.0"
 rand = "0.8.5"

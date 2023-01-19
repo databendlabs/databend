@@ -13,12 +13,16 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::fs::File;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::arrow::io::parquet::read as pread;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -39,8 +43,8 @@ use common_pipeline_core::Pipeline;
 use opendal::Operator;
 
 use super::TableContext;
-use crate::ParquetLocationPart;
-use crate::ParquetReader;
+use crate::parquet_part::ParquetLocationPart;
+use crate::ReadOptions;
 
 pub struct ParquetTable {
     table_args: Vec<Scalar>,
@@ -49,6 +53,7 @@ pub struct ParquetTable {
     pub(super) table_info: TableInfo,
     pub(super) arrow_schema: ArrowSchema,
     pub(super) operator: Operator,
+    pub(super) read_options: ReadOptions,
 }
 
 impl ParquetTable {
@@ -64,16 +69,29 @@ impl ParquetTable {
             ));
         }
 
-        if table_args.is_none() || table_args.as_ref().unwrap().is_empty() {
+        // Syntax:
+        // read_parquet('path1', 'path2', ..., prune_pages=>true, refresh_meta_cache=>true, ...)
+        // The options should be behind the file paths.
+
+        if table_args.is_none() {
             return Err(ErrorCode::BadArguments(
                 "read_parquet needs at least one argument",
             ));
         }
 
-        let table_args = table_args.unwrap();
+        let args = table_args.unwrap();
+        let path_num = args
+            .iter()
+            .position(|arg| matches!(arg, Scalar::Tuple(_)))
+            .unwrap_or(args.len());
+        if path_num == 0 {
+            return Err(ErrorCode::BadArguments(
+                "read_parquet needs at least one file path",
+            ));
+        }
 
-        let mut file_locations = Vec::with_capacity(table_args.len());
-        for arg in table_args.iter() {
+        let mut file_locations = Vec::with_capacity(args.len());
+        for arg in args.iter().take(path_num) {
             match arg {
                 Scalar::String(path) => {
                     let maybe_glob_path = std::str::from_utf8(path).unwrap();
@@ -104,21 +122,35 @@ impl ParquetTable {
             ));
         }
 
+        let mut builder = opendal::services::fs::Builder::default();
+        builder.root("/");
+        let operator = Operator::new(builder.build()?);
+
+        // Now, `read_options` is hard-coded.
+        let read_options = ReadOptions::try_from(&args[path_num..])?;
+
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let first_meta = ParquetReader::read_meta(&file_locations[0])?;
-        let arrow_schema = ParquetReader::infer_schema(&first_meta)?;
+        let location = &file_locations[0];
+        let mut file = File::open(location).map_err(|e| {
+            ErrorCode::Internal(format!("Failed to open file '{}': {}", location, e))
+        })?;
+        let first_meta = pread::read_metadata(&mut file).map_err(|e| {
+            ErrorCode::Internal(format!(
+                "Read parquet file '{}''s meta error: {}",
+                location, e
+            ))
+        })?;
+        let arrow_schema = pread::infer_schema(&first_meta)?;
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: Arc::new(TableSchema::from(&arrow_schema)),
+                schema: arrow_to_table_schema(arrow_schema.clone()).into(),
                 engine: "SystemReadParquet".to_string(),
-                // Assuming that created_on is unnecessary for function table,
-                // we could make created_on fixed to pass test_shuffle_action_try_into.
                 created_on: Utc
                     .from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
                 updated_on: Utc
@@ -128,16 +160,13 @@ impl ParquetTable {
             ..Default::default()
         };
 
-        let mut builder = opendal::services::fs::Builder::default();
-        builder.root("/");
-        let operator = Operator::new(builder.build()?);
-
         Ok(Arc::new(ParquetTable {
-            table_args,
+            table_args: args,
             file_locations,
             table_info,
             arrow_schema,
             operator,
+            read_options,
         }))
     }
 }
@@ -157,7 +186,7 @@ impl Table for ParquetTable {
     }
 
     fn support_prewhere(&self) -> bool {
-        true
+        self.read_options.do_prewhere()
     }
 
     fn has_exact_total_row_count(&self) -> bool {
@@ -211,4 +240,28 @@ impl TableFunction for ParquetTable {
     where Self: 'a {
         self
     }
+}
+
+fn lower_field_name(field: &mut ArrowField) {
+    field.name = field.name.to_lowercase();
+    match &mut field.data_type {
+        ArrowDataType::List(f)
+        | ArrowDataType::LargeList(f)
+        | ArrowDataType::FixedSizeList(f, _) => {
+            lower_field_name(f.as_mut());
+        }
+        ArrowDataType::Struct(ref mut fields) => {
+            for f in fields {
+                lower_field_name(f);
+            }
+        }
+        _ => {}
+    }
+}
+
+pub fn arrow_to_table_schema(mut schema: ArrowSchema) -> TableSchema {
+    schema.fields.iter_mut().for_each(|f| {
+        lower_field_name(f);
+    });
+    TableSchema::from(&schema)
 }

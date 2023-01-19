@@ -14,12 +14,12 @@
 
 #![allow(unused_comparisons)]
 
-use std::io::Write;
-
 use common_expression::types::boolean::BooleanDomain;
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
@@ -28,6 +28,9 @@ use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use common_expression::utils::arrow::constant_bitmap;
+use common_expression::values::Value;
+use common_expression::values::ValueRef;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
@@ -36,6 +39,7 @@ use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
 
 use super::arithmetic_modulo::vectorize_modulo;
@@ -147,79 +151,39 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                         {
                             type T = F64;
-                            registry.register_2_arg_core::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+                            registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
                                 "divide",
                                 FunctionProperty::default(),
                                 |_, _| FunctionDomain::MayThrow,
                                 vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                                    |a, b, output, _| {
+                                    |a, b, output, ctx| {
                                         let b = (b.as_() : T);
                                         if std::intrinsics::unlikely(b == 0.0) {
-                                            return Err("/ by zero".to_string());
+                                            ctx.set_error(output.len(), "divided by zero");
+                                            output.push(F64::default());
+                                        } else {
+                                            output.push(((a.as_() : T) / b));
                                         }
-                                        output.push((a.as_() : T) / b);
-                                        Ok(())
                                     }),
                             );
-
-                            registry.register_2_arg_core::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>, _, _>(
-                                "divide",
-                                FunctionProperty::default(),
-                                |_, _| FunctionDomain::MayThrow,
-                                vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
-                                    |a, b, output, _| {
-                                    match (a,b) {
-                                        (Some(a), Some(b)) => {
-                                            let b = (b.as_() : T);
-                                            if std::intrinsics::unlikely(b == 0.0) {
-                                                return Err("/ by zero".to_string());
-                                            }
-                                            output.push(((a.as_() : T) / b));
-                                        },
-                                        _ => output.push_null(),
-                                    }
-                                    Ok(())
-                                }),
-                            )
                         }
 
                         {
                             type T = <(L, R) as ResultTypeOfBinary>::IntDiv;
 
-                            registry.register_2_arg_core::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
+                            registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
                             "div",
                             FunctionProperty::default(),
                             |_, _| FunctionDomain::MayThrow,
                             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                                    |a, b, output, _| {
+                                    |a, b, output, ctx| {
                                     let b = (b.as_() : F64);
                                     if std::intrinsics::unlikely(b == 0.0) {
-                                        return Err("Division by zero".to_string());
+                                            ctx.set_error(output.len(), "divided by zero");
+                                            output.push(T::default());
+                                    } else {
+                                        output.push(((a.as_() : F64) / b).as_() : T);
                                     }
-                                    output.push(((a.as_() : F64) / b).as_() : T);
-                                    Ok(())
-                                }),
-                            );
-
-                            // a   b
-                            // 2   NULL (data = 0, validity = false), we should return NULL even the divisor is 0
-                            registry.register_2_arg_core::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>,_, _>(
-                            "div",
-                            FunctionProperty::default(),
-                            |_, _| FunctionDomain::MayThrow,
-                            vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
-                                    |a, b, output, _| {
-                                    match (a,b) {
-                                        (Some(a), Some(b)) => {
-                                            let b = (b.as_() : F64);
-                                            if std::intrinsics::unlikely(b == 0.0) {
-                                                return Err("Division by zero".to_string());
-                                            }
-                                            output.push(((a.as_() : F64) / b).as_() : T);
-                                        },
-                                        _ => output.push_null(),
-                                    }
-                                    Ok(())
                                 }),
                             );
                         }
@@ -237,49 +201,29 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     | NumberDataType::UInt32
                                     | NumberDataType::UInt64
                             ) {
-                                registry.register_2_arg_core::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
+                                registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
                                 "modulo",
                                 FunctionProperty::default(),
                                 |_, _| FunctionDomain::MayThrow,
                                 vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                                        |a, b, output, _| {
+                                        |a, b, output, ctx| {
                                         let b = (b.as_() : F64);
                                         if std::intrinsics::unlikely(b == 0.0) {
-                                            return Err("Modulo by zero".to_string());
+                                                ctx.set_error(output.len(), "divided by zero");
+                                                output.push(T::default());
+                                        } else {
+                                            output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
                                         }
-                                        output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
-                                        Ok(())
                                     }),
                                 );
                             } else {
-                                registry.register_2_arg_core::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+                                registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
                                     "modulo",
                                     FunctionProperty::default(),
                                     |_, _| FunctionDomain::MayThrow,
                                     vectorize_modulo::<L, R, M, T>()
                                 );
                             }
-
-                            // nullable modulo
-                            registry.register_2_arg_core::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>,_, _>(
-                                "modulo",
-                                FunctionProperty::default(),
-                                |_, _| FunctionDomain::MayThrow,
-                                vectorize_with_builder_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>,  NullableType<NumberType<T>>>(
-                                        |a, b, output, _| {
-                                        match (a,b) {
-                                            (Some(a), Some(b)) => {
-                                                let b = (b.as_() : F64);
-                                                if std::intrinsics::unlikely(b == 0.0) {
-                                                    return Err("Modulo by zero".to_string());
-                                                }
-                                                output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
-                                            },
-                                            _ => output.push_null(),
-                                        }
-                                        Ok(())
-                                }),
-                            );
                         }
                     }
                 }),
@@ -319,17 +263,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     }
                                 },
                                 vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>>(
-                                    move |val, output, _| {
-                                        let new_val =
-                                            num_traits::cast::cast(val).ok_or_else(|| {
-                                                format!(
-                                                    "unable to cast {} to {}",
-                                                    val,
-                                                    dest_type,
-                                                )
-                                            })?;
-                                        output.push(new_val);
-                                        Ok(())
+                                    move |val, output, ctx| {
+                                        match num_traits::cast::cast(val) {
+                                            Some(val) => output.push(val),
+                                            None => {
+                                                ctx.set_error(output.len(),"number overflowed");
+                                                output.push(DEST_TYPE::default());
+                                            },
+                                        }
                                     }
                                 ),
                             );
@@ -374,7 +315,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         } else {
                                             output.push_null();
                                         }
-                                        Ok(())
                                     }
                                 ),
                             );
@@ -393,25 +333,79 @@ pub fn register(registry: &mut FunctionRegistry) {
                         "to_string",
                         FunctionProperty::default(),
                         |_| FunctionDomain::Full,
-                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, StringType>(
-                            |val, output, _| {
-                                output.write_row(|data| write!(data, "{val}").unwrap());
-                                Ok(())
-                            },
-                        ),
+                        |from, _| match from {
+                            ValueRef::Scalar(s) => Value::Scalar(s.to_string().into_bytes()),
+                            ValueRef::Column(from) => {
+                                let options = NUM_TYPE::lexical_options();
+                                const FORMAT: u128 = lexical_core::format::STANDARD;
+
+                                let mut builder =
+                                    StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
+                                let values = &mut builder.data;
+
+                                type Native = <NUM_TYPE as Number>::Native;
+                                let mut offset: usize = 0;
+                                unsafe {
+                                    for x in from.iter() {
+                                        values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                        values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                        let bytes = &mut values[offset..];
+
+                                        let len = lexical_core::write_with_options_unchecked::<
+                                            _,
+                                            FORMAT,
+                                        >(
+                                            Native::from(*x), bytes, &options
+                                        )
+                                        .len();
+                                        offset += len;
+                                        builder.offsets.push(offset as u64);
+                                    }
+                                    values.set_len(offset);
+                                }
+                                Value::Column(builder.build())
+                            }
+                        },
                     );
                 registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
                     "try_to_string",
                     FunctionProperty::default(),
                     |_| FunctionDomain::Full,
-                    vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NullableType<StringType>>(
-                        |val, output, _ctx| {
-                            write!(output.builder.data, "{val}").unwrap();
-                            output.builder.commit_row();
-                            output.validity.push(true);
-                            Ok(())
-                        },
-                    ),
+                    |from, _| match from {
+                        ValueRef::Scalar(s) => Value::Scalar(Some(s.to_string().into_bytes())),
+                        ValueRef::Column(from) => {
+                            let options = NUM_TYPE::lexical_options();
+                            const FORMAT: u128 = lexical_core::format::STANDARD;
+                            let mut builder =
+                                StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
+                            let values = &mut builder.data;
+
+                            type Native = <NUM_TYPE as Number>::Native;
+                            let mut offset: usize = 0;
+                            unsafe {
+                                for x in from.iter() {
+                                    values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                    values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                    let bytes = &mut values[offset..];
+                                    let len =
+                                        lexical_core::write_with_options_unchecked::<_, FORMAT>(
+                                            Native::from(*x),
+                                            bytes,
+                                            &options,
+                                        )
+                                        .len();
+                                    offset += len;
+                                    builder.offsets.push(offset as u64);
+                                }
+                                values.set_len(offset);
+                            }
+                            let result = builder.build();
+                            Value::Column(NullableColumn {
+                                column: result,
+                                validity: constant_bitmap(true, from.len()).into(),
+                            })
+                        }
+                    },
                 );
             }
         });
@@ -451,7 +445,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         >(|val, output, _| {
                             output.builder.push(val != 0);
                             output.validity.push(true);
-                            Ok(())
                         }),
                     );
 
@@ -487,7 +480,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                             NullableType<NumberType<NUM_TYPE>>,
                         >(|val, output, _| {
                             output.push(NUM_TYPE::from(val));
-                            Ok(())
                         }),
                     );
             }
@@ -505,13 +497,20 @@ pub fn register(registry: &mut FunctionRegistry) {
                         FunctionProperty::default(),
                         |_| FunctionDomain::MayThrow,
                         vectorize_with_builder_1_arg::<StringType, NumberType<DEST_TYPE>>(
-                            move |val, output, _| {
+                            move |val, output, ctx| {
                                 let str_val = String::from_utf8_lossy(val);
-                                let new_val = str_val.parse::<DEST_TYPE>().map_err(|_| {
-                                    format!("unable to cast {} to {}", str_val, dest_type)
-                                })?;
-                                output.push(new_val);
-                                Ok(())
+                                match str_val.parse::<DEST_TYPE>() {
+                                    Ok(new_val) => output.push(new_val),
+                                    Err(e) => {
+                                        ctx.set_error(
+                                            output.len(),
+                                            format!(
+                                                "unable to parse string to type `{dest_type}` because {e}",
+                                            ),
+                                        );
+                                        output.push(DEST_TYPE::default());
+                                    }
+                                };
                             },
                         ),
                     );
@@ -532,7 +531,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                             } else {
                                 output.push_null();
                             }
-                            Ok(())
                         }),
                     );
             }

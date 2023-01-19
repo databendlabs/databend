@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
 
-mod parquet_column;
 mod parquet_part;
 mod parquet_reader;
 mod parquet_source;
+mod pruning;
+mod read_options;
+mod statistics;
 mod table_function;
 
-pub use parquet_part::ParquetLocationPart;
-pub use parquet_reader::ParquetReader;
-pub use parquet_source::ParquetSource;
+pub use read_options::ReadOptions;
 pub use table_function::ParquetTable;

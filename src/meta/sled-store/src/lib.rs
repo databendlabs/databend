@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
+
 //! sled_store implement a key-value like store backed by sled::Tree.
 //!
 //! It is used by raft for log and state machine storage.
@@ -21,6 +23,7 @@ pub use db::init_sled_db;
 pub use db::init_temp_sled_db;
 pub use openraft;
 pub use sled;
+pub use sled_iter::iter;
 pub use sled_key_space::SledKeySpace;
 pub use sled_serde::SledOrderedSerde;
 pub use sled_serde::SledRangeSerde;
@@ -35,6 +38,7 @@ pub use store::Store;
 
 mod bytes_error;
 mod db;
+mod sled_iter;
 mod sled_key_space;
 mod sled_serde;
 mod sled_tree;

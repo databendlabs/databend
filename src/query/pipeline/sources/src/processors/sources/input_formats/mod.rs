@@ -23,8 +23,15 @@ mod source_aligner;
 mod source_deserializer;
 mod transform_deserializer;
 
+use common_exception::ErrorCode;
 pub use input_context::InputContext;
 pub use input_format::InputFormat;
 pub use input_pipeline::StreamingReadBatch;
 pub use input_split::split_by_size;
 pub use input_split::SplitInfo;
+
+#[derive(Debug, Clone)]
+pub struct InputError {
+    pub(crate) err: ErrorCode,
+    pub(crate) num: usize,
+}

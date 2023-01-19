@@ -9,6 +9,7 @@ edition = "2021"
 members = [
     # Binaries
     "src/binaries",
+    "src/binaries/meta-upgrade-09",
     # Common
     "src/common/arrow",
     "src/common/auth",
@@ -84,6 +85,8 @@ members = [
 # databend maintains:
 openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.3" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
+opendal = { version = "0.25" }
+ordered-float = { version = "3.4.0", default-features = false }
 
 # error
 anyhow = { version = "1.0.65" }
@@ -156,6 +159,8 @@ rpath = false
 # If there are dependencies that need patching, they can be listed below.
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
-parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "fb08b72" }
+
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "211be21" }
+parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 limits-rs = { git = "https://github.com/datafuse-extras/limits-rs", rev = "abfcf7b" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "bc49d03" }

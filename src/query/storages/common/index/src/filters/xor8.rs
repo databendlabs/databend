@@ -25,7 +25,7 @@ use xorfilter::Xor8;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
-use crate::SupportedType;
+use crate::Index;
 
 /// A builder that builds a xor8 filter.
 ///
@@ -65,6 +65,10 @@ impl FilterBuilder for Xor8Builder {
         self.builder.populate(keys)
     }
 
+    fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
+        self.builder.populate_digests(digests)
+    }
+
     fn build(mut self) -> Result<Self::Filter, Self::Error> {
         let f = self
             .builder
@@ -94,6 +98,10 @@ impl Filter for Xor8Filter {
         self.filter.contains(key)
     }
 
+    fn contains_digest(&self, digest: u64) -> bool {
+        self.filter.contains_digest(digest)
+    }
+
     fn to_bytes(&self) -> Result<Vec<u8>, Xor8CodecError> {
         let mut buf: Vec<u8> = vec![];
         let cbor_val = self
@@ -118,11 +126,13 @@ impl Filter for Xor8Filter {
     }
 }
 
-impl SupportedType for Xor8Filter {
-    fn is_supported_type(data_type: &DataType) -> bool {
-        // Bloom index only enabled for String and Integral types for now
+impl Index for Xor8Filter {
+    fn supported_type(data_type: &DataType) -> bool {
         let inner_type = data_type.remove_nullable();
-        matches!(inner_type, DataType::Number(_) | DataType::String)
+        matches!(
+            inner_type,
+            DataType::Number(_) | DataType::String | DataType::Timestamp | DataType::Date
+        )
     }
 }
 

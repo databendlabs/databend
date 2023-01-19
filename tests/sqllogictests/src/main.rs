@@ -33,7 +33,7 @@ use crate::arg::SqlLogicTestArgs;
 use crate::client::Client;
 use crate::client::ClientType;
 use crate::client::HttpClient;
-use crate::client::MysqlClient;
+use crate::client::MySQLClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 use crate::util::get_files;
@@ -42,6 +42,10 @@ mod arg;
 mod client;
 mod error;
 mod util;
+
+const HANDLER_MYSQL: &str = "mysql";
+const HANDLER_HTTP: &str = "http";
+const HANDLER_CLICKHOUSE: &str = "clickhouse";
 
 pub struct Databend {
     client: Client,
@@ -70,51 +74,40 @@ impl sqllogictest::AsyncDB for Databend {
 pub async fn main() -> Result<()> {
     env_logger::init();
     let args = SqlLogicTestArgs::parse();
-    if let Some(handlers) = &args.handlers {
-        for handler in handlers.iter() {
-            match handler.as_str() {
-                "mysql" => {
-                    println!("Mysql client starts to run...");
-                    run_mysql_client().await?;
-                }
-                "http" => {
-                    println!("Http client starts to run...");
-                    run_http_client().await?;
-                }
-                "clickhouse" => {
-                    println!("Clickhouse http client starts to run...");
-                    run_ck_http_client().await?;
-                }
-                _ => unreachable!(),
+    let handlers = match &args.handlers {
+        Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
+        None => vec![HANDLER_MYSQL, HANDLER_HTTP, HANDLER_CLICKHOUSE],
+    };
+    for handler in handlers.iter() {
+        match *handler {
+            HANDLER_MYSQL => {
+                run_mysql_client().await?;
+            }
+            HANDLER_HTTP => {
+                run_http_client().await?;
+            }
+            HANDLER_CLICKHOUSE => {
+                run_ck_http_client().await?;
+            }
+            _ => {
+                return Err(format!("Unknown test handler: {handler}").into());
             }
         }
-        return Ok(());
     }
-    // If args don't set handler, run all handlers one by one.
-
-    // First run databend with mysql client
-    println!("Mysql client starts to run...");
-    run_mysql_client().await?;
-
-    // Second run databend with http client
-    println!("Http client starts to run...");
-    run_http_client().await?;
-
-    // Third run databend with clickhouse http client
-    println!("Clickhouse http client starts to run...");
-    run_ck_http_client().await?;
 
     Ok(())
 }
 
 async fn run_mysql_client() -> Result<()> {
+    println!("MySQL client starts to run...");
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
-    run_suits(suits, ClientType::Mysql).await?;
+    run_suits(suits, ClientType::MySQL).await?;
     Ok(())
 }
 
 async fn run_http_client() -> Result<()> {
+    println!("Http client starts to run...");
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
     run_suits(suits, ClientType::Http).await?;
@@ -122,6 +115,7 @@ async fn run_http_client() -> Result<()> {
 }
 
 async fn run_ck_http_client() -> Result<()> {
+    println!("Clickhouse http client starts to run...");
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
     run_suits(suits, ClientType::Clickhouse).await?;
@@ -132,8 +126,8 @@ async fn run_ck_http_client() -> Result<()> {
 async fn create_databend(client_type: &ClientType) -> Result<Databend> {
     let mut client: Client;
     match client_type {
-        ClientType::Mysql => {
-            client = Client::Mysql(MysqlClient::create().await?);
+        ClientType::MySQL => {
+            client = Client::MySQL(MySQLClient::create().await?);
         }
         ClientType::Http => {
             client = Client::Http(HttpClient::create()?);
@@ -229,9 +223,14 @@ async fn run_file_async(
     client_type: &ClientType,
     filename: impl AsRef<Path>,
 ) -> std::result::Result<Vec<TestError>, TestError> {
+    println!(
+        "Running {} test for file: {} ...",
+        client_type,
+        filename.as_ref().display()
+    );
     let mut error_records = vec![];
     let no_fail_fast = SqlLogicTestArgs::parse().no_fail_fast;
-    let records = parse_file(filename).unwrap();
+    let records = parse_file(&filename).unwrap();
     let mut runner = Runner::new(create_databend(client_type).await.unwrap());
     for record in records.into_iter() {
         if let Record::Halt { .. } = record {
@@ -246,6 +245,16 @@ async fn run_file_async(
             }
         }
     }
+    let run_file_status = match error_records.is_empty() {
+        true => "✅",
+        false => "❌",
+    };
+    println!(
+        "Completed {} test for file: {} {}",
+        client_type,
+        filename.as_ref().display(),
+        run_file_status,
+    );
     Ok(error_records)
 }
 

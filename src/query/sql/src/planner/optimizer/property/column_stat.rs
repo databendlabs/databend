@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use crate::optimizer::property::histogram::Histogram;
+use crate::optimizer::Datum;
 use crate::IndexType;
 
 pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
@@ -22,9 +23,25 @@ pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
 #[derive(Debug, Clone)]
 /// Statistics information of a column
 pub struct ColumnStat {
+    /// Min value of the column
+    pub min: Datum,
+
+    /// Max value of the column
+    pub max: Datum,
+
+    /// Number of distinct values
+    pub ndv: f64,
+
     /// Count of null values
     pub null_count: u64,
 
     /// Histogram of column
     pub histogram: Option<Histogram>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewStatistic {
+    pub min: Option<Datum>,
+    pub max: Option<Datum>,
+    pub ndv: Option<f64>,
 }

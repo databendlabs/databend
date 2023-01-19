@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
 #![feature(type_alias_impl_trait)]
 
+mod build_options_table;
 mod catalogs_table;
 mod clustering_history_table;
 mod clusters_table;
@@ -39,6 +41,7 @@ mod tables_table;
 mod tracing_table;
 mod users_table;
 
+pub use build_options_table::BuildOptionsTable;
 pub use catalogs_table::CatalogsTable;
 pub use clustering_history_table::ClusteringHistoryLogElement;
 pub use clustering_history_table::ClusteringHistoryQueue;

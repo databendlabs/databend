@@ -212,7 +212,7 @@ impl StringColumn {
 }
 
 pub struct StringIterator<'a> {
-    data: &'a Buffer<u8>,
+    data: &'a [u8],
     offsets: std::slice::Windows<'a, u64>,
 }
 
@@ -309,12 +309,6 @@ impl StringColumnBuilder {
 
     pub fn put(&mut self, item: &[u8]) {
         self.data.extend_from_slice(item);
-    }
-
-    pub fn write_row<T>(&mut self, f: impl FnOnce(&mut Vec<u8>) -> T) -> T {
-        let res = f(&mut self.data);
-        self.commit_row();
-        res
     }
 
     #[inline]

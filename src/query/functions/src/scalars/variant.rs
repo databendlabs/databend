@@ -20,10 +20,7 @@ use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use common_expression::types::date::string_to_date;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
-use common_expression::types::number::Float64Type;
-use common_expression::types::number::Int64Type;
-use common_expression::types::number::UInt32Type;
-use common_expression::types::number::UInt64Type;
+use common_expression::types::number::*;
 use common_expression::types::timestamp::string_to_timestamp;
 use common_expression::types::variant::cast_scalar_to_variant;
 use common_expression::types::variant::cast_scalars_to_variants;
@@ -65,7 +62,6 @@ use common_jsonb::to_bool;
 use common_jsonb::to_f64;
 use common_jsonb::to_i64;
 use common_jsonb::to_str;
-use common_jsonb::to_string;
 use common_jsonb::to_u64;
 use common_jsonb::JsonPath;
 use common_jsonb::Number as JsonbNumber;
@@ -76,19 +72,21 @@ pub fn register(registry: &mut FunctionRegistry) {
         "parse_json",
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, VariantType>(|s, output, _| {
+        vectorize_with_builder_1_arg::<StringType, VariantType>(|s, output, ctx| {
             if s.trim().is_empty() {
                 output.put_slice(JSONB_NULL);
                 output.commit_row();
-                return Ok(());
+                return;
             }
-            let value = parse_value(s).map_err(|err| {
-                format!("unable to parse '{}': {}", &String::from_utf8_lossy(s), err)
-            })?;
-            value.write_to_vec(&mut output.data);
+            match parse_value(s) {
+                Ok(value) => {
+                    value.write_to_vec(&mut output.data);
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
             output.commit_row();
-
-            Ok(())
         }),
     );
 
@@ -109,7 +107,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Err(_) => output.push_null(),
                 }
             }
-            Ok(())
         }),
     );
 
@@ -126,7 +123,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Err(e) => output.push(e.to_string().as_bytes()),
                 }
             }
-            Ok(())
         }),
     );
 
@@ -142,7 +138,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             };
             value.write_to_vec(&mut output.data);
             output.commit_row();
-            Ok(())
         }),
     );
 
@@ -164,7 +159,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             output.validity.push(true);
             value.write_to_vec(&mut output.builder.data);
             output.builder.commit_row();
-            Ok(())
         }),
     );
 
@@ -179,7 +173,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         vectorize_with_builder_1_arg::<BooleanType, NullableType<StringType>>(|_, output, _| {
             output.push_null();
-            Ok(())
         }),
     );
 
@@ -205,7 +198,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 };
                                 value.write_to_vec(&mut output.data);
                                 output.commit_row();
-                                Ok(())
                             },
                         ),
                     );
@@ -237,7 +229,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                             output.validity.push(true);
                             value.write_to_vec(&mut output.builder.data);
                             output.builder.commit_row();
-                            Ok(())
                         }),
                     );
 
@@ -253,7 +244,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NullableType<StringType>>(
                         |_, output, _| {
                             output.push_null();
-                            Ok(())
                         },
                     ),
                 );
@@ -379,30 +369,24 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<StringType>>(
-            |s, path, output, _| {
+            |s, path, output, _ctx| {
                 if s.is_empty() || path.is_empty() {
                     output.push_null();
                 } else {
-                    let value = common_jsonb::parse_value(s).map_err(|err| {
-                        format!("unable to parse '{}': {}", &String::from_utf8_lossy(s), err)
-                    })?;
+                    let value = common_jsonb::parse_value(s);
+                    let json_paths = parse_json_path(path);
 
-                    let json_paths = parse_json_path(path).map_err(|err| {
-                        format!(
-                            "Invalid extraction path '{}': {}",
-                            &String::from_utf8_lossy(path),
-                            err
-                        )
-                    })?;
-                    match value.get_by_path(&json_paths) {
-                        Some(val) => {
-                            let json_val = format!("{val}");
-                            output.push(json_val.as_bytes());
-                        }
-                        None => output.push_null(),
+                    match (value, json_paths) {
+                        (Ok(value), Ok(json_paths)) => match value.get_by_path(&json_paths) {
+                            Some(val) => {
+                                let json_val = format!("{val}");
+                                output.push(json_val.as_bytes());
+                            }
+                            None => output.push_null(),
+                        },
+                        _ => output.push_null(),
                     }
                 }
-                Ok(())
             },
         ),
     );
@@ -420,7 +404,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     None => output.push_null(),
                 }
             }
-            Ok(())
         }),
     );
 
@@ -437,7 +420,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     None => output.push_null(),
                 }
             }
-            Ok(())
         }),
     );
 
@@ -454,7 +436,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     None => output.push_null(),
                 }
             }
-            Ok(())
         }),
     );
 
@@ -471,7 +452,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     None => output.push_null(),
                 }
             }
-            Ok(())
         }),
     );
 
@@ -487,7 +467,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             } else {
                 output.push_null()
             }
-            Ok(())
         }),
     );
 
@@ -503,7 +482,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             } else {
                 output.push_null()
             }
-            Ok(())
         }),
     );
 
@@ -515,11 +493,11 @@ pub fn register(registry: &mut FunctionRegistry) {
             ValueRef::Scalar(scalar) => {
                 let mut buf = Vec::new();
                 cast_scalar_to_variant(scalar, ctx.tz, &mut buf);
-                Ok(Value::Scalar(buf))
+                Value::Scalar(buf)
             }
             ValueRef::Column(col) => {
                 let new_col = cast_scalars_to_variants(col.iter(), ctx.tz);
-                Ok(Value::Column(new_col))
+                Value::Column(new_col)
             }
         },
     );
@@ -537,14 +515,14 @@ pub fn register(registry: &mut FunctionRegistry) {
             ValueRef::Scalar(scalar) => {
                 let mut buf = Vec::new();
                 cast_scalar_to_variant(scalar, ctx.tz, &mut buf);
-                Ok(Value::Scalar(Some(buf)))
+                Value::Scalar(Some(buf))
             }
             ValueRef::Column(col) => {
                 let new_col = cast_scalars_to_variants(col.iter(), ctx.tz);
-                Ok(Value::Column(NullableColumn {
+                Value::Column(NullableColumn {
                     validity: constant_bitmap(true, new_col.len()).into(),
                     column: new_col,
-                }))
+                })
             }
         },
     );
@@ -553,11 +531,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_boolean",
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, _| {
-            let value = to_bool(val)
-                .map_err(|_| format!("unable to cast {} to Boolean", to_string(val)))?;
-            output.push(value);
-            Ok(())
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| match to_bool(
+            val,
+        ) {
+            Ok(value) => output.push(value),
+            Err(err) => {
+                ctx.set_error(output.len(), err.to_string());
+                output.push(false);
+            }
         }),
     );
 
@@ -573,7 +554,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 Err(_) => output.push_null(),
             }
-            Ok(())
         }),
     );
 
@@ -581,12 +561,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_string",
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, _| {
-            let value =
-                to_str(val).map_err(|_| format!("unable to cast {} to String", to_string(val)))?;
-            output.put_slice(value.as_bytes());
+        vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
+            match to_str(val) {
+                Ok(value) => output.put_slice(value.as_bytes()),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
             output.commit_row();
-            Ok(())
         }),
     );
 
@@ -603,7 +585,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 Err(_) => output.push_null(),
             }
-            Ok(())
         }),
     );
 
@@ -612,12 +593,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, DateType>(|val, output, ctx| {
-            let str_val = as_str(val)
-                .ok_or_else(|| format!("unable to cast {} to DateType", to_string(val),))?;
-            let d = string_to_date(str_val.as_bytes(), ctx.tz)
-                .ok_or_else(|| format!("unable to cast {} to DateType", to_string(val)))?;
-            output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
-            Ok(())
+            match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.tz)) {
+                Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                None => {
+                    ctx.set_error(output.len(), "unable to cast to type `DATE`");
+                    output.push(0);
+                }
+            }
         }),
     );
 
@@ -626,18 +608,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
-            match as_str(val) {
-                Some(str_val) => {
-                    let date = string_to_date(str_val.as_bytes(), ctx.tz)
-                        .map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE));
-                    match date {
-                        Some(date) => output.push(date),
-                        None => output.push_null(),
-                    }
-                }
+            match as_str(val).and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.tz)) {
+                Some(date) => output.push(date.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 None => output.push_null(),
             }
-            Ok(())
         }),
     );
 
@@ -645,14 +619,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_timestamp",
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<VariantType, TimestampType>(|val, output, ctx| {
-            let str_val = as_str(val)
-                .ok_or_else(|| format!("unable to cast {} to TimestampType", to_string(val),))?;
-            let ts = string_to_timestamp(str_val.as_bytes(), ctx.tz)
-                .ok_or_else(|| format!("unable to cast {} to TimestampType", to_string(val)))?;
-            output.push(ts.timestamp_micros());
-            Ok(())
-        }),
+        vectorize_with_builder_1_arg::<VariantType, TimestampType>(
+            |val, output, ctx| match as_str(val)
+                .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.tz))
+            {
+                Some(ts) => output.push(ts.timestamp_micros()),
+                None => {
+                    ctx.set_error(output.len(), "unable to cast to type `TIMESTAMP`");
+                    output.push(0);
+                }
+            },
+        ),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
@@ -660,19 +637,16 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
-            |val, output, ctx| {
-                match as_str(val) {
-                    Some(str_val) => {
-                        let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.tz)
-                            .map(|ts| ts.timestamp_micros());
-                        match timestamp {
-                            Some(timestamp) => output.push(timestamp),
-                            None => output.push_null(),
-                        }
+            |val, output, ctx| match as_str(val) {
+                Some(str_val) => {
+                    let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.tz)
+                        .map(|ts| ts.timestamp_micros());
+                    match timestamp {
+                        Some(timestamp) => output.push(timestamp),
+                        None => output.push_null(),
                     }
-                    None => output.push_null(),
                 }
-                Ok(())
+                None => output.push_null(),
             },
         ),
     );
@@ -687,55 +661,26 @@ pub fn register(registry: &mut FunctionRegistry) {
                         FunctionProperty::default(),
                         |_| FunctionDomain::MayThrow,
                         vectorize_with_builder_1_arg::<VariantType, NumberType<NUM_TYPE>>(
-                            move |val, output, _| {
-                                let value = if dest_type.is_float() {
-                                    let value = to_f64(val).map_err(|_| {
-                                        format!(
-                                            "unable to cast {} to {}",
-                                            to_string(val),
-                                            dest_type
-                                        )
-                                    })?;
-                                    num_traits::cast::cast(value).ok_or_else(|| {
-                                        format!(
-                                            "unable to cast {} to {}",
-                                            to_string(val),
-                                            dest_type,
-                                        )
-                                    })?
+                            move |val, output, ctx| {
+                                type Native = <NUM_TYPE as Number>::Native;
+
+                                let value: Option<Native> = if dest_type.is_float() {
+                                    to_f64(val).ok().and_then(num_traits::cast::cast)
                                 } else if dest_type.is_signed() {
-                                    let value = to_i64(val).map_err(|_| {
-                                        format!(
-                                            "unable to cast {} to {}",
-                                            to_string(val),
-                                            dest_type
-                                        )
-                                    })?;
-                                    num_traits::cast::cast(value).ok_or_else(|| {
-                                        format!(
-                                            "unable to cast {} to {}",
-                                            to_string(val),
-                                            dest_type,
-                                        )
-                                    })?
+                                    to_i64(val).ok().and_then(num_traits::cast::cast)
                                 } else {
-                                    let value = to_u64(val).map_err(|_| {
-                                        format!(
-                                            "unable to cast {} to {}",
-                                            to_string(val),
-                                            dest_type
-                                        )
-                                    })?;
-                                    num_traits::cast::cast(value).ok_or_else(|| {
-                                        format!(
-                                            "unable to cast {} to {}",
-                                            to_string(val),
-                                            dest_type,
-                                        )
-                                    })?
+                                    to_u64(val).ok().and_then(num_traits::cast::cast)
                                 };
-                                output.push(value);
-                                Ok(())
+                                match value {
+                                    Some(value) => output.push(value.into()),
+                                    None => {
+                                        ctx.set_error(
+                                            output.len(),
+                                            format!("unable to cast to type {dest_type}",),
+                                        );
+                                        output.push(NUM_TYPE::default());
+                                    }
+                                }
                             },
                         ),
                     );
@@ -781,7 +726,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     output.push_null();
                                 }
                             }
-                            Ok(())
                         }),
                     );
             }

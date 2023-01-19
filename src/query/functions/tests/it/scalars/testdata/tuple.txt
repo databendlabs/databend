@@ -35,8 +35,8 @@ output         : (1_u8, 2_u8, ("a", "b"))
 
 
 ast            : (s, s)
-raw expr       : tuple(#0::String NULL, #0::String NULL)
-checked expr   : tuple<String NULL, String NULL>(#0, #0)
+raw expr       : tuple(s::String NULL, s::String NULL)
+checked expr   : tuple<String NULL, String NULL>(s, s)
 evaluation:
 +--------+----------------------+----------------------------------------------+
 |        | s                    | Output                                       |
@@ -127,8 +127,8 @@ output         : "a"
 
 
 ast            : (s, s).1
-raw expr       : get(1)(tuple(#0::String NULL, #0::String NULL))
-checked expr   : get<(String NULL, String NULL)>(tuple<String NULL, String NULL>(#0, #0))
+raw expr       : get(1)(tuple(s::String NULL, s::String NULL))
+checked expr   : get<(String NULL, String NULL)>(tuple<String NULL, String NULL>(s, s))
 evaluation:
 +--------+----------------------+----------------------+
 |        | s                    | Output               |

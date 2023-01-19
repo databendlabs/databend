@@ -25,7 +25,7 @@ use ordered_float::OrderedFloat;
 pub type F64 = OrderedFloat<f64>;
 
 /// Datum is the struct to represent a single value in optimizer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Datum {
     Bool(bool),
     Int(i64),
@@ -39,8 +39,17 @@ impl Datum {
         match data_value {
             Scalar::Boolean(v) => Some(Datum::Bool(*v)),
             Scalar::Number(NumberScalar::Int64(v)) => Some(Datum::Int(*v)),
+            Scalar::Number(NumberScalar::Int32(v)) => Some(Datum::Int(*v as i64)),
+            Scalar::Number(NumberScalar::Int16(v)) => Some(Datum::Int(*v as i64)),
+            Scalar::Number(NumberScalar::Int8(v)) => Some(Datum::Int(*v as i64)),
             Scalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(*v)),
+            Scalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(*v as u64)),
+            Scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(*v as u64)),
+            Scalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(*v as u64)),
             Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(*v)),
+            Scalar::Number(NumberScalar::Float32(v)) => {
+                Some(Datum::Float(F64::from(f32::from(*v) as f64)))
+            }
             Scalar::String(v) => Some(Datum::Bytes(v.clone())),
             _ => None,
         }
@@ -50,10 +59,29 @@ impl Datum {
         match data_value {
             Literal::Boolean(v) => Some(Datum::Bool(*v)),
             Literal::Int64(v) => Some(Datum::Int(*v)),
+            Literal::Int32(v) => Some(Datum::Int(*v as i64)),
+            Literal::Int16(v) => Some(Datum::Int(*v as i64)),
+            Literal::Int8(v) => Some(Datum::Int(*v as i64)),
             Literal::UInt64(v) => Some(Datum::UInt(*v)),
+            Literal::UInt32(v) => Some(Datum::UInt(*v as u64)),
+            Literal::UInt16(v) => Some(Datum::UInt(*v as u64)),
+            Literal::UInt8(v) => Some(Datum::UInt(*v as u64)),
             Literal::Float64(v) => Some(Datum::Float(*v)),
+            Literal::Float32(v) => Some(Datum::Float(F64::from(f32::from(*v) as f64))),
             Literal::String(v) => Some(Datum::Bytes(v.clone())),
             _ => None,
+        }
+    }
+
+    pub fn to_double(&self) -> Result<f64> {
+        match self {
+            Datum::Int(v) => Ok(*v as f64),
+            Datum::UInt(v) => Ok(*v as f64),
+            Datum::Float(v) => Ok(v.into_inner()),
+            _ => Err(ErrorCode::IllegalDataType(format!(
+                "Cannot convert {:?} to double",
+                self
+            ))),
         }
     }
 }
@@ -74,6 +102,23 @@ impl Display for Datum {
 }
 
 impl Datum {
+    pub fn type_comparable(&self, other: &Datum) -> bool {
+        matches!(
+            (self, other),
+            (Datum::Bool(_), Datum::Bool(_))
+                | (Datum::Bytes(_), Datum::Bytes(_))
+                | (Datum::Int(_), Datum::UInt(_))
+                | (Datum::Int(_), Datum::Int(_))
+                | (Datum::Int(_), Datum::Float(_))
+                | (Datum::UInt(_), Datum::Int(_))
+                | (Datum::UInt(_), Datum::UInt(_))
+                | (Datum::UInt(_), Datum::Float(_))
+                | (Datum::Float(_), Datum::Float(_))
+                | (Datum::Float(_), Datum::Int(_))
+                | (Datum::Float(_), Datum::UInt(_))
+        )
+    }
+
     pub fn compare(&self, other: &Self) -> Result<std::cmp::Ordering> {
         match (self, other) {
             (Datum::Bool(l), Datum::Bool(r)) => Ok(l.cmp(r)),

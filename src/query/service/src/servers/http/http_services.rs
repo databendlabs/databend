@@ -130,7 +130,7 @@ impl HttpHandler {
         let tls_config = Self::build_tls(config.as_ref())?;
         let router = self.build_router(config.as_ref(), listening).await?;
         self.shutdown_handler
-            .start_service(listening, Some(tls_config), router)
+            .start_service(listening, Some(tls_config), router, None)
             .await
     }
 
@@ -139,7 +139,7 @@ impl HttpHandler {
             .build_router(GlobalConfig::instance().as_ref(), listening)
             .await?;
         self.shutdown_handler
-            .start_service(listening, None, router)
+            .start_service(listening, None, router, None)
             .await
     }
 }

@@ -21,7 +21,7 @@ import "config.proto";
 
 message AuthInfo {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   message None {}
   message Password {
@@ -44,7 +44,7 @@ message AuthInfo {
 
 message GrantObject {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   message GrantGlobalObject {}
 
@@ -68,7 +68,7 @@ message GrantObject {
 
 message GrantEntry {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   GrantObject object = 1;
   uint64 privileges = 2;
@@ -76,7 +76,7 @@ message GrantEntry {
 
 message UserGrantSet {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   repeated GrantEntry entries = 1;
   map<string, bool> roles = 2;
@@ -84,7 +84,7 @@ message UserGrantSet {
 
 message UserQuota {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   uint64 max_cpu = 1;
   uint64 max_memory_in_bytes = 2;
@@ -93,7 +93,7 @@ message UserQuota {
 
 message UserOption {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   uint64 flags = 1;
   optional string default_role = 2;
@@ -101,7 +101,7 @@ message UserOption {
 
 message UserInfo {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   string name = 1;
   string hostname = 2;
@@ -113,7 +113,7 @@ message UserInfo {
 
 message UserIdentity {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   string username = 1;
   string hostname = 2;
@@ -121,7 +121,7 @@ message UserIdentity {
 
 message UserStageInfo {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   enum StageType {
     LegacyInternal = 0;
@@ -170,7 +170,7 @@ message UserStageInfo {
 
   message FileFormatOptions {
     uint64 ver = 100;
-    uint64 min_compatible = 101;
+    uint64 min_reader_ver = 101;
 
     StageFileFormatType format = 1;
     // Number of lines at the start of the file to skip.
@@ -198,6 +198,7 @@ message UserStageInfo {
       Empty SkipFile = 3;
       uint64 SkipFileNum = 4;
       Empty AbortStatement = 5;
+      uint64 AbortNum = 6;
     }
   }
 
@@ -229,7 +230,7 @@ message UserStageInfo {
 
 message StageFile {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   string path = 1;
   uint64 size = 2;

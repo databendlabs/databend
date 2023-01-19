@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
 #![feature(try_blocks)]
 
 mod common;
+mod data_schema;
 mod group_by;
 mod kernel;
 mod sort;

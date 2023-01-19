@@ -369,7 +369,7 @@ pub trait Visitor<'ast>: Sized {
         &mut self,
         _is_global: bool,
         _variable: &'ast Identifier<'ast>,
-        _value: &'ast Literal,
+        _value: &'ast Expr<'ast>,
     ) {
     }
 

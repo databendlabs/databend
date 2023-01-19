@@ -21,7 +21,7 @@ import "datatype.proto";
 // The schema of a table, such as column data types and other meta info.
 message DataSchema {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   // Fields in the table
   repeated DataField fields = 1;
@@ -33,7 +33,7 @@ message DataSchema {
 // One field, AKA column
 message DataField {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   // The name of this column.
   string name = 1;

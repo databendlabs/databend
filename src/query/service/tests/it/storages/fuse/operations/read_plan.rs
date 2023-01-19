@@ -23,8 +23,8 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::Scalar;
-use common_storage::ColumnLeaf;
-use common_storage::ColumnLeaves;
+use common_storage::ColumnNode;
+use common_storage::ColumnNodes;
 use databend_query::storages::fuse::FuseTable;
 use futures::TryStreamExt;
 use storages_common_table_meta::meta;
@@ -48,13 +48,15 @@ fn test_to_partitions() -> Result<()> {
         distinct_of_values: None,
     };
 
-    let col_metas_gen = |col_size| ColumnMeta {
-        offset: 0,
-        len: col_size as u64,
-        num_values: 0,
+    let col_metas_gen = |col_size| {
+        ColumnMeta::Parquet(meta::SingleColumnMeta {
+            offset: 0,
+            len: col_size as u64,
+            num_values: 0,
+        })
     };
 
-    let col_leaves_gen = |col_id| ColumnLeaf {
+    let col_nodes_gen = |col_id| ColumnNode {
         field: ArrowField::new("".to_string(), ArrowType::Int64, false),
         leaf_ids: vec![col_id],
         children: None,
@@ -96,20 +98,23 @@ fn test_to_partitions() -> Result<()> {
 
     let blocks_metas = (0..num_of_block)
         .into_iter()
-        .map(|_| block_meta.clone())
+        .map(|_| (None, block_meta.clone()))
         .collect::<Vec<_>>();
 
-    let column_leaves = (0..num_of_col)
+    let column_nodes = (0..num_of_col)
         .into_iter()
-        .map(col_leaves_gen)
+        .map(col_nodes_gen)
         .collect::<Vec<_>>();
 
-    let column_leafs = ColumnLeaves { column_leaves };
+    let column_nodes = ColumnNodes { column_nodes };
 
     // CASE I:  no projection
-    let (s, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, None);
+    let (s, parts) = FuseTable::to_partitions(&blocks_metas, &column_nodes, None);
     assert_eq!(parts.len(), num_of_block as usize);
-    let expected_block_size: u64 = cols_metas.values().map(|col_meta| col_meta.len).sum();
+    let expected_block_size: u64 = cols_metas
+        .values()
+        .map(|col_meta| col_meta.offset_length().1)
+        .sum();
     assert_eq!(expected_block_size * num_of_block, s.read_bytes as u64);
 
     // CASE II: col pruning
@@ -124,7 +129,7 @@ fn test_to_partitions() -> Result<()> {
     let expected_block_size: u64 = cols_metas
         .iter()
         .filter(|(cid, _)| col_ids.contains(&(**cid as usize)))
-        .map(|(_, col_meta)| col_meta.len)
+        .map(|(_, col_meta)| col_meta.offset_length().1)
         .sum();
 
     // kick off
@@ -136,7 +141,7 @@ fn test_to_partitions() -> Result<()> {
         prewhere: None,
     });
 
-    let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, push_down);
+    let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_nodes, push_down);
     assert_eq!(parts.len(), num_of_block as usize);
     assert_eq!(expected_block_size * num_of_block, stats.read_bytes as u64);
 

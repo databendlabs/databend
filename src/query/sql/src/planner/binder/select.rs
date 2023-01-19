@@ -45,7 +45,7 @@ use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::JoinType;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::ColumnBinding;
@@ -60,7 +60,7 @@ pub struct SelectList<'a> {
 #[derive(Debug)]
 pub struct SelectItem<'a> {
     pub select_target: &'a SelectTarget<'a>,
-    pub scalar: Scalar,
+    pub scalar: ScalarExpr,
     pub alias: String,
 }
 
@@ -492,6 +492,7 @@ impl<'a> Binder {
                     visibility: Visibility::Visible,
                 };
                 let left_coercion_expr = CastExpr {
+                    is_try: false,
                     argument: Box::new(
                         BoundColumnRef {
                             column: left_col.clone(),
@@ -517,6 +518,7 @@ impl<'a> Binder {
                     .write()
                     .add_derived_column(right_col.column_name.clone(), coercion_types[idx].clone());
                 let right_coercion_expr = CastExpr {
+                    is_try: false,
                     argument: Box::new(
                         BoundColumnRef {
                             column: right_col.clone(),

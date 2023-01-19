@@ -18,7 +18,7 @@ package databend_proto;
 
 message ShareNameIdent {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   // The user this share belongs to
   string tenant = 1;
@@ -29,7 +29,7 @@ message ShareNameIdent {
 
 message ShareDatabaseObject {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   // The user this db belongs to
   string tenant = 1;
@@ -42,7 +42,7 @@ message ShareDatabaseObject {
 
 message ShareGrantObject {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   oneof object {
     uint64 db_id = 1;
@@ -52,7 +52,7 @@ message ShareGrantObject {
 
 message ShareGrantEntry {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   ShareGrantObject object = 1;
   uint64 privileges = 2;
@@ -62,7 +62,7 @@ message ShareGrantEntry {
 
 message ShareMeta {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   optional ShareGrantEntry database = 1;
   repeated ShareGrantEntry entries = 2;
@@ -75,7 +75,7 @@ message ShareMeta {
 
 message ShareAccountMeta {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   string account = 1;
   uint64 share_id = 2;
@@ -85,7 +85,7 @@ message ShareAccountMeta {
 
 message ObjectSharedByShareIds {
   uint64 ver = 100;
-  uint64 min_compatible = 101;
+  uint64 min_reader_ver = 101;
 
   repeated uint64 share_ids = 1;
 }

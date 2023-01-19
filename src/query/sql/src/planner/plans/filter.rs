@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -27,12 +28,11 @@ use crate::optimizer::Statistics;
 use crate::optimizer::MAX_SELECTIVITY;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Filter {
-    pub predicates: Vec<Scalar>,
+    pub predicates: Vec<ScalarExpr>,
     // True if the plan represents having, else the plan represents where
     pub is_having: bool,
 }
@@ -52,22 +52,22 @@ impl Operator for Filter {
         RelOp::Filter
     }
 
-    fn derive_physical_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
     }
 
-    fn compute_required_prop_child<'a>(
+    fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr<'a>,
+        _rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         Ok(required.clone())
     }
 
-    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
-        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+        let mut input_prop = rel_expr.derive_relational_prop_child(0)?;
         let output_columns = input_prop.output_columns;
 
         // Derive outer columns
@@ -90,10 +90,22 @@ impl Operator for Filter {
             selectivity *= sb.compute_selectivity(pred);
         }
         let cardinality = input_prop.cardinality * selectivity;
-
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
+
+        // Derive column statistics
+        let column_stats = if cardinality == 0.0 {
+            HashMap::new()
+        } else {
+            for (_, column_stat) in input_prop.statistics.column_stats.iter_mut() {
+                if cardinality < input_prop.cardinality {
+                    column_stat.ndv =
+                        (column_stat.ndv * cardinality / input_prop.cardinality).ceil();
+                }
+            }
+            input_prop.statistics.column_stats
+        };
 
         Ok(RelationalProperty {
             output_columns,
@@ -104,7 +116,7 @@ impl Operator for Filter {
             // precise cardinality
             statistics: Statistics {
                 precise_cardinality: None,
-                column_stats: Default::default(),
+                column_stats,
                 is_accurate: false,
             },
         })

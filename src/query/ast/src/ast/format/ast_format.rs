@@ -907,15 +907,19 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         &mut self,
         is_global: bool,
         variable: &'ast Identifier<'ast>,
-        value: &'ast Literal,
+        value: &'ast Expr<'ast>,
     ) {
+        let mut children = Vec::with_capacity(1);
+        self.visit_expr(value);
+        children.push(self.children.pop().unwrap());
+
         let name = if is_global {
-            format!("SetGlobal {} = {}", variable, value)
+            format!("SetGlobal {}", variable)
         } else {
-            format!("Set {} = {}", variable, value)
+            format!("Set {}", variable)
         };
-        let format_ctx = AstFormatContext::new(name);
-        let node = FormatTreeNode::new(format_ctx);
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
 
@@ -2195,12 +2199,22 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 span: _,
                 name,
                 params,
+                named_params,
                 alias,
             } => {
                 let mut children = Vec::with_capacity(params.len());
                 for param in params.iter() {
                     self.visit_expr(param);
                     children.push(self.children.pop().unwrap());
+                }
+                for (name, param) in named_params.iter() {
+                    self.visit_expr(param);
+                    let child = self.children.pop().unwrap();
+                    let node = FormatTreeNode::with_children(
+                        AstFormatContext::new(format!("{}=>{}", name, child.payload)),
+                        child.children,
+                    );
+                    children.push(node);
                 }
                 let func_name = format!("TableFunction {}", name);
                 let format_ctx = if let Some(alias) = alias {

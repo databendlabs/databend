@@ -232,6 +232,28 @@ pub fn table_reference(i: Input) -> IResult<TableReference> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum TableFunctionParam<'a> {
+    // func(name => arg)
+    Named { name: String, value: Expr<'a> },
+    // func(arg)
+    Normal(Expr<'a>),
+}
+
+pub fn table_function_param(i: Input) -> IResult<TableFunctionParam> {
+    let named = map(rule! { Ident ~ "=>" ~ #expr  }, |(name, _, value)| {
+        TableFunctionParam::Named {
+            name: name.text().to_string(),
+            value,
+        }
+    });
+    let normal = map(rule! { #expr }, TableFunctionParam::Normal);
+
+    rule!(
+        #named | #normal
+    )(i)
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum TableReferenceElement<'a> {
     Table {
         catalog: Option<Identifier<'a>>,
@@ -243,7 +265,7 @@ pub enum TableReferenceElement<'a> {
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
         name: Identifier<'a>,
-        params: Vec<Expr<'a>>,
+        params: Vec<TableFunctionParam<'a>>,
         alias: Option<TableAlias<'a>>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
@@ -281,7 +303,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let table_function = map(
         rule! {
-            #ident ~ "(" ~ #comma_separated_list0(expr) ~ ")" ~ #table_alias?
+            #ident ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
         },
         |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
             name,
@@ -407,12 +429,29 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement<'a>>>> PrattParse
                 name,
                 params,
                 alias,
-            } => TableReference::TableFunction {
-                span: input.span.0,
-                name,
-                params,
-                alias,
-            },
+            } => {
+                let normal_params = params
+                    .iter()
+                    .filter_map(|p| match p {
+                        TableFunctionParam::Normal(p) => Some(p.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                let named_params = params
+                    .into_iter()
+                    .filter_map(|p| match p {
+                        TableFunctionParam::Named { name, value } => Some((name, value)),
+                        _ => None,
+                    })
+                    .collect();
+                TableReference::TableFunction {
+                    span: input.span.0,
+                    name,
+                    params: normal_params,
+                    named_params,
+                    alias,
+                }
+            }
             TableReferenceElement::Subquery { subquery, alias } => TableReference::Subquery {
                 span: input.span.0,
                 subquery,

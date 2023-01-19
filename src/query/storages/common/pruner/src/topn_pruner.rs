@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -22,10 +23,11 @@ use common_expression::TableSchemaRef;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct BlockMetaIndex {
     pub segment_idx: usize,
     pub block_idx: usize,
+    pub range: Option<Range<usize>>,
 }
 
 /// TopN prunner.

@@ -245,6 +245,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         min: vec![Scalar::Number(NumberScalar::Int32(1))],
         max: vec![Scalar::Number(NumberScalar::Int32(5))],
         level: 0,
+        pages: None,
     });
 
     let block_compactor = BlockCompactThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
@@ -252,6 +253,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         0,
         vec![0],
         0,
+        None,
         0,
         block_compactor,
         vec![],
@@ -274,6 +276,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
                 span: None,
                 id: 0usize,
                 data_type: schema.field(0).data_type().clone(),
+                display_name: schema.field(0).name().clone(),
             },
             RawExpr::Literal {
                 span: None,
@@ -289,6 +292,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         0,
         vec![1],
         0,
+        None,
         0,
         block_compactor,
         operators,
@@ -306,6 +310,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         1,
         vec![0],
         0,
+        None,
         0,
         block_compactor,
         vec![],
@@ -405,14 +410,8 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
         );
         let block = DataBlock::new_from_columns(vec![data_col.clone()]);
 
-        let min_col = eval_aggr(
-            "min",
-            vec![],
-            &[data_col.clone()],
-            &[DataType::String],
-            rows,
-        )?;
-        let max_col = eval_aggr("max", vec![], &[data_col], &[DataType::String], rows)?;
+        let min_col = eval_aggr("min", vec![], &[data_col.clone()], rows)?;
+        let max_col = eval_aggr("max", vec![], &[data_col], rows)?;
 
         let min_expr = min_col.0.index(0).unwrap();
         let max_expr = max_col.0.index(0).unwrap();

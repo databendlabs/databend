@@ -39,16 +39,15 @@ use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
 use crate::MetadataRef;
 
 pub struct JoinConditions {
-    pub(crate) left_conditions: Vec<Scalar>,
-    pub(crate) right_conditions: Vec<Scalar>,
-    pub(crate) non_equi_conditions: Vec<Scalar>,
-    pub(crate) other_conditions: Vec<Scalar>,
+    pub(crate) left_conditions: Vec<ScalarExpr>,
+    pub(crate) right_conditions: Vec<ScalarExpr>,
+    pub(crate) non_equi_conditions: Vec<ScalarExpr>,
+    pub(crate) other_conditions: Vec<ScalarExpr>,
 }
 
 impl<'a> Binder {
@@ -83,10 +82,10 @@ impl<'a> Binder {
             _ => (),
         };
 
-        let mut left_join_conditions: Vec<Scalar> = vec![];
-        let mut right_join_conditions: Vec<Scalar> = vec![];
-        let mut non_equi_conditions: Vec<Scalar> = vec![];
-        let mut other_conditions: Vec<Scalar> = vec![];
+        let mut left_join_conditions: Vec<ScalarExpr> = vec![];
+        let mut right_join_conditions: Vec<ScalarExpr> = vec![];
+        let mut non_equi_conditions: Vec<ScalarExpr> = vec![];
+        let mut other_conditions: Vec<ScalarExpr> = vec![];
         let mut join_condition_resolver = JoinConditionResolver::new(
             self.ctx.clone(),
             &self.name_resolution_ctx,
@@ -212,8 +211,8 @@ impl<'a> Binder {
         &self,
         left_child: &mut SExpr,
         right_child: &mut SExpr,
-        other_conditions: Vec<Scalar>,
-        non_equi_conditions: &mut Vec<Scalar>,
+        other_conditions: Vec<ScalarExpr>,
+        non_equi_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
         if other_conditions.is_empty() {
             return Ok(());
@@ -393,10 +392,10 @@ impl<'a> JoinConditionResolver<'a> {
 
     pub async fn resolve(
         &mut self,
-        left_join_conditions: &mut Vec<Scalar>,
-        right_join_conditions: &mut Vec<Scalar>,
-        non_equi_conditions: &mut Vec<Scalar>,
-        other_join_conditions: &mut Vec<Scalar>,
+        left_join_conditions: &mut Vec<ScalarExpr>,
+        right_join_conditions: &mut Vec<ScalarExpr>,
+        non_equi_conditions: &mut Vec<ScalarExpr>,
+        other_join_conditions: &mut Vec<ScalarExpr>,
         join_op: &JoinOperator,
     ) -> Result<()> {
         match &self.join_condition {
@@ -453,10 +452,10 @@ impl<'a> JoinConditionResolver<'a> {
     async fn resolve_on(
         &mut self,
         condition: &Expr<'a>,
-        left_join_conditions: &mut Vec<Scalar>,
-        right_join_conditions: &mut Vec<Scalar>,
-        non_equi_conditions: &mut Vec<Scalar>,
-        other_join_conditions: &mut Vec<Scalar>,
+        left_join_conditions: &mut Vec<ScalarExpr>,
+        right_join_conditions: &mut Vec<ScalarExpr>,
+        non_equi_conditions: &mut Vec<ScalarExpr>,
+        other_join_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
         let conjunctions = split_conjunctions_expr(condition);
         for expr in conjunctions.iter() {
@@ -481,10 +480,10 @@ impl<'a> JoinConditionResolver<'a> {
     async fn resolve_predicate(
         &self,
         predicate: &Expr<'_>,
-        left_join_conditions: &mut Vec<Scalar>,
-        right_join_conditions: &mut Vec<Scalar>,
-        non_equi_conditions: &mut Vec<Scalar>,
-        other_join_conditions: &mut Vec<Scalar>,
+        left_join_conditions: &mut Vec<ScalarExpr>,
+        right_join_conditions: &mut Vec<ScalarExpr>,
+        non_equi_conditions: &mut Vec<ScalarExpr>,
+        other_join_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
         let mut join_context = (*self.join_context).clone();
         wrap_nullable_for_column(
@@ -531,8 +530,8 @@ impl<'a> JoinConditionResolver<'a> {
     async fn resolve_using(
         &mut self,
         using_columns: Vec<String>,
-        left_join_conditions: &mut Vec<Scalar>,
-        right_join_conditions: &mut Vec<Scalar>,
+        left_join_conditions: &mut Vec<ScalarExpr>,
+        right_join_conditions: &mut Vec<ScalarExpr>,
         join_op: &JoinOperator,
     ) -> Result<()> {
         wrap_nullable_for_column(
@@ -549,7 +548,7 @@ impl<'a> JoinConditionResolver<'a> {
                 .iter()
                 .find(|col_binding| col_binding.column_name == join_key_name)
             {
-                Scalar::BoundColumnRef(BoundColumnRef {
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
                     column: col_binding.clone(),
                 })
             } else {
@@ -564,7 +563,7 @@ impl<'a> JoinConditionResolver<'a> {
                 .iter()
                 .find(|col_binding| col_binding.column_name == join_key_name)
             {
-                Scalar::BoundColumnRef(BoundColumnRef {
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
                     column: col_binding.clone(),
                 })
             } else {
@@ -597,10 +596,10 @@ impl<'a> JoinConditionResolver<'a> {
 
     fn add_equi_conditions(
         &self,
-        mut left: Scalar,
-        mut right: Scalar,
-        left_join_conditions: &mut Vec<Scalar>,
-        right_join_conditions: &mut Vec<Scalar>,
+        mut left: ScalarExpr,
+        mut right: ScalarExpr,
+        left_join_conditions: &mut Vec<ScalarExpr>,
+        right_join_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<bool> {
         let left_used_columns = left.used_columns();
         let right_used_columns = right.used_columns();
@@ -637,7 +636,7 @@ impl<'a> JoinConditionResolver<'a> {
     async fn add_other_conditions(
         &self,
         predicate: &Expr<'_>,
-        other_join_conditions: &mut Vec<Scalar>,
+        other_join_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<bool> {
         let mut join_context = (*self.join_context).clone();
         wrap_nullable_for_column(

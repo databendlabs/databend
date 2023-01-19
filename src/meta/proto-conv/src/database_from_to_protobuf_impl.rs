@@ -23,16 +23,19 @@ use common_meta_app::schema as mt;
 use common_meta_app::share;
 use common_protos::pb;
 
-use crate::check_ver;
+use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
-use crate::MIN_COMPATIBLE_VER;
+use crate::MIN_READER_VER;
 use crate::VER;
 
 impl FromToProto for mt::DatabaseNameIdent {
     type PB = pb::DatabaseNameIdent;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DatabaseNameIdent) -> Result<Self, Incompatible> {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
             tenant: p.tenant,
@@ -44,7 +47,7 @@ impl FromToProto for mt::DatabaseNameIdent {
     fn to_pb(&self) -> Result<pb::DatabaseNameIdent, Incompatible> {
         let p = pb::DatabaseNameIdent {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             tenant: self.tenant.clone(),
             db_name: self.db_name.clone(),
         };
@@ -54,8 +57,11 @@ impl FromToProto for mt::DatabaseNameIdent {
 
 impl FromToProto for mt::DatabaseMeta {
     type PB = pb::DatabaseMeta;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DatabaseMeta) -> Result<Self, Incompatible> {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
             engine: p.engine,
@@ -80,7 +86,7 @@ impl FromToProto for mt::DatabaseMeta {
     fn to_pb(&self) -> Result<pb::DatabaseMeta, Incompatible> {
         let p = pb::DatabaseMeta {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             options: self.options.clone(),
@@ -103,8 +109,11 @@ impl FromToProto for mt::DatabaseMeta {
 
 impl FromToProto for mt::DbIdList {
     type PB = pb::DbIdList;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
     fn from_pb(p: pb::DbIdList) -> Result<Self, Incompatible> {
-        check_ver(p.ver, p.min_compatible)?;
+        reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self { id_list: p.ids };
         Ok(v)
@@ -113,7 +122,7 @@ impl FromToProto for mt::DbIdList {
     fn to_pb(&self) -> Result<pb::DbIdList, Incompatible> {
         let p = pb::DbIdList {
             ver: VER,
-            min_compatible: MIN_COMPATIBLE_VER,
+            min_reader_ver: MIN_READER_VER,
             ids: self.id_list.clone(),
         };
         Ok(p)

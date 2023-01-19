@@ -32,10 +32,10 @@ pub struct ClickhouseHttpClient {
 }
 
 impl ClickhouseHttpClient {
-    pub fn create() -> Result<ClickhouseHttpClient> {
+    pub fn create() -> Result<Self> {
         let client = Client::new();
         let url = "http://127.0.0.1:8124".to_string();
-        Ok(ClickhouseHttpClient {
+        Ok(Self {
             client,
             database: "default".to_string(),
             settings: HashMap::new(),
@@ -46,7 +46,7 @@ impl ClickhouseHttpClient {
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
         if self.debug {
-            println!("Running sql with clickhouse client: [{}]", sql);
+            println!("Running sql with clickhouse client: [{sql}]");
         }
         // Client will save the following info: use database, settings (session level info)
         // Then send them to server, so even though the session changes, database and settings context is correct

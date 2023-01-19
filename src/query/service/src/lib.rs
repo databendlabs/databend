@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::uninlined_format_args)]
 #![feature(hash_raw_entry)]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
@@ -23,6 +24,7 @@
 #![feature(option_get_or_insert_default)]
 #![feature(result_option_inspect)]
 #![feature(result_flattening)]
+#![feature(iterator_try_reduce)]
 #![feature(cursor_remaining)]
 
 extern crate core;

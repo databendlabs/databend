@@ -31,12 +31,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
-use common_storage::ColumnLeaf;
+use common_storage::ColumnNode;
 
 use super::filter::FilterState;
 use crate::parquet_part::ColumnMeta;
 use crate::parquet_part::ParquetRowGroupPart;
-use crate::ParquetReader;
+use crate::parquet_reader::ParquetReader;
 
 impl ParquetReader {
     pub fn deserialize(
@@ -52,11 +52,11 @@ impl ParquetReader {
         let mut normal_fields = Vec::with_capacity(self.projected_arrow_schema.fields.len());
         let mut nested_fields = Vec::with_capacity(self.projected_arrow_schema.fields.len());
 
-        let column_leaves = &self.projected_column_leaves.column_leaves;
-        let mut cnt_map = Self::build_projection_count_map(column_leaves);
+        let column_nodes = &self.projected_column_nodes.column_nodes;
+        let mut cnt_map = Self::build_projection_count_map(column_nodes);
 
-        for (idx, column_leaf) in column_leaves.iter().enumerate() {
-            let indices = &column_leaf.leaf_ids;
+        for (idx, column_node) in column_nodes.iter().enumerate() {
+            let indices = &column_node.leaf_ids;
             let mut metas = Vec::with_capacity(indices.len());
             let mut chunks = Vec::with_capacity(indices.len());
             for index in indices {
@@ -80,7 +80,7 @@ impl ParquetReader {
                         metas,
                         chunks,
                         part.num_rows,
-                        column_leaf.field.clone(),
+                        column_node.field.clone(),
                     )?);
                     nested_fields.push(self.output_schema.field(idx).clone());
                 } else {
@@ -88,7 +88,7 @@ impl ParquetReader {
                         metas,
                         chunks,
                         part.num_rows,
-                        column_leaf.field.clone(),
+                        column_node.field.clone(),
                         bitmap.clone(),
                     )?);
                     normal_fields.push(self.output_schema.field(idx).clone());
@@ -98,7 +98,7 @@ impl ParquetReader {
                     metas,
                     chunks,
                     part.num_rows,
-                    column_leaf.field.clone(),
+                    column_node.field.clone(),
                 )?)
             }
         }
@@ -148,8 +148,8 @@ impl ParquetReader {
                     std::io::Cursor::new(chunk),
                     PageMetaData {
                         column_start: meta.offset,
-                        num_values: meta.length as i64,
-                        compression: meta.compression.into(),
+                        num_values: rows as i64,
+                        compression: meta.compression,
                         descriptor: descriptor.descriptor.clone(),
                     },
                     Arc::new(|_, _| true),
@@ -191,8 +191,8 @@ impl ParquetReader {
                     std::io::Cursor::new(chunk),
                     PageMetaData {
                         column_start: meta.offset,
-                        num_values: meta.length as i64,
-                        compression: meta.compression.into(),
+                        num_values: rows as i64,
+                        compression: meta.compression,
                         descriptor: descriptor.descriptor.clone(),
                     },
                     Arc::new(move |_, header| {
@@ -246,7 +246,7 @@ impl ParquetReader {
     }
 
     // Build a map to record the count number of each leaf_id
-    fn build_projection_count_map(columns: &[ColumnLeaf]) -> HashMap<usize, usize> {
+    fn build_projection_count_map(columns: &[ColumnNode]) -> HashMap<usize, usize> {
         let mut cnt_map = HashMap::with_capacity(columns.len());
         for column in columns {
             for index in &column.leaf_ids {

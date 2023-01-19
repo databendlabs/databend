@@ -111,13 +111,14 @@ impl HeuristicOptimizer {
         Ok(result)
     }
 
-    // Return `None` if no rules matched
+    /// Try to apply the rules to the expression.
+    /// Return the final result that no rule can be applied.
     fn apply_transform_rules(&self, s_expr: &SExpr, rule_list: &RuleList) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
         for rule in rule_list.iter() {
             let mut state = TransformResult::new();
             if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
-                s_expr.apply_rule(&rule.id());
+                s_expr.set_applied_rule(&rule.id());
                 rule.apply(&s_expr, &mut state)?;
                 if !state.results().is_empty() {
                     // Recursive optimize the result
