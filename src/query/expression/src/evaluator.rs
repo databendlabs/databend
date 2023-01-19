@@ -64,7 +64,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    pub fn check_expr(&self, expr: &Expr) {
+    fn check_expr(&self, expr: &Expr) {
         let column_refs = expr.column_refs();
         for (index, datatype) in column_refs.iter() {
             let column = self.input_columns.get_by_offset(*index);
@@ -489,7 +489,7 @@ impl<'a> Evaluator<'a> {
             display_name: String::new(),
         };
 
-        let cast_expr = check_function(span, cast_fn, &[], &[expr.clone()], self.fn_registry)?;
+        let cast_expr = check_function(span, cast_fn, &[], &[expr], self.fn_registry)?;
 
         if cast_expr.data_type() != dest_type {
             return Ok(None);
@@ -507,7 +507,7 @@ impl<'a> Evaluator<'a> {
             num_rows,
         );
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        Ok(Some(evaluator.run(&expr)?))
+        Ok(Some(evaluator.run(&cast_expr)?))
     }
 }
 

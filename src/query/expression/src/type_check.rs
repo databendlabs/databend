@@ -139,6 +139,7 @@ pub fn check_cast<Index: ColumnIndex>(
     } else {
         dest_type.clone()
     };
+
     if expr.data_type() == &wrapped_dest_type {
         Ok(expr)
     } else {
@@ -150,6 +151,7 @@ pub fn check_cast<Index: ColumnIndex>(
                 return Ok(cast_expr);
             }
         }
+
         Ok(Expr::Cast {
             span,
             is_try,
