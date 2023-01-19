@@ -21,7 +21,7 @@ use storages_common_table_meta::meta::BlockBloomFilterIndexVersion;
 use storages_common_table_meta::meta::BlockFilter;
 use storages_common_table_meta::meta::Location;
 
-use super::util::load_bloom_filter_by_columns;
+use super::loader::load_bloom_filter_by_columns;
 
 #[async_trait::async_trait]
 pub trait BloomFilterReader {

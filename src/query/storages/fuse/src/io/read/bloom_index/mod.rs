@@ -15,6 +15,6 @@
 
 mod column_reader;
 mod filter_reader;
-mod util;
+mod loader;
 
 pub use filter_reader::BloomFilterReader;
