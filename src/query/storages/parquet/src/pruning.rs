@@ -366,7 +366,7 @@ mod tests {
     use common_sql::plans::BoundColumnRef;
     use common_sql::plans::ConstantExpr;
     use common_sql::plans::FunctionCall;
-    use common_sql::plans::Scalar;
+    use common_sql::plans::ScalarExpr;
     use common_sql::ColumnBinding;
     use common_sql::Visibility;
     use common_storage::ColumnNodes;
@@ -575,10 +575,10 @@ mod tests {
 
         // col1 > 12
         {
-            let filter = Scalar::FunctionCall(FunctionCall {
+            let filter = ScalarExpr::FunctionCall(FunctionCall {
                 params: vec![],
                 arguments: vec![
-                    Scalar::BoundColumnRef(BoundColumnRef {
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -588,7 +588,7 @@ mod tests {
                             visibility: Visibility::Visible,
                         },
                     }),
-                    Scalar::ConstantExpr(ConstantExpr {
+                    ScalarExpr::ConstantExpr(ConstantExpr {
                         value: Literal::Int32(12),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
@@ -607,10 +607,10 @@ mod tests {
 
         // col1 < 0
         {
-            let filter = Scalar::FunctionCall(FunctionCall {
+            let filter = ScalarExpr::FunctionCall(FunctionCall {
                 params: vec![],
                 arguments: vec![
-                    Scalar::BoundColumnRef(BoundColumnRef {
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -620,7 +620,7 @@ mod tests {
                             visibility: Visibility::Visible,
                         },
                     }),
-                    Scalar::ConstantExpr(ConstantExpr {
+                    ScalarExpr::ConstantExpr(ConstantExpr {
                         value: Literal::Int32(0),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
@@ -639,10 +639,10 @@ mod tests {
 
         // col1 <= 5
         {
-            let filter = Scalar::FunctionCall(FunctionCall {
+            let filter = ScalarExpr::FunctionCall(FunctionCall {
                 params: vec![],
                 arguments: vec![
-                    Scalar::BoundColumnRef(BoundColumnRef {
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -652,7 +652,7 @@ mod tests {
                             visibility: Visibility::Visible,
                         },
                     }),
-                    Scalar::ConstantExpr(ConstantExpr {
+                    ScalarExpr::ConstantExpr(ConstantExpr {
                         value: Literal::Int32(5),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
@@ -681,10 +681,10 @@ mod tests {
 
         // col1 > 12
         {
-            let filter = Scalar::FunctionCall(FunctionCall {
+            let filter = ScalarExpr::FunctionCall(FunctionCall {
                 params: vec![],
                 arguments: vec![
-                    Scalar::BoundColumnRef(BoundColumnRef {
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -694,7 +694,7 @@ mod tests {
                             visibility: Visibility::Visible,
                         },
                     }),
-                    Scalar::ConstantExpr(ConstantExpr {
+                    ScalarExpr::ConstantExpr(ConstantExpr {
                         value: Literal::Int32(12),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
@@ -711,10 +711,10 @@ mod tests {
 
         // col1 <= 5
         {
-            let filter = Scalar::FunctionCall(FunctionCall {
+            let filter = ScalarExpr::FunctionCall(FunctionCall {
                 params: vec![],
                 arguments: vec![
-                    Scalar::BoundColumnRef(BoundColumnRef {
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -724,7 +724,7 @@ mod tests {
                             visibility: Visibility::Visible,
                         },
                     }),
-                    Scalar::ConstantExpr(ConstantExpr {
+                    ScalarExpr::ConstantExpr(ConstantExpr {
                         value: Literal::Int32(5),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
@@ -741,10 +741,10 @@ mod tests {
 
         // col1 > 10
         {
-            let filter = Scalar::FunctionCall(FunctionCall {
+            let filter = ScalarExpr::FunctionCall(FunctionCall {
                 params: vec![],
                 arguments: vec![
-                    Scalar::BoundColumnRef(BoundColumnRef {
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -754,7 +754,7 @@ mod tests {
                             visibility: Visibility::Visible,
                         },
                     }),
-                    Scalar::ConstantExpr(ConstantExpr {
+                    ScalarExpr::ConstantExpr(ConstantExpr {
                         value: Literal::Int32(10),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
@@ -771,10 +771,10 @@ mod tests {
 
         // col1 <= 10
         {
-            let filter = Scalar::FunctionCall(FunctionCall {
+            let filter = ScalarExpr::FunctionCall(FunctionCall {
                 params: vec![],
                 arguments: vec![
-                    Scalar::BoundColumnRef(BoundColumnRef {
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -784,7 +784,7 @@ mod tests {
                             visibility: Visibility::Visible,
                         },
                     }),
-                    Scalar::ConstantExpr(ConstantExpr {
+                    ScalarExpr::ConstantExpr(ConstantExpr {
                         value: Literal::Int32(10),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),

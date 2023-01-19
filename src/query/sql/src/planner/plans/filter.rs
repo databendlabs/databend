@@ -28,12 +28,11 @@ use crate::optimizer::Statistics;
 use crate::optimizer::MAX_SELECTIVITY;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Filter {
-    pub predicates: Vec<Scalar>,
+    pub predicates: Vec<ScalarExpr>,
     // True if the plan represents having, else the plan represents where
     pub is_having: bool,
 }

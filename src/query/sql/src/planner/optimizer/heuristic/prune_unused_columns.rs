@@ -25,7 +25,6 @@ use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::MetadataRef;
-use crate::ScalarExpr;
 
 pub struct UnusedColumnPruner {
     metadata: MetadataRef,

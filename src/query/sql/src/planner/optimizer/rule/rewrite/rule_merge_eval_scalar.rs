@@ -23,7 +23,6 @@ use crate::optimizer::SExpr;
 use crate::plans::EvalScalar;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::ScalarExpr;
 
 // Merge two adjacent `EvalScalar`s into one
 pub struct RuleMergeEvalScalar {

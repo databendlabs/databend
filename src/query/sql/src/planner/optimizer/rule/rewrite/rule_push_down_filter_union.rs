@@ -31,7 +31,7 @@ use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::UnionAll;
 use crate::ColumnBinding;
 use crate::IndexType;
@@ -128,10 +128,10 @@ impl Rule for RulePushDownFilterUnion {
 
 fn replace_column_binding(
     index_pairs: &HashMap<IndexType, IndexType>,
-    scalar: Scalar,
-) -> Result<Scalar> {
+    scalar: ScalarExpr,
+) -> Result<ScalarExpr> {
     match scalar {
-        Scalar::BoundColumnRef(column) => {
+        ScalarExpr::BoundColumnRef(column) => {
             let index = column.column.index;
             if index_pairs.contains_key(&index) {
                 let new_column = ColumnBinding {
@@ -142,46 +142,48 @@ fn replace_column_binding(
                     data_type: column.column.data_type,
                     visibility: Visibility::Visible,
                 };
-                return Ok(Scalar::BoundColumnRef(BoundColumnRef {
+                return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                     column: new_column,
                 }));
             }
-            Ok(Scalar::BoundColumnRef(column))
+            Ok(ScalarExpr::BoundColumnRef(column))
         }
-        constant_expr @ Scalar::ConstantExpr(_) => Ok(constant_expr),
-        Scalar::AndExpr(expr) => Ok(Scalar::AndExpr(AndExpr {
+        constant_expr @ ScalarExpr::ConstantExpr(_) => Ok(constant_expr),
+        ScalarExpr::AndExpr(expr) => Ok(ScalarExpr::AndExpr(AndExpr {
             left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
             right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
             return_type: expr.return_type,
         })),
-        Scalar::OrExpr(expr) => Ok(Scalar::OrExpr(OrExpr {
+        ScalarExpr::OrExpr(expr) => Ok(ScalarExpr::OrExpr(OrExpr {
             left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
             right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
             return_type: expr.return_type,
         })),
-        Scalar::NotExpr(expr) => Ok(Scalar::NotExpr(NotExpr {
+        ScalarExpr::NotExpr(expr) => Ok(ScalarExpr::NotExpr(NotExpr {
             argument: Box::new(replace_column_binding(index_pairs, *expr.argument)?),
             return_type: expr.return_type,
         })),
-        Scalar::ComparisonExpr(expr) => Ok(Scalar::ComparisonExpr(ComparisonExpr {
+        ScalarExpr::ComparisonExpr(expr) => Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
             op: expr.op,
             left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
             right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
             return_type: expr.return_type,
         })),
-        Scalar::AggregateFunction(expr) => Ok(Scalar::AggregateFunction(AggregateFunction {
-            display_name: expr.display_name,
-            func_name: expr.func_name,
-            distinct: expr.distinct,
-            params: expr.params,
-            args: expr
-                .args
-                .into_iter()
-                .map(|arg| replace_column_binding(index_pairs, arg))
-                .collect::<Result<Vec<_>>>()?,
-            return_type: expr.return_type,
-        })),
-        Scalar::FunctionCall(expr) => Ok(Scalar::FunctionCall(FunctionCall {
+        ScalarExpr::AggregateFunction(expr) => {
+            Ok(ScalarExpr::AggregateFunction(AggregateFunction {
+                display_name: expr.display_name,
+                func_name: expr.func_name,
+                distinct: expr.distinct,
+                params: expr.params,
+                args: expr
+                    .args
+                    .into_iter()
+                    .map(|arg| replace_column_binding(index_pairs, arg))
+                    .collect::<Result<Vec<_>>>()?,
+                return_type: expr.return_type,
+            }))
+        }
+        ScalarExpr::FunctionCall(expr) => Ok(ScalarExpr::FunctionCall(FunctionCall {
             params: expr.params,
             arguments: expr
                 .arguments
@@ -191,13 +193,13 @@ fn replace_column_binding(
             func_name: expr.func_name,
             return_type: expr.return_type,
         })),
-        Scalar::CastExpr(expr) => Ok(Scalar::CastExpr(CastExpr {
+        ScalarExpr::CastExpr(expr) => Ok(ScalarExpr::CastExpr(CastExpr {
             is_try: expr.is_try,
             argument: Box::new(replace_column_binding(index_pairs, *(expr.argument))?),
             from_type: expr.from_type,
             target_type: expr.target_type,
         })),
-        Scalar::SubqueryExpr(_) => Err(ErrorCode::Unimplemented(
+        ScalarExpr::SubqueryExpr(_) => Err(ErrorCode::Unimplemented(
             "replace_column_binding: don't support subquery",
         )),
     }

@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::BindContext;
 
 #[derive(Clone, Debug)]
@@ -26,8 +26,8 @@ pub struct UpdatePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub update_list: HashMap<usize, Scalar>,
-    pub selection: Option<Scalar>,
+    pub update_list: HashMap<usize, ScalarExpr>,
+    pub selection: Option<ScalarExpr>,
     pub bind_context: Box<BindContext>,
 }
 
