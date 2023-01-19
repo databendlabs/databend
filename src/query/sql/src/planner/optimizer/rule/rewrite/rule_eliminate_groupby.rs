@@ -95,14 +95,20 @@ impl Rule for RuleEliminateGroupBy {
         let group_col_nums = group_item_cols.len();
         if all_fn_items
             .iter()
-            .all(|item| item.1.len() < group_col_nums)
+            .all(|item| item.1.len() <= group_col_nums)
         {
+            let mut need_remove = false;
             for item in all_fn_items {
                 if item.1.iter().all(|col| group_item_cols.contains(col)) {
+                    need_remove = true;
                     agg.group_items.remove(item.0);
                 }
             }
-            state.add_result(SExpr::create_unary(agg.into(), s_expr.child(0)?.clone()));
+            if need_remove {
+                state.add_result(SExpr::create_unary(agg.into(), s_expr.child(0)?.clone()));
+            } else {
+                return Ok(());
+            }
         }
 
         Ok(())
