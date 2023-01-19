@@ -20,6 +20,7 @@ use common_config::GlobalConfig;
 use common_exception::Result;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
+use common_storage::GlobalHttpClient;
 use common_storage::ShareTableConfig;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
@@ -48,6 +49,7 @@ impl GlobalServices {
 
         QueryLogger::init(app_name_shuffle, &config.log)?;
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
+        GlobalHttpClient::init().await?;
 
         // Cluster discovery.
         ClusterDiscovery::init(config.clone()).await?;

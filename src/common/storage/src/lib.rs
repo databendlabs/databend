@@ -59,6 +59,9 @@ pub use operator::init_operator;
 pub use operator::CacheOperator;
 pub use operator::DataOperator;
 
+mod http_client;
+pub use http_client::GlobalHttpClient;
+
 mod metrics;
 pub use metrics::StorageMetrics;
 pub use metrics::StorageMetricsLayer;

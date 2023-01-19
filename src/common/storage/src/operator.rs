@@ -51,6 +51,7 @@ use crate::config::StorageMokaConfig;
 use crate::config::StorageObsConfig;
 use crate::runtime_layer::RuntimeLayer;
 use crate::CacheConfig;
+use crate::GlobalHttpClient;
 use crate::StorageConfig;
 use crate::StorageOssConfig;
 use crate::StorageRedisConfig;
@@ -124,6 +125,8 @@ pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<Operator> {
     builder.account_name(&cfg.account_name);
     builder.account_key(&cfg.account_key);
 
+    builder.http_client(GlobalHttpClient::instance());
+
     Ok(Operator::new(builder.build()?))
 }
 
@@ -164,6 +167,7 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<Operator> {
         .bucket(&cfg.bucket)
         .root(&cfg.root)
         .credential(&cfg.credential)
+        .http_client(GlobalHttpClient::instance())
         .build()?;
 
     Ok(Operator::new(accessor))
@@ -192,6 +196,7 @@ fn init_ipfs_operator(cfg: &super::StorageIpfsConfig) -> Result<Operator> {
 
     builder.root(&cfg.root);
     builder.endpoint(&cfg.endpoint_url);
+    builder.http_client(GlobalHttpClient::instance());
 
     Ok(Operator::new(builder.build()?))
 }
@@ -201,6 +206,7 @@ fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
 
     // Endpoint.
     builder.endpoint(&cfg.endpoint_url);
+    builder.http_client(GlobalHttpClient::instance());
 
     // HTTP Service is read-only and doesn't support list operation.
     // ImmutableIndexLayer will build an in-memory immutable index for it.
@@ -258,6 +264,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
         builder.enable_virtual_host_style();
     }
 
+    // Use the global http client
+    builder.http_client(GlobalHttpClient::instance());
+
     Ok(Operator::new(builder.build()?))
 }
 
@@ -274,6 +283,9 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
     builder.access_key_id(&cfg.access_key_id);
     builder.secret_access_key(&cfg.secret_access_key);
 
+    // Use the global http client
+    builder.http_client(GlobalHttpClient::instance());
+
     Ok(Operator::new(builder.build()?))
 }
 
@@ -288,6 +300,7 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
         .access_key_secret(&cfg.access_key_secret)
         .bucket(&cfg.bucket)
         .root(&cfg.root)
+        .http_client(GlobalHttpClient::instance())
         .build()?;
 
     Ok(Operator::new(backend))
