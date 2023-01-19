@@ -30,4 +30,4 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
-      run: bash ./scripts/ci/ci-run-sqllogic-tests-management-mode.sh
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-management-mode.sh ${{ inputs.dirs }}
