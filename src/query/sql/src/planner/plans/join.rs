@@ -385,7 +385,8 @@ impl Operator for Join {
 
         let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
-
+        
+        // it join/probe side is Serial or join key is empty, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial || self.left_conditions.is_empty()
         {
