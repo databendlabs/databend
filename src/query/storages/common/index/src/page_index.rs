@@ -196,7 +196,7 @@ impl PageIndex {
         // Fill missing stats to be full domain
         for (name, ty) in self.column_refs.iter() {
             if !input_domains.contains_key(name.as_str()) {
-                input_domains.insert(name.clone(), Domain::full(&ty));
+                input_domains.insert(name.clone(), Domain::full(ty));
             }
         }
 

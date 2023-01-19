@@ -39,7 +39,7 @@ impl UnusedColumnPruner {
     }
 
     pub fn remove_unused_columns(&self, expr: &SExpr, require_columns: ColumnSet) -> Result<SExpr> {
-        self.keep_required_columns(expr, require_columns)
+        Self::keep_required_columns(expr, require_columns)
     }
 
     /// Keep columns referenced by parent plan node.
@@ -47,7 +47,7 @@ impl UnusedColumnPruner {
     /// the required columns for each child could be different and we may include columns not needed
     /// by a specific child. Columns should be skipped once we found it not exist in the subtree as we
     /// visit a plan node.
-    fn keep_required_columns(&self, expr: &SExpr, mut required: ColumnSet) -> Result<SExpr> {
+    fn keep_required_columns(expr: &SExpr, mut required: ColumnSet) -> Result<SExpr> {
         match expr.plan() {
             RelOperator::Scan(p) => {
                 // Some table may not have any column,
@@ -98,11 +98,11 @@ impl UnusedColumnPruner {
 
                 Ok(SExpr::create_binary(
                     RelOperator::Join(p.clone()),
-                    self.keep_required_columns(
+                    Self::keep_required_columns(
                         expr.child(0)?,
                         left.union(&others).cloned().collect(),
                     )?,
-                    self.keep_required_columns(
+                    Self::keep_required_columns(
                         expr.child(1)?,
                         right.union(&others).cloned().collect(),
                     )?,
@@ -123,11 +123,11 @@ impl UnusedColumnPruner {
                 }
                 if used.is_empty() {
                     // Eliminate unneccessary `EvalScalar`
-                    self.keep_required_columns(expr.child(0)?, required)
+                    Self::keep_required_columns(expr.child(0)?, required)
                 } else {
                     Ok(SExpr::create_unary(
                         RelOperator::EvalScalar(EvalScalar { items: used }),
-                        self.keep_required_columns(expr.child(0)?, required)?,
+                        Self::keep_required_columns(expr.child(0)?, required)?,
                     ))
                 }
             }
@@ -137,7 +137,7 @@ impl UnusedColumnPruner {
                 });
                 Ok(SExpr::create_unary(
                     RelOperator::Filter(p.clone()),
-                    self.keep_required_columns(expr.child(0)?, used)?,
+                    Self::keep_required_columns(expr.child(0)?, used)?,
                 ))
             }
             RelOperator::Aggregate(p) => {
@@ -187,7 +187,7 @@ impl UnusedColumnPruner {
                         from_distinct: p.from_distinct,
                         mode: p.mode,
                     }),
-                    self.keep_required_columns(expr.child(0)?, required)?,
+                    Self::keep_required_columns(expr.child(0)?, required)?,
                 ))
             }
             RelOperator::Sort(p) => {
@@ -196,12 +196,12 @@ impl UnusedColumnPruner {
                 });
                 Ok(SExpr::create_unary(
                     RelOperator::Sort(p.clone()),
-                    self.keep_required_columns(expr.child(0)?, required)?,
+                    Self::keep_required_columns(expr.child(0)?, required)?,
                 ))
             }
             RelOperator::Limit(p) => Ok(SExpr::create_unary(
                 RelOperator::Limit(p.clone()),
-                self.keep_required_columns(expr.child(0)?, required)?,
+                Self::keep_required_columns(expr.child(0)?, required)?,
             )),
 
             RelOperator::UnionAll(p) => {
@@ -215,8 +215,8 @@ impl UnusedColumnPruner {
                 });
                 Ok(SExpr::create_binary(
                     RelOperator::UnionAll(p.clone()),
-                    self.keep_required_columns(expr.child(0)?, left_used)?,
-                    self.keep_required_columns(expr.child(1)?, right_used)?,
+                    Self::keep_required_columns(expr.child(0)?, left_used)?,
+                    Self::keep_required_columns(expr.child(1)?, right_used)?,
                 ))
             }
 
