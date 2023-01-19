@@ -38,6 +38,7 @@ use common_expression::TableSchema;
 use futures_util::future::try_join_all;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::caches::BloomIndexMeta;
 use storages_common_table_meta::meta::BlockFilter;
 use storages_common_table_meta::meta::ColumnId;
 use tracing::Instrument;
@@ -57,7 +58,8 @@ pub async fn load_bloom_filter_by_columns(
     path: &str,
     length: u64,
 ) -> Result<BlockFilter> {
-    let file_meta = load_index_meta(dal.clone(), path, length).await?;
+    let bloom_index_meta = load_index_meta(dal.clone(), path, length).await?;
+    let file_meta = &bloom_index_meta.0;
     if file_meta.row_groups.len() != 1 {
         return Err(ErrorCode::StorageOther(format!(
             "invalid v1 bloom index filter index, number of row group should be 1, but found {} row groups",
@@ -76,7 +78,7 @@ pub async fn load_bloom_filter_by_columns(
     // 1. load column data, as bytes
     let futs = column_needed
         .iter()
-        .map(|col_name| load_column_bytes(&ctx, &file_meta, col_name, path, &dal))
+        .map(|col_name| load_column_bytes(&ctx, file_meta, col_name, path, &dal))
         .collect::<Vec<_>>();
 
     let start = Instant::now();
@@ -92,7 +94,7 @@ pub async fn load_bloom_filter_by_columns(
     }
 
     let column_descriptors = file_meta.schema_descr.columns();
-    let arrow_schema = infer_schema(&file_meta)?;
+    let arrow_schema = infer_schema(file_meta)?;
     let mut columns_array_iter = Vec::with_capacity(cols_data.len());
     let num_values = row_group.num_rows();
 
@@ -216,7 +218,7 @@ async fn load_column_bytes(
 /// Loads index meta data
 /// read data from cache, or populate cache items if possible
 #[tracing::instrument(level = "debug", skip_all)]
-async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<FileMetaData>> {
+async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<BloomIndexMeta>> {
     let storage_runtime = GlobalIORuntime::instance();
     let path_owned = path.to_owned();
     async move {

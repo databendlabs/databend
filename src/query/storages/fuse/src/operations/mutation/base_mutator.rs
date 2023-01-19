@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
-use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -96,12 +95,7 @@ impl BaseMutator {
         let schema = Arc::new(self.base_snapshot.schema.clone());
         let segment_reader = MetaReaders::segment_info_reader(self.data_accessor.clone(), schema);
 
-        let segment_info_cache = CacheManager::instance().get_table_segment_cache();
-        let seg_writer = SegmentWriter::new(
-            &self.data_accessor,
-            &self.location_generator,
-            &segment_info_cache,
-        );
+        let seg_writer = SegmentWriter::new(&self.data_accessor, &self.location_generator);
 
         // apply mutations
         for (seg_idx, replacements) in self.mutations.clone() {

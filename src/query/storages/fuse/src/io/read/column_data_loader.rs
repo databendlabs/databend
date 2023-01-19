@@ -15,8 +15,9 @@
 use opendal::Operator;
 use storages_common_cache::CacheKey;
 use storages_common_cache::LoadParams;
-use storages_common_cache::LoaderWithKey;
+use storages_common_cache::LoaderWithCacheKey;
 
+/// Loader that fetch range of the target object with customized cache key
 pub struct ColumnDataLoader {
     pub offset: u64,
     pub len: u64,
@@ -25,7 +26,7 @@ pub struct ColumnDataLoader {
 }
 
 #[async_trait::async_trait]
-impl LoaderWithKey<Vec<u8>> for ColumnDataLoader {
+impl LoaderWithCacheKey<Vec<u8>> for ColumnDataLoader {
     async fn load_with_cache_key(
         &self,
         params: &LoadParams,

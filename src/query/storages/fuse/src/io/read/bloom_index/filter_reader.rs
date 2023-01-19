@@ -43,14 +43,15 @@ impl BloomFilterReader for Location {
         columns: &[String],
         index_length: u64,
     ) -> common_exception::Result<BlockFilter> {
-        let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
+        let (path, ver) = &self;
+        let index_version = BlockBloomFilterIndexVersion::try_from(*ver)?;
         match index_version {
             BlockBloomFilterIndexVersion::V0(_) => Err(ErrorCode::DeprecatedIndexFormat(
                 "bloom filter index version(v0) is deprecated",
             )),
             BlockBloomFilterIndexVersion::V2(_) | BlockBloomFilterIndexVersion::V3(_) => {
                 let res =
-                    load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
+                    load_bloom_filter_by_columns(ctx, dal, columns, path, index_length).await?;
                 Ok(res)
             }
         }

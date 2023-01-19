@@ -18,19 +18,21 @@ use std::sync::Arc;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_exception::Result;
 use opendal::Operator;
-use storages_common_cache::BytesMemoryCacheReader;
+use storages_common_cache::InMemoryBytesCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta::ColumnId;
 
 use crate::io::read::column_data_loader::ColumnDataLoader;
 
-type CachedReader = BytesMemoryCacheReader<Vec<u8>, ColumnDataLoader>;
+type CachedReader = InMemoryBytesCacheReader<Vec<u8>, ColumnDataLoader>;
 
-/// An wrapper of [BytesMemoryCacheReader], uses [ColumnDataLoader] to
+/// An wrapper of [InMemoryBytesCacheReader], uses [ColumnDataLoader] to
 /// load the data of a given bloom index column. Also
 /// - takes cares of getting the correct cache instance from [CacheManager]
 /// - generates the proper cache key
+///
+/// this could be generified to be the template of cached data block column reader as well
 pub struct BloomIndexColumnReader {
     cached_reader: CachedReader,
     param: LoadParams,

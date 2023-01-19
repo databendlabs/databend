@@ -16,6 +16,7 @@ use std::borrow::Borrow;
 use std::hash::Hash;
 use std::sync::Arc;
 
+/// The minimum interface that cache providers should implement
 pub trait StorageCache<K, V> {
     type Meter;
     fn put(&mut self, key: K, value: Arc<V>);

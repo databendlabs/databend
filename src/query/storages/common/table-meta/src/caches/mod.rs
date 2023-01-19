@@ -15,6 +15,8 @@
 mod meta_cache;
 mod meta_cache_manager;
 
+pub use meta_cache::BloomIndexMeta;
+pub use meta_cache::CachedMeta;
 pub use meta_cache::SegmentInfoCache;
 pub use meta_cache::TableSnapshotCache;
 pub use meta_cache::TableSnapshotStatisticCache;

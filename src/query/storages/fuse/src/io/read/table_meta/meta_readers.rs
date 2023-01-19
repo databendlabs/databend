@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::read::read_metadata_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -22,6 +21,7 @@ use opendal::Operator;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
+use storages_common_table_meta::caches::BloomIndexMeta;
 use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoVersion;
@@ -35,7 +35,7 @@ use super::versioned_reader::VersionedReader;
 pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
 pub type BloomIndexFileMetaDataReader =
-    InMemoryItemCacheReader<FileMetaData, LoaderWrapper<Operator>>;
+    InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
 pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type SegmentInfoReader =
     InMemoryItemCacheReader<SegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
@@ -109,20 +109,21 @@ impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
 }
 
 #[async_trait::async_trait]
-impl Loader<FileMetaData> for LoaderWrapper<Operator> {
-    async fn load(&self, params: &LoadParams) -> Result<FileMetaData> {
+impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
+    async fn load(&self, params: &LoadParams) -> Result<BloomIndexMeta> {
         let object = self.0.object(&params.location);
         let mut reader = if let Some(len) = params.len_hint {
             object.range_reader(0..len).await?
         } else {
             object.reader().await?
         };
-        read_metadata_async(&mut reader).await.map_err(|err| {
+        let meta = read_metadata_async(&mut reader).await.map_err(|err| {
             ErrorCode::Internal(format!(
                 "read file meta failed, {}, {:?}",
                 params.location, err
             ))
-        })
+        })?;
+        Ok(BloomIndexMeta(meta))
     }
 }
 

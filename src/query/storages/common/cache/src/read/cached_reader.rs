@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,80 +11,39 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_cache::BytesMeter;
-use common_cache::Count;
-use common_cache::DefaultHashBuilder;
-use common_cache::LruCache;
 use common_exception::Result;
 use parking_lot::RwLock;
 
+use super::loader::LoadParams;
+use super::loader::LoaderWithCacheKey;
 use crate::cache::StorageCache;
 use crate::metrics::metrics_inc_cache_access_count;
 use crate::metrics::metrics_inc_cache_hit_count;
 use crate::metrics::metrics_inc_cache_miss_count;
 use crate::metrics::metrics_inc_cache_miss_load_millisecond;
-use crate::providers::DiskCache;
 
-pub struct LoadParams {
-    pub location: String,
-    pub len_hint: Option<u64>,
-    pub ver: u64,
-}
-
-pub type CacheKey = String;
-/// Loads an object from storage
-#[async_trait::async_trait]
-pub trait LoaderWithKey<T> {
-    /// Loads object of type T, located by `LoadParams`
-    /// If Some(CacheKey) returns, it will be used as the key of cache item,
-    /// otherwise, the LoadParams::location will be used
-    async fn load_with_cache_key(&self, params: &LoadParams) -> Result<(T, CacheKey)>;
-}
-
-/// Loads an object from storage
-#[async_trait::async_trait]
-pub trait Loader<T> {
-    /// Loads object of type T, located by `LoadParams`
-    async fn load(&self, params: &LoadParams) -> Result<T>;
-}
-
-#[async_trait::async_trait]
-impl<L, T> LoaderWithKey<T> for L
-where L: Loader<T> + Send + Sync
-{
-    async fn load_with_cache_key(&self, params: &LoadParams) -> Result<(T, CacheKey)> {
-        let v = self.load(params).await?;
-        Ok((v, params.location.clone()))
-    }
-}
-
-/// A "cache-aware" reader
+/// A generic cache-aware reader
+///
+/// Given an impl of [StorageCache], e.g. `ItemCache` or `DiskCache` and a proper impl
+/// [LoaderWithCacheKey], which is able to load `T`, `CachedReader` will load the `T`
+/// by using [LoaderWithCacheKey], and populate the cache item into [StorageCache] by using
+/// the loaded `T` and the key that [LoaderWithCacheKey] provides.
 pub struct CachedReader<T, L, C> {
     cache: Option<Arc<RwLock<C>>>,
     loader: L,
+    /// name of this cache instance
     name: String,
     _p: PhantomData<T>,
 }
 
-pub type MemoryCacheReader<T, L, M> =
-    CachedReader<T, L, LruCache<String, Arc<T>, DefaultHashBuilder, M>>;
-
-pub type InMemoryItemCacheReader<T, L> = MemoryCacheReader<T, L, Count>;
-pub type BytesMemoryCacheReader<T, L> = MemoryCacheReader<T, L, BytesMeter>;
-
-// NOTE: not usable yet, just testing api
-#[allow(dead_code)]
-pub type DiskCacheReader<T, L> = CachedReader<T, L, DiskCache>;
-
 impl<T, L, C, M> CachedReader<T, L, C>
 where
-    L: LoaderWithKey<T> + Sync,
+    L: LoaderWithCacheKey<T> + Sync,
     C: StorageCache<String, T, Meter = M>,
 {
     pub fn new(cache: Option<Arc<RwLock<C>>>, name: impl Into<String>, loader: L) -> Self {

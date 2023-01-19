@@ -20,7 +20,7 @@ use common_base::base::tokio;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_storages_fuse::io::write_meta;
+use common_storages_fuse::io::MetaWriter;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::FuseTable;
@@ -92,7 +92,9 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
         // orphan_snapshot is created by using `from_previous`, which guarantees
         // that the timestamp of snapshot returned is larger than `current_snapshot`'s.
         let orphan_snapshot = TableSnapshot::from_previous(current_snapshot.as_ref());
-        write_meta(&operator, &orphan_snapshot_location, orphan_snapshot).await?;
+        orphan_snapshot
+            .write_meta(&operator, &orphan_snapshot_location)
+            .await?;
     }
 
     // do_gc
@@ -247,6 +249,7 @@ mod utils {
     use chrono::DateTime;
     use chrono::Utc;
     use common_storages_factory::Table;
+    use common_storages_fuse::io::MetaWriter;
     use common_storages_fuse::FuseStorageFormat;
 
     use super::*;
@@ -267,7 +270,10 @@ mod utils {
             new_snapshot.timestamp = Some(ts)
         }
 
-        write_meta(&operator, &new_snapshot_location, &new_snapshot).await?;
+        new_snapshot
+            .write_meta(&operator, &new_snapshot_location)
+            .await?;
+
         Ok(new_snapshot_location)
     }
 
@@ -310,7 +316,7 @@ mod utils {
         }
 
         let segment_info = SegmentInfo::new(block_metas, Statistics::default());
-        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator(), &None);
+        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator());
         let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
         Ok((segment_location, segment_info))
     }

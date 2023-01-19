@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_config::QueryConfig;
 use common_exception::Result;
-use storages_common_cache::InMemoryBytesCache;
-use storages_common_cache::InMemoryItemCache;
-use storages_common_cache::MemoryCache;
+use storages_common_cache::InMemoryBytesCacheHolder;
+use storages_common_cache::InMemoryCacheBuilder;
+use storages_common_cache::InMemoryItemCacheHolder;
 
 use crate::caches::meta_cache::BloomIndexCache;
 use crate::caches::meta_cache::BloomIndexMetaCache;
@@ -27,7 +27,6 @@ use crate::caches::meta_cache::FileMetaDataCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
-use crate::meta::SegmentInfo;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
@@ -105,17 +104,17 @@ impl CacheManager {
         self.file_meta_data_cache.clone()
     }
 
-    fn new_item_cache<T>(capacity: u64) -> Option<InMemoryItemCache<T>> {
+    fn new_item_cache<T>(capacity: u64) -> Option<InMemoryItemCacheHolder<T>> {
         if capacity > 0 {
-            Some(MemoryCache::new_item_cache(capacity))
+            Some(InMemoryCacheBuilder::new_item_cache(capacity))
         } else {
             None
         }
     }
 
-    fn new_bytes_cache(capacity: u64) -> Option<InMemoryBytesCache> {
+    fn new_bytes_cache(capacity: u64) -> Option<InMemoryBytesCacheHolder> {
         if capacity > 0 {
-            Some(MemoryCache::new_bytes_cache(capacity))
+            Some(InMemoryCacheBuilder::new_bytes_cache(capacity))
         } else {
             None
         }

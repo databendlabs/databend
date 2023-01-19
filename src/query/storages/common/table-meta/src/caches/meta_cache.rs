@@ -13,23 +13,67 @@
 //  limitations under the License.
 
 use common_arrow::parquet::metadata::FileMetaData;
-use storages_common_cache::InMemoryBytesCache;
-use storages_common_cache::InMemoryItemCache;
+use storages_common_cache::CacheAccessor;
+use storages_common_cache::InMemoryBytesCacheHolder;
+use storages_common_cache::InMemoryItemCacheHolder;
 
+use crate::caches::CacheManager;
 use crate::meta::SegmentInfo;
 use crate::meta::TableSnapshot;
 use crate::meta::TableSnapshotStatistics;
 
 /// In memory object cache of SegmentInfo
-pub type SegmentInfoCache = InMemoryItemCache<SegmentInfo>;
+pub type SegmentInfoCache = InMemoryItemCacheHolder<SegmentInfo>;
 /// In memory object cache of TableSnapshot
-pub type TableSnapshotCache = InMemoryItemCache<TableSnapshot>;
+pub type TableSnapshotCache = InMemoryItemCacheHolder<TableSnapshot>;
 /// In memory object cache of TableSnapshotStatistics
-pub type TableSnapshotStatisticCache = InMemoryItemCache<TableSnapshotStatistics>;
+pub type TableSnapshotStatisticCache = InMemoryItemCacheHolder<TableSnapshotStatistics>;
 /// In memory data cache of bloom index data.
 /// For each indexed data block, the index data of column is cached individually
-pub type BloomIndexCache = InMemoryBytesCache;
+pub type BloomIndexCache = InMemoryBytesCacheHolder;
+pub struct BloomIndexMeta(pub FileMetaData);
 /// In memory object cache of parquet FileMetaData of bloom index data
-pub type BloomIndexMetaCache = InMemoryItemCache<FileMetaData>;
+pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
 /// In memory object cache of parquet FileMetaData of external parquet files
-pub type FileMetaDataCache = InMemoryItemCache<FileMetaData>;
+pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
+
+// Bind Type of cached objects to Caches
+pub trait CachedMeta<T> {
+    type Cache: CacheAccessor<String, T>;
+    fn cache() -> Option<Self::Cache>;
+}
+
+impl CachedMeta<SegmentInfo> for SegmentInfo {
+    type Cache = SegmentInfoCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_table_segment_cache()
+    }
+}
+
+impl CachedMeta<TableSnapshot> for TableSnapshot {
+    type Cache = TableSnapshotCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_table_snapshot_cache()
+    }
+}
+
+impl CachedMeta<TableSnapshotStatistics> for TableSnapshotStatistics {
+    type Cache = TableSnapshotStatisticCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_table_snapshot_statistics_cache()
+    }
+}
+
+impl CachedMeta<BloomIndexMeta> for BloomIndexMeta {
+    type Cache = BloomIndexMetaCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_bloom_index_meta_cache()
+    }
+}
+
+impl CachedMeta<BloomIndexMeta> for FileMetaData {
+    type Cache = BloomIndexMetaCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_bloom_index_meta_cache()
+    }
+}

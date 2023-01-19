@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,12 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-mod disk_cache;
-mod memory_cache;
-pub use disk_cache::DiskCache;
-pub use memory_cache::BytesCache;
-pub use memory_cache::InMemoryBytesCacheHolder;
-pub use memory_cache::InMemoryCacheBuilder;
-pub use memory_cache::InMemoryItemCacheHolder;
-pub use memory_cache::ItemCache;
+mod cached_reader;
+mod loader;
+mod readers;
+
+pub use loader::CacheKey;
+pub use loader::LoadParams;
+pub use loader::Loader;
+pub use loader::LoaderWithCacheKey;
+pub use readers::DiskCacheReader;
+pub use readers::InMemoryBytesCacheReader;
+pub use readers::InMemoryItemCacheReader;

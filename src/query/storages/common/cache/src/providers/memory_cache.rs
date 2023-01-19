@@ -30,23 +30,20 @@ use crate::cache::StorageCache;
 pub type ItemCache<V> = LruCache<String, Arc<V>, DefaultHashBuilder, Count>;
 pub type BytesCache = LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>;
 
-pub type InMemoryItemCache<T> = Arc<RwLock<ItemCache<T>>>;
-pub type InMemoryBytesCache = Arc<RwLock<BytesCache>>;
+pub type InMemoryItemCacheHolder<T> = Arc<RwLock<ItemCache<T>>>;
+pub type InMemoryBytesCacheHolder = Arc<RwLock<BytesCache>>;
 
-pub struct MemoryCache;
-impl MemoryCache {
-    pub fn new_item_cache<V>(capacity: u64) -> InMemoryItemCache<V> {
-        let item = RwLock::new(LruCache::new(capacity));
-        Arc::new(item)
+pub struct InMemoryCacheBuilder;
+impl InMemoryCacheBuilder {
+    pub fn new_item_cache<V>(capacity: u64) -> InMemoryItemCacheHolder<V> {
+        let cache = LruCache::new(capacity);
+        Arc::new(RwLock::new(cache))
     }
 
-    pub fn new_bytes_cache(capacity: u64) -> InMemoryBytesCache {
-        let item = RwLock::new(LruCache::with_meter_and_hasher(
-            capacity,
-            BytesMeter,
-            DefaultHashBuilder::new(),
-        ));
-        Arc::new(item)
+    pub fn new_bytes_cache(capacity: u64) -> InMemoryBytesCacheHolder {
+        let cache =
+            LruCache::with_meter_and_hasher(capacity, BytesMeter, DefaultHashBuilder::new());
+        Arc::new(RwLock::new(cache))
     }
 }
 
@@ -62,7 +59,6 @@ where
         Cache::put(self, key, value);
     }
 
-    // TODO return Option<&Arc<V>>
     fn get<Q>(&mut self, k: &Q) -> Option<&Arc<V>>
     where
         K: Borrow<Q>,
