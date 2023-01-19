@@ -31,7 +31,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
 use crate::plans::RelOperator;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::ColumnEntry;
@@ -82,9 +82,9 @@ impl Display for FormatContext {
     }
 }
 
-pub fn format_scalar(_metadata: &MetadataRef, scalar: &Scalar) -> String {
+pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
     match scalar {
-        Scalar::BoundColumnRef(column_ref) => {
+        ScalarExpr::BoundColumnRef(column_ref) => {
             if let Some(table_name) = &column_ref.column.table_name {
                 format!(
                     "{}.{} (#{})",
@@ -97,26 +97,26 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &Scalar) -> String {
                 )
             }
         }
-        Scalar::ConstantExpr(constant) => constant.value.to_string(),
-        Scalar::AndExpr(and) => format!(
+        ScalarExpr::ConstantExpr(constant) => constant.value.to_string(),
+        ScalarExpr::AndExpr(and) => format!(
             "({}) AND ({})",
             format_scalar(_metadata, &and.left),
             format_scalar(_metadata, &and.right)
         ),
-        Scalar::OrExpr(or) => format!(
+        ScalarExpr::OrExpr(or) => format!(
             "({}) OR ({})",
             format_scalar(_metadata, &or.left),
             format_scalar(_metadata, &or.right)
         ),
-        Scalar::NotExpr(not) => format!("NOT ({})", format_scalar(_metadata, &not.argument),),
-        Scalar::ComparisonExpr(comp) => format!(
+        ScalarExpr::NotExpr(not) => format!("NOT ({})", format_scalar(_metadata, &not.argument),),
+        ScalarExpr::ComparisonExpr(comp) => format!(
             "{} {} {}",
             format_scalar(_metadata, &comp.left),
             comp.op.to_func_name(),
             format_scalar(_metadata, &comp.right)
         ),
-        Scalar::AggregateFunction(agg) => agg.display_name.clone(),
-        Scalar::FunctionCall(func) => {
+        ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
+        ScalarExpr::FunctionCall(func) => {
             format!(
                 "{}({})",
                 &func.func_name,
@@ -127,14 +127,14 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &Scalar) -> String {
                     .join(", ")
             )
         }
-        Scalar::CastExpr(cast) => {
+        ScalarExpr::CastExpr(cast) => {
             format!(
                 "CAST({} AS {})",
                 format_scalar(_metadata, &cast.argument),
                 cast.target_type
             )
         }
-        Scalar::SubqueryExpr(_) => "SUBQUERY".to_string(),
+        ScalarExpr::SubqueryExpr(_) => "SUBQUERY".to_string(),
     }
 }
 
@@ -341,7 +341,7 @@ pub fn logical_join_to_format_tree(
     metadata: MetadataRef,
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {
-    let preds: Vec<Scalar> = op
+    let preds: Vec<ScalarExpr> = op
         .left_conditions
         .iter()
         .zip(op.right_conditions.iter())
@@ -363,7 +363,7 @@ pub fn logical_join_to_format_tree(
 
     let equi_conditions = if !preds.is_empty() {
         let pred = preds.iter().skip(1).fold(preds[0].clone(), |prev, next| {
-            Scalar::AndExpr(AndExpr {
+            ScalarExpr::AndExpr(AndExpr {
                 left: Box::new(prev),
                 right: Box::new(next.clone()),
                 return_type: Box::new(DataType::Boolean),

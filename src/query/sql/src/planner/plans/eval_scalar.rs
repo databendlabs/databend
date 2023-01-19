@@ -25,7 +25,6 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::IndexType;
 
@@ -37,7 +36,7 @@ pub struct EvalScalar {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ScalarItem {
-    pub scalar: Scalar,
+    pub scalar: ScalarExpr,
     pub index: IndexType,
 }
 

@@ -25,7 +25,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::DeletePlan;
-use crate::sql::plans::ScalarExpr;
 
 /// interprets DeletePlan
 pub struct DeleteInterpreter {
