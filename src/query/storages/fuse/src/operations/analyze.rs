@@ -19,17 +19,18 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Value;
+use common_expression::types::DataType;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_index::BloomIndex;
+use storages_common_index::Index;
 use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use tracing::warn;
 
-use crate::io::BlockFilterReader;
+use crate::io::BloomBlockFilterReader;
 use crate::io::SegmentsIO;
 use crate::FuseTable;
 
@@ -55,7 +56,9 @@ impl FuseTable {
             // 2. Iterator segments and blocks to estimate statistics.
             let mut filter_block_cols = vec![];
             for field in self.table_info.schema().fields() {
-                filter_block_cols.push(BloomIndex::build_filter_column_name(field.name()));
+                if Xor8Filter::supported_type(&DataType::from(field.data_type())) {
+                    filter_block_cols.push(BloomIndex::build_filter_column_name(field.name()));
+                }
             }
             let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
             let segments = segments_io.read_segments(&snapshot.segments).await?;
@@ -71,8 +74,7 @@ impl FuseTable {
                         let index_len = block.bloom_filter_index_size;
                         if row_count != 0 {
                             let maybe_filter = loc
-                                .read_filter(
-                                    ctx.clone(),
+                                .read_block_filter(
                                     self.operator.clone(),
                                     &filter_block_cols,
                                     index_len,
@@ -81,15 +83,8 @@ impl FuseTable {
                             match maybe_filter {
                                 Ok(filter) => {
                                     let source_schema = filter.filter_schema;
-                                    let block = filter.filter_block;
-                                    for i in 0..block.num_columns() {
-                                        let filter_bytes = match &block.get_by_offset(i).value {
-                                            Value::Scalar(s) => s.as_string().unwrap(),
-                                            Value::Column(c) => unsafe {
-                                                c.as_string().unwrap().index_unchecked(0)
-                                            },
-                                        };
-                                        let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
+                                    let block = filter.filters;
+                                    for (i, filter) in block.iter().enumerate() {
                                         if let Some(len) = filter.len() {
                                             let idx = source_schema
                                                 .index_of(source_schema.field(i).name().as_str())
