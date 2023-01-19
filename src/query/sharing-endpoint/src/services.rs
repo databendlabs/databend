@@ -15,6 +15,7 @@
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_exception::Result;
+use common_storage::GlobalHttpClient;
 
 use crate::accessor::SharingAccessor;
 use crate::configs::Config;
@@ -28,6 +29,7 @@ impl SharingServices {
         GlobalInstance::init_production();
 
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
+        GlobalHttpClient::init().await?;
         SharingAccessor::init(&config).await
     }
 }
