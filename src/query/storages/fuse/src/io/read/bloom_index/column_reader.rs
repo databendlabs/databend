@@ -13,18 +13,65 @@
 // limitations under the License.
 //
 
+use std::sync::Arc;
+
+use common_arrow::parquet::metadata::ColumnChunkMetaData;
+use common_exception::Result;
+use opendal::Operator;
 use storages_common_cache::BytesMemoryCacheReader;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::meta::ColumnId;
 
 use crate::io::read::column_data_loader::ColumnDataLoader;
 
-pub type BloomIndexColumnDataReader = BytesMemoryCacheReader<Vec<u8>, ColumnDataLoader>;
-pub fn new_bloom_index_column_data_reader(
-    accessor: ColumnDataLoader,
-) -> BloomIndexColumnDataReader {
-    BloomIndexColumnDataReader::new(
-        CacheManager::instance().get_bloom_index_cache(),
-        "BLOOM_INDEX_DATA_CACHE".to_owned(),
-        accessor,
-    )
+type CachedReader = BytesMemoryCacheReader<Vec<u8>, ColumnDataLoader>;
+
+/// An wrapper of [BytesMemoryCacheReader], uses [ColumnDataLoader] to
+/// load the data of a given bloom index column. Also
+/// - takes cares of getting the correct cache instance from [CacheManager]
+/// - generates the proper cache key
+pub struct BloomIndexColumnReader {
+    cached_reader: CachedReader,
+    param: LoadParams,
+}
+
+impl BloomIndexColumnReader {
+    pub fn new(
+        path: String,
+        column_id: ColumnId,
+        colum_chunk_meta: &ColumnChunkMetaData,
+        operator: Operator,
+    ) -> Self {
+        let meta = colum_chunk_meta.metadata();
+        let cache_key = format!("{path}-{column_id}");
+        let loader = ColumnDataLoader {
+            offset: meta.data_page_offset as u64,
+            len: meta.total_compressed_size as u64,
+            cache_key,
+            operator,
+        };
+        let cached_reader = Self::get_cached_reader(loader);
+        let param = LoadParams {
+            location: path,
+            len_hint: None,
+            ver: 0,
+        };
+        BloomIndexColumnReader {
+            cached_reader,
+            param,
+        }
+    }
+
+    pub async fn read(&self) -> Result<Arc<Vec<u8>>> {
+        self.cached_reader.read(&self.param).await
+    }
+
+    fn get_cached_reader(accessor: ColumnDataLoader) -> CachedReader {
+        CachedReader::new(
+            CacheManager::instance().get_bloom_index_cache(),
+            "BLOOM_INDEX_DATA_CACHE".to_owned(),
+            accessor,
+        )
+    }
 }

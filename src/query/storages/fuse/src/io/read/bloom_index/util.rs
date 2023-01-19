@@ -39,10 +39,10 @@ use futures_util::future::try_join_all;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockFilter;
+use storages_common_table_meta::meta::ColumnId;
 use tracing::Instrument;
 
-use super::column_reader::new_bloom_index_column_data_reader;
-use crate::io::read::column_data_loader::ColumnDataLoader;
+use crate::io::read::bloom_index::column_reader::BloomIndexColumnReader;
 use crate::io::MetaReaders;
 use crate::metrics::metrics_inc_block_index_read_bytes;
 use crate::metrics::metrics_inc_block_index_read_milliseconds;
@@ -114,7 +114,6 @@ pub async fn load_bloom_filter_by_columns(
             {
                 metrics_inc_block_index_read_bytes(bytes.len() as u64);
             }
-
 
             let compression_codec = columns[0]
                 .column_chunk()
@@ -195,22 +194,14 @@ async fn load_column_bytes(
         .enumerate()
         .find(|(_, c)| c.descriptor().path_in_schema[0] == col_name)
     {
-        let cache_key = format!("{path}-{idx}");
-        let chunk_meta = col_meta.metadata();
-        let accessor = ColumnDataLoader {
-            offset: chunk_meta.data_page_offset as u64,
-            len: chunk_meta.total_compressed_size as u64,
-            cache_key,
-            operator: dal.clone(),
-        };
         let bytes = {
-            let reader = new_bloom_index_column_data_reader(accessor);
-            let param = LoadParams {
-                location: path.to_owned(),
-                len_hint: None,
-                ver: 0,
-            };
-            async move { reader.read(&param).await }
+            let column_data_reader = BloomIndexColumnReader::new(
+                path.to_owned(),
+                idx as ColumnId,
+                col_meta,
+                dal.clone(),
+            );
+            async move { column_data_reader.read().await }
         }
         .execute_in_runtime(&storage_runtime)
         .await??;

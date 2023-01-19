@@ -67,8 +67,8 @@ where L: Loader<T> + Send + Sync
 /// A "cache-aware" reader
 pub struct CachedReader<T, L, C> {
     cache: Option<Arc<RwLock<C>>>,
-    name: String,
     loader: L,
+    name: String,
     _p: PhantomData<T>,
 }
 
@@ -87,11 +87,11 @@ where
     L: LoaderWithKey<T> + Sync,
     C: StorageCache<String, T, Meter = M>,
 {
-    pub fn new(cache: Option<Arc<RwLock<C>>>, name: impl Into<String>, dal: L) -> Self {
+    pub fn new(cache: Option<Arc<RwLock<C>>>, name: impl Into<String>, loader: L) -> Self {
         Self {
             cache,
             name: name.into(),
-            loader: dal,
+            loader,
             _p: PhantomData,
         }
     }

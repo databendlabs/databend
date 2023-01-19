@@ -27,6 +27,7 @@ use crate::caches::meta_cache::FileMetaDataCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::meta::SegmentInfo;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
