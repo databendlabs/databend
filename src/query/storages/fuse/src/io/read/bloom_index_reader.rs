@@ -247,6 +247,8 @@ mod util_v1 {
                     }
                 }
 
+                metrics::increment_gauge!("cache_bloom_byte_miss_count", 1.0f64);
+
                 // missing cache
                 let bytes = Arc::new(
                     // As suggested by Winter, execute task of loading data in storage runtime
