@@ -375,6 +375,7 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
                 endpoint_url: "https://oss-cn-litang.example.com".to_string(),
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
+                presign_endpoint_url: "".to_string(),
 
                 access_key_id: "access_key_id".to_string(),
                 access_key_secret: "access_key_secret".to_string(),
@@ -430,6 +431,7 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
         stage_params: mt::StageParams {
             storage: StorageParams::Oss(StorageOssConfig {
                 endpoint_url: "https://oss-cn-litang.example.com".to_string(),
+                presign_endpoint_url: "".to_string(),
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
 

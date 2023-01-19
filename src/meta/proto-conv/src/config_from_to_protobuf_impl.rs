@@ -136,6 +136,7 @@ impl FromToProto for StorageOssConfig {
 
         Ok(StorageOssConfig {
             endpoint_url: p.endpoint_url,
+            presign_endpoint_url: "".to_string(),
             bucket: p.bucket,
             root: p.root,
 
