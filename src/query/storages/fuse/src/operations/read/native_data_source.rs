@@ -17,14 +17,15 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use common_arrow::native::read::reader::NativeReader;
-use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
-pub type DataChunks = Vec<(usize, NativeReader<Box<dyn NativeReadBuf + Send + Sync>>)>;
+use crate::io::NativeReaderExt;
+
+pub type DataChunks = Vec<(usize, NativeReader<Box<dyn NativeReaderExt>>)>;
 
 pub struct NativeDataSourceMeta {
     pub part: Vec<PartInfoPtr>,

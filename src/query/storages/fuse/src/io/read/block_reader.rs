@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
@@ -26,8 +27,10 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchema;
+use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
@@ -46,6 +49,7 @@ pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
+    pub(crate) project_indices: BTreeMap<usize, (Field, DataType)>,
     pub(crate) column_nodes: ColumnNodes,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
 }
@@ -126,6 +130,12 @@ impl BlockReader {
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema);
+        let project_column_nodes: Vec<ColumnNode> = projection
+            .project_column_nodes(&column_nodes)?
+            .iter()
+            .map(|c| (*c).clone())
+            .collect();
+        let project_indices = Self::build_projection_indices(&project_column_nodes);
 
         Ok(Arc::new(BlockReader {
             operator,
@@ -133,6 +143,7 @@ impl BlockReader {
             projected_schema,
             parquet_schema_descriptor,
             column_nodes,
+            project_indices,
         }))
     }
 
@@ -277,11 +288,8 @@ impl BlockReader {
             metrics_inc_remote_io_read_parts(1);
         }
 
-        let columns = self.projection.project_column_nodes(&self.column_nodes)?;
-        let indices = Self::build_projection_indices(&columns);
-
         let mut ranges = vec![];
-        for index in indices.keys() {
+        for index in self.project_indices.keys() {
             let column_meta = &columns_meta[index];
             let (offset, len) = column_meta.offset_length();
             ranges.push((*index, offset..(offset + len)));
@@ -304,11 +312,9 @@ impl BlockReader {
         part: PartInfoPtr,
     ) -> Result<MergeIOReadResult> {
         let part = FusePartInfo::from_part(&part)?;
-        let columns = self.projection.project_column_nodes(&self.column_nodes)?;
-        let indices = Self::build_projection_indices(&columns);
 
         let mut ranges = vec![];
-        for index in indices.keys() {
+        for index in self.project_indices.keys() {
             let column_meta = &part.columns_meta[index];
             let (offset, len) = column_meta.offset_length();
             ranges.push((*index, offset..(offset + len)));
@@ -320,12 +326,14 @@ impl BlockReader {
 
     // Build non duplicate leaf_ids to avoid repeated read column from parquet
     pub(crate) fn build_projection_indices(
-        column_nodes: &Vec<&ColumnNode>,
-    ) -> HashMap<usize, Field> {
-        let mut indices = HashMap::with_capacity(column_nodes.len());
-        for column_node in column_nodes {
-            for index in &column_node.leaf_ids {
-                indices.insert(*index, column_node.field.clone());
+        columns: &[ColumnNode],
+    ) -> BTreeMap<usize, (Field, DataType)> {
+        let mut indices = BTreeMap::new();
+        for column in columns {
+            for index in &column.leaf_ids {
+                let f: TableField = (&column.field).into();
+                let data_type: DataType = f.data_type().into();
+                indices.insert(*index, (column.field.clone(), data_type));
             }
         }
         indices

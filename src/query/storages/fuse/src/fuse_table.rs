@@ -118,11 +118,11 @@ impl FuseTable {
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
-                    Some(sp) => init_operator(&sp)?,
-                    None => DataOperator::instance().operator(),
+                    Some(sp) => Ok(init_operator(&sp)?),
+                    None => Ok(DataOperator::instance().operator()),
                 }
             }
-        };
+        }?;
 
         let data_metrics = Arc::new(StorageMetrics::default());
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
@@ -166,6 +166,10 @@ impl FuseTable {
             comment: "FUSE Storage Engine".to_string(),
             support_cluster_key: true,
         }
+    }
+
+    pub fn is_native(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Native)
     }
 
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
@@ -607,6 +611,10 @@ impl Table for FuseTable {
         point: NavigationDescriptor,
     ) -> Result<()> {
         self.do_revert_to(ctx.as_ref(), point).await
+    }
+
+    fn support_prewhere(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Native)
     }
 }
 

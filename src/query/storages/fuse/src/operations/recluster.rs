@@ -112,11 +112,17 @@ impl FuseTable {
         }
 
         let partitions_total = mutator.partitions_total();
+
+        let block_metas: Vec<_> = mutator
+            .selected_blocks()
+            .iter()
+            .map(|meta| (None, meta.clone()))
+            .collect();
         let (statistics, parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.table_info.schema(),
             None,
-            mutator.selected_blocks(),
+            &block_metas,
             partitions_total,
         )?;
         let table_info = self.get_table_info();
@@ -137,8 +143,15 @@ impl FuseTable {
         // ReadDataKind to avoid OOM.
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
+        let max_page_size = if self.is_native() {
+            Some(self.get_write_settings().max_page_size)
+        } else {
+            None
+        };
+
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),
+            max_page_size,
             pipeline,
             mutator.level() + 1,
             block_compact_thresholds,

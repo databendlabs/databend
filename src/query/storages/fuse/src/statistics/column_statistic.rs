@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
@@ -27,18 +26,8 @@ use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
-pub fn calc_column_distinct_of_values(
-    column: &Column,
-    data_type: &DataType,
-    rows: usize,
-) -> Result<u64> {
-    let distinct_values = eval_aggr(
-        "approx_count_distinct",
-        vec![],
-        &[column.clone()],
-        &[data_type.clone()],
-        rows,
-    )?;
+pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u64> {
+    let distinct_values = eval_aggr("approx_count_distinct", vec![], &[column.clone()], rows)?;
     let col = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap();
     Ok(col[0])
 }
@@ -71,8 +60,8 @@ pub fn gen_columns_statistics(
         let mut min = Scalar::Null;
         let mut max = Scalar::Null;
 
-        let (mins, _) = eval_aggr("min", vec![], &[col.clone()], &[data_type.clone()], rows)?;
-        let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], &[data_type.clone()], rows)?;
+        let (mins, _) = eval_aggr("min", vec![], &[col.clone()], rows)?;
+        let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], rows)?;
 
         if mins.len() > 0 {
             min = if let Some(v) = mins.index(0) {
@@ -116,10 +105,10 @@ pub fn gen_columns_statistics(
                         *value as u64
                     }
                 } else {
-                    calc_column_distinct_of_values(col, data_type, rows)?
+                    calc_column_distinct_of_values(col, rows)?
                 }
             }
-            (_, _) => calc_column_distinct_of_values(col, data_type, rows)?,
+            (_, _) => calc_column_distinct_of_values(col, rows)?,
         };
 
         let in_memory_size = col.memory_size() as u64;
