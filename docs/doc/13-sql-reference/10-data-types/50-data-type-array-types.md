@@ -10,13 +10,13 @@ ARRAY(T) consists of defined variable-length inner T data type values, which is 
 ### Example
 
 ```sql
-CREATE TABLE array_int64_table(arr ARRAY(INT64) NULL);
+CREATE TABLE array_int64_table(arr ARRAY(INT64));
 
 DESC array_int64_table;
 +-------+--------------+------+---------+-------+
 | Field | Type         | Null | Default | Extra |
 +-------+--------------+------+---------+-------+
-| arr   | ARRAY(INT64) | YES  | NULL    |       |
+| arr   | ARRAY(INT64) | NO   | []      |       |
 +-------+--------------+------+---------+-------+
 ```
 
