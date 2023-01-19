@@ -21,7 +21,6 @@ use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::schema_projection as ap;
 use common_catalog::plan::Projection;
-use common_catalog::table::ColumnId;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -53,7 +52,7 @@ pub struct ParquetReader {
     /// select a, a.b, a.c from t;
     /// select a, b, a from t;
     /// ```
-    columns_to_read: HashSet<(usize, ColumnId)>,
+    columns_to_read: HashSet<usize>,
     /// The schema of the [`common_expression::DataBlock`] this reader produces.
     ///
     /// ```
@@ -111,7 +110,7 @@ impl ParquetReader {
         ArrowSchema,
         ColumnNodes,
         HashMap<usize, ColumnDescriptor>,
-        HashSet<(usize, ColumnId)>,
+        HashSet<usize>,
     )> {
         // Full schema and column leaves.
 
@@ -136,9 +135,8 @@ impl ParquetReader {
         let mut columns_to_read =
             HashSet::with_capacity(column_nodes.iter().map(|leaf| leaf.leaf_ids.len()).sum());
         for column_node in column_nodes {
-            for (i, index) in column_node.leaf_ids.iter().enumerate() {
-                let column_id = column_node.leaf_column_id(i);
-                columns_to_read.insert((*index, column_id));
+            for index in &column_node.leaf_ids {
+                columns_to_read.insert(*index);
                 projected_column_descriptors
                     .insert(*index, schema_descriptors.columns()[*index].clone());
             }
@@ -155,16 +153,13 @@ impl ParquetReader {
     pub fn sync_read_columns(&self, part: &ParquetRowGroupPart) -> Result<Vec<IndexedChunk>> {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
-        for (index, column_id) in &self.columns_to_read {
-            if let Some(meta) = part.column_metas.get(column_id) {
-                let op = self.operator.clone();
-                let chunk = Self::sync_read_one_column(
-                    op.object(&part.location),
-                    meta.offset,
-                    meta.length,
-                )?;
-                chunks.push((*index, chunk));
-            }
+        for index in &self.columns_to_read {
+            // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
+            let meta = &part.column_metas[&(*index as u32)];
+            let op = self.operator.clone();
+            let chunk =
+                Self::sync_read_one_column(op.object(&part.location), meta.offset, meta.length)?;
+            chunks.push((*index, chunk));
         }
 
         Ok(chunks)

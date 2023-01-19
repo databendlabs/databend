@@ -59,20 +59,19 @@ impl ParquetReader {
             let indices = &column_node.leaf_ids;
             let mut metas = Vec::with_capacity(indices.len());
             let mut chunks = Vec::with_capacity(indices.len());
-            for (i, index) in indices.iter().enumerate() {
-                let column_id = column_node.leaf_column_id(i);
-                if let Some(column_meta) = part.column_metas.get(&column_id) {
-                    let cnt = cnt_map.get_mut(index).unwrap();
-                    *cnt -= 1;
-                    let column_chunk = if cnt > &mut 0 {
-                        chunk_map.get(index).unwrap().clone()
-                    } else {
-                        chunk_map.remove(index).unwrap()
-                    };
-                    let descriptor = &self.projected_column_descriptors[index];
-                    metas.push((column_meta, descriptor));
-                    chunks.push(column_chunk);
-                }
+            for index in indices {
+                // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
+                let column_meta = &part.column_metas[&(*index as u32)];
+                let cnt = cnt_map.get_mut(index).unwrap();
+                *cnt -= 1;
+                let column_chunk = if cnt > &mut 0 {
+                    chunk_map.get(index).unwrap().clone()
+                } else {
+                    chunk_map.remove(index).unwrap()
+                };
+                let descriptor = &self.projected_column_descriptors[index];
+                metas.push((column_meta, descriptor));
+                chunks.push(column_chunk);
             }
             if let Some(ref bitmap) = filter {
                 // Filter push down for nested type is not supported now.

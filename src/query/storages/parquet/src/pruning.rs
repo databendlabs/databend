@@ -30,7 +30,6 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_pages_locations;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::table::ColumnId;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -70,7 +69,7 @@ pub fn prune_and_set_partitions(
     locations: &[String],
     schema: &TableSchemaRef,
     filters: &Option<&[Expr<String>]>,
-    columns_to_read: &HashSet<(usize, ColumnId)>,
+    columns_to_read: &HashSet<usize>,
     column_nodes: &ColumnNodes,
     skip_pruning: bool,
     read_options: ReadOptions,
@@ -146,10 +145,10 @@ pub fn prune_and_set_partitions(
             };
 
             let mut column_metas = HashMap::with_capacity(columns_to_read.len());
-            for (index, column_id) in columns_to_read {
+            for index in columns_to_read {
                 let c = &rg.columns()[*index];
                 let (offset, length) = c.byte_range();
-                column_metas.insert(*column_id, ColumnMeta {
+                column_metas.insert(*index as u32, ColumnMeta {
                     offset,
                     length,
                     compression: c.compression(),
