@@ -99,7 +99,7 @@ fn test_to_partitions() -> Result<()> {
 
     let blocks_metas = (0..num_of_block)
         .into_iter()
-        .map(|_| block_meta.clone())
+        .map(|_| (None, block_meta.clone()))
         .collect::<Vec<_>>();
 
     let column_nodes = (0..num_of_col)

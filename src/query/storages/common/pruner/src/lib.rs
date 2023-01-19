@@ -16,11 +16,14 @@
 #![deny(unused_crate_dependencies)]
 
 mod limiter_pruner;
+mod page_pruner;
 mod range_pruner;
 mod topn_pruner;
 
 pub use limiter_pruner::LimiterPruner;
 pub use limiter_pruner::LimiterPrunerCreator;
+pub use page_pruner::PagePruner;
+pub use page_pruner::PagePrunerCreator;
 pub use range_pruner::RangePruner;
 pub use range_pruner::RangePrunerCreator;
 pub use topn_pruner::BlockMetaIndex;

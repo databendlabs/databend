@@ -17,9 +17,11 @@
 mod bloom_index;
 pub mod filters;
 mod index;
+mod page_index;
 mod range_index;
 
 pub use bloom_index::BloomIndex;
 pub use bloom_index::FilterEvalResult;
 pub use index::Index;
+pub use page_index::PageIndex;
 pub use range_index::RangeIndex;

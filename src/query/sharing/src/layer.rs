@@ -59,7 +59,7 @@ pub fn create_share_table_operator(
     share_tenant_id: &str,
     share_name: &str,
     table_name: &str,
-) -> Operator {
+) -> Result<Operator> {
     let op = match share_endpoint_address {
         Some(share_endpoint_address) => {
             let signer = SharedSigner::new(
@@ -68,16 +68,15 @@ pub fn create_share_table_operator(
                     share_endpoint_address, share_tenant_id, share_name, table_name
                 ),
                 share_endpoint_token,
+                HttpClient::new()?,
             );
-            Operator::new(apply_wrapper(SharedAccessor {
-                signer,
-                client: HttpClient::new(),
-            }))
+            let client = HttpClient::new()?;
+            Operator::new(apply_wrapper(SharedAccessor { signer, client }))
         }
         None => Operator::new(DummySharedAccessor {}),
     };
 
-    op
+    Ok(op
         // Add retry
         .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
         // Add metrics
@@ -85,7 +84,7 @@ pub fn create_share_table_operator(
         // Add logging
         .layer(LoggingLayer::default())
         // Add tracing
-        .layer(TracingLayer)
+        .layer(TracingLayer))
 }
 
 #[derive(Debug)]

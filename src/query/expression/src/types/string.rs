@@ -212,7 +212,7 @@ impl StringColumn {
 }
 
 pub struct StringIterator<'a> {
-    data: &'a Buffer<u8>,
+    data: &'a [u8],
     offsets: std::slice::Windows<'a, u64>,
 }
 
