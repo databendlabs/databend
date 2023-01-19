@@ -100,6 +100,7 @@ pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<M
     inputs: Vec<InputPortState>,
 
     working_bucket: isize,
+    min_bucket: isize,
     method: Method,
     params: Arc<AggregatorParams>,
     buckets_blocks: HashMap<isize, Vec<DataBlock>>,
@@ -127,6 +128,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
             working_bucket: 0,
             output: OutputPort::create(),
             buckets_blocks: HashMap::new(),
+            min_bucket: MAX_BUCKET_NUM,
         })
     }
 
@@ -218,7 +220,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
             }
         }
 
-        let mut min_bucket = MAX_BUCKET_NUM;
         let mut all_port_prepared_data = true;
 
         for input in self.inputs.iter_mut() {
@@ -269,7 +270,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                         Some(info) => match info.overflow {
                             None => {
                                 *bucket = info.bucket + 1;
-                                min_bucket = std::cmp::min(info.bucket, min_bucket);
+                                self.min_bucket = std::cmp::min(info.bucket, self.min_bucket);
                                 match self.buckets_blocks.entry(info.bucket) {
                                     Entry::Vacant(v) => {
                                         v.insert(vec![data_block]);
@@ -294,7 +295,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                         },
                     };
                 }
-                _ => { /* finished or done current bucket, do nothing */ }
+                InputPortState::Finished => { /* finished, do nothing */ }
+                InputPortState::Active { port, bucket } => {
+                    port.set_need_data();
+                    self.min_bucket = std::cmp::min(*bucket, self.min_bucket);
+                }
             }
         }
 
@@ -319,7 +324,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                 return Ok(Event::Sync);
             }
 
-            if min_bucket == MAX_BUCKET_NUM {
+            if self.min_bucket == MAX_BUCKET_NUM {
                 self.output.finish();
 
                 for input in &self.inputs {
@@ -331,13 +336,14 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                 return Ok(Event::Finished);
             }
 
-            if let Some(bucket_blocks) = self.buckets_blocks.remove(&min_bucket) {
+            if let Some(bucket_blocks) = self.buckets_blocks.remove(&self.min_bucket) {
                 self.output.push_data(Ok(DataBlock::empty_with_meta(
-                    ConvertGroupingMetaInfo::create(min_bucket, bucket_blocks),
+                    ConvertGroupingMetaInfo::create(self.min_bucket, bucket_blocks),
                 )));
             }
 
-            self.working_bucket = min_bucket + 1;
+            self.working_bucket = self.min_bucket + 1;
+            self.min_bucket = MAX_BUCKET_NUM;
             return Ok(Event::NeedConsume);
         }
 
