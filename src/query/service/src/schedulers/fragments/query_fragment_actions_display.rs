@@ -84,7 +84,6 @@ impl<'a> Display for QueryFragmentActionsWrap<'a> {
                         .format(self.metadata.clone())
                         .and_then(|node| node.format_pretty_with_prefix("    "))
                         .unwrap();
-                    // .map_err(|_| std::fmt::Error)?;
                     write!(f, "{}", plan_display_string)?;
                 }
             };
