@@ -22,7 +22,7 @@ use crate::cache::StorageCache;
 pub struct DiskCache {}
 
 impl<K, V> StorageCache<K, V> for DiskCache {
-    type MetaType = ();
+    type Meter = ();
 
     fn put(&mut self, _key: K, _value: Arc<V>) {
         todo!()

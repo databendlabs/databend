@@ -56,7 +56,7 @@ where
     S: BuildHasher,
     K: Eq + Hash,
 {
-    type MetaType = M;
+    type Meter = M;
 
     fn put(&mut self, key: K, value: Arc<V>) {
         Cache::put(self, key, value);

@@ -85,7 +85,7 @@ pub type DiskCacheReader<T, L> = CachedReader<T, L, DiskCache>;
 impl<T, L, C, M> CachedReader<T, L, C>
 where
     L: LoaderWithKey<T> + Sync,
-    C: StorageCache<String, T, MetaType = M>,
+    C: StorageCache<String, T, Meter = M>,
 {
     pub fn new(cache: Option<Arc<RwLock<C>>>, name: impl Into<String>, dal: L) -> Self {
         Self {

@@ -17,7 +17,7 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 pub trait StorageCache<K, V> {
-    type MetaType;
+    type Meter;
     fn put(&mut self, key: K, value: Arc<V>);
 
     fn get<Q>(&mut self, k: &Q) -> Option<&Arc<V>>
