@@ -143,7 +143,7 @@ impl ExplainInterpreter {
         plan: &PhysicalPlan,
         metadata: &MetadataRef,
     ) -> Result<Vec<DataBlock>> {
-        let result = plan.format(metadata.clone())?;
+        let result = plan.format(metadata.clone())?.format_pretty()?;
         let line_splitted_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_splitted_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
@@ -185,7 +185,7 @@ impl ExplainInterpreter {
         metadata: MetadataRef,
     ) -> Result<Vec<DataBlock>> {
         let ctx = self.ctx.clone();
-        let plan = PhysicalPlanBuilder::new(metadata, self.ctx.clone())
+        let plan = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone())
             .build(&s_expr)
             .await?;
 
@@ -194,7 +194,7 @@ impl ExplainInterpreter {
         let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
-        let display_string = fragments_actions.display_indent().to_string();
+        let display_string = fragments_actions.display_indent(&metadata).to_string();
         let line_splitted_result = display_string
             .lines()
             .map(|s| s.as_bytes().to_vec())
