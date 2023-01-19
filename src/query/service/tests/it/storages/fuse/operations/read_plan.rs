@@ -182,7 +182,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         };
         let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
-        assert!(parts.len() > 0);
+        assert!(!parts.is_empty());
     }
     Ok(())
 }
