@@ -28,12 +28,14 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 
 pub struct UnusedColumnPruner {
-    metadata: MetadataRef,
+    _metadata: MetadataRef,
 }
 
 impl UnusedColumnPruner {
     pub fn new(metadata: MetadataRef) -> Self {
-        Self { metadata }
+        Self {
+            _metadata: metadata,
+        }
     }
 
     pub fn remove_unused_columns(&self, expr: &SExpr, require_columns: ColumnSet) -> Result<SExpr> {
@@ -60,35 +62,10 @@ impl UnusedColumnPruner {
                         pw.prewhere_columns.is_subset(&p.columns),
                         "prewhere columns should be a subset of scan columns"
                     );
-                    // `used` is the columns which prewhere scan needs to output for its upper operator.
-                    if used.is_empty() {
-                        let smallest_index = if pw.prewhere_columns.is_empty() {
-                            self.metadata
-                                .read()
-                                .find_smallest_column_by_table_index(p.table_index)
-                        } else {
-                            self.metadata.read().find_smallest_column(
-                                pw.prewhere_columns
-                                    .iter()
-                                    .copied()
-                                    .collect::<Vec<_>>()
-                                    .as_slice(),
-                            )
-                        };
-                        used.insert(smallest_index);
-                    }
                     pw.output_columns = used.clone();
                     // `prune_columns` is after `prewhere_optimize`,
                     // so we need to add prewhere columns to scan columns.
                     used = used.union(&pw.prewhere_columns).cloned().collect();
-                }
-
-                if used.is_empty() {
-                    let smallest_index = self
-                        .metadata
-                        .read()
-                        .find_smallest_column_by_table_index(p.table_index);
-                    used.insert(smallest_index);
                 }
 
                 Ok(SExpr::create_leaf(RelOperator::Scan(Scan {

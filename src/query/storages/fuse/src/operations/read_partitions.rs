@@ -32,7 +32,6 @@ use common_storage::ColumnNodes;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::TableSnapshot;
 use tracing::debug;
 use tracing::info;
 
@@ -53,10 +52,6 @@ impl FuseTable {
         let snapshot = self.read_table_snapshot().await?;
         match snapshot {
             Some(snapshot) => {
-                if let Some(result) = self.check_quick_path(&snapshot, &push_downs) {
-                    return Ok(result);
-                }
-
                 let settings = ctx.get_settings();
 
                 if settings.get_enable_distributed_eval_index()? {
@@ -340,30 +335,5 @@ impl FuseTable {
             meta.compression(),
             range,
         )
-    }
-
-    fn check_quick_path(
-        &self,
-        snapshot: &TableSnapshot,
-        push_down: &Option<PushDownInfo>,
-    ) -> Option<(PartStatistics, Partitions)> {
-        push_down.as_ref().and_then(|extra| match extra {
-            PushDownInfo {
-                projection: Some(projs),
-                filters,
-                ..
-            } if projs.is_empty() && filters.is_empty() => {
-                let summary = &snapshot.summary;
-                let stats = PartStatistics {
-                    read_rows: summary.row_count as usize,
-                    read_bytes: 0,
-                    partitions_scanned: 0,
-                    partitions_total: summary.block_count as usize,
-                    is_exact: true,
-                };
-                Some((stats, Partitions::default()))
-            }
-            _ => None,
-        })
     }
 }
