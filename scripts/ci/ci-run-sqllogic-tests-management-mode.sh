@@ -10,5 +10,11 @@ echo "Starting standalone DatabendQuery and DatabendMeta"
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
+RUN_DIR=""
+if [ $# -gt 0 ]; then
+	RUN_DIR="--run_dir $*"
+fi
+echo "Run suites using argument: $RUN_DIR"
+
 echo "Starting databend-sqllogic tests"
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} --run_file 01_0011_management_calls --enable_sandbox --debug
+target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --debug
