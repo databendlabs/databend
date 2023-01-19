@@ -46,7 +46,7 @@ pub trait CacheAccessor<K, V> {
         Q: Hash + Eq + ?Sized;
 }
 
-pub mod write {
+mod impls {
     use parking_lot::RwLock;
 
     use super::*;
