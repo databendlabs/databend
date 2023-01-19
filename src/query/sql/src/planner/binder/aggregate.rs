@@ -40,7 +40,6 @@ use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
-use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::BindContext;
@@ -88,35 +87,35 @@ impl<'a> AggregateRewriter<'a> {
         }
     }
 
-    pub fn visit(&mut self, scalar: &Scalar) -> Result<Scalar> {
+    pub fn visit(&mut self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
         match scalar {
-            Scalar::BoundColumnRef(_) => Ok(scalar.clone()),
-            Scalar::ConstantExpr(_) => Ok(scalar.clone()),
-            Scalar::AndExpr(scalar) => Ok(AndExpr {
+            ScalarExpr::BoundColumnRef(_) => Ok(scalar.clone()),
+            ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
+            ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
                 return_type: scalar.return_type.clone(),
             }
             .into()),
-            Scalar::OrExpr(scalar) => Ok(OrExpr {
+            ScalarExpr::OrExpr(scalar) => Ok(OrExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
                 return_type: scalar.return_type.clone(),
             }
             .into()),
-            Scalar::NotExpr(scalar) => Ok(NotExpr {
+            ScalarExpr::NotExpr(scalar) => Ok(NotExpr {
                 argument: Box::new(self.visit(&scalar.argument)?),
                 return_type: scalar.return_type.clone(),
             }
             .into()),
-            Scalar::ComparisonExpr(scalar) => Ok(ComparisonExpr {
+            ScalarExpr::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
                 return_type: scalar.return_type.clone(),
             }
             .into()),
-            Scalar::FunctionCall(func) => {
+            ScalarExpr::FunctionCall(func) => {
                 let new_args = func
                     .arguments
                     .iter()
@@ -130,7 +129,7 @@ impl<'a> AggregateRewriter<'a> {
                 }
                 .into())
             }
-            Scalar::CastExpr(cast) => Ok(CastExpr {
+            ScalarExpr::CastExpr(cast) => Ok(CastExpr {
                 is_try: cast.is_try,
                 argument: Box::new(self.visit(&cast.argument)?),
                 from_type: cast.from_type.clone(),
@@ -139,21 +138,21 @@ impl<'a> AggregateRewriter<'a> {
             .into()),
 
             // TODO(leiysky): should we recursively process subquery here?
-            Scalar::SubqueryExpr(_) => Ok(scalar.clone()),
+            ScalarExpr::SubqueryExpr(_) => Ok(scalar.clone()),
 
-            Scalar::AggregateFunction(agg_func) => self.replace_aggregate_function(agg_func),
+            ScalarExpr::AggregateFunction(agg_func) => self.replace_aggregate_function(agg_func),
         }
     }
 
     /// Replace the arguments of aggregate function with a BoundColumnRef, and
     /// add the replaced aggregate function and the arguments into `AggregateInfo`.
-    fn replace_aggregate_function(&mut self, aggregate: &AggregateFunction) -> Result<Scalar> {
+    fn replace_aggregate_function(&mut self, aggregate: &AggregateFunction) -> Result<ScalarExpr> {
         let agg_info = &mut self.bind_context.aggregate_info;
-        let mut replaced_args: Vec<Scalar> = Vec::with_capacity(aggregate.args.len());
+        let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(aggregate.args.len());
 
         for (i, arg) in aggregate.args.iter().enumerate() {
             let name = format!("{}_arg_{}", &aggregate.func_name, i);
-            if let Scalar::BoundColumnRef(column_ref) = arg {
+            if let ScalarExpr::BoundColumnRef(column_ref) = arg {
                 replaced_args.push(column_ref.clone().into());
                 agg_info.aggregate_arguments.push(ScalarItem {
                     index: column_ref.column.index,
@@ -253,7 +252,7 @@ impl<'a> Binder {
         // Extract available aliases from `SELECT` clause,
         for item in select_list.items.iter() {
             if let SelectTarget::AliasedExpr { alias: Some(_), .. } = item.select_target {
-                let column = if let Scalar::BoundColumnRef(column_ref) = &item.scalar {
+                let column = if let ScalarExpr::BoundColumnRef(column_ref) = &item.scalar {
                     let mut column = column_ref.column.clone();
                     column.column_name = item.alias.clone();
                     column
@@ -316,7 +315,7 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         select_list: &SelectList<'a>,
         group_by: &[Expr<'a>],
-        available_aliases: &[(ColumnBinding, Scalar)],
+        available_aliases: &[(ColumnBinding, ScalarExpr)],
     ) -> Result<()> {
         // Resolve group items with `FROM` context. Since the alias item can not be resolved
         // from the context, we can detect the failure and fallback to resolving with `available_aliases`.
@@ -332,7 +331,8 @@ impl<'a> Binder {
                 if let Entry::Vacant(entry) = bind_context.aggregate_info.group_items_map.entry(key)
                 {
                     // Add group item if it's not duplicated
-                    let column_binding = if let Scalar::BoundColumnRef(ref column_ref) = scalar {
+                    let column_binding = if let ScalarExpr::BoundColumnRef(ref column_ref) = scalar
+                    {
                         column_ref.column.clone()
                     } else {
                         self.create_column_binding(None, None, alias, scalar.data_type())
@@ -370,7 +370,7 @@ impl<'a> Binder {
             }
 
             let group_item_name = format!("{:#}", expr);
-            let index = if let Scalar::BoundColumnRef(BoundColumnRef {
+            let index = if let ScalarExpr::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding { index, .. },
             }) = &scalar_expr
             {
@@ -397,7 +397,7 @@ impl<'a> Binder {
         expr: &Expr<'a>,
         index: u64,
         select_list: &SelectList<'a>,
-    ) -> Result<(Scalar, String)> {
+    ) -> Result<(ScalarExpr, String)> {
         // Convert to zero-based index
         let index = index as usize - 1;
         if index >= select_list.items.len() {
@@ -419,9 +419,9 @@ impl<'a> Binder {
     fn resolve_alias_item(
         bind_context: &mut BindContext,
         expr: &Expr<'a>,
-        available_aliases: &[(ColumnBinding, Scalar)],
+        available_aliases: &[(ColumnBinding, ScalarExpr)],
         original_error: ErrorCode,
-    ) -> Result<(Scalar, DataType)> {
+    ) -> Result<(ScalarExpr, DataType)> {
         let mut result: Vec<usize> = vec![];
         // If cannot resolve group item, then try to find an available alias
         for (i, (column_binding, _)) in available_aliases.iter().enumerate() {
@@ -463,7 +463,7 @@ impl<'a> Binder {
             );
 
             // Add a mapping (alias -> scalar), so we can resolve the alias later
-            let column_ref: Scalar = BoundColumnRef {
+            let column_ref: ScalarExpr = BoundColumnRef {
                 column: column_binding,
             }
             .into();

@@ -71,8 +71,18 @@ impl FuseTable {
             }
         }
 
-        let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compact_thresholds)?;
+        let max_page_size = if self.is_native() {
+            Some(write_settings.max_page_size)
+        } else {
+            None
+        };
+        let cluster_stats_gen = self.get_cluster_stats_gen(
+            ctx.clone(),
+            max_page_size,
+            pipeline,
+            0,
+            block_compact_thresholds,
+        )?;
 
         let cluster_keys = &cluster_stats_gen.cluster_key_index;
         if !cluster_keys.is_empty() {
@@ -130,6 +140,7 @@ impl FuseTable {
     pub fn get_cluster_stats_gen(
         &self,
         ctx: Arc<dyn TableContext>,
+        max_page_size: Option<usize>,
         pipeline: &mut Pipeline,
         level: i32,
         block_compactor: BlockCompactThresholds,
@@ -183,6 +194,7 @@ impl FuseTable {
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             extra_key_num,
+            max_page_size,
             level,
             block_compactor,
             vec![],

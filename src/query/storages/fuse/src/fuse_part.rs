@@ -17,6 +17,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::ops::Range;
 use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
@@ -35,6 +36,9 @@ pub struct FusePartInfo {
     pub nums_rows: usize,
     pub columns_meta: HashMap<usize, ColumnMeta>,
     pub compression: Compression,
+
+    /// page range in the file
+    pub range: Option<Range<usize>>,
 }
 
 #[typetag::serde(name = "fuse")]
@@ -64,6 +68,7 @@ impl FusePartInfo {
         rows_count: u64,
         columns_meta: HashMap<usize, ColumnMeta>,
         compression: Compression,
+        range: Option<Range<usize>>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {
             location,
@@ -71,6 +76,7 @@ impl FusePartInfo {
             columns_meta,
             nums_rows: rows_count as usize,
             compression,
+            range,
         }))
     }
 

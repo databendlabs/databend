@@ -78,6 +78,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         min: vec![Scalar::from(1i64)],
         max: vec![Scalar::from(3i64)],
         level: 0,
+        pages: None,
     }))
     .await?;
     test_segment_locations.push(segment_location);
@@ -88,6 +89,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         min: vec![Scalar::from(2i64)],
         max: vec![Scalar::from(4i64)],
         level: 0,
+        pages: None,
     }))
     .await?;
     test_segment_locations.push(segment_location);
@@ -98,6 +100,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         min: vec![Scalar::from(4i64)],
         max: vec![Scalar::from(5i64)],
         level: 0,
+        pages: None,
     }))
     .await?;
     test_segment_locations.push(segment_location);

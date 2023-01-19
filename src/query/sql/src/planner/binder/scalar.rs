@@ -22,7 +22,7 @@ use common_expression::types::DataType;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.
@@ -31,7 +31,7 @@ pub struct ScalarBinder<'a> {
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
-    aliases: &'a [(String, Scalar)],
+    aliases: &'a [(String, ScalarExpr)],
 }
 
 impl<'a> ScalarBinder<'a> {
@@ -40,7 +40,7 @@ impl<'a> ScalarBinder<'a> {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
-        aliases: &'a [(String, Scalar)],
+        aliases: &'a [(String, ScalarExpr)],
     ) -> Self {
         ScalarBinder {
             bind_context,
@@ -51,7 +51,7 @@ impl<'a> ScalarBinder<'a> {
         }
     }
 
-    pub async fn bind(&mut self, expr: &Expr<'_>) -> Result<(Scalar, DataType)> {
+    pub async fn bind(&mut self, expr: &Expr<'_>) -> Result<(ScalarExpr, DataType)> {
         let mut type_checker = TypeChecker::new(
             self.bind_context,
             self.ctx.clone(),

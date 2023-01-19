@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
@@ -30,6 +31,7 @@ pub fn build_fuse_native_source_pipeline(
     pipeline: &mut Pipeline,
     block_reader: Arc<BlockReader>,
     max_threads: usize,
+    plan: &DataSourcePlan,
     max_io_requests: usize,
 ) -> Result<()> {
     match block_reader.support_blocking_api() {
@@ -64,6 +66,7 @@ pub fn build_fuse_native_source_pipeline(
         NativeDeserializeDataTransform::create(
             ctx.clone(),
             block_reader.clone(),
+            plan,
             transform_input,
             transform_output,
         )

@@ -25,6 +25,7 @@ mod versioned_reader;
 
 pub use block_reader::BlockReader;
 pub use block_reader::MergeIOReadResult;
+pub use block_reader_native::NativeReaderExt;
 pub use bloom_index::BloomFilterReader;
 pub use decompressor::UncompressedBuffer;
 pub use meta_readers::MetaReaders;

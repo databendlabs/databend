@@ -44,6 +44,9 @@ pub struct ClusterStatistics {
     pub min: Vec<Scalar>,
     pub max: Vec<Scalar>,
     pub level: i32,
+
+    // currently it's only used in native engine
+    pub pages: Option<Vec<Scalar>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -97,6 +100,7 @@ impl ClusterStatistics {
                 .map(|s| from_scalar(&s, &data_type))
                 .collect(),
             level: v0.level,
+            pages: None,
         }
     }
 }
