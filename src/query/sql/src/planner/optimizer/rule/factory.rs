@@ -25,6 +25,7 @@ use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
+use crate::optimizer::rule::rewrite::RuleEliminateGroupBy;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
 use crate::optimizer::rule::rewrite::RulePushDownFilterScan;
@@ -63,6 +64,7 @@ impl RuleFactory {
             RuleID::RulePushDownLimitExpression => Ok(Box::new(RulePushDownLimitExpression::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
+            RuleID::EliminateGroupBy => Ok(Box::new(RuleEliminateGroupBy::new())),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),

@@ -34,6 +34,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::EliminateFilter,
+        RuleID::EliminateGroupBy,
         RuleID::EliminateEvalScalar,
         RuleID::MergeFilter,
         RuleID::MergeEvalScalar,
