@@ -27,11 +27,11 @@ use parking_lot::RwLock;
 
 use crate::cache::StorageCache;
 
-pub type ItemCache<V> = RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>;
-pub type BytesCache = RwLock<LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>;
+pub type ItemCache<V> = LruCache<String, Arc<V>, DefaultHashBuilder, Count>;
+pub type BytesCache = LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>;
 
-pub type InMemoryItemCache<T> = Arc<ItemCache<T>>;
-pub type InMemoryBytesCache = Arc<BytesCache>;
+pub type InMemoryItemCache<T> = Arc<RwLock<ItemCache<T>>>;
+pub type InMemoryBytesCache = Arc<RwLock<BytesCache>>;
 
 pub struct MemoryCache;
 impl MemoryCache {

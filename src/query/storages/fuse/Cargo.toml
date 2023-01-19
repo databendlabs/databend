@@ -30,10 +30,10 @@ common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
 
 storages-common-blocks = { path = "../common/blocks" }
+storages-common-cache = { path = "../common/cache" }
 storages-common-index = { path = "../common/index" }
 storages-common-pruner = { path = "../common/pruner" }
 storages-common-table-meta = { path = "../common/table-meta" }
-storages-common-cache = { path = "../common/cache" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
