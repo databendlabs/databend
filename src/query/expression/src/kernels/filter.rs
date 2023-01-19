@@ -58,10 +58,10 @@ impl DataBlock {
     }
 
     pub fn filter(self, predicate: &Value<AnyType>) -> Result<DataBlock> {
-        if self.num_columns() == 0 || self.num_rows() == 0 {
+        if self.num_rows() == 0 {
             return Ok(self);
         }
-
+        
         let predicate = Self::cast_to_nonull_boolean(predicate).ok_or_else(|| {
             ErrorCode::BadDataValueType(format!(
                 "Filter predict column does not support type '{:?}'",
