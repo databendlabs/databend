@@ -226,7 +226,7 @@ output         : "🍦 が美味しい"
 
 ast            : CAST((1,) AS VARIANT)
 raw expr       : CAST(tuple(1_u8) AS Variant)
-checked expr   : to_variant<T0=(UInt8,)><T0>(tuple<UInt8>(1_u8))
+checked expr   : to_variant<T0=Tuple(UInt8,)><T0>(tuple<UInt8>(1_u8))
 optimized expr : 0x400000011000000120000002315001
 output type    : Variant
 output domain  : Undefined
@@ -235,7 +235,7 @@ output         : {"1":1}
 
 ast            : CAST((1, 2) AS VARIANT)
 raw expr       : CAST(tuple(1_u8, 2_u8) AS Variant)
-checked expr   : to_variant<T0=(UInt8, UInt8)><T0>(tuple<UInt8, UInt8>(1_u8, 2_u8))
+checked expr   : to_variant<T0=Tuple(UInt8, UInt8)><T0>(tuple<UInt8, UInt8>(1_u8, 2_u8))
 optimized expr : 0x4000000210000001100000012000000220000002313250015002
 output type    : Variant
 output domain  : Undefined
@@ -244,7 +244,7 @@ output         : {"1":1,"2":2}
 
 ast            : CAST((false, true) AS VARIANT)
 raw expr       : CAST(tuple(false, true) AS Variant)
-checked expr   : to_variant<T0=(Boolean, Boolean)><T0>(tuple<Boolean, Boolean>(false, true))
+checked expr   : to_variant<T0=Tuple(Boolean, Boolean)><T0>(tuple<Boolean, Boolean>(false, true))
 optimized expr : 0x40000002100000011000000130000000400000003132
 output type    : Variant
 output domain  : Undefined
@@ -253,7 +253,7 @@ output         : {"1":false,"2":true}
 
 ast            : CAST(('a',) AS VARIANT)
 raw expr       : CAST(tuple("a") AS Variant)
-checked expr   : to_variant<T0=(String,)><T0>(tuple<String>("a"))
+checked expr   : to_variant<T0=Tuple(String,)><T0>(tuple<String>("a"))
 optimized expr : 0x4000000110000001100000013161
 output type    : Variant
 output domain  : Undefined
@@ -262,7 +262,7 @@ output         : {"1":"a"}
 
 ast            : CAST((1, 2, (false, true, ('a',))) AS VARIANT)
 raw expr       : CAST(tuple(1_u8, 2_u8, tuple(false, true, tuple("a"))) AS Variant)
-checked expr   : to_variant<T0=(UInt8, UInt8, (Boolean, Boolean, (String,)))><T0>(tuple<UInt8, UInt8, (Boolean, Boolean, (String,))>(1_u8, 2_u8, tuple<Boolean, Boolean, (String,)>(false, true, tuple<String>("a"))))
+checked expr   : to_variant<T0=Tuple(UInt8, UInt8, Tuple(Boolean, Boolean, Tuple(String,)))><T0>(tuple<UInt8, UInt8, Tuple(Boolean, Boolean, Tuple(String,))>(1_u8, 2_u8, tuple<Boolean, Boolean, Tuple(String,)>(false, true, tuple<String>("a"))))
 optimized expr : 0x4000000310000001100000011000000120000002200000025000002d313233500150024000000310000001100000011000000130000000400000005000000e3132334000000110000001100000013161
 output type    : Variant
 output domain  : Undefined
@@ -1551,7 +1551,7 @@ evaluation:
 +--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------+
 |        | a                          | b                                                                                                                                                                                                                                                                                                                              | Output                                                                                                     |
 +--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------+
-| Type   | UInt64                     | Float64                                                                                                                                                                                                                                                                                                                        | (Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL)                                                       |
+| Type   | UInt64                     | Float64                                                                                                                                                                                                                                                                                                                        | Tuple(Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL)                                                  |
 | Domain | {0..=18446744073709551615} | {-179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..=inf} | ({0..=18446744073709551616}, {0..=2147483647} ∪ {NULL}, {-inf..=inf}, {-2147483648..=2147483647} ∪ {NULL}) |
 | Row 0  | 0_u64                      | 0_f64                                                                                                                                                                                                                                                                                                                          | (0_f32, 0_i32, 0_f32, 0_i32)                                                                               |
 | Row 1  | 1_u64                      | 4294967295_f64                                                                                                                                                                                                                                                                                                                 | (1_f32, 1_i32, 4294967296_f32, NULL)                                                                       |
@@ -1597,20 +1597,20 @@ evaluation (internal):
 
 
 ast            : TRY_CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))
-raw expr       : TRY_CAST(tuple(a::Int16, b::Int16, NULL) AS (Int8, UInt8, Boolean NULL))
-checked expr   : TRY_CAST(tuple<Int16, Int16, NULL>(a, b, NULL) AS (Int8 NULL, UInt8 NULL, Boolean NULL) NULL)
+raw expr       : TRY_CAST(tuple(a::Int16, b::Int16, NULL) AS Tuple(Int8, UInt8, Boolean NULL))
+checked expr   : TRY_CAST(tuple<Int16, Int16, NULL>(a, b, NULL) AS Tuple(Int8 NULL, UInt8 NULL, Boolean NULL) NULL)
 evaluation:
-+--------+-----------+------------+------------------------------------------------+
-|        | a         | b          | Output                                         |
-+--------+-----------+------------+------------------------------------------------+
-| Type   | Int16     | Int16      | (Int8 NULL, UInt8 NULL, Boolean NULL) NULL     |
-| Domain | {0..=256} | {-129..=1} | ({0..=127} ∪ {NULL}, {0..=1} ∪ {NULL}, {NULL}) |
-| Row 0  | 0_i16     | 0_i16      | (0_i8, 0_u8, NULL)                             |
-| Row 1  | 1_i16     | 1_i16      | (1_i8, 1_u8, NULL)                             |
-| Row 2  | 2_i16     | -127_i16   | (2_i8, NULL, NULL)                             |
-| Row 3  | 127_i16   | -128_i16   | (127_i8, NULL, NULL)                           |
-| Row 4  | 256_i16   | -129_i16   | (NULL, NULL, NULL)                             |
-+--------+-----------+------------+------------------------------------------------+
++--------+-----------+------------+-------------------------------------------------+
+|        | a         | b          | Output                                          |
++--------+-----------+------------+-------------------------------------------------+
+| Type   | Int16     | Int16      | Tuple(Int8 NULL, UInt8 NULL, Boolean NULL) NULL |
+| Domain | {0..=256} | {-129..=1} | ({0..=127} ∪ {NULL}, {0..=1} ∪ {NULL}, {NULL})  |
+| Row 0  | 0_i16     | 0_i16      | (0_i8, 0_u8, NULL)                              |
+| Row 1  | 1_i16     | 1_i16      | (1_i8, 1_u8, NULL)                              |
+| Row 2  | 2_i16     | -127_i16   | (2_i8, NULL, NULL)                              |
+| Row 3  | 127_i16   | -128_i16   | (127_i8, NULL, NULL)                            |
+| Row 4  | 256_i16   | -129_i16   | (NULL, NULL, NULL)                              |
++--------+-----------+------------+-------------------------------------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                        |
@@ -1818,7 +1818,7 @@ output         : "🍦 が美味しい"
 
 ast            : TRY_CAST((1,) AS VARIANT)
 raw expr       : TRY_CAST(tuple(1_u8) AS Variant)
-checked expr   : try_to_variant<T0=(UInt8,)><T0>(tuple<UInt8>(1_u8))
+checked expr   : try_to_variant<T0=Tuple(UInt8,)><T0>(tuple<UInt8>(1_u8))
 optimized expr : 0x400000011000000120000002315001
 output type    : Variant NULL
 output domain  : Undefined
@@ -1827,7 +1827,7 @@ output         : {"1":1}
 
 ast            : TRY_CAST((1, 2) AS VARIANT)
 raw expr       : TRY_CAST(tuple(1_u8, 2_u8) AS Variant)
-checked expr   : try_to_variant<T0=(UInt8, UInt8)><T0>(tuple<UInt8, UInt8>(1_u8, 2_u8))
+checked expr   : try_to_variant<T0=Tuple(UInt8, UInt8)><T0>(tuple<UInt8, UInt8>(1_u8, 2_u8))
 optimized expr : 0x4000000210000001100000012000000220000002313250015002
 output type    : Variant NULL
 output domain  : Undefined
@@ -1836,7 +1836,7 @@ output         : {"1":1,"2":2}
 
 ast            : TRY_CAST((false, true) AS VARIANT)
 raw expr       : TRY_CAST(tuple(false, true) AS Variant)
-checked expr   : try_to_variant<T0=(Boolean, Boolean)><T0>(tuple<Boolean, Boolean>(false, true))
+checked expr   : try_to_variant<T0=Tuple(Boolean, Boolean)><T0>(tuple<Boolean, Boolean>(false, true))
 optimized expr : 0x40000002100000011000000130000000400000003132
 output type    : Variant NULL
 output domain  : Undefined
@@ -1845,7 +1845,7 @@ output         : {"1":false,"2":true}
 
 ast            : TRY_CAST(('a',) AS VARIANT)
 raw expr       : TRY_CAST(tuple("a") AS Variant)
-checked expr   : try_to_variant<T0=(String,)><T0>(tuple<String>("a"))
+checked expr   : try_to_variant<T0=Tuple(String,)><T0>(tuple<String>("a"))
 optimized expr : 0x4000000110000001100000013161
 output type    : Variant NULL
 output domain  : Undefined
@@ -1854,7 +1854,7 @@ output         : {"1":"a"}
 
 ast            : TRY_CAST((1, 2, (false, true, ('a',))) AS VARIANT)
 raw expr       : TRY_CAST(tuple(1_u8, 2_u8, tuple(false, true, tuple("a"))) AS Variant)
-checked expr   : try_to_variant<T0=(UInt8, UInt8, (Boolean, Boolean, (String,)))><T0>(tuple<UInt8, UInt8, (Boolean, Boolean, (String,))>(1_u8, 2_u8, tuple<Boolean, Boolean, (String,)>(false, true, tuple<String>("a"))))
+checked expr   : try_to_variant<T0=Tuple(UInt8, UInt8, Tuple(Boolean, Boolean, Tuple(String,)))><T0>(tuple<UInt8, UInt8, Tuple(Boolean, Boolean, Tuple(String,))>(1_u8, 2_u8, tuple<Boolean, Boolean, Tuple(String,)>(false, true, tuple<String>("a"))))
 optimized expr : 0x4000000310000001100000011000000120000002200000025000002d313233500150024000000310000001100000011000000130000000400000005000000e3132334000000110000001100000013161
 output type    : Variant NULL
 output domain  : Undefined
