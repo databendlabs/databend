@@ -27,8 +27,9 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_storages_system::SyncOneBlockSystemTable;
-use common_storages_system::SyncSystemTable;
+
+use crate::SyncOneBlockSystemTable;
+use crate::SyncSystemTable;
 
 pub struct BuildOptionsTable {
     table_info: TableInfo,
