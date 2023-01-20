@@ -23,6 +23,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_io::prelude::BinaryRead;
+use common_io::prelude::BinaryWrite;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -228,12 +230,11 @@ impl Processor for ExchangeTransform {
                     output_data.data_block = Some(data_block);
                     output_data.serialized_blocks.push(None);
                 } else {
-                    let meta = match bincode::serialize(&data_block.meta()?) {
-                        Ok(bytes) => Ok(bytes),
-                        Err(_) => Err(ErrorCode::BadBytes(
-                            "block meta serialize error when exchange",
-                        )),
-                    }?;
+                    let mut meta = vec![];
+                    meta.write_scalar_own(data_block.num_rows() as u32)?;
+                    bincode::serialize_into(&mut meta, &data_block.meta()?).map_err(|_| {
+                        ErrorCode::BadBytes("block meta serialize error when exchange")
+                    })?;
 
                     let chunks = data_block.try_into()?;
                     let options = &self.serialize_params.options;
@@ -329,7 +330,7 @@ impl ExchangeTransform {
             &Default::default(),
         )?;
 
-        let meta = match bincode::deserialize(fragment_data.get_meta()) {
+        let meta = match bincode::deserialize(&fragment_data.get_meta()[4..]) {
             Ok(meta) => Ok(meta),
             Err(cause) => Err(ErrorCode::BadBytes(format!(
                 "block meta deserialize error when exchange, {:?}",
@@ -337,10 +338,17 @@ impl ExchangeTransform {
             ))),
         }?;
 
+        let mut block = DataBlock::from_arrow_chunk(&batch, schema)?.add_meta(meta)?;
+        if block.num_columns() == 0 {
+            let mut row_count_meta = &fragment_data.get_meta()[..4];
+            let row_count: u32 = row_count_meta.read_scalar()?;
+            block = DataBlock::new(vec![], row_count as usize).add_meta(block.take_meta())?;
+        }
+
         self.output_data = Some(OutputData {
             serialized_blocks: vec![],
             has_serialized_blocks: false,
-            data_block: Some(DataBlock::from_arrow_chunk(&batch, schema)?.add_meta(meta)?),
+            data_block: Some(block),
         });
 
         Ok(())

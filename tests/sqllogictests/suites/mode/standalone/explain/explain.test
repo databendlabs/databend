@@ -1,13 +1,13 @@
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8000/v1/query): error trying to connect: tcp connect error: Connection refused (os error 111)
 drop table if exists t1 all
 
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8000/v1/query): error trying to connect: tcp connect error: Connection refused (os error 111)
 drop table if exists t2 all
 
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8000/v1/query): error trying to connect: tcp connect error: Connection refused (os error 111)
 create table t1 as select number as a, number as b from numbers(1)
 
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8000/v1/query): error trying to connect: tcp connect error: Connection refused (os error 111)
 create table t2 as select number as a, number as b from numbers(5)
 
 query T
@@ -603,10 +603,10 @@ Filter
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 5.00
 
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8000/v1/query): error trying to connect: tcp connect error: Connection refused (os error 111)
 drop table if exists t3
 
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8000/v1/query): error trying to connect: tcp connect error: Connection refused (os error 111)
 create table t3 as select number as a, number as b from numbers(10)
 
 query T
@@ -839,10 +839,10 @@ EvalScalar
                     ├── output columns: [0]
                     └── estimated rows: 1.00
 
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8000/v1/query): error trying to connect: tcp connect error: Connection refused (os error 111)
 drop table t1
 
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8000/v1/query): error trying to connect: tcp connect error: Connection refused (os error 111)
 drop table t2
 
 query T

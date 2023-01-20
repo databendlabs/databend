@@ -155,7 +155,7 @@ impl DataBlock {
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.num_columns() == 0 || self.num_rows() == 0
+        self.num_rows() == 0
     }
 
     #[inline]

@@ -73,7 +73,10 @@ impl Rule for RulePushDownLimitSort {
             let mut sort_limit: logsort = sort.plan().clone().try_into()?;
             sort_limit.limit = Some(sort_limit.limit.map_or(count, |c| cmp::max(c, count)));
             let sort = SExpr::create_unary(RelOperator::Sort(sort_limit), sort.child(0)?.clone());
-            state.add_result(s_expr.replace_children(vec![sort]));
+
+            let mut result = SExpr::create_unary(limit.into(), sort);
+            result.set_applied_rule(&self.id);
+            state.add_result(result);
         }
         Ok(())
     }

@@ -19,6 +19,7 @@ use common_arrow::arrow::io::flight::serialize_batch;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_io::prelude::BinaryWrite;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
@@ -121,12 +122,10 @@ impl Processor for ExchangePublisherSink {
                     continue;
                 }
 
-                let meta = match bincode::serialize(&data_block.meta()?) {
-                    Ok(bytes) => Ok(bytes),
-                    Err(_) => Err(ErrorCode::BadBytes(
-                        "block meta serialize error when exchange",
-                    )),
-                }?;
+                let mut meta = vec![];
+                meta.write_scalar_own(data_block.num_rows() as u32)?;
+                bincode::serialize_into(&mut meta, &data_block.meta()?)
+                    .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
 
                 let chunks = data_block.try_into()?;
                 let options = &self.serialize_params.options;
