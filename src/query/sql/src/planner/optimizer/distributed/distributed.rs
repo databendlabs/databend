@@ -60,15 +60,16 @@ fn push_down_topk_to_merge(s_expr: &mut SExpr, mut top_k: Option<TopK>) -> Resul
         return Ok(());
     }
 
-    top_k = None;
     for child in s_expr.children.iter_mut() {
+        top_k = None;
         if let RelOperator::Sort(sort) = &child.plan {
-            // If limit.limit is None, no need to push down.
-            if let Some(_) = sort.limit {
+            if sort.limit.is_some() {
                 top_k = Some(TopK { sort: sort.clone() });
             }
         }
-        push_down_topk_to_merge(child, top_k.clone())?;
+        for child_child in child.children.iter_mut() {
+            push_down_topk_to_merge(child_child, top_k.clone())?;
+        }
     }
     Ok(())
 }

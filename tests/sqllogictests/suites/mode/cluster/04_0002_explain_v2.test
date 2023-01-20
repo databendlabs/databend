@@ -184,43 +184,39 @@ Limit
     ├── estimated rows: 0.00
     └── Exchange
         ├── exchange type: Merge
-        └── Limit
-            ├── limit: 10
-            ├── offset: 0
+        └── Sort
+            ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
             ├── estimated rows: 0.00
-            └── Sort
-                ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
+            └── EvalScalar
+                ├── expressions: [plus(t1.a (#0), 1_u8), plus(t1.b (#1), 1_u8), plus(t2.a (#2), 1_u8)]
                 ├── estimated rows: 0.00
-                └── EvalScalar
-                    ├── expressions: [plus(t1.a (#0), 1_u8), plus(t1.b (#1), 1_u8), plus(t2.a (#2), 1_u8)]
+                └── HashJoin
+                    ├── join type: INNER
+                    ├── build keys: [t2.a (#2)]
+                    ├── probe keys: [t1.a (#0)]
+                    ├── filters: []
                     ├── estimated rows: 0.00
-                    └── HashJoin
-                        ├── join type: INNER
-                        ├── build keys: [t2.a (#2)]
-                        ├── probe keys: [t1.a (#0)]
-                        ├── filters: []
-                        ├── estimated rows: 0.00
-                        ├── Exchange(Build)
-                        │   ├── exchange type: Hash(t2.a (#2))
-                        │   └── TableScan
-                        │       ├── table: default.default.t2
-                        │       ├── read rows: 0
-                        │       ├── read bytes: 0
-                        │       ├── partitions total: 0
-                        │       ├── partitions scanned: 0
-                        │       ├── push downs: [filters: [], limit: NONE]
-                        │       ├── output columns: [0]
-                        │       └── estimated rows: 0.00
-                        └── Exchange(Probe)
-                            ├── exchange type: Hash(t1.a (#0))
-                            └── TableScan
-                                ├── table: default.default.t1
-                                ├── read rows: 0
-                                ├── read bytes: 0
-                                ├── partitions total: 0
-                                ├── partitions scanned: 0
-                                ├── push downs: [filters: [], limit: NONE]
-                                └── estimated rows: 0.00
+                    ├── Exchange(Build)
+                    │   ├── exchange type: Hash(t2.a (#2))
+                    │   └── TableScan
+                    │       ├── table: default.default.t2
+                    │       ├── read rows: 0
+                    │       ├── read bytes: 0
+                    │       ├── partitions total: 0
+                    │       ├── partitions scanned: 0
+                    │       ├── push downs: [filters: [], limit: NONE]
+                    │       ├── output columns: [0]
+                    │       └── estimated rows: 0.00
+                    └── Exchange(Probe)
+                        ├── exchange type: Hash(t1.a (#0))
+                        └── TableScan
+                            ├── table: default.default.t1
+                            ├── read rows: 0
+                            ├── read bytes: 0
+                            ├── partitions total: 0
+                            ├── partitions scanned: 0
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 0.00
 
 statement ok
 set prefer_broadcast_join = 1;
@@ -269,24 +265,20 @@ Limit
 ├── estimated rows: 3.00
 └── Sort
     ├── sort keys: [number ASC NULLS LAST]
-    ├── estimated rows: 3.00
+    ├── estimated rows: 10.00
     └── Exchange
         ├── exchange type: Merge
-        └── Limit
-            ├── limit: 3
-            ├── offset: 0
-            ├── estimated rows: 3.00
-            └── Sort
-                ├── sort keys: [number ASC NULLS LAST]
-                ├── estimated rows: 10.00
-                └── TableScan
-                    ├── table: default.system.numbers
-                    ├── read rows: 10
-                    ├── read bytes: 80
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── push downs: [filters: [], limit: 3]
-                    └── estimated rows: 10.00
+        └── Sort
+            ├── sort keys: [number ASC NULLS LAST]
+            ├── estimated rows: 10.00
+            └── TableScan
+                ├── table: default.system.numbers
+                ├── read rows: 10
+                ├── read bytes: 80
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── push downs: [filters: [], limit: 3]
+                └── estimated rows: 10.00
 
 query T
 explain select * from (SELECT number AS a FROM numbers(10)) x right join (SELECT number AS a FROM numbers(5)) y using(a) order by x.a limit 3;
@@ -297,42 +289,38 @@ Limit
 ├── estimated rows: 3.00
 └── Sort
     ├── sort keys: [number ASC NULLS LAST]
-    ├── estimated rows: 3.00
+    ├── estimated rows: 50.00
     └── Exchange
         ├── exchange type: Merge
-        └── Limit
-            ├── limit: 3
-            ├── offset: 0
-            ├── estimated rows: 3.00
-            └── Sort
-                ├── sort keys: [number ASC NULLS LAST]
+        └── Sort
+            ├── sort keys: [number ASC NULLS LAST]
+            ├── estimated rows: 50.00
+            └── HashJoin
+                ├── join type: RIGHT OUTER
+                ├── build keys: [TRY_CAST(y.a (#1) AS UInt64 NULL)]
+                ├── probe keys: [x.a (#0)]
+                ├── filters: []
                 ├── estimated rows: 50.00
-                └── HashJoin
-                    ├── join type: RIGHT OUTER
-                    ├── build keys: [TRY_CAST(y.a (#1) AS UInt64 NULL)]
-                    ├── probe keys: [x.a (#0)]
-                    ├── filters: []
-                    ├── estimated rows: 50.00
-                    ├── Exchange(Build)
-                    │   ├── exchange type: Hash(TRY_CAST(y.a (#1) AS UInt64 NULL))
-                    │   └── TableScan
-                    │       ├── table: default.system.numbers
-                    │       ├── read rows: 5
-                    │       ├── read bytes: 40
-                    │       ├── partitions total: 1
-                    │       ├── partitions scanned: 1
-                    │       ├── push downs: [filters: [], limit: NONE]
-                    │       └── estimated rows: 5.00
-                    └── Exchange(Probe)
-                        ├── exchange type: Hash(x.a (#0))
-                        └── TableScan
-                            ├── table: default.system.numbers
-                            ├── read rows: 10
-                            ├── read bytes: 80
-                            ├── partitions total: 1
-                            ├── partitions scanned: 1
-                            ├── push downs: [filters: [], limit: NONE]
-                            └── estimated rows: 10.00
+                ├── Exchange(Build)
+                │   ├── exchange type: Hash(TRY_CAST(y.a (#1) AS UInt64 NULL))
+                │   └── TableScan
+                │       ├── table: default.system.numbers
+                │       ├── read rows: 5
+                │       ├── read bytes: 40
+                │       ├── partitions total: 1
+                │       ├── partitions scanned: 1
+                │       ├── push downs: [filters: [], limit: NONE]
+                │       └── estimated rows: 5.00
+                └── Exchange(Probe)
+                    ├── exchange type: Hash(x.a (#0))
+                    └── TableScan
+                        ├── table: default.system.numbers
+                        ├── read rows: 10
+                        ├── read bytes: 80
+                        ├── partitions total: 1
+                        ├── partitions scanned: 1
+                        ├── push downs: [filters: [], limit: NONE]
+                        └── estimated rows: 10.00
 
 statement ok
 drop table t1;
