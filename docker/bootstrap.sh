@@ -16,11 +16,11 @@ PROCESSES+=($!)
 sleep 1
 
 function setup_query_default_user {
-    if [ -n "$DATABEND_QUERY_DEFAULT_USER" ] && [ -n "$DATABEND_QUERY_DEFAULT_PASSWORD" ]; then
-        DOUBLE_SHA1_PASSWORD=$(echo -n "$DATABEND_QUERY_DEFAULT_PASSWORD" | sha1sum | cut -d' ' -f1 | xxd -r -p | sha1sum | cut -d' ' -f1)
+    if [ -n "$QUERY_DEFAULT_USER" ] && [ -n "$QUERY_DEFAULT_PASSWORD" ]; then
+        DOUBLE_SHA1_PASSWORD=$(echo -n "$QUERY_DEFAULT_PASSWORD" | sha1sum | cut -d' ' -f1 | xxd -r -p | sha1sum | cut -d' ' -f1)
         cat <<EOF >>"$QUERY_CONFIG_FILE"
 [[query.users]]
-name = "$DATABEND_QUERY_DEFAULT_USER"
+name = "$QUERY_DEFAULT_USER"
 auth_type = "double_sha1_password"
 auth_string = "$DOUBLE_SHA1_PASSWORD"
 EOF
@@ -56,14 +56,14 @@ function setup_minio {
 
 function setup_query_storage {
     QUERY_STORAGE_TYPE=${QUERY_STORAGE_TYPE:-"fs"}
+    AWS_S3_BUCKET=${AWS_S3_BUCKET:-"databend"}
     if [[ -n $MINIO_ENABLED ]]; then
         # force to use s3 storage when minio is enabled
         QUERY_STORAGE_TYPE="s3"
-        AWS_S3_BUCKET=${AWS_S3_BUCKET:-"databend"}
         AWS_S3_ENDPOINT=${AWS_S3_ENDPOINT:-"http://0.0.0.0:9000"}
         AWS_S3_PRESIGNED_ENDPOINT=${AWS_S3_PRESIGNED_ENDPOINT:-"http://localhost:9000"}
-        AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-"minio"}
-        AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-"miniostorage"}
+        AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-"minioadmin"}
+        AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-"minioadmin"}
         setup_minio
     fi
     case $QUERY_STORAGE_TYPE in
