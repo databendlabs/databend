@@ -17,10 +17,7 @@ mod metrics;
 mod providers;
 mod read;
 
-use std::borrow::Borrow;
-use std::hash::Hash;
-use std::sync::Arc;
-
+pub use cache::CacheAccessor;
 pub use providers::DiskCache;
 pub use providers::InMemoryBytesCacheHolder;
 pub use providers::InMemoryCacheBuilder;
@@ -32,80 +29,3 @@ pub use read::InMemoryItemCacheReader;
 pub use read::LoadParams;
 pub use read::Loader;
 pub use read::LoaderWithCacheKey;
-
-pub trait CacheAccessor<K, V> {
-    fn get<Q>(&self, k: &Q) -> Option<Arc<V>>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
-
-    fn put(&self, key: K, value: Arc<V>);
-    fn evict<Q>(&self, k: &Q) -> bool
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
-}
-
-mod impls {
-    use parking_lot::RwLock;
-
-    use super::*;
-    use crate::cache::StorageCache;
-
-    impl<V, C> CacheAccessor<String, V> for Arc<RwLock<C>>
-    where C: StorageCache<String, V>
-    {
-        fn get<Q>(&self, k: &Q) -> Option<Arc<V>>
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
-            let mut guard = self.write();
-            guard.get(k).cloned()
-        }
-
-        fn put(&self, k: String, v: Arc<V>) {
-            let mut guard = self.write();
-            guard.put(k, v);
-        }
-
-        fn evict<Q>(&self, k: &Q) -> bool
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
-            let mut guard = self.write();
-            guard.evict(k)
-        }
-    }
-
-    impl<V, C> CacheAccessor<String, V> for Option<Arc<RwLock<C>>>
-    where C: StorageCache<String, V>
-    {
-        fn get<Q>(&self, k: &Q) -> Option<Arc<V>>
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
-            self.as_ref().and_then(|cache| cache.get(k))
-        }
-
-        fn put(&self, k: String, v: Arc<V>) {
-            if let Some(cache) = self {
-                cache.put(k, v);
-            }
-        }
-
-        fn evict<Q>(&self, k: &Q) -> bool
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
-            if let Some(cache) = self {
-                cache.evict(k)
-            } else {
-                false
-            }
-        }
-    }
-}
