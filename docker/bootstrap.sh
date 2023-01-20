@@ -99,6 +99,7 @@ EOF
 if [ -z "$QUERY_CONFIG_FILE" ]; then
     QUERY_CONFIG_FILE="/etc/databend/query.toml"
     echo "==> QUERY_CONFIG_FILE is not set, using default: $QUERY_CONFIG_FILE"
+    cp /etc/databend/query_config_spec.toml "$QUERY_CONFIG_FILE"
     setup_query_default_user
     setup_query_storage
 fi
