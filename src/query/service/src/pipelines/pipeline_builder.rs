@@ -345,10 +345,7 @@ impl PipelineBuilder {
             &aggregate.agg_funcs,
         )?;
 
-        // this has bugs now, so we disable it for now, cc @winter
-        #[allow(clippy::overly_complex_bool_expr)]
-        if 1 == 2
-            && self.ctx.get_cluster().is_empty()
+        if self.ctx.get_cluster().is_empty()
             && !params.group_columns.is_empty()
             && self.main_pipeline.output_len() > 1
         {
