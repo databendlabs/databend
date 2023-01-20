@@ -282,6 +282,7 @@ impl BlockPruner {
             type BlockPruningFuture =
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
             blocks.next().map(|(block_idx, block_meta)| {
+                let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
                 if pruning_ctx.range_pruner.should_keep(&block_meta.col_stats) {
                     // not pruned by block zone map index,
@@ -291,7 +292,6 @@ impl BlockPruner {
                     let index_location = block_meta.bloom_filter_index_location.clone();
                     let index_size = block_meta.bloom_filter_index_size;
 
-                    let cluster_stats = block_meta.cluster_stats.clone();
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
@@ -299,7 +299,8 @@ impl BlockPruner {
                                 && ctx.limiter.within_limit(row_count);
 
                             if keep {
-                                let (keep, range) = page_pruner.should_keep(&cluster_stats);
+                                let (keep, range) =
+                                    page_pruner.should_keep(&block_meta.cluster_stats);
                                 (block_idx, keep, range)
                             } else {
                                 (block_idx, keep, None)
