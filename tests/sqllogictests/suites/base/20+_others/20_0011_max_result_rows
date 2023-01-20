@@ -18,13 +18,25 @@ SELECT COUNT() FROM (SELECT * FROM t1)
 ----
 3
 
+query I
+SELECT a FROM t1 ORDER BY a;
+----
+1
+2
+3
+
 statement ok
 SET max_result_rows=1
 
 query I
-SELECT COUNT() FROM (SELECT * FROM t1)
+SELECT a FROM t1 ORDER BY a;
 ----
 1
+
+query I
+SELECT COUNT() FROM (SELECT * FROM t1)
+----
+3
 
 query I
 SELECT COUNT() FROM (SELECT * FROM t1 limit 2)

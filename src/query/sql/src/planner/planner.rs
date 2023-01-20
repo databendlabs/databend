@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::Expr;
+use common_ast::ast::Literal;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::token::Token;
@@ -80,7 +82,8 @@ impl Planner {
                 // Step 2: Parse the SQL.
                 let backtrace = Backtrace::new();
                 let (mut stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
-                replace_stmt(&mut stmt);
+                self.replace_stmt(&mut stmt);
+
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
                 let metadata = Arc::new(RwLock::new(Metadata::default()));
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -128,11 +131,29 @@ impl Planner {
             }
         }
     }
-}
 
-fn replace_stmt(stmt: &mut Statement) {
-    let mut visitors = vec![DistinctToGroupBy::default()];
-    for v in visitors.iter_mut() {
-        walk_statement_mut(v, stmt)
+    fn add_max_rows_limit(&self, statment: &mut Statement) {
+        let max_rows = self.ctx.get_settings().get_max_result_rows().unwrap();
+        if max_rows == 0 {
+            return;
+        }
+
+        if let Statement::Query(query) = statment {
+            if query.limit.is_empty() {
+                query.limit = vec![Expr::Literal {
+                    span: &[],
+                    lit: Literal::Integer(max_rows),
+                }];
+            }
+        }
+    }
+
+    fn replace_stmt(&self, stmt: &mut Statement) {
+        let mut visitors = vec![DistinctToGroupBy::default()];
+        for v in visitors.iter_mut() {
+            walk_statement_mut(v, stmt)
+        }
+
+        self.add_max_rows_limit(stmt);
     }
 }
