@@ -170,24 +170,25 @@ pub fn new_filter_pruner(
 mod util {
     use common_exception::ErrorCode;
     use storages_common_index::FilterEvalResult;
+    use tracing::warn;
 
     use super::*;
     use crate::io::BloomFilterReader;
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn should_keep_by_filter(
+    pub async fn should_keep_by_filter<'a>(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
-        schema: &TableSchemaRef,
-        filter_expr: &Expr<String>,
-        scalar_map: &HashMap<Scalar, u64>,
-        filter_col_names: &[String],
-        index_location: &Location,
+        schema: &'a TableSchemaRef,
+        filter_expr: &'a Expr<String>,
+        scalar_map: &'a HashMap<Scalar, u64>,
+        filter_col_names: &'a [String],
+        index_location: &'a Location,
         index_length: u64,
     ) -> Result<bool> {
         // load the relevant index columns
         let maybe_filter = index_location
-            .read_filter(ctx.clone(), dal, filter_col_names, index_length)
+            .read_filter(dal, filter_col_names, index_length)
             .await;
 
         match maybe_filter {
@@ -201,12 +202,16 @@ mod util {
             .apply(filter_expr.clone(), scalar_map)?
                 != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
+                warn!("DEPRECATED INDEX FORMAT, location: {} ", index_location.0);
                 // In case that the index is no longer supported, just return ture to indicate
                 // that the block being pruned should be kept. (Although the caller of this method
                 // "FilterPruner::should_keep",  will ignore any exceptions returned)
                 Ok(true)
             }
-            Err(e) => Err(e),
+            Err(e) => {
+                warn!("load filter failed , {}", e.to_string());
+                Err(e)
+            }
         }
     }
 }

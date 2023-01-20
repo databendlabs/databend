@@ -374,7 +374,6 @@ impl FuseTable {
         base_timestamp: Option<DateTime<Utc>>,
         snapshot_lites: Vec<TableSnapshotLite>,
     ) -> Result<RetentionPartition> {
-        //    let retention_interval = Duration::hours(DEFAULT_RETENTION_PERIOD_HOURS as i64);
         let retention_interval = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
         let retention_point = base_timestamp.map(|s| s - retention_interval);
         let (beyond_retention, within_retention) = snapshot_lites
@@ -389,13 +388,9 @@ impl FuseTable {
     // filter out segments that are referenced by orphan snapshots
     // which are within retention period
     fn filter_out_segments_within_retention(
-        // orphan_snapshot_index: impl IntoIterator<Item = SnapshotId>,
         orphan_snapshot_index: HashSet<SnapshotId>,
         mut segment_with_refer_index: HashMap<Location, HashSet<SnapshotId>>,
     ) -> HashSet<Location> {
-        // let orphan_snapshot_index_bitmap = RoaringBitmap::from_iter(orphan_snapshot_index);
-        // segment_with_refer_index
-        //    .retain(|_location, refer_map| orphan_snapshot_index_bitmap.is_disjoint(refer_map));
         segment_with_refer_index
             .retain(|_location, refer_map| orphan_snapshot_index.is_disjoint(refer_map));
         segment_with_refer_index.into_keys().collect()
@@ -409,7 +404,6 @@ impl FuseTable {
     ) -> Result<()> {
         let fuse_file = Files::create(ctx.clone(), self.operator.clone());
         let locations = Vec::from_iter(locations_to_be_purged);
-        // self.clean_cache(&locations);
         fuse_file.remove_file_in_batch(&locations).await
     }
 

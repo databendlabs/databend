@@ -14,8 +14,8 @@
 
 use common_arrow::parquet::metadata::FileMetaData;
 use storages_common_cache::CacheAccessor;
-use storages_common_cache::InMemoryBytesCacheHolder;
 use storages_common_cache::InMemoryItemCacheHolder;
+use xorfilter::Xor8;
 
 use crate::caches::CacheManager;
 use crate::meta::SegmentInfo;
@@ -30,7 +30,7 @@ pub type TableSnapshotCache = InMemoryItemCacheHolder<TableSnapshot>;
 pub type TableSnapshotStatisticCache = InMemoryItemCacheHolder<TableSnapshotStatistics>;
 /// In memory data cache of bloom index data.
 /// For each indexed data block, the index data of column is cached individually
-pub type BloomIndexCache = InMemoryBytesCacheHolder;
+pub type BloomIndexCache = InMemoryItemCacheHolder<Xor8>;
 pub struct BloomIndexMeta(pub FileMetaData);
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;

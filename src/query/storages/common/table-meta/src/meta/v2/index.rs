@@ -12,13 +12,16 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_expression::DataBlock;
+use std::sync::Arc;
+
 use common_expression::TableSchemaRef;
+use xorfilter::Xor8;
 
 /// Filter data of a DataBlock, which itself is also a DataBlock.
 ///
 /// Depending on the query conditions, columns of index data will be loaded on demand.
 pub struct BlockFilter {
     pub filter_schema: TableSchemaRef,
-    pub filter_block: DataBlock,
+    // pub filter_block: DataBlock,
+    pub filter_block: Vec<Arc<Xor8>>,
 }

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_config::QueryConfig;
 use common_exception::Result;
-use storages_common_cache::InMemoryBytesCacheHolder;
 use storages_common_cache::InMemoryCacheBuilder;
 use storages_common_cache::InMemoryItemCacheHolder;
 
@@ -58,8 +57,11 @@ impl CacheManager {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
             let table_statistic_cache = Self::new_item_cache(config.table_cache_statistic_count);
             let segment_info_cache = Self::new_item_cache(config.table_cache_segment_count);
+            // TODO remove this
+            // let bloom_index_data_cache =
+            //    Self::new_bytes_cache(config.table_cache_bloom_index_data_bytes);
             let bloom_index_data_cache =
-                Self::new_bytes_cache(config.table_cache_bloom_index_data_bytes);
+                Self::new_item_cache(config.table_cache_bloom_index_data_bytes);
             let bloom_index_meta_cache =
                 Self::new_item_cache(config.table_cache_bloom_index_meta_count);
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
@@ -107,14 +109,6 @@ impl CacheManager {
     fn new_item_cache<T>(capacity: u64) -> Option<InMemoryItemCacheHolder<T>> {
         if capacity > 0 {
             Some(InMemoryCacheBuilder::new_item_cache(capacity))
-        } else {
-            None
-        }
-    }
-
-    fn new_bytes_cache(capacity: u64) -> Option<InMemoryBytesCacheHolder> {
-        if capacity > 0 {
-            Some(InMemoryCacheBuilder::new_bytes_cache(capacity))
         } else {
             None
         }

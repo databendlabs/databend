@@ -14,24 +14,14 @@
 
 use std::future::Future;
 use std::sync::Arc;
-use std::time::Instant;
 
-use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::infer_schema;
-use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::parquet::compression::Compression;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::read::BasicDecompressor;
-use common_arrow::parquet::read::PageMetaData;
-use common_arrow::parquet::read::PageReader;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -41,185 +31,102 @@ use storages_common_cache::LoadParams;
 use storages_common_table_meta::caches::BloomIndexMeta;
 use storages_common_table_meta::meta::BlockFilter;
 use storages_common_table_meta::meta::ColumnId;
-use tracing::Instrument;
+use xorfilter::Xor8;
 
 use crate::io::read::bloom_index::column_reader::BloomIndexColumnReader;
 use crate::io::MetaReaders;
-use crate::metrics::metrics_inc_block_index_read_bytes;
-use crate::metrics::metrics_inc_block_index_read_milliseconds;
-use crate::metrics::metrics_inc_block_index_read_nums;
 
 /// load index column data
-#[tracing::instrument(level = "debug", skip_all)]
-pub async fn load_bloom_filter_by_columns(
-    ctx: Arc<dyn TableContext>,
+pub async fn load_bloom_filter_by_columns<'a>(
     dal: Operator,
-    column_needed: &[String],
-    path: &str,
-    length: u64,
+    column_needed: &'a [String],
+    index_path: &'a str,
+    index_length: u64,
 ) -> Result<BlockFilter> {
-    let bloom_index_meta = load_index_meta(dal.clone(), path, length).await?;
+    // 1. load index meta
+    let bloom_index_meta = load_index_meta(dal.clone(), index_path, index_length).await?;
     let file_meta = &bloom_index_meta.0;
     if file_meta.row_groups.len() != 1 {
         return Err(ErrorCode::StorageOther(format!(
-            "invalid v1 bloom index filter index, number of row group should be 1, but found {} row groups",
+            "invalid bloom filter index, number of row group should be 1, but found {} row groups",
             file_meta.row_groups.len()
         )));
     }
-    let row_group = &file_meta.row_groups[0];
 
-    let fields = column_needed
-        .iter()
-        .map(|name| TableField::new(name, TableDataType::String))
-        .collect::<Vec<_>>();
+    let cols = file_meta.row_groups[0].columns();
 
-    let filter_schema = Arc::new(TableSchema::new(fields));
-
-    // 1. load column data, as bytes
-    let futs = column_needed
-        .iter()
-        .map(|col_name| load_column_bytes(&ctx, file_meta, col_name, path, &dal))
-        .collect::<Vec<_>>();
-
-    let start = Instant::now();
-
-    let cols_data = try_join_all(futs)
-        .instrument(tracing::debug_span!("join_columns"))
-        .await?;
-
-    // Perf.
-    {
-        metrics_inc_block_index_read_nums(cols_data.len() as u64);
-        metrics_inc_block_index_read_milliseconds(start.elapsed().as_millis() as u64);
-    }
-
-    let column_descriptors = file_meta.schema_descr.columns();
+    // 2. filter out columns that needed and exist in the index
     let arrow_schema = infer_schema(file_meta)?;
-    let mut columns_array_iter = Vec::with_capacity(cols_data.len());
-    let num_values = row_group.num_rows();
+    let col_metas: Vec<_> = column_needed
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, col_name)| {
+            cols.iter()
+                .find(|c| &c.descriptor().path_in_schema[0] == col_name)
+                .map(|col| (idx, col, arrow_schema.fields[idx].clone()))
+        })
+        .collect();
 
-    // 2. deserialize column data
+    // 3. load filters
+    let futs = col_metas
+        .iter()
+        .map(|(idx, col_chunk_meta, field)| {
+            load_column_xor8(*idx as ColumnId, field, col_chunk_meta, index_path, &dal)
+        })
+        .collect::<Vec<_>>();
 
-    // wrapping around Arc<Vec<u8>>, so that bytes clone can be avoided
-    // later in the construction of PageReader
-    struct Wrap(Arc<Vec<u8>>);
-    impl AsRef<[u8]> for Wrap {
-        #[inline]
-        fn as_ref(&self) -> &[u8] {
-            self.0.as_ref()
-        }
-    }
-    let columns = row_group.columns();
-    tracing::debug_span!("build_array_iter").in_scope(|| {
-        for (bytes, col_idx) in cols_data.into_iter() {
-            // Perf.
-            {
-                metrics_inc_block_index_read_bytes(bytes.len() as u64);
-            }
+    let cols_data = try_join_all(futs).await?;
+    let filter_block: Vec<Arc<Xor8>> = cols_data.into_iter().map(|(x, _)| x).collect();
 
-            let compression_codec = columns[0]
-                .column_chunk()
-                .meta_data
-                .as_ref()
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!("column meta is none, idx {}", col_idx))
-                })?
-                .codec;
+    // 4. build index schema
+    let fields = col_metas
+        .iter()
+        .map(|(_, col_chunk_mea, _)| {
+            TableField::new(
+                &col_chunk_mea.descriptor().path_in_schema[0],
+                TableDataType::String,
+            )
+        })
+        .collect();
 
-            // TODO(xuanwo): return a understandable error code to user
-            let compression = Compression::try_from(compression_codec).map_err(|e| {
-                ErrorCode::Internal(format!("unrecognized compression: {} ", e))
-            })?;
-            let descriptor = file_meta.schema_descr.columns()[col_idx].descriptor.clone();
+    let filter_schema = TableSchema::new(fields);
 
-            let page_meta_data = PageMetaData {
-                column_start: 0,
-                num_values: num_values as i64,
-                compression,
-                descriptor,
-            };
-
-            let wrapped = Wrap(bytes);
-            let page_reader = PageReader::new_with_page_meta(
-                std::io::Cursor::new(wrapped), // we can not use &[u8] as Reader here, lifetime not valid
-                page_meta_data,
-                Arc::new(|_, _| true),
-                vec![],
-                usize::MAX,
-            );
-            let decompressor = BasicDecompressor::new(page_reader, vec![]);
-            let decompressors = vec![decompressor];
-            let types = vec![&column_descriptors[col_idx].descriptor.primitive_type];
-            let field = arrow_schema.fields[col_idx].clone();
-            let arrays = tracing::debug_span!("iter_to_arrays").in_scope(|| {
-                column_iter_to_arrays(decompressors, types, field, Some(num_values), num_values)
-            })?;
-            columns_array_iter.push(arrays);
-        }
-        Ok::<_, ErrorCode>(())
-    })?;
-
-    let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_values, None);
-    let next = tracing::debug_span!("deserializer_next").in_scope(|| deserializer.next());
-
-    match next {
-        None => Err(ErrorCode::Internal(
-            "deserialize row group: fail to get a chunk",
-        )),
-        Some(Err(cause)) => Err(ErrorCode::from(cause)),
-        Some(Ok(chunk)) => {
-            let span = tracing::info_span!("from_chunk");
-            let filter_block =
-                span.in_scope(|| DataBlock::from_arrow_chunk(&chunk, &(&filter_schema).into()))?;
-            Ok(BlockFilter {
-                filter_schema,
-                filter_block,
-            })
-        }
-    }
+    Ok(BlockFilter {
+        filter_schema: Arc::new(filter_schema),
+        filter_block,
+    })
 }
 
 /// Loads bytes and index of the given column.
 /// read data from cache, or populate cache items if possible
 #[tracing::instrument(level = "debug", skip_all)]
-async fn load_column_bytes(
-    _ctx: &Arc<dyn TableContext>, // TODO funny lifetime compile error, if this commented out
-    file_meta: &FileMetaData,
-    col_name: &str,
-    path: &str,
-    dal: &Operator,
-) -> Result<(Arc<Vec<u8>>, usize)> {
+async fn load_column_xor8<'a>(
+    idx: ColumnId,
+    field: &'a common_arrow::arrow::datatypes::Field,
+    col_chunk_meta: &'a ColumnChunkMetaData,
+    index_path: &'a str,
+    dal: &'a Operator,
+) -> Result<(Arc<Xor8>, ColumnId)> {
     let storage_runtime = GlobalIORuntime::instance();
-    let cols = file_meta.row_groups[0].columns();
-    if let Some((idx, col_meta)) = cols
-        .iter()
-        .enumerate()
-        .find(|(_, c)| c.descriptor().path_in_schema[0] == col_name)
-    {
-        let bytes = {
-            let column_data_reader = BloomIndexColumnReader::new(
-                path.to_owned(),
-                idx as ColumnId,
-                col_meta,
-                dal.clone(),
-            );
-            async move { column_data_reader.read().await }
-        }
-        .execute_in_runtime(&storage_runtime)
-        .await??;
-        Ok((bytes, idx))
-    } else {
-        Err(ErrorCode::Internal(format!(
-            "failed to find bloom index column. no such column {col_name}"
-        )))
+    let bytes = {
+        let column_data_reader = BloomIndexColumnReader::new(
+            index_path.to_owned(),
+            idx,
+            col_chunk_meta,
+            dal.clone(),
+            field,
+        );
+        async move { column_data_reader.read().await }
     }
+    .execute_in_runtime(&storage_runtime)
+    .await??;
+    Ok((bytes, idx))
 }
 
 /// Loads index meta data
 /// read data from cache, or populate cache items if possible
 #[tracing::instrument(level = "debug", skip_all)]
 async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<BloomIndexMeta>> {
-    let storage_runtime = GlobalIORuntime::instance();
     let path_owned = path.to_owned();
     async move {
         let reader = MetaReaders::file_meta_data_reader(dal);
@@ -235,24 +142,8 @@ async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<B
 
         reader.read(&load_params).await
     }
-    .execute_in_runtime(&storage_runtime)
+    .execute_in_runtime(&GlobalIORuntime::instance())
     .await?
-}
-
-#[tracing::instrument(level = "debug", skip_all)]
-async fn load_index_column_data_from_storage(
-    col_meta: ColumnChunkMetaData,
-    dal: Operator,
-    path: String,
-) -> Result<Vec<u8>> {
-    let chunk_meta = col_meta.metadata();
-    let chunk_offset = chunk_meta.data_page_offset as u64;
-    let col_len = chunk_meta.total_compressed_size as u64;
-    let column_reader = dal.object(&path);
-    let bytes = column_reader
-        .range_read(chunk_offset..chunk_offset + col_len)
-        .await?;
-    Ok(bytes)
 }
 
 #[async_trait::async_trait]

@@ -2088,6 +2088,7 @@ dependencies = [
  "tracing",
  "typetag",
  "uuid",
+ "xorfilter-rs",
 ]
 
 [[package]]
@@ -7783,6 +7784,7 @@ dependencies = [
  "once_cell",
  "serde",
  "storages-common-cache",
+ "xorfilter-rs",
 ]
 
 [[package]]

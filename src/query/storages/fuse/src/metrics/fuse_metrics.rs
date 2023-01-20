@@ -95,17 +95,17 @@ pub fn metrics_inc_block_index_write_milliseconds(c: u64) {
     increment_gauge!(key!("block_index_write_milliseconds"), c as f64);
 }
 
-pub fn metrics_inc_block_index_read_nums(c: u64) {
-    increment_gauge!(key!("block_index_read_nums"), c as f64);
-}
+// pub fn metrics_inc_block_index_read_nums(c: u64) {
+//    increment_gauge!(key!("block_index_read_nums"), c as f64);
+//}
 
-pub fn metrics_inc_block_index_read_bytes(c: u64) {
-    increment_gauge!(key!("block_index_read_bytes"), c as f64);
-}
+// pub fn metrics_inc_block_index_read_bytes(c: u64) {
+//    increment_gauge!(key!("block_index_read_bytes"), c as f64);
+//}
 
-pub fn metrics_inc_block_index_read_milliseconds(c: u64) {
-    increment_gauge!(key!("block_index_read_milliseconds"), c as f64);
-}
+// pub fn metrics_inc_block_index_read_milliseconds(c: u64) {
+//    increment_gauge!(key!("block_index_read_milliseconds"), c as f64);
+//}
 
 /// Compact metrics.
 pub fn metrics_inc_compact_block_read_nums(c: u64) {

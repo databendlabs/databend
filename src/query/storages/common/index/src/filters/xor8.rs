@@ -35,7 +35,7 @@ pub struct Xor8Builder {
 }
 
 pub struct Xor8Filter {
-    filter: Xor8,
+    pub filter: Xor8,
 }
 
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]

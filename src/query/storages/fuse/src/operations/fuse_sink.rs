@@ -70,16 +70,18 @@ impl BloomIndexState {
         location: Location,
     ) -> Result<Option<Self>> {
         // write index
-        let bloom_index = BloomIndex::try_create(
+        let maybe_bloom_index = BloomIndex::try_create(
             ctx.try_get_function_context()?,
             source_schema,
             location.1,
             &[block],
         )?;
-        if let Some(bloom_index) = bloom_index {
-            let index_block = bloom_index.filter_block;
+        if let Some(bloom_index) = maybe_bloom_index {
+            let index_block = bloom_index.serialize_to_data_block();
+            let filter_schema = bloom_index.filter_schema;
+            let column_distinct_count = bloom_index.column_distinct_count;
             let mut data = Vec::with_capacity(100 * 1024);
-            let index_block_schema = &bloom_index.filter_schema;
+            let index_block_schema = &filter_schema;
             let (size, _) = blocks_to_parquet(
                 index_block_schema,
                 vec![index_block],
@@ -90,7 +92,7 @@ impl BloomIndexState {
                 data,
                 size,
                 location,
-                column_distinct_count: bloom_index.column_distinct_count,
+                column_distinct_count,
             }))
         } else {
             Ok(None)
