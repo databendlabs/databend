@@ -54,7 +54,7 @@ docker run \
 docker run \
     -p 8000:8000 \
     -e QUERY_STORAGE_TYPE=s3 \
-    -e AWS_S3_ENDPOINT="http://some_s3_endpoint \
+    -e AWS_S3_ENDPOINT="http://some_s3_endpoint" \
     -e AWS_S3_BUCKET=some_bucket \
     -e AWS_ACCESS_KEY_ID=some_key \
     -e AWS_SECRET_ACCESS_KEY=some_secret \
