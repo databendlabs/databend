@@ -20,9 +20,9 @@ use std::collections::VecDeque;
 use super::constants::*;
 use super::error::*;
 use super::jentry::JEntry;
+use super::json_path::JsonPathRef;
 use super::number::Number;
 use super::parser::decode_value;
-use super::value::JsonPath;
 use super::value::Value;
 
 // builtin functions for `JSONB` bytes and `JSON` strings without decode all Values.
@@ -206,7 +206,7 @@ pub fn get_by_name_ignore_case(value: &[u8], name: &str) -> Option<Vec<u8>> {
 /// Get the inner value by JSON path of `JSONB` object.
 /// JSON path can be a nested index or name,
 /// used to get inner value of array and object respectively.
-pub fn get_by_path<'a>(value: &'a [u8], paths: Vec<JsonPath<'a>>) -> Option<Vec<u8>> {
+pub fn get_by_path<'a>(value: &'a [u8], paths: Vec<JsonPathRef<'a>>) -> Option<Vec<u8>> {
     if !is_jsonb(value) {
         let json_value = decode_value(value).unwrap();
         return json_value.get_by_path(&paths).map(Value::to_vec);
@@ -219,7 +219,7 @@ pub fn get_by_path<'a>(value: &'a [u8], paths: Vec<JsonPath<'a>>) -> Option<Vec<
         let path = paths.get(i).unwrap();
         let header = read_u32(value, offset).unwrap();
         let (jentry_offset, val_offset) = match path {
-            JsonPath::String(name) => {
+            JsonPathRef::String(name) => {
                 if header & CONTAINER_HEADER_TYPE_MASK != OBJECT_CONTAINER_TAG {
                     return None;
                 }
@@ -259,7 +259,7 @@ pub fn get_by_path<'a>(value: &'a [u8], paths: Vec<JsonPath<'a>>) -> Option<Vec<
                 }
                 (jentry_offset, val_offset)
             }
-            JsonPath::UInt64(index) => {
+            JsonPathRef::UInt64(index) => {
                 if header & CONTAINER_HEADER_TYPE_MASK != ARRAY_CONTAINER_TAG {
                     return None;
                 }
@@ -867,7 +867,7 @@ pub fn is_object(value: &[u8]) -> bool {
 
 /// Parse path string to Json path.
 /// Support `["<name>"]`, `[<index>]`, `:name` and `.name`.
-pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
+pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPathRef>, Error> {
     let mut idx = 0;
     let mut prev_idx = 0;
     let mut json_paths = Vec::new();
@@ -893,7 +893,7 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                     return Err(Error::InvalidToken);
                 }
                 let s = std::str::from_utf8(&path[prev_idx..idx - 2])?;
-                let json_path = JsonPath::String(Cow::Borrowed(s));
+                let json_path = JsonPathRef::String(Cow::Borrowed(s));
 
                 json_paths.push(json_path);
             } else {
@@ -909,7 +909,7 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                 }
                 let s = std::str::from_utf8(&path[prev_idx..idx - 1])?;
                 if let Ok(v) = s.parse::<u64>() {
-                    let json_path = JsonPath::UInt64(v);
+                    let json_path = JsonPathRef::UInt64(v);
                     json_paths.push(json_path);
                 } else {
                     return Err(Error::InvalidToken);
@@ -929,7 +929,7 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                 }
             }
             let s = std::str::from_utf8(&path[prev_idx..idx - 1])?;
-            let json_path = JsonPath::String(Cow::Borrowed(s));
+            let json_path = JsonPathRef::String(Cow::Borrowed(s));
             if json_paths.is_empty() {
                 json_paths.push(json_path);
             } else {
@@ -956,7 +956,7 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                 return Err(Error::InvalidToken);
             }
             let s = std::str::from_utf8(&path[prev_idx..idx])?;
-            let json_path = JsonPath::String(Cow::Borrowed(s));
+            let json_path = JsonPathRef::String(Cow::Borrowed(s));
             json_paths.push(json_path);
         }
     }

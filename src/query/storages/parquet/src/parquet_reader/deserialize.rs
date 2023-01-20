@@ -45,6 +45,10 @@ impl ParquetReader {
         chunks: Vec<(usize, Vec<u8>)>,
         filter: Option<Bitmap>,
     ) -> Result<DataBlock> {
+        if chunks.is_empty() {
+            return Ok(DataBlock::new(vec![], part.num_rows));
+        }
+
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projected_arrow_schema.fields.len());
         let mut nested_columns_array_iter =

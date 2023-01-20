@@ -63,7 +63,7 @@ use common_jsonb::to_f64;
 use common_jsonb::to_i64;
 use common_jsonb::to_str;
 use common_jsonb::to_u64;
-use common_jsonb::JsonPath;
+use common_jsonb::JsonPathRef;
 use common_jsonb::Number as JsonbNumber;
 use common_jsonb::Value as JsonbValue;
 
@@ -279,7 +279,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     if val.is_empty() {
                         None
                     } else {
-                        let json_path = JsonPath::UInt64(idx);
+                        let json_path = JsonPathRef::UInt64(idx);
                         get_by_path(val, vec![json_path])
                     }
                 }
@@ -305,7 +305,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 err
                             )
                         }).ok()?;
-                        let json_path = JsonPath::String(Cow::Borrowed(&name));
+                        let json_path = JsonPathRef::String(Cow::Borrowed(&name));
                         get_by_path(val, vec![json_path])
                     }
                 }

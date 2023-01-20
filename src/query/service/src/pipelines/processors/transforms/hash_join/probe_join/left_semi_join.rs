@@ -89,8 +89,10 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        // If there is no build key, the result is input
+        // Eg: select * from onecolumn as a right semi join twocolumn as b on true order by b.x
+        let mut probe_indexes = Vec::with_capacity(input.num_rows());
         let valids = &probe_state.valids;
-        let mut probe_indexes = Vec::with_capacity(keys_iter.size_hint().0);
 
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
@@ -133,7 +135,7 @@ impl JoinHashTable {
 
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
         // For semi join, it defaults to all
-        let mut row_state = vec![0_u32; keys_iter.size_hint().0];
+        let mut row_state = vec![0_u32; input.num_rows()];
         let dummy_probed_rows = vec![RowPtr {
             chunk_index: 0,
             row_index: 0,

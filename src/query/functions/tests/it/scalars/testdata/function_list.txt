@@ -913,8 +913,8 @@ geo_distance(Float64, Float64, Float64, Float64) :: Float32
 geo_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 geo_to_h3(Float64, Float64, UInt8) :: UInt64
 geo_to_h3(Float64 NULL, Float64 NULL, UInt8 NULL) :: UInt64 NULL
-geohash_decode(String) :: (Float64, Float64)
-geohash_decode(String NULL) :: (Float64, Float64) NULL
+geohash_decode(String) :: Tuple(Float64, Float64)
+geohash_decode(String NULL) :: Tuple(Float64, Float64) NULL
 geohash_encode(Float64, Float64) :: String
 geohash_encode(Float64 NULL, Float64 NULL) :: String NULL
 geohash_encode(Float64, Float64, UInt8) :: String

@@ -1,0 +1,31 @@
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+create table t(MobilePhoneModel String);
+
+statement ok
+insert into t select if(rand() > 0.1, 'iPhone', 'iPod') from numbers(10000);
+
+statement ok
+insert into t select if(rand() > 0.2, 'iP', 'iPod') from numbers(1000);
+
+statement ok
+insert into t values('iP'), ('iPod'), ('iPhone');
+
+statement ok
+set group_by_two_level_threshold = 0;
+
+query TIFS
+SELECT COUNT() FROM (SELECT MobilePhoneModel, count(), count_if(3 > 1) c FROM t WHERE MobilePhoneModel in( 'iPod','iP', 'iPhone') GROUP BY MobilePhoneModel ORDER BY c DESC);
+----
+3
+
+statement ok
+drop table t
