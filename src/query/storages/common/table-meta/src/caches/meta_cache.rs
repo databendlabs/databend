@@ -38,6 +38,10 @@ pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
 pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
 
 // Bind Type of cached objects to Caches
+//
+// The `Cache` returned should
+// - cache item s of Type `T`
+// - and implement `CacheAccessor` properly
 pub trait CachedMeta<T> {
     type Cache: CacheAccessor<String, T>;
     fn cache() -> Option<Self::Cache>;
@@ -71,9 +75,9 @@ impl CachedMeta<BloomIndexMeta> for BloomIndexMeta {
     }
 }
 
-impl CachedMeta<BloomIndexMeta> for FileMetaData {
-    type Cache = BloomIndexMetaCache;
+impl CachedMeta<FileMetaData> for FileMetaData {
+    type Cache = FileMetaDataCache;
     fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_bloom_index_meta_cache()
+        CacheManager::instance().get_file_meta_data_cache()
     }
 }
