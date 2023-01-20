@@ -31,7 +31,6 @@ pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) ->
         distribution: Distribution::Any,
     };
     let mut result = require_property(ctx, &required, s_expr)?;
-    // Issue: SELECT * FROM (onecolumn CROSS JOIN twocolumn JOIN onecolumn AS a(b) ON a.b=twocolumn.x JOIN twocolumn AS c(d,e) ON a.b=c.d AND c.d=onecolumn.x) ORDER BY 1 LIMIT 1;
     push_down_topk_to_merge(&mut result, None)?;
     let rel_expr = RelExpr::with_s_expr(&result);
     let physical_prop = rel_expr.derive_physical_prop()?;
