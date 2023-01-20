@@ -154,6 +154,24 @@ jobs:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
 
+  test_sqllogic_management_mode_linux:
+    timeout-minutes: 30
+    name: test_sqllogic_${{ matrix.dirs }}_linux
+    runs-on: [ self-hosted, X64, Linux, development ]
+    needs: build_gnu
+    strategy:
+      matrix:
+        dirs:
+          - "management"
+        handlers:
+          - "mysql,http,clickhouse"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_sqllogic_management_mode_linux
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+
   test_sqllogic_cluster_linux:
     timeout-minutes: 30
     name: test_sqllogic_${{ matrix.dirs }}_cluster_linux

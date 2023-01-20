@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_ast::ast::FormatTreeNode;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
@@ -34,14 +33,17 @@ use super::Sort;
 use super::TableScan;
 use super::UnionAll;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::DistributedInsertSelect;
+use crate::executor::ExchangeSink;
+use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 use crate::ColumnEntry;
 
 impl PhysicalPlan {
-    pub fn format(&self, metadata: MetadataRef) -> Result<String> {
-        to_format_tree(self, &metadata)?.format_pretty()
+    pub fn format(&self, metadata: MetadataRef) -> Result<FormatTreeNode<String>> {
+        to_format_tree(self, &metadata)
     }
 }
 
@@ -58,10 +60,10 @@ fn to_format_tree(plan: &PhysicalPlan, metadata: &MetadataRef) -> Result<FormatT
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata),
         PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata),
         PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata),
-        PhysicalPlan::ExchangeSource(_)
-        | PhysicalPlan::ExchangeSink(_)
-        | PhysicalPlan::DistributedInsertSelect(_) => {
-            Err(ErrorCode::Internal("Invalid physical plan"))
+        PhysicalPlan::ExchangeSource(plan) => exchange_source_to_format_tree(plan),
+        PhysicalPlan::ExchangeSink(plan) => exchange_sink_to_format_tree(plan, metadata),
+        PhysicalPlan::DistributedInsertSelect(plan) => {
+            distributed_insert_to_format_tree(plan.as_ref(), metadata)
         }
     }
 }
@@ -484,4 +486,49 @@ fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNode<St
         "estimated rows: {0:.2}",
         info.estimated_rows
     ))]
+}
+
+fn exchange_source_to_format_tree(plan: &ExchangeSource) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![];
+
+    children.push(FormatTreeNode::new(format!(
+        "source fragment: [{}]",
+        plan.source_fragment_id
+    )));
+
+    Ok(FormatTreeNode::with_children(
+        "ExchangeSource".to_string(),
+        children,
+    ))
+}
+
+fn exchange_sink_to_format_tree(
+    plan: &ExchangeSink,
+    metadata: &MetadataRef,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![];
+
+    children.push(FormatTreeNode::new(format!(
+        "destination fragment: [{}]",
+        plan.destination_fragment_id
+    )));
+
+    children.push(to_format_tree(&plan.input, metadata)?);
+
+    Ok(FormatTreeNode::with_children(
+        "ExchangeSink".to_string(),
+        children,
+    ))
+}
+
+fn distributed_insert_to_format_tree(
+    plan: &DistributedInsertSelect,
+    metadata: &MetadataRef,
+) -> Result<FormatTreeNode<String>> {
+    let children = vec![to_format_tree(&plan.input, metadata)?];
+
+    Ok(FormatTreeNode::with_children(
+        "DistributedInsertSelect".to_string(),
+        children,
+    ))
 }

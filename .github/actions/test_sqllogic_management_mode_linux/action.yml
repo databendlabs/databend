@@ -1,0 +1,33 @@
+name: "Test sqllogic management mode"
+description: "Running sqllogic tests in management mode"
+inputs:
+  profile:
+    description: "The profile for this test"
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+  dirs:
+    description: "logic test suites dirs"
+    required: true
+    default: ""
+  handlers:
+    description: "logic test handlers, mysql,http,clickhouse"
+    required: false
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        profile: ${{ inputs.profile }}
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+    - name: Run sqllogic Tests with management mode
+      shell: bash
+      env:
+        TEST_HANDLERS: ${{ inputs.handlers }}
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-management-mode.sh ${{ inputs.dirs }}
