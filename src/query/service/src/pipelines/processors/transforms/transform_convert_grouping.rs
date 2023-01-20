@@ -42,6 +42,10 @@ use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
 
 static MAX_BUCKET_NUM: isize = 256;
+// Overflow to object storage data block
+static OVERFLOW_BUCKET_NUM: isize = -2;
+// Single level data block
+static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 
 ///
 #[derive(Debug)]
@@ -205,7 +209,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
         }
 
         if self.working_bucket == 1 {
-            if self.buckets_blocks.contains_key(&-2) || self.buckets_blocks.contains_key(&-1) {
+            if self.buckets_blocks.contains_key(&OVERFLOW_BUCKET_NUM)
+                || self.buckets_blocks.contains_key(&SINGLE_LEVEL_BUCKET_NUM)
+            {
                 return Ok(Event::Sync);
             }
 
@@ -246,7 +252,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                         None => {
                             port.finish();
                             *input = InputPortState::Finished;
-                            match self.buckets_blocks.entry(-1) {
+                            match self.buckets_blocks.entry(SINGLE_LEVEL_BUCKET_NUM) {
                                 Entry::Vacant(v) => {
                                     v.insert(vec![data_block]);
                                 }
@@ -255,10 +261,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                                 }
                             };
                         }
-                        Some(info) if info.bucket == -1 => {
+                        Some(info) if info.bucket == SINGLE_LEVEL_BUCKET_NUM => {
                             port.finish();
                             *input = InputPortState::Finished;
-                            match self.buckets_blocks.entry(-1) {
+                            match self.buckets_blocks.entry(SINGLE_LEVEL_BUCKET_NUM) {
                                 Entry::Vacant(v) => {
                                     v.insert(vec![data_block]);
                                 }
@@ -283,7 +289,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                             Some(_) => {
                                 // Skipping overflow block.
                                 all_port_prepared_data = false;
-                                match self.buckets_blocks.entry(-2) {
+                                match self.buckets_blocks.entry(OVERFLOW_BUCKET_NUM) {
                                     Entry::Vacant(v) => {
                                         v.insert(vec![data_block]);
                                     }
@@ -305,14 +311,18 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
 
         if all_port_prepared_data {
             // current working bucket is process completed.
-            if self.working_bucket == 0 && self.buckets_blocks.contains_key(&-1) {
+            if self.working_bucket == 0
+                && self.buckets_blocks.contains_key(&SINGLE_LEVEL_BUCKET_NUM)
+            {
                 // all single level data block
                 if self.buckets_blocks.len() == 1 {
                     self.working_bucket = 256;
 
-                    if let Some(bucket_blocks) = self.buckets_blocks.remove(&-1) {
+                    if let Some(bucket_blocks) =
+                        self.buckets_blocks.remove(&SINGLE_LEVEL_BUCKET_NUM)
+                    {
                         self.output.push_data(Ok(DataBlock::empty_with_meta(
-                            ConvertGroupingMetaInfo::create(-1, bucket_blocks),
+                            ConvertGroupingMetaInfo::create(SINGLE_LEVEL_BUCKET_NUM, bucket_blocks),
                         )));
                     }
 
@@ -351,10 +361,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(overflow_blocks) = self.buckets_blocks.get_mut(&-2) {
+        if let Some(overflow_blocks) = self.buckets_blocks.get_mut(&OVERFLOW_BUCKET_NUM) {
             match overflow_blocks.pop() {
                 None => {
-                    self.buckets_blocks.remove(&-2);
+                    self.buckets_blocks.remove(&OVERFLOW_BUCKET_NUM);
                 }
                 Some(data_block) => {
                     if let Some(meta) = data_block.get_meta() {
@@ -379,10 +389,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
             };
         }
 
-        if let Some(single_level_blocks) = self.buckets_blocks.get_mut(&-1) {
+        if let Some(single_level_blocks) = self.buckets_blocks.get_mut(&SINGLE_LEVEL_BUCKET_NUM) {
             match single_level_blocks.pop() {
                 None => {
-                    self.buckets_blocks.remove(&-1);
+                    self.buckets_blocks.remove(&SINGLE_LEVEL_BUCKET_NUM);
                 }
                 Some(data_block) => {
                     let blocks = self.convert_to_two_level(data_block)?;
