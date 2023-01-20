@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+if [ -z "$(which cargo-make)" ]; then
+    echo "Installing cargo-make..."
+    cargo install cargo-make --version "^0.36"
+fi
+
+touch databend.dev.env
+
+if [ $# -eq 0 ] || [ "$1" == "-h" ] || [ "$1" ==  "--help" ]; then
+    cargo make --list-all-steps
+    exit 0
+fi
+
+cargo make "$@"

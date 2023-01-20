@@ -60,3 +60,6 @@ __pycache__/
 
 # tpch data set
 benchmark/tpch/data
+
+# dddev
+databend.dev.env

@@ -1,0 +1,43 @@
+env_files = ["./databend.dev.env"]
+
+[config]
+default_to_workspace = true
+skip_core_tasks = true
+skip_git_env_info = true
+skip_rust_env_info = false
+skip_crate_env_info = true
+
+[tasks.check-clippy]
+category = "Databend - Check"
+description = "Run cargo clippy check"
+script = """
+#!/usr/bin/env bash
+echo "Running $(tput setaf 4)cargo clippy$(tput sgr0) checks"
+cargo clippy --all-targets --all-features -- -D warnings
+echo "If cargo clippy check failed or generates warning, you may run $(tput setaf 4)cargo clippy --workspace --all-targets --fix$(tput sgr0) to fix it. Note that clippy fix requires manual review, as not all auto fixes are guaranteed to be reasonable."
+"""
+
+[tasks.check-fmt]
+category = "Databend - Check"
+description = "Run cargo fmt check and attempt to fix"
+script = """
+#!/usr/bin/env bash
+echo "Running $(tput setaf 4)cargo fmt$(tput sgr0) checks and attempting to fix"
+cargo fmt --all
+test $? -eq 0 || exit 1
+"""
+
+[tasks.check]
+category = "Databend - Check"
+dependencies = [
+  "check-clippy",
+  "check-fmt",
+]
+script = """
+#!/usr/bin/env bash
+echo "Good work!"
+"""
+description = "Perform pre-CI checks and automatically fix cargo sort, cargo fmt warnings"
+
+[tasks.c]
+alias = "check"
