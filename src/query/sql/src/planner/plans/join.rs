@@ -389,7 +389,6 @@ impl Operator for Join {
         // if join/probe side is Serial or join key is empty, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial
-            || self.left_conditions.is_empty()
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
