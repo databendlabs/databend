@@ -174,7 +174,9 @@ impl ExchangeSourceTransform {
             &Default::default(),
         )?;
 
-        let meta = match bincode::deserialize(&fragment_data.get_meta()[4..]) {
+        const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
+
+        let meta = match bincode::deserialize(&fragment_data.get_meta()[ROW_HEADER_SIZE..]) {
             Ok(meta) => Ok(meta),
             Err(_) => Err(ErrorCode::BadBytes(
                 "block meta deserialize error when exchange",
@@ -182,7 +184,7 @@ impl ExchangeSourceTransform {
         }?;
         let mut block = DataBlock::from_arrow_chunk(&batch, schema)?.add_meta(meta)?;
         if block.num_columns() == 0 {
-            let mut row_count_meta = &fragment_data.get_meta()[..4];
+            let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
             let row_count: u32 = row_count_meta.read_scalar()?;
             block = DataBlock::new(vec![], row_count as usize).add_meta(block.take_meta())?;
         }
