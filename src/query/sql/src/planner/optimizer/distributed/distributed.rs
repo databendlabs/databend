@@ -24,7 +24,6 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Exchange;
-use crate::plans::Limit;
 use crate::plans::RelOperator;
 
 pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) -> Result<SExpr> {
@@ -32,9 +31,8 @@ pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) ->
         distribution: Distribution::Any,
     };
     let mut result = require_property(ctx, &required, s_expr)?;
-    // todo(xudong): we can't push down topk to merge now, it has bugs
-    // Issue: explain  SELECT * FROM (onecolumn CROSS JOIN twocolumn JOIN onecolumn AS a(b) ON a.b=twocolumn.x JOIN twocolumn AS c(d,e) ON a.b=c.d AND c.d=onecolumn.x) ORDER BY 1 LIMIT 1;
-    // push_down_topk_to_merge(&mut result, None)?;
+    // Issue: SELECT * FROM (onecolumn CROSS JOIN twocolumn JOIN onecolumn AS a(b) ON a.b=twocolumn.x JOIN twocolumn AS c(d,e) ON a.b=c.d AND c.d=onecolumn.x) ORDER BY 1 LIMIT 1;
+    push_down_topk_to_merge(&mut result, None)?;
     let rel_expr = RelExpr::with_s_expr(&result);
     let physical_prop = rel_expr.derive_physical_prop()?;
     let root_required = RequiredProperty {
@@ -48,7 +46,6 @@ pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) ->
     Ok(result)
 }
 
-#[allow(dead_code)]
 // Traverse the SExpr tree to find top_k, if find, push down it to Exchange::Merge
 fn push_down_topk_to_merge(s_expr: &mut SExpr, mut top_k: Option<TopK>) -> Result<()> {
     if let RelOperator::Exchange(Exchange::Merge) = s_expr.plan {
@@ -60,21 +57,16 @@ fn push_down_topk_to_merge(s_expr: &mut SExpr, mut top_k: Option<TopK>) -> Resul
         if let Some(top_k) = top_k {
             let child = &mut s_expr.children[0];
             *child = SExpr::create_unary(top_k.sort.into(), child.clone());
-            *child = SExpr::create_unary(top_k.limit.into(), child.clone());
         }
         return Ok(());
     }
+
+    top_k = None;
     for child in s_expr.children.iter_mut() {
         if let RelOperator::Sort(sort) = &child.plan {
             // If limit.limit is None, no need to push down.
-            if let Some(count) = sort.limit {
-                top_k = Some(TopK {
-                    sort: sort.clone(),
-                    limit: Limit {
-                        limit: Some(count),
-                        offset: 0,
-                    },
-                });
+            if let Some(_) = sort.limit {
+                top_k = Some(TopK { sort: sort.clone() });
             }
         }
         push_down_topk_to_merge(child, top_k.clone())?;
