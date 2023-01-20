@@ -1559,6 +1559,7 @@ dependencies = [
  "byteorder",
  "fast-float",
  "ordered-float 3.4.0",
+ "serde",
  "serde_json",
 ]
 
