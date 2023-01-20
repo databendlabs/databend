@@ -89,8 +89,14 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
-        let valids = &probe_state.valids;
+        // If there is no build key, the result is input
+        // Eg: select * from onecolumn as a right semi join twocolumn as b on true order by b.x
+        if self.hash_join_desc.build_keys.is_empty() {
+            return Ok(vec![input.clone()]);
+        }
+
         let mut probe_indexes = Vec::with_capacity(keys_iter.size_hint().0);
+        let valids = &probe_state.valids;
 
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
@@ -221,6 +227,10 @@ impl JoinHashTable {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
+        }
+
+        if self.hash_join_desc.build_keys.is_empty() {
+            probe_indexes = (0..input.num_rows()).map(|i| i as u32).collect();
         }
 
         let probe_block = DataBlock::take(input, &probe_indexes)?;
