@@ -440,7 +440,7 @@ evaluation (internal):
 
 ast            : contains([(1,'2', 3, false), (1,'2', 4, true), null], (1,'2', 3, false))
 raw expr       : contains(array(tuple(1_u8, "2", 3_u8, false), tuple(1_u8, "2", 4_u8, true), NULL), tuple(1_u8, "2", 3_u8, false))
-checked expr   : contains<T0=(UInt8, String, UInt8, Boolean) NULL><Array(T0), T0>(array<T0=(UInt8, String, UInt8, Boolean) NULL><T0, T0, T0>(CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS (UInt8, String, UInt8, Boolean) NULL), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 4_u8, true) AS (UInt8, String, UInt8, Boolean) NULL), CAST(NULL AS (UInt8, String, UInt8, Boolean) NULL)), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS (UInt8, String, UInt8, Boolean) NULL))
+checked expr   : contains<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><Array(T0), T0>(array<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><T0, T0, T0>(CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 4_u8, true) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST(NULL AS Tuple(UInt8, String, UInt8, Boolean) NULL)), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
