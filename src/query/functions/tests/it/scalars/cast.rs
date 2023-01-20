@@ -36,6 +36,7 @@ fn test_cast() {
         test_cast_between_date_and_timestamp(file, is_try);
         test_cast_between_string_and_timestamp(file, is_try);
         test_between_string_and_date(file, is_try);
+        test_cast_to_nested_type(file, is_try);
     }
 }
 
@@ -540,4 +541,49 @@ fn test_between_string_and_date(file: &mut impl Write, is_try: bool) {
         "a",
         DateType::from_data(vec![-354285, -100, 0, 100, 2932896]),
     )]);
+}
+
+fn test_cast_to_nested_type(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    run_ast(
+        file,
+        format!("{prefix}CAST(((1, TRUE), 1) AS Tuple(Tuple(INT, INT), INT))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT NULL), INT))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT), INT) NULL)"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST([(1,TRUE),(2,FALSE)] AS Array(Tuple(INT, INT)))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT)) NULL)"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT NULL)))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST([[TRUE], [FALSE, TRUE]] AS Array(Array(INT)))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST([['a'], ['b', 'c']] AS Array(Array(INT) NULL))"),
+        &[],
+    );
 }

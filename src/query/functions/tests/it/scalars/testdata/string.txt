@@ -1770,7 +1770,7 @@ has tried possible overloads:
 
 ast            : bin(a)
 raw expr       : bin(a::Int8)
-checked expr   : bin<Int64>(CAST(a AS Int64))
+checked expr   : bin<Int64>(to_int64<Int8>(a))
 evaluation:
 +--------+----------+--------------------------------------------------------------------+
 |        | a        | Output                                                             |
@@ -1814,7 +1814,7 @@ evaluation (internal):
 
 ast            : bin(b)
 raw expr       : bin(b::Int16)
-checked expr   : bin<Int64>(CAST(b AS Int64))
+checked expr   : bin<Int64>(to_int64<Int16>(b))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -1836,7 +1836,7 @@ evaluation (internal):
 
 ast            : bin(c)
 raw expr       : bin(c::UInt32)
-checked expr   : bin<Int64>(CAST(c AS Int64))
+checked expr   : bin<Int64>(to_int64<UInt32>(c))
 evaluation:
 +--------+-----------+---------+
 |        | c         | Output  |
@@ -1882,7 +1882,7 @@ has tried possible overloads:
 
 ast            : oct(a)
 raw expr       : oct(a::Int8)
-checked expr   : oct<Int64>(CAST(a AS Int64))
+checked expr   : oct<Int64>(to_int64<Int8>(a))
 evaluation:
 +--------+----------+--------------------------+
 |        | a        | Output                   |
@@ -1926,7 +1926,7 @@ evaluation (internal):
 
 ast            : oct(b)
 raw expr       : oct(b::Int16)
-checked expr   : oct<Int64>(CAST(b AS Int64))
+checked expr   : oct<Int64>(to_int64<Int16>(b))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -1948,7 +1948,7 @@ evaluation (internal):
 
 ast            : oct(c)
 raw expr       : oct(c::UInt32)
-checked expr   : oct<Int64>(CAST(c AS Int64))
+checked expr   : oct<Int64>(to_int64<UInt32>(c))
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
@@ -1994,7 +1994,7 @@ has tried possible overloads:
 
 ast            : hex(a)
 raw expr       : hex(a::Int8)
-checked expr   : hex<Int64>(CAST(a AS Int64))
+checked expr   : hex<Int64>(to_int64<Int8>(a))
 evaluation:
 +--------+----------+--------------------+
 |        | a        | Output             |
@@ -2038,7 +2038,7 @@ evaluation (internal):
 
 ast            : hex(b)
 raw expr       : hex(b::Int16)
-checked expr   : hex<Int64>(CAST(b AS Int64))
+checked expr   : hex<Int64>(to_int64<Int16>(b))
 evaluation:
 +--------+---------+--------+
 |        | b       | Output |
@@ -2060,7 +2060,7 @@ evaluation (internal):
 
 ast            : hex(c)
 raw expr       : hex(c::UInt32)
-checked expr   : hex<Int64>(CAST(c AS Int64))
+checked expr   : hex<Int64>(to_int64<UInt32>(c))
 evaluation:
 +--------+-----------+--------+
 |        | c         | Output |
@@ -2171,7 +2171,7 @@ evaluation (internal):
 
 ast            : lpad('hi', 2, '?')
 raw expr       : lpad("hi", 2_u8, "?")
-checked expr   : lpad<String, UInt64, String>("hi", CAST(2_u8 AS UInt64), "?")
+checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(2_u8), "?")
 optimized expr : "hi"
 output type    : String
 output domain  : {"hi"..="hi"}
@@ -2180,7 +2180,7 @@ output         : "hi"
 
 ast            : lpad('hi', 4, '?')
 raw expr       : lpad("hi", 4_u8, "?")
-checked expr   : lpad<String, UInt64, String>("hi", CAST(4_u8 AS UInt64), "?")
+checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(4_u8), "?")
 optimized expr : "??hi"
 output type    : String
 output domain  : {"??hi"..="??hi"}
@@ -2189,7 +2189,7 @@ output         : "??hi"
 
 ast            : lpad('hi', 0, '?')
 raw expr       : lpad("hi", 0_u8, "?")
-checked expr   : lpad<String, UInt64, String>("hi", CAST(0_u8 AS UInt64), "?")
+checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(0_u8), "?")
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -2198,7 +2198,7 @@ output         : ""
 
 ast            : lpad('hi', 1, '?')
 raw expr       : lpad("hi", 1_u8, "?")
-checked expr   : lpad<String, UInt64, String>("hi", CAST(1_u8 AS UInt64), "?")
+checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "?")
 optimized expr : "h"
 output type    : String
 output domain  : {"h"..="h"}
@@ -2219,7 +2219,7 @@ has tried possible overloads:
 
 ast            : lpad(a, b, c)
 raw expr       : lpad(a::String, b::UInt8, c::String)
-checked expr   : lpad<String, UInt64, String>(a, CAST(b AS UInt64), c)
+checked expr   : lpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
 evaluation:
 +--------+-----------------+---------+-------------+---------+
 |        | a               | b       | c           | Output  |
@@ -2243,7 +2243,7 @@ evaluation (internal):
 
 ast            : rpad('hi', 2, '?')
 raw expr       : rpad("hi", 2_u8, "?")
-checked expr   : rpad<String, UInt64, String>("hi", CAST(2_u8 AS UInt64), "?")
+checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(2_u8), "?")
 optimized expr : "hi"
 output type    : String
 output domain  : {"hi"..="hi"}
@@ -2252,7 +2252,7 @@ output         : "hi"
 
 ast            : rpad('hi', 4, '?')
 raw expr       : rpad("hi", 4_u8, "?")
-checked expr   : rpad<String, UInt64, String>("hi", CAST(4_u8 AS UInt64), "?")
+checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(4_u8), "?")
 optimized expr : "hi??"
 output type    : String
 output domain  : {"hi??"..="hi??"}
@@ -2261,7 +2261,7 @@ output         : "hi??"
 
 ast            : rpad('hi', 0, '?')
 raw expr       : rpad("hi", 0_u8, "?")
-checked expr   : rpad<String, UInt64, String>("hi", CAST(0_u8 AS UInt64), "?")
+checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(0_u8), "?")
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -2270,7 +2270,7 @@ output         : ""
 
 ast            : rpad('hi', 1, '?')
 raw expr       : rpad("hi", 1_u8, "?")
-checked expr   : rpad<String, UInt64, String>("hi", CAST(1_u8 AS UInt64), "?")
+checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "?")
 optimized expr : "h"
 output type    : String
 output domain  : {"h"..="h"}
@@ -2291,7 +2291,7 @@ has tried possible overloads:
 
 ast            : rpad(a, b, c)
 raw expr       : rpad(a::String, b::UInt8, c::String)
-checked expr   : rpad<String, UInt64, String>(a, CAST(b AS UInt64), c)
+checked expr   : rpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
 evaluation:
 +--------+-----------------+---------+-------------+---------+
 |        | a               | b       | c           | Output  |
@@ -2462,7 +2462,7 @@ output         : 0_u64
 
 ast            : locate('bar', 'foobarbar', 5)
 raw expr       : locate("bar", "foobarbar", 5_u8)
-checked expr   : locate<String, String, UInt64>("bar", "foobarbar", CAST(5_u8 AS UInt64))
+checked expr   : locate<String, String, UInt64>("bar", "foobarbar", to_uint64<UInt8>(5_u8))
 optimized expr : 7_u64
 output type    : UInt64
 output domain  : {7..=7}
@@ -2471,7 +2471,7 @@ output         : 7_u64
 
 ast            : locate(a, b, c)
 raw expr       : locate(a::String, b::String, c::UInt8)
-checked expr   : locate<String, String, UInt64>(a, b, CAST(c AS UInt64))
+checked expr   : locate<String, String, UInt64>(a, b, to_uint64<UInt8>(c))
 evaluation:
 +--------+---------------+---------------+---------+----------------------------+
 |        | a             | b             | c       | Output                     |
@@ -2686,7 +2686,7 @@ output         : NULL
 
 ast            : repeat('3', 5)
 raw expr       : repeat("3", 5_u8)
-checked expr   : repeat<String, UInt64>("3", CAST(5_u8 AS UInt64))
+checked expr   : repeat<String, UInt64>("3", to_uint64<UInt8>(5_u8))
 optimized expr : "33333"
 output type    : String
 output domain  : {"33333"..="33333"}
@@ -2703,7 +2703,7 @@ error:
 
 ast            : repeat(a, 3)
 raw expr       : repeat(a::String, 3_u8)
-checked expr   : repeat<String, UInt64>(a, CAST(3_u8 AS UInt64))
+checked expr   : repeat<String, UInt64>(a, to_uint64<UInt8>(3_u8))
 optimized expr : repeat<String, UInt64>(a, 3_u64)
 evaluation:
 +--------+-------------+---------+
@@ -2742,7 +2742,7 @@ error:
 
 ast            : insert('Quadratic', 3, 4, 'What')
 raw expr       : insert("Quadratic", 3_u8, 4_u8, "What")
-checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST(3_u8 AS Int64), CAST(4_u8 AS Int64), "What")
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(4_u8), "What")
 optimized expr : "QuWhattic"
 output type    : String
 output domain  : {"QuWhattic"..="QuWhattic"}
@@ -2751,7 +2751,7 @@ output         : "QuWhattic"
 
 ast            : insert('Quadratic', -1, 4, 'What')
 raw expr       : insert("Quadratic", minus(1_u8), 4_u8, "What")
-checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST(minus<UInt8>(1_u8) AS Int64), CAST(4_u8 AS Int64), "What")
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<Int16>(minus<UInt8>(1_u8)), to_int64<UInt8>(4_u8), "What")
 optimized expr : "Quadratic"
 output type    : String
 output domain  : {"Quadratic"..="Quadratic"}
@@ -2760,7 +2760,7 @@ output         : "Quadratic"
 
 ast            : insert('Quadratic', 3, 100, 'What')
 raw expr       : insert("Quadratic", 3_u8, 100_u8, "What")
-checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST(3_u8 AS Int64), CAST(100_u8 AS Int64), "What")
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(100_u8), "What")
 optimized expr : "QuWhat"
 output type    : String
 output domain  : {"QuWhat"..="QuWhat"}
@@ -2805,7 +2805,7 @@ output         : NULL
 
 ast            : insert(a, b, c, d)
 raw expr       : insert(a::String, b::UInt8, c::UInt8, d::String)
-checked expr   : insert<String, Int64, Int64, String>(a, CAST(b AS Int64), CAST(c AS Int64), d)
+checked expr   : insert<String, Int64, Int64, String>(a, to_int64<UInt8>(b), to_int64<UInt8>(c), d)
 evaluation:
 +--------+-----------------+---------+---------+---------------+---------+
 |        | a               | b       | c       | d             | Output  |
@@ -2857,7 +2857,7 @@ evaluation (internal):
 
 ast            : space(0)
 raw expr       : space(0_u8)
-checked expr   : space<UInt64>(CAST(0_u8 AS UInt64))
+checked expr   : space<UInt64>(to_uint64<UInt8>(0_u8))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -2866,7 +2866,7 @@ output         : ""
 
 ast            : space(5)
 raw expr       : space(5_u8)
-checked expr   : space<UInt64>(CAST(5_u8 AS UInt64))
+checked expr   : space<UInt64>(to_uint64<UInt8>(5_u8))
 optimized expr : "     "
 output type    : String
 output domain  : {"     "..="     "}
@@ -2875,7 +2875,7 @@ output         : "     "
 
 ast            : space(a)
 raw expr       : space(a::UInt8)
-checked expr   : space<UInt64>(CAST(a AS UInt64))
+checked expr   : space<UInt64>(to_uint64<UInt8>(a))
 evaluation:
 +--------+---------+--------------------+
 |        | a       | Output             |
@@ -2904,7 +2904,7 @@ evaluation (internal):
 
 ast            : left('', 0)
 raw expr       : left("", 0_u8)
-checked expr   : left<String, UInt64>("", CAST(0_u8 AS UInt64))
+checked expr   : left<String, UInt64>("", to_uint64<UInt8>(0_u8))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -2913,7 +2913,7 @@ output         : ""
 
 ast            : left('', 1)
 raw expr       : left("", 1_u8)
-checked expr   : left<String, UInt64>("", CAST(1_u8 AS UInt64))
+checked expr   : left<String, UInt64>("", to_uint64<UInt8>(1_u8))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -2922,7 +2922,7 @@ output         : ""
 
 ast            : left('123456789', a)
 raw expr       : left("123456789", a::UInt8)
-checked expr   : left<String, UInt64>("123456789", CAST(a AS UInt64))
+checked expr   : left<String, UInt64>("123456789", to_uint64<UInt8>(a))
 evaluation:
 +--------+----------+-------------+
 |        | a        | Output      |
@@ -2952,7 +2952,7 @@ evaluation (internal):
 
 ast            : right('', 0)
 raw expr       : right("", 0_u8)
-checked expr   : right<String, UInt64>("", CAST(0_u8 AS UInt64))
+checked expr   : right<String, UInt64>("", to_uint64<UInt8>(0_u8))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -2961,7 +2961,7 @@ output         : ""
 
 ast            : right('', 1)
 raw expr       : right("", 1_u8)
-checked expr   : right<String, UInt64>("", CAST(1_u8 AS UInt64))
+checked expr   : right<String, UInt64>("", to_uint64<UInt8>(1_u8))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -2970,7 +2970,7 @@ output         : ""
 
 ast            : right('123456789', a)
 raw expr       : right("123456789", a::UInt8)
-checked expr   : right<String, UInt64>("123456789", CAST(a AS UInt64))
+checked expr   : right<String, UInt64>("123456789", to_uint64<UInt8>(a))
 evaluation:
 +--------+----------+-------------+
 |        | a        | Output      |
@@ -3000,7 +3000,7 @@ evaluation (internal):
 
 ast            : mid('1234567890', -3, 3)
 raw expr       : mid("1234567890", minus(3_u8), 3_u8)
-checked expr   : substr<String, Int64, UInt64>("1234567890", CAST(minus<UInt8>(3_u8) AS Int64), CAST(3_u8 AS UInt64))
+checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)), to_uint64<UInt8>(3_u8))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
@@ -3009,7 +3009,7 @@ output         : "890"
 
 ast            : mid('1234567890', -3)
 raw expr       : mid("1234567890", minus(3_u8))
-checked expr   : substr<String, Int64>("1234567890", CAST(minus<UInt8>(3_u8) AS Int64))
+checked expr   : substr<String, Int64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
@@ -3018,7 +3018,7 @@ output         : "890"
 
 ast            : substring('', 0, 1)
 raw expr       : substr("", 0_u8, 1_u8)
-checked expr   : substr<String, Int64, UInt64>("", CAST(0_u8 AS Int64), CAST(1_u8 AS UInt64))
+checked expr   : substr<String, Int64, UInt64>("", to_int64<UInt8>(0_u8), to_uint64<UInt8>(1_u8))
 optimized expr : ""
 output type    : String
 output domain  : {""..=""}
@@ -3027,7 +3027,7 @@ output         : ""
 
 ast            : substr('Sakila' from -4 for 2)
 raw expr       : substr("Sakila", minus(4_u8), 2_u8)
-checked expr   : substr<String, Int64, UInt64>("Sakila", CAST(minus<UInt8>(4_u8) AS Int64), CAST(2_u8 AS UInt64))
+checked expr   : substr<String, Int64, UInt64>("Sakila", to_int64<Int16>(minus<UInt8>(4_u8)), to_uint64<UInt8>(2_u8))
 optimized expr : "ki"
 output type    : String
 output domain  : {"ki"..="ki"}
@@ -3036,7 +3036,7 @@ output         : "ki"
 
 ast            : substr('sakila' FROM -4)
 raw expr       : substr("sakila", minus(4_u8))
-checked expr   : substr<String, Int64>("sakila", CAST(minus<UInt8>(4_u8) AS Int64))
+checked expr   : substr<String, Int64>("sakila", to_int64<Int16>(minus<UInt8>(4_u8)))
 optimized expr : "kila"
 output type    : String
 output domain  : {"kila"..="kila"}
@@ -3045,7 +3045,7 @@ output         : "kila"
 
 ast            : substr('abc',2)
 raw expr       : substr("abc", 2_u8)
-checked expr   : substr<String, Int64>("abc", CAST(2_u8 AS Int64))
+checked expr   : substr<String, Int64>("abc", to_int64<UInt8>(2_u8))
 optimized expr : "bc"
 output type    : String
 output domain  : {"bc"..="bc"}
@@ -3054,7 +3054,7 @@ output         : "bc"
 
 ast            : substr('abc', pos, len)
 raw expr       : substr("abc", pos::Int8, len::UInt8)
-checked expr   : substr<String, Int64, UInt64>("abc", CAST(pos AS Int64), CAST(len AS UInt64))
+checked expr   : substr<String, Int64, UInt64>("abc", to_int64<Int8>(pos), to_uint64<UInt8>(len))
 evaluation:
 +--------+----------+---------+--------+
 |        | pos      | len     | Output |

@@ -100,7 +100,7 @@ evaluation (internal):
 
 ast            : great_circle_angle(0, 0, 45, 0)
 raw expr       : great_circle_angle(0_u8, 0_u8, 45_u8, 0_u8)
-checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(CAST(0_u8 AS Float64), CAST(0_u8 AS Float64), CAST(45_u8 AS Float64), CAST(0_u8 AS Float64))
+checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(to_float64<UInt8>(0_u8), to_float64<UInt8>(0_u8), to_float64<UInt8>(45_u8), to_float64<UInt8>(0_u8))
 optimized expr : 44.99998_f32
 output type    : Float32
 output domain  : {44.99998..=44.99998}
@@ -109,7 +109,7 @@ output         : 44.99998_f32
 
 ast            : great_circle_angle(0, 0, a, 0)
 raw expr       : great_circle_angle(0_u8, 0_u8, a::Float64, 0_u8)
-checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(CAST(0_u8 AS Float64), CAST(0_u8 AS Float64), a, CAST(0_u8 AS Float64))
+checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(to_float64<UInt8>(0_u8), to_float64<UInt8>(0_u8), a, to_float64<UInt8>(0_u8))
 optimized expr : great_circle_angle<Float64, Float64, Float64, Float64>(0_f64, 0_f64, a, 0_f64)
 evaluation:
 +--------+-----------+--------------+

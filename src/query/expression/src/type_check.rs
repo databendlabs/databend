@@ -164,7 +164,7 @@ pub fn check_cast<Index: ColumnIndex>(
 fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
     match ty {
         DataType::Null => Err((span, "TRY_CAST() to NULL is not supported".to_string())),
-        DataType::Nullable(_) => Ok(ty.clone()),
+        DataType::Nullable(ty) => wrap_nullable_for_try_cast(span, ty),
         DataType::Array(inner_ty) => Ok(DataType::Nullable(Box::new(DataType::Array(Box::new(
             wrap_nullable_for_try_cast(span, inner_ty)?,
         ))))),
@@ -202,7 +202,7 @@ pub fn check_function<Index: ColumnIndex>(
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
-        match try_check_function(span.clone(), args, &func.signature, &additional_rules) {
+        match try_check_function(span.clone(), args, &func.signature, &additional_rules, fn_registry) {
             Ok((checked_args, return_type, generics)) => {
                 return Ok(Expr::FunctionCall {
                     span,
@@ -317,6 +317,7 @@ pub fn try_check_function<Index: ColumnIndex>(
     args: &[Expr<Index>],
     sig: &FunctionSignature,
     additional_rules: &AutoCastSignature,
+    fn_registry: &FunctionRegistry,
 ) -> Result<(Vec<Expr<Index>>, DataType, Vec<DataType>)> {
     assert_eq!(args.len(), sig.args_type.len());
 
@@ -338,16 +339,7 @@ pub fn try_check_function<Index: ColumnIndex>(
         .zip(&sig.args_type)
         .map(|(arg, sig_type)| {
             let sig_type = subst.apply(sig_type.clone())?;
-            Ok(if arg.data_type() == &sig_type {
-                arg.clone()
-            } else {
-                Expr::Cast {
-                    span: span.clone(),
-                    is_try: false,
-                    expr: Box::new(arg.clone()),
-                    dest_type: sig_type,
-                }
-            })
+            check_cast(span.clone(), false, arg.clone(), &sig_type, fn_registry)
         })
         .collect::<Result<Vec<_>>>()?;
 

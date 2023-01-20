@@ -359,9 +359,8 @@ impl<'a> Evaluator<'a> {
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
-            if let Some(val) = self
+            if let Ok(Some(val)) = self
                 .run_simple_cast(span.clone(), src_type, dest_type, value.clone(), &cast_fn)
-                .expect("try_cast should not fail")
             {
                 return val;
             }
@@ -611,7 +610,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 dest_type,
             } => {
                 let (inner_expr, inner_domain) = self.fold_once(expr);
-
+                
                 let new_domain = if *is_try {
                     inner_domain.and_then(|inner_domain| {
                         self.calculate_try_cast(
