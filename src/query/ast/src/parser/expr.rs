@@ -1118,6 +1118,10 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             item_type: opt_item_type.map(|(_, opt_item_type, _)| Box::new(opt_item_type)),
         },
     );
+    let ty_nullable = map(
+        rule! { NULLABLE ~ ( "(" ~ #type_name ~ ")" ) },
+        |(_, item_type)| TypeName::Nullable(Box::new(item_type.1)),
+    );
     let ty_tuple = map(
         rule! { TUPLE ~ "(" ~ #comma_separated_list1(tuple_types) ~ ")" },
         |(_, _, tuple_types, _)| {
@@ -1173,10 +1177,11 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_object
             | #ty_variant
+            | #ty_nullable
             ) ~ NULL? : "type name"
         },
         |(ty, null_opt)| {
-            if null_opt.is_some() {
+            if null_opt.is_some() && !matches!(ty, TypeName::Nullable(_)) {
                 TypeName::Nullable(Box::new(ty))
             } else {
                 ty
