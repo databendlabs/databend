@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
@@ -50,7 +50,7 @@ pub struct BaseMutator {
     pub(crate) location_generator: TableMetaLocationGenerator,
     pub(crate) data_accessor: Operator,
     pub(crate) base_snapshot: Arc<TableSnapshot>,
-    pub(crate) thresholds: BlockCompactThresholds,
+    pub(crate) thresholds: BlockThresholds,
 }
 
 impl BaseMutator {
@@ -59,7 +59,7 @@ impl BaseMutator {
         op: Operator,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
-        thresholds: BlockCompactThresholds,
+        thresholds: BlockThresholds,
     ) -> Result<Self> {
         Ok(Self {
             mutations: HashMap::new(),

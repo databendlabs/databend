@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
@@ -146,7 +146,7 @@ impl FuseTableSink {
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
-        thresholds: BlockCompactThresholds,
+        thresholds: BlockThresholds,
         source_schema: TableSchemaRef,
         output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {

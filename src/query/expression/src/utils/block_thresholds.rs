@@ -17,15 +17,15 @@ use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
 
 #[derive(Clone, Copy, Debug)]
-pub struct BlockCompactThresholds {
+pub struct BlockThresholds {
     pub max_rows_per_block: usize,
     pub min_rows_per_block: usize,
     pub max_bytes_per_block: usize,
 }
 
-impl Default for BlockCompactThresholds {
-    fn default() -> BlockCompactThresholds {
-        BlockCompactThresholds {
+impl Default for BlockThresholds {
+    fn default() -> BlockThresholds {
+        BlockThresholds {
             max_rows_per_block: DEFAULT_BLOCK_MAX_ROWS,
             min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
             max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE,
@@ -33,13 +33,13 @@ impl Default for BlockCompactThresholds {
     }
 }
 
-impl BlockCompactThresholds {
+impl BlockThresholds {
     pub fn new(
         max_rows_per_block: usize,
         min_rows_per_block: usize,
         max_bytes_per_block: usize,
     ) -> Self {
-        BlockCompactThresholds {
+        BlockThresholds {
             max_rows_per_block,
             min_rows_per_block,
             max_bytes_per_block,

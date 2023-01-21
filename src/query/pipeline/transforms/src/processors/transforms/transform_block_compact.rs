@@ -18,14 +18,14 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 
 use super::Compactor;
 use super::TransformCompact;
 
 pub struct BlockCompactor {
-    thresholds: BlockCompactThresholds,
+    thresholds: BlockThresholds,
     // A flag denoting whether it is a recluster operation.
     // Will be removed later.
     is_recluster: bool,
@@ -33,7 +33,7 @@ pub struct BlockCompactor {
 }
 
 impl BlockCompactor {
-    pub fn new(thresholds: BlockCompactThresholds, is_recluster: bool) -> Self {
+    pub fn new(thresholds: BlockThresholds, is_recluster: bool) -> Self {
         BlockCompactor {
             thresholds,
             is_recluster,

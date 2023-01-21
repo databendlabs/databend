@@ -23,7 +23,7 @@ use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
@@ -97,7 +97,7 @@ pub struct CompactTransform {
     compact_tasks: VecDeque<CompactTask>,
     block_metas: Vec<Arc<BlockMeta>>,
     order: usize,
-    thresholds: BlockCompactThresholds,
+    thresholds: BlockThresholds,
     write_settings: WriteSettings,
     abort_operation: AbortOperation,
 }
@@ -113,7 +113,7 @@ impl CompactTransform {
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
         schema: TableSchemaRef,
-        thresholds: BlockCompactThresholds,
+        thresholds: BlockThresholds,
         write_settings: WriteSettings,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();

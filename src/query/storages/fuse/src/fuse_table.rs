@@ -34,7 +34,7 @@ use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::RemoteExpr;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
@@ -574,7 +574,7 @@ impl Table for FuseTable {
             .await
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+    fn get_block_compact_thresholds(&self) -> BlockThresholds {
         let max_rows_per_block =
             self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
@@ -582,7 +582,7 @@ impl Table for FuseTable {
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,
         );
-        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+        BlockThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 
     async fn compact(

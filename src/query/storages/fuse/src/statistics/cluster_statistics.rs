@@ -13,7 +13,7 @@
 //  limitations under the License.
 
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::FunctionContext;
@@ -31,7 +31,7 @@ pub struct ClusterStatsGenerator {
     max_page_size: Option<usize>,
 
     level: i32,
-    block_compact_thresholds: BlockCompactThresholds,
+    block_compact_thresholds: BlockThresholds,
     operators: Vec<BlockOperator>,
     pub(crate) out_fields: Vec<DataField>,
     func_ctx: FunctionContext,
@@ -45,7 +45,7 @@ impl ClusterStatsGenerator {
         extra_key_num: usize,
         max_page_size: Option<usize>,
         level: i32,
-        block_compact_thresholds: BlockCompactThresholds,
+        block_compact_thresholds: BlockThresholds,
         operators: Vec<BlockOperator>,
         out_fields: Vec<DataField>,
         func_ctx: FunctionContext,
@@ -67,7 +67,7 @@ impl ClusterStatsGenerator {
         !self.cluster_key_index.is_empty()
     }
 
-    pub fn block_compact_thresholds(&self) -> BlockCompactThresholds {
+    pub fn block_compact_thresholds(&self) -> BlockThresholds {
         self.block_compact_thresholds
     }
 
