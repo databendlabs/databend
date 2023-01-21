@@ -12,33 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
+
 #[derive(Clone, Copy, Debug)]
-pub struct BlockCompactThresholds {
+pub struct BlockThresholds {
     pub max_rows_per_block: usize,
     pub min_rows_per_block: usize,
     pub max_bytes_per_block: usize,
 }
 
-impl Default for BlockCompactThresholds {
-    fn default() -> BlockCompactThresholds {
-        BlockCompactThresholds {
-            // DEFAULT_ROW_PER_BLOCK
-            max_rows_per_block: 1000 * 1000,
-            // 0.8 * DEFAULT_ROW_PER_BLOCK
-            min_rows_per_block: 800 * 1000,
-            // DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD
-            max_bytes_per_block: 100 * 1024 * 1024,
+impl Default for BlockThresholds {
+    fn default() -> BlockThresholds {
+        BlockThresholds {
+            max_rows_per_block: DEFAULT_BLOCK_MAX_ROWS,
+            min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
+            max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE,
         }
     }
 }
 
-impl BlockCompactThresholds {
+impl BlockThresholds {
     pub fn new(
         max_rows_per_block: usize,
         min_rows_per_block: usize,
         max_bytes_per_block: usize,
     ) -> Self {
-        BlockCompactThresholds {
+        BlockThresholds {
             max_rows_per_block,
             min_rows_per_block,
             max_bytes_per_block,

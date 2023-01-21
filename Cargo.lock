@@ -2064,6 +2064,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
+ "common-io",
  "common-jsonb",
  "common-meta-app",
  "common-meta-types",
@@ -2983,7 +2984,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tracing",
 ]
 
 [[package]]
