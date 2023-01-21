@@ -394,6 +394,15 @@ impl<'a> Evaluator<'a> {
                 }
                 other => unreachable!("source: {}", other),
             },
+            (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => match value {
+                Value::Scalar(_) => value,
+                Value::Column(column) => {
+                    Value::Column(Column::Nullable(Box::new(NullableColumn {
+                        validity: constant_bitmap(true, column.len()).into(),
+                        column,
+                    })))
+                }
+            },
 
             (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::EmptyArray) => {
@@ -858,6 +867,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     }
                     None => Some(domain.clone()),
                 }
+            }
+            (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => {
+                Some(Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(domain.clone())),
+                }))
             }
 
             (DataType::EmptyArray, DataType::Array(_)) => Some(Domain::Nullable(NullableDomain {
