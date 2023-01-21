@@ -399,7 +399,7 @@ impl Display for DataType {
             DataType::Array(inner) => write!(f, "Array({inner})"),
             DataType::Map(inner) => write!(f, "Map({inner})"),
             DataType::Tuple(tys) => {
-                write!(f, "(")?;
+                write!(f, "Tuple(")?;
                 for (i, ty) in tys.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;

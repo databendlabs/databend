@@ -12,53 +12,51 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::Arc;
-
-use common_cache::Cache;
 use common_exception::Result;
 use opendal::Operator;
-use storages_common_table_meta::caches::SegmentInfoCache;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Versioned;
 
-use crate::io::write_meta;
+use super::meta_writer::MetaWriter;
+use crate::io::CachedMetaWriter;
 use crate::io::TableMetaLocationGenerator;
 
 #[derive(Clone)]
 pub struct SegmentWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
-    cache: &'a Option<SegmentInfoCache>,
 }
 
 impl<'a> SegmentWriter<'a> {
     pub fn new(
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
-        cache: &'a Option<SegmentInfoCache>,
     ) -> Self {
         Self {
             location_generator,
             data_accessor,
-            cache,
         }
     }
 
     pub async fn write_segment(&self, segment: SegmentInfo) -> Result<Location> {
-        let location = self.write_segment_no_cache(&segment).await?;
-        let segment = Arc::new(segment);
-        if let Some(ref cache) = self.cache {
-            let cache = &mut cache.write();
-            cache.put(location.0.clone(), segment);
-        }
+        let location = self.generate_location();
+        segment
+            .write_meta_through_cache(self.data_accessor, &location.0)
+            .await?;
         Ok(location)
     }
 
     pub async fn write_segment_no_cache(&self, segment: &SegmentInfo) -> Result<Location> {
-        let path = self.location_generator.gen_segment_info_location();
-        let location = (path, SegmentInfo::VERSION);
-        write_meta(self.data_accessor, location.0.as_str(), segment).await?;
+        let location = self.generate_location();
+        segment
+            .write_meta(self.data_accessor, location.0.as_str())
+            .await?;
         Ok(location)
+    }
+
+    fn generate_location(&self) -> Location {
+        let path = self.location_generator.gen_segment_info_location();
+        (path, SegmentInfo::VERSION)
     }
 }

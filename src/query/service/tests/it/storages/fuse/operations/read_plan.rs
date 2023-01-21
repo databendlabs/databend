@@ -98,7 +98,7 @@ fn test_to_partitions() -> Result<()> {
 
     let blocks_metas = (0..num_of_block)
         .into_iter()
-        .map(|_| block_meta.clone())
+        .map(|_| (None, block_meta.clone()))
         .collect::<Vec<_>>();
 
     let column_nodes = (0..num_of_col)
@@ -182,8 +182,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         };
         let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
-        assert!(parts.is_empty());
+        assert!(!parts.is_empty());
     }
-
     Ok(())
 }

@@ -87,14 +87,18 @@ impl BlockReader {
         part: PartInfoPtr,
         chunks: Vec<(usize, Vec<u8>)>,
     ) -> Result<DataBlock> {
+        let part = FusePartInfo::from_part(&part)?;
         let start = Instant::now();
+
+        if chunks.is_empty() {
+            return Ok(DataBlock::new(vec![], part.nums_rows));
+        }
 
         let reads = chunks
             .iter()
             .map(|(index, chunk)| (*index, chunk.as_slice()))
             .collect::<Vec<_>>();
 
-        let part = FusePartInfo::from_part(&part)?;
         let deserialized_res = self.deserialize_parquet_chunks_with_buffer(
             part.nums_rows,
             &part.compression,
@@ -120,6 +124,10 @@ impl BlockReader {
         columns_chunks: Vec<(usize, &[u8])>,
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
+        if columns_chunks.is_empty() {
+            return Ok(DataBlock::new(vec![], num_rows));
+        }
+
         let chunk_map: HashMap<usize, &[u8]> = columns_chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 

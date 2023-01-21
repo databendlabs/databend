@@ -21,7 +21,7 @@ use crate::plans::ComparisonExpr;
 use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 
 /// Controls how the visitor recursion should proceed.
 pub enum Recursion<V: ScalarVisitor> {
@@ -38,9 +38,9 @@ pub enum Recursion<V: ScalarVisitor> {
 /// on `Scalar::accept` for details on its use
 pub trait ScalarVisitor: Sized {
     /// Invoked before any children of `expr` are visisted.
-    fn pre_visit(self, scalar: &Scalar) -> Result<Recursion<Self>>;
+    fn pre_visit(self, scalar: &ScalarExpr) -> Result<Recursion<Self>>;
 
-    fn visit(mut self, predecessor_scalar: &Scalar) -> Result<Self> {
+    fn visit(mut self, predecessor_scalar: &ScalarExpr) -> Result<Self> {
         let mut stack = vec![RecursionProcessing::Call(predecessor_scalar)];
         while let Some(element) = stack.pop() {
             match element {
@@ -53,36 +53,40 @@ pub trait ScalarVisitor: Sized {
                         Recursion::Stop(visitor) => visitor,
                         Recursion::Continue(visitor) => {
                             match scalar {
-                                Scalar::AggregateFunction(AggregateFunction { args, .. }) => {
+                                ScalarExpr::AggregateFunction(AggregateFunction {
+                                    args, ..
+                                }) => {
                                     for arg in args {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                Scalar::ComparisonExpr(ComparisonExpr { left, right, .. }) => {
+                                ScalarExpr::ComparisonExpr(ComparisonExpr {
+                                    left, right, ..
+                                }) => {
                                     stack.push(RecursionProcessing::Call(left));
                                     stack.push(RecursionProcessing::Call(right));
                                 }
-                                Scalar::AndExpr(AndExpr { left, right, .. }) => {
+                                ScalarExpr::AndExpr(AndExpr { left, right, .. }) => {
                                     stack.push(RecursionProcessing::Call(left));
                                     stack.push(RecursionProcessing::Call(right));
                                 }
-                                Scalar::OrExpr(OrExpr { left, right, .. }) => {
+                                ScalarExpr::OrExpr(OrExpr { left, right, .. }) => {
                                     stack.push(RecursionProcessing::Call(left));
                                     stack.push(RecursionProcessing::Call(right));
                                 }
-                                Scalar::NotExpr(NotExpr { argument, .. }) => {
+                                ScalarExpr::NotExpr(NotExpr { argument, .. }) => {
                                     stack.push(RecursionProcessing::Call(argument));
                                 }
-                                Scalar::FunctionCall(FunctionCall { arguments, .. }) => {
+                                ScalarExpr::FunctionCall(FunctionCall { arguments, .. }) => {
                                     for arg in arguments.iter() {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                Scalar::BoundColumnRef(_) | Scalar::ConstantExpr(_) => {}
-                                Scalar::CastExpr(CastExpr { argument, .. }) => {
+                                ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => {}
+                                ScalarExpr::CastExpr(CastExpr { argument, .. }) => {
                                     stack.push(RecursionProcessing::Call(argument))
                                 }
-                                Scalar::SubqueryExpr(_) => {}
+                                ScalarExpr::SubqueryExpr(_) => {}
                             }
 
                             visitor
@@ -97,12 +101,12 @@ pub trait ScalarVisitor: Sized {
 
     /// Invoked after all children of `expr` are visited. Default
     /// implementation does nothing.
-    fn post_visit(self, _expr: &Scalar) -> Result<Self> {
+    fn post_visit(self, _expr: &ScalarExpr) -> Result<Self> {
         Ok(self)
     }
 }
 
-impl Scalar {
+impl ScalarExpr {
     /// Performs a depth first walk of an scalar expression and
     /// its children, calling [`ScalarVisitor::pre_visit`] and
     /// `visitor.post_visit`.
@@ -143,6 +147,6 @@ impl Scalar {
 }
 
 enum RecursionProcessing<'a> {
-    Call(&'a Scalar),
-    Ret(&'a Scalar),
+    Call(&'a ScalarExpr),
+    Ret(&'a ScalarExpr),
 }

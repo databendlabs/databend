@@ -20,15 +20,19 @@ use std::time::Instant;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
-use common_cache::Cache;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use storages_common_table_meta::caches::CacheManager;
+use storages_common_cache::CacheAccessor;
+use storages_common_table_meta::caches::BloomIndexMeta;
+use storages_common_table_meta::caches::CachedMeta;
 use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
+use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotLite;
+use storages_common_table_meta::meta::TableSnapshotStatistics;
 use tracing::info;
 use tracing::warn;
 
@@ -244,8 +248,11 @@ impl FuseTable {
                         bloom_locations_to_be_pruged.insert(loc.to_string());
                     }
                     status_bloom_to_be_purged_count += bloom_locations_to_be_pruged.len();
-                    self.try_purge_location_files(ctx.clone(), bloom_locations_to_be_pruged)
-                        .await?;
+                    self.try_purge_location_files_and_cache::<BloomIndexMeta>(
+                        ctx.clone(),
+                        bloom_locations_to_be_pruged,
+                    )
+                    .await?;
                 }
 
                 // 3. Try to purge segment file chunks.
@@ -256,8 +263,11 @@ impl FuseTable {
                             .map(|loc| loc.0.clone())
                             .collect::<Vec<String>>(),
                     );
-                    self.try_purge_location_files(ctx.clone(), segment_locations_to_be_purged)
-                        .await?;
+                    self.try_purge_location_files_and_cache::<SegmentInfo>(
+                        ctx.clone(),
+                        segment_locations_to_be_purged,
+                    )
+                    .await?;
                 }
 
                 // Refresh status.
@@ -302,8 +312,11 @@ impl FuseTable {
                         snapshot_locations_to_be_purged.insert(loc);
                     }
                 }
-                self.try_purge_location_files(ctx.clone(), snapshot_locations_to_be_purged)
-                    .await?;
+                self.try_purge_location_files_and_cache::<TableSnapshot>(
+                    ctx.clone(),
+                    snapshot_locations_to_be_purged,
+                )
+                .await?;
 
                 // Refresh status.
                 {
@@ -330,8 +343,11 @@ impl FuseTable {
                 for file in chunk {
                     ts_locations_to_be_purged.insert(file.clone());
                 }
-                self.try_purge_location_files(ctx.clone(), ts_locations_to_be_purged)
-                    .await?;
+                self.try_purge_location_files_and_cache::<TableSnapshotStatistics>(
+                    ctx.clone(),
+                    ts_locations_to_be_purged,
+                )
+                .await?;
                 // Refresh status.
                 {
                     status_purged_count += chunk.len();
@@ -393,8 +409,26 @@ impl FuseTable {
     ) -> Result<()> {
         let fuse_file = Files::create(ctx.clone(), self.operator.clone());
         let locations = Vec::from_iter(locations_to_be_purged);
-        self.clean_cache(&locations);
+        // self.clean_cache(&locations);
         fuse_file.remove_file_in_batch(&locations).await
+    }
+
+    // Purge file by location chunks.
+    async fn try_purge_location_files_and_cache<T>(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        locations_to_be_purged: HashSet<String>,
+    ) -> Result<()>
+    where
+        T: CachedMeta<T>,
+    {
+        if let Some(cache) = T::cache() {
+            for loc in locations_to_be_purged.iter() {
+                cache.evict(loc);
+            }
+        }
+        self.try_purge_location_files(ctx, locations_to_be_purged)
+            .await
     }
 
     async fn get_block_locations(
@@ -438,15 +472,6 @@ impl FuseTable {
             block_location: blocks,
             bloom_location: blooms,
         })
-    }
-
-    fn clean_cache(&self, locs: &[String]) {
-        if let Some(c) = CacheManager::instance().get_table_segment_cache() {
-            let cache = &mut *c.write();
-            for loc in locs {
-                cache.pop(loc);
-            }
-        }
     }
 }
 

@@ -26,19 +26,18 @@ use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
-use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 
 // Visitor that find Expressions that match a particular predicate
 struct Finder<'a, F>
-where F: Fn(&Scalar) -> bool
+where F: Fn(&ScalarExpr) -> bool
 {
     find_fn: &'a F,
-    scalars: Vec<Scalar>,
+    scalars: Vec<ScalarExpr>,
 }
 
 impl<'a, F> Finder<'a, F>
-where F: Fn(&Scalar) -> bool
+where F: Fn(&ScalarExpr) -> bool
 {
     /// Create a new finder with the `test_fn`
     #[allow(dead_code)]
@@ -51,9 +50,9 @@ where F: Fn(&Scalar) -> bool
 }
 
 impl<'a, F> ScalarVisitor for Finder<'a, F>
-where F: Fn(&Scalar) -> bool
+where F: Fn(&ScalarExpr) -> bool
 {
-    fn pre_visit(mut self, scalar: &Scalar) -> Result<Recursion<Self>> {
+    fn pre_visit(mut self, scalar: &ScalarExpr) -> Result<Recursion<Self>> {
         if (self.find_fn)(scalar) {
             if !(self.scalars.contains(scalar)) {
                 self.scalars.push((*scalar).clone())
@@ -66,9 +65,9 @@ where F: Fn(&Scalar) -> bool
     }
 }
 
-pub fn split_conjunctions(scalar: &Scalar) -> Vec<Scalar> {
+pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
     match scalar {
-        Scalar::AndExpr(AndExpr { left, right, .. }) => {
+        ScalarExpr::AndExpr(AndExpr { left, right, .. }) => {
             vec![split_conjunctions(left), split_conjunctions(right)].concat()
         }
         _ => {
@@ -77,16 +76,16 @@ pub fn split_conjunctions(scalar: &Scalar) -> Vec<Scalar> {
     }
 }
 
-pub fn split_equivalent_predicate(scalar: &Scalar) -> Option<(Scalar, Scalar)> {
+pub fn split_equivalent_predicate(scalar: &ScalarExpr) -> Option<(ScalarExpr, ScalarExpr)> {
     match scalar {
-        Scalar::ComparisonExpr(ComparisonExpr {
+        ScalarExpr::ComparisonExpr(ComparisonExpr {
             op, left, right, ..
         }) if *op == ComparisonOp::Equal => Some((*left.clone(), *right.clone())),
         _ => None,
     }
 }
 
-pub fn satisfied_by(scalar: &Scalar, prop: &RelationalProperty) -> bool {
+pub fn satisfied_by(scalar: &ScalarExpr, prop: &RelationalProperty) -> bool {
     scalar.used_columns().is_subset(&prop.output_columns)
 }
 
@@ -99,15 +98,18 @@ pub fn satisfied_by(scalar: &Scalar, prop: &RelationalProperty) -> bool {
 /// - Other: `a+b = 1`
 #[derive(Clone, Debug)]
 pub enum JoinPredicate<'a> {
-    Left(&'a Scalar),
-    Right(&'a Scalar),
-    Both { left: &'a Scalar, right: &'a Scalar },
-    Other(&'a Scalar),
+    Left(&'a ScalarExpr),
+    Right(&'a ScalarExpr),
+    Both {
+        left: &'a ScalarExpr,
+        right: &'a ScalarExpr,
+    },
+    Other(&'a ScalarExpr),
 }
 
 impl<'a> JoinPredicate<'a> {
     pub fn new(
-        scalar: &'a Scalar,
+        scalar: &'a ScalarExpr,
         left_prop: &RelationalProperty,
         right_prop: &RelationalProperty,
     ) -> Self {
@@ -122,7 +124,7 @@ impl<'a> JoinPredicate<'a> {
             return Self::Right(scalar);
         }
 
-        if let Scalar::ComparisonExpr(ComparisonExpr {
+        if let ScalarExpr::ComparisonExpr(ComparisonExpr {
             op: ComparisonOp::Equal,
             left,
             right,
@@ -145,35 +147,35 @@ impl<'a> JoinPredicate<'a> {
     }
 }
 
-pub fn contain_subquery(scalar: &Scalar) -> bool {
+pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
     match scalar {
-        Scalar::BoundColumnRef(BoundColumnRef { column }) => {
+        ScalarExpr::BoundColumnRef(BoundColumnRef { column }) => {
             // For example: SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL');
             // predicate `c_id = scalar_subquery_{}` can't be pushed down to the join condition.
             // TODO(xudong963): need a better way to handle this, such as add a field to predicate to indicate if it derives from subquery.
             column.column_name == format!("scalar_subquery_{}", column.index)
         }
-        Scalar::ComparisonExpr(ComparisonExpr { left, right, .. }) => {
+        ScalarExpr::ComparisonExpr(ComparisonExpr { left, right, .. }) => {
             contain_subquery(left) || contain_subquery(right)
         }
-        Scalar::AndExpr(AndExpr { left, right, .. }) => {
+        ScalarExpr::AndExpr(AndExpr { left, right, .. }) => {
             contain_subquery(left) || contain_subquery(right)
         }
-        Scalar::OrExpr(OrExpr { left, right, .. }) => {
+        ScalarExpr::OrExpr(OrExpr { left, right, .. }) => {
             contain_subquery(left) || contain_subquery(right)
         }
-        Scalar::NotExpr(NotExpr { argument, .. }) => contain_subquery(argument),
-        Scalar::FunctionCall(FunctionCall { arguments, .. }) => {
+        ScalarExpr::NotExpr(NotExpr { argument, .. }) => contain_subquery(argument),
+        ScalarExpr::FunctionCall(FunctionCall { arguments, .. }) => {
             arguments.iter().any(contain_subquery)
         }
-        Scalar::CastExpr(CastExpr { argument, .. }) => contain_subquery(argument),
+        ScalarExpr::CastExpr(CastExpr { argument, .. }) => contain_subquery(argument),
         _ => false,
     }
 }
 
 /// Wrap a cast expression with given target type
-pub fn wrap_cast(scalar: &Scalar, target_type: &DataType) -> Scalar {
-    Scalar::CastExpr(CastExpr {
+pub fn wrap_cast(scalar: &ScalarExpr, target_type: &DataType) -> ScalarExpr {
+    ScalarExpr::CastExpr(CastExpr {
         is_try: false,
         argument: Box::new(scalar.clone()),
         from_type: Box::new(scalar.data_type()),
@@ -182,7 +184,7 @@ pub fn wrap_cast(scalar: &Scalar, target_type: &DataType) -> Scalar {
 }
 
 /// Wrap a cast expression with given target type if the scalar is not of the target type
-pub fn wrap_cast_if_needed(scalar: &Scalar, target_type: &DataType) -> Scalar {
+pub fn wrap_cast_if_needed(scalar: &ScalarExpr, target_type: &DataType) -> ScalarExpr {
     if &scalar.data_type() == target_type {
         scalar.clone()
     } else {

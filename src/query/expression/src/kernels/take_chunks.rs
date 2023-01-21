@@ -44,11 +44,11 @@ pub type BlockRowIndex = (usize, usize, usize);
 impl DataBlock {
     pub fn take_blocks(blocks: &[DataBlock], indices: &[BlockRowIndex]) -> Self {
         debug_assert!(!blocks.is_empty());
-        debug_assert!(blocks[0].num_columns() > 0);
 
+        let num_columns = blocks[0].num_columns();
         let result_size = indices.iter().map(|(_, _, c)| *c).sum();
 
-        let result_columns = (0..blocks[0].num_columns())
+        let result_columns = (0..num_columns)
             .map(|index| {
                 let columns = blocks
                     .iter()

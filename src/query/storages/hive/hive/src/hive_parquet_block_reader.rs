@@ -35,7 +35,7 @@ use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use opendal::Object;
 use opendal::Operator;
-use storages_common_table_meta::caches::LoadParams;
+use storages_common_cache::LoadParams;
 
 use crate::hive_partition::HivePartInfo;
 use crate::HivePartitionFiller;
@@ -242,7 +242,6 @@ impl HiveBlockReader {
             location: filename.to_owned(),
             len_hint: Some(filesize),
             ver: 0,
-            schema: None,
         };
 
         reader.read(&load_params).await

@@ -25,6 +25,7 @@ common-pipeline-core = { path = "../../../pipeline/core" }
 common-pipeline-sources = { path = "../../../pipeline/sources" }
 common-storage = { path = "../../../../common/storage" }
 
+storages-common-cache = { path = "../../common/cache" }
 storages-common-index = { path = "../../common/index" }
 storages-common-table-meta = { path = "../../common/table-meta" }
 

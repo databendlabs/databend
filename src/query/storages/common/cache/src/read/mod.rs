@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,22 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-#[derive(Clone)]
-pub struct CacheSettings {
-    pub memory_items_cache_capacity: u64,
-    pub memory_bytes_cache_capacity: u64,
+mod cached_reader;
+mod loader;
+mod readers;
 
-    // write cache if true.
-    pub cache_on_write: bool,
-}
-
-impl Default for CacheSettings {
-    fn default() -> Self {
-        CacheSettings {
-            memory_items_cache_capacity: 10000 * 100,
-            memory_bytes_cache_capacity: 1024 * 1024 * 1024,
-            cache_on_write: false,
-        }
-    }
-}
+pub use loader::CacheKey;
+pub use loader::LoadParams;
+pub use loader::Loader;
+pub use loader::LoaderWithCacheKey;
+pub use readers::DiskCacheReader;
+pub use readers::InMemoryBytesCacheReader;
+pub use readers::InMemoryItemCacheReader;

@@ -13,12 +13,17 @@
 //  limitations under the License.
 
 use common_arrow::parquet::metadata::FileMetaData;
+use common_arrow::parquet::read::read_metadata_async;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use opendal::Operator;
+use storages_common_cache::InMemoryItemCacheReader;
+use storages_common_cache::LoadParams;
+use storages_common_cache::Loader;
 use storages_common_table_meta::caches::CacheManager;
-use storages_common_table_meta::caches::MemoryCacheReader;
 
-pub type FileMetaDataReader = MemoryCacheReader<FileMetaData, Operator>;
-
+pub struct LoaderWrapper<T>(T);
+pub type FileMetaDataReader = InMemoryItemCacheReader<FileMetaData, LoaderWrapper<Operator>>;
 pub struct MetaDataReader;
 
 impl MetaDataReader {
@@ -26,7 +31,25 @@ impl MetaDataReader {
         FileMetaDataReader::new(
             CacheManager::instance().get_file_meta_data_cache(),
             "FILE_META_DATA_CACHE".to_owned(),
-            dal,
+            LoaderWrapper(dal),
         )
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<FileMetaData> for LoaderWrapper<Operator> {
+    async fn load(&self, params: &LoadParams) -> Result<FileMetaData> {
+        let object = self.0.object(&params.location);
+        let mut reader = if let Some(len) = params.len_hint {
+            object.range_reader(0..len).await?
+        } else {
+            object.reader().await?
+        };
+        read_metadata_async(&mut reader).await.map_err(|err| {
+            ErrorCode::Internal(format!(
+                "read file meta failed, {}, {:?}",
+                params.location, err
+            ))
+        })
     }
 }

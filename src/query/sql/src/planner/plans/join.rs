@@ -20,7 +20,6 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
-use super::ScalarExpr;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Datum;
@@ -36,7 +35,7 @@ use crate::optimizer::Statistics;
 use crate::optimizer::UniformSampleSet;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
@@ -132,9 +131,9 @@ impl Display for JoinType {
 /// the probe side.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Join {
-    pub left_conditions: Vec<Scalar>,
-    pub right_conditions: Vec<Scalar>,
-    pub non_equi_conditions: Vec<Scalar>,
+    pub left_conditions: Vec<ScalarExpr>,
+    pub right_conditions: Vec<ScalarExpr>,
+    pub non_equi_conditions: Vec<ScalarExpr>,
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
@@ -387,6 +386,7 @@ impl Operator for Join {
         let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
 
+        // if join/probe side is Serial or join key is empty, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial
         {
@@ -532,8 +532,8 @@ fn evaluate_by_ndv(
 fn update_statistic(
     left_prop: &mut RelationalProperty,
     right_prop: &mut RelationalProperty,
-    left_condition: &Scalar,
-    right_condition: &Scalar,
+    left_condition: &ScalarExpr,
+    right_condition: &ScalarExpr,
     new_stat: NewStatistic,
 ) {
     let left_col_stat = left_prop

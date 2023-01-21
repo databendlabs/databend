@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::future::Future;
+use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
@@ -25,18 +26,22 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use futures::future;
 use opendal::Operator;
+use storages_common_cache::LoadParams;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_pruner::LimiterPruner;
 use storages_common_pruner::LimiterPrunerCreator;
+use storages_common_pruner::PagePruner;
+use storages_common_pruner::PagePrunerCreator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 use storages_common_pruner::TopNPrunner;
-use storages_common_table_meta::caches::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use tracing::warn;
@@ -53,19 +58,34 @@ struct PruningContext {
     limiter: LimiterPruner,
     range_pruner: Arc<dyn RangePruner + Send + Sync>,
     filter_pruner: Option<Arc<dyn Pruner + Send + Sync>>,
+    page_pruner: Arc<dyn PagePruner + Send + Sync>,
     rt: Arc<Runtime>,
     semaphore: Arc<Semaphore>,
 }
 
 pub struct BlockPruner;
 impl BlockPruner {
-    // prune blocks by utilizing min_max index and filter, according to the pushdowns
-    #[tracing::instrument(level = "debug", skip(schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
+        segment_locs: Vec<Location>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        Self::prune_with_pages(ctx, dal, schema, push_down, None, vec![], segment_locs).await
+    }
+
+    // prune blocks by utilizing min_max index and filter, according to the pushdowns
+    #[tracing::instrument(level = "debug", skip(schema, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    pub async fn prune_with_pages(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+
         segment_locs: Vec<Location>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if segment_locs.is_empty() {
@@ -91,18 +111,25 @@ impl BlockPruner {
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
         let limiter = LimiterPrunerCreator::create(limit);
 
+        let func_context = ctx.try_get_function_context()?;
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
-        let range_pruner = RangePrunerCreator::try_create(
-            ctx.try_get_function_context()?,
-            filter_exprs.as_deref(),
-            &schema,
-        )?;
+        let range_pruner =
+            RangePrunerCreator::try_create(func_context, filter_exprs.as_deref(), &schema)?;
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
         let filter_pruner =
             pruner::new_filter_pruner(ctx, filter_exprs.as_deref(), &schema, dal.clone())?;
+
+        // prepare the page pruner, this is used in native format
+        let page_pruner = PagePrunerCreator::try_create(
+            func_context,
+            cluster_key_meta,
+            cluster_keys,
+            filter_exprs.as_deref(),
+            &schema,
+        )?;
 
         // 2. constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -131,6 +158,7 @@ impl BlockPruner {
             limiter: limiter.clone(),
             range_pruner: range_pruner.clone(),
             filter_pruner,
+            page_pruner,
             rt: pruning_runtime.clone(),
             semaphore: semaphore.clone(),
         });
@@ -198,7 +226,7 @@ impl BlockPruner {
         segment_location: Location,
         schema: TableSchemaRef,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let segment_reader = MetaReaders::segment_info_reader(dal.clone());
+        let segment_reader = MetaReaders::segment_info_reader(dal.clone(), schema.clone());
 
         let (path, ver) = segment_location;
 
@@ -207,7 +235,6 @@ impl BlockPruner {
             location: path,
             len_hint: None,
             ver,
-            schema: Some(schema.clone()),
         };
 
         let segment_info = segment_reader.read(&load_params).await?;
@@ -249,23 +276,34 @@ impl BlockPruner {
             if pruning_ctx.limiter.exceeded() {
                 return None;
             }
-            type BlockPruningFutureReturn = Pin<Box<dyn Future<Output = (usize, bool)> + Send>>;
+            type BlockPruningFutureReturn =
+                Pin<Box<dyn Future<Output = (usize, bool, Option<Range<usize>>)> + Send>>;
             type BlockPruningFuture =
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
             blocks.next().map(|(block_idx, block_meta)| {
+                let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
                 if pruning_ctx.range_pruner.should_keep(&block_meta.col_stats) {
                     // not pruned by block zone map index,
                     let ctx = pruning_ctx.clone();
                     let filter_pruner = filter_pruner.clone();
+                    let page_pruner = ctx.page_pruner.clone();
                     let index_location = block_meta.bloom_filter_index_location.clone();
                     let index_size = block_meta.bloom_filter_index_size;
+
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
                             let keep = filter_pruner.should_keep(&index_location, index_size).await
                                 && ctx.limiter.within_limit(row_count);
-                            (block_idx, keep)
+
+                            if keep {
+                                let (keep, range) =
+                                    page_pruner.should_keep(&block_meta.cluster_stats);
+                                (block_idx, keep, range)
+                            } else {
+                                (block_idx, keep, None)
+                            }
                         })
                     });
                     v
@@ -273,7 +311,7 @@ impl BlockPruner {
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
-                            (block_idx, false)
+                            (block_idx, false, None)
                         })
                     });
                     v
@@ -293,13 +331,15 @@ impl BlockPruner {
 
         let mut result = Vec::with_capacity(segment_info.blocks.len());
         for item in joint {
-            let (block_idx, keep) = item;
+            let (block_idx, keep, range) = item;
             if keep {
                 let block = segment_info.blocks[block_idx].clone();
+
                 result.push((
                     BlockMetaIndex {
                         segment_idx,
                         block_idx,
+                        range,
                     },
                     block,
                 ))
@@ -333,13 +373,19 @@ impl BlockPruner {
             if pruning_ctx.range_pruner.should_keep(&block_meta.col_stats)
                 && pruning_ctx.limiter.within_limit(row_count)
             {
-                result.push((
-                    BlockMetaIndex {
-                        segment_idx,
-                        block_idx,
-                    },
-                    block_meta.clone(),
-                ))
+                let (keep, range) = pruning_ctx
+                    .page_pruner
+                    .should_keep(&block_meta.cluster_stats);
+                if keep {
+                    result.push((
+                        BlockMetaIndex {
+                            segment_idx,
+                            block_idx,
+                            range,
+                        },
+                        block_meta.clone(),
+                    ))
+                }
             }
         }
 

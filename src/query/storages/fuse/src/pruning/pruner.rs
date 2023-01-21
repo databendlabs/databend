@@ -27,8 +27,6 @@ use opendal::Operator;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::Location;
 
-use crate::io::BlockFilterReader;
-
 #[async_trait::async_trait]
 pub trait Pruner {
     // returns ture, if target should NOT be pruned (false positive allowed)
@@ -174,6 +172,7 @@ mod util {
     use storages_common_index::FilterEvalResult;
 
     use super::*;
+    use crate::io::BloomFilterReader;
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn should_keep_by_filter(

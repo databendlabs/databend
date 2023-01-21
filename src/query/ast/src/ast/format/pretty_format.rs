@@ -34,6 +34,13 @@ where T: Display + Clone
         Ok(buf)
     }
 
+    /// Format TreeNode in a pretty way, with given prefix.
+    pub fn format_pretty_with_prefix(&self, prefix: &str) -> Result<String> {
+        let mut buf = String::new();
+        self.format_pretty_impl(prefix.to_string(), prefix.to_string(), &mut buf)?;
+        Ok(buf)
+    }
+
     fn format_pretty_impl(
         &self,
         prefix: String,

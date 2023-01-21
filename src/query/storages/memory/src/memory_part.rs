@@ -16,9 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
-use common_catalog::plan::PartInfoPtr;
-use common_exception::ErrorCode;
-use common_exception::Result;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct MemoryPartInfo {
@@ -52,14 +49,5 @@ impl MemoryPartInfo {
             part_start: start,
             part_end: end,
         }))
-    }
-
-    pub fn from_part(info: &PartInfoPtr) -> Result<&MemoryPartInfo> {
-        match info.as_any().downcast_ref::<MemoryPartInfo>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to MemoryPartInfo.",
-            )),
-        }
     }
 }

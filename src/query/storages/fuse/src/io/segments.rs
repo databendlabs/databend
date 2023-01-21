@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_expression::TableSchemaRef;
 use futures_util::future;
 use opendal::Operator;
-use storages_common_table_meta::caches::LoadParams;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use tracing::Instrument;
@@ -54,14 +54,13 @@ impl SegmentsIO {
         table_schema: TableSchemaRef,
     ) -> Result<Arc<SegmentInfo>> {
         let (path, ver) = segment_location;
-        let reader = MetaReaders::segment_info_reader(dal);
+        let reader = MetaReaders::segment_info_reader(dal, table_schema);
 
         // Keep in mind that segment_info_read must need a schema
         let load_params = LoadParams {
             location: path,
             len_hint: None,
             ver,
-            schema: Some(table_schema),
         };
 
         reader.read(&load_params).await

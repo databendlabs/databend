@@ -15,20 +15,20 @@
 mod block_reader;
 mod block_reader_native;
 mod block_reader_parquet;
-mod bloom_index_reader;
+mod bloom_index;
+mod column_data_loader;
 mod decompressor;
-mod meta_readers;
 mod read_settings;
 mod snapshot_history_reader;
-mod versioned_reader;
+mod table_meta;
 
 pub use block_reader::BlockReader;
 pub use block_reader::MergeIOReadResult;
-pub use bloom_index_reader::load_bloom_filter_by_columns;
-pub use bloom_index_reader::BlockFilterReader;
+pub use block_reader_native::NativeReaderExt;
+pub use bloom_index::BloomFilterReader;
 pub use decompressor::UncompressedBuffer;
-pub use meta_readers::MetaReaders;
-pub use meta_readers::SegmentInfoReader;
-pub use meta_readers::TableSnapshotReader;
 pub use read_settings::ReadSettings;
 pub use snapshot_history_reader::SnapshotHistoryReader;
+pub use table_meta::MetaReaders;
+pub use table_meta::SegmentInfoReader;
+pub use table_meta::TableSnapshotReader;

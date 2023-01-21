@@ -50,7 +50,7 @@ use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
 use opendal::layers::CacheLayer;
 use opendal::Operator;
-use storages_common_table_meta::caches::LoadParams;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use storages_common_table_meta::meta::Statistics as FuseStatistics;
@@ -118,11 +118,11 @@ impl FuseTable {
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
-                    Some(sp) => init_operator(&sp)?,
-                    None => DataOperator::instance().operator(),
+                    Some(sp) => Ok(init_operator(&sp)?),
+                    None => Ok(DataOperator::instance().operator()),
                 }
             }
-        };
+        }?;
 
         let data_metrics = Arc::new(StorageMetrics::default());
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
@@ -166,6 +166,10 @@ impl FuseTable {
             comment: "FUSE Storage Engine".to_string(),
             support_cluster_key: true,
         }
+    }
+
+    pub fn is_native(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Native)
     }
 
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
@@ -223,7 +227,6 @@ impl FuseTable {
                         location: loc.clone(),
                         len_hint: None,
                         ver,
-                        schema: None,
                     };
 
                     Ok(Some(reader.read(&load_params).await?))
@@ -244,7 +247,6 @@ impl FuseTable {
                 location: loc,
                 len_hint: None,
                 ver,
-                schema: None,
             };
             Ok(Some(reader.read(&params).await?))
         } else {
@@ -607,6 +609,10 @@ impl Table for FuseTable {
         point: NavigationDescriptor,
     ) -> Result<()> {
         self.do_revert_to(ctx.as_ref(), point).await
+    }
+
+    fn support_prewhere(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Native)
     }
 }
 

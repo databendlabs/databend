@@ -101,50 +101,50 @@ error:
   --> SQL:1:10
   |
 1 | (1, 'a') = (1,)
-  |          ^ no overload satisfies `eq((UInt8, String), (UInt8,))`
+  |          ^ no overload satisfies `eq(Tuple(UInt8, String), Tuple(UInt8,))`
 
 has tried possible overloads:
-  eq(String, String) :: Boolean                                 : unable to unify `(UInt8, String)` with `String`
-  eq(String NULL, String NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `String`
-  eq(Date, Date) :: Boolean                                     : unable to unify `(UInt8, String)` with `Date`
-  eq(Date NULL, Date NULL) :: Boolean NULL                      : unable to unify `(UInt8, String)` with `Date`
-  eq(Timestamp, Timestamp) :: Boolean                           : unable to unify `(UInt8, String)` with `Timestamp`
-  eq(Timestamp NULL, Timestamp NULL) :: Boolean NULL            : unable to unify `(UInt8, String)` with `Timestamp`
-  eq(UInt8, UInt8) :: Boolean                                   : unable to unify `(UInt8, String)` with `UInt8`
-  eq(UInt8 NULL, UInt8 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `UInt8`
-  eq(UInt16, UInt16) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt16`
-  eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt16`
-  eq(UInt32, UInt32) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt32`
-  eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt32`
-  eq(UInt64, UInt64) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt64`
-  eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt64`
-  eq(Int8, Int8) :: Boolean                                     : unable to unify `(UInt8, String)` with `Int8`
-  eq(Int8 NULL, Int8 NULL) :: Boolean NULL                      : unable to unify `(UInt8, String)` with `Int8`
-  eq(Int16, Int16) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int16`
-  eq(Int16 NULL, Int16 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int16`
-  eq(Int32, Int32) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int32`
-  eq(Int32 NULL, Int32 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int32`
-  eq(Int64, Int64) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int64`
-  eq(Int64 NULL, Int64 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int64`
-  eq(Float32, Float32) :: Boolean                               : unable to unify `(UInt8, String)` with `Float32`
-  eq(Float32 NULL, Float32 NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Float32`
-  eq(Float64, Float64) :: Boolean                               : unable to unify `(UInt8, String)` with `Float64`
-  eq(Float64 NULL, Float64 NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Float64`
-  eq(Boolean, Boolean) :: Boolean                               : unable to unify `(UInt8, String)` with `Boolean`
-  eq(Boolean NULL, Boolean NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Boolean`
-  eq(Variant, Variant) :: Boolean                               : unable to unify `(UInt8, String)` with `Variant`
-  eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Variant`
-  eq(Array(Nothing), Array(Nothing)) :: Boolean                 : unable to unify `(UInt8, String)` with `Array(Nothing)`
-  eq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL  : unable to unify `(UInt8, String)` with `Array(Nothing)`
-  eq(Array(T0), Array(T0)) :: Boolean                           : unable to unify `(UInt8, String)` with `Array(T0)`
-  eq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL            : unable to unify `(UInt8, String)` with `Array(T0)`
-  eq((T0, T1), (T0, T1)) :: Boolean                             : unable to unify `(UInt8,)` with `(T0, T1)`
+  eq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
+  eq(String NULL, String NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `String`
+  eq(Date, Date) :: Boolean                                     : unable to unify `Tuple(UInt8, String)` with `Date`
+  eq(Date NULL, Date NULL) :: Boolean NULL                      : unable to unify `Tuple(UInt8, String)` with `Date`
+  eq(Timestamp, Timestamp) :: Boolean                           : unable to unify `Tuple(UInt8, String)` with `Timestamp`
+  eq(Timestamp NULL, Timestamp NULL) :: Boolean NULL            : unable to unify `Tuple(UInt8, String)` with `Timestamp`
+  eq(UInt8, UInt8) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `UInt8`
+  eq(UInt8 NULL, UInt8 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `UInt8`
+  eq(UInt16, UInt16) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt16`
+  eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt16`
+  eq(UInt32, UInt32) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt32`
+  eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt32`
+  eq(UInt64, UInt64) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt64`
+  eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt64`
+  eq(Int8, Int8) :: Boolean                                     : unable to unify `Tuple(UInt8, String)` with `Int8`
+  eq(Int8 NULL, Int8 NULL) :: Boolean NULL                      : unable to unify `Tuple(UInt8, String)` with `Int8`
+  eq(Int16, Int16) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int16`
+  eq(Int16 NULL, Int16 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int16`
+  eq(Int32, Int32) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int32`
+  eq(Int32 NULL, Int32 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int32`
+  eq(Int64, Int64) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int64`
+  eq(Int64 NULL, Int64 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int64`
+  eq(Float32, Float32) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Float32`
+  eq(Float32 NULL, Float32 NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Float32`
+  eq(Float64, Float64) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Float64`
+  eq(Float64 NULL, Float64 NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Float64`
+  eq(Boolean, Boolean) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Boolean`
+  eq(Boolean NULL, Boolean NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Boolean`
+  eq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
+  eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
+  eq(Array(Nothing), Array(Nothing)) :: Boolean                 : unable to unify `Tuple(UInt8, String)` with `Array(Nothing)`
+  eq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL  : unable to unify `Tuple(UInt8, String)` with `Array(Nothing)`
+  eq(Array(T0), Array(T0)) :: Boolean                           : unable to unify `Tuple(UInt8, String)` with `Array(T0)`
+  eq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL            : unable to unify `Tuple(UInt8, String)` with `Array(T0)`
+  eq(Tuple(T0, T1), Tuple(T0, T1)) :: Boolean                   : unable to unify `Tuple(UInt8,)` with `Tuple(T0, T1)`
 
 
 
 ast            : (1, 'a') = (1, 'a')
 raw expr       : eq(tuple(1_u8, "a"), tuple(1_u8, "a"))
-checked expr   : eq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
+checked expr   : eq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -153,7 +153,7 @@ output         : true
 
 ast            : (1, 'a') = (1, 'b')
 raw expr       : eq(tuple(1_u8, "a"), tuple(1_u8, "b"))
-checked expr   : eq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+checked expr   : eq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -366,50 +366,50 @@ error:
   --> SQL:1:10
   |
 1 | (1, 'a') != (1,)
-  |          ^^ no overload satisfies `noteq((UInt8, String), (UInt8,))`
+  |          ^^ no overload satisfies `noteq(Tuple(UInt8, String), Tuple(UInt8,))`
 
 has tried possible overloads:
-  noteq(String, String) :: Boolean                                 : unable to unify `(UInt8, String)` with `String`
-  noteq(String NULL, String NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `String`
-  noteq(Date, Date) :: Boolean                                     : unable to unify `(UInt8, String)` with `Date`
-  noteq(Date NULL, Date NULL) :: Boolean NULL                      : unable to unify `(UInt8, String)` with `Date`
-  noteq(Timestamp, Timestamp) :: Boolean                           : unable to unify `(UInt8, String)` with `Timestamp`
-  noteq(Timestamp NULL, Timestamp NULL) :: Boolean NULL            : unable to unify `(UInt8, String)` with `Timestamp`
-  noteq(UInt8, UInt8) :: Boolean                                   : unable to unify `(UInt8, String)` with `UInt8`
-  noteq(UInt8 NULL, UInt8 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `UInt8`
-  noteq(UInt16, UInt16) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt16`
-  noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt16`
-  noteq(UInt32, UInt32) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt32`
-  noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt32`
-  noteq(UInt64, UInt64) :: Boolean                                 : unable to unify `(UInt8, String)` with `UInt64`
-  noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `(UInt8, String)` with `UInt64`
-  noteq(Int8, Int8) :: Boolean                                     : unable to unify `(UInt8, String)` with `Int8`
-  noteq(Int8 NULL, Int8 NULL) :: Boolean NULL                      : unable to unify `(UInt8, String)` with `Int8`
-  noteq(Int16, Int16) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int16`
-  noteq(Int16 NULL, Int16 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int16`
-  noteq(Int32, Int32) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int32`
-  noteq(Int32 NULL, Int32 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int32`
-  noteq(Int64, Int64) :: Boolean                                   : unable to unify `(UInt8, String)` with `Int64`
-  noteq(Int64 NULL, Int64 NULL) :: Boolean NULL                    : unable to unify `(UInt8, String)` with `Int64`
-  noteq(Float32, Float32) :: Boolean                               : unable to unify `(UInt8, String)` with `Float32`
-  noteq(Float32 NULL, Float32 NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Float32`
-  noteq(Float64, Float64) :: Boolean                               : unable to unify `(UInt8, String)` with `Float64`
-  noteq(Float64 NULL, Float64 NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Float64`
-  noteq(Boolean, Boolean) :: Boolean                               : unable to unify `(UInt8, String)` with `Boolean`
-  noteq(Boolean NULL, Boolean NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Boolean`
-  noteq(Variant, Variant) :: Boolean                               : unable to unify `(UInt8, String)` with `Variant`
-  noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `(UInt8, String)` with `Variant`
-  noteq(Array(Nothing), Array(Nothing)) :: Boolean                 : unable to unify `(UInt8, String)` with `Array(Nothing)`
-  noteq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL  : unable to unify `(UInt8, String)` with `Array(Nothing)`
-  noteq(Array(T0), Array(T0)) :: Boolean                           : unable to unify `(UInt8, String)` with `Array(T0)`
-  noteq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL            : unable to unify `(UInt8, String)` with `Array(T0)`
-  noteq((T0, T1), (T0, T1)) :: Boolean                             : unable to unify `(UInt8,)` with `(T0, T1)`
+  noteq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
+  noteq(String NULL, String NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `String`
+  noteq(Date, Date) :: Boolean                                     : unable to unify `Tuple(UInt8, String)` with `Date`
+  noteq(Date NULL, Date NULL) :: Boolean NULL                      : unable to unify `Tuple(UInt8, String)` with `Date`
+  noteq(Timestamp, Timestamp) :: Boolean                           : unable to unify `Tuple(UInt8, String)` with `Timestamp`
+  noteq(Timestamp NULL, Timestamp NULL) :: Boolean NULL            : unable to unify `Tuple(UInt8, String)` with `Timestamp`
+  noteq(UInt8, UInt8) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `UInt8`
+  noteq(UInt8 NULL, UInt8 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `UInt8`
+  noteq(UInt16, UInt16) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt16`
+  noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt16`
+  noteq(UInt32, UInt32) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt32`
+  noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt32`
+  noteq(UInt64, UInt64) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt64`
+  noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt64`
+  noteq(Int8, Int8) :: Boolean                                     : unable to unify `Tuple(UInt8, String)` with `Int8`
+  noteq(Int8 NULL, Int8 NULL) :: Boolean NULL                      : unable to unify `Tuple(UInt8, String)` with `Int8`
+  noteq(Int16, Int16) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int16`
+  noteq(Int16 NULL, Int16 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int16`
+  noteq(Int32, Int32) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int32`
+  noteq(Int32 NULL, Int32 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int32`
+  noteq(Int64, Int64) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int64`
+  noteq(Int64 NULL, Int64 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int64`
+  noteq(Float32, Float32) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Float32`
+  noteq(Float32 NULL, Float32 NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Float32`
+  noteq(Float64, Float64) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Float64`
+  noteq(Float64 NULL, Float64 NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Float64`
+  noteq(Boolean, Boolean) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Boolean`
+  noteq(Boolean NULL, Boolean NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Boolean`
+  noteq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
+  noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
+  noteq(Array(Nothing), Array(Nothing)) :: Boolean                 : unable to unify `Tuple(UInt8, String)` with `Array(Nothing)`
+  noteq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL  : unable to unify `Tuple(UInt8, String)` with `Array(Nothing)`
+  noteq(Array(T0), Array(T0)) :: Boolean                           : unable to unify `Tuple(UInt8, String)` with `Array(T0)`
+  noteq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL            : unable to unify `Tuple(UInt8, String)` with `Array(T0)`
+  noteq(Tuple(T0, T1), Tuple(T0, T1)) :: Boolean                   : unable to unify `Tuple(UInt8,)` with `Tuple(T0, T1)`
 
 
 
 ast            : (1, 'a') != (1, 'a')
 raw expr       : noteq(tuple(1_u8, "a"), tuple(1_u8, "a"))
-checked expr   : noteq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
+checked expr   : noteq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -418,7 +418,7 @@ output         : false
 
 ast            : (1, 'a') != (1, 'b')
 raw expr       : noteq(tuple(1_u8, "a"), tuple(1_u8, "b"))
-checked expr   : noteq<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+checked expr   : noteq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -565,7 +565,7 @@ output         : true
 
 ast            : (1, 'b') < (1, 'a')
 raw expr       : lt(tuple(1_u8, "b"), tuple(1_u8, "a"))
-checked expr   : lt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
+checked expr   : lt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -574,7 +574,7 @@ output         : false
 
 ast            : (1, 'a') < (1, 'b')
 raw expr       : lt(tuple(1_u8, "a"), tuple(1_u8, "b"))
-checked expr   : lt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+checked expr   : lt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -583,7 +583,7 @@ output         : true
 
 ast            : (1, 'a') < (2, 'a')
 raw expr       : lt(tuple(1_u8, "a"), tuple(2_u8, "a"))
-checked expr   : lt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
+checked expr   : lt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -736,7 +736,7 @@ output         : true
 
 ast            : (1, 'b') <= (1, 'a')
 raw expr       : lte(tuple(1_u8, "b"), tuple(1_u8, "a"))
-checked expr   : lte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
+checked expr   : lte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -745,7 +745,7 @@ output         : false
 
 ast            : (1, 'a') <= (1, 'b')
 raw expr       : lte(tuple(1_u8, "a"), tuple(1_u8, "b"))
-checked expr   : lte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+checked expr   : lte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -754,7 +754,7 @@ output         : true
 
 ast            : (1, 'a') <= (2, 'a')
 raw expr       : lte(tuple(1_u8, "a"), tuple(2_u8, "a"))
-checked expr   : lte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
+checked expr   : lte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -908,7 +908,7 @@ output         : false
 
 ast            : (1, 'b') > (1, 'a')
 raw expr       : gt(tuple(1_u8, "b"), tuple(1_u8, "a"))
-checked expr   : gt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
+checked expr   : gt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -917,7 +917,7 @@ output         : true
 
 ast            : (1, 'a') > (1, 'b')
 raw expr       : gt(tuple(1_u8, "a"), tuple(1_u8, "b"))
-checked expr   : gt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+checked expr   : gt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -926,7 +926,7 @@ output         : false
 
 ast            : (1, 'a') > (2, 'a')
 raw expr       : gt(tuple(1_u8, "a"), tuple(2_u8, "a"))
-checked expr   : gt<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
+checked expr   : gt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1084,7 +1084,7 @@ output         : false
 
 ast            : (1, 'b') >= (1, 'a')
 raw expr       : gte(tuple(1_u8, "b"), tuple(1_u8, "a"))
-checked expr   : gte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
+checked expr   : gte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1093,7 +1093,7 @@ output         : true
 
 ast            : (1, 'a') >= (1, 'b')
 raw expr       : gte(tuple(1_u8, "a"), tuple(1_u8, "b"))
-checked expr   : gte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
+checked expr   : gte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1102,7 +1102,7 @@ output         : false
 
 ast            : (1, 'a') >= (2, 'a')
 raw expr       : gte(tuple(1_u8, "a"), tuple(2_u8, "a"))
-checked expr   : gte<T0=UInt8, T1=String><(T0, T1), (T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
+checked expr   : gte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}

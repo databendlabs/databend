@@ -358,6 +358,14 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           build-args: VERSION=${{ needs.create_release.outputs.version }}
+      - name: Update repo description
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ steps.login.outputs.dockerhub_repo }}
+          short-description: ${{ github.event.repository.description }}
+          readme-filepath: ./docker/README.md
 
   release_docker_separate:
     name: docker image seperated

@@ -24,7 +24,6 @@ use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::ScalarExpr;
 
 pub struct RulePushDownFilterEvalScalar {
     id: RuleID,

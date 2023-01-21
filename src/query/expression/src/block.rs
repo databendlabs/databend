@@ -155,7 +155,7 @@ impl DataBlock {
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.num_columns() == 0 || self.num_rows() == 0
+        self.num_rows() == 0
     }
 
     #[inline]
@@ -323,6 +323,24 @@ impl DataBlock {
                 Ok(BlockEntry {
                     data_type: field.data_type().clone(),
                     value: Value::Column(Column::from_arrow(col.as_ref(), field.data_type())),
+                })
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(DataBlock::new(cols, arrow_chunk.len()))
+    }
+
+    pub fn from_arrow_chunk_with_types<A: AsRef<dyn Array>>(
+        arrow_chunk: &ArrowChunk<A>,
+        data_types: &[DataType],
+    ) -> Result<Self> {
+        let cols = data_types
+            .iter()
+            .zip(arrow_chunk.arrays())
+            .map(|(data_type, col)| {
+                Ok(BlockEntry {
+                    data_type: data_type.clone(),
+                    value: Value::Column(Column::from_arrow(col.as_ref(), data_type)),
                 })
             })
             .collect::<Result<_>>()?;

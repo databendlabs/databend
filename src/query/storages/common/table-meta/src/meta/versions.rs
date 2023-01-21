@@ -100,7 +100,6 @@ pub struct V2BloomBlock {}
 
 impl Versioned<0> for V0BloomBlock {}
 impl Versioned<2> for V2BloomBlock {}
-
 impl Versioned<3> for BlockFilter {}
 
 pub enum BlockBloomFilterIndexVersion {
@@ -139,7 +138,7 @@ mod converters {
                 1 => Ok(SnapshotVersion::V1(ver_eq::<_, 1>(PhantomData))),
                 2 => Ok(SnapshotVersion::V2(ver_eq::<_, 2>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
-                    "unknown snapshot segment version {value}, versions supported: 0, 1"
+                    "unknown snapshot segment version {value}, versions supported: 0, 1, 2"
                 ))),
             }
         }
@@ -180,7 +179,7 @@ mod converters {
         }
     }
 
-    /// Statically check that if T implements Versoined<U> where U equals V
+    /// Statically check that if T implements Versioned<U> where U equals V
     #[inline]
     fn ver_eq<T, const V: u64>(t: PhantomData<T>) -> PhantomData<T>
     where T: Versioned<V> {
