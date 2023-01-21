@@ -21,7 +21,6 @@ use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
 use backon::Retryable;
 use common_base::base::ProgressValues;
-use common_cache::Cache;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
@@ -34,7 +33,8 @@ use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use opendal::Operator;
-use storages_common_table_meta::caches::CacheManager;
+use storages_common_cache::CacheAccessor;
+use storages_common_table_meta::caches::CachedMeta;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -48,7 +48,7 @@ use tracing::info;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::io::write_meta;
+use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
@@ -313,14 +313,16 @@ impl FuseTable {
             snapshot.table_statistics_location.is_some() && table_statistics.is_some();
 
         // 1. write down snapshot
-        write_meta(operator, &snapshot_location, &snapshot).await?;
+        snapshot.write_meta(operator, &snapshot_location).await?;
         if need_to_save_statistics {
-            write_meta(
-                operator,
-                &snapshot.table_statistics_location.clone().unwrap(),
-                table_statistics.clone().unwrap(),
-            )
-            .await?;
+            table_statistics
+                .clone()
+                .unwrap()
+                .write_meta(
+                    operator,
+                    &snapshot.table_statistics_location.clone().unwrap(),
+                )
+                .await?;
         }
 
         // 2. prepare table meta
@@ -358,22 +360,14 @@ impl FuseTable {
         let reply = catalog.update_table_meta(table_info, req).await;
         match reply {
             Ok(_) => {
-                if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
-                    let cache = &mut snapshot_cache.write();
-                    cache.put(snapshot_location.clone(), Arc::new(snapshot.clone()));
-                }
-                // upsert snapshot stastics cache
+                // upsert snapshot statistics cache
                 if let Some(snapshot_statistics) = table_statistics {
-                    if let Some(mut_snapshot_statistics) =
-                        CacheManager::instance().get_table_snapshot_statistics_cache()
-                    {
-                        let cache = &mut mut_snapshot_statistics.write();
-                        cache.put(
-                            snapshot.table_statistics_location.unwrap(),
-                            Arc::new(snapshot_statistics),
-                        );
+                    if let Some(location) = &snapshot.table_statistics_location {
+                        TableSnapshotStatistics::cache()
+                            .put(location.clone(), Arc::new(snapshot_statistics));
                     }
                 }
+                TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
                 // try keep a hit file of last snapshot
                 Self::write_last_snapshot_hint(operator, location_generator, snapshot_location)
                     .await;
