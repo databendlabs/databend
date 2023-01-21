@@ -56,7 +56,7 @@ explain select * from v where a > 1
 UnionAll
 ├── estimated rows: 1.33
 ├── Filter
-│   ├── filters: [gt(v.a (#0), CAST(1_u8 AS Int32))]
+│   ├── filters: [gt(v.a (#0), to_int32(1_u8))]
 │   ├── estimated rows: 0.67
 │   └── TableScan
 │       ├── table: default.default.t1
@@ -67,7 +67,7 @@ UnionAll
 │       ├── push downs: [filters: [gt(v.a (#0), 1_i32)], limit: NONE]
 │       └── estimated rows: 2.00
 └── Filter
-    ├── filters: [gt(a (#2), CAST(1_u8 AS Int32))]
+    ├── filters: [gt(a (#2), to_int32(1_u8))]
     ├── estimated rows: 0.67
     └── TableScan
         ├── table: default.default.t2
