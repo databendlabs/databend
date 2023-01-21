@@ -1514,10 +1514,10 @@ evaluation (internal):
 
 
 ast            : CAST(((1, TRUE), 1) AS Tuple(Tuple(INT, INT), INT))
-raw expr       : CAST(tuple(tuple(1_u8, true), 1_u8) AS ((Int32, Int32), Int32))
-checked expr   : CAST(tuple<(UInt8, Boolean), UInt8>(tuple<UInt8, Boolean>(1_u8, true), 1_u8) AS ((Int32, Int32), Int32))
+raw expr       : CAST(tuple(tuple(1_u8, true), 1_u8) AS Tuple(Tuple(Int32, Int32), Int32))
+checked expr   : CAST(tuple<Tuple(UInt8, Boolean), UInt8>(tuple<UInt8, Boolean>(1_u8, true), 1_u8) AS Tuple(Tuple(Int32, Int32), Int32))
 optimized expr : ((1_i32, 1_i32), 1_i32)
-output type    : ((Int32, Int32), Int32)
+output type    : Tuple(Tuple(Int32, Int32), Int32)
 output domain  : (({1..=1}, {1..=1}), {1..=1})
 output         : ((1_i32, 1_i32), 1_i32)
 
@@ -1548,10 +1548,10 @@ error:
 
 
 ast            : CAST([(1,TRUE),(2,FALSE)] AS Array(Tuple(INT, INT)))
-raw expr       : CAST(array(tuple(1_u8, true), tuple(2_u8, false)) AS Array((Int32, Int32)))
-checked expr   : CAST(array<T0=(UInt8, Boolean)><T0, T0>(tuple<UInt8, Boolean>(1_u8, true), tuple<UInt8, Boolean>(2_u8, false)) AS Array((Int32, Int32)))
+raw expr       : CAST(array(tuple(1_u8, true), tuple(2_u8, false)) AS Array(Tuple(Int32, Int32)))
+checked expr   : CAST(array<T0=Tuple(UInt8, Boolean)><T0, T0>(tuple<UInt8, Boolean>(1_u8, true), tuple<UInt8, Boolean>(2_u8, false)) AS Array(Tuple(Int32, Int32)))
 optimized expr : [(1_i32, 1_i32), (2_i32, 0_i32)]
-output type    : Array((Int32, Int32))
+output type    : Array(Tuple(Int32, Int32))
 output domain  : [({1..=2}, {0..=1})]
 output         : [(1_i32, 1_i32), (2_i32, 0_i32)]
 
@@ -3267,64 +3267,64 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(((1, TRUE), 1) AS Tuple(Tuple(INT, INT), INT))
-raw expr       : TRY_CAST(tuple(tuple(1_u8, true), 1_u8) AS ((Int32, Int32), Int32))
-checked expr   : TRY_CAST(tuple<(UInt8, Boolean), UInt8>(tuple<UInt8, Boolean>(1_u8, true), 1_u8) AS ((Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL)
+raw expr       : TRY_CAST(tuple(tuple(1_u8, true), 1_u8) AS Tuple(Tuple(Int32, Int32), Int32))
+checked expr   : TRY_CAST(tuple<Tuple(UInt8, Boolean), UInt8>(tuple<UInt8, Boolean>(1_u8, true), 1_u8) AS Tuple(Tuple(Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL)
 optimized expr : ((1_i32, 1_i32), 1_i32)
-output type    : ((Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL
+output type    : Tuple(Tuple(Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL
 output domain  : (({1..=1}, {1..=1}), {1..=1})
 output         : ((1_i32, 1_i32), 1_i32)
 
 
-ast            : CAST(TRY_CAST(1 AS INT32) AS INT32)
-raw expr       : CAST(TRY_CAST(1_u8 AS Int32) AS Int32)
-checked expr   : CAST(try_to_int32<UInt8>(1_u8) AS Int32)
+ast            : TRY_CAST(TRY_CAST(1 AS INT32) AS INT32)
+raw expr       : TRY_CAST(TRY_CAST(1_u8 AS Int32) AS Int32)
+checked expr   : try_to_int32<UInt8>(1_u8)
 optimized expr : 1_i32
-output type    : Int32
+output type    : Int32 NULL
 output domain  : {1..=1}
 output         : 1_i32
 
 
 ast            : TRY_CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT NULL), INT))
-raw expr       : TRY_CAST(tuple(tuple(1_u8, "a"), 1_u8) AS ((Int32, Int32 NULL), Int32))
-checked expr   : TRY_CAST(tuple<(UInt8, String), UInt8>(tuple<UInt8, String>(1_u8, "a"), 1_u8) AS ((Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL)
+raw expr       : TRY_CAST(tuple(tuple(1_u8, "a"), 1_u8) AS Tuple(Tuple(Int32, Int32 NULL), Int32))
+checked expr   : TRY_CAST(tuple<Tuple(UInt8, String), UInt8>(tuple<UInt8, String>(1_u8, "a"), 1_u8) AS Tuple(Tuple(Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL)
 optimized expr : ((1_i32, NULL), 1_i32)
-output type    : ((Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL
+output type    : Tuple(Tuple(Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL
 output domain  : (({1..=1}, {NULL}), {1..=1})
 output         : ((1_i32, NULL), 1_i32)
 
 
 ast            : TRY_CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT), INT) NULL)
-raw expr       : TRY_CAST(tuple(tuple(1_u8, "a"), 1_u8) AS ((Int32, Int32), Int32) NULL)
-checked expr   : TRY_CAST(tuple<(UInt8, String), UInt8>(tuple<UInt8, String>(1_u8, "a"), 1_u8) AS ((Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL)
+raw expr       : TRY_CAST(tuple(tuple(1_u8, "a"), 1_u8) AS Tuple(Tuple(Int32, Int32), Int32) NULL)
+checked expr   : TRY_CAST(tuple<Tuple(UInt8, String), UInt8>(tuple<UInt8, String>(1_u8, "a"), 1_u8) AS Tuple(Tuple(Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL)
 optimized expr : ((1_i32, NULL), 1_i32)
-output type    : ((Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL
+output type    : Tuple(Tuple(Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL
 output domain  : (({1..=1}, {NULL}), {1..=1})
 output         : ((1_i32, NULL), 1_i32)
 
 
 ast            : TRY_CAST([(1,TRUE),(2,FALSE)] AS Array(Tuple(INT, INT)))
-raw expr       : TRY_CAST(array(tuple(1_u8, true), tuple(2_u8, false)) AS Array((Int32, Int32)))
-checked expr   : TRY_CAST(array<T0=(UInt8, Boolean)><T0, T0>(tuple<UInt8, Boolean>(1_u8, true), tuple<UInt8, Boolean>(2_u8, false)) AS Array((Int32 NULL, Int32 NULL) NULL) NULL)
+raw expr       : TRY_CAST(array(tuple(1_u8, true), tuple(2_u8, false)) AS Array(Tuple(Int32, Int32)))
+checked expr   : TRY_CAST(array<T0=Tuple(UInt8, Boolean)><T0, T0>(tuple<UInt8, Boolean>(1_u8, true), tuple<UInt8, Boolean>(2_u8, false)) AS Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL)
 optimized expr : [(1_i32, 1_i32), (2_i32, 0_i32)]
-output type    : Array((Int32 NULL, Int32 NULL) NULL) NULL
+output type    : Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL
 output domain  : [({1..=2}, {0..=1})]
 output         : [(1_i32, 1_i32), (2_i32, 0_i32)]
 
 
 ast            : TRY_CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT)) NULL)
-raw expr       : TRY_CAST(array(tuple(1_u8, "a"), tuple(2_u8, "a")) AS Array((Int32, Int32)) NULL)
-checked expr   : TRY_CAST(array<T0=(UInt8, String)><T0, T0>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a")) AS Array((Int32 NULL, Int32 NULL) NULL) NULL)
+raw expr       : TRY_CAST(array(tuple(1_u8, "a"), tuple(2_u8, "a")) AS Array(Tuple(Int32, Int32)) NULL)
+checked expr   : TRY_CAST(array<T0=Tuple(UInt8, String)><T0, T0>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a")) AS Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL)
 optimized expr : [(1_i32, NULL), (2_i32, NULL)]
-output type    : Array((Int32 NULL, Int32 NULL) NULL) NULL
+output type    : Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL
 output domain  : [({1..=2}, {0..=0} ∪ {NULL})]
 output         : [(1_i32, NULL), (2_i32, NULL)]
 
 
 ast            : TRY_CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT NULL)))
-raw expr       : TRY_CAST(array(tuple(1_u8, "a"), tuple(2_u8, "a")) AS Array((Int32, Int32 NULL)))
-checked expr   : TRY_CAST(array<T0=(UInt8, String)><T0, T0>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a")) AS Array((Int32 NULL, Int32 NULL) NULL) NULL)
+raw expr       : TRY_CAST(array(tuple(1_u8, "a"), tuple(2_u8, "a")) AS Array(Tuple(Int32, Int32 NULL)))
+checked expr   : TRY_CAST(array<T0=Tuple(UInt8, String)><T0, T0>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a")) AS Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL)
 optimized expr : [(1_i32, NULL), (2_i32, NULL)]
-output type    : Array((Int32 NULL, Int32 NULL) NULL) NULL
+output type    : Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL
 output domain  : [({1..=2}, {0..=0} ∪ {NULL})]
 output         : [(1_i32, NULL), (2_i32, NULL)]
 

@@ -554,7 +554,11 @@ fn test_cast_to_nested_type(file: &mut impl Write, is_try: bool) {
         format!("{prefix}CAST(((1, TRUE), 1) AS Tuple(Tuple(INT, INT), INT))"),
         &[],
     );
-    run_ast(file, format!("CAST(TRY_CAST(1 AS INT32) AS INT32)"), &[]);
+    run_ast(
+        file,
+        format!("{prefix}CAST(TRY_CAST(1 AS INT32) AS INT32)"),
+        &[],
+    );
     run_ast(
         file,
         format!("{prefix}CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT NULL), INT))"),
