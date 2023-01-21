@@ -33,7 +33,6 @@ use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::DataType;
 use crate::utils::arrow::constant_bitmap;
-use crate::utils::calculate_function_domain;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
@@ -207,10 +206,10 @@ impl<'a> Evaluator<'a> {
         }
 
         if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
-            if let Some(val) =
+            if let Some(new_value) =
                 self.run_simple_cast(span.clone(), src_type, dest_type, value.clone(), &cast_fn)?
             {
-                return Ok(val);
+                return Ok(new_value);
             }
         }
 
@@ -248,7 +247,7 @@ impl<'a> Evaluator<'a> {
                 Value::Scalar(_) => self.run_cast(span, inner_src_ty, dest_type, value),
                 Value::Column(Column::Nullable(col)) => {
                     if col.validity.unset_bits() > 0 {
-                        return Err((span, (format!("unable to cast {src_type} to {dest_type}"))));
+                        return Err((span, (format!("unable to cast NULL to {dest_type}"))));
                     }
                     let column = self
                         .run_cast(span, inner_src_ty, dest_type, Value::Column(col.column))?
@@ -359,10 +358,10 @@ impl<'a> Evaluator<'a> {
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
-            if let Ok(Some(val)) = self
-                .run_simple_cast(span.clone(), src_type, dest_type, value.clone(), &cast_fn)
+            if let Ok(Some(new_value)) =
+                self.run_simple_cast(span.clone(), src_type, dest_type, value.clone(), &cast_fn)
             {
-                return val;
+                return new_value;
             }
         }
 
@@ -610,7 +609,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 dest_type,
             } => {
                 let (inner_expr, inner_domain) = self.fold_once(expr);
-                
+
                 let new_domain = if *is_try {
                     inner_domain.and_then(|inner_domain| {
                         self.calculate_try_cast(
@@ -752,9 +751,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
 
         if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
-            return self
-                .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
-                .unwrap();
+            if let Some(new_domain) =
+                self.calculate_simple_cast(span.clone(), src_type, dest_type, domain, &cast_fn)
+            {
+                return new_domain;
+            }
         }
 
         match (src_type, dest_type) {
@@ -813,6 +814,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         .collect::<Option<Vec<_>>>()?,
                 ))
             }
+
             _ => None,
         }
     }
@@ -832,9 +834,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
-            return self
-                .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
-                .unwrap();
+            if let Some(new_domain) =
+                self.calculate_simple_cast(span.clone(), src_type, dest_type, domain, &cast_fn)
+            {
+                return new_domain;
+            }
         }
 
         match (src_type, inner_dest_type) {
@@ -903,15 +907,27 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         dest_type: &DataType,
         domain: &Domain,
         cast_fn: &str,
-    ) -> Result<Option<Domain>> {
-        let (domain, ty) = calculate_function_domain(
-            span,
-            cast_fn,
-            [(domain.clone(), src_type.clone())],
+    ) -> Option<Option<Domain>> {
+        let expr = Expr::ColumnRef {
+            span: span.clone(),
+            id: 0,
+            data_type: src_type.clone(),
+            display_name: String::new(),
+        };
+
+        let cast_expr = check_function(span, cast_fn, &[], &[expr], self.fn_registry).ok()?;
+
+        if cast_expr.data_type() != dest_type {
+            return None;
+        }
+
+        let (_, output_domain) = ConstantFolder::fold_with_domain(
+            &cast_expr,
+            [(0, domain.clone())].into_iter().collect(),
             self.func_ctx,
             self.fn_registry,
-        )?;
-        assert_eq!(&ty, dest_type);
-        Ok(domain)
+        );
+
+        Some(output_domain)
     }
 }

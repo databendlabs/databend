@@ -1,6 +1,32 @@
 error: 
   --> SQL:1:1
   |
+1 | CAST(NULL AS UINT8)
+  | ^^^^^^^^^^^^^^^^^^^ unable to cast NULL to UInt8
+
+
+
+ast            : CAST(NULL AS UINT8 NULL)
+raw expr       : CAST(NULL AS UInt8 NULL)
+checked expr   : CAST(NULL AS UInt8 NULL)
+optimized expr : NULL
+output type    : UInt8 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(0 AS UINT8 NULL)
+raw expr       : CAST(0_u8 AS UInt8 NULL)
+checked expr   : CAST(0_u8 AS UInt8 NULL)
+optimized expr : 0_u8
+output type    : UInt8 NULL
+output domain  : {0..=0}
+output         : 0_u8
+
+
+error: 
+  --> SQL:1:1
+  |
 1 | CAST(a AS UINT8)
   | ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint8(512_u16)`
 
@@ -50,7 +76,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([[a, b], NULL, NULL] AS Array(Array(Int8)))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast Array(Int16) NULL to Array(Int8)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast NULL to Array(Int8)
 
 
 
@@ -1496,6 +1522,15 @@ output domain  : (({1..=1}, {1..=1}), {1..=1})
 output         : ((1_i32, 1_i32), 1_i32)
 
 
+ast            : CAST(TRY_CAST(1 AS INT32) AS INT32)
+raw expr       : CAST(TRY_CAST(1_u8 AS Int32) AS Int32)
+checked expr   : CAST(try_to_int32<UInt8>(1_u8) AS Int32)
+optimized expr : 1_i32
+output type    : Int32
+output domain  : {1..=1}
+output         : 1_i32
+
+
 error: 
   --> SQL:1:1
   |
@@ -1552,6 +1587,33 @@ error:
 1 | CAST([['a'], ['b', 'c']] AS Array(Array(INT) NULL))
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `Int32` because invalid digit found in string while evaluating function `to_int32("a")`
 
+
+
+ast            : TRY_CAST(NULL AS UINT8)
+raw expr       : TRY_CAST(NULL AS UInt8)
+checked expr   : try_to_uint8<UInt8 NULL>(CAST(NULL AS UInt8 NULL))
+optimized expr : NULL
+output type    : UInt8 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(NULL AS UINT8 NULL)
+raw expr       : TRY_CAST(NULL AS UInt8 NULL)
+checked expr   : TRY_CAST(NULL AS UInt8 NULL)
+optimized expr : NULL
+output type    : UInt8 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(0 AS UINT8 NULL)
+raw expr       : TRY_CAST(0_u8 AS UInt8 NULL)
+checked expr   : TRY_CAST(0_u8 AS UInt8 NULL)
+optimized expr : 0_u8
+output type    : UInt8 NULL
+output domain  : {0..=0}
+output         : 0_u8
 
 
 ast            : TRY_CAST(a AS UINT8)
@@ -3211,6 +3273,15 @@ optimized expr : ((1_i32, 1_i32), 1_i32)
 output type    : ((Int32 NULL, Int32 NULL) NULL, Int32 NULL) NULL
 output domain  : (({1..=1}, {1..=1}), {1..=1})
 output         : ((1_i32, 1_i32), 1_i32)
+
+
+ast            : CAST(TRY_CAST(1 AS INT32) AS INT32)
+raw expr       : CAST(TRY_CAST(1_u8 AS Int32) AS Int32)
+checked expr   : CAST(try_to_int32<UInt8>(1_u8) AS Int32)
+optimized expr : 1_i32
+output type    : Int32
+output domain  : {1..=1}
+output         : 1_i32
 
 
 ast            : TRY_CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT NULL), INT))

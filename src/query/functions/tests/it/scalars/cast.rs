@@ -43,6 +43,9 @@ fn test_cast() {
 fn test_cast_primitive(file: &mut impl Write, is_try: bool) {
     let prefix = if is_try { "TRY_" } else { "" };
 
+    run_ast(file, format!("{prefix}CAST(NULL AS UINT8)"), &[]);
+    run_ast(file, format!("{prefix}CAST(NULL AS UINT8 NULL)"), &[]);
+    run_ast(file, format!("{prefix}CAST(0 AS UINT8 NULL)"), &[]);
     run_ast(file, format!("{prefix}CAST(a AS UINT8)"), &[(
         "a",
         UInt16Type::from_data(vec![0u16, 64, 255, 512, 1024]),
@@ -551,6 +554,7 @@ fn test_cast_to_nested_type(file: &mut impl Write, is_try: bool) {
         format!("{prefix}CAST(((1, TRUE), 1) AS Tuple(Tuple(INT, INT), INT))"),
         &[],
     );
+    run_ast(file, format!("CAST(TRY_CAST(1 AS INT32) AS INT32)"), &[]);
     run_ast(
         file,
         format!("{prefix}CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT NULL), INT))"),

@@ -202,7 +202,13 @@ pub fn check_function<Index: ColumnIndex>(
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
-        match try_check_function(span.clone(), args, &func.signature, &additional_rules, fn_registry) {
+        match try_check_function(
+            span.clone(),
+            args,
+            &func.signature,
+            &additional_rules,
+            fn_registry,
+        ) {
             Ok((checked_args, return_type, generics)) => {
                 return Ok(Expr::FunctionCall {
                     span,
