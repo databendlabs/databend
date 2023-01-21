@@ -145,10 +145,12 @@ pub fn check_cast<Index: ColumnIndex>(
     } else {
         // fast path to eval function for cast
         if let Some(cast_fn) = get_simple_cast_function(is_try, dest_type) {
-            let cast_expr =
-                check_function(span.clone(), &cast_fn, &[], &[expr.clone()], fn_registry)?;
-            if cast_expr.data_type() == &wrapped_dest_type {
-                return Ok(cast_expr);
+            if let Ok(cast_expr) =
+                check_function(span.clone(), &cast_fn, &[], &[expr.clone()], fn_registry)
+            {
+                if cast_expr.data_type() == &wrapped_dest_type {
+                    return Ok(cast_expr);
+                }
             }
         }
 

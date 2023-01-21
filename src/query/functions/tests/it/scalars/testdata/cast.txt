@@ -1,3 +1,37 @@
+ast            : CAST(0 AS UINT8)
+raw expr       : CAST(0_u8 AS UInt8)
+checked expr   : 0_u8
+output type    : UInt8
+output domain  : {0..=0}
+output         : 0_u8
+
+
+ast            : CAST(0 AS UINT8 NULL)
+raw expr       : CAST(0_u8 AS UInt8 NULL)
+checked expr   : CAST(0_u8 AS UInt8 NULL)
+optimized expr : 0_u8
+output type    : UInt8 NULL
+output domain  : {0..=0}
+output         : 0_u8
+
+
+ast            : CAST('str' AS STRING)
+raw expr       : CAST("str" AS String)
+checked expr   : "str"
+output type    : String
+output domain  : {"str"..="str"}
+output         : "str"
+
+
+ast            : CAST('str' AS STRING NULL)
+raw expr       : CAST("str" AS String NULL)
+checked expr   : CAST("str" AS String NULL)
+optimized expr : "str"
+output type    : String NULL
+output domain  : {"str"..="str"}
+output         : "str"
+
+
 error: 
   --> SQL:1:1
   |
@@ -15,13 +49,21 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : CAST(0 AS UINT8 NULL)
-raw expr       : CAST(0_u8 AS UInt8 NULL)
-checked expr   : CAST(0_u8 AS UInt8 NULL)
-optimized expr : 0_u8
-output type    : UInt8 NULL
-output domain  : {0..=0}
-output         : 0_u8
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(NULL AS STRING)
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast NULL to String
+
+
+
+ast            : CAST(NULL AS STRING NULL)
+raw expr       : CAST(NULL AS String NULL)
+checked expr   : CAST(NULL AS String NULL)
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
 
 
 error: 
@@ -1589,6 +1631,42 @@ error:
 
 
 
+ast            : TRY_CAST(0 AS UINT8)
+raw expr       : TRY_CAST(0_u8 AS UInt8)
+checked expr   : try_to_uint8<UInt8>(0_u8)
+optimized expr : 0_u8
+output type    : UInt8 NULL
+output domain  : {0..=0}
+output         : 0_u8
+
+
+ast            : TRY_CAST(0 AS UINT8 NULL)
+raw expr       : TRY_CAST(0_u8 AS UInt8 NULL)
+checked expr   : TRY_CAST(0_u8 AS UInt8 NULL)
+optimized expr : 0_u8
+output type    : UInt8 NULL
+output domain  : {0..=0}
+output         : 0_u8
+
+
+ast            : TRY_CAST('str' AS STRING)
+raw expr       : TRY_CAST("str" AS String)
+checked expr   : TRY_CAST("str" AS String NULL)
+optimized expr : "str"
+output type    : String NULL
+output domain  : {"str"..="str"}
+output         : "str"
+
+
+ast            : TRY_CAST('str' AS STRING NULL)
+raw expr       : TRY_CAST("str" AS String NULL)
+checked expr   : TRY_CAST("str" AS String NULL)
+optimized expr : "str"
+output type    : String NULL
+output domain  : {"str"..="str"}
+output         : "str"
+
+
 ast            : TRY_CAST(NULL AS UINT8)
 raw expr       : TRY_CAST(NULL AS UInt8)
 checked expr   : try_to_uint8<UInt8 NULL>(CAST(NULL AS UInt8 NULL))
@@ -1607,13 +1685,22 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : TRY_CAST(0 AS UINT8 NULL)
-raw expr       : TRY_CAST(0_u8 AS UInt8 NULL)
-checked expr   : TRY_CAST(0_u8 AS UInt8 NULL)
-optimized expr : 0_u8
-output type    : UInt8 NULL
-output domain  : {0..=0}
-output         : 0_u8
+ast            : TRY_CAST(NULL AS STRING)
+raw expr       : TRY_CAST(NULL AS String)
+checked expr   : try_to_string<UInt8 NULL>(CAST(NULL AS UInt8 NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(NULL AS STRING NULL)
+raw expr       : TRY_CAST(NULL AS String NULL)
+checked expr   : TRY_CAST(NULL AS String NULL)
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : TRY_CAST(a AS UINT8)

@@ -578,8 +578,8 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         (old_expr, old_domain)
     }
 
-    /// Fold expression by one step, specifically reducing expression by domain calculation and then
-    /// folding the function calls with all constant arguments.
+    /// Fold expression by one step, specifically, by reducing expression by domain calculation and then
+    /// folding the function calls whose all arguments are constants.
     fn fold_once(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
         let (new_expr, domain) = match expr {
             Expr::Constant {

@@ -43,9 +43,14 @@ fn test_cast() {
 fn test_cast_primitive(file: &mut impl Write, is_try: bool) {
     let prefix = if is_try { "TRY_" } else { "" };
 
+    run_ast(file, format!("{prefix}CAST(0 AS UINT8)"), &[]);
+    run_ast(file, format!("{prefix}CAST(0 AS UINT8 NULL)"), &[]);
+    run_ast(file, format!("{prefix}CAST('str' AS STRING)"), &[]);
+    run_ast(file, format!("{prefix}CAST('str' AS STRING NULL)"), &[]);
     run_ast(file, format!("{prefix}CAST(NULL AS UINT8)"), &[]);
     run_ast(file, format!("{prefix}CAST(NULL AS UINT8 NULL)"), &[]);
-    run_ast(file, format!("{prefix}CAST(0 AS UINT8 NULL)"), &[]);
+    run_ast(file, format!("{prefix}CAST(NULL AS STRING)"), &[]);
+    run_ast(file, format!("{prefix}CAST(NULL AS STRING NULL)"), &[]);
     run_ast(file, format!("{prefix}CAST(a AS UINT8)"), &[(
         "a",
         UInt16Type::from_data(vec![0u16, 64, 255, 512, 1024]),
