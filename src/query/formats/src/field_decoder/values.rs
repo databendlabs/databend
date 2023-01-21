@@ -22,11 +22,11 @@ use common_expression::NullableDeserializer;
 use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
 use common_expression::TypeDeserializer;
-use common_io::consts::FALSE_BYTES_LOWER;
-use common_io::consts::INF_BYTES_LOWER;
-use common_io::consts::NAN_BYTES_LOWER;
-use common_io::consts::NULL_BYTES_UPPER;
-use common_io::consts::TRUE_BYTES_LOWER;
+use common_io::constants::FALSE_BYTES_LOWER;
+use common_io::constants::INF_BYTES_LOWER;
+use common_io::constants::NAN_BYTES_LOWER;
+use common_io::constants::NULL_BYTES_UPPER;
+use common_io::constants::TRUE_BYTES_LOWER;
 use common_io::cursor_ext::BufferReadStringExt;
 use common_io::cursor_ext::ReadBytesExt;
 

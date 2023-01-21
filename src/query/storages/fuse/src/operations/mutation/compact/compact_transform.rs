@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_expression::BlockCompactThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
 use storages_common_index::BloomIndex;
@@ -258,7 +259,7 @@ impl Processor for CompactTransform {
                     };
 
                     // serialize data block.
-                    let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
+                    let mut block_data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
                     let (file_size, col_metas) = io::write_block(
                         &self.write_settings,
                         &self.schema,
