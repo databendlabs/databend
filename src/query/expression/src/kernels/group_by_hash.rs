@@ -39,6 +39,7 @@ use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
+use crate::with_unsigned_number_mapped_type;
 use crate::Column;
 use crate::TypeDeserializer;
 
@@ -221,6 +222,23 @@ where T: Clone
         group_items: &[(usize, DataType)],
     ) -> Result<Vec<Column>> {
         debug_assert!(!keys.is_empty());
+
+        // faster path for single unsigned integer to column
+        if group_items.len() == 1 && group_items[0].1.is_unsigned_numeric() {
+            match group_items[0].1 {
+                DataType::Number(ty) => with_unsigned_number_mapped_type!(|NUM_TYPE| match ty {
+                    NumberDataType::NUM_TYPE => {
+                        let buffer: Buffer<T> = keys.into();
+                        let col =
+                            unsafe { std::mem::transmute::<Buffer<T>, Buffer<NUM_TYPE>>(buffer) };
+                        return Ok(vec![NumberType::<NUM_TYPE>::upcast_column(col)]);
+                    }
+                    _ => {}
+                }),
+                _ => {}
+            }
+        }
+
         let mut keys = keys;
         let rows = keys.len();
         let step = std::mem::size_of::<T>();

@@ -60,7 +60,7 @@ impl VisitorMut for DistinctToGroupBy {
                             distinct: false,
                             select_list: vec![],
                             from: from.clone(),
-                            selection: None,
+                            selection: selection.clone(),
                             group_by: args.clone(),
                             having: None,
                         })),
@@ -92,7 +92,7 @@ impl VisitorMut for DistinctToGroupBy {
                             subquery: Box::new(subquery),
                             alias: None,
                         }],
-                        selection: selection.clone(),
+                        selection: None,
                         group_by: vec![],
                         having: having.clone(),
                     };
