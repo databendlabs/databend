@@ -158,10 +158,11 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_function_factory("ignore", |_, args_type| {
+        let args_type = (0..args_type.len()).map(DataType::Generic).collect();
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "ignore".to_string(),
-                args_type: vec![DataType::Generic(0); args_type.len()],
+                args_type,
                 return_type: DataType::Boolean,
                 property: FunctionProperty::default(),
             },

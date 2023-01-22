@@ -468,16 +468,7 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
             Some(DataType::Number(num1.lossful_super_type(num2)))
         }
 
-        (DataType::String, DataType::Timestamp) | (DataType::Timestamp, DataType::String) => {
-            Some(DataType::Timestamp)
-        }
-        (DataType::String, DataType::Date) | (DataType::Date, DataType::String) => {
-            Some(DataType::Date)
-        }
-        (DataType::Date, DataType::Timestamp) | (DataType::Timestamp, DataType::Date) => {
-            Some(DataType::Timestamp)
-        }
-        _ => Some(DataType::Variant),
+        _ => None,
     }
 }
 

@@ -25,13 +25,15 @@ output domain  : [[{"a"..="b"}]]
 output         : [["a", "b"], []]
 
 
-ast            : ['a', 1, parse_json('{"foo":"bar"}')]
-raw expr       : array("a", 1_u8, parse_json("{\"foo\":\"bar\"}"))
-checked expr   : array<T0=Variant><T0, T0, T0>(to_variant<T0=String><T0>("a"), to_variant<T0=UInt8><T0>(1_u8), parse_json<String>("{\"foo\":\"bar\"}"))
-optimized expr : ["a", 1, {"foo":"bar"}]
-output type    : Array(Variant)
-output domain  : [Undefined]
-output         : ["a", 1, {"foo":"bar"}]
+error: 
+  --> SQL:1:1
+  |
+1 | ['a', 1, parse_json('{"foo":"bar"}')]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(String, UInt8, Variant)`
+
+has tried possible overloads:
+  array(T0, T0, T0) :: Array(T0)  : unable to find a common super type for `String` and `UInt8`
+
 
 
 ast            : [parse_json('[]'), parse_json('{"foo":"bar"}')]
@@ -471,27 +473,14 @@ evaluation (internal):
 +--------------+---------------------------------------------------------------------------+
 
 
-ast            : nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
-raw expr       : contains(array(1_u8, "9", 3_u8, 10_u8, 12_u8, true), nullable_col::Int64 NULL)
-checked expr   : contains<T0=Variant NULL><Array(T0), T0>(CAST(array<T0=Variant><T0, T0, T0, T0, T0, T0>(to_variant<T0=UInt8><T0>(1_u8), to_variant<T0=String><T0>("9"), to_variant<T0=UInt8><T0>(3_u8), to_variant<T0=UInt8><T0>(10_u8), to_variant<T0=UInt8><T0>(12_u8), to_variant<T0=Boolean><T0>(true)) AS Array(Variant NULL)), CAST(nullable_col AS Variant NULL))
-optimized expr : contains<T0=Variant NULL><Array(T0), T0>([1, "9", 3, 10, 12, true], CAST(nullable_col AS Variant NULL))
-evaluation:
-+--------+-------------------+---------------+
-|        | nullable_col      | Output        |
-+--------+-------------------+---------------+
-| Type   | Int64 NULL        | Boolean       |
-| Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} |
-| Row 0  | 9_i64             | false         |
-| Row 1  | 10_i64            | true          |
-| Row 2  | NULL              | false         |
-| Row 3  | NULL              | false         |
-+--------+-------------------+---------------+
-evaluation (internal):
-+--------------+---------------------------------------------------------------------------+
-| Column       | Data                                                                      |
-+--------------+---------------------------------------------------------------------------+
-| nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] } |
-| Output       | Boolean([0b____0010])                                                     |
-+--------------+---------------------------------------------------------------------------+
+error: 
+  --> SQL:1:14
+  |
+1 | nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(UInt8, String, UInt8, UInt8, UInt8, Boolean)`
+
+has tried possible overloads:
+  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `UInt8` and `String`
+
 
 

@@ -256,13 +256,15 @@ output domain  : Undefined
 output         : [0,1,2]
 
 
-ast            : CAST([0, 'a'] AS VARIANT)
-raw expr       : CAST(array(0_u8, "a") AS Variant)
-checked expr   : to_variant<T0=Array(Variant)><T0>(array<T0=Variant><T0, T0>(to_variant<T0=UInt8><T0>(0_u8), to_variant<T0=String><T0>("a")))
-optimized expr : 0x8000000220000001100000010061
-output type    : Variant
-output domain  : Undefined
-output         : [0,"a"]
+error: 
+  --> SQL:1:6
+  |
+1 | CAST([0, 'a'] AS VARIANT)
+  |      ^^^^^^^^ no overload satisfies `array(UInt8, String)`
+
+has tried possible overloads:
+  array(T0, T0) :: Array(T0)  : unable to find a common super type for `UInt8` and `String`
+
 
 
 ast            : CAST(to_timestamp(1000000) AS VARIANT)
@@ -2067,13 +2069,15 @@ output domain  : Undefined
 output         : [0,1,2]
 
 
-ast            : TRY_CAST([0, 'a'] AS VARIANT)
-raw expr       : TRY_CAST(array(0_u8, "a") AS Variant)
-checked expr   : try_to_variant<T0=Array(Variant)><T0>(array<T0=Variant><T0, T0>(to_variant<T0=UInt8><T0>(0_u8), to_variant<T0=String><T0>("a")))
-optimized expr : 0x8000000220000001100000010061
-output type    : Variant NULL
-output domain  : Undefined
-output         : [0,"a"]
+error: 
+  --> SQL:1:10
+  |
+1 | TRY_CAST([0, 'a'] AS VARIANT)
+  |          ^^^^^^^^ no overload satisfies `array(UInt8, String)`
+
+has tried possible overloads:
+  array(T0, T0) :: Array(T0)  : unable to find a common super type for `UInt8` and `String`
+
 
 
 ast            : TRY_CAST(to_timestamp(1000000) AS VARIANT)
