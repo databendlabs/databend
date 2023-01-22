@@ -27,14 +27,15 @@ pub struct ColumnDataLoader {
 
 #[async_trait::async_trait]
 impl LoaderWithCacheKey<Vec<u8>> for ColumnDataLoader {
-    async fn load_with_cache_key(
-        &self,
-        params: &LoadParams,
-    ) -> common_exception::Result<(Vec<u8>, CacheKey)> {
+    async fn load_with_cache_key(&self, params: &LoadParams) -> common_exception::Result<Vec<u8>> {
         let column_reader = self.operator.object(&params.location);
         let bytes = column_reader
             .range_read(self.offset..self.offset + self.len)
             .await?;
-        Ok((bytes, self.cache_key.clone()))
+        Ok(bytes)
+    }
+
+    fn cache_key(&self, _params: &LoadParams) -> CacheKey {
+        self.cache_key.clone()
     }
 }
