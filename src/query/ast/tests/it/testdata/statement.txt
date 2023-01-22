@@ -1111,6 +1111,7 @@ CreateView(
             quote: None,
             span: Ident(12..13),
         },
+        columns: [],
         query: Query {
             span: [
                 SELECT(17..23),
@@ -1357,6 +1358,136 @@ DropView(
             name: "v",
             quote: None,
             span: Ident(10..11),
+        },
+    },
+)
+
+
+---------- Input ----------
+create view v1(c1) as select number % 3 as a from numbers(1000);
+---------- Output ---------
+CREATE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
+---------- AST ------------
+CreateView(
+    CreateViewStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v1",
+            quote: None,
+            span: Ident(12..14),
+        },
+        columns: [
+            Identifier {
+                name: "c1",
+                quote: None,
+                span: Ident(15..17),
+            },
+        ],
+        query: Query {
+            span: [
+                SELECT(22..28),
+                Ident(29..35),
+                Modulo(36..37),
+                LiteralInteger(38..39),
+                AS(40..42),
+                Ident(43..44),
+                FROM(45..49),
+                Ident(50..57),
+                LParen(57..58),
+                LiteralInteger(58..62),
+                RParen(62..63),
+            ],
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(22..28),
+                        Ident(29..35),
+                        Modulo(36..37),
+                        LiteralInteger(38..39),
+                        AS(40..42),
+                        Ident(43..44),
+                        FROM(45..49),
+                        Ident(50..57),
+                        LParen(57..58),
+                        LiteralInteger(58..62),
+                        RParen(62..63),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: BinaryOp {
+                                span: [
+                                    Modulo(36..37),
+                                ],
+                                op: Modulo,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(29..35),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "number",
+                                        quote: None,
+                                        span: Ident(29..35),
+                                    },
+                                },
+                                right: Literal {
+                                    span: [
+                                        LiteralInteger(38..39),
+                                    ],
+                                    lit: Integer(
+                                        3,
+                                    ),
+                                },
+                            },
+                            alias: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(43..44),
+                                },
+                            ),
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: [
+                                Ident(50..57),
+                                LParen(57..58),
+                                LiteralInteger(58..62),
+                                RParen(62..63),
+                            ],
+                            name: Identifier {
+                                name: "numbers",
+                                quote: None,
+                                span: Ident(50..57),
+                            },
+                            params: [
+                                Literal {
+                                    span: [
+                                        LiteralInteger(58..62),
+                                    ],
+                                    lit: Integer(
+                                        1000,
+                                    ),
+                                },
+                            ],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
         },
     },
 )

@@ -23,6 +23,7 @@ pub struct CreateViewPlan {
     pub catalog: String,
     pub database: String,
     pub viewname: String,
+    pub column_names: Vec<String>,
     pub subquery: String,
 }
 

@@ -34,6 +34,7 @@ impl<'a> Binder {
             catalog,
             database,
             view,
+            columns,
             query,
         } = stmt;
 
@@ -49,12 +50,19 @@ impl<'a> Binder {
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
         let subquery = format!("{}", query);
 
+        let column_names = columns
+            .iter()
+            .map(|ident| {
+                normalize_identifier(ident, &self.name_resolution_ctx).name
+            }).collect::<Vec<_>>();
+
         let plan = CreateViewPlan {
             if_not_exists: *if_not_exists,
             tenant,
             catalog,
             database,
             viewname,
+            column_names,
             subquery,
         };
         Ok(Plan::CreateView(Box::new(plan)))
