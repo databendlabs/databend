@@ -226,6 +226,17 @@ where
         }
     }
 
+    #[inline]
+    pub fn check_grow(&mut self) {
+        if std::intrinsics::unlikely((self.len() + 1) * 2 > self.capacity()) {
+            if (self.entries.len() >> 22) == 0 {
+                self.grow(2);
+            } else {
+                self.grow(1);
+            }
+        }
+    }
+
     pub fn grow(&mut self, shift: u8) {
         let old_capacity = self.entries.len();
         let new_capacity = self.entries.len() << shift;

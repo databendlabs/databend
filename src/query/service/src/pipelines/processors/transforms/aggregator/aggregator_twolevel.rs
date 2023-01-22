@@ -30,6 +30,7 @@ use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use tracing::info;
 
+use super::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
@@ -135,11 +136,13 @@ where
                 .map(|(_, s)| *s)
                 .collect::<Vec<_>>();
 
-            for group_entity in table.iter() {
-                let place = Into::<StateAddr>::into(*group_entity.get());
+            if !states.is_empty() {
+                for group_entity in table.iter() {
+                    let place = Into::<StateAddr>::into(*group_entity.get());
 
-                for (function, state_offset) in functions.iter().zip(states.iter()) {
-                    unsafe { function.drop_state(place.next(*state_offset)) }
+                    for (function, state_offset) in functions.iter().zip(states.iter()) {
+                        unsafe { function.drop_state(place.next(*state_offset)) }
+                    }
                 }
             }
 
@@ -165,7 +168,8 @@ where
                 .map(|_| StringColumnBuilder::with_capacity(capacity, capacity * 4))
                 .collect();
 
-            let mut group_key_builder = agg.method.keys_column_builder(capacity);
+            let value_size = estimated_key_size(inner_table);
+            let mut group_key_builder = agg.method.keys_column_builder(capacity, value_size);
 
             for group_entity in iterator {
                 let place = Into::<StateAddr>::into(*group_entity.get());
@@ -273,7 +277,9 @@ where
             let iterator = inner_table.iter();
 
             let (capacity, _) = iterator.size_hint();
-            let mut keys_column_builder = agg.method.keys_column_builder(capacity);
+            let value_size = estimated_key_size(inner_table);
+
+            let mut keys_column_builder = agg.method.keys_column_builder(capacity, value_size);
 
             for group_entity in iterator {
                 keys_column_builder.append_value(group_entity.key());
