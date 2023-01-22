@@ -25,15 +25,14 @@ use crate::expression::Expr;
 use crate::expression::Span;
 use crate::function::EvalContext;
 use crate::property::Domain;
-use crate::type_check::check_simple_cast;
+use crate::type_check::check_function;
+use crate::type_check::get_simple_cast_function;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::DataType;
 use crate::utils::arrow::constant_bitmap;
-use crate::utils::calculate_function_domain;
-use crate::utils::eval_function;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
@@ -64,7 +63,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    pub fn check_expr(&self, expr: &Expr) {
+    fn check_expr(&self, expr: &Expr) {
         let column_refs = expr.column_refs();
         for (index, datatype) in column_refs.iter() {
             let column = self.input_columns.get_by_offset(*index);
@@ -206,8 +205,12 @@ impl<'a> Evaluator<'a> {
             return Ok(value);
         }
 
-        if let Some(cast_fn) = check_simple_cast(src_type, false, dest_type) {
-            return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
+        if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
+            if let Some(new_value) =
+                self.run_simple_cast(span.clone(), src_type, dest_type, value.clone(), &cast_fn)?
+            {
+                return Ok(new_value);
+            }
         }
 
         match (src_type, dest_type) {
@@ -238,13 +241,17 @@ impl<'a> Evaluator<'a> {
                 other => unreachable!("source: {}", other),
             },
             (DataType::Nullable(inner_src_ty), _) => match value {
-                Value::Scalar(Scalar::Null) => {
-                    Err((span, (format!("unable to cast {src_type} to {dest_type}"))))
-                }
+                Value::Scalar(Scalar::Null) => Err((
+                    span,
+                    (format!("unable to cast type `{src_type}` to type `{dest_type}`")),
+                )),
                 Value::Scalar(_) => self.run_cast(span, inner_src_ty, dest_type, value),
                 Value::Column(Column::Nullable(col)) => {
                     if col.validity.unset_bits() > 0 {
-                        return Err((span, (format!("unable to cast {src_type} to {dest_type}"))));
+                        return Err((
+                            span,
+                            (format!("unable to cast `NULL` to type `{dest_type}`")),
+                        ));
                     }
                     let column = self
                         .run_cast(span, inner_src_ty, dest_type, Value::Column(col.column))?
@@ -305,37 +312,45 @@ impl<'a> Evaluator<'a> {
                 other => unreachable!("source: {}", other),
             },
 
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => match value {
-                Value::Scalar(Scalar::Tuple(fields)) => {
-                    let new_fields = fields
-                        .into_iter()
-                        .zip(fields_src_ty.iter())
-                        .zip(fields_dest_ty.iter())
-                        .map(|((field, src_ty), dest_ty)| {
-                            self.run_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))
-                                .map(|val| val.into_scalar().unwrap())
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-                    Ok(Value::Scalar(Scalar::Tuple(new_fields)))
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+                if fields_src_ty.len() == fields_dest_ty.len() =>
+            {
+                match value {
+                    Value::Scalar(Scalar::Tuple(fields)) => {
+                        let new_fields = fields
+                            .into_iter()
+                            .zip(fields_src_ty.iter())
+                            .zip(fields_dest_ty.iter())
+                            .map(|((field, src_ty), dest_ty)| {
+                                self.run_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))
+                                    .map(|val| val.into_scalar().unwrap())
+                            })
+                            .collect::<Result<Vec<_>>>()?;
+                        Ok(Value::Scalar(Scalar::Tuple(new_fields)))
+                    }
+                    Value::Column(Column::Tuple { fields, len }) => {
+                        let new_fields = fields
+                            .into_iter()
+                            .zip(fields_src_ty.iter())
+                            .zip(fields_dest_ty.iter())
+                            .map(|((field, src_ty), dest_ty)| {
+                                self.run_cast(span.clone(), src_ty, dest_ty, Value::Column(field))
+                                    .map(|val| val.into_column().unwrap())
+                            })
+                            .collect::<Result<_>>()?;
+                        Ok(Value::Column(Column::Tuple {
+                            fields: new_fields,
+                            len,
+                        }))
+                    }
+                    other => unreachable!("source: {}", other),
                 }
-                Value::Column(Column::Tuple { fields, len }) => {
-                    let new_fields = fields
-                        .into_iter()
-                        .zip(fields_src_ty.iter())
-                        .zip(fields_dest_ty.iter())
-                        .map(|((field, src_ty), dest_ty)| {
-                            self.run_cast(span.clone(), src_ty, dest_ty, Value::Column(field))
-                                .map(|val| val.into_column().unwrap())
-                        })
-                        .collect::<Result<_>>()?;
-                    Ok(Value::Column(Column::Tuple {
-                        fields: new_fields,
-                        len,
-                    }))
-                }
-                other => unreachable!("source: {}", other),
-            },
-            _ => Err((span, (format!("unable to cast {src_type} to {dest_type}")))),
+            }
+
+            _ => Err((
+                span,
+                (format!("unable to cast type `{src_type}` to type `{dest_type}`")),
+            )),
         }
     }
 
@@ -353,10 +368,12 @@ impl<'a> Evaluator<'a> {
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
-        if let Some(cast_fn) = check_simple_cast(src_type, true, inner_dest_type) {
-            return self
-                .run_simple_cast(span, src_type, dest_type, value, &cast_fn)
-                .unwrap();
+        if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
+            if let Ok(Some(new_value)) =
+                self.run_simple_cast(span.clone(), src_type, dest_type, value.clone(), &cast_fn)
+            {
+                return new_value;
+            }
         }
 
         match (src_type, inner_dest_type) {
@@ -387,6 +404,15 @@ impl<'a> Evaluator<'a> {
                     })))
                 }
                 other => unreachable!("source: {}", other),
+            },
+            (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => match value {
+                Value::Scalar(_) => value,
+                Value::Column(column) => {
+                    Value::Column(Column::Nullable(Box::new(NullableColumn {
+                        validity: constant_bitmap(true, column.len()).into(),
+                        column,
+                    })))
+                }
             },
 
             (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
@@ -428,50 +454,55 @@ impl<'a> Evaluator<'a> {
                 _ => unreachable!(),
             },
 
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => match value {
-                Value::Scalar(Scalar::Tuple(fields)) => {
-                    let new_fields = fields
-                        .into_iter()
-                        .zip(fields_src_ty.iter())
-                        .zip(fields_dest_ty.iter())
-                        .map(|((field, src_ty), dest_ty)| {
-                            self.run_try_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+                if fields_src_ty.len() == fields_dest_ty.len() =>
+            {
+                match value {
+                    Value::Scalar(Scalar::Tuple(fields)) => {
+                        let new_fields = fields
+                            .into_iter()
+                            .zip(fields_src_ty.iter())
+                            .zip(fields_dest_ty.iter())
+                            .map(|((field, src_ty), dest_ty)| {
+                                self.run_try_cast(
+                                    span.clone(),
+                                    src_ty,
+                                    dest_ty,
+                                    Value::Scalar(field),
+                                )
                                 .into_scalar()
                                 .unwrap()
-                        })
-                        .collect::<Vec<_>>();
-                    Value::Scalar(Scalar::Tuple(new_fields))
-                }
-                Value::Column(Column::Tuple { fields, len }) => {
-                    let new_fields = fields
-                        .into_iter()
-                        .zip(fields_src_ty.iter())
-                        .zip(fields_dest_ty.iter())
-                        .map(|((field, src_ty), dest_ty)| {
-                            self.run_try_cast(span.clone(), src_ty, dest_ty, Value::Column(field))
+                            })
+                            .collect::<Vec<_>>();
+                        Value::Scalar(Scalar::Tuple(new_fields))
+                    }
+                    Value::Column(Column::Tuple { fields, len }) => {
+                        let new_fields = fields
+                            .into_iter()
+                            .zip(fields_src_ty.iter())
+                            .zip(fields_dest_ty.iter())
+                            .map(|((field, src_ty), dest_ty)| {
+                                self.run_try_cast(
+                                    span.clone(),
+                                    src_ty,
+                                    dest_ty,
+                                    Value::Column(field),
+                                )
                                 .into_column()
                                 .unwrap()
-                        })
-                        .collect();
-                    let new_col = Column::Tuple {
-                        fields: new_fields,
-                        len,
-                    };
-                    Value::Column(new_col)
-                }
-                other => unreachable!("source: {}", other),
-            },
-
-            _ => match value {
-                Value::Scalar(_) => Value::Scalar(Scalar::Null),
-                Value::Column(col) => {
-                    let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
-                    for _ in 0..col.len() {
-                        builder.push_default();
+                            })
+                            .collect();
+                        let new_col = Column::Tuple {
+                            fields: new_fields,
+                            len,
+                        };
+                        Value::Column(new_col)
                     }
-                    Value::Column(builder.build())
+                    other => unreachable!("source: {}", other),
                 }
-            },
+            }
+
+            _ => Value::Scalar(Scalar::Null),
         }
     }
 
@@ -482,22 +513,36 @@ impl<'a> Evaluator<'a> {
         dest_type: &DataType,
         value: Value<AnyType>,
         cast_fn: &str,
-    ) -> Result<Value<AnyType>> {
+    ) -> Result<Option<Value<AnyType>>> {
+        let expr = Expr::ColumnRef {
+            span: span.clone(),
+            id: 0,
+            data_type: src_type.clone(),
+            display_name: String::new(),
+        };
+
+        let cast_expr = match check_function(span, cast_fn, &[], &[expr], self.fn_registry) {
+            Ok(cast_expr) => cast_expr,
+            Err(_) => return Ok(None),
+        };
+
+        if cast_expr.data_type() != dest_type {
+            return Ok(None);
+        }
+
         let num_rows = match &value {
             Value::Scalar(_) => 1,
             Value::Column(col) => col.len(),
         };
-
-        let (val, ty) = eval_function(
-            span,
-            cast_fn,
-            [(value, src_type.clone())],
-            self.func_ctx,
+        let block = DataBlock::new(
+            vec![BlockEntry {
+                data_type: src_type.clone(),
+                value,
+            }],
             num_rows,
-            self.fn_registry,
-        )?;
-        assert_eq!(&ty, dest_type);
-        Ok(val)
+        );
+        let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+        Ok(Some(evaluator.run(&cast_expr)?))
     }
 }
 
@@ -570,8 +615,8 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         (old_expr, old_domain)
     }
 
-    /// Fold expression by one step, specifically reducing expression by domain calculation and then
-    /// folding the function calls with all constant arguments.
+    /// Fold expression by one step, specifically, by reducing expression by domain calculation and then
+    /// folding the function calls whose all arguments are constants.
     fn fold_once(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
         let (new_expr, domain) = match expr {
             Expr::Constant {
@@ -742,10 +787,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return Some(domain.clone());
         }
 
-        if let Some(cast_fn) = check_simple_cast(src_type, false, dest_type) {
-            return self
-                .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
-                .unwrap();
+        if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
+            if let Some(new_domain) =
+                self.calculate_simple_cast(span.clone(), src_type, dest_type, domain, &cast_fn)
+            {
+                return new_domain;
+            }
         }
 
         match (src_type, dest_type) {
@@ -790,7 +837,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 Some(Domain::Array(inner_domain))
             }
 
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => {
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+                if fields_src_ty.len() == fields_dest_ty.len() =>
+            {
                 Some(Domain::Tuple(
                     domain
                         .as_tuple()
@@ -804,6 +853,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         .collect::<Option<Vec<_>>>()?,
                 ))
             }
+
             _ => None,
         }
     }
@@ -822,10 +872,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
-        if let Some(cast_fn) = check_simple_cast(src_type, true, inner_dest_type) {
-            return self
-                .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
-                .unwrap();
+        if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
+            if let Some(new_domain) =
+                self.calculate_simple_cast(span.clone(), src_type, dest_type, domain, &cast_fn)
+            {
+                return new_domain;
+            }
         }
 
         match (src_type, inner_dest_type) {
@@ -845,6 +897,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     }
                     None => Some(domain.clone()),
                 }
+            }
+            (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => {
+                Some(Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(domain.clone())),
+                }))
             }
 
             (DataType::EmptyArray, DataType::Array(_)) => Some(Domain::Nullable(NullableDomain {
@@ -867,7 +925,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 }))
             }
 
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => {
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+                if fields_src_ty.len() == fields_dest_ty.len() =>
+            {
                 let fields_domain = domain.as_tuple().unwrap();
                 let new_fields_domain = fields_domain
                     .iter()
@@ -894,15 +954,27 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         dest_type: &DataType,
         domain: &Domain,
         cast_fn: &str,
-    ) -> Result<Option<Domain>> {
-        let (domain, ty) = calculate_function_domain(
-            span,
-            cast_fn,
-            [(domain.clone(), src_type.clone())],
+    ) -> Option<Option<Domain>> {
+        let expr = Expr::ColumnRef {
+            span: span.clone(),
+            id: 0,
+            data_type: src_type.clone(),
+            display_name: String::new(),
+        };
+
+        let cast_expr = check_function(span, cast_fn, &[], &[expr], self.fn_registry).ok()?;
+
+        if cast_expr.data_type() != dest_type {
+            return None;
+        }
+
+        let (_, output_domain) = ConstantFolder::fold_with_domain(
+            &cast_expr,
+            [(0, domain.clone())].into_iter().collect(),
             self.func_ctx,
             self.fn_registry,
-        )?;
-        assert_eq!(&ty, dest_type);
-        Ok(domain)
+        );
+
+        Some(output_domain)
     }
 }

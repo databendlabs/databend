@@ -103,20 +103,19 @@ SELECT CAST(CAST('0' AS bigint) AS BOOLEAN)
 # query I
 # SELECT CAST(CAST('0' AS decimal(38,0)) AS BOOLEAN)
 
-statement error 1005
+statement error 1001
 SELECT CAST(CAST('1' AS float) AS BOOLEAN)
-----
-1
 
-statement error 1065
+
+statement error 1001
 SELECT CAST(CAST('0' AS float) AS BOOLEAN)
  
 
-statement error 1065
+statement error 1001
 SELECT CAST(CAST('1' AS double) AS BOOLEAN)
  
 
-statement error 1065
+statement error 1001
 SELECT CAST(CAST('0' AS double) AS BOOLEAN)
 
 query I

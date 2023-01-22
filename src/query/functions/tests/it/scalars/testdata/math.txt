@@ -1,6 +1,6 @@
 ast            : abs(1)
 raw expr       : abs(1_u8)
-checked expr   : abs<UInt64>(CAST(1_u8 AS UInt64))
+checked expr   : abs<UInt64>(to_uint64<UInt8>(1_u8))
 optimized expr : 1_u64
 output type    : UInt64
 output domain  : {1..=1}
@@ -9,7 +9,7 @@ output         : 1_u64
 
 ast            : abs(-1)
 raw expr       : abs(minus(1_u8))
-checked expr   : abs<Int64>(CAST(minus<UInt8>(1_u8) AS Int64))
+checked expr   : abs<Int64>(to_int64<Int16>(minus<UInt8>(1_u8)))
 optimized expr : 1_u64
 output type    : UInt64
 output domain  : {1..=1}
@@ -49,7 +49,7 @@ evaluation (internal):
 
 ast            : sign(1)
 raw expr       : sign(1_u8)
-checked expr   : sign<Float64>(CAST(1_u8 AS Float64))
+checked expr   : sign<Float64>(to_float64<UInt8>(1_u8))
 optimized expr : 1_i8
 output type    : Int8
 output domain  : {1..=1}
@@ -58,7 +58,7 @@ output         : 1_i8
 
 ast            : sign(-1)
 raw expr       : sign(minus(1_u8))
-checked expr   : sign<Float64>(CAST(minus<UInt8>(1_u8) AS Float64))
+checked expr   : sign<Float64>(to_float64<Int16>(minus<UInt8>(1_u8)))
 optimized expr : -1_i8
 output type    : Int8
 output domain  : {-1..=-1}
@@ -76,7 +76,7 @@ output         : NULL
 
 ast            : sign(a)
 raw expr       : sign(a::Int64)
-checked expr   : sign<Float64>(CAST(a AS Float64))
+checked expr   : sign<Float64>(to_float64<Int64>(a))
 evaluation:
 +--------+--------------+----------+
 |        | a            | Output   |
@@ -98,7 +98,7 @@ evaluation (internal):
 
 ast            : sin(1)
 raw expr       : sin(1_u8)
-checked expr   : sin<Float64>(CAST(1_u8 AS Float64))
+checked expr   : sin<Float64>(to_float64<UInt8>(1_u8))
 optimized expr : 0.8414709848_f64
 output type    : Float64
 output domain  : {0.8414709848..=0.8414709848}
@@ -107,7 +107,7 @@ output         : 0.8414709848_f64
 
 ast            : cos(1)
 raw expr       : cos(1_u8)
-checked expr   : cos<Float64>(CAST(1_u8 AS Float64))
+checked expr   : cos<Float64>(to_float64<UInt8>(1_u8))
 optimized expr : 0.5403023058_f64
 output type    : Float64
 output domain  : {0.5403023058..=0.5403023058}
@@ -116,7 +116,7 @@ output         : 0.5403023058_f64
 
 ast            : tan(1)
 raw expr       : tan(1_u8)
-checked expr   : tan<Float64>(CAST(1_u8 AS Float64))
+checked expr   : tan<Float64>(to_float64<UInt8>(1_u8))
 optimized expr : 1.5574077246_f64
 output type    : Float64
 output domain  : {1.5574077246..=1.5574077246}
@@ -143,7 +143,7 @@ output         : -0.6420926159_f64
 
 ast            : asin(1)
 raw expr       : asin(1_u8)
-checked expr   : asin<Float64>(CAST(1_u8 AS Float64))
+checked expr   : asin<Float64>(to_float64<UInt8>(1_u8))
 optimized expr : 1.5707963267_f64
 output type    : Float64
 output domain  : {1.5707963267..=1.5707963267}
@@ -152,7 +152,7 @@ output         : 1.5707963267_f64
 
 ast            : acos(0)
 raw expr       : acos(0_u8)
-checked expr   : acos<Float64>(CAST(0_u8 AS Float64))
+checked expr   : acos<Float64>(to_float64<UInt8>(0_u8))
 optimized expr : 1.5707963267_f64
 output type    : Float64
 output domain  : {1.5707963267..=1.5707963267}
@@ -170,8 +170,8 @@ output         : NULL
 
 ast            : atan2(a, 4)
 raw expr       : atan2(a::Int64, 4_u8)
-checked expr   : atan2<Float64, Float64>(CAST(a AS Float64), CAST(4_u8 AS Float64))
-optimized expr : atan2<Float64, Float64>(CAST(a AS Float64), 4_f64)
+checked expr   : atan2<Float64, Float64>(to_float64<Int64>(a), to_float64<UInt8>(4_u8))
+optimized expr : atan2<Float64, Float64>(to_float64<Int64>(a), 4_f64)
 evaluation:
 +--------+-------------+--------------------------------+
 |        | a           | Output                         |
@@ -290,7 +290,7 @@ output         : -1_f64
 
 ast            : round(1.298, 1)
 raw expr       : round(1.298_f64, 1_u8)
-checked expr   : round<Float64, Int64>(1.298_f64, CAST(1_u8 AS Int64))
+checked expr   : round<Float64, Int64>(1.298_f64, to_int64<UInt8>(1_u8))
 optimized expr : 1.3_f64
 output type    : Float64
 output domain  : {1.3..=1.3}
@@ -299,7 +299,7 @@ output         : 1.3_f64
 
 ast            : round(1.298, 0)
 raw expr       : round(1.298_f64, 0_u8)
-checked expr   : round<Float64, Int64>(1.298_f64, CAST(0_u8 AS Int64))
+checked expr   : round<Float64, Int64>(1.298_f64, to_int64<UInt8>(0_u8))
 optimized expr : 1_f64
 output type    : Float64
 output domain  : {1..=1}
@@ -308,7 +308,7 @@ output         : 1_f64
 
 ast            : round(23.298, -1)
 raw expr       : round(23.298_f64, minus(1_u8))
-checked expr   : round<Float64, Int64>(23.298_f64, CAST(minus<UInt8>(1_u8) AS Int64))
+checked expr   : round<Float64, Int64>(23.298_f64, to_int64<Int16>(minus<UInt8>(1_u8)))
 optimized expr : 20_f64
 output type    : Float64
 output domain  : {20..=20}
@@ -317,7 +317,7 @@ output         : 20_f64
 
 ast            : round(0.12345678901234567890123456789012345, 35)
 raw expr       : round(0.12345678901234568_f64, 35_u8)
-checked expr   : round<Float64, Int64>(0.123456789_f64, CAST(35_u8 AS Int64))
+checked expr   : round<Float64, Int64>(0.123456789_f64, to_int64<UInt8>(35_u8))
 optimized expr : 0.123456789_f64
 output type    : Float64
 output domain  : {0.123456789..=0.123456789}
@@ -379,7 +379,7 @@ evaluation (internal):
 
 ast            : truncate(1.223, 1)
 raw expr       : truncate(1.223_f64, 1_u8)
-checked expr   : truncate<Float64, Int64>(1.223_f64, CAST(1_u8 AS Int64))
+checked expr   : truncate<Float64, Int64>(1.223_f64, to_int64<UInt8>(1_u8))
 optimized expr : 1.2_f64
 output type    : Float64
 output domain  : {1.2..=1.2}
@@ -397,7 +397,7 @@ output         : 1_f64
 
 ast            : truncate(1.999, 1)
 raw expr       : truncate(1.999_f64, 1_u8)
-checked expr   : truncate<Float64, Int64>(1.999_f64, CAST(1_u8 AS Int64))
+checked expr   : truncate<Float64, Int64>(1.999_f64, to_int64<UInt8>(1_u8))
 optimized expr : 1.9_f64
 output type    : Float64
 output domain  : {1.9..=1.9}
@@ -406,7 +406,7 @@ output         : 1.9_f64
 
 ast            : truncate(122, -2)
 raw expr       : truncate(122_u8, minus(2_u8))
-checked expr   : truncate<UInt8, Int64>(122_u8, CAST(minus<UInt8>(2_u8) AS Int64))
+checked expr   : truncate<UInt8, Int64>(122_u8, to_int64<Int16>(minus<UInt8>(2_u8)))
 optimized expr : 100_f64
 output type    : Float64
 output domain  : {100..=100}
@@ -415,7 +415,7 @@ output         : 100_f64
 
 ast            : truncate(10.28*100, 0)
 raw expr       : truncate(multiply(10.28_f64, 100_u8), 0_u8)
-checked expr   : truncate<Float64, Int64>(multiply<Float64, UInt8>(10.28_f64, 100_u8), CAST(0_u8 AS Int64))
+checked expr   : truncate<Float64, Int64>(multiply<Float64, UInt8>(10.28_f64, 100_u8), to_int64<UInt8>(0_u8))
 optimized expr : 1028_f64
 output type    : Float64
 output domain  : {1028..=1028}
@@ -424,7 +424,7 @@ output         : 1028_f64
 
 ast            : truncate(a, 1)
 raw expr       : truncate(a::Float64, 1_u8)
-checked expr   : truncate<Float64, Int64>(a, CAST(1_u8 AS Int64))
+checked expr   : truncate<Float64, Int64>(a, to_int64<UInt8>(1_u8))
 optimized expr : truncate<Float64, Int64>(a, 1_i64)
 evaluation:
 +--------+------------------+--------------+
@@ -456,7 +456,7 @@ output         : 0.6931471805_f64
 
 ast            : log(2, 65536)
 raw expr       : log(2_u8, 65536_u32)
-checked expr   : log<UInt8, Float64>(2_u8, CAST(65536_u32 AS Float64))
+checked expr   : log<UInt8, Float64>(2_u8, to_float64<UInt32>(65536_u32))
 optimized expr : 16_f64
 output type    : Float64
 output domain  : {16..=16}

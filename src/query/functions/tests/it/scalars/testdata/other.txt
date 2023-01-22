@@ -1,6 +1,6 @@
 ast            : running_difference(-1)
 raw expr       : running_difference(minus(1_u8))
-checked expr   : running_difference<Int64>(CAST(minus<UInt8>(1_u8) AS Int64))
+checked expr   : running_difference<Int64>(to_int64<Int16>(minus<UInt8>(1_u8)))
 optimized expr : 0_i64
 output type    : Int64
 output domain  : {0..=0}
@@ -18,7 +18,7 @@ output         : 0_f64
 
 ast            : running_difference(to_datetime(10000))
 raw expr       : running_difference(to_datetime(10000_u16))
-checked expr   : running_difference<Timestamp>(to_timestamp<Int64>(CAST(10000_u16 AS Int64)))
+checked expr   : running_difference<Timestamp>(to_timestamp<Int64>(to_int64<UInt16>(10000_u16)))
 optimized expr : 0_i64
 output type    : Int64
 output domain  : {0..=0}
@@ -27,7 +27,7 @@ output         : 0_i64
 
 ast            : running_difference(to_date(10000))
 raw expr       : running_difference(to_date(10000_u16))
-checked expr   : running_difference<Date>(to_date<Int64>(CAST(10000_u16 AS Int64)))
+checked expr   : running_difference<Date>(to_date<Int64>(to_int64<UInt16>(10000_u16)))
 optimized expr : 0_i32
 output type    : Int32
 output domain  : {0..=0}
@@ -36,7 +36,7 @@ output         : 0_i32
 
 ast            : running_difference(a)
 raw expr       : running_difference(a::UInt16)
-checked expr   : running_difference<Int64>(CAST(a AS Int64))
+checked expr   : running_difference<Int64>(to_int64<UInt16>(a))
 evaluation:
 +--------+-------------+---------+
 |        | a           | Output  |
@@ -80,7 +80,7 @@ evaluation (internal):
 
 ast            : humanize_size(100)
 raw expr       : humanize_size(100_u8)
-checked expr   : humanize_size<Float64>(CAST(100_u8 AS Float64))
+checked expr   : humanize_size<Float64>(to_float64<UInt8>(100_u8))
 optimized expr : "100.00 B"
 output type    : String
 output domain  : {"100.00 B"..="100.00 B"}
@@ -98,7 +98,7 @@ output         : "1.00 KiB"
 
 ast            : humanize_number(100)
 raw expr       : humanize_number(100_u8)
-checked expr   : humanize_number<Float64>(CAST(100_u8 AS Float64))
+checked expr   : humanize_number<Float64>(to_float64<UInt8>(100_u8))
 optimized expr : "100"
 output type    : String
 output domain  : {"100"..="100"}
@@ -116,7 +116,7 @@ output         : "1.02 thousand"
 
 ast            : typeof(humanize_size(100))
 raw expr       : typeof(humanize_size(100_u8))
-checked expr   : typeof<T0=String><T0>(humanize_size<Float64>(CAST(100_u8 AS Float64)))
+checked expr   : typeof<T0=String><T0>(humanize_size<Float64>(to_float64<UInt8>(100_u8)))
 optimized expr : "VARCHAR"
 output type    : String
 output domain  : {"VARCHAR"..="VARCHAR"}
@@ -133,7 +133,7 @@ output         : "DOUBLE"
 
 ast            : sleep(2)
 raw expr       : sleep(2_u8)
-checked expr   : sleep<Float64>(CAST(2_u8 AS Float64))
+checked expr   : sleep<Float64>(to_float64<UInt8>(2_u8))
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
@@ -168,7 +168,7 @@ output         : false
 
 ast            : ignore(100, 'str')
 raw expr       : ignore(100_u8, "str")
-checked expr   : ignore<T0=Variant><T0, T0>(CAST(100_u8 AS Variant), CAST("str" AS Variant))
+checked expr   : ignore<T0=Variant><T0, T0>(to_variant<T0=UInt8><T0>(100_u8), to_variant<T0=String><T0>("str"))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -226,7 +226,7 @@ output         : 167773449_u32
 
 ast            : inet_ntoa(16909060)
 raw expr       : inet_ntoa(16909060_u32)
-checked expr   : inet_ntoa<Int64>(CAST(16909060_u32 AS Int64))
+checked expr   : inet_ntoa<Int64>(to_int64<UInt32>(16909060_u32))
 optimized expr : "1.2.3.4"
 output type    : String
 output domain  : {"1.2.3.4"..="1.2.3.4"}
@@ -235,7 +235,7 @@ output         : "1.2.3.4"
 
 ast            : try_inet_ntoa(121211111111111)
 raw expr       : try_inet_ntoa(121211111111111_u64)
-checked expr   : try_inet_ntoa<Int64>(CAST(121211111111111_u64 AS Int64))
+checked expr   : try_inet_ntoa<Int64>(to_int64<UInt64>(121211111111111_u64))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}

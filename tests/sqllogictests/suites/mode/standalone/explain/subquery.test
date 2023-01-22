@@ -73,7 +73,7 @@ query T
 explain select t.number from numbers(1) as t where exists (select t1.number from numbers(1) as t1 where t.number = t1.number) or t.number > 1
 ----
 Filter
-├── filters: [or(2 (#2), CAST(gt(t.number (#0), CAST(1_u8 AS UInt64)) AS Boolean NULL))]
+├── filters: [or(2 (#2), CAST(gt(t.number (#0), to_uint64(1_u8)) AS Boolean NULL))]
 ├── estimated rows: 0.33
 └── HashJoin
     ├── join type: RIGHT MARK
@@ -126,7 +126,7 @@ HashJoin
 │               ├── offset: 0
 │               ├── estimated rows: 0.33
 │               └── Filter
-│                   ├── filters: [eq(numbers.number (#1), CAST(0_u8 AS UInt64))]
+│                   ├── filters: [eq(numbers.number (#1), to_uint64(0_u8))]
 │                   ├── estimated rows: 0.33
 │                   └── TableScan
 │                       ├── table: default.system.numbers
@@ -158,7 +158,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 1.00
     ├── Filter(Build)
-    │   ├── filters: [eq(numbers.number (#1), CAST(0_u8 AS UInt64))]
+    │   ├── filters: [eq(numbers.number (#1), to_uint64(0_u8))]
     │   ├── estimated rows: 0.33
     │   └── TableScan
     │       ├── table: default.system.numbers
@@ -265,7 +265,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.33
 ├── Filter(Build)
-│   ├── filters: [eq(numbers.number (#1), CAST(0_u8 AS UInt64))]
+│   ├── filters: [eq(numbers.number (#1), to_uint64(0_u8))]
 │   ├── estimated rows: 0.33
 │   └── TableScan
 │       ├── table: default.system.numbers
@@ -276,7 +276,7 @@ HashJoin
 │       ├── push downs: [filters: [eq(numbers.number (#1), 0_u64)], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
-    ├── filters: [lt(t.number (#0), CAST(10_u8 AS UInt64))]
+    ├── filters: [lt(t.number (#0), to_uint64(10_u8))]
     ├── estimated rows: 0.33
     └── TableScan
         ├── table: default.system.numbers
@@ -352,7 +352,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [eq(COUNT(*) (#4), CAST(1_u8 AS UInt64))]
+    │   ├── expressions: [eq(COUNT(*) (#4), to_uint64(1_u8))]
     │   ├── estimated rows: 0.33
     │   └── AggregateFinal
     │       ├── group by: [number]
