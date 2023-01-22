@@ -484,3 +484,27 @@ has tried possible overloads:
 
 
 
+ast            : nullable_col in (1::VARIANT, '9'::VARIANT, 3::VARIANT, 10::VARIANT, 12::VARIANT, true::VARIANT, [1,2,3]::VARIANT)
+raw expr       : contains(array(), nullable_col::Int64 NULL)
+checked expr   : contains<Array(Int64) NULL, Int64 NULL>(CAST(array<>() AS Array(Int64) NULL), nullable_col)
+optimized expr : contains<Array(Int64) NULL, Int64 NULL>([], nullable_col)
+evaluation:
++--------+-------------------+------------------+
+|        | nullable_col      | Output           |
++--------+-------------------+------------------+
+| Type   | Int64 NULL        | Boolean NULL     |
+| Domain | {9..=12} ∪ {NULL} | {FALSE} ∪ {NULL} |
+| Row 0  | 9_i64             | false            |
+| Row 1  | 10_i64            | false            |
+| Row 2  | NULL              | NULL             |
+| Row 3  | NULL              | NULL             |
++--------+-------------------+------------------+
+evaluation (internal):
++--------------+---------------------------------------------------------------------------+
+| Column       | Data                                                                      |
++--------------+---------------------------------------------------------------------------+
+| nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] } |
+| Output       | NullableColumn { column: Boolean([0b____0000]), validity: [0b____0011] }  |
++--------------+---------------------------------------------------------------------------+
+
+
