@@ -101,7 +101,7 @@ impl<'a> Binder {
             .await?;
 
         let (mut scalar_items, projections) = self.analyze_projection(&select_list)?;
-
+        
         // This will potentially add some alias group items to `from_context` if find some.
         self.analyze_group_items(&mut from_context, &select_list, &stmt.group_by)
             .await?;
@@ -127,7 +127,7 @@ impl<'a> Binder {
             )
             .await?;
 
-        if !from_context.aggregate_info.aggregate_functions.is_empty() || !stmt.group_by.is_empty()
+        if !from_context.aggregate_info.aggregate_functions.is_empty() || !from_context.aggregate_info.group_items.is_empty()
         {
             s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
         }

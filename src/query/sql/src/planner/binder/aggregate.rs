@@ -327,6 +327,12 @@ impl<'a> Binder {
             } = expr
             {
                 let (scalar, alias) = Self::resolve_index_item(expr, *index, select_list)?;
+                
+                // If group by scalar is a constant literal, we can skip it.
+                if matches!(scalar, ScalarExpr::ConstantExpr(_)) {
+                    continue;
+                }
+                
                 let key = format!("{:?}", &scalar);
                 if let Entry::Vacant(entry) = bind_context.aggregate_info.group_items_map.entry(key)
                 {
