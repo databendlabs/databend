@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
@@ -39,11 +39,11 @@ pub struct StatisticsAccumulator {
     pub index_size: u64,
 
     pub perfect_block_count: u64,
-    pub thresholds: BlockCompactThresholds,
+    pub thresholds: BlockThresholds,
 }
 
 impl StatisticsAccumulator {
-    pub fn new(thresholds: BlockCompactThresholds) -> Self {
+    pub fn new(thresholds: BlockThresholds) -> Self {
         Self {
             thresholds,
             ..Default::default()

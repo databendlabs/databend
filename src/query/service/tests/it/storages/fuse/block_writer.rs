@@ -16,6 +16,8 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use common_storages_fuse::io::write_block;
 use common_storages_fuse::io::write_data;
 use common_storages_fuse::io::TableMetaLocationGenerator;
@@ -31,9 +33,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::table::TableCompression;
 use uuid::Uuid;
-
-const DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE: usize = 300 * 1024;
-const DEFAULT_BLOCK_WRITE_BUFFER_SIZE: usize = 100 * 1024 * 1024;
 
 pub struct BlockWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
@@ -73,7 +72,7 @@ impl<'a> BlockWriter<'a> {
             ..Default::default()
         };
 
-        let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
+        let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let (file_size, col_metas) = write_block(&write_settings, schema, block, &mut buf)?;
 
         write_data(&buf, data_accessor, &location.0).await?;
@@ -107,7 +106,7 @@ impl<'a> BlockWriter<'a> {
             BloomIndex::try_create(FunctionContext::default(), schema, location.1, &[block])?;
         if let Some(bloom_index) = bloom_index {
             let index_block = bloom_index.filter_block;
-            let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
+            let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
             let index_block_schema = &bloom_index.filter_schema;
             let (size, _) = blocks_to_parquet(
                 index_block_schema,

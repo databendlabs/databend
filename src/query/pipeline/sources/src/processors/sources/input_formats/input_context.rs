@@ -24,7 +24,7 @@ use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
@@ -118,7 +118,7 @@ pub struct InputContext {
     pub settings: Arc<Settings>,
 
     pub read_batch_size: usize,
-    pub block_compact_thresholds: BlockCompactThresholds,
+    pub block_compact_thresholds: BlockThresholds,
 
     pub scan_progress: Arc<Progress>,
     pub on_error_mode: OnErrorMode,
@@ -159,7 +159,7 @@ impl InputContext {
         stage_info: UserStageInfo,
         splits: Vec<Arc<SplitInfo>>,
         scan_progress: Arc<Progress>,
-        block_compact_thresholds: BlockCompactThresholds,
+        block_compact_thresholds: BlockThresholds,
     ) -> Result<Self> {
         let on_error_mode = stage_info.copy_options.on_error.clone();
         let plan = Box::new(CopyIntoPlan { stage_info });
@@ -197,7 +197,7 @@ impl InputContext {
         settings: Arc<Settings>,
         schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
-        block_compact_thresholds: BlockCompactThresholds,
+        block_compact_thresholds: BlockThresholds,
     ) -> Result<Self> {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
 
@@ -240,7 +240,7 @@ impl InputContext {
         schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
-        block_compact_thresholds: BlockCompactThresholds,
+        block_compact_thresholds: BlockThresholds,
     ) -> Result<Self> {
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let format_typ = file_format_options.format.clone();

@@ -20,7 +20,7 @@ use common_base::base::tokio;
 use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
@@ -142,7 +142,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         location_generator,
         base_snapshot,
         1.0,
-        BlockCompactThresholds::default(),
+        BlockThresholds::default(),
         blocks_map,
         data_accessor,
     )?;

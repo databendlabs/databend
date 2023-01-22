@@ -21,10 +21,10 @@ use common_expression::ArrayDeserializer;
 use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
 use common_expression::VariantDeserializer;
-use common_io::consts::FALSE_BYTES_LOWER;
-use common_io::consts::INF_BYTES_LOWER;
-use common_io::consts::NULL_BYTES_ESCAPE;
-use common_io::consts::TRUE_BYTES_LOWER;
+use common_io::constants::FALSE_BYTES_LOWER;
+use common_io::constants::INF_BYTES_LOWER;
+use common_io::constants::NULL_BYTES_ESCAPE;
+use common_io::constants::TRUE_BYTES_LOWER;
 use common_io::cursor_ext::ReadBytesExt;
 
 use crate::field_decoder::row_based::FieldDecoderRowBased;

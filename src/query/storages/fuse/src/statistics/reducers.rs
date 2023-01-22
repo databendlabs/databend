@@ -16,7 +16,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use storages_common_table_meta::meta::BlockMeta;
@@ -150,7 +150,7 @@ pub fn reduce_statistics<T: Borrow<Statistics>>(stats: &[T]) -> Result<Statistic
 
 pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     block_metas: &[T],
-    thresholds: BlockCompactThresholds,
+    thresholds: BlockThresholds,
 ) -> Result<Statistics> {
     let mut row_count: u64 = 0;
     let mut block_count: u64 = 0;
