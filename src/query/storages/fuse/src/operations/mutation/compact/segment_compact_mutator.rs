@@ -19,7 +19,6 @@ use common_catalog::table::Table;
 use common_exception::Result;
 use metrics::gauge;
 use opendal::Operator;
-use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
@@ -101,12 +100,7 @@ impl TableMutator for SegmentCompactMutator {
         let limit = std::cmp::max(2, self.compact_params.limit.unwrap_or(num_segments));
 
         // 2. prepare compactor
-        let segment_info_cache = CacheManager::instance().get_table_segment_cache();
-        let segment_writer = SegmentWriter::new(
-            &self.data_accessor,
-            &self.location_generator,
-            &segment_info_cache,
-        );
+        let segment_writer = SegmentWriter::new(&self.data_accessor, &self.location_generator);
 
         let compactor =
             SegmentCompactor::new(self.compact_params.block_per_seg as u64, segment_writer);

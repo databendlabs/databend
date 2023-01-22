@@ -195,7 +195,12 @@ impl HiveTableSource {
                 let prewhere_datablocks = prewhere_datablocks
                     .into_iter()
                     .zip(valids.iter())
-                    .map(|(datablock, valid)| DataBlock::filter(datablock, valid).unwrap())
+                    .map(|(datablock, valid)| {
+                        let datablock = DataBlock::filter(datablock, valid).unwrap();
+                        datablock
+                            .resort(&self.source_schema, &self.output_schema)
+                            .unwrap()
+                    })
                     .filter(|x| !x.is_empty())
                     .collect();
 
@@ -246,7 +251,7 @@ impl HiveTableSource {
                 .collect::<Vec<_>>();
             allblocks
         } else {
-            prewhere_data.data_blocks
+            return Err(ErrorCode::Internal("It's a bug. No remain reader"));
         };
 
         // 3  trans to generate state

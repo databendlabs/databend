@@ -31,6 +31,7 @@ use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use futures::future;
 use opendal::Operator;
+use storages_common_cache::LoadParams;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_pruner::LimiterPruner;
 use storages_common_pruner::LimiterPrunerCreator;
@@ -39,7 +40,6 @@ use storages_common_pruner::PagePrunerCreator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 use storages_common_pruner::TopNPrunner;
-use storages_common_table_meta::caches::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::Location;
@@ -226,7 +226,7 @@ impl BlockPruner {
         segment_location: Location,
         schema: TableSchemaRef,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let segment_reader = MetaReaders::segment_info_reader(dal.clone());
+        let segment_reader = MetaReaders::segment_info_reader(dal.clone(), schema.clone());
 
         let (path, ver) = segment_location;
 
@@ -235,7 +235,6 @@ impl BlockPruner {
             location: path,
             len_hint: None,
             ver,
-            schema: Some(schema.clone()),
         };
 
         let segment_info = segment_reader.read(&load_params).await?;

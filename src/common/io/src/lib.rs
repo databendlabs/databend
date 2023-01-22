@@ -23,7 +23,7 @@
 #![feature(cursor_remaining)]
 #![feature(buf_read_has_data_left)]
 
-pub mod consts;
+pub mod constants;
 pub mod format_diagnostic;
 pub mod prelude;
 

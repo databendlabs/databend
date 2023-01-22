@@ -1,16 +1,17 @@
-//  Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 
 use std::marker::PhantomData;
 
@@ -28,13 +29,13 @@ use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 
 #[async_trait::async_trait]
 pub trait VersionedReader<T> {
-    async fn read<R>(&self, read: R, _schema: Option<TableSchemaRef>) -> Result<T>
+    async fn read<R>(&self, read: R) -> Result<T>
     where R: AsyncRead + Unpin + Send;
 }
 
 #[async_trait::async_trait]
 impl VersionedReader<TableSnapshot> for SnapshotVersion {
-    async fn read<R>(&self, reader: R, _schema: Option<TableSchemaRef>) -> Result<TableSnapshot>
+    async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
             SnapshotVersion::V2(v) => load_by_version(reader, v).await?,
@@ -47,14 +48,8 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
 
 #[async_trait::async_trait]
 impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion {
-    async fn read<R>(
-        &self,
-        reader: R,
-        _schema: Option<TableSchemaRef>,
-    ) -> Result<TableSnapshotStatistics>
-    where
-        R: AsyncRead + Unpin + Send,
-    {
+    async fn read<R>(&self, reader: R) -> Result<TableSnapshotStatistics>
+    where R: AsyncRead + Unpin + Send {
         let r = match self {
             TableSnapshotStatisticsVersion::V0(v) => load_by_version(reader, v).await?,
         };
@@ -63,19 +58,20 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
 }
 
 #[async_trait::async_trait]
-impl VersionedReader<SegmentInfo> for SegmentInfoVersion {
-    async fn read<R>(&self, reader: R, schema: Option<TableSchemaRef>) -> Result<SegmentInfo>
+impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
+    async fn read<R>(&self, reader: R) -> Result<SegmentInfo>
     where R: AsyncRead + Unpin + Send {
-        let r = match self {
+        let schema = &self.1;
+        let r = match &self.0 {
             SegmentInfoVersion::V2(v) => load_by_version(reader, v).await?,
             SegmentInfoVersion::V1(v) => {
                 let data = load_by_version(reader, v).await?;
-                let fields = schema.unwrap().leaf_fields();
+                let fields = schema.leaf_fields();
                 SegmentInfo::from_v1(data, &fields)
             }
             SegmentInfoVersion::V0(v) => {
                 let data = load_by_version(reader, v).await?;
-                let fields = schema.unwrap().leaf_fields();
+                let fields = schema.leaf_fields();
                 SegmentInfo::from_v0(data, &fields)
             }
         };

@@ -18,18 +18,19 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_pipeline_core::processors::port::OutputPort;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
+use storages_common_cache::CacheAccessor;
 use storages_common_index::*;
-use storages_common_table_meta::caches::CacheManager;
+use storages_common_table_meta::caches::CachedMeta;
 use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Location;
@@ -145,7 +146,7 @@ impl FuseTableSink {
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
-        thresholds: BlockCompactThresholds,
+        thresholds: BlockThresholds,
         source_schema: TableSchemaRef,
         output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {
@@ -236,7 +237,7 @@ impl Processor for FuseTableSink {
                 )?;
 
                 // we need a configuration of block size threshold here
-                let mut data = Vec::with_capacity(100 * 1024 * 1024);
+                let mut data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
                 let (size, meta_data) =
                     io::write_block(&self.write_settings, &self.source_schema, block, &mut data)?;
 
@@ -269,9 +270,8 @@ impl Processor for FuseTableSink {
                 }
             }
             State::PreCommitSegment { location, segment } => {
-                if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    let cache = &mut segment_cache.write();
-                    cache.put(location.clone(), segment.clone());
+                if let Some(segment_cache) = SegmentInfo::cache() {
+                    segment_cache.put(location.clone(), segment.clone());
                 }
 
                 // TODO: dyn operation for table trait

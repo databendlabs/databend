@@ -5,10 +5,10 @@ Support Platform: `linux/amd64`, `linux/arm64`
 
 ## Available Enviroment Variables
 
-* DATABEND_QUERY_CONFIG_FILE
-* DATABEND_QUERY_DEFAULT_USER
-* DATABEND_QUERY_DEFAULT_PASSWORD
-* DATABEND_QUERY_STORAGE_TYPE
+* QUERY_CONFIG_FILE
+* QUERY_DEFAULT_USER
+* QUERY_DEFAULT_PASSWORD
+* QUERY_STORAGE_TYPE
 
 * AWS_S3_ENDPOINT
 * AWS_S3_PRESIGNED_ENDPOINT
@@ -27,21 +27,24 @@ Support Platform: `linux/amd64`, `linux/arm64`
 docker run -p 8000:8000 datafuselabs/databend
 ```
 
+### Adding built-in query user
+```
+docker run \
+    -p 8000:8000 \
+    -e QUERY_DEFAULT_USER=databend \
+    -e QUERY_DEFAULT_PASSWORD=databend \
+    datafuselabs/databend
+```
+
 ### Run with MinIO as backend
+*NOTE:* setting `MINIO_ENABLED` will trigger a runtime MinIO binary download.
+
 ```
 docker run \
     -p 8000:8000 \
     -p 9000:9000 \
     -e MINIO_ENABLED=true \
-    datafuselabs/databend
-```
-
-### Adding built-in query user
-```
-docker run \
-    -p 8000:8000 \
-    -e DATABEND_QUERY_DEFAULT_USER=databend \
-    -e DATABEND_QUERY_DEFAULT_PASSWORD=databend \
+    -v minio_data_dir:/var/lib/minio \
     datafuselabs/databend
 ```
 
@@ -50,8 +53,8 @@ docker run \
 ```
 docker run \
     -p 8000:8000 \
-    -e DATABEND_QUERY_STORAGE_TYPE=s3 \
-    -e AWS_S3_ENDPOINT="http://some_s3_endpoint \
+    -e QUERY_STORAGE_TYPE=s3 \
+    -e AWS_S3_ENDPOINT="http://some_s3_endpoint" \
     -e AWS_S3_BUCKET=some_bucket \
     -e AWS_ACCESS_KEY_ID=some_key \
     -e AWS_SECRET_ACCESS_KEY=some_secret \
@@ -72,7 +75,7 @@ docker run \
 ```
 docker run \
     -p 8000:8000 \
-    -e DATABEND_QUERY_CONFIG_FILE=/etc/databend/mine.toml \
+    -e QUERY_CONFIG_FILE=/etc/databend/mine.toml \
     -v query_config_file:/etc/databend/mine.toml \
     datafuselabs/databend
 ```

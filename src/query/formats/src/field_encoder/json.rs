@@ -15,9 +15,9 @@
 use common_expression::types::array::ArrayColumn;
 use common_expression::types::ValueType;
 use common_expression::Column;
-use common_io::consts::FALSE_BYTES_LOWER;
-use common_io::consts::NULL_BYTES_LOWER;
-use common_io::consts::TRUE_BYTES_LOWER;
+use common_io::constants::FALSE_BYTES_LOWER;
+use common_io::constants::NULL_BYTES_LOWER;
+use common_io::constants::TRUE_BYTES_LOWER;
 
 use crate::field_encoder::helpers::write_json_string;
 use crate::field_encoder::FieldEncoderRowBased;

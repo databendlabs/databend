@@ -12,18 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cache;
-mod cache_metrics;
-mod memory_cache;
-mod memory_cache_reader;
+mod meta_cache;
+mod meta_cache_manager;
 
-pub use cache::CacheManager;
-pub use cache::LoadParams;
-pub use cache::Loader;
-pub use cache_metrics::metrics_reset;
-pub use memory_cache::ItemCache;
-pub use memory_cache::LabeledItemCache;
-pub use memory_cache::SegmentInfoCache;
-pub use memory_cache::TableSnapshotCache;
-pub use memory_cache::TableSnapshotStatisticCache;
-pub use memory_cache_reader::MemoryCacheReader;
+pub use meta_cache::BloomIndexMeta;
+pub use meta_cache::CachedMeta;
+pub use meta_cache::SegmentInfoCache;
+pub use meta_cache::TableSnapshotCache;
+pub use meta_cache::TableSnapshotStatisticCache;
+pub use meta_cache_manager::CacheManager;

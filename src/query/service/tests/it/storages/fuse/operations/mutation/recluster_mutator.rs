@@ -20,7 +20,7 @@ use common_base::base::tokio;
 use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
@@ -30,7 +30,6 @@ use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
 use databend_query::storages::fuse::pruning::BlockPruner;
-use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
@@ -48,9 +47,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let ctx = fixture.ctx();
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
-    let segment_info_cache = CacheManager::instance().get_table_segment_cache();
     let data_accessor = ctx.get_data_operator()?.operator();
-    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, &segment_info_cache);
+    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);
 
     let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
         let block_id = Uuid::new_v4().simple().to_string();
@@ -144,7 +142,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         location_generator,
         base_snapshot,
         1.0,
-        BlockCompactThresholds::default(),
+        BlockThresholds::default(),
         blocks_map,
         data_accessor,
     )?;

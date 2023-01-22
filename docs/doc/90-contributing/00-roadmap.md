@@ -22,30 +22,30 @@ See also:
 
 ## Features
 
-| Task                                                                               | Status      | Comments |
-|------------------------------------------------------------------------------------|-------------|----------|
-| Update                                                                             | IN PROGRESS |          |
-| Merge                                                                              | PLAN        |          |
-| Alter table                                                                        | IN PROGRESS |          |
-| Window function                                                                    | PLAN        |          |
-| Lambda function and high-order functions                                           | PLAN        |          |
-| TimestampTz data type                                                              | PLAN        |          |
-| Decimal data type                                                                  | PLAN        |          |
-| Materialized view                                                                  | PLAN        |          |
-| [Support SET_VAR hints#8833](https://github.com/datafuselabs/databend/issues/8833) | PLAN        |          |
-| Parquet reader                                                                     | PLAN        |          |
-| Distributed COPY                                                                   | PLAN        |          |
-| JSON indexing                                                                      | PLAN        |          |
-| DataFrame                                                                          | PLAN        |          |
-| Data Sharing(community version)                                                    | IN PROGRESS |          |
-| Concurrent query enhance                                                   | PLAN |          |
+| Task                                                                                   | Status      | Comments      |
+|----------------------------------------------------------------------------------------|-------------|---------------|
+| [Update#9261](https://github.com/datafuselabs/databend/issues/9261)                    | DONE        |               |
+| Privileges                                                                             | IN PROGRESS |               |
+| Alter table                                                                            | IN PROGRESS |               |
+| Window function                                                                        | PLAN        |               |
+| Lambda function and high-order functions                                               | PLAN        |               |
+| TimestampTz data type                                                                  | PLAN        |               |
+| Materialized view                                                                      | PLAN        |               |
+| [Support SET_VAR hints#8833](https://github.com/datafuselabs/databend/issues/8833)     | PLAN        |               |
+| Parquet reader                                                                         | PLAN        |               |
+| DataFrame                                                                              | PLAN        |               |
+| Data Sharing(community version)                                                        | IN PROGRESS |               |
+| Concurrent query enhance                                                               | PLAN        |               |
+| [Distributed COPY#8594](https://github.com/datafuselabs/databend/issues/8594)          | PLAN        |               |
+| [Support Decimal data type#2931](https://github.com/datafuselabs/databend/issues/2931) | PLAN        | high-priority |
+
 
 ## Improvements
 
-| Task                                                                      | Status      | Comments |
-|---------------------------------------------------------------------------|-------------|----------|
-| [New expression#9411](https://github.com/datafuselabs/databend/pull/9411) | IN PROGRESS |          |
-| Error message                                                             | PLAN        |          |
+| Task                                                                      | Status | Comments |
+|---------------------------------------------------------------------------|--------|----------|
+| [New expression#9411](https://github.com/datafuselabs/databend/pull/9411) | DONE   |          |
+| Error message                                                             | PLAN   |          |
 
 ## Planner
 
@@ -55,18 +55,18 @@ See also:
 | Column constraint framework                                                                  | PLAN        |                      |
 | [Functional dependency framework#7438](https://github.com/datafuselabs/databend/issues/7438) | PLAN        |                      |
 | Join reorder                                                                                 | IN PROGRESS |                      |
-| CBO for distributed plan                                                                     | PLAN        |                      |
+| [CBO](https://github.com/datafuselabs/databend/issues/9597)                                  | IN PROGRESS |                      |
 | Support TPC-DS                                                                               | PLAN        |                      |
 | Support optimization tracing                                                                 | PLAN        | Easy to debug/study. |
 
 ## Cache
 
-| Task                | Status  | Comments |
-|---------------------|---------|----------|
+| Task                | Status      | Comments |
+|---------------------|-------------|----------|
 | Unified cache layer | IN PROGRESS |          |
 | Meta data cache     | IN PROGRESS |          |
 | Index data cache    | IN PROGRESS |          |
-| Block data cache    | PLAN    |          |
+| Block data cache    | PLAN        |          |
 
 ## Data Storage
 
@@ -75,14 +75,6 @@ See also:
 | Fuse engine re-clustering       | PLAN   |                                        |
 | Fuse engine orphan data cleanup | PLAN   |                                        |
 | Fuse engine segment tree        | PLAN   | Support large dataset(PB) in one table |
-
-## LakeHouse
-
-| Task                               | Status      | Comments |
-|------------------------------------|-------------|----------|
-| Apache Hive                        | IN PROGRESS |          |
-| Apache Iceberg                     | IN PROGRESS |          |
-| Querying external storage(Parquet) | IN PROGRESS |          |
 
 ## Distributed Query Execution
 
@@ -99,6 +91,25 @@ See also:
 | User-level quota control (CPU/Memory)    | PLAN        |          |
 
 
+## Schema-Less Search
+
+| Task                                                                         | Status   | Comments       |
+|------------------------------------------------------------------------------|----------|----------------|
+| JSON indexing                                                                | PLAN     | high-priority  |
+| [Fulltext index#3915](https://github.com/datafuselabs/databend/issues/3915)  | PLAN     | high-priority  |
+| [Array functions#7931](https://github.com/datafuselabs/databend/issues/7931) | PLAN     | high-priority  |
+| [Faiss index#9699](https://github.com/datafuselabs/databend/issues/9699)     | PLAN     |                |
+
+## LakeHouse
+
+| Task                               | Status      | Comments |
+|------------------------------------|-------------|----------|
+| Apache Hive                        | IN PROGRESS |          |
+| Apache Iceberg                     | IN PROGRESS |          |
+| Delta Lake                         | IN PROGRESS |          |
+| Querying external storage(Parquet) | IN PROGRESS |          |
+
+
 ## Integrations
 
 | Task                                      | Status      | Comments |
@@ -113,9 +124,14 @@ See also:
 
 ## Meta
 
-| Task        | Status      | Comments |
-|-------------|-------------|----------|
-| Jepsen test | IN PROGRESS |          |
+| Task                          | Status        | Comments |
+|-------------------------------|---------------|----------|
+| Jepsen test                   | IN PROGRESS   |          |
+| Store membership in raft      | PLAN          |          |
+| Nonblocking snapshot building | PLAN          |          |
+| Snapshot file format impl     | PLAN          |          |
+| Upgrade on-disk store format  | PLAN          |          |
+
 
 ## Testing
 
@@ -126,6 +142,8 @@ See also:
 | Fuzzer Test   | PLAN        |                                   |
 
 # Releases
+- [ ] [v1.0#9604](https://github.com/datafuselabs/databend/issues/9604)
+- [ ] [v0.9#7052](https://github.com/datafuselabs/databend/issues/7052)
 - [x] [v0.8 #4591](https://github.com/datafuselabs/databend/issues/4591)
 - [x] [v0.7 #3428](https://github.com/datafuselabs/databend/issues/2328)
 - [x] [v0.6 #2525](https://github.com/datafuselabs/databend/issues/2525)

@@ -13,16 +13,19 @@
 // limitations under the License.
 
 mod cache;
-mod object;
+mod metrics;
 mod providers;
-mod settings;
+mod read;
 
-pub use cache::ObjectCacheProvider;
-pub use object::CachedObject;
-pub use object::CachedObjectAccessor;
-pub use providers::metrics::metrics_reset;
-pub use providers::ByPassCache;
-pub use providers::FileCache;
-pub use providers::MemoryBytesCache;
-pub use providers::MemoryItemsCache;
-pub use settings::CacheSettings;
+pub use cache::CacheAccessor;
+pub use providers::DiskCache;
+pub use providers::InMemoryBytesCacheHolder;
+pub use providers::InMemoryCacheBuilder;
+pub use providers::InMemoryItemCacheHolder;
+pub use read::CacheKey;
+pub use read::DiskCacheReader;
+pub use read::InMemoryBytesCacheReader;
+pub use read::InMemoryItemCacheReader;
+pub use read::LoadParams;
+pub use read::Loader;
+pub use read::LoaderWithCacheKey;
