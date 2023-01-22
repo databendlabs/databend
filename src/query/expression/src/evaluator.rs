@@ -241,13 +241,17 @@ impl<'a> Evaluator<'a> {
                 other => unreachable!("source: {}", other),
             },
             (DataType::Nullable(inner_src_ty), _) => match value {
-                Value::Scalar(Scalar::Null) => {
-                    Err((span, (format!("unable to cast {src_type} to {dest_type}"))))
-                }
+                Value::Scalar(Scalar::Null) => Err((
+                    span,
+                    (format!("unable to cast type `{src_type}` to type `{dest_type}`")),
+                )),
                 Value::Scalar(_) => self.run_cast(span, inner_src_ty, dest_type, value),
                 Value::Column(Column::Nullable(col)) => {
                     if col.validity.unset_bits() > 0 {
-                        return Err((span, (format!("unable to cast NULL to {dest_type}"))));
+                        return Err((
+                            span,
+                            (format!("unable to cast `NULL` to type `{dest_type}`")),
+                        ));
                     }
                     let column = self
                         .run_cast(span, inner_src_ty, dest_type, Value::Column(col.column))?
@@ -308,38 +312,45 @@ impl<'a> Evaluator<'a> {
                 other => unreachable!("source: {}", other),
             },
 
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => match value {
-                Value::Scalar(Scalar::Tuple(fields)) => {
-                    let new_fields = fields
-                        .into_iter()
-                        .zip(fields_src_ty.iter())
-                        .zip(fields_dest_ty.iter())
-                        .map(|((field, src_ty), dest_ty)| {
-                            self.run_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))
-                                .map(|val| val.into_scalar().unwrap())
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-                    Ok(Value::Scalar(Scalar::Tuple(new_fields)))
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+                if fields_src_ty.len() == fields_dest_ty.len() =>
+            {
+                match value {
+                    Value::Scalar(Scalar::Tuple(fields)) => {
+                        let new_fields = fields
+                            .into_iter()
+                            .zip(fields_src_ty.iter())
+                            .zip(fields_dest_ty.iter())
+                            .map(|((field, src_ty), dest_ty)| {
+                                self.run_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))
+                                    .map(|val| val.into_scalar().unwrap())
+                            })
+                            .collect::<Result<Vec<_>>>()?;
+                        Ok(Value::Scalar(Scalar::Tuple(new_fields)))
+                    }
+                    Value::Column(Column::Tuple { fields, len }) => {
+                        let new_fields = fields
+                            .into_iter()
+                            .zip(fields_src_ty.iter())
+                            .zip(fields_dest_ty.iter())
+                            .map(|((field, src_ty), dest_ty)| {
+                                self.run_cast(span.clone(), src_ty, dest_ty, Value::Column(field))
+                                    .map(|val| val.into_column().unwrap())
+                            })
+                            .collect::<Result<_>>()?;
+                        Ok(Value::Column(Column::Tuple {
+                            fields: new_fields,
+                            len,
+                        }))
+                    }
+                    other => unreachable!("source: {}", other),
                 }
-                Value::Column(Column::Tuple { fields, len }) => {
-                    let new_fields = fields
-                        .into_iter()
-                        .zip(fields_src_ty.iter())
-                        .zip(fields_dest_ty.iter())
-                        .map(|((field, src_ty), dest_ty)| {
-                            self.run_cast(span.clone(), src_ty, dest_ty, Value::Column(field))
-                                .map(|val| val.into_column().unwrap())
-                        })
-                        .collect::<Result<_>>()?;
-                    Ok(Value::Column(Column::Tuple {
-                        fields: new_fields,
-                        len,
-                    }))
-                }
-                other => unreachable!("source: {}", other),
-            },
+            }
 
-            _ => Err((span, (format!("unable to cast {src_type} to {dest_type}")))),
+            _ => Err((
+                span,
+                (format!("unable to cast type `{src_type}` to type `{dest_type}`")),
+            )),
         }
     }
 
@@ -443,39 +454,53 @@ impl<'a> Evaluator<'a> {
                 _ => unreachable!(),
             },
 
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => match value {
-                Value::Scalar(Scalar::Tuple(fields)) => {
-                    let new_fields = fields
-                        .into_iter()
-                        .zip(fields_src_ty.iter())
-                        .zip(fields_dest_ty.iter())
-                        .map(|((field, src_ty), dest_ty)| {
-                            self.run_try_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+                if fields_src_ty.len() == fields_dest_ty.len() =>
+            {
+                match value {
+                    Value::Scalar(Scalar::Tuple(fields)) => {
+                        let new_fields = fields
+                            .into_iter()
+                            .zip(fields_src_ty.iter())
+                            .zip(fields_dest_ty.iter())
+                            .map(|((field, src_ty), dest_ty)| {
+                                self.run_try_cast(
+                                    span.clone(),
+                                    src_ty,
+                                    dest_ty,
+                                    Value::Scalar(field),
+                                )
                                 .into_scalar()
                                 .unwrap()
-                        })
-                        .collect::<Vec<_>>();
-                    Value::Scalar(Scalar::Tuple(new_fields))
-                }
-                Value::Column(Column::Tuple { fields, len }) => {
-                    let new_fields = fields
-                        .into_iter()
-                        .zip(fields_src_ty.iter())
-                        .zip(fields_dest_ty.iter())
-                        .map(|((field, src_ty), dest_ty)| {
-                            self.run_try_cast(span.clone(), src_ty, dest_ty, Value::Column(field))
+                            })
+                            .collect::<Vec<_>>();
+                        Value::Scalar(Scalar::Tuple(new_fields))
+                    }
+                    Value::Column(Column::Tuple { fields, len }) => {
+                        let new_fields = fields
+                            .into_iter()
+                            .zip(fields_src_ty.iter())
+                            .zip(fields_dest_ty.iter())
+                            .map(|((field, src_ty), dest_ty)| {
+                                self.run_try_cast(
+                                    span.clone(),
+                                    src_ty,
+                                    dest_ty,
+                                    Value::Column(field),
+                                )
                                 .into_column()
                                 .unwrap()
-                        })
-                        .collect();
-                    let new_col = Column::Tuple {
-                        fields: new_fields,
-                        len,
-                    };
-                    Value::Column(new_col)
+                            })
+                            .collect();
+                        let new_col = Column::Tuple {
+                            fields: new_fields,
+                            len,
+                        };
+                        Value::Column(new_col)
+                    }
+                    other => unreachable!("source: {}", other),
                 }
-                other => unreachable!("source: {}", other),
-            },
+            }
 
             _ => Value::Scalar(Scalar::Null),
         }
@@ -496,7 +521,10 @@ impl<'a> Evaluator<'a> {
             display_name: String::new(),
         };
 
-        let cast_expr = check_function(span, cast_fn, &[], &[expr], self.fn_registry)?;
+        let cast_expr = match check_function(span, cast_fn, &[], &[expr], self.fn_registry) {
+            Ok(cast_expr) => cast_expr,
+            Err(_) => return Ok(None),
+        };
 
         if cast_expr.data_type() != dest_type {
             return Ok(None);
@@ -809,7 +837,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 Some(Domain::Array(inner_domain))
             }
 
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => {
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+                if fields_src_ty.len() == fields_dest_ty.len() =>
+            {
                 Some(Domain::Tuple(
                     domain
                         .as_tuple()
@@ -895,7 +925,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 }))
             }
 
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => {
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+                if fields_src_ty.len() == fields_dest_ty.len() =>
+            {
                 let fields_domain = domain.as_tuple().unwrap();
                 let new_fields_domain = fields_domain
                     .iter()
