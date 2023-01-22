@@ -58,14 +58,15 @@ where
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
     pub async fn read(&self, params: &LoadParams) -> Result<Arc<T>> {
         match &self.cache {
-            None => Ok(Arc::new(self.loader.load_with_cache_key(params).await?.0)),
+            None => Ok(Arc::new(self.loader.load_with_cache_key(params).await?)),
             Some(labeled_cache) => {
                 // Perf.
                 {
                     metrics_inc_cache_access_count(1, &self.name);
                 }
 
-                match self.get_cached(params.location.as_ref(), labeled_cache) {
+                let cache_key = self.loader.cache_key(params);
+                match self.get_cached(cache_key.as_ref(), labeled_cache) {
                     Some(item) => {
                         // Perf.
                         {
@@ -77,7 +78,7 @@ where
                     None => {
                         let start = Instant::now();
 
-                        let (v, cache_key) = self.loader.load_with_cache_key(params).await?;
+                        let v = self.loader.load_with_cache_key(params).await?;
                         let item = Arc::new(v);
 
                         // Perf.
