@@ -225,8 +225,8 @@ where T: Clone
 
         // faster path for single unsigned integer to column
         if group_items.len() == 1 && group_items[0].1.is_unsigned_numeric() {
-            match group_items[0].1 {
-                DataType::Number(ty) => with_unsigned_number_mapped_type!(|NUM_TYPE| match ty {
+            if let DataType::Number(ty) = group_items[0].1 {
+                with_unsigned_number_mapped_type!(|NUM_TYPE| match ty {
                     NumberDataType::NUM_TYPE => {
                         let buffer: Buffer<T> = keys.into();
                         let col =
@@ -234,8 +234,7 @@ where T: Clone
                         return Ok(vec![NumberType::<NUM_TYPE>::upcast_column(col)]);
                     }
                     _ => {}
-                }),
-                _ => {}
+                })
             }
         }
 
