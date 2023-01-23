@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use common_exception::Result;
 use common_expression::types::DataType;
 
@@ -170,6 +172,38 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
         }
         ScalarExpr::CastExpr(CastExpr { argument, .. }) => contain_subquery(argument),
         _ => false,
+    }
+}
+
+/// check if the scalar could be constructed by the columns
+pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> bool {
+    if columns.contains(scalar) {
+        return true;
+    }
+
+    match scalar {
+        ScalarExpr::BoundColumnRef(_) => false,
+        ScalarExpr::ConstantExpr(_) => true,
+        ScalarExpr::AndExpr(scalar) => {
+            prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
+        }
+        ScalarExpr::OrExpr(scalar) => {
+            prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
+        }
+        ScalarExpr::NotExpr(scalar) => prune_by_children(&scalar.argument, columns),
+        ScalarExpr::ComparisonExpr(scalar) => {
+            prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
+        }
+        ScalarExpr::AggregateFunction(scalar) => scalar
+            .args
+            .iter()
+            .all(|arg| prune_by_children(arg, columns)),
+        ScalarExpr::FunctionCall(scalar) => scalar
+            .arguments
+            .iter()
+            .all(|arg| prune_by_children(arg, columns)),
+        ScalarExpr::CastExpr(expr) => prune_by_children(expr.argument.as_ref(), columns),
+        ScalarExpr::SubqueryExpr(_) => false,
     }
 }
 

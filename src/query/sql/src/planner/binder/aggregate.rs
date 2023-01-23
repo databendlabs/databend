@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
@@ -23,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 
+use super::prune_by_children;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
@@ -390,6 +392,32 @@ impl<'a> Binder {
                 bind_context.aggregate_info.group_items.len() - 1,
             );
         }
+
+        // Remove dependent group items, group by a, f(a, b), f(a), b ---> group by a,b
+        let mut results = vec![];
+        for item in bind_context.aggregate_info.group_items.iter() {
+            let columns: HashSet<ScalarExpr> = bind_context
+                .aggregate_info
+                .group_items
+                .iter()
+                .filter(|p| p.scalar != item.scalar)
+                .map(|p| p.scalar.clone())
+                .collect();
+
+            if prune_by_children(&item.scalar, &columns) {
+                continue;
+            }
+            results.push(item.clone());
+        }
+
+        bind_context.aggregate_info.group_items_map.clear();
+        for (i, item) in results.iter().enumerate() {
+            bind_context
+                .aggregate_info
+                .group_items_map
+                .insert(format!("{:?}", &item.scalar), i);
+        }
+        bind_context.aggregate_info.group_items = results;
         Ok(())
     }
 
