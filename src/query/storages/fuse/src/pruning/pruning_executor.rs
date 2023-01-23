@@ -47,10 +47,10 @@ use storages_common_table_meta::meta::SegmentInfo;
 use tracing::warn;
 use tracing::Instrument;
 
-use super::fuse_bloom_pruner;
 use crate::io::MetaReaders;
 use crate::metrics::*;
-use crate::pruning::fuse_bloom_pruner::FuseBloomPruner;
+use crate::pruning::FuseBloomPruner;
+use crate::pruning::FuseBloomPrunerCreator;
 
 type SegmentPruningJoinHandles = Vec<JoinHandle<Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>>>>;
 
@@ -119,12 +119,8 @@ impl BlockPruner {
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let filter_pruner = fuse_bloom_pruner::new_bloom_pruner(
-            ctx,
-            filter_exprs.as_deref(),
-            &schema,
-            dal.clone(),
-        )?;
+        let filter_pruner =
+            FuseBloomPrunerCreator::create(ctx, filter_exprs.as_deref(), &schema, dal.clone())?;
 
         // prepare the page pruner, this is used in native format
         let page_pruner = PagePrunerCreator::try_create(

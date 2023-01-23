@@ -15,4 +15,6 @@
 mod fuse_bloom_pruner;
 mod pruning_executor;
 
+pub use fuse_bloom_pruner::FuseBloomPruner;
+pub use fuse_bloom_pruner::FuseBloomPrunerCreator;
 pub use pruning_executor::BlockPruner;
