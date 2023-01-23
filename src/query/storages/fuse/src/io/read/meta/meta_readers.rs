@@ -70,7 +70,7 @@ impl MetaReaders {
     pub fn file_meta_data_reader(dal: Operator) -> BloomIndexFileMetaDataReader {
         BloomIndexFileMetaDataReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
-            "BLOOM_INDEX_FILE_META_DATA_CACHE".to_owned(),
+            "bloom_index_file_meta_data_cache".to_owned(),
             LoaderWrapper(dal),
         )
     }

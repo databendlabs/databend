@@ -42,11 +42,9 @@ use storages_common_table_meta::meta::BlockFilter;
 use storages_common_table_meta::meta::ColumnId;
 use tracing::Instrument;
 
-use crate::io::read::bloom_index::column_reader::BloomIndexColumnReader;
+use crate::io::read::bloom::BloomIndexColumnReader;
 use crate::io::MetaReaders;
-use crate::metrics::metrics_inc_block_index_read_bytes;
-use crate::metrics::metrics_inc_block_index_read_milliseconds;
-use crate::metrics::metrics_inc_block_index_read_nums;
+use crate::metrics::*;
 
 /// load index column data
 #[tracing::instrument(level = "debug", skip_all)]

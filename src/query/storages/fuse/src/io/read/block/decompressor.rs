@@ -57,7 +57,7 @@ impl UncompressedBuffer {
     }
 
     #[allow(clippy::mut_from_ref)]
-    pub(in crate::io::read::decompressor) fn buffer_mut(&self) -> &mut Vec<u8> {
+    pub(in crate::io::read::block::decompressor) fn buffer_mut(&self) -> &mut Vec<u8> {
         unsafe { &mut *self.buffer.get() }
     }
 }

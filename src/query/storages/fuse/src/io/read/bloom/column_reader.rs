@@ -18,12 +18,12 @@ use std::sync::Arc;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_exception::Result;
 use opendal::Operator;
+use storages_common_cache::CacheKey;
 use storages_common_cache::InMemoryBytesCacheReader;
 use storages_common_cache::LoadParams;
+use storages_common_cache::LoaderWithCacheKey;
 use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta::ColumnId;
-
-use crate::io::read::column_data_loader::ColumnDataLoader;
 
 type CachedReader = InMemoryBytesCacheReader<Vec<u8>, ColumnDataLoader>;
 
@@ -54,12 +54,18 @@ impl BloomIndexColumnReader {
             operator,
         };
 
-        let cached_reader = Self::get_cached_reader(loader);
+        let cached_reader = CachedReader::new(
+            CacheManager::instance().get_bloom_index_cache(),
+            "bloom_index_data_cache".to_owned(),
+            loader,
+        );
+
         let param = LoadParams {
             location: path,
             len_hint: None,
             ver: 0,
         };
+
         BloomIndexColumnReader {
             cached_reader,
             param,
@@ -69,12 +75,27 @@ impl BloomIndexColumnReader {
     pub async fn read(&self) -> Result<Arc<Vec<u8>>> {
         self.cached_reader.read(&self.param).await
     }
+}
 
-    fn get_cached_reader(accessor: ColumnDataLoader) -> CachedReader {
-        CachedReader::new(
-            CacheManager::instance().get_bloom_index_cache(),
-            "BLOOM_INDEX_DATA_CACHE".to_owned(),
-            accessor,
-        )
+/// Loader that fetch range of the target object with customized cache key
+struct ColumnDataLoader {
+    pub offset: u64,
+    pub len: u64,
+    pub cache_key: String,
+    pub operator: Operator,
+}
+
+#[async_trait::async_trait]
+impl LoaderWithCacheKey<Vec<u8>> for ColumnDataLoader {
+    async fn load_with_cache_key(&self, params: &LoadParams) -> common_exception::Result<Vec<u8>> {
+        let column_reader = self.operator.object(&params.location);
+        let bytes = column_reader
+            .range_read(self.offset..self.offset + self.len)
+            .await?;
+        Ok(bytes)
+    }
+
+    fn cache_key(&self, _params: &LoadParams) -> CacheKey {
+        self.cache_key.clone()
     }
 }
