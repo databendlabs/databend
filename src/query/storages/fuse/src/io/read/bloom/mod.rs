@@ -17,4 +17,5 @@ mod column_loader;
 mod column_reader;
 mod filter_reader;
 
+pub(crate) use column_reader::BloomIndexColumnReader;
 pub use filter_reader::BloomFilterReader;
