@@ -12,9 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod fuse_bloom_pruner;
+mod bloom_pruner;
 mod pruning_executor;
 
-pub use fuse_bloom_pruner::FuseBloomPruner;
-pub use fuse_bloom_pruner::FuseBloomPrunerCreator;
+pub use bloom_pruner::FuseBloomPruner;
+pub use bloom_pruner::FuseBloomPrunerCreator;
 pub use pruning_executor::BlockPruner;
