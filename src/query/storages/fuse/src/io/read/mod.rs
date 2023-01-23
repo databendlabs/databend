@@ -16,7 +16,6 @@ mod block_reader;
 mod block_reader_native;
 mod block_reader_parquet;
 mod bloom_index;
-mod column_data_loader;
 mod decompressor;
 mod read_settings;
 mod snapshot_history_reader;

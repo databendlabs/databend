@@ -18,11 +18,11 @@ use storages_common_table_meta::meta::BlockBloomFilterIndexVersion;
 use storages_common_table_meta::meta::BlockFilter;
 use storages_common_table_meta::meta::Location;
 
-use super::loader::load_bloom_filter_by_columns;
+use super::column_loader::load_bloom_filter_by_columns;
 
 #[async_trait::async_trait]
 pub trait BloomFilterReader {
-    async fn read_filter(
+    async fn read_bloom(
         &self,
         dal: Operator,
         columns: &[String],
@@ -32,7 +32,7 @@ pub trait BloomFilterReader {
 
 #[async_trait::async_trait]
 impl BloomFilterReader for Location {
-    async fn read_filter(
+    async fn read_bloom(
         &self,
         dal: Operator,
         columns: &[String],

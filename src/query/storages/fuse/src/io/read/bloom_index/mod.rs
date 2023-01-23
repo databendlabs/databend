@@ -13,8 +13,8 @@
 // limitations under the License.
 //
 
+mod column_loader;
 mod column_reader;
 mod filter_reader;
-mod loader;
 
 pub use filter_reader::BloomFilterReader;
