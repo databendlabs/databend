@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod pruner;
+mod fuse_bloom_pruner;
 mod pruning_executor;
 
 pub use pruning_executor::BlockPruner;

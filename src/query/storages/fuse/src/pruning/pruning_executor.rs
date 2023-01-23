@@ -47,17 +47,17 @@ use storages_common_table_meta::meta::SegmentInfo;
 use tracing::warn;
 use tracing::Instrument;
 
-use super::pruner;
+use super::fuse_bloom_pruner;
 use crate::io::MetaReaders;
 use crate::metrics::*;
-use crate::pruning::pruner::Pruner;
+use crate::pruning::fuse_bloom_pruner::FuseBloomPruner;
 
 type SegmentPruningJoinHandles = Vec<JoinHandle<Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>>>>;
 
 struct PruningContext {
     limiter: LimiterPruner,
     range_pruner: Arc<dyn RangePruner + Send + Sync>,
-    filter_pruner: Option<Arc<dyn Pruner + Send + Sync>>,
+    filter_pruner: Option<Arc<dyn FuseBloomPruner + Send + Sync>>,
     page_pruner: Arc<dyn PagePruner + Send + Sync>,
     rt: Arc<Runtime>,
     semaphore: Arc<Semaphore>,
@@ -119,8 +119,12 @@ impl BlockPruner {
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let filter_pruner =
-            pruner::new_filter_pruner(ctx, filter_exprs.as_deref(), &schema, dal.clone())?;
+        let filter_pruner = fuse_bloom_pruner::new_bloom_pruner(
+            ctx,
+            filter_exprs.as_deref(),
+            &schema,
+            dal.clone(),
+        )?;
 
         // prepare the page pruner, this is used in native format
         let page_pruner = PagePrunerCreator::try_create(
@@ -263,7 +267,7 @@ impl BlockPruner {
     #[tracing::instrument(level = "debug", skip_all)]
     async fn prune_blocks(
         pruning_ctx: &Arc<PruningContext>,
-        filter_pruner: &Arc<dyn Pruner + Send + Sync>,
+        filter_pruner: &Arc<dyn FuseBloomPruner + Send + Sync>,
         segment_idx: usize,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {

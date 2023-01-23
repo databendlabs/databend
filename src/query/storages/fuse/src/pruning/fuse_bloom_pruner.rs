@@ -28,12 +28,12 @@ use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::Location;
 
 #[async_trait::async_trait]
-pub trait Pruner {
+pub trait FuseBloomPruner {
     // returns ture, if target should NOT be pruned (false positive allowed)
     async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool;
 }
 
-struct FilterPruner {
+struct FuseBloomPrunerCreator {
     ctx: Arc<dyn TableContext>,
 
     /// indices that should be loaded from filter block
@@ -42,7 +42,7 @@ struct FilterPruner {
     /// the expression that would be evaluate
     filter_expression: Expr<String>,
 
-    /// pre caculated digest for constant Scalar
+    /// pre calculated digest for constant Scalar
     scalar_map: HashMap<Scalar, u64>,
 
     /// the data accessor
@@ -52,7 +52,7 @@ struct FilterPruner {
     data_schema: TableSchemaRef,
 }
 
-impl FilterPruner {
+impl FuseBloomPrunerCreator {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         index_columns: Vec<String>,
@@ -74,7 +74,7 @@ impl FilterPruner {
 
 use self::util::*;
 #[async_trait::async_trait]
-impl Pruner for FilterPruner {
+impl FuseBloomPruner for FuseBloomPrunerCreator {
     async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression
@@ -108,12 +108,12 @@ impl Pruner for FilterPruner {
 /// if `filter_expr` is empty, or is not applicable, e.g. have no point queries
 /// a [NonPruner] will be return, which prunes nothing.
 /// otherwise, a [Filter] backed pruner will be return
-pub fn new_filter_pruner(
+pub fn new_bloom_pruner(
     ctx: &Arc<dyn TableContext>,
     filter_exprs: Option<&[Expr<String>]>,
     schema: &TableSchemaRef,
     dal: Operator,
-) -> Result<Option<Arc<dyn Pruner + Send + Sync>>> {
+) -> Result<Option<Arc<dyn FuseBloomPruner + Send + Sync>>> {
     if let Some(exprs) = filter_exprs {
         if exprs.is_empty() {
             return Ok(None);
@@ -152,7 +152,7 @@ pub fn new_filter_pruner(
                 }
             }
 
-            return Ok(Some(Arc::new(FilterPruner::new(
+            return Ok(Some(Arc::new(FuseBloomPrunerCreator::new(
                 ctx.clone(),
                 filter_block_cols,
                 optimized_expr,
