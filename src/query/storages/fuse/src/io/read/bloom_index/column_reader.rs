@@ -53,6 +53,7 @@ impl BloomIndexColumnReader {
             cache_key,
             operator,
         };
+
         let cached_reader = Self::get_cached_reader(loader);
         let param = LoadParams {
             location: path,
