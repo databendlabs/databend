@@ -32,6 +32,7 @@ use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use tracing::info;
 
+use super::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
@@ -226,17 +227,11 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
         }
 
-        let mut estimated_key_size = self.hash_table.bytes_len();
-        let value_size = std::mem::size_of::<u64>() * self.hash_table.len();
-        if estimated_key_size > value_size {
-            estimated_key_size -= value_size;
-        }
+        let value_size = estimated_key_size(&self.hash_table);
 
-        let mut group_columns_builder = self.method.group_columns_builder(
-            self.hash_table.len(),
-            estimated_key_size,
-            &self.params,
-        );
+        let mut group_columns_builder =
+            self.method
+                .group_columns_builder(self.hash_table.len(), value_size, &self.params);
 
         if !HAS_AGG {
             for group_entity in self.hash_table.iter() {
@@ -338,11 +333,13 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             .map(|(_, s)| *s)
             .collect::<Vec<_>>();
 
-        for group_entity in self.hash_table.iter() {
-            let place = Into::<StateAddr>::into(*group_entity.get());
+        if !state_offsets.is_empty() {
+            for group_entity in self.hash_table.iter() {
+                let place = Into::<StateAddr>::into(*group_entity.get());
 
-            for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
-                unsafe { function.drop_state(place.next(*state_offset)) }
+                for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
+                    unsafe { function.drop_state(place.next(*state_offset)) }
+                }
             }
         }
 
