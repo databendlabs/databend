@@ -90,6 +90,14 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> Hashtable
         std::mem::size_of::<Self>() + impl_bytes
     }
 
+    fn unsize_key_size(&self) -> Option<usize> {
+        let mut key_len = 0;
+        for table in &self.tables {
+            key_len += table.unsize_key_size()?;
+        }
+        Some(key_len)
+    }
+
     fn entry(&self, key: &Self::Key) -> Option<Self::EntryRef<'_>> {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
