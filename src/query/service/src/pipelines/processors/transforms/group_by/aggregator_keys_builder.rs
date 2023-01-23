@@ -52,7 +52,6 @@ impl<'a, T: Number> KeysColumnBuilder for FixedKeysColumnBuilder<'a, T> {
 pub struct SerializedKeysColumnBuilder<'a> {
     pub inner_builder: StringColumnBuilder,
 
-    value_capacity: usize,
     _phantom: PhantomData<&'a ()>,
 }
 
@@ -61,7 +60,6 @@ impl<'a> SerializedKeysColumnBuilder<'a> {
         SerializedKeysColumnBuilder {
             inner_builder: StringColumnBuilder::with_capacity(capacity, value_capacity),
             _phantom: PhantomData,
-            value_capacity,
         }
     }
 }
@@ -75,12 +73,6 @@ impl<'a> KeysColumnBuilder for SerializedKeysColumnBuilder<'a> {
     }
 
     fn finish(self) -> Column {
-        tracing::debug!(
-            "{:?} --> {:?} {:?}",
-            self.value_capacity,
-            self.inner_builder.data.len(),
-            self.inner_builder.data.capacity()
-        );
         Column::String(self.inner_builder.build())
     }
 }

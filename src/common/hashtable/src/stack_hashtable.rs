@@ -188,7 +188,6 @@ where
                 _alignment: [0; 0],
             }));
         }
-        self.table.check_grow();
 
         unsafe {
             self.table.set_merge(&other.table);
