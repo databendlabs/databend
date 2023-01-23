@@ -15,12 +15,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_expression::ConstantFolder;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -38,7 +38,7 @@ pub trait FuseBloomPruner {
 }
 
 pub struct FuseBloomPrunerCreator {
-    ctx: Arc<dyn TableContext>,
+    func_ctx: FunctionContext,
 
     /// indices that should be loaded from filter block
     index_columns: Vec<String>,
@@ -58,7 +58,7 @@ pub struct FuseBloomPrunerCreator {
 
 impl FuseBloomPrunerCreator {
     pub fn create(
-        ctx: &Arc<dyn TableContext>,
+        func_ctx: &FunctionContext,
         filter_exprs: Option<&[Expr<String>]>,
         schema: &TableSchemaRef,
         dal: Operator,
@@ -77,8 +77,7 @@ impl FuseBloomPrunerCreator {
                 })
                 .unwrap();
 
-            let (optimized_expr, _) =
-                ConstantFolder::fold(&expr, ctx.try_get_function_context()?, &BUILTIN_FUNCTIONS);
+            let (optimized_expr, _) = ConstantFolder::fold(&expr, *func_ctx, &BUILTIN_FUNCTIONS);
             let point_query_cols = BloomIndex::find_eq_columns(&optimized_expr)?;
 
             tracing::debug!(
@@ -92,17 +91,16 @@ impl FuseBloomPrunerCreator {
                 // convert to filter column names
                 let mut filter_block_cols = vec![];
                 let mut scalar_map = HashMap::<Scalar, u64>::new();
-                let func_ctx = ctx.try_get_function_context()?;
                 for (col_name, scalar, ty) in point_query_cols.iter() {
                     filter_block_cols.push(BloomIndex::build_filter_column_name(col_name));
                     if !scalar_map.contains_key(scalar) {
-                        let digest = BloomIndex::calculate_scalar_digest(func_ctx, scalar, ty)?;
+                        let digest = BloomIndex::calculate_scalar_digest(*func_ctx, scalar, ty)?;
                         scalar_map.insert(scalar.clone(), digest);
                     }
                 }
 
                 let creator = FuseBloomPrunerCreator {
-                    ctx: ctx.clone(),
+                    func_ctx: *func_ctx,
                     index_columns: filter_block_cols,
                     filter_expression: optimized_expr,
                     scalar_map,
@@ -119,17 +117,12 @@ impl FuseBloomPrunerCreator {
     pub async fn apply(&self, index_location: &Location, index_length: u64) -> Result<bool> {
         // load the relevant index columns
         let maybe_filter = index_location
-            .read_filter(
-                self.ctx.clone(),
-                self.dal.clone(),
-                &self.index_columns,
-                index_length,
-            )
+            .read_filter(self.dal.clone(), &self.index_columns, index_length)
             .await;
 
         match maybe_filter {
             Ok(filter) => Ok(BloomIndex::from_filter_block(
-                self.ctx.try_get_function_context()?,
+                self.func_ctx,
                 self.data_schema.clone(),
                 filter.filter_schema,
                 filter.filter_block,

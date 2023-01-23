@@ -28,7 +28,6 @@ use common_arrow::parquet::read::PageReader;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -52,7 +51,6 @@ use crate::metrics::metrics_inc_block_index_read_nums;
 /// load index column data
 #[tracing::instrument(level = "debug", skip_all)]
 pub async fn load_bloom_filter_by_columns(
-    ctx: Arc<dyn TableContext>,
     dal: Operator,
     column_needed: &[String],
     path: &str,
@@ -78,7 +76,7 @@ pub async fn load_bloom_filter_by_columns(
     // 1. load column data, as bytes
     let futs = column_needed
         .iter()
-        .map(|col_name| load_column_bytes(&ctx, file_meta, col_name, path, &dal))
+        .map(|col_name| load_column_bytes(file_meta, col_name, path, &dal))
         .collect::<Vec<_>>();
 
     let start = Instant::now();
@@ -183,7 +181,6 @@ pub async fn load_bloom_filter_by_columns(
 /// read data from cache, or populate cache items if possible
 #[tracing::instrument(level = "debug", skip_all)]
 async fn load_column_bytes(
-    _ctx: &Arc<dyn TableContext>, // TODO funny lifetime compile error, if this commented out
     file_meta: &FileMetaData,
     col_name: &str,
     path: &str,

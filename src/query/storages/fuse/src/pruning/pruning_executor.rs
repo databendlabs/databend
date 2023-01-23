@@ -119,8 +119,12 @@ impl BlockPruner {
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let filter_pruner =
-            FuseBloomPrunerCreator::create(ctx, filter_exprs.as_deref(), &schema, dal.clone())?;
+        let filter_pruner = FuseBloomPrunerCreator::create(
+            &ctx.try_get_function_context()?,
+            filter_exprs.as_deref(),
+            &schema,
+            dal.clone(),
+        )?;
 
         // prepare the page pruner, this is used in native format
         let page_pruner = PagePrunerCreator::try_create(

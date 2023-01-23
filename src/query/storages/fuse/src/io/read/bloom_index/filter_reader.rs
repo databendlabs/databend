@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockBloomFilterIndexVersion;
@@ -27,7 +24,6 @@ use super::loader::load_bloom_filter_by_columns;
 pub trait BloomFilterReader {
     async fn read_filter(
         &self,
-        ctx: Arc<dyn TableContext>,
         dal: Operator,
         columns: &[String],
         index_length: u64,
@@ -38,7 +34,6 @@ pub trait BloomFilterReader {
 impl BloomFilterReader for Location {
     async fn read_filter(
         &self,
-        ctx: Arc<dyn TableContext>,
         dal: Operator,
         columns: &[String],
         index_length: u64,
@@ -50,8 +45,7 @@ impl BloomFilterReader for Location {
                 "bloom filter index version(v0) is deprecated",
             )),
             BlockBloomFilterIndexVersion::V2(_) | BlockBloomFilterIndexVersion::V3(_) => {
-                let res =
-                    load_bloom_filter_by_columns(ctx, dal, columns, path, index_length).await?;
+                let res = load_bloom_filter_by_columns(dal, columns, path, index_length).await?;
                 Ok(res)
             }
         }
