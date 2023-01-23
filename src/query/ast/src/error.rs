@@ -241,5 +241,5 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
             .map(|(span, msg)| (*span, format!("while parsing {}", msg))),
     );
 
-    pretty_print_error(&source, lables)
+    pretty_print_error(source, lables)
 }
