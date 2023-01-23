@@ -56,11 +56,12 @@ EvalScalar
     └── estimated rows: 10.00
 
 
+
 query T
-explain select 1, number from numbers(10) group by number, 1;
+explain select 1, number, number + 1, number -1 from numbers(10) group by number, abs(number), cast(number as int);
 ----
 EvalScalar
-├── expressions: [1_u8]
+├── expressions: [1_u8, plus(group_item (#0), 1_u8), minus(group_item (#0), 1_u8)]
 ├── estimated rows: 10.00
 └── AggregateFinal
     ├── group by: [number]
@@ -78,3 +79,27 @@ EvalScalar
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 10.00
+
+
+query T
+explain select count(3), type, name, trim(name) as a from system.columns group by name, type, a, concat(name, trim(name)), concat(type, name), length(name);
+----
+EvalScalar
+├── expressions: [count(3) (#14), trim_both(group_item (#0), " ")]
+├── estimated rows: 0.00
+└── AggregateFinal
+    ├── group by: [name, type]
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 0.00
+    └── AggregatePartial
+        ├── group by: [name, type]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.system.columns
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00

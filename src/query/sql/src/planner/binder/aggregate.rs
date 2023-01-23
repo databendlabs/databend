@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
@@ -44,6 +45,8 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::BindContext;
 use crate::MetadataRef;
+
+use super::prune_by_children;
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct AggregateInfo {
@@ -327,12 +330,6 @@ impl<'a> Binder {
             } = expr
             {
                 let (scalar, alias) = Self::resolve_index_item(expr, *index, select_list)?;
-                
-                // If group by scalar is a constant literal, we can skip it.
-                if matches!(scalar, ScalarExpr::ConstantExpr(_)) {
-                    continue;
-                }
-                
                 let key = format!("{:?}", &scalar);
                 if let Entry::Vacant(entry) = bind_context.aggregate_info.group_items_map.entry(key)
                 {
@@ -396,6 +393,23 @@ impl<'a> Binder {
                 bind_context.aggregate_info.group_items.len() - 1,
             );
         }
+
+        // Remove dependent group items, group by a, f(a, b), f(a), b ---> group by a,b
+        let mut results = vec![];
+        for  item in bind_context.aggregate_info.group_items.iter()  {
+            let columns: HashSet<ScalarExpr> = bind_context.aggregate_info.group_items.iter().filter(|p| p.scalar != item.scalar).map(|p| p.scalar.clone()).collect();
+            
+            if prune_by_children(&item.scalar, &columns) {
+                continue;
+            }
+            results.push(item.clone());
+        }
+        
+        bind_context.aggregate_info.group_items_map.clear();
+        for (i, item) in results.iter().enumerate() {
+            bind_context.aggregate_info.group_items_map.insert(format!("{:?}", &item.scalar), i);
+        }
+        bind_context.aggregate_info.group_items = results;
         Ok(())
     }
 
