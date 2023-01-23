@@ -21,6 +21,11 @@ use crate::stat_buffer::StatBuffer;
 const MAX_VARINT_LEN64: usize = 10;
 
 pub trait BinaryWrite {
+    fn write_scalar_own<V>(&mut self, v: V) -> Result<()>
+    where V: Marshal + StatBuffer {
+        self.write_scalar(&v)
+    }
+
     fn write_scalar<V>(&mut self, v: &V) -> Result<()>
     where V: Marshal + StatBuffer;
 

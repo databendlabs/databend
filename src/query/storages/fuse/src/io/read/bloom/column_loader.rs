@@ -33,10 +33,11 @@ use storages_common_table_meta::meta::BlockFilter;
 use storages_common_table_meta::meta::ColumnId;
 use xorfilter::Xor8;
 
-use crate::io::read::bloom_index::column_reader::BloomIndexColumnReader;
+use crate::io::read::bloom::BloomIndexColumnReader;
 use crate::io::MetaReaders;
 
 /// load index column data
+#[tracing::instrument(level = "debug", skip_all)]
 pub async fn load_bloom_filter_by_columns<'a>(
     dal: Operator,
     column_needed: &'a [String],
@@ -93,7 +94,7 @@ pub async fn load_bloom_filter_by_columns<'a>(
 
     Ok(BlockFilter {
         filter_schema: Arc::new(filter_schema),
-        filter_block,
+        filters: filter_block,
     })
 }
 

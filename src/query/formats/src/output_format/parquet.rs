@@ -15,6 +15,7 @@
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use storages_common_blocks::blocks_to_parquet;
 use storages_common_table_meta::table::TableCompression;
 
@@ -51,7 +52,7 @@ impl OutputFormat for ParquetOutputFormat {
         if blocks.is_empty() {
             return Ok(vec![]);
         }
-        let mut buf = Vec::with_capacity(100 * 1024 * 1024);
+        let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let _ = blocks_to_parquet(&self.schema, blocks, &mut buf, TableCompression::LZ4)?;
         Ok(buf)
     }

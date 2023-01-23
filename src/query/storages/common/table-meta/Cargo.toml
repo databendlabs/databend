@@ -24,4 +24,3 @@ serde = { workspace = true }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = [
     "cbordata",
 ], tag = "databend-alpha.4" }
-

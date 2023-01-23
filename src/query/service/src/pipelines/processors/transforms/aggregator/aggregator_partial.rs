@@ -34,6 +34,7 @@ use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
+use super::estimated_key_size;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -201,7 +202,10 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             .map(|_| StringColumnBuilder::with_capacity(state_groups_len, state_groups_len * 4))
             .collect::<Vec<_>>();
 
-        let mut group_key_builder = self.method.keys_column_builder(state_groups_len);
+        let value_size = estimated_key_size(&self.hash_table);
+        let mut group_key_builder = self
+            .method
+            .keys_column_builder(state_groups_len, value_size);
         for group_entity in self.hash_table.iter() {
             let place = Into::<StateAddr>::into(*group_entity.get());
 
@@ -284,7 +288,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         }
 
         let capacity = self.hash_table.len();
-        let mut keys_column_builder = self.method.keys_column_builder(capacity);
+        let value_size = estimated_key_size(&self.hash_table);
+
+        let mut keys_column_builder = self.method.keys_column_builder(capacity, value_size);
+
         for group_entity in self.hash_table.iter() {
             keys_column_builder.append_value(group_entity.key());
         }
@@ -318,11 +325,13 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
                 .map(|(_, s)| *s)
                 .collect::<Vec<_>>();
 
-            for group_entity in self.hash_table.iter() {
-                let place = Into::<StateAddr>::into(*group_entity.get());
+            if !states.is_empty() {
+                for group_entity in self.hash_table.iter() {
+                    let place = Into::<StateAddr>::into(*group_entity.get());
 
-                for (function, state_offset) in functions.iter().zip(states.iter()) {
-                    unsafe { function.drop_state(place.next(*state_offset)) }
+                    for (function, state_offset) in functions.iter().zip(states.iter()) {
+                        unsafe { function.drop_state(place.next(*state_offset)) }
+                    }
                 }
             }
 

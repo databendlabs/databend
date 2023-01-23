@@ -69,16 +69,19 @@ impl BloomIndexColumnReader {
             column_descriptor: colum_chunk_meta.descriptor().descriptor.clone(),
             field: field.clone(), // TODO eliminate this clone?
         };
+
         let cached_reader = CachedReader::new(
             CacheManager::instance().get_bloom_index_cache(),
-            "BLOOM_INDEX_DATA_CACHE".to_owned(),
+            "bloom_index_data_cache".to_owned(),
             loader,
         );
+
         let param = LoadParams {
             location: index_path,
             len_hint: None,
             ver: 0,
         };
+
         BloomIndexColumnReader {
             cached_reader,
             param,
@@ -102,7 +105,7 @@ pub struct Xor8Loader {
 
 #[async_trait::async_trait]
 impl LoaderWithCacheKey<Xor8> for Xor8Loader {
-    async fn load_with_cache_key(&self, params: &LoadParams) -> Result<(Xor8, CacheKey)> {
+    async fn load_with_cache_key(&self, params: &LoadParams) -> Result<Xor8> {
         let column_reader = self.operator.object(&params.location);
         let bytes = column_reader
             .range_read(self.offset..self.offset + self.len)
@@ -135,11 +138,15 @@ impl LoaderWithCacheKey<Xor8> for Xor8Loader {
             let col = Column::from_arrow(array.as_ref(), &DBDataType::try_from(&table_data_type)?);
             let bytes = unsafe { col.as_string().unwrap().index_unchecked(0) };
             let (filter, _size) = Xor8Filter::from_bytes(bytes)?;
-            Ok((filter.filter, self.cache_key.clone()))
+            Ok(filter.filter)
         } else {
             Err(ErrorCode::StorageOther(
                 "bloom index data not available as expected",
             ))
         }
+    }
+
+    fn cache_key(&self, _params: &LoadParams) -> CacheKey {
+        self.cache_key.clone()
     }
 }

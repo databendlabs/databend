@@ -51,13 +51,14 @@ impl<'a, T: Number> KeysColumnBuilder for FixedKeysColumnBuilder<'a, T> {
 
 pub struct SerializedKeysColumnBuilder<'a> {
     pub inner_builder: StringColumnBuilder,
+
     _phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> SerializedKeysColumnBuilder<'a> {
-    pub fn create(capacity: usize) -> Self {
+    pub fn create(capacity: usize, value_capacity: usize) -> Self {
         SerializedKeysColumnBuilder {
-            inner_builder: StringColumnBuilder::with_capacity(capacity, capacity),
+            inner_builder: StringColumnBuilder::with_capacity(capacity, value_capacity),
             _phantom: PhantomData,
         }
     }

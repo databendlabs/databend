@@ -21,9 +21,11 @@ use async_trait::async_trait;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use common_pipeline_core::processors::port::OutputPort;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
@@ -80,7 +82,7 @@ impl BloomIndexState {
             let index_block = bloom_index.serialize_to_data_block();
             let filter_schema = bloom_index.filter_schema;
             let column_distinct_count = bloom_index.column_distinct_count;
-            let mut data = Vec::with_capacity(100 * 1024);
+            let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
             let index_block_schema = &filter_schema;
             let (size, _) = blocks_to_parquet(
                 index_block_schema,
@@ -147,7 +149,7 @@ impl FuseTableSink {
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
-        thresholds: BlockCompactThresholds,
+        thresholds: BlockThresholds,
         source_schema: TableSchemaRef,
         output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {
@@ -238,7 +240,7 @@ impl Processor for FuseTableSink {
                 )?;
 
                 // we need a configuration of block size threshold here
-                let mut data = Vec::with_capacity(100 * 1024 * 1024);
+                let mut data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
                 let (size, meta_data) =
                     io::write_block(&self.write_settings, &self.source_schema, block, &mut data)?;
 

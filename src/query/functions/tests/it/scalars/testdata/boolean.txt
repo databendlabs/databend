@@ -54,7 +54,7 @@ output         : false
 
 ast            : true AND 1
 raw expr       : and(true, 1_u8)
-checked expr   : and<Boolean, Boolean>(true, CAST(1_u8 AS Boolean))
+checked expr   : and<Boolean, Boolean>(true, to_boolean<UInt8>(1_u8))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}

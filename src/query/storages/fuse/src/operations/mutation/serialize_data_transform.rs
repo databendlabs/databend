@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use opendal::Operator;
@@ -184,7 +185,7 @@ impl Processor for SerializeDataTransform {
                 let col_stats = gen_columns_statistics(&block, column_distinct_count)?;
 
                 // serialize data block.
-                let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
+                let mut block_data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
                 let schema = self.schema.clone();
                 let (file_size, meta_data) = blocks_to_parquet(
                     &schema,

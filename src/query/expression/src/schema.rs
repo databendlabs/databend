@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_jsonb::Number as JsonbNumber;
 use common_jsonb::Object as JsonbObject;
 use common_jsonb::Value as JsonbValue;
+use itertools::Itertools;
 use rand::distributions::Alphanumeric;
 use rand::distributions::DistString;
 use rand::rngs::SmallRng;
@@ -607,6 +608,15 @@ impl TableDataType {
         match self {
             TableDataType::Nullable(inner_ty) => {
                 format!("Nullable({})", inner_ty.wrapped_display())
+            }
+            TableDataType::Tuple { fields_type, .. } => {
+                format!(
+                    "Tuple({})",
+                    fields_type.iter().map(|ty| ty.wrapped_display()).join(", ")
+                )
+            }
+            TableDataType::Array(inner_ty) => {
+                format!("Array({})", inner_ty.wrapped_display())
             }
             _ => format!("{}", self),
         }

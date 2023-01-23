@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -36,6 +37,7 @@ use crate::range_index::statistics_to_domain;
 #[derive(Clone)]
 pub struct PageIndex {
     expr: Expr<String>,
+    column_refs: HashMap<String, DataType>,
     func_ctx: FunctionContext,
     cluster_key_id: u32,
 
@@ -67,6 +69,7 @@ impl PageIndex {
             .collect::<Vec<_>>();
 
         Ok(Self {
+            column_refs: new_expr.column_refs(),
             expr: new_expr,
             cluster_key_fields,
             cluster_key_id,
@@ -78,10 +81,9 @@ impl PageIndex {
         // if the exprs did not contains the first cluster key, we should return true
         if self.cluster_key_fields.is_empty()
             || !self
-                .expr
-                .column_refs()
+                .column_refs
                 .iter()
-                .any(|c| c.0 == self.cluster_key_fields[0].name())
+                .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c.0))
         {
             return Ok(true);
         }
@@ -141,9 +143,6 @@ impl PageIndex {
             }
             end -= 1;
         }
-        if end - start + 1 < pages {
-            tracing::debug!("range cut from {pages} to : {:?} --> {:?}", start, end);
-        }
 
         // no page is pruned
         if start + pages == end + 1 {
@@ -167,17 +166,22 @@ impl PageIndex {
 
         let mut input_domains = HashMap::with_capacity(self.cluster_key_fields.len());
         for (idx, (min, max)) in min_value.iter().zip(max_value.iter()).enumerate() {
-            let f = &self.cluster_key_fields[idx];
+            if self
+                .column_refs
+                .contains_key(self.cluster_key_fields[idx].name())
+            {
+                let f = &self.cluster_key_fields[idx];
 
-            let stats = ColumnStatistics {
-                min: min.clone(),
-                max: max.clone(),
-                null_count: 1,
-                in_memory_size: 0,
-                distinct_of_values: None,
-            };
-            let domain = statistics_to_domain(Some(&stats), f.data_type());
-            input_domains.insert(f.name().clone(), domain);
+                let stats = ColumnStatistics {
+                    min: min.clone(),
+                    max: max.clone(),
+                    null_count: 1,
+                    in_memory_size: 0,
+                    distinct_of_values: None,
+                };
+                let domain = statistics_to_domain(Some(&stats), f.data_type());
+                input_domains.insert(f.name().clone(), domain);
+            }
 
             // For Tuple scalars, if the first element is not equal, then the monotonically increasing property is broken.
             if min != max {
@@ -185,10 +189,14 @@ impl PageIndex {
             }
         }
 
+        if input_domains.is_empty() {
+            return Ok(true);
+        }
+
         // Fill missing stats to be full domain
-        for (name, ty) in self.expr.column_refs().into_iter() {
+        for (name, ty) in self.column_refs.iter() {
             if !input_domains.contains_key(name.as_str()) {
-                input_domains.insert(name.clone(), Domain::full(&ty));
+                input_domains.insert(name.clone(), Domain::full(ty));
             }
         }
 

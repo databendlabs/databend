@@ -193,7 +193,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, BooleanType, _, _>(
         "to_boolean",
         FunctionProperty::default(),
-        |_| FunctionDomain::Full,
+        |_| FunctionDomain::MayThrow,
         eval_string_to_boolean,
     );
 

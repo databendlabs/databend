@@ -995,6 +995,10 @@ pub struct OssStorageConfig {
     #[serde(rename = "endpoint_url")]
     pub oss_endpoint_url: String,
 
+    #[clap(long = "storage-oss-presign-endpoint-url", default_value_t)]
+    #[serde(rename = "presign_endpoint_url")]
+    pub oss_presign_endpoint_url: String,
+
     #[clap(long = "storage-oss-root", default_value_t)]
     #[serde(rename = "root")]
     pub oss_root: String,
@@ -1028,6 +1032,7 @@ impl From<InnerStorageOssConfig> for OssStorageConfig {
             oss_access_key_secret: inner.access_key_secret,
             oss_bucket: inner.bucket,
             oss_endpoint_url: inner.endpoint_url,
+            oss_presign_endpoint_url: inner.presign_endpoint_url,
             oss_root: inner.root,
         }
     }
@@ -1039,6 +1044,7 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
     fn try_into(self) -> Result<InnerStorageOssConfig, Self::Error> {
         Ok(InnerStorageOssConfig {
             endpoint_url: self.oss_endpoint_url,
+            presign_endpoint_url: self.oss_presign_endpoint_url,
             bucket: self.oss_bucket,
             access_key_id: self.oss_access_key_id,
             access_key_secret: self.oss_access_key_secret,

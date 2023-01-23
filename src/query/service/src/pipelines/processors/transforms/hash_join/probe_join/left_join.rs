@@ -62,7 +62,7 @@ impl JoinHashTable {
         let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         let mut row_state = match WITH_OTHER_CONJUNCT {
-            true => vec![0; keys_iter.size_hint().0],
+            true => vec![0; input.num_rows()],
             false => vec![],
         };
 

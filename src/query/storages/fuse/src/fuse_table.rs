@@ -34,9 +34,11 @@ use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::RemoteExpr;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
@@ -75,8 +77,6 @@ use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
-use crate::DEFAULT_ROW_PER_BLOCK;
 use crate::DEFAULT_ROW_PER_PAGE;
 use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
@@ -574,14 +574,15 @@ impl Table for FuseTable {
             .await
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
-        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+    fn get_block_compact_thresholds(&self) -> BlockThresholds {
+        let max_rows_per_block =
+            self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_BUFFER_SIZE,
         );
-        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+        BlockThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 
     async fn compact(

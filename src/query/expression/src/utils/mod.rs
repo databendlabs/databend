@@ -14,13 +14,11 @@
 
 pub mod arithmetics_type;
 pub mod arrow;
-pub mod block_compact_thresholds;
 pub mod block_debug;
+pub mod block_thresholds;
 mod column_from;
 pub mod date_helper;
 pub mod display;
-
-use std::collections::HashMap;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
@@ -41,9 +39,7 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::BlockEntry;
 use crate::Column;
-use crate::ConstantFolder;
 use crate::DataBlock;
-use crate::Domain;
 use crate::Evaluator;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
@@ -90,41 +86,6 @@ pub fn eval_function(
     let block = DataBlock::new(cols, num_rows);
     let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
     Ok((evaluator.run(&expr)?, expr.data_type().clone()))
-}
-
-/// A convenient shortcut to calculate the domain of a scalar function.
-pub fn calculate_function_domain(
-    span: Span,
-    fn_name: &str,
-    args: impl IntoIterator<Item = (Domain, DataType)>,
-    func_ctx: FunctionContext,
-    fn_registry: &FunctionRegistry,
-) -> Result<(Option<Domain>, DataType)> {
-    let (args, args_domain): (Vec<_>, HashMap<_, _>) = args
-        .into_iter()
-        .enumerate()
-        .map(|(id, (domain, ty))| {
-            (
-                RawExpr::ColumnRef {
-                    span: span.clone(),
-                    id,
-                    data_type: ty,
-                    display_name: String::new(),
-                },
-                (id, domain),
-            )
-        })
-        .unzip();
-    let raw_expr = RawExpr::FunctionCall {
-        span,
-        name: fn_name.to_string(),
-        params: vec![],
-        args,
-    };
-    let expr = crate::type_check::check(&raw_expr, fn_registry)?;
-    let (_, output_domain) =
-        ConstantFolder::fold_with_domain(&expr, args_domain, func_ctx, fn_registry);
-    Ok((output_domain, expr.data_type().clone()))
 }
 
 pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<Bitmap> {

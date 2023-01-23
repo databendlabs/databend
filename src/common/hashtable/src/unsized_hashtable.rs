@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
-use std::intrinsics::unlikely;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
@@ -45,6 +44,7 @@ where
     A: Allocator + Clone,
 {
     pub(crate) arena: Bump,
+    pub(crate) key_size: usize,
     pub(crate) table0: TableEmpty<V, A>,
     pub(crate) table1: Table0<InlineKey<0>, V, HeapContainer<Entry<InlineKey<0>, V>, A>, A>,
     pub(crate) table2: Table0<InlineKey<1>, V, HeapContainer<Entry<InlineKey<1>, V>, A>, A>,
@@ -117,6 +117,7 @@ where
         let allocator = A::default();
         Self {
             arena: Bump::new(),
+            key_size: 0,
             table0: TableEmpty::new_in(allocator.clone()),
             table1: Table0::with_capacity_in(capacity, allocator.clone()),
             table2: Table0::with_capacity_in(capacity, allocator.clone()),
@@ -161,16 +162,11 @@ where
         let key = (*key).as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => {
-                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
-                    if (self.table4.entries.len() >> 22) == 0 {
-                        self.table4.grow(2);
-                    } else {
-                        self.table4.grow(1);
-                    }
-                }
+                self.table4.check_grow();
                 self.table4
                     .insert(FallbackKey::new(key))
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
                     })
                     .map_err(|x| {
@@ -193,19 +189,14 @@ where
                     ))
                 }),
             1..=8 => {
-                if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
-                    if (self.table1.entries.len() >> 22) == 0 {
-                        self.table1.grow(2);
-                    } else {
-                        self.table1.grow(1);
-                    }
-                }
+                self.table1.check_grow();
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
                 let t = std::mem::transmute::<_, InlineKey<0>>(t);
                 self.table1
                     .insert(t)
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
                     })
                     .map_err(|x| {
@@ -213,13 +204,7 @@ where
                     })
             }
             9..=16 => {
-                if unlikely((self.table2.len() + 1) * 2 > self.table2.capacity()) {
-                    if (self.table2.entries.len() >> 22) == 0 {
-                        self.table2.grow(2);
-                    } else {
-                        self.table2.grow(1);
-                    }
-                }
+                self.table2.check_grow();
                 let mut t = [0u64; 2];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
@@ -227,6 +212,7 @@ where
                 self.table2
                     .insert(t)
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
                     })
                     .map_err(|x| {
@@ -234,13 +220,7 @@ where
                     })
             }
             17..=24 => {
-                if unlikely((self.table3.len() + 1) * 2 > self.table3.capacity()) {
-                    if (self.table3.entries.len() >> 22) == 0 {
-                        self.table3.grow(2);
-                    } else {
-                        self.table3.grow(1);
-                    }
-                }
+                self.table3.check_grow();
                 let mut t = [0u64; 3];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
@@ -249,6 +229,7 @@ where
                 self.table3
                     .insert(t)
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
                     })
                     .map_err(|x| {
@@ -256,16 +237,11 @@ where
                     })
             }
             _ => {
-                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
-                    if (self.table4.entries.len() >> 22) == 0 {
-                        self.table4.grow(2);
-                    } else {
-                        self.table4.grow(1);
-                    }
-                }
+                self.table4.check_grow();
                 self.table4
                     .insert(FallbackKey::new(key))
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
                     })
                     .map_err(|x| {
@@ -778,6 +754,10 @@ where A: Allocator + Clone + Default
             + self.table4.heap_bytes()
     }
 
+    fn unsize_key_size(&self) -> Option<usize> {
+        Some(self.key_size)
+    }
+
     fn entry(&self, key: &Self::Key) -> Option<Self::EntryRef<'_>> {
         let key = key.as_bytes();
         match key.len() {
@@ -899,19 +879,14 @@ where A: Allocator + Clone + Default
         let key = key.as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => {
-                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
-                    if (self.table4.entries.len() >> 22) == 0 {
-                        self.table4.grow(2);
-                    } else {
-                        self.table4.grow(1);
-                    }
-                }
-
+                self.table4.check_grow();
                 match self.table4.insert(FallbackKey::new(key)) {
                     Ok(e) => {
                         // We need to save the key to avoid drop it.
                         let s = self.arena.alloc_slice_copy(key);
                         e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
+
+                        self.key_size += key.len();
                         Ok(UnsizedHashtableEntryMutRef(
                             UnsizedHashtableEntryMutRefInner::Table4(e),
                         ))
@@ -938,19 +913,14 @@ where A: Allocator + Clone + Default
                 }),
 
             1..=8 => {
-                if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
-                    if (self.table1.entries.len() >> 22) == 0 {
-                        self.table1.grow(2);
-                    } else {
-                        self.table1.grow(1);
-                    }
-                }
+                self.table1.check_grow();
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
                 let t = std::mem::transmute::<_, InlineKey<0>>(t);
                 self.table1
                     .insert(t)
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
                     })
                     .map_err(|x| {
@@ -958,13 +928,7 @@ where A: Allocator + Clone + Default
                     })
             }
             9..=16 => {
-                if unlikely((self.table2.len() + 1) * 2 > self.table2.capacity()) {
-                    if (self.table2.entries.len() >> 22) == 0 {
-                        self.table2.grow(2);
-                    } else {
-                        self.table2.grow(1);
-                    }
-                }
+                self.table2.check_grow();
                 let mut t = [0u64; 2];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
@@ -972,6 +936,7 @@ where A: Allocator + Clone + Default
                 self.table2
                     .insert(t)
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
                     })
                     .map_err(|x| {
@@ -979,13 +944,7 @@ where A: Allocator + Clone + Default
                     })
             }
             17..=24 => {
-                if unlikely((self.table3.len() + 1) * 2 > self.table3.capacity()) {
-                    if (self.table3.entries.len() >> 22) == 0 {
-                        self.table3.grow(2);
-                    } else {
-                        self.table3.grow(1);
-                    }
-                }
+                self.table3.check_grow();
                 let mut t = [0u64; 3];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
@@ -994,6 +953,7 @@ where A: Allocator + Clone + Default
                 self.table3
                     .insert(t)
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
                     })
                     .map_err(|x| {
@@ -1001,19 +961,14 @@ where A: Allocator + Clone + Default
                     })
             }
             _ => {
-                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
-                    if (self.table4.entries.len() >> 22) == 0 {
-                        self.table4.grow(2);
-                    } else {
-                        self.table4.grow(1);
-                    }
-                }
-
+                self.table4.check_grow();
                 match self.table4.insert(FallbackKey::new(key)) {
                     Ok(e) => {
                         // We need to save the key to avoid drop it.
                         let s = self.arena.alloc_slice_copy(key);
                         e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
+
+                        self.key_size += key.len();
                         Ok(UnsizedHashtableEntryMutRef(
                             UnsizedHashtableEntryMutRefInner::Table4(e),
                         ))
@@ -1035,15 +990,11 @@ where A: Allocator + Clone + Default
         let key = key.as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => {
-                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
-                    if (self.table4.entries.len() >> 22) == 0 {
-                        self.table4.grow(2);
-                    } else {
-                        self.table4.grow(1);
-                    }
-                }
-
-                match self.table4.insert(FallbackKey::new_with_hash(key, hash)) {
+                self.table4.check_grow();
+                match self
+                    .table4
+                    .insert_with_hash(FallbackKey::new_with_hash(key, hash), hash)
+                {
                     Ok(e) => {
                         // We need to save the key to avoid drop it.
                         let s = self.arena.alloc_slice_copy(key);
@@ -1061,6 +1012,7 @@ where A: Allocator + Clone + Default
                 .table0
                 .insert()
                 .map(|x| {
+                    self.key_size += key.len();
                     UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
                         x,
                         PhantomData,
@@ -1073,19 +1025,14 @@ where A: Allocator + Clone + Default
                     ))
                 }),
             1..=8 => {
-                if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
-                    if (self.table1.entries.len() >> 22) == 0 {
-                        self.table1.grow(2);
-                    } else {
-                        self.table1.grow(1);
-                    }
-                }
+                self.table1.check_grow();
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
                 let t = std::mem::transmute::<_, InlineKey<0>>(t);
                 self.table1
-                    .insert(t)
+                    .insert_with_hash(t, hash)
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
                     })
                     .map_err(|x| {
@@ -1093,20 +1040,15 @@ where A: Allocator + Clone + Default
                     })
             }
             9..=16 => {
-                if unlikely((self.table2.len() + 1) * 2 > self.table2.capacity()) {
-                    if (self.table2.entries.len() >> 22) == 0 {
-                        self.table2.grow(2);
-                    } else {
-                        self.table2.grow(1);
-                    }
-                }
+                self.table2.check_grow();
                 let mut t = [0u64; 2];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
                 let t = std::mem::transmute::<_, InlineKey<1>>(t);
                 self.table2
-                    .insert(t)
+                    .insert_with_hash(t, hash)
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
                     })
                     .map_err(|x| {
@@ -1114,21 +1056,16 @@ where A: Allocator + Clone + Default
                     })
             }
             17..=24 => {
-                if unlikely((self.table3.len() + 1) * 2 > self.table3.capacity()) {
-                    if (self.table3.entries.len() >> 22) == 0 {
-                        self.table3.grow(2);
-                    } else {
-                        self.table3.grow(1);
-                    }
-                }
+                self.table3.check_grow();
                 let mut t = [0u64; 3];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
                 t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
                 let t = std::mem::transmute::<_, InlineKey<2>>(t);
                 self.table3
-                    .insert(t)
+                    .insert_with_hash(t, hash)
                     .map(|x| {
+                        self.key_size += key.len();
                         UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
                     })
                     .map_err(|x| {
@@ -1136,19 +1073,17 @@ where A: Allocator + Clone + Default
                     })
             }
             _ => {
-                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
-                    if (self.table4.entries.len() >> 22) == 0 {
-                        self.table4.grow(2);
-                    } else {
-                        self.table4.grow(1);
-                    }
-                }
-
-                match self.table4.insert(FallbackKey::new_with_hash(key, hash)) {
+                self.table4.check_grow();
+                match self
+                    .table4
+                    .insert_with_hash(FallbackKey::new_with_hash(key, hash), hash)
+                {
                     Ok(e) => {
                         // We need to save the key to avoid drop it.
                         let s = self.arena.alloc_slice_copy(key);
                         e.set_key(FallbackKey::new_with_hash(s, hash));
+
+                        self.key_size += key.len();
                         Ok(UnsizedHashtableEntryMutRef(
                             UnsizedHashtableEntryMutRefInner::Table4(e),
                         ))

@@ -22,6 +22,6 @@ use xorfilter::Xor8;
 /// Depending on the query conditions, columns of index data will be loaded on demand.
 pub struct BlockFilter {
     pub filter_schema: TableSchemaRef,
-    // pub filter_block: DataBlock,
-    pub filter_block: Vec<Arc<Xor8>>,
+    // TODO remove this pub, we should extract cached manager into a dedicated crate?
+    pub filters: Vec<Arc<Xor8>>,
 }

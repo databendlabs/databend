@@ -78,7 +78,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 1.11
 ├── Filter(Build)
-│   ├── filters: [gt(t.number (#0), CAST(1_u8 AS UInt64))]
+│   ├── filters: [gt(t.number (#0), to_uint64(1_u8))]
 │   ├── estimated rows: 0.33
 │   └── TableScan
 │       ├── table: default.default.t
@@ -89,7 +89,7 @@ HashJoin
 │       ├── push downs: [filters: [gt(t.number (#0), 1_u64)], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
-    ├── filters: [lt(CAST(1_u8 AS UInt64), t1.number (#1))]
+    ├── filters: [lt(to_uint64(1_u8), t1.number (#1))]
     ├── estimated rows: 3.33
     └── TableScan
         ├── table: default.default.t1
@@ -104,7 +104,7 @@ query T
 explain select t.number from t, t1 where t.number + t1.number = 1
 ----
 Filter
-├── filters: [eq(plus(t.number (#0), t1.number (#1)), CAST(1_u8 AS UInt64))]
+├── filters: [eq(plus(t.number (#0), t1.number (#1)), to_uint64(1_u8))]
 ├── estimated rows: 3.33
 └── HashJoin
     ├── join type: CROSS
@@ -140,7 +140,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
-│   ├── filters: [eq(t.number (#0), CAST(1_u8 AS UInt64))]
+│   ├── filters: [eq(t.number (#0), to_uint64(1_u8))]
 │   ├── estimated rows: 0.33
 │   └── TableScan
 │       ├── table: default.default.t

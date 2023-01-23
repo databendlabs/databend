@@ -276,6 +276,7 @@ pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
                 root: "/data/files".to_string(),
                 access_key_id: "access_key_id".to_string(),
                 access_key_secret: "access_key_secret".to_string(),
+                presign_endpoint_url: "".to_string(),
             }),
         },
         file_format_options: mt::FileFormatOptions {

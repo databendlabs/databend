@@ -12,23 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_reader;
-mod block_reader_native;
-mod block_reader_parquet;
-mod bloom_index;
-mod column_data_loader;
-mod decompressor;
+mod block;
+mod bloom;
+mod meta;
 mod read_settings;
 mod snapshot_history_reader;
-mod table_meta;
 
-pub use block_reader::BlockReader;
-pub use block_reader::MergeIOReadResult;
-pub use block_reader_native::NativeReaderExt;
-pub use bloom_index::BloomFilterReader;
-pub use decompressor::UncompressedBuffer;
+pub use block::BlockReader;
+pub use block::MergeIOReadResult;
+pub use block::NativeReaderExt;
+pub use block::UncompressedBuffer;
+pub use bloom::BloomFilterReader;
+pub use meta::MetaReaders;
+pub use meta::SegmentInfoReader;
+pub use meta::TableSnapshotReader;
 pub use read_settings::ReadSettings;
 pub use snapshot_history_reader::SnapshotHistoryReader;
-pub use table_meta::MetaReaders;
-pub use table_meta::SegmentInfoReader;
-pub use table_meta::TableSnapshotReader;

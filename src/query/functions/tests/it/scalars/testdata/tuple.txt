@@ -2,7 +2,7 @@ ast            : (NULL,)
 raw expr       : tuple(NULL)
 checked expr   : tuple<NULL>(NULL)
 optimized expr : (NULL,)
-output type    : (NULL,)
+output type    : Tuple(NULL,)
 output domain  : ({NULL})
 output         : (NULL,)
 
@@ -11,7 +11,7 @@ ast            : (NULL, NULL)
 raw expr       : tuple(NULL, NULL)
 checked expr   : tuple<NULL, NULL>(NULL, NULL)
 optimized expr : (NULL, NULL)
-output type    : (NULL, NULL)
+output type    : Tuple(NULL, NULL)
 output domain  : ({NULL}, {NULL})
 output         : (NULL, NULL)
 
@@ -20,16 +20,16 @@ ast            : (1, 2, 'a')
 raw expr       : tuple(1_u8, 2_u8, "a")
 checked expr   : tuple<UInt8, UInt8, String>(1_u8, 2_u8, "a")
 optimized expr : (1_u8, 2_u8, "a")
-output type    : (UInt8, UInt8, String)
+output type    : Tuple(UInt8, UInt8, String)
 output domain  : ({1..=1}, {2..=2}, {"a"..="a"})
 output         : (1_u8, 2_u8, "a")
 
 
 ast            : (1, 2, ('a', 'b'))
 raw expr       : tuple(1_u8, 2_u8, tuple("a", "b"))
-checked expr   : tuple<UInt8, UInt8, (String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))
+checked expr   : tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))
 optimized expr : (1_u8, 2_u8, ("a", "b"))
-output type    : (UInt8, UInt8, (String, String))
+output type    : Tuple(UInt8, UInt8, Tuple(String, String))
 output domain  : ({1..=1}, {2..=2}, ({"a"..="a"}, {"b"..="b"}))
 output         : (1_u8, 2_u8, ("a", "b"))
 
@@ -41,7 +41,7 @@ evaluation:
 +--------+----------------------+----------------------------------------------+
 |        | s                    | Output                                       |
 +--------+----------------------+----------------------------------------------+
-| Type   | String NULL          | (String NULL, String NULL)                   |
+| Type   | String NULL          | Tuple(String NULL, String NULL)              |
 | Domain | {"a"..="d"} ∪ {NULL} | ({"a"..="d"} ∪ {NULL}, {"a"..="d"} ∪ {NULL}) |
 | Row 0  | "a"                  | ("a", "a")                                   |
 | Row 1  | "b"                  | ("b", "b")                                   |
@@ -61,7 +61,7 @@ error:
   --> SQL:1:1
   |
 1 | get((NULL,))
-  | ^^^^^^^^^^^^ no overload satisfies `get((NULL,))`
+  | ^^^^^^^^^^^^ no overload satisfies `get(Tuple(NULL,))`
 
 
 
@@ -69,13 +69,13 @@ error:
   --> SQL:1:8
   |
 1 | (NULL,).0
-  |        ^^ no overload satisfies `get(0)((NULL,))`
+  |        ^^ no overload satisfies `get(0)(Tuple(NULL,))`
 
 
 
 ast            : (NULL,).1
 raw expr       : get(1)(tuple(NULL))
-checked expr   : get<(NULL,)>(tuple<NULL>(NULL))
+checked expr   : get<Tuple(NULL,)>(tuple<NULL>(NULL))
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
@@ -86,13 +86,13 @@ error:
   --> SQL:1:8
   |
 1 | (NULL,).2
-  |        ^^ no overload satisfies `get(2)((NULL,))`
+  |        ^^ no overload satisfies `get(2)(Tuple(NULL,))`
 
 
 
 ast            : (1, 'a').1
 raw expr       : get(1)(tuple(1_u8, "a"))
-checked expr   : get<(UInt8, String)>(tuple<UInt8, String>(1_u8, "a"))
+checked expr   : get<Tuple(UInt8, String)>(tuple<UInt8, String>(1_u8, "a"))
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
@@ -101,7 +101,7 @@ output         : 1_u8
 
 ast            : (1, 'a').2
 raw expr       : get(2)(tuple(1_u8, "a"))
-checked expr   : get<(UInt8, String)>(tuple<UInt8, String>(1_u8, "a"))
+checked expr   : get<Tuple(UInt8, String)>(tuple<UInt8, String>(1_u8, "a"))
 optimized expr : "a"
 output type    : String
 output domain  : {"a"..="a"}
@@ -110,16 +110,16 @@ output         : "a"
 
 ast            : (1, 2, ('a', 'b')).3
 raw expr       : get(3)(tuple(1_u8, 2_u8, tuple("a", "b")))
-checked expr   : get<(UInt8, UInt8, (String, String))>(tuple<UInt8, UInt8, (String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b")))
+checked expr   : get<Tuple(UInt8, UInt8, Tuple(String, String))>(tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b")))
 optimized expr : ("a", "b")
-output type    : (String, String)
+output type    : Tuple(String, String)
 output domain  : ({"a"..="a"}, {"b"..="b"})
 output         : ("a", "b")
 
 
 ast            : (1, 2, ('a', 'b')).3.1
 raw expr       : get(1)(get(3)(tuple(1_u8, 2_u8, tuple("a", "b"))))
-checked expr   : get<(String, String)>(get<(UInt8, UInt8, (String, String))>(tuple<UInt8, UInt8, (String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))))
+checked expr   : get<Tuple(String, String)>(get<Tuple(UInt8, UInt8, Tuple(String, String))>(tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))))
 optimized expr : "a"
 output type    : String
 output domain  : {"a"..="a"}
@@ -128,7 +128,7 @@ output         : "a"
 
 ast            : (s, s).1
 raw expr       : get(1)(tuple(s::String NULL, s::String NULL))
-checked expr   : get<(String NULL, String NULL)>(tuple<String NULL, String NULL>(s, s))
+checked expr   : get<Tuple(String NULL, String NULL)>(tuple<String NULL, String NULL>(s, s))
 evaluation:
 +--------+----------------------+----------------------+
 |        | s                    | Output               |
