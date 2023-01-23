@@ -168,7 +168,7 @@ impl FuseTable {
         let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
         let res = evaluator
             .run(&filter_expr)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("eval try eval const failed: {}.", e)))?;
+            .map_err(|e| e.add_message("eval try eval const failed:"))?;
         let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
             ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
         })?;

@@ -116,11 +116,7 @@ impl ScalarExpr {
 
     pub fn as_expr_with_col_name(&self) -> Result<Expr<String>> {
         let raw_expr = self.as_raw_expr_with_col_name();
-        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {
-            common_exception::ErrorCode::Internal(format!(
-                "Failed to type check the expression: {raw_expr:?}, error: {e}",
-            ))
-        })?;
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
         Ok(expr)
     }
 
@@ -214,11 +210,7 @@ impl ScalarExpr {
 
     pub fn as_expr_with_col_index(&self) -> Result<Expr> {
         let raw_expr = self.as_raw_expr_with_col_index();
-        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).map_err(|(_, e)| {
-            common_exception::ErrorCode::Internal(format!(
-                "Failed to type check the expression: {raw_expr:?}, error: {e}",
-            ))
-        })?;
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
         Ok(expr)
     }
 }

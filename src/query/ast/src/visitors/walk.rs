@@ -15,130 +15,130 @@
 use super::Visitor;
 use crate::ast::*;
 
-pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr<'a>) {
+pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
     match expr {
         Expr::ColumnRef {
             span,
             database,
             table,
             column,
-        } => visitor.visit_column_ref(span, database, table, column),
-        Expr::IsNull { span, expr, not } => visitor.visit_is_null(span, expr, *not),
+        } => visitor.visit_column_ref(*span, database, table, column),
+        Expr::IsNull { span, expr, not } => visitor.visit_is_null(*span, expr, *not),
         Expr::IsDistinctFrom {
             span,
             left,
             right,
             not,
-        } => visitor.visit_is_distinct_from(span, left, right, *not),
+        } => visitor.visit_is_distinct_from(*span, left, right, *not),
         Expr::InList {
             span,
             expr,
             list,
             not,
-        } => visitor.visit_in_list(span, expr, list, *not),
+        } => visitor.visit_in_list(*span, expr, list, *not),
         Expr::InSubquery {
             span,
             expr,
             subquery,
             not,
-        } => visitor.visit_in_subquery(span, expr, subquery, *not),
+        } => visitor.visit_in_subquery(*span, expr, subquery, *not),
         Expr::Between {
             span,
             expr,
             low,
             high,
             not,
-        } => visitor.visit_between(span, expr, low, high, *not),
+        } => visitor.visit_between(*span, expr, low, high, *not),
         Expr::BinaryOp {
             span,
             op,
             left,
             right,
-        } => visitor.visit_binary_op(span, op, left, right),
-        Expr::UnaryOp { span, op, expr } => visitor.visit_unary_op(span, op, expr),
+        } => visitor.visit_binary_op(*span, op, left, right),
+        Expr::UnaryOp { span, op, expr } => visitor.visit_unary_op(*span, op, expr),
         Expr::Cast {
             span,
             expr,
             target_type,
             pg_style,
-        } => visitor.visit_cast(span, expr, target_type, *pg_style),
+        } => visitor.visit_cast(*span, expr, target_type, *pg_style),
         Expr::TryCast {
             span,
             expr,
             target_type,
-        } => visitor.visit_try_cast(span, expr, target_type),
-        Expr::Extract { span, kind, expr } => visitor.visit_extract(span, kind, expr),
+        } => visitor.visit_try_cast(*span, expr, target_type),
+        Expr::Extract { span, kind, expr } => visitor.visit_extract(*span, kind, expr),
         Expr::Position {
             span,
             substr_expr,
             str_expr,
-        } => visitor.visit_positon(span, substr_expr, str_expr),
+        } => visitor.visit_positon(*span, substr_expr, str_expr),
         Expr::Substring {
             span,
             expr,
             substring_from,
             substring_for,
-        } => visitor.visit_substring(span, expr, substring_from, substring_for),
+        } => visitor.visit_substring(*span, expr, substring_from, substring_for),
         Expr::Trim {
             span,
             expr,
             trim_where,
-        } => visitor.visit_trim(span, expr, trim_where),
-        Expr::Literal { span, lit } => visitor.visit_literal(span, lit),
-        Expr::CountAll { span } => visitor.visit_count_all(span),
-        Expr::Tuple { span, exprs } => visitor.visit_tuple(span, exprs),
+        } => visitor.visit_trim(*span, expr, trim_where),
+        Expr::Literal { span, lit } => visitor.visit_literal(*span, lit),
+        Expr::CountAll { span } => visitor.visit_count_all(*span),
+        Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
             span,
             distinct,
             name,
             args,
             params,
-        } => visitor.visit_function_call(span, *distinct, name, args, params),
+        } => visitor.visit_function_call(*span, *distinct, name, args, params),
         Expr::Case {
             span,
             operand,
             conditions,
             results,
             else_result,
-        } => visitor.visit_case_when(span, operand, conditions, results, else_result),
+        } => visitor.visit_case_when(*span, operand, conditions, results, else_result),
         Expr::Exists {
             span,
             not,
             subquery,
-        } => visitor.visit_exists(span, *not, subquery),
+        } => visitor.visit_exists(*span, *not, subquery),
         Expr::Subquery {
             span,
             modifier,
             subquery,
-        } => visitor.visit_subquery(span, modifier, subquery),
+        } => visitor.visit_subquery(*span, modifier, subquery),
         Expr::MapAccess {
             span,
             expr,
             accessor,
-        } => visitor.visit_map_access(span, expr, accessor),
-        Expr::Array { span, exprs } => visitor.visit_array(span, exprs),
-        Expr::Interval { span, expr, unit } => visitor.visit_interval(span, expr, unit),
+        } => visitor.visit_map_access(*span, expr, accessor),
+        Expr::Array { span, exprs } => visitor.visit_array(*span, exprs),
+        Expr::Interval { span, expr, unit } => visitor.visit_interval(*span, expr, unit),
         Expr::DateAdd {
             span,
             date,
             interval,
             unit,
-        } => visitor.visit_date_add(span, unit, interval, date),
+        } => visitor.visit_date_add(*span, unit, interval, date),
         Expr::DateSub {
             span,
             date,
             interval,
             unit,
-        } => visitor.visit_date_sub(span, unit, interval, date),
-        Expr::DateTrunc { span, unit, date } => visitor.visit_date_trunc(span, unit, date),
+        } => visitor.visit_date_sub(*span, unit, interval, date),
+        Expr::DateTrunc { span, unit, date } => visitor.visit_date_trunc(*span, unit, date),
     }
 }
 
-pub fn walk_identifier<'a, V: Visitor<'a>>(visitor: &mut V, ident: &'a Identifier<'a>) {
+pub fn walk_identifier<'a, V: Visitor<'a>>(visitor: &mut V, ident: &'a Identifier) {
     visitor.visit_identifier(ident);
 }
 
-pub fn walk_query<'a, V: Visitor<'a>>(visitor: &mut V, query: &'a Query<'a>) {
+pub fn walk_query<'a, V: Visitor<'a>>(visitor: &mut V, query: &'a Query) {
     let Query {
         with,
         body,
@@ -163,7 +163,7 @@ pub fn walk_query<'a, V: Visitor<'a>>(visitor: &mut V, query: &'a Query<'a>) {
     }
 }
 
-pub fn walk_set_expr<'a, V: Visitor<'a>>(visitor: &mut V, set_expr: &'a SetExpr<'a>) {
+pub fn walk_set_expr<'a, V: Visitor<'a>>(visitor: &mut V, set_expr: &'a SetExpr) {
     match set_expr {
         SetExpr::Select(select) => {
             visitor.visit_select_stmt(select);
@@ -177,7 +177,7 @@ pub fn walk_set_expr<'a, V: Visitor<'a>>(visitor: &mut V, set_expr: &'a SetExpr<
     }
 }
 
-pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a SelectTarget<'a>) {
+pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a SelectTarget) {
     match target {
         SelectTarget::AliasedExpr { expr, alias } => {
             visitor.visit_expr(expr);
@@ -206,10 +206,7 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
     }
 }
 
-pub fn walk_table_reference<'a, V: Visitor<'a>>(
-    visitor: &mut V,
-    table_ref: &'a TableReference<'a>,
-) {
+pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a TableReference) {
     match table_ref {
         TableReference::Table {
             catalog,
@@ -266,14 +263,14 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(
     }
 }
 
-pub fn walk_time_travel_point<'a, V: Visitor<'a>>(visitor: &mut V, time: &'a TimeTravelPoint<'a>) {
+pub fn walk_time_travel_point<'a, V: Visitor<'a>>(visitor: &mut V, time: &'a TimeTravelPoint) {
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
     }
 }
 
-pub fn walk_join_condition<'a, V: Visitor<'a>>(visitor: &mut V, join_cond: &'a JoinCondition<'a>) {
+pub fn walk_join_condition<'a, V: Visitor<'a>>(visitor: &mut V, join_cond: &'a JoinCondition) {
     match join_cond {
         JoinCondition::On(expr) => visitor.visit_expr(expr),
         JoinCondition::Using(using) => {
@@ -286,14 +283,14 @@ pub fn walk_join_condition<'a, V: Visitor<'a>>(visitor: &mut V, join_cond: &'a J
     }
 }
 
-pub fn walk_cte<'a, V: Visitor<'a>>(visitor: &mut V, cte: &'a CTE<'a>) {
+pub fn walk_cte<'a, V: Visitor<'a>>(visitor: &mut V, cte: &'a CTE) {
     let CTE { alias, query, .. } = cte;
 
     visitor.visit_identifier(&alias.name);
     visitor.visit_query(query);
 }
 
-pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statement<'a>) {
+pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statement) {
     match statement {
         Statement::Explain { kind, query } => visitor.visit_explain(kind, query),
         Statement::Query(query) => visitor.visit_query(query),

@@ -823,8 +823,8 @@ async fn fill_default_value(
     Ok(())
 }
 
-async fn exprs_to_scalar<'a>(
-    exprs: Vec<AExpr<'a>>,
+async fn exprs_to_scalar(
+    exprs: Vec<AExpr>,
     schema: &DataSchemaRef,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,

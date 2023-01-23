@@ -32,7 +32,8 @@ use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_arrow::parquet::write::Version;
 use common_arrow::write_parquet_file;
 use common_exception::ErrorCode;
-use common_exception::Result as ExceptionResult;
+use common_exception::Result;
+use common_exception::Span;
 
 pub use self::column_from::*;
 use crate::types::AnyType;
@@ -44,8 +45,6 @@ use crate::Evaluator;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
 use crate::RawExpr;
-use crate::Result;
-use crate::Span;
 use crate::TableSchema;
 use crate::Value;
 
@@ -64,7 +63,7 @@ pub fn eval_function(
         .map(|(id, (val, ty))| {
             (
                 RawExpr::ColumnRef {
-                    span: span.clone(),
+                    span,
                     id,
                     data_type: ty.clone(),
                     display_name: String::new(),
@@ -113,7 +112,7 @@ pub fn serialize_to_parquet_with_compression(
     schema: impl AsRef<TableSchema>,
     buf: &mut Vec<u8>,
     compression: CompressionOptions,
-) -> ExceptionResult<(u64, ThriftFileMetaData)> {
+) -> Result<(u64, ThriftFileMetaData)> {
     let arrow_schema = schema.as_ref().to_arrow();
 
     let row_group_write_options = WriteOptions {
@@ -125,7 +124,7 @@ pub fn serialize_to_parquet_with_compression(
     let batches = blocks
         .into_iter()
         .map(ArrowChunk::try_from)
-        .collect::<ExceptionResult<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let encoding_map = |data_type: &ArrowDataType| match data_type {
         ArrowDataType::Dictionary(..) => Encoding::RleDictionary,
@@ -161,7 +160,7 @@ pub fn serialize_to_parquet(
     blocks: Vec<DataBlock>,
     schema: impl AsRef<TableSchema>,
     buf: &mut Vec<u8>,
-) -> ExceptionResult<(u64, ThriftFileMetaData)> {
+) -> Result<(u64, ThriftFileMetaData)> {
     serialize_to_parquet_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
 }
 

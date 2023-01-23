@@ -30,7 +30,7 @@ use crate::plans::ListPlan;
 use crate::plans::Plan;
 use crate::plans::RemoveStagePlan;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_list_stage(
         &mut self,
         location: &str,

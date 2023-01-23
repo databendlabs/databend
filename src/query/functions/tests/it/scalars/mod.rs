@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::io::Write;
 
 use comfy_table::Table;
-use common_ast::DisplayError;
+use common_exception::Result;
 use common_expression::type_check;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -49,7 +49,7 @@ mod variant;
 
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
     let text = text.as_ref();
-    let result = try {
+    let result: Result<_> = try {
         let raw_expr = parser::parse_raw_expr(
             text,
             &columns
@@ -101,7 +101,11 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
                     .as_ref()
                     .sematically_eq(&optimized_result.unwrap().as_ref())
             ),
-            Err(e) => assert_eq!(e, &optimized_result.unwrap_err()),
+            Err(e) => {
+                let optimized_err = optimized_result.unwrap_err();
+                assert_eq!(e.message(), optimized_err.message());
+                assert_eq!(e.span(), optimized_err.span());
+            }
         }
 
         (
@@ -198,11 +202,8 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
             }
             write!(file, "\n\n").unwrap();
         }
-        Err((Some(span), msg)) => {
-            writeln!(file, "{}\n", span.display_error((text.to_string(), msg))).unwrap();
-        }
-        Err((None, msg)) => {
-            writeln!(file, "error: {}\n", msg).unwrap();
+        Err(err) => {
+            writeln!(file, "{}\n", err.display_with_sql(text).message()).unwrap();
         }
     }
 }

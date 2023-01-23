@@ -17,9 +17,8 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod error;
-
+pub use error::display_parser_error;
 pub use error::Backtrace;
-pub use error::DisplayError;
 pub use error::Error;
 pub use error::ErrorKind;
 

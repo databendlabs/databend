@@ -19,7 +19,6 @@ use std::sync::Mutex;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Notify;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::and_validities;
 use common_expression::DataBlock;
@@ -247,10 +246,7 @@ impl JoinHashTable {
                 let return_type = expr.data_type();
                 Ok((
                     evaluator
-                        .run(expr)
-                        .map_err(|(_, e)| {
-                            ErrorCode::Internal(format!("Invalid expression: {}", e))
-                        })?
+                        .run(expr)?
                         .convert_to_full_column(return_type, input.num_rows()),
                     return_type.clone(),
                 ))

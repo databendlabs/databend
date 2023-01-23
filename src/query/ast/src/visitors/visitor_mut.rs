@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Span;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 
@@ -26,20 +27,15 @@ use super::walk_mut::walk_statement_mut;
 use super::walk_mut::walk_table_reference_mut;
 use super::walk_time_travel_point_mut;
 use crate::ast::*;
-use crate::parser::token::Token;
 
 pub trait VisitorMut: Sized {
-    fn visit_expr(&mut self, expr: &mut Expr<'_>) {
+    fn visit_expr(&mut self, expr: &mut Expr) {
         walk_expr_mut(self, expr);
     }
 
-    fn visit_identifier(&mut self, _ident: &mut Identifier<'_>) {}
+    fn visit_identifier(&mut self, _ident: &mut Identifier) {}
 
-    fn visit_database_ref(
-        &mut self,
-        catalog: &mut Option<Identifier<'_>>,
-        database: &mut Identifier<'_>,
-    ) {
+    fn visit_database_ref(&mut self, catalog: &mut Option<Identifier>, database: &mut Identifier) {
         if let Some(catalog) = catalog {
             walk_identifier_mut(self, catalog);
         }
@@ -49,9 +45,9 @@ pub trait VisitorMut: Sized {
 
     fn visit_table_ref(
         &mut self,
-        catalog: &mut Option<Identifier<'_>>,
-        database: &mut Option<Identifier<'_>>,
-        table: &mut Identifier<'_>,
+        catalog: &mut Option<Identifier>,
+        database: &mut Option<Identifier>,
+        table: &mut Identifier,
     ) {
         if let Some(catalog) = catalog {
             walk_identifier_mut(self, catalog);
@@ -66,10 +62,10 @@ pub trait VisitorMut: Sized {
 
     fn visit_column_ref(
         &mut self,
-        _span: &mut &[Token<'_>],
-        database: &mut Option<Identifier<'_>>,
-        table: &mut Option<Identifier<'_>>,
-        column: &mut Identifier<'_>,
+        _span: Span,
+        database: &mut Option<Identifier>,
+        table: &mut Option<Identifier>,
+        column: &mut Identifier,
     ) {
         if let Some(database) = database {
             walk_identifier_mut(self, database);
@@ -82,28 +78,22 @@ pub trait VisitorMut: Sized {
         walk_identifier_mut(self, column);
     }
 
-    fn visit_is_null(&mut self, _span: &mut &[Token<'_>], expr: &mut Expr<'_>, _not: bool) {
+    fn visit_is_null(&mut self, _span: Span, expr: &mut Expr, _not: bool) {
         walk_expr_mut(self, expr);
     }
 
     fn visit_is_distinct_from(
         &mut self,
-        _span: &mut &[Token<'_>],
-        left: &mut Expr<'_>,
-        right: &mut Expr<'_>,
+        _span: Span,
+        left: &mut Expr,
+        right: &mut Expr,
         _not: bool,
     ) {
         walk_expr_mut(self, left);
         walk_expr_mut(self, right);
     }
 
-    fn visit_in_list(
-        &mut self,
-        _span: &mut &[Token<'_>],
-        expr: &mut Expr<'_>,
-        list: &mut [Expr<'_>],
-        _not: bool,
-    ) {
+    fn visit_in_list(&mut self, _span: Span, expr: &mut Expr, list: &mut [Expr], _not: bool) {
         walk_expr_mut(self, expr);
         for expr in list {
             walk_expr_mut(self, expr);
@@ -112,9 +102,9 @@ pub trait VisitorMut: Sized {
 
     fn visit_in_subquery(
         &mut self,
-        _span: &mut &[Token<'_>],
-        expr: &mut Expr<'_>,
-        subquery: &mut Query<'_>,
+        _span: Span,
+        expr: &mut Expr,
+        subquery: &mut Query,
         _not: bool,
     ) {
         walk_expr_mut(self, expr);
@@ -123,10 +113,10 @@ pub trait VisitorMut: Sized {
 
     fn visit_between(
         &mut self,
-        _span: &mut &[Token<'_>],
-        expr: &mut Expr<'_>,
-        low: &mut Expr<'_>,
-        high: &mut Expr<'_>,
+        _span: Span,
+        expr: &mut Expr,
+        low: &mut Expr,
+        high: &mut Expr,
         _not: bool,
     ) {
         walk_expr_mut(self, expr);
@@ -136,68 +126,48 @@ pub trait VisitorMut: Sized {
 
     fn visit_binary_op(
         &mut self,
-        _span: &mut &[Token<'_>],
+        _span: Span,
         _op: &mut BinaryOperator,
-        left: &mut Expr<'_>,
-        right: &mut Expr<'_>,
+        left: &mut Expr,
+        right: &mut Expr,
     ) {
         walk_expr_mut(self, left);
         walk_expr_mut(self, right);
     }
 
-    fn visit_unary_op(
-        &mut self,
-        _span: &mut &[Token<'_>],
-        _op: &mut UnaryOperator,
-        expr: &mut Expr<'_>,
-    ) {
+    fn visit_unary_op(&mut self, _span: Span, _op: &mut UnaryOperator, expr: &mut Expr) {
         walk_expr_mut(self, expr);
     }
 
     fn visit_cast(
         &mut self,
-        _span: &mut &[Token<'_>],
-        expr: &mut Expr<'_>,
+        _span: Span,
+        expr: &mut Expr,
         _target_type: &mut TypeName,
         _pg_style: bool,
     ) {
         walk_expr_mut(self, expr);
     }
 
-    fn visit_try_cast(
-        &mut self,
-        _span: &mut &[Token<'_>],
-        expr: &mut Expr<'_>,
-        _target_type: &mut TypeName,
-    ) {
+    fn visit_try_cast(&mut self, _span: Span, expr: &mut Expr, _target_type: &mut TypeName) {
         walk_expr_mut(self, expr);
     }
 
-    fn visit_extract(
-        &mut self,
-        _span: &mut &[Token<'_>],
-        _kind: &mut IntervalKind,
-        expr: &mut Expr<'_>,
-    ) {
+    fn visit_extract(&mut self, _span: Span, _kind: &mut IntervalKind, expr: &mut Expr) {
         walk_expr_mut(self, expr);
     }
 
-    fn visit_positon(
-        &mut self,
-        _span: &mut &[Token<'_>],
-        substr_expr: &mut Expr<'_>,
-        str_expr: &mut Expr<'_>,
-    ) {
+    fn visit_positon(&mut self, _span: Span, substr_expr: &mut Expr, str_expr: &mut Expr) {
         walk_expr_mut(self, substr_expr);
         walk_expr_mut(self, str_expr);
     }
 
     fn visit_substring(
         &mut self,
-        _span: &mut &[Token<'_>],
-        expr: &mut Expr<'_>,
-        substring_from: &mut Box<Expr<'_>>,
-        substring_for: &mut Option<Box<Expr<'_>>>,
+        _span: Span,
+        expr: &mut Expr,
+        substring_from: &mut Box<Expr>,
+        substring_for: &mut Option<Box<Expr>>,
     ) {
         walk_expr_mut(self, expr);
         walk_expr_mut(self, substring_from);
@@ -209,9 +179,9 @@ pub trait VisitorMut: Sized {
 
     fn visit_trim(
         &mut self,
-        _span: &mut &[Token<'_>],
-        expr: &mut Expr<'_>,
-        trim_where: &mut Option<(TrimWhere, Box<Expr<'_>>)>,
+        _span: Span,
+        expr: &mut Expr,
+        trim_where: &mut Option<(TrimWhere, Box<Expr>)>,
     ) {
         walk_expr_mut(self, expr);
 
@@ -220,11 +190,11 @@ pub trait VisitorMut: Sized {
         }
     }
 
-    fn visit_literal(&mut self, _span: &mut &[Token<'_>], _lit: &mut Literal) {}
+    fn visit_literal(&mut self, _span: Span, _lit: &mut Literal) {}
 
-    fn visit_count_all(&mut self, _span: &mut &[Token<'_>]) {}
+    fn visit_count_all(&mut self, _span: Span) {}
 
-    fn visit_tuple(&mut self, _span: &mut &[Token<'_>], elements: &mut [Expr<'_>]) {
+    fn visit_tuple(&mut self, _span: Span, elements: &mut [Expr]) {
         for elem in elements.iter_mut() {
             walk_expr_mut(self, elem);
         }
@@ -232,10 +202,10 @@ pub trait VisitorMut: Sized {
 
     fn visit_function_call(
         &mut self,
-        _span: &mut &[Token<'_>],
+        _span: Span,
         _distinct: bool,
-        _name: &mut Identifier<'_>,
-        args: &mut [Expr<'_>],
+        _name: &mut Identifier,
+        args: &mut [Expr],
         _params: &mut [Literal],
     ) {
         for arg in args.iter_mut() {
@@ -245,11 +215,11 @@ pub trait VisitorMut: Sized {
 
     fn visit_case_when(
         &mut self,
-        _span: &mut &[Token<'_>],
-        operand: &mut Option<Box<Expr<'_>>>,
-        conditions: &mut [Expr<'_>],
-        results: &mut [Expr<'_>],
-        else_result: &mut Option<Box<Expr<'_>>>,
+        _span: Span,
+        operand: &mut Option<Box<Expr>>,
+        conditions: &mut [Expr],
+        results: &mut [Expr],
+        else_result: &mut Option<Box<Expr>>,
     ) {
         if let Some(operand) = operand {
             walk_expr_mut(self, operand);
@@ -268,49 +238,39 @@ pub trait VisitorMut: Sized {
         }
     }
 
-    fn visit_exists(&mut self, _span: &mut &[Token<'_>], _not: bool, subquery: &mut Query<'_>) {
+    fn visit_exists(&mut self, _span: Span, _not: bool, subquery: &mut Query) {
         walk_query_mut(self, subquery);
     }
 
     fn visit_subquery(
         &mut self,
-        _span: &mut &[Token<'_>],
+        _span: Span,
         _modifier: &mut Option<SubqueryModifier>,
-        subquery: &mut Query<'_>,
+        subquery: &mut Query,
     ) {
         walk_query_mut(self, subquery);
     }
 
-    fn visit_map_access(
-        &mut self,
-        _span: &mut &[Token<'_>],
-        expr: &mut Expr<'_>,
-        _accessor: &mut MapAccessor<'_>,
-    ) {
+    fn visit_map_access(&mut self, _span: Span, expr: &mut Expr, _accessor: &mut MapAccessor) {
         walk_expr_mut(self, expr);
     }
 
-    fn visit_array(&mut self, _span: &mut &[Token<'_>], elements: &mut [Expr<'_>]) {
+    fn visit_array(&mut self, _span: Span, elements: &mut [Expr]) {
         for elem in elements.iter_mut() {
             walk_expr_mut(self, elem);
         }
     }
 
-    fn visit_interval(
-        &mut self,
-        _span: &mut &[Token<'_>],
-        expr: &mut Expr<'_>,
-        _unit: &mut IntervalKind,
-    ) {
+    fn visit_interval(&mut self, _span: Span, expr: &mut Expr, _unit: &mut IntervalKind) {
         walk_expr_mut(self, expr);
     }
 
     fn visit_date_add(
         &mut self,
-        _span: &mut &[Token<'_>],
+        _span: Span,
         _unit: &mut IntervalKind,
-        interval: &mut Expr<'_>,
-        date: &mut Expr<'_>,
+        interval: &mut Expr,
+        date: &mut Expr,
     ) {
         walk_expr_mut(self, date);
         walk_expr_mut(self, interval);
@@ -318,39 +278,34 @@ pub trait VisitorMut: Sized {
 
     fn visit_date_sub(
         &mut self,
-        _span: &mut &[Token<'_>],
+        _span: Span,
         _unit: &mut IntervalKind,
-        interval: &mut Expr<'_>,
-        date: &mut Expr<'_>,
+        interval: &mut Expr,
+        date: &mut Expr,
     ) {
         walk_expr_mut(self, date);
         walk_expr_mut(self, interval);
     }
 
-    fn visit_date_trunc(
-        &mut self,
-        _span: &mut &[Token<'_>],
-        _unit: &mut IntervalKind,
-        date: &mut Expr<'_>,
-    ) {
+    fn visit_date_trunc(&mut self, _span: Span, _unit: &mut IntervalKind, date: &mut Expr) {
         walk_expr_mut(self, date);
     }
 
-    fn visit_statement(&mut self, statement: &mut Statement<'_>) {
+    fn visit_statement(&mut self, statement: &mut Statement) {
         walk_statement_mut(self, statement);
     }
 
-    fn visit_query(&mut self, query: &mut Query<'_>) {
+    fn visit_query(&mut self, query: &mut Query) {
         walk_query_mut(self, query);
     }
 
-    fn visit_explain(&mut self, _kind: &mut ExplainKind, stmt: &mut Statement<'_>) {
+    fn visit_explain(&mut self, _kind: &mut ExplainKind, stmt: &mut Statement) {
         walk_statement_mut(self, stmt);
     }
 
-    fn visit_copy(&mut self, _copy: &mut CopyStmt<'_>) {}
+    fn visit_copy(&mut self, _copy: &mut CopyStmt) {}
 
-    fn visit_copy_unit(&mut self, _copy_unit: &mut CopyUnit<'_>) {}
+    fn visit_copy_unit(&mut self, _copy_unit: &mut CopyUnit) {}
 
     fn visit_call(&mut self, _call: &mut CallStmt) {}
 
@@ -362,94 +317,94 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_engines(&mut self) {}
 
-    fn visit_show_functions(&mut self, _limit: &mut Option<ShowLimit<'_>>) {}
+    fn visit_show_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
 
-    fn visit_show_limit(&mut self, _limit: &mut ShowLimit<'_>) {}
+    fn visit_show_limit(&mut self, _limit: &mut ShowLimit) {}
 
     fn visit_kill(&mut self, _kill_target: &mut KillTarget, _object_id: &mut String) {}
 
     fn visit_set_variable(
         &mut self,
         _is_global: bool,
-        _variable: &mut Identifier<'_>,
-        _value: &mut Box<Expr<'_>>,
+        _variable: &mut Identifier,
+        _value: &mut Box<Expr>,
     ) {
     }
 
-    fn visit_unset_variable(&mut self, _stmt: &mut UnSetStmt<'_>) {}
+    fn visit_unset_variable(&mut self, _stmt: &mut UnSetStmt) {}
 
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
 
-    fn visit_insert(&mut self, _insert: &mut InsertStmt<'_>) {}
+    fn visit_insert(&mut self, _insert: &mut InsertStmt) {}
 
-    fn visit_insert_source(&mut self, _insert_source: &mut InsertSource<'_>) {}
+    fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 
     fn visit_delete(
         &mut self,
-        _table_reference: &mut TableReference<'_>,
-        _selection: &mut Option<Expr<'_>>,
+        _table_reference: &mut TableReference,
+        _selection: &mut Option<Expr>,
     ) {
     }
 
-    fn visit_update(&mut self, _update: &mut UpdateStmt<'_>) {}
+    fn visit_update(&mut self, _update: &mut UpdateStmt) {}
 
-    fn visit_show_catalogs(&mut self, _stmt: &mut ShowCatalogsStmt<'_>) {}
+    fn visit_show_catalogs(&mut self, _stmt: &mut ShowCatalogsStmt) {}
 
-    fn visit_show_create_catalog(&mut self, _stmt: &mut ShowCreateCatalogStmt<'_>) {}
+    fn visit_show_create_catalog(&mut self, _stmt: &mut ShowCreateCatalogStmt) {}
 
     fn visit_create_catalog(&mut self, _stmt: &mut CreateCatalogStmt) {}
 
-    fn visit_drop_catalog(&mut self, _stmt: &mut DropCatalogStmt<'_>) {}
+    fn visit_drop_catalog(&mut self, _stmt: &mut DropCatalogStmt) {}
 
-    fn visit_show_databases(&mut self, _stmt: &mut ShowDatabasesStmt<'_>) {}
+    fn visit_show_databases(&mut self, _stmt: &mut ShowDatabasesStmt) {}
 
-    fn visit_show_create_databases(&mut self, _stmt: &mut ShowCreateDatabaseStmt<'_>) {}
+    fn visit_show_create_databases(&mut self, _stmt: &mut ShowCreateDatabaseStmt) {}
 
-    fn visit_create_database(&mut self, _stmt: &mut CreateDatabaseStmt<'_>) {}
+    fn visit_create_database(&mut self, _stmt: &mut CreateDatabaseStmt) {}
 
-    fn visit_drop_database(&mut self, _stmt: &mut DropDatabaseStmt<'_>) {}
+    fn visit_drop_database(&mut self, _stmt: &mut DropDatabaseStmt) {}
 
-    fn visit_undrop_database(&mut self, _stmt: &mut UndropDatabaseStmt<'_>) {}
+    fn visit_undrop_database(&mut self, _stmt: &mut UndropDatabaseStmt) {}
 
-    fn visit_alter_database(&mut self, _stmt: &mut AlterDatabaseStmt<'_>) {}
+    fn visit_alter_database(&mut self, _stmt: &mut AlterDatabaseStmt) {}
 
-    fn visit_use_database(&mut self, _database: &mut Identifier<'_>) {}
+    fn visit_use_database(&mut self, _database: &mut Identifier) {}
 
-    fn visit_show_tables(&mut self, _stmt: &mut ShowTablesStmt<'_>) {}
+    fn visit_show_tables(&mut self, _stmt: &mut ShowTablesStmt) {}
 
-    fn visit_show_create_table(&mut self, _stmt: &mut ShowCreateTableStmt<'_>) {}
+    fn visit_show_create_table(&mut self, _stmt: &mut ShowCreateTableStmt) {}
 
-    fn visit_describe_table(&mut self, _stmt: &mut DescribeTableStmt<'_>) {}
+    fn visit_describe_table(&mut self, _stmt: &mut DescribeTableStmt) {}
 
-    fn visit_show_tables_status(&mut self, _stmt: &mut ShowTablesStatusStmt<'_>) {}
+    fn visit_show_tables_status(&mut self, _stmt: &mut ShowTablesStatusStmt) {}
 
-    fn visit_create_table(&mut self, _stmt: &mut CreateTableStmt<'_>) {}
+    fn visit_create_table(&mut self, _stmt: &mut CreateTableStmt) {}
 
-    fn visit_create_table_source(&mut self, _source: &mut CreateTableSource<'_>) {}
+    fn visit_create_table_source(&mut self, _source: &mut CreateTableSource) {}
 
-    fn visit_column_definition(&mut self, _column_definition: &mut ColumnDefinition<'_>) {}
+    fn visit_column_definition(&mut self, _column_definition: &mut ColumnDefinition) {}
 
-    fn visit_drop_table(&mut self, _stmt: &mut DropTableStmt<'_>) {}
+    fn visit_drop_table(&mut self, _stmt: &mut DropTableStmt) {}
 
-    fn visit_undrop_table(&mut self, _stmt: &mut UndropTableStmt<'_>) {}
+    fn visit_undrop_table(&mut self, _stmt: &mut UndropTableStmt) {}
 
-    fn visit_alter_table(&mut self, _stmt: &mut AlterTableStmt<'_>) {}
+    fn visit_alter_table(&mut self, _stmt: &mut AlterTableStmt) {}
 
-    fn visit_rename_table(&mut self, _stmt: &mut RenameTableStmt<'_>) {}
+    fn visit_rename_table(&mut self, _stmt: &mut RenameTableStmt) {}
 
-    fn visit_truncate_table(&mut self, _stmt: &mut TruncateTableStmt<'_>) {}
+    fn visit_truncate_table(&mut self, _stmt: &mut TruncateTableStmt) {}
 
-    fn visit_optimize_table(&mut self, _stmt: &mut OptimizeTableStmt<'_>) {}
+    fn visit_optimize_table(&mut self, _stmt: &mut OptimizeTableStmt) {}
 
-    fn visit_analyze_table(&mut self, _stmt: &mut AnalyzeTableStmt<'_>) {}
+    fn visit_analyze_table(&mut self, _stmt: &mut AnalyzeTableStmt) {}
 
-    fn visit_exists_table(&mut self, _stmt: &mut ExistsTableStmt<'_>) {}
+    fn visit_exists_table(&mut self, _stmt: &mut ExistsTableStmt) {}
 
-    fn visit_create_view(&mut self, _stmt: &mut CreateViewStmt<'_>) {}
+    fn visit_create_view(&mut self, _stmt: &mut CreateViewStmt) {}
 
-    fn visit_alter_view(&mut self, _stmt: &mut AlterViewStmt<'_>) {}
+    fn visit_alter_view(&mut self, _stmt: &mut AlterViewStmt) {}
 
-    fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt<'_>) {}
+    fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt) {}
 
     fn visit_show_users(&mut self) {}
 
@@ -474,20 +429,20 @@ pub trait VisitorMut: Sized {
     fn visit_create_udf(
         &mut self,
         _if_not_exists: bool,
-        _udf_name: &mut Identifier<'_>,
-        _parameters: &mut [Identifier<'_>],
-        _definition: &mut Expr<'_>,
+        _udf_name: &mut Identifier,
+        _parameters: &mut [Identifier],
+        _definition: &mut Expr,
         _description: &mut Option<String>,
     ) {
     }
 
-    fn visit_drop_udf(&mut self, _if_exists: bool, _udf_name: &mut Identifier<'_>) {}
+    fn visit_drop_udf(&mut self, _if_exists: bool, _udf_name: &mut Identifier) {}
 
     fn visit_alter_udf(
         &mut self,
-        _udf_name: &mut Identifier<'_>,
-        _parameters: &mut [Identifier<'_>],
-        _definition: &mut Expr<'_>,
+        _udf_name: &mut Identifier,
+        _parameters: &mut [Identifier],
+        _definition: &mut Expr,
         _description: &mut Option<String>,
     ) {
     }
@@ -506,17 +461,17 @@ pub trait VisitorMut: Sized {
 
     fn visit_presign(&mut self, _presign: &mut PresignStmt) {}
 
-    fn visit_create_share(&mut self, _stmt: &mut CreateShareStmt<'_>) {}
+    fn visit_create_share(&mut self, _stmt: &mut CreateShareStmt) {}
 
-    fn visit_drop_share(&mut self, _stmt: &mut DropShareStmt<'_>) {}
+    fn visit_drop_share(&mut self, _stmt: &mut DropShareStmt) {}
 
-    fn visit_grant_share_object(&mut self, _stmt: &mut GrantShareObjectStmt<'_>) {}
+    fn visit_grant_share_object(&mut self, _stmt: &mut GrantShareObjectStmt) {}
 
-    fn visit_revoke_share_object(&mut self, _stmt: &mut RevokeShareObjectStmt<'_>) {}
+    fn visit_revoke_share_object(&mut self, _stmt: &mut RevokeShareObjectStmt) {}
 
-    fn visit_alter_share_tenants(&mut self, _stmt: &mut AlterShareTenantsStmt<'_>) {}
+    fn visit_alter_share_tenants(&mut self, _stmt: &mut AlterShareTenantsStmt) {}
 
-    fn visit_desc_share(&mut self, _stmt: &mut DescShareStmt<'_>) {}
+    fn visit_desc_share(&mut self, _stmt: &mut DescShareStmt) {}
 
     fn visit_show_shares(&mut self, _stmt: &mut ShowSharesStmt) {}
 
@@ -524,30 +479,30 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_grants_of_share(&mut self, _stmt: &mut ShowGrantsOfShareStmt) {}
 
-    fn visit_with(&mut self, with: &mut With<'_>) {
+    fn visit_with(&mut self, with: &mut With) {
         let With { ctes, .. } = with;
         for cte in ctes.iter_mut() {
             walk_cte_mut(self, cte);
         }
     }
 
-    fn visit_set_expr(&mut self, expr: &mut SetExpr<'_>) {
+    fn visit_set_expr(&mut self, expr: &mut SetExpr) {
         walk_set_expr_mut(self, expr);
     }
 
-    fn visit_set_operation(&mut self, op: &mut SetOperation<'_>) {
+    fn visit_set_operation(&mut self, op: &mut SetOperation) {
         let SetOperation { left, right, .. } = op;
 
         walk_set_expr_mut(self, left);
         walk_set_expr_mut(self, right);
     }
 
-    fn visit_order_by(&mut self, order_by: &mut OrderByExpr<'_>) {
+    fn visit_order_by(&mut self, order_by: &mut OrderByExpr) {
         let OrderByExpr { expr, .. } = order_by;
         walk_expr_mut(self, expr);
     }
 
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt<'_>) {
+    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             from,
@@ -578,19 +533,19 @@ pub trait VisitorMut: Sized {
         }
     }
 
-    fn visit_select_target(&mut self, target: &mut SelectTarget<'_>) {
+    fn visit_select_target(&mut self, target: &mut SelectTarget) {
         walk_select_target_mut(self, target);
     }
 
-    fn visit_table_reference(&mut self, table: &mut TableReference<'_>) {
+    fn visit_table_reference(&mut self, table: &mut TableReference) {
         walk_table_reference_mut(self, table);
     }
 
-    fn visit_time_travel_point(&mut self, time: &mut TimeTravelPoint<'_>) {
+    fn visit_time_travel_point(&mut self, time: &mut TimeTravelPoint) {
         walk_time_travel_point_mut(self, time);
     }
 
-    fn visit_join(&mut self, join: &mut Join<'_>) {
+    fn visit_join(&mut self, join: &mut Join) {
         let Join {
             left,
             right,

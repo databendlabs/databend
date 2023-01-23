@@ -50,12 +50,12 @@ pub struct JoinConditions {
     pub(crate) other_conditions: Vec<ScalarExpr>,
 }
 
-impl<'a> Binder {
+impl Binder {
     #[async_recursion]
     pub(super) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
-        join: &common_ast::ast::Join<'a>,
+        join: &common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
         let (left_child, left_context) =
             self.bind_table_reference(bind_context, &join.left).await?;
@@ -363,7 +363,7 @@ struct JoinConditionResolver<'a> {
     left_context: &'a BindContext,
     right_context: &'a BindContext,
     join_context: &'a mut BindContext,
-    join_condition: &'a JoinCondition<'a>,
+    join_condition: &'a JoinCondition,
 }
 
 impl<'a> JoinConditionResolver<'a> {
@@ -376,7 +376,7 @@ impl<'a> JoinConditionResolver<'a> {
         left_context: &'a BindContext,
         right_context: &'a BindContext,
         join_context: &'a mut BindContext,
-        join_condition: &'a JoinCondition<'a>,
+        join_condition: &'a JoinCondition,
     ) -> Self {
         Self {
             ctx,
@@ -451,7 +451,7 @@ impl<'a> JoinConditionResolver<'a> {
 
     async fn resolve_on(
         &mut self,
-        condition: &Expr<'a>,
+        condition: &Expr,
         left_join_conditions: &mut Vec<ScalarExpr>,
         right_join_conditions: &mut Vec<ScalarExpr>,
         non_equi_conditions: &mut Vec<ScalarExpr>,
@@ -479,7 +479,7 @@ impl<'a> JoinConditionResolver<'a> {
 
     async fn resolve_predicate(
         &self,
-        predicate: &Expr<'_>,
+        predicate: &Expr,
         left_join_conditions: &mut Vec<ScalarExpr>,
         right_join_conditions: &mut Vec<ScalarExpr>,
         non_equi_conditions: &mut Vec<ScalarExpr>,
@@ -635,7 +635,7 @@ impl<'a> JoinConditionResolver<'a> {
 
     async fn add_other_conditions(
         &self,
-        predicate: &Expr<'_>,
+        predicate: &Expr,
         other_join_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<bool> {
         let mut join_context = (*self.join_context).clone();

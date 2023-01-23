@@ -33,7 +33,6 @@
 #![allow(clippy::needless_lifetimes)]
 #![allow(incomplete_features)]
 
-pub type Result<T> = std::result::Result<T, (crate::Span, String)>;
 #[allow(dead_code)]
 mod block;
 

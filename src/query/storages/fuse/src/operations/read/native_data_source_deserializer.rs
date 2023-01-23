@@ -21,7 +21,6 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
@@ -242,9 +241,9 @@ impl Processor for NativeDeserializeDataTransform {
                     let prewhere_block = self.block_reader.build_block(arrays.clone())?;
                     let evaluator =
                         Evaluator::new(&prewhere_block, self.func_ctx, &BUILTIN_FUNCTIONS);
-                    let result = evaluator.run(filter).map_err(|(_, e)| {
-                        ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
-                    })?;
+                    let result = evaluator
+                        .run(filter)
+                        .map_err(|e| e.add_message("eval prewhere filter failed:"))?;
                     let filter = DataBlock::cast_to_nonull_boolean(&result).unwrap();
 
                     let all_filtered = match &filter {

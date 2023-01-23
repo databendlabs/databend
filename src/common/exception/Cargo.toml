@@ -13,6 +13,11 @@ test = false
 [dependencies] # In alphabetical order
 common-arrow = { path = "../arrow" }
 
+# Github dependencies
+# TODO: Use the version from crates.io once
+# https://github.com/brendanzab/codespan/pull/331 is released.
+codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }
+
 anyhow = { workspace = true }
 bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }
 opendal = { workspace = true }

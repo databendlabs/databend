@@ -192,9 +192,7 @@ impl JoinHashTable {
         let func_ctx = self.ctx.try_get_function_context()?;
         // `predicate_column` contains a column, which is a boolean column.
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
-        let filter_vector: Value<AnyType> = evaluator
-            .run(filter)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
         let predict_boolean_nonull = DataBlock::cast_to_nonull_boolean(&filter_vector)
             .ok_or_else(|| ErrorCode::Internal("Cannot get the boolean column"))?;
 
@@ -216,9 +214,7 @@ impl JoinHashTable {
         let func_ctx = self.ctx.try_get_function_context()?;
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
 
-        let filter_vector: Value<AnyType> = evaluator
-            .run(filter)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
         let filter_vector =
             filter_vector.convert_to_full_column(filter.data_type(), merged_block.num_rows());
 
@@ -376,10 +372,7 @@ impl JoinHashTable {
                 let return_type = expr.data_type();
                 Ok((
                     evaluator
-                        .run(expr)
-                        .map_err(|(_, e)| {
-                            ErrorCode::Internal(format!("Invalid expression: {}", e))
-                        })?
+                        .run(expr)?
                         .convert_to_full_column(return_type, data_block.num_rows()),
                     return_type.clone(),
                 ))

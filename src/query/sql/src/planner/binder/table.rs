@@ -31,7 +31,6 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_ast::DisplayError;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::ColumnId;
@@ -74,11 +73,11 @@ use crate::BindContext;
 use crate::ColumnEntry;
 use crate::IndexType;
 
-impl<'a> Binder {
+impl Binder {
     pub(super) async fn bind_one_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &SelectStmt<'a>,
+        stmt: &SelectStmt,
     ) -> Result<(SExpr, BindContext)> {
         for select_target in &stmt.select_list {
             if let SelectTarget::QualifiedName {
@@ -87,9 +86,10 @@ impl<'a> Binder {
             {
                 for indirect in names {
                     if indirect == &Indirection::Star {
-                        return Err(ErrorCode::SemanticError(stmt.span.display_error(
+                        return Err(ErrorCode::SemanticError(
                             "SELECT * with no tables specified is not valid".to_string(),
-                        )));
+                        )
+                        .set_span(stmt.span));
                     }
                 }
             }
@@ -114,7 +114,7 @@ impl<'a> Binder {
     pub(super) async fn bind_table_reference(
         &mut self,
         bind_context: &BindContext,
-        table_ref: &TableReference<'a>,
+        table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
             TableReference::Table {
@@ -555,7 +555,7 @@ impl<'a> Binder {
     pub(crate) async fn resolve_data_travel_point(
         &self,
         bind_context: &BindContext,
-        travel_point: &TimeTravelPoint<'a>,
+        travel_point: &TimeTravelPoint,
     ) -> Result<NavigationPoint> {
         match travel_point {
             TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),

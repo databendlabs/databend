@@ -30,7 +30,7 @@ use crate::ast::TableReference;
 use crate::ast::UpdateExpr;
 use crate::ast::UpdateStmt;
 
-pub(crate) fn pretty_insert(insert_stmt: InsertStmt) -> RcDoc {
+pub(crate) fn pretty_insert(insert_stmt: InsertStmt) -> RcDoc<'static> {
     RcDoc::text("INSERT")
         .append(RcDoc::space())
         .append(if insert_stmt.overwrite {
@@ -69,7 +69,7 @@ pub(crate) fn pretty_insert(insert_stmt: InsertStmt) -> RcDoc {
         .append(pretty_source(insert_stmt.source))
 }
 
-fn pretty_source(source: InsertSource) -> RcDoc {
+fn pretty_source(source: InsertSource) -> RcDoc<'static> {
     RcDoc::line().append(match source {
         InsertSource::Streaming {
             format,
@@ -81,7 +81,7 @@ fn pretty_source(source: InsertSource) -> RcDoc {
             .append(
                 RcDoc::line()
                     .nest(NEST_FACTOR)
-                    .append(RcDoc::text(rest_str.to_string()))
+                    .append(RcDoc::text(rest_str))
                     .append(RcDoc::text(start.to_string())),
             ),
         InsertSource::StreamingV2 { settings, start } => RcDoc::text("FILE_FORMAT").append(
@@ -106,16 +106,13 @@ fn pretty_source(source: InsertSource) -> RcDoc {
         InsertSource::Values { rest_str } => RcDoc::text("VALUES").append(
             RcDoc::line()
                 .nest(NEST_FACTOR)
-                .append(RcDoc::text(rest_str.to_string())),
+                .append(RcDoc::text(rest_str)),
         ),
         InsertSource::Select { query } => pretty_query(*query),
     })
 }
 
-pub(crate) fn pretty_delete<'a>(
-    table: TableReference<'a>,
-    selection: Option<Expr<'a>>,
-) -> RcDoc<'a> {
+pub(crate) fn pretty_delete(table: TableReference, selection: Option<Expr>) -> RcDoc<'static> {
     RcDoc::text("DELETE FROM")
         .append(RcDoc::line().nest(NEST_FACTOR).append(pretty_table(table)))
         .append(if let Some(selection) = selection {
@@ -129,7 +126,7 @@ pub(crate) fn pretty_delete<'a>(
         })
 }
 
-pub(crate) fn pretty_update(update_stmt: UpdateStmt) -> RcDoc {
+pub(crate) fn pretty_update(update_stmt: UpdateStmt) -> RcDoc<'static> {
     RcDoc::text("UPDATE")
         .append(
             RcDoc::line()
@@ -149,7 +146,7 @@ pub(crate) fn pretty_update(update_stmt: UpdateStmt) -> RcDoc {
         })
 }
 
-fn pretty_update_list(update_list: Vec<UpdateExpr>) -> RcDoc {
+fn pretty_update_list(update_list: Vec<UpdateExpr>) -> RcDoc<'static> {
     if update_list.len() > 1 {
         RcDoc::line()
     } else {
@@ -169,7 +166,7 @@ fn pretty_update_list(update_list: Vec<UpdateExpr>) -> RcDoc {
     )
 }
 
-pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc {
+pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
     RcDoc::text("COPY")
         .append(RcDoc::line().append(RcDoc::text("INTO ")))
         .append(pretty_copy_unit(copy_stmt.dst))
@@ -234,7 +231,7 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc {
         )
 }
 
-fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc {
+fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc<'static> {
     match copy_unit {
         CopyUnit::Table {
             catalog,

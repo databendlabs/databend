@@ -219,7 +219,11 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         let mut writer = DFQueryResultWriter::create(writer);
 
         let instant = Instant::now();
-        let query_result = self.base.do_query(query).await;
+        let query_result = self
+            .base
+            .do_query(query)
+            .await
+            .map_err(|err| err.display_with_sql(query));
 
         let format = self.base.session.get_format_settings()?;
         let mut write_result = writer.write(query_result, &format).await;

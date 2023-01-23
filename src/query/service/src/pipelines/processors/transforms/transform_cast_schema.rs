@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
@@ -84,9 +83,7 @@ impl Transform for TransformCastSchema {
         let mut columns = Vec::with_capacity(self.exprs.len());
         let evaluator = Evaluator::new(&data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
         for (field, expr) in self.insert_schema.fields().iter().zip(self.exprs.iter()) {
-            let value = evaluator.run(expr).map_err(|(_, e)| {
-                ErrorCode::Internal(format!("eval cast schema failed: {}.", e))
-            })?;
+            let value = evaluator.run(expr)?;
             let column = BlockEntry {
                 data_type: field.data_type().clone(),
                 value,

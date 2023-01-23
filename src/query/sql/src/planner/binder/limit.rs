@@ -23,13 +23,13 @@ use crate::planner::semantic::TypeChecker;
 use crate::plans::Limit;
 use crate::BindContext;
 
-impl<'a> Binder {
+impl Binder {
     pub(super) async fn bind_limit(
         &mut self,
         bind_context: &BindContext,
         child: SExpr,
-        limit: Option<&Expr<'a>>,
-        offset: &Option<Expr<'a>>,
+        limit: Option<&Expr>,
+        offset: &Option<Expr>,
     ) -> Result<SExpr> {
         let _type_checker = TypeChecker::new(
             bind_context,

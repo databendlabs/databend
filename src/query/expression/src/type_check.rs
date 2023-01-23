@@ -15,12 +15,14 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_exception::Span;
 use itertools::Itertools;
 
 use crate::expression::Expr;
 use crate::expression::Literal;
 use crate::expression::RawExpr;
-use crate::expression::Span;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
 use crate::types::number::NumberDataType;
@@ -28,7 +30,6 @@ use crate::types::number::NumberScalar;
 use crate::types::DataType;
 use crate::AutoCastSignature;
 use crate::ColumnIndex;
-use crate::Result;
 use crate::Scalar;
 
 pub fn check<Index: ColumnIndex>(
@@ -39,7 +40,7 @@ pub fn check<Index: ColumnIndex>(
         RawExpr::Literal { span, lit } => {
             let (scalar, data_type) = check_literal(lit);
             Ok(Expr::Constant {
-                span: span.clone(),
+                span: *span,
                 scalar,
                 data_type,
             })
@@ -50,7 +51,7 @@ pub fn check<Index: ColumnIndex>(
             data_type,
             display_name,
         } => Ok(Expr::ColumnRef {
-            span: span.clone(),
+            span: *span,
             id: id.clone(),
             data_type: data_type.clone(),
             display_name: display_name.clone(),
@@ -62,7 +63,7 @@ pub fn check<Index: ColumnIndex>(
             dest_type,
         } => {
             let expr = check(expr, fn_registry)?;
-            check_cast(span.clone(), *is_try, expr, dest_type, fn_registry)
+            check_cast(*span, *is_try, expr, dest_type, fn_registry)
         }
         RawExpr::FunctionCall {
             span,
@@ -74,7 +75,7 @@ pub fn check<Index: ColumnIndex>(
                 .iter()
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
-            check_function(span.clone(), name, params, &args_expr, fn_registry)
+            check_function(*span, name, params, &args_expr, fn_registry)
         }
     }
 }
@@ -135,7 +136,7 @@ pub fn check_cast<Index: ColumnIndex>(
     fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
     let wrapped_dest_type = if is_try {
-        wrap_nullable_for_try_cast(span.clone(), dest_type)?
+        wrap_nullable_for_try_cast(span, dest_type)?
     } else {
         dest_type.clone()
     };
@@ -145,8 +146,7 @@ pub fn check_cast<Index: ColumnIndex>(
     } else {
         // fast path to eval function for cast
         if let Some(cast_fn) = get_simple_cast_function(is_try, dest_type) {
-            if let Ok(cast_expr) =
-                check_function(span.clone(), &cast_fn, &[], &[expr.clone()], fn_registry)
+            if let Ok(cast_expr) = check_function(span, &cast_fn, &[], &[expr.clone()], fn_registry)
             {
                 if cast_expr.data_type() == &wrapped_dest_type {
                     return Ok(cast_expr);
@@ -165,7 +165,10 @@ pub fn check_cast<Index: ColumnIndex>(
 
 fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
     match ty {
-        DataType::Null => Err((span, "TRY_CAST() to NULL is not supported".to_string())),
+        DataType::Null => Err(ErrorCode::SemanticError(
+            "TRY_CAST() to NULL is not supported".to_string(),
+        )
+        .set_span(span)),
         DataType::Nullable(ty) => wrap_nullable_for_try_cast(span, ty),
         DataType::Array(inner_ty) => Ok(DataType::Nullable(Box::new(DataType::Array(Box::new(
             wrap_nullable_for_try_cast(span, inner_ty)?,
@@ -173,7 +176,7 @@ fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
         DataType::Tuple(fields_ty) => Ok(DataType::Nullable(Box::new(DataType::Tuple(
             fields_ty
                 .iter()
-                .map(|ty| wrap_nullable_for_try_cast(span.clone(), ty))
+                .map(|ty| wrap_nullable_for_try_cast(span, ty))
                 .collect::<Result<Vec<_>>>()?,
         )))),
         _ => Ok(DataType::Nullable(Box::new(ty.clone()))),
@@ -194,7 +197,9 @@ pub fn check_function<Index: ColumnIndex>(
     let candidates = fn_registry.search_candidates(name, params, args);
 
     if candidates.is_empty() && !fn_registry.contains(name) {
-        return Err((span, format!("function `{name}` does not exist")));
+        return Err(
+            ErrorCode::UnknownFunction(format!("function `{name}` does not exist")).set_span(span),
+        );
     }
 
     let additional_rules = fn_registry
@@ -204,13 +209,7 @@ pub fn check_function<Index: ColumnIndex>(
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
-        match try_check_function(
-            span.clone(),
-            args,
-            &func.signature,
-            &additional_rules,
-            fn_registry,
-        ) {
+        match try_check_function(args, &func.signature, &additional_rules, fn_registry) {
             Ok((checked_args, return_type, generics)) => {
                 return Ok(Expr::FunctionCall {
                     span,
@@ -252,7 +251,7 @@ pub fn check_function<Index: ColumnIndex>(
         let candidates_fail_reason = candidates_sig
             .into_iter()
             .zip(fail_resaons)
-            .map(|(sig, (_, reason))| format!("  {sig:<max_len$}  : {reason}"))
+            .map(|(sig, err)| format!("  {sig:<max_len$}  : {}", err.message()))
             .join("\n");
 
         write!(
@@ -263,7 +262,7 @@ pub fn check_function<Index: ColumnIndex>(
         .unwrap();
     };
 
-    Err((span, msg))
+    Err(ErrorCode::SemanticError(msg).set_span(span))
 }
 
 #[derive(Debug)]
@@ -284,10 +283,9 @@ impl Subsitution {
         for (idx, ty2) in other.0 {
             if let Some(ty1) = self.0.remove(&idx) {
                 let common_ty = common_super_type(ty2.clone(), ty1.clone()).ok_or_else(|| {
-                    (
-                        None,
-                        (format!("unable to find a common super type for `{ty1}` and `{ty2}`")),
-                    )
+                    ErrorCode::SemanticError(format!(
+                        "unable to find a common super type for `{ty1}` and `{ty2}`"
+                    ))
                 })?;
                 self.0.insert(idx, common_ty);
             } else {
@@ -300,11 +298,11 @@ impl Subsitution {
 
     pub fn apply(&self, ty: DataType) -> Result<DataType> {
         match ty {
-            DataType::Generic(idx) => self
-                .0
-                .get(&idx)
-                .cloned()
-                .ok_or_else(|| (None, (format!("unbound generic type `T{idx}`")))),
+            DataType::Generic(idx) => {
+                self.0.get(&idx).cloned().ok_or_else(|| {
+                    ErrorCode::SemanticError(format!("unbound generic type `T{idx}`"))
+                })
+            }
             DataType::Nullable(box ty) => Ok(DataType::Nullable(Box::new(self.apply(ty)?))),
             DataType::Array(box ty) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
             DataType::Tuple(fields_ty) => {
@@ -321,7 +319,6 @@ impl Subsitution {
 
 #[allow(clippy::type_complexity)]
 pub fn try_check_function<Index: ColumnIndex>(
-    span: Span,
     args: &[Expr<Index>],
     sig: &FunctionSignature,
     additional_rules: &AutoCastSignature,
@@ -333,13 +330,11 @@ pub fn try_check_function<Index: ColumnIndex>(
         .iter()
         .map(Expr::data_type)
         .zip(&sig.args_type)
-        .map(|(src_ty, dest_ty)| {
-            unify(src_ty, dest_ty, additional_rules).map_err(|(_, err)| (span.clone(), err))
-        })
+        .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, additional_rules))
         .collect::<Result<Vec<_>>>()?;
     let subst = substs
         .into_iter()
-        .try_reduce(|subst1, subst2| subst1.merge(subst2).map_err(|(_, err)| (span.clone(), err)))?
+        .try_reduce(|subst1, subst2| subst1.merge(subst2))?
         .unwrap_or_else(Subsitution::empty);
 
     let checked_args = args
@@ -347,7 +342,7 @@ pub fn try_check_function<Index: ColumnIndex>(
         .zip(&sig.args_type)
         .map(|(arg, sig_type)| {
             let sig_type = subst.apply(sig_type.clone())?;
-            check_cast(span.clone(), false, arg.clone(), &sig_type, fn_registry)
+            check_cast(None, false, arg.clone(), &sig_type, fn_registry)
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -362,7 +357,9 @@ pub fn try_check_function<Index: ColumnIndex>(
             (0..max_generic_idx + 1)
                 .map(|idx| match subst.0.get(&idx) {
                     Some(ty) => Ok(ty.clone()),
-                    None => Err((span.clone(), format!("unable to resolve generic T{idx}"))),
+                    None => Err(ErrorCode::Internal(format!(
+                        "unable to resolve generic T{idx}"
+                    ))),
                 })
                 .collect::<Result<Vec<_>>>()
         })
@@ -410,10 +407,10 @@ pub fn unify(
         {
             Ok(Subsitution::empty())
         }
-        _ => Err((
-            None,
-            (format!("unable to unify `{}` with `{}`", src_ty, dest_ty)),
-        )),
+        _ => Err(ErrorCode::SemanticError(format!(
+            "unable to unify `{}` with `{}`",
+            src_ty, dest_ty
+        ))),
     }
 }
 

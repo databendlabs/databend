@@ -251,7 +251,6 @@ impl PipelineBuilder {
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
             .try_reduce(|lhs, rhs| {
                 check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-                    .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))
             })
             .transpose()
             .unwrap_or_else(|| {

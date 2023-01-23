@@ -37,11 +37,11 @@ use crate::plans::ShowCreateCatalogPlan;
 use crate::BindContext;
 use crate::Binder;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_show_catalogs(
         &mut self,
         bind_context: &BindContext,
-        stmt: &ShowCatalogsStmt<'a>,
+        stmt: &ShowCatalogsStmt,
     ) -> Result<Plan> {
         let ShowCatalogsStmt { limit } = stmt;
         let mut query = String::new();
@@ -63,7 +63,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_show_create_catalogs(
         &self,
-        stmt: &ShowCreateCatalogStmt<'_>,
+        stmt: &ShowCreateCatalogStmt,
     ) -> Result<Plan> {
         let ShowCreateCatalogStmt { catalog } = stmt;
         let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
@@ -102,7 +102,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_drop_catalog(
         &self,
-        stmt: &DropCatalogStmt<'_>,
+        stmt: &DropCatalogStmt,
     ) -> Result<Plan> {
         let DropCatalogStmt { if_exists, catalog } = stmt;
         let tenant = self.ctx.get_tenant();

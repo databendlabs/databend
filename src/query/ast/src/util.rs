@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Range;
+use common_exception::Span;
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::Offset;
@@ -91,7 +93,7 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
                 non_reserved_keyword(|token| token.is_reserved_ident(false)),
             )),
             |token| Identifier {
-                span: token.clone(),
+                span: transform_span(&[token.clone()]),
                 name: token.text().to_string(),
                 quote: None,
             },
@@ -106,7 +108,7 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
                     .is_some()
                 {
                     Ok((i2, Identifier {
-                        span: token.clone(),
+                        span: transform_span(&[token.clone()]),
                         name: token.text()[1..token.text().len() - 1].to_string(),
                         quote: Some(token.text().chars().next().unwrap()),
                     }))
@@ -129,7 +131,7 @@ fn non_reserved_identifier(
             map(
                 alt((rule! { Ident }, non_reserved_keyword(is_reserved_keyword))),
                 |token| Identifier {
-                    span: token.clone(),
+                    span: transform_span(&[token.clone()]),
                     name: token.text().to_string(),
                     quote: None,
                 },
@@ -144,7 +146,7 @@ fn non_reserved_identifier(
                         .is_some()
                     {
                         Ok((i2, Identifier {
-                            span: token.clone(),
+                            span: transform_span(&[token.clone()]),
                             name: token.text()[1..token.text().len() - 1].to_string(),
                             quote: Some(token.text().chars().next().unwrap()),
                         }))
@@ -350,6 +352,13 @@ where
             Err(e) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
         }
     }
+}
+
+pub fn transform_span(tokens: &[Token]) -> Span {
+    Some(Range {
+        start: tokens.first().unwrap().span.start,
+        end: tokens.last().unwrap().span.end,
+    })
 }
 
 pub fn run_pratt_parser<'a, I, P, E>(

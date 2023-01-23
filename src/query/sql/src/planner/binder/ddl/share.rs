@@ -29,10 +29,10 @@ use crate::plans::ShowGrantTenantsOfSharePlan;
 use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowSharesPlan;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_create_share(
         &mut self,
-        stmt: &CreateShareStmt<'a>,
+        stmt: &CreateShareStmt,
     ) -> Result<Plan> {
         let CreateShareStmt {
             if_not_exists,
@@ -53,7 +53,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_drop_share(
         &mut self,
-        stmt: &DropShareStmt<'a>,
+        stmt: &DropShareStmt,
     ) -> Result<Plan> {
         let DropShareStmt { if_exists, share } = stmt;
 
@@ -69,7 +69,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_grant_share_object(
         &mut self,
-        stmt: &GrantShareObjectStmt<'a>,
+        stmt: &GrantShareObjectStmt,
     ) -> Result<Plan> {
         let GrantShareObjectStmt {
             share,
@@ -89,7 +89,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_revoke_share_object(
         &mut self,
-        stmt: &RevokeShareObjectStmt<'a>,
+        stmt: &RevokeShareObjectStmt,
     ) -> Result<Plan> {
         let RevokeShareObjectStmt {
             share,
@@ -109,7 +109,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_alter_share_accounts(
         &mut self,
-        stmt: &AlterShareTenantsStmt<'a>,
+        stmt: &AlterShareTenantsStmt,
     ) -> Result<Plan> {
         let AlterShareTenantsStmt {
             share,
@@ -131,7 +131,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_desc_share(
         &mut self,
-        stmt: &DescShareStmt<'a>,
+        stmt: &DescShareStmt,
     ) -> Result<Plan> {
         let DescShareStmt { share } = stmt;
 

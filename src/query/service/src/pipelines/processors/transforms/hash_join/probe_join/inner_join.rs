@@ -119,9 +119,7 @@ impl JoinHashTable {
                     }
 
                     let evaluator = Evaluator::new(&probed_block, func_ctx, &BUILTIN_FUNCTIONS);
-                    let predicate = evaluator.run(other_predicate).map_err(|(_, e)| {
-                        ErrorCode::Internal(format!("Invalid expression: {}", e))
-                    })?;
+                    let predicate = evaluator.run(other_predicate)?;
                     let res = probed_block.filter(&predicate)?;
                     if !res.is_empty() {
                         filtered_blocks.push(res);

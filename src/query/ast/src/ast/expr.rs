@@ -17,12 +17,12 @@ use std::fmt::Formatter;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::parser::token::Token;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum IntervalKind {
@@ -38,175 +38,169 @@ pub enum IntervalKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expr<'a> {
+pub enum Expr {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
-        span: &'a [Token<'a>],
-        database: Option<Identifier<'a>>,
-        table: Option<Identifier<'a>>,
-        column: Identifier<'a>,
+        span: Span,
+        database: Option<Identifier>,
+        table: Option<Identifier>,
+        column: Identifier,
     },
     /// `IS [ NOT ] NULL` expression
     IsNull {
-        span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
+        span: Span,
+        expr: Box<Expr>,
         not: bool,
     },
     /// `IS [NOT] DISTINCT` expression
     IsDistinctFrom {
-        span: &'a [Token<'a>],
-        left: Box<Expr<'a>>,
-        right: Box<Expr<'a>>,
+        span: Span,
+        left: Box<Expr>,
+        right: Box<Expr>,
         not: bool,
     },
     /// `[ NOT ] IN (expr, ...)`
     InList {
-        span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
-        list: Vec<Expr<'a>>,
+        span: Span,
+        expr: Box<Expr>,
+        list: Vec<Expr>,
         not: bool,
     },
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
-        span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
-        subquery: Box<Query<'a>>,
+        span: Span,
+        expr: Box<Expr>,
+        subquery: Box<Query>,
         not: bool,
     },
     /// `BETWEEN ... AND ...`
     Between {
-        span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
-        low: Box<Expr<'a>>,
-        high: Box<Expr<'a>>,
+        span: Span,
+        expr: Box<Expr>,
+        low: Box<Expr>,
+        high: Box<Expr>,
         not: bool,
     },
     /// Binary operation
     BinaryOp {
-        span: &'a [Token<'a>],
+        span: Span,
         op: BinaryOperator,
-        left: Box<Expr<'a>>,
-        right: Box<Expr<'a>>,
+        left: Box<Expr>,
+        right: Box<Expr>,
     },
     /// Unary operation
     UnaryOp {
-        span: &'a [Token<'a>],
+        span: Span,
         op: UnaryOperator,
-        expr: Box<Expr<'a>>,
+        expr: Box<Expr>,
     },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
-        span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
+        span: Span,
+        expr: Box<Expr>,
         target_type: TypeName,
         pg_style: bool,
     },
     /// `TRY_CAST` expression`
     TryCast {
-        span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
+        span: Span,
+        expr: Box<Expr>,
         target_type: TypeName,
     },
     /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
-        span: &'a [Token<'a>],
+        span: Span,
         kind: IntervalKind,
-        expr: Box<Expr<'a>>,
+        expr: Box<Expr>,
     },
     /// POSITION(<expr> IN <expr>)
     Position {
-        span: &'a [Token<'a>],
-        substr_expr: Box<Expr<'a>>,
-        str_expr: Box<Expr<'a>>,
+        span: Span,
+        substr_expr: Box<Expr>,
+        str_expr: Box<Expr>,
     },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
-        span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
-        substring_from: Box<Expr<'a>>,
-        substring_for: Option<Box<Expr<'a>>>,
+        span: Span,
+        expr: Box<Expr>,
+        substring_from: Box<Expr>,
+        substring_for: Option<Box<Expr>>,
     },
     /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
     /// Or
     /// TRIM(<expr>)
     Trim {
-        span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
+        span: Span,
+        expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(TrimWhere, Box<Expr<'a>>)>,
+        trim_where: Option<(TrimWhere, Box<Expr>)>,
     },
     /// A literal value, such as string, number, date or NULL
-    Literal { span: &'a [Token<'a>], lit: Literal },
+    Literal { span: Span, lit: Literal },
     /// `COUNT(*)` expression
-    CountAll { span: &'a [Token<'a>] },
+    CountAll { span: Span },
     /// `(foo, bar)`
-    Tuple {
-        span: &'a [Token<'a>],
-        exprs: Vec<Expr<'a>>,
-    },
+    Tuple { span: Span, exprs: Vec<Expr> },
     /// Scalar function call
     FunctionCall {
-        span: &'a [Token<'a>],
+        span: Span,
         /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
         distinct: bool,
-        name: Identifier<'a>,
-        args: Vec<Expr<'a>>,
+        name: Identifier,
+        args: Vec<Expr>,
         params: Vec<Literal>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
-        span: &'a [Token<'a>],
-        operand: Option<Box<Expr<'a>>>,
-        conditions: Vec<Expr<'a>>,
-        results: Vec<Expr<'a>>,
-        else_result: Option<Box<Expr<'a>>>,
+        span: Span,
+        operand: Option<Box<Expr>>,
+        conditions: Vec<Expr>,
+        results: Vec<Expr>,
+        else_result: Option<Box<Expr>>,
     },
     /// `EXISTS` expression
     Exists {
-        span: &'a [Token<'a>],
+        span: Span,
         /// Indicate if this is a `NOT EXISTS`
         not: bool,
-        subquery: Box<Query<'a>>,
+        subquery: Box<Query>,
     },
     /// Scalar/ANY/ALL/SOME subquery
     Subquery {
-        span: &'a [Token<'a>],
+        span: Span,
         modifier: Option<SubqueryModifier>,
-        subquery: Box<Query<'a>>,
+        subquery: Box<Query>,
     },
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
-        span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
-        accessor: MapAccessor<'a>,
+        span: Span,
+        expr: Box<Expr>,
+        accessor: MapAccessor,
     },
     /// The `Array` expr
-    Array {
-        span: &'a [Token<'a>],
-        exprs: Vec<Expr<'a>>,
-    },
+    Array { span: Span, exprs: Vec<Expr> },
     /// The `Interval 1 DAY` expr
     Interval {
-        span: &'a [Token<'a>],
-        expr: Box<Expr<'a>>,
+        span: Span,
+        expr: Box<Expr>,
         unit: IntervalKind,
     },
     DateAdd {
-        span: &'a [Token<'a>],
+        span: Span,
         unit: IntervalKind,
-        interval: Box<Expr<'a>>,
-        date: Box<Expr<'a>>,
+        interval: Box<Expr>,
+        date: Box<Expr>,
     },
     DateSub {
-        span: &'a [Token<'a>],
+        span: Span,
         unit: IntervalKind,
-        interval: Box<Expr<'a>>,
-        date: Box<Expr<'a>>,
+        interval: Box<Expr>,
+        date: Box<Expr>,
     },
     DateTrunc {
-        span: &'a [Token<'a>],
+        span: Span,
         unit: IntervalKind,
-        date: Box<Expr<'a>>,
+        date: Box<Expr>,
     },
 }
 
@@ -231,15 +225,15 @@ pub enum Literal {
 
 /// The display style for a map access expression
 #[derive(Debug, Clone, PartialEq)]
-pub enum MapAccessor<'a> {
+pub enum MapAccessor {
     /// `[0][1]`
-    Bracket { key: Box<Expr<'a>> },
+    Bracket { key: Box<Expr> },
     /// `.a.b`
-    Period { key: Identifier<'a> },
+    Period { key: Identifier },
     /// `.1`
     PeriodNumber { key: u64 },
     /// `:a:b`
-    Colon { key: Identifier<'a> },
+    Colon { key: Identifier },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -359,8 +353,8 @@ pub enum UnaryOperator {
     Not,
 }
 
-impl<'a> Expr<'a> {
-    pub fn span(&self) -> &'a [Token<'a>] {
+impl Expr {
+    pub fn span(&self) -> Span {
         match self {
             Expr::ColumnRef { span, .. }
             | Expr::IsNull { span, .. }
@@ -388,7 +382,7 @@ impl<'a> Expr<'a> {
             | Expr::Interval { span, .. }
             | Expr::DateAdd { span, .. }
             | Expr::DateSub { span, .. }
-            | Expr::DateTrunc { span, .. } => span,
+            | Expr::DateTrunc { span, .. } => *span,
         }
     }
 }
@@ -655,7 +649,7 @@ impl Display for Literal {
     }
 }
 
-impl<'a> Display for Expr<'a> {
+impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::ColumnRef {
@@ -893,7 +887,7 @@ impl<'a> Display for Expr<'a> {
     }
 }
 
-pub fn split_conjunctions_expr<'a>(expr: &Expr<'a>) -> Vec<Expr<'a>> {
+pub fn split_conjunctions_expr(expr: &Expr) -> Vec<Expr> {
     match expr {
         Expr::BinaryOp {
             op, left, right, ..
@@ -906,7 +900,7 @@ pub fn split_conjunctions_expr<'a>(expr: &Expr<'a>) -> Vec<Expr<'a>> {
     }
 }
 
-pub fn split_equivalent_predicate_expr<'a>(expr: &Expr<'a>) -> Option<(Expr<'a>, Expr<'a>)> {
+pub fn split_equivalent_predicate_expr(expr: &Expr) -> Option<(Expr, Expr)> {
     match expr {
         Expr::BinaryOp {
             op, left, right, ..

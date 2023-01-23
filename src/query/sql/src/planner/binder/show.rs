@@ -20,11 +20,11 @@ use crate::plans::RewriteKind;
 use crate::BindContext;
 use crate::Binder;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_show_functions(
         &mut self,
         bind_context: &BindContext,
-        limit: &Option<ShowLimit<'a>>,
+        limit: &Option<ShowLimit>,
     ) -> Result<Plan> {
         // rewrite show functions to select * from system.functions ...
         let query = format!(
