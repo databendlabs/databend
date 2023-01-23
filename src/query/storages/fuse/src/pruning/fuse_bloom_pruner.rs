@@ -115,11 +115,8 @@ impl FuseBloomPrunerCreator {
         Ok(None)
     }
 
-    pub async fn should_keep_by_filter(
-        &self,
-        index_location: &Location,
-        index_length: u64,
-    ) -> Result<bool> {
+    // Check a location file is hit or not by bloom filter.
+    pub async fn apply(&self, index_location: &Location, index_length: u64) -> Result<bool> {
         // load the relevant index columns
         let maybe_filter = index_location
             .read_filter(
@@ -156,11 +153,11 @@ impl FuseBloomPruner for FuseBloomPrunerCreator {
     async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression
-            match self.should_keep_by_filter(loc, index_length).await {
+            match self.apply(loc, index_length).await {
                 Ok(v) => v,
                 Err(e) => {
                     // swallow exceptions intentionally, corrupted index should not prevent execution
-                    tracing::warn!("failed to apply filter, returning ture. {}", e);
+                    tracing::warn!("failed to apply bloom pruner, returning ture. {}", e);
                     true
                 }
             }
