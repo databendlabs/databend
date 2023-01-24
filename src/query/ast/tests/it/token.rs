@@ -15,7 +15,6 @@
 use std::fs::File;
 use std::io::Write;
 
-use common_ast::display_parser_error;
 use common_ast::parser::token::*;
 use common_exception::Result;
 use goldenfile::Mint;
