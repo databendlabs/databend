@@ -49,7 +49,7 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::pruning::BlockPruner;
+use crate::pruning::BlockPruner1;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -256,7 +256,7 @@ impl FuseTable {
         });
 
         let segments_location = base_snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(
+        let block_metas = BlockPruner1::prune(
             &ctx,
             self.operator.clone(),
             self.table_info.schema(),

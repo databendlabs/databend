@@ -25,6 +25,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 
 use crate::io::MetaReaders;
+use crate::pruning::BlockPruner;
 use crate::pruning::PruningContext;
 
 /// Segment level pruning: range pruning.
@@ -102,7 +103,7 @@ impl SegmentPruner {
         pruning_ctx: PruningContext,
         permit: OwnedSemaphorePermit,
         table_schema: TableSchemaRef,
-        _segment_idx: usize,
+        segment_idx: usize,
         segment_location: Location,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let dal = pruning_ctx.dal.clone();
@@ -125,10 +126,13 @@ impl SegmentPruner {
         // Segment range pruning.
         let range_pruner = pruning_ctx.range_pruner.clone();
         let result = if range_pruner.should_keep(&segment_info.summary.col_stats) {
-            todo!()
+            // Block pruner.
+            let block_pruner = BlockPruner::create(pruning_ctx)?;
+            block_pruner.pruning(segment_idx, &segment_info).await?
         } else {
             vec![]
         };
+
         Ok(result)
     }
 }

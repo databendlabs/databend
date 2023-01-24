@@ -63,8 +63,8 @@ struct PruningContext {
     semaphore: Arc<Semaphore>,
 }
 
-pub struct BlockPruner;
-impl BlockPruner {
+pub struct BlockPruner1;
+impl BlockPruner1 {
     pub async fn prune(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,

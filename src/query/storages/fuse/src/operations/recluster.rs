@@ -35,7 +35,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use crate::operations::FuseTableSink;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
-use crate::pruning::BlockPruner;
+use crate::pruning::BlockPruner1;
 use crate::FuseTable;
 use crate::TableMutator;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
@@ -62,7 +62,7 @@ impl FuseTable {
 
         let schema = self.table_info.schema();
         let segments_locations = snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(
+        let block_metas = BlockPruner1::prune(
             &ctx,
             self.operator.clone(),
             schema,
