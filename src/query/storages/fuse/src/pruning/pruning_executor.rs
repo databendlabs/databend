@@ -111,28 +111,28 @@ impl BlockPruner1 {
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
         let limiter = LimiterPrunerCreator::create(limit);
 
-        let func_context = ctx.try_get_function_context()?;
+        let func_ctx = ctx.try_get_function_context()?;
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
         let range_pruner =
-            RangePrunerCreator::try_create(func_context, filter_exprs.as_deref(), &schema)?;
+            RangePrunerCreator::try_create(func_ctx, &schema, filter_exprs.as_deref())?;
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
         let filter_pruner = FuseBloomPrunerCreator::create(
-            &ctx.try_get_function_context()?,
-            filter_exprs.as_deref(),
+            ctx.try_get_function_context()?,
             &schema,
             dal.clone(),
+            filter_exprs.as_deref(),
         )?;
 
         // prepare the page pruner, this is used in native format
         let page_pruner = PagePrunerCreator::try_create(
-            func_context,
+            func_ctx,
+            &schema,
+            filter_exprs.as_deref(),
             cluster_key_meta,
             cluster_keys,
-            filter_exprs.as_deref(),
-            &schema,
         )?;
 
         // 2. constraint the degree of parallelism

@@ -58,10 +58,10 @@ pub struct FuseBloomPrunerCreator {
 
 impl FuseBloomPrunerCreator {
     pub fn create(
-        func_ctx: &FunctionContext,
-        filter_exprs: Option<&[Expr<String>]>,
+        func_ctx: FunctionContext,
         schema: &TableSchemaRef,
         dal: Operator,
+        filter_exprs: Option<&[Expr<String>]>,
     ) -> Result<Option<Arc<dyn FuseBloomPruner + Send + Sync>>> {
         if let Some(exprs) = filter_exprs {
             if exprs.is_empty() {
@@ -77,7 +77,7 @@ impl FuseBloomPrunerCreator {
                 })
                 .unwrap();
 
-            let (optimized_expr, _) = ConstantFolder::fold(&expr, *func_ctx, &BUILTIN_FUNCTIONS);
+            let (optimized_expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
             let point_query_cols = BloomIndex::find_eq_columns(&optimized_expr)?;
 
             tracing::debug!(
@@ -94,13 +94,13 @@ impl FuseBloomPrunerCreator {
                 for (col_name, scalar, ty) in point_query_cols.iter() {
                     filter_block_cols.push(BloomIndex::build_filter_column_name(col_name));
                     if !scalar_map.contains_key(scalar) {
-                        let digest = BloomIndex::calculate_scalar_digest(*func_ctx, scalar, ty)?;
+                        let digest = BloomIndex::calculate_scalar_digest(func_ctx, scalar, ty)?;
                         scalar_map.insert(scalar.clone(), digest);
                     }
                 }
 
                 let creator = FuseBloomPrunerCreator {
-                    func_ctx: *func_ctx,
+                    func_ctx,
                     index_columns: filter_block_cols,
                     filter_expression: optimized_expr,
                     scalar_map,

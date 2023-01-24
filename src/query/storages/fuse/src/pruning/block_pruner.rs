@@ -44,8 +44,8 @@ impl BlockPruner {
         segment_idx: usize,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        if let Some(filter_pruner) = &self.pruning_ctx.filter_pruner {
-            self.block_pruning(filter_pruner, segment_idx, segment_info)
+        if let Some(bloom_pruner) = &self.pruning_ctx.bloom_pruner {
+            self.block_pruning(bloom_pruner, segment_idx, segment_info)
                 .await
         } else {
             // if no available filter pruners, just prune the blocks by
@@ -54,9 +54,10 @@ impl BlockPruner {
         }
     }
 
+    // async pruning with bloom index.
     async fn block_pruning(
         &self,
-        filter_pruner: &Arc<dyn FuseBloomPruner + Send + Sync>,
+        bloom_pruner: &Arc<dyn FuseBloomPruner + Send + Sync>,
         segment_idx: usize,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
@@ -83,7 +84,7 @@ impl BlockPruner {
                 let row_count = block_meta.row_count;
                 if range_pruner.should_keep(&block_meta.col_stats) {
                     // not pruned by block zone map index,
-                    let filter_pruner = filter_pruner.clone();
+                    let bloom_pruner = bloom_pruner.clone();
                     let limit_pruner = limit_pruner.clone();
                     let page_pruner = page_pruner.clone();
                     let index_location = block_meta.bloom_filter_index_location.clone();
@@ -92,7 +93,7 @@ impl BlockPruner {
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
-                            let keep = filter_pruner.should_keep(&index_location, index_size).await
+                            let keep = bloom_pruner.should_keep(&index_location, index_size).await
                                 && limit_pruner.within_limit(row_count);
 
                             if keep {

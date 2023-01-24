@@ -16,14 +16,28 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
 use common_base::runtime::Runtime;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::RemoteExpr;
+use common_expression::TableSchemaRef;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use opendal::Operator;
+use storages_common_pruner::BlockMetaIndex;
 use storages_common_pruner::Limiter;
+use storages_common_pruner::LimiterPrunerCreator;
 use storages_common_pruner::PagePruner;
+use storages_common_pruner::PagePrunerCreator;
 use storages_common_pruner::RangePruner;
+use storages_common_pruner::RangePrunerCreator;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ClusterKey;
+use storages_common_table_meta::meta::Location;
+use tracing::warn;
 
 use crate::pruning::FuseBloomPruner;
+use crate::pruning::FuseBloomPrunerCreator;
+use crate::pruning::SegmentPruner;
 
 #[derive(Clone)]
 pub struct PruningContext {
@@ -34,14 +48,113 @@ pub struct PruningContext {
 
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
-    pub filter_pruner: Option<Arc<dyn FuseBloomPruner + Send + Sync>>,
+    pub bloom_pruner: Option<Arc<dyn FuseBloomPruner + Send + Sync>>,
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
 }
 
-pub struct FusePruner {}
+pub struct FusePruner {
+    pub schema: TableSchemaRef,
+    pub pruning_ctx: PruningContext,
+}
 
 impl FusePruner {
-    pub fn create_ctx() -> Result<PruningContext> {
-        todo!()
+    // Build pruning context.
+    pub fn create(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+    ) -> Result<Self> {
+        let func_ctx = ctx.try_get_function_context()?;
+
+        let filter_exprs = push_down.as_ref().map(|extra| {
+            extra
+                .filters
+                .iter()
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
+                .collect::<Vec<_>>()
+        });
+
+        // Limit prunner.
+        // if there are ordering/filter clause, ignore limit, even it has been pushed down
+        let limit = push_down
+            .as_ref()
+            .filter(|p| p.order_by.is_empty() && p.filters.is_empty())
+            .and_then(|p| p.limit);
+        // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
+        let limit_pruner = LimiterPrunerCreator::create(limit);
+
+        // Range filter.
+        // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
+        let range_pruner =
+            RangePrunerCreator::try_create(func_ctx, &schema, filter_exprs.as_deref())?;
+
+        // Bloom pruner.
+        // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
+        let bloom_pruner = FuseBloomPrunerCreator::create(
+            func_ctx,
+            &schema,
+            dal.clone(),
+            filter_exprs.as_deref(),
+        )?;
+
+        // prepare the page pruner, this is used in native format
+        let page_pruner = PagePrunerCreator::try_create(
+            func_ctx,
+            &schema,
+            filter_exprs.as_deref(),
+            cluster_key_meta,
+            cluster_keys,
+        )?;
+
+        // Constraint the degree of parallelism
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_concurrency = {
+            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+            // Prevent us from miss-configured max_storage_io_requests setting, e.g. 0
+            let v = std::cmp::max(max_io_requests, 10);
+            if v > max_io_requests {
+                warn!(
+                    "max_storage_io_requests setting is too low {}, increased to {}",
+                    max_io_requests, v
+                )
+            }
+            v
+        };
+
+        // Pruning runtime.
+        let pruning_runtime = Arc::new(Runtime::with_worker_threads(
+            max_threads,
+            Some("pruning-worker".to_owned()),
+        )?);
+        let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
+
+        let pruning_ctx = PruningContext {
+            ctx: ctx.clone(),
+            dal,
+            pruning_runtime,
+            pruning_semaphore,
+            limit_pruner,
+            range_pruner,
+            bloom_pruner,
+            page_pruner,
+        };
+
+        Ok(FusePruner {
+            schema,
+            pruning_ctx,
+        })
+    }
+
+    // Pruning chain:
+    // segment pruner -> block pruner
+    pub async fn pruning(
+        &self,
+        segment_locs: Vec<Location>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let segment_pruner = SegmentPruner::create(self.pruning_ctx.clone(), self.schema.clone())?;
+        segment_pruner.pruning(segment_locs).await
     }
 }
