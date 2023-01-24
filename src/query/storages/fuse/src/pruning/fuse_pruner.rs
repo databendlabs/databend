@@ -18,6 +18,7 @@ use common_base::base::tokio::sync::Semaphore;
 use common_base::runtime::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use opendal::Operator;
 use storages_common_pruner::Limiter;
 use storages_common_pruner::PagePruner;
 use storages_common_pruner::RangePruner;
@@ -27,6 +28,7 @@ use crate::pruning::FuseBloomPruner;
 #[derive(Clone)]
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
+    pub dal: Operator,
     pub pruning_runtime: Arc<Runtime>,
     pub pruning_semaphore: Arc<Semaphore>,
 
