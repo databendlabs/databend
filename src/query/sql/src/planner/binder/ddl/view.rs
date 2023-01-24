@@ -48,13 +48,12 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
-        let subquery = format!("{}", query);
-
         let column_names = columns
             .iter()
             .map(|ident| {
                 normalize_identifier(ident, &self.name_resolution_ctx).name
             }).collect::<Vec<_>>();
+        let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
             if_not_exists: *if_not_exists,
@@ -76,6 +75,7 @@ impl<'a> Binder {
             catalog,
             database,
             view,
+            columns,
             query,
         } = stmt;
 
@@ -89,6 +89,11 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
+        let column_names = columns
+            .iter()
+            .map(|ident| {
+                normalize_identifier(ident, &self.name_resolution_ctx).name
+            }).collect::<Vec<_>>();
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
@@ -96,6 +101,7 @@ impl<'a> Binder {
             catalog,
             database,
             viewname,
+            column_names,
             subquery,
         };
         Ok(Plan::AlterView(Box::new(plan)))

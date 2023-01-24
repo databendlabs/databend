@@ -1235,6 +1235,7 @@ AlterView(
             quote: None,
             span: Ident(11..12),
         },
+        columns: [],
         query: Query {
             span: [
                 SELECT(16..22),
@@ -1470,6 +1471,135 @@ CreateView(
                                 Literal {
                                     span: [
                                         LiteralInteger(58..62),
+                                    ],
+                                    lit: Integer(
+                                        1000,
+                                    ),
+                                },
+                            ],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+alter view v1(c2) as select number % 3 as a from numbers(1000);
+---------- Output ---------
+ALTER VIEW v1 (c2) AS SELECT (number % 3) AS a FROM numbers(1000)
+---------- AST ------------
+AlterView(
+    AlterViewStmt {
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v1",
+            quote: None,
+            span: Ident(11..13),
+        },
+        columns: [
+            Identifier {
+                name: "c2",
+                quote: None,
+                span: Ident(14..16),
+            },
+        ],
+        query: Query {
+            span: [
+                SELECT(21..27),
+                Ident(28..34),
+                Modulo(35..36),
+                LiteralInteger(37..38),
+                AS(39..41),
+                Ident(42..43),
+                FROM(44..48),
+                Ident(49..56),
+                LParen(56..57),
+                LiteralInteger(57..61),
+                RParen(61..62),
+            ],
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(21..27),
+                        Ident(28..34),
+                        Modulo(35..36),
+                        LiteralInteger(37..38),
+                        AS(39..41),
+                        Ident(42..43),
+                        FROM(44..48),
+                        Ident(49..56),
+                        LParen(56..57),
+                        LiteralInteger(57..61),
+                        RParen(61..62),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: BinaryOp {
+                                span: [
+                                    Modulo(35..36),
+                                ],
+                                op: Modulo,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(28..34),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "number",
+                                        quote: None,
+                                        span: Ident(28..34),
+                                    },
+                                },
+                                right: Literal {
+                                    span: [
+                                        LiteralInteger(37..38),
+                                    ],
+                                    lit: Integer(
+                                        3,
+                                    ),
+                                },
+                            },
+                            alias: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(42..43),
+                                },
+                            ),
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: [
+                                Ident(49..56),
+                                LParen(56..57),
+                                LiteralInteger(57..61),
+                                RParen(61..62),
+                            ],
+                            name: Identifier {
+                                name: "numbers",
+                                quote: None,
+                                span: Ident(49..56),
+                            },
+                            params: [
+                                Literal {
+                                    span: [
+                                        LiteralInteger(57..61),
                                     ],
                                     lit: Integer(
                                         1000,
