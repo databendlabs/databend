@@ -15,6 +15,7 @@
 use std::fs::File;
 use std::io::Write;
 
+use common_ast::display_parser_error;
 use common_ast::parser::token::*;
 use common_exception::Result;
 use goldenfile::Mint;
@@ -34,7 +35,7 @@ fn run_lexer(file: &mut File, source: &str) {
             writeln!(file, "\n").unwrap();
         }
         Err(err) => {
-            let report = err.message().trim().to_string();
+            let report = err.display_with_sql(source).message().trim().to_string();
             writeln!(file, "---------- Input ----------").unwrap();
             writeln!(file, "{}", source).unwrap();
             writeln!(file, "---------- Output ---------").unwrap();
