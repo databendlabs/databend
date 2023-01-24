@@ -14,55 +14,34 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Semaphore;
-use common_base::runtime::Runtime;
-use common_catalog::plan::PushDownInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use futures_util::future;
 use opendal::Operator;
 use storages_common_pruner::BlockMetaIndex;
-use storages_common_pruner::LimiterPruner;
-use storages_common_pruner::LimiterPrunerCreator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 
+use crate::pruning::PruningContext;
+
 /// Segment level pruning.
 pub struct SegmentPruner {
-    pub func_ctx: FunctionContext,
-    pub pruning_runtime: Arc<Runtime>,
-    pub pruning_semaphore: Arc<Semaphore>,
+    pub pruning_ctx: PruningContext,
     pub operator: Operator,
     pub table_schema: TableSchemaRef,
-    pub limit_pruner: LimiterPruner,
 }
 
 impl SegmentPruner {
     pub fn create(
-        func_ctx: FunctionContext,
-        pruning_runtime: Arc<Runtime>,
-        pruning_semaphore: Arc<Semaphore>,
+        pruning_ctx: PruningContext,
         operator: Operator,
         table_schema: TableSchemaRef,
-        push_down: &Option<PushDownInfo>,
     ) -> Result<SegmentPruner> {
-        // Build limit pruner.
-        // In case that limit is none, an unlimited limiter will be returned.
-        let limit = push_down
-            .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_empty())
-            .and_then(|p| p.limit);
-        let limit_pruner = LimiterPrunerCreator::create(limit);
-
         Ok(SegmentPruner {
-            func_ctx,
-            pruning_runtime,
-            pruning_semaphore,
+            pruning_ctx,
             operator,
             table_schema,
-            limit_pruner,
         })
     }
 
@@ -78,19 +57,21 @@ impl SegmentPruner {
         let mut segments = segment_locs.into_iter().enumerate();
         let pruning_tasks = std::iter::from_fn(|| {
             // pruning tasks are executed concurrently, check if limit exceeded before proceeding
-            if self.limit_pruner.exceeded() {
+            if self.pruning_ctx.limit_pruner.exceeded() {
                 None
             } else {
                 segments.next().map(|(_segment_idx, _segment_location)| {
-                    move |_permit| async move { Self::prune_segment().await }
+                    let pruning_ctx = self.pruning_ctx.clone();
+                    move |_permit| async move { Self::prune_segment(pruning_ctx).await }
                 })
             }
         });
 
         // Run tasks and collect the results.
-        let join_handlers = self
-            .pruning_runtime
-            .try_spawn_batch_with_owned_semaphore(self.pruning_semaphore.clone(), pruning_tasks)
+        let pruning_runtime = self.pruning_ctx.pruning_runtime.clone();
+        let pruning_semaphore = self.pruning_ctx.pruning_semaphore.clone();
+        let join_handlers = pruning_runtime
+            .try_spawn_batch_with_owned_semaphore(pruning_semaphore, pruning_tasks)
             .await?;
 
         let joint = future::try_join_all(join_handlers)
@@ -107,7 +88,9 @@ impl SegmentPruner {
         Ok(metas)
     }
 
-    async fn prune_segment() -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+    async fn prune_segment(
+        _pruning_ctx: PruningContext,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         todo!()
     }
 }

@@ -14,27 +14,32 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::PushDownInfo;
+use common_base::base::tokio::sync::Semaphore;
+use common_base::runtime::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::RemoteExpr;
-use common_expression::TableSchemaRef;
-use opendal::Operator;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::Location;
+use storages_common_pruner::Limiter;
+use storages_common_pruner::PagePruner;
+use storages_common_pruner::RangePruner;
+
+use crate::pruning::FuseBloomPruner;
+
+#[derive(Clone)]
+pub struct PruningContext {
+    pub ctx: Arc<dyn TableContext>,
+    pub pruning_runtime: Arc<Runtime>,
+    pub pruning_semaphore: Arc<Semaphore>,
+
+    pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
+    pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
+    pub filter_pruner: Option<Arc<dyn FuseBloomPruner + Send + Sync>>,
+    pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
+}
 
 pub struct FusePruner {}
 
 impl FusePruner {
-    pub fn create(
-        _ctx: &Arc<dyn TableContext>,
-        _dal: Operator,
-        _schema: TableSchemaRef,
-        _push_down: &Option<PushDownInfo>,
-        _cluster_key_meta: Option<ClusterKey>,
-        _cluster_keys: Vec<RemoteExpr<String>>,
-        _segment_locs: Vec<Location>,
-    ) -> Result<FusePruner> {
+    pub fn create_ctx() -> Result<PruningContext> {
         todo!()
     }
 }

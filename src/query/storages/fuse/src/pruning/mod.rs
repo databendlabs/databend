@@ -20,5 +20,6 @@ mod segment_pruner;
 pub use bloom_pruner::FuseBloomPruner;
 pub use bloom_pruner::FuseBloomPrunerCreator;
 pub use fuse_pruner::FusePruner;
+pub use fuse_pruner::PruningContext;
 pub use pruning_executor::BlockPruner;
 pub use segment_pruner::SegmentPruner;
