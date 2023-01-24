@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::parquet::read::infer_schema;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Runtime;
@@ -54,35 +54,32 @@ pub async fn load_bloom_filter_by_columns<'a>(
         )));
     }
 
-    let cols = file_meta.row_groups[0].columns();
-
     // 2. filter out columns that needed and exist in the index
-    let arrow_schema = infer_schema(file_meta)?;
-    let col_metas: Vec<_> = column_needed
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, col_name)| {
-            cols.iter()
-                .find(|c| &c.descriptor().path_in_schema[0] == col_name)
-                .map(|col| (idx, col, arrow_schema.fields[idx].clone()))
-        })
-        .collect();
+    // 2.1 dedup the columns
+    let column_needed: HashSet<&String> = HashSet::from_iter(column_needed);
+    // 2.2 collects the column metas and their column ids
+    let index_column_chunk_metas = file_meta.row_groups[0].columns();
+    let mut col_metas = Vec::with_capacity(column_needed.len());
+    for column_name in column_needed {
+        for (idx, column_chunk_meta) in index_column_chunk_metas.iter().enumerate() {
+            if &column_chunk_meta.descriptor().path_in_schema[0] == column_name {
+                col_metas.push((idx as ColumnId, column_chunk_meta))
+            }
+        }
+    }
 
     // 3. load filters
     let futs = col_metas
         .iter()
-        .map(|(idx, col_chunk_meta, field)| {
-            load_column_xor8(*idx as ColumnId, field, col_chunk_meta, index_path, &dal)
-        })
+        .map(|(idx, col_chunk_meta)| load_column_xor8(*idx, col_chunk_meta, index_path, &dal))
         .collect::<Vec<_>>();
 
-    let cols_data = try_join_all(futs).await?;
-    let filter_block: Vec<Arc<Xor8>> = cols_data.into_iter().map(|(x, _)| x).collect();
+    let filters = try_join_all(futs).await?.into_iter().collect();
 
     // 4. build index schema
     let fields = col_metas
         .iter()
-        .map(|(_, col_chunk_mea, _)| {
+        .map(|(_, col_chunk_mea)| {
             TableField::new(
                 &col_chunk_mea.descriptor().path_in_schema[0],
                 TableDataType::String,
@@ -94,7 +91,7 @@ pub async fn load_bloom_filter_by_columns<'a>(
 
     Ok(BlockFilter {
         filter_schema: Arc::new(filter_schema),
-        filters: filter_block,
+        filters,
     })
 }
 
@@ -103,25 +100,19 @@ pub async fn load_bloom_filter_by_columns<'a>(
 #[tracing::instrument(level = "debug", skip_all)]
 async fn load_column_xor8<'a>(
     idx: ColumnId,
-    field: &'a common_arrow::arrow::datatypes::Field,
     col_chunk_meta: &'a ColumnChunkMetaData,
     index_path: &'a str,
     dal: &'a Operator,
-) -> Result<(Arc<Xor8>, ColumnId)> {
+) -> Result<Arc<Xor8>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
-        let column_data_reader = BloomIndexColumnReader::new(
-            index_path.to_owned(),
-            idx,
-            col_chunk_meta,
-            dal.clone(),
-            field,
-        );
+        let column_data_reader =
+            BloomIndexColumnReader::new(index_path.to_owned(), idx, col_chunk_meta, dal.clone());
         async move { column_data_reader.read().await }
     }
     .execute_in_runtime(&storage_runtime)
     .await??;
-    Ok((bytes, idx))
+    Ok(bytes)
 }
 
 /// Loads index meta data

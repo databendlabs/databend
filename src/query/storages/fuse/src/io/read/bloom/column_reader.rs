@@ -15,18 +15,18 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Field;
+use common_arrow::arrow::datatypes::DataType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::parquet::compression::Compression;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::Descriptor;
+use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Column;
-use common_expression::TableDataType;
 use opendal::Operator;
 use storages_common_cache::CacheKey;
 use storages_common_cache::InMemoryItemCacheReader;
@@ -57,7 +57,6 @@ impl BloomIndexColumnReader {
         column_id: ColumnId,
         colum_chunk_meta: &ColumnChunkMetaData,
         operator: Operator,
-        field: &Field,
     ) -> Self {
         let meta = colum_chunk_meta.metadata();
         let cache_key = format!("{index_path}-{column_id}");
@@ -66,8 +65,7 @@ impl BloomIndexColumnReader {
             len: meta.total_compressed_size as u64,
             cache_key,
             operator,
-            column_descriptor: colum_chunk_meta.descriptor().descriptor.clone(),
-            field: field.clone(), // TODO eliminate this clone?
+            column_descriptor: colum_chunk_meta.descriptor().clone(),
         };
 
         let cached_reader = CachedReader::new(
@@ -99,15 +97,14 @@ pub struct Xor8Loader {
     pub len: u64,
     pub cache_key: String,
     pub operator: Operator,
-    pub column_descriptor: Descriptor,
-    pub field: Field,
+    pub column_descriptor: ColumnDescriptor,
 }
 
 #[async_trait::async_trait]
 impl LoaderWithCacheKey<Xor8> for Xor8Loader {
     async fn load_with_cache_key(&self, params: &LoadParams) -> Result<Xor8> {
-        let column_reader = self.operator.object(&params.location);
-        let bytes = column_reader
+        let reader = self.operator.object(&params.location);
+        let bytes = reader
             .range_read(self.offset..self.offset + self.len)
             .await?;
 
@@ -115,7 +112,7 @@ impl LoaderWithCacheKey<Xor8> for Xor8Loader {
             column_start: 0,
             num_values: 1,
             compression: Compression::Uncompressed,
-            descriptor: self.column_descriptor.clone(),
+            descriptor: self.column_descriptor.descriptor.clone(),
         };
 
         let page_reader = PageReader::new_with_page_meta(
@@ -127,15 +124,15 @@ impl LoaderWithCacheKey<Xor8> for Xor8Loader {
         );
 
         let decompressor = BasicDecompressor::new(page_reader, vec![]);
-        let field = self.field.clone();
-        let column_type = self.column_descriptor.primitive_type.clone();
+        let column_type = self.column_descriptor.descriptor.primitive_type.clone();
+        let filed_name = self.column_descriptor.path_in_schema[0].to_owned();
+        let field = ArrowField::new(filed_name, DataType::Binary, false);
         let mut array_iter =
             column_iter_to_arrays(vec![decompressor], vec![&column_type], field, None, 1)?;
         if let Some(array) = array_iter.next() {
             let array = array?;
-            use common_expression::types::DataType as DBDataType;
-            let table_data_type: TableDataType = TableDataType::from(&self.field);
-            let col = Column::from_arrow(array.as_ref(), &DBDataType::try_from(&table_data_type)?);
+            let col =
+                Column::from_arrow(array.as_ref(), &common_expression::types::DataType::String);
             let bytes = unsafe { col.as_string().unwrap().index_unchecked(0) };
             let (filter, _size) = Xor8Filter::from_bytes(bytes)?;
             Ok(filter.filter)
