@@ -12,12 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod block_pruner;
 mod bloom_pruner;
+mod fuse_pruner;
 mod pruning_executor;
 mod segment_pruner;
-mod snapshot_pruner;
 
 pub use bloom_pruner::FuseBloomPruner;
 pub use bloom_pruner::FuseBloomPrunerCreator;
+pub use fuse_pruner::FusePruner;
 pub use pruning_executor::BlockPruner;
+pub use segment_pruner::SegmentPruner;
