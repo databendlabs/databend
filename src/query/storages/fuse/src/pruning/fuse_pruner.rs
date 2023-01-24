@@ -58,8 +58,18 @@ pub struct FusePruner {
 }
 
 impl FusePruner {
-    // Build pruning context.
+    // Create normal fuse pruner.
     pub fn create(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+    ) -> Result<Self> {
+        Self::create_with_pages(ctx, dal, schema, push_down, None, vec![])
+    }
+
+    // Create fuse pruner with pages.
+    pub fn create_with_pages(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         schema: TableSchemaRef,
@@ -100,7 +110,7 @@ impl FusePruner {
             filter_exprs.as_deref(),
         )?;
 
-        // prepare the page pruner, this is used in native format
+        // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
             func_ctx,
             &schema,

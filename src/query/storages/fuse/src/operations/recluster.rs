@@ -35,7 +35,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use crate::operations::FuseTableSink;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
-use crate::pruning::BlockPruner1;
+use crate::pruning::FusePruner;
 use crate::FuseTable;
 use crate::TableMutator;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
@@ -61,15 +61,9 @@ impl FuseTable {
         };
 
         let schema = self.table_info.schema();
-        let segments_locations = snapshot.segments.clone();
-        let block_metas = BlockPruner1::prune(
-            &ctx,
-            self.operator.clone(),
-            schema,
-            &push_downs,
-            segments_locations,
-        )
-        .await?;
+        let segment_locations = snapshot.segments.clone();
+        let pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
+        let block_metas = pruner.pruning(segment_locations).await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();

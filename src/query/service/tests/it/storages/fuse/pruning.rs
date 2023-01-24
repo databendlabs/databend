@@ -31,7 +31,7 @@ use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_sql::parse_to_remote_string_exprs;
 use common_sql::plans::CreateTablePlanV2;
-use common_storages_fuse::pruning::BlockPruner1;
+use common_storages_fuse::pruning::FusePruner;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
@@ -59,7 +59,8 @@ async fn apply_block_pruning(
 ) -> Result<Vec<Arc<BlockMeta>>> {
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
-    BlockPruner1::prune(&ctx, op, schema, push_down, segment_locs)
+    FusePruner::create(&ctx, op, schema, push_down)?
+        .pruning(segment_locs)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }

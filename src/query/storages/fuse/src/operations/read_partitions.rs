@@ -37,7 +37,7 @@ use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::FusePartInfo;
-use crate::pruning::BlockPruner1;
+use crate::pruning::FusePruner;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -105,25 +105,21 @@ impl FuseTable {
         );
 
         let block_metas = if !self.is_native() || self.cluster_key_meta.is_none() {
-            BlockPruner1::prune(
-                &ctx,
-                dal,
-                table_info.schema(),
-                &push_downs,
-                segments_location,
-            )
-            .await?
+            FusePruner::create(&ctx, dal, table_info.schema(), &push_downs)?
+                .pruning(segments_location)
+                .await?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
-            BlockPruner1::prune_with_pages(
+
+            FusePruner::create_with_pages(
                 &ctx,
                 dal,
                 table_info.schema(),
                 &push_downs,
                 self.cluster_key_meta.clone(),
                 cluster_keys,
-                segments_location,
-            )
+            )?
+            .pruning(segments_location)
             .await?
         };
 
