@@ -61,7 +61,7 @@ select v1.id from default.v0 as v1 order by v1.id
 1
 2
 
-statement error mysql client error: Server error: `ERROR HY000 (1105): Code: 2306, displayText = default.v2 as view Already Exists.'
+statement ok
 create view default.v2 as select * from test_view.t0 where ((((((t0.id)-(1362151668)))-((+ 1362151668))))is not distinct from((+ ((-177629504)/(2071531978)))))
 
 statement ok
