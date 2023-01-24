@@ -20,8 +20,8 @@ use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_sql::Planner;
 use common_sql::plans::CreateViewPlan;
+use common_sql::Planner;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
@@ -71,7 +71,7 @@ impl CreateViewInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let mut options = BTreeMap::new();
 
-        let subquery =  if self.plan.column_names.is_empty() {
+        let subquery = if self.plan.column_names.is_empty() {
             self.plan.subquery.clone()
         } else {
             let mut planner = Planner::new(self.ctx.clone());
@@ -83,7 +83,12 @@ impl CreateViewInterpreter {
                     self.plan.column_names.len(),
                 )));
             }
-            format!("select * from ({}) {}({})", self.plan.subquery, self.plan.viewname, self.plan.column_names.join(","))
+            format!(
+                "select * from ({}) {}({})",
+                self.plan.subquery,
+                self.plan.viewname,
+                self.plan.column_names.join(",")
+            )
         };
         options.insert("query".to_string(), subquery);
 

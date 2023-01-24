@@ -50,9 +50,8 @@ impl<'a> Binder {
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
         let column_names = columns
             .iter()
-            .map(|ident| {
-                normalize_identifier(ident, &self.name_resolution_ctx).name
-            }).collect::<Vec<_>>();
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .collect::<Vec<_>>();
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
@@ -91,9 +90,8 @@ impl<'a> Binder {
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
         let column_names = columns
             .iter()
-            .map(|ident| {
-                normalize_identifier(ident, &self.name_resolution_ctx).name
-            }).collect::<Vec<_>>();
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .collect::<Vec<_>>();
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
