@@ -1800,7 +1800,7 @@ impl<'a> TypeChecker<'a> {
                 .map_err(|e| e.set_span(span))?;
             self.resolve(&udf_expr, None).await
         } else {
-            Err(ErrorCode::SemanticError(format!(
+            Err(ErrorCode::UnknownFunction(format!(
                 "No function matches the given name: {func_name}"
             ))
             .set_span(span))

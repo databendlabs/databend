@@ -118,7 +118,7 @@ pub async fn streaming_load(
     let (mut plan, _, _) = planner
         .plan_sql(insert_sql)
         .await
-        .map_err(|err| err.display_with_sql(&insert_sql))
+        .map_err(|err| err.display_with_sql(insert_sql))
         .map_err(InternalServerError)?;
     context.attach_query_str(plan.to_string(), insert_sql);
 
@@ -140,12 +140,12 @@ pub async fn streaming_load(
                 let to_table = context
                     .get_table(&insert.catalog, &insert.database, &insert.table)
                     .await
-                    .map_err(|err| err.display_with_sql(&insert_sql))
+                    .map_err(|err| err.display_with_sql(insert_sql))
                     .map_err(InternalServerError)?;
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
 
                 let table_schema = infer_table_schema(&schema)
-                    .map_err(|err| err.display_with_sql(&insert_sql))
+                    .map_err(|err| err.display_with_sql(insert_sql))
                     .map_err(InternalServerError)?;
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert_file_format(
@@ -158,7 +158,7 @@ pub async fn streaming_load(
                         to_table.get_block_compact_thresholds(),
                     )
                     .await
-                    .map_err(|err| err.display_with_sql(&insert_sql))
+                    .map_err(|err| err.display_with_sql(insert_sql))
                     .map_err(InternalServerError)?,
                 );
                 *input_context_ref = Some(input_context.clone());
@@ -178,7 +178,7 @@ pub async fn streaming_load(
                     Ok(Err(cause)) => Err(poem::Error::from_string(
                         format!(
                             "execute fail: {}",
-                            cause.display_with_sql(&insert_sql).message()
+                            cause.display_with_sql(insert_sql).message()
                         ),
                         StatusCode::BAD_REQUEST,
                     )),
