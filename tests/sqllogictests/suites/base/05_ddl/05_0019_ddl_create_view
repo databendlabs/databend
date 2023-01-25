@@ -88,4 +88,17 @@ select * from c
 statement ok
 drop table c
 
+statement ok
+create view tmp_view(c1, c2) as select number % 3 as a, avg(number) from numbers(1000) group by a order by a
 
+query T
+describe tmp_view
+----
+c1 TINYINT UNSIGNED NO 0 (empty)
+c2 DOUBLE YES NULL (empty)
+
+statement error 1018
+create view tmp_view2(d1, d2) as select * from numbers(3)
+
+statement ok
+drop view if exists tmp_view

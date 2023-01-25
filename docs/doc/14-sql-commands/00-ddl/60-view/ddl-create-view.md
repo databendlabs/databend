@@ -4,7 +4,7 @@ description:
   Create a new view based on a query
 ---
 
-Creates a new view based on a query, the Logical View does not store any physical data, when we access a logical view, it will convert the sql into the subqery format to finish it.
+Creates a new view based on a query, the Logical View does not store any physical data, when we access a logical view, it will convert the sql into the subquery format to finish it.
 
 For example, if you create a Logical View like:
 
@@ -25,20 +25,20 @@ So, if you delete the table which the view depends on, it occurs an error that t
 ## Syntax
 
 ```sql
-CREATE VIEW [IF NOT EXISTS] [db.]view_name AS SELECT query
+CREATE VIEW [IF NOT EXISTS] [db.]view_name [(<column>, ...)] AS SELECT query
 ```
 
 ## Examples
 
 ```sql
-CREATE VIEW tmp_view AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a;
+CREATE VIEW tmp_view(c1, c2) AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a;
 
 SELECT * FROM tmp_view;
-+------+-------------+
-| a    | avg(number) |
-+------+-------------+
-|    0 |       499.5 |
-|    1 |         499 |
-|    2 |         500 |
-+------+-------------+
++------+-------+
+| c1   | c2    |
++------+-------+
+|    0 | 499.5 |
+|    1 | 499.0 |
+|    2 | 500.0 |
++------+-------+
 ```

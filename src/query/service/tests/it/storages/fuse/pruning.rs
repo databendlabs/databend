@@ -31,13 +31,13 @@ use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_sql::parse_to_remote_string_exprs;
 use common_sql::plans::CreateTablePlanV2;
+use common_storages_fuse::pruning::FusePruner;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::MetaReaders;
-use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use opendal::Operator;
@@ -59,7 +59,8 @@ async fn apply_block_pruning(
 ) -> Result<Vec<Arc<BlockMeta>>> {
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
-    BlockPruner::prune(&ctx, op, schema, push_down, segment_locs)
+    FusePruner::create(&ctx, op, schema, push_down)?
+        .pruning(segment_locs)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
@@ -181,7 +182,7 @@ async fn test_block_pruner() -> Result<()> {
         parse_to_remote_string_exprs(ctx.clone(), table.clone(), false, "a > 0 and b > 6")?;
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
-    // Sort asc Limit
+    // Sort asc Limit: TopN-pruner.
     let e3 = PushDownInfo {
         order_by: vec![(
             RemoteExpr::ColumnRef {
@@ -197,7 +198,7 @@ async fn test_block_pruner() -> Result<()> {
         ..Default::default()
     };
 
-    // Sort desc Limit
+    // Sort desc Limit: TopN-pruner.
     let e4 = PushDownInfo {
         order_by: vec![(
             RemoteExpr::ColumnRef {
@@ -213,12 +214,20 @@ async fn test_block_pruner() -> Result<()> {
         ..Default::default()
     };
 
+    // Limit push-down, Limit-pruner.
+    let e5 = PushDownInfo {
+        order_by: vec![],
+        limit: Some(11),
+        ..Default::default()
+    };
+
     let extras = vec![
         (None, num_blocks, num_blocks * row_per_block),
         (Some(e1), 0, 0),
         (Some(e2), b2, b2 * row_per_block),
         (Some(e3), 3, 3 * row_per_block),
         (Some(e4), 4, 4 * row_per_block),
+        (Some(e5), 2, 2 * row_per_block),
     ];
 
     for (extra, expected_blocks, expected_rows) in extras {
