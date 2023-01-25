@@ -21,10 +21,8 @@ use std::time::Instant;
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::TableSchemaRef;
 use futures_util::future;
 use storages_common_pruner::BlockMetaIndex;
-use storages_common_pruner::TopNPrunner;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 
@@ -33,19 +31,12 @@ use crate::pruning::BloomPruner;
 use crate::pruning::PruningContext;
 
 pub struct BlockPruner {
-    pub table_schema: TableSchemaRef,
     pub pruning_ctx: PruningContext,
 }
 
 impl BlockPruner {
-    pub fn create(
-        pruning_ctx: PruningContext,
-        table_schema: TableSchemaRef,
-    ) -> Result<BlockPruner> {
-        Ok(BlockPruner {
-            table_schema,
-            pruning_ctx,
-        })
+    pub fn create(pruning_ctx: PruningContext) -> Result<BlockPruner> {
+        Ok(BlockPruner { pruning_ctx })
     }
 
     pub async fn pruning(
@@ -53,39 +44,14 @@ impl BlockPruner {
         segment_idx: usize,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let metas = if let Some(bloom_pruner) = &self.pruning_ctx.bloom_pruner {
+        if let Some(bloom_pruner) = &self.pruning_ctx.bloom_pruner {
             self.block_pruning(bloom_pruner, segment_idx, segment_info)
                 .await
         } else {
             // if no available filter pruners, just prune the blocks by
             // using zone map index, and do not spawn async tasks
             self.block_pruning_sync(segment_idx, segment_info)
-        }?;
-
-        // Check topn pruning.
-        self.topn_pruning(metas)
-    }
-
-    // topn pruner:
-    // if there are ordering + limit clause, use topn pruner
-    fn topn_pruning(
-        &self,
-        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let push_down = self.pruning_ctx.push_down.clone();
-        if push_down
-            .as_ref()
-            .filter(|p| !p.order_by.is_empty() && p.limit.is_some())
-            .is_some()
-        {
-            let schema = self.table_schema.clone();
-            let push_down = push_down.as_ref().unwrap();
-            let limit = push_down.limit.unwrap();
-            let sort = push_down.order_by.clone();
-            let topn_pruner = TopNPrunner::create(schema, sort, limit);
-            return topn_pruner.prune(metas);
         }
-        Ok(metas)
     }
 
     // async pruning with bloom index.

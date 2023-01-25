@@ -30,6 +30,7 @@ use storages_common_pruner::PagePruner;
 use storages_common_pruner::PagePrunerCreator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
+use storages_common_pruner::TopNPrunner;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::Location;
@@ -45,7 +46,6 @@ pub struct PruningContext {
     pub dal: Operator,
     pub pruning_runtime: Arc<Runtime>,
     pub pruning_semaphore: Arc<Semaphore>,
-    pub push_down: Option<PushDownInfo>,
 
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
@@ -54,8 +54,9 @@ pub struct PruningContext {
 }
 
 pub struct FusePruner {
-    pub schema: TableSchemaRef,
+    pub table_schema: TableSchemaRef,
     pub pruning_ctx: PruningContext,
+    pub push_down: Option<PushDownInfo>,
 }
 
 impl FusePruner {
@@ -63,17 +64,17 @@ impl FusePruner {
     pub fn create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
-        schema: TableSchemaRef,
+        table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
     ) -> Result<Self> {
-        Self::create_with_pages(ctx, dal, schema, push_down, None, vec![])
+        Self::create_with_pages(ctx, dal, table_schema, push_down, None, vec![])
     }
 
     // Create fuse pruner with pages.
     pub fn create_with_pages(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
-        schema: TableSchemaRef,
+        table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
@@ -100,17 +101,21 @@ impl FusePruner {
         // Range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
         let range_pruner =
-            RangePrunerCreator::try_create(func_ctx, &schema, filter_exprs.as_deref())?;
+            RangePrunerCreator::try_create(func_ctx, &table_schema, filter_exprs.as_deref())?;
 
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let bloom_pruner =
-            BloomPrunerCreator::create(func_ctx, &schema, dal.clone(), filter_exprs.as_deref())?;
+        let bloom_pruner = BloomPrunerCreator::create(
+            func_ctx,
+            &table_schema,
+            dal.clone(),
+            filter_exprs.as_deref(),
+        )?;
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
             func_ctx,
-            &schema,
+            &table_schema,
             filter_exprs.as_deref(),
             cluster_key_meta,
             cluster_keys,
@@ -143,7 +148,6 @@ impl FusePruner {
             dal,
             pruning_runtime,
             pruning_semaphore,
-            push_down: push_down.clone(),
             limit_pruner,
             range_pruner,
             bloom_pruner,
@@ -151,7 +155,8 @@ impl FusePruner {
         };
 
         Ok(FusePruner {
-            schema,
+            table_schema,
+            push_down: push_down.clone(),
             pruning_ctx,
         })
     }
@@ -162,7 +167,34 @@ impl FusePruner {
         &self,
         segment_locs: Vec<Location>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let segment_pruner = SegmentPruner::create(self.pruning_ctx.clone(), self.schema.clone())?;
-        segment_pruner.pruning(segment_locs).await
+        // Segment pruner.
+        let segment_pruner =
+            SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
+        let metas = segment_pruner.pruning(segment_locs).await?;
+
+        // TopN pruner.
+        self.topn_pruning(metas)
+    }
+
+    // topn pruner:
+    // if there are ordering + limit clause, use topn pruner
+    fn topn_pruning(
+        &self,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let push_down = self.push_down.clone();
+        if push_down
+            .as_ref()
+            .filter(|p| !p.order_by.is_empty() && p.limit.is_some())
+            .is_some()
+        {
+            let schema = self.table_schema.clone();
+            let push_down = push_down.as_ref().unwrap();
+            let limit = push_down.limit.unwrap();
+            let sort = push_down.order_by.clone();
+            let topn_pruner = TopNPrunner::create(schema, sort, limit);
+            return topn_pruner.prune(metas);
+        }
+        Ok(metas)
     }
 }
