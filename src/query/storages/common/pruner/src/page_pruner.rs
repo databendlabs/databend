@@ -66,10 +66,10 @@ impl PagePrunerCreator {
     /// Note: the schema should be the schema of the table, not the schema of the input.
     pub fn try_create<'a>(
         func_ctx: FunctionContext,
+        schema: &'a TableSchemaRef,
+        filter_expr: Option<&'a [Expr<String>]>,
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
-        filter_expr: Option<&'a [Expr<String>]>,
-        schema: &'a TableSchemaRef,
     ) -> Result<Arc<dyn PagePruner + Send + Sync>> {
         if cluster_key_meta.is_none()
             || cluster_keys.is_empty()
