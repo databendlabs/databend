@@ -45,6 +45,7 @@ pub struct PruningContext {
     pub dal: Operator,
     pub pruning_runtime: Arc<Runtime>,
     pub pruning_semaphore: Arc<Semaphore>,
+    pub push_down: Option<PushDownInfo>,
 
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
@@ -146,6 +147,7 @@ impl FusePruner {
             dal,
             pruning_runtime,
             pruning_semaphore,
+            push_down: push_down.clone(),
             limit_pruner,
             range_pruner,
             bloom_pruner,
@@ -159,7 +161,7 @@ impl FusePruner {
     }
 
     // Pruning chain:
-    // segment pruner -> block pruner
+    // segment pruner -> block pruner -> topn pruner
     pub async fn pruning(
         &self,
         segment_locs: Vec<Location>,

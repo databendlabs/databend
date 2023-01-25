@@ -127,7 +127,7 @@ impl SegmentPruner {
         let range_pruner = pruning_ctx.range_pruner.clone();
         let result = if range_pruner.should_keep(&segment_info.summary.col_stats) {
             // Block pruner.
-            let block_pruner = BlockPruner::create(pruning_ctx)?;
+            let block_pruner = BlockPruner::create(pruning_ctx, table_schema)?;
             block_pruner.pruning(segment_idx, &segment_info).await?
         } else {
             vec![]
