@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
@@ -38,9 +39,9 @@ use tracing::warn;
 
 use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
+use crate::pruning::FusePruningStatistics;
 use crate::pruning::SegmentPruner;
 
-#[derive(Clone)]
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
     pub dal: Operator,
@@ -51,11 +52,13 @@ pub struct PruningContext {
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
+
+    pub pruning_stats: Arc<FusePruningStatistics>,
 }
 
 pub struct FusePruner {
     pub table_schema: TableSchemaRef,
-    pub pruning_ctx: PruningContext,
+    pub pruning_ctx: Arc<PruningContext>,
     pub push_down: Option<PushDownInfo>,
 }
 
@@ -142,8 +145,9 @@ impl FusePruner {
             Some("pruning-worker".to_owned()),
         )?);
         let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
+        let pruning_stats = Arc::new(FusePruningStatistics::default());
 
-        let pruning_ctx = PruningContext {
+        let pruning_ctx = Arc::new(PruningContext {
             ctx: ctx.clone(),
             dal,
             pruning_runtime,
@@ -152,7 +156,8 @@ impl FusePruner {
             range_pruner,
             bloom_pruner,
             page_pruner,
-        };
+            pruning_stats,
+        });
 
         Ok(FusePruner {
             table_schema,
@@ -196,5 +201,31 @@ impl FusePruner {
             return topn_pruner.prune(metas);
         }
         Ok(metas)
+    }
+
+    // Pruning stats.
+    pub fn pruning_stats(&self) -> common_catalog::plan::PruningStatistics {
+        let stats = self.pruning_ctx.pruning_stats.clone();
+        let segments_range_pruning_before =
+            stats.segments_range_pruning_before.load(Ordering::Relaxed) as usize;
+        let segments_range_pruning_after =
+            stats.segments_range_pruning_after.load(Ordering::Relaxed) as usize;
+        let blocks_range_pruning_before =
+            stats.blocks_range_pruning_before.load(Ordering::Relaxed) as usize;
+        let blocks_range_pruning_after =
+            stats.blocks_range_pruning_after.load(Ordering::Relaxed) as usize;
+        let blocks_bloom_pruning_before =
+            stats.blocks_bloom_pruning_before.load(Ordering::Relaxed) as usize;
+        let blocks_bloom_pruning_after =
+            stats.blocks_bloom_pruning_after.load(Ordering::Relaxed) as usize;
+
+        common_catalog::plan::PruningStatistics {
+            segments_range_pruning_before,
+            segments_range_pruning_after,
+            blocks_range_pruning_before,
+            blocks_range_pruning_after,
+            blocks_bloom_pruning_before,
+            blocks_bloom_pruning_after,
+        }
     }
 }

@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
@@ -31,13 +32,13 @@ use crate::pruning::PruningContext;
 
 /// Segment level pruning: range pruning.
 pub struct SegmentPruner {
-    pub pruning_ctx: PruningContext,
+    pub pruning_ctx: Arc<PruningContext>,
     pub table_schema: TableSchemaRef,
 }
 
 impl SegmentPruner {
     pub fn create(
-        pruning_ctx: PruningContext,
+        pruning_ctx: Arc<PruningContext>,
         table_schema: TableSchemaRef,
     ) -> Result<SegmentPruner> {
         Ok(SegmentPruner {
@@ -101,13 +102,14 @@ impl SegmentPruner {
 
     // Pruning segment with range pruner, then pruning on Block.
     async fn segment_pruning(
-        pruning_ctx: PruningContext,
+        pruning_ctx: Arc<PruningContext>,
         permit: OwnedSemaphorePermit,
         table_schema: TableSchemaRef,
         segment_idx: usize,
         segment_location: Location,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let dal = pruning_ctx.dal.clone();
+        let pruning_stats = pruning_ctx.pruning_stats.clone();
 
         // Keep in mind that segment_info_read must need a schema
         let segment_reader = MetaReaders::segment_info_reader(dal, table_schema.clone());
@@ -129,6 +131,10 @@ impl SegmentPruner {
         {
             metrics_inc_segments_range_pruning_before(1);
             metrics_inc_bytes_segment_range_pruning_before(total_bytes);
+
+            pruning_stats
+                .segments_range_pruning_before
+                .fetch_add(1, Ordering::Relaxed);
         }
 
         // Segment range pruning.
@@ -138,6 +144,10 @@ impl SegmentPruner {
             {
                 metrics_inc_segments_range_pruning_after(1);
                 metrics_inc_bytes_segment_range_pruning_after(total_bytes);
+
+                pruning_stats
+                    .segments_range_pruning_after
+                    .fetch_add(1, Ordering::Relaxed);
             }
 
             // Block pruner.
