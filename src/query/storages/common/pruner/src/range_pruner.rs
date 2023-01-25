@@ -63,8 +63,8 @@ impl RangePrunerCreator {
     /// Note: the schema should be the schema of the table, not the schema of the input.
     pub fn try_create<'a>(
         func_ctx: FunctionContext,
-        filter_expr: Option<&'a [Expr<String>]>,
         schema: &'a TableSchemaRef,
+        filter_expr: Option<&'a [Expr<String>]>,
     ) -> Result<Arc<dyn RangePruner + Send + Sync>> {
         Ok(match filter_expr {
             Some(exprs) if !exprs.is_empty() => {

@@ -20,6 +20,7 @@ mod page_pruner;
 mod range_pruner;
 mod topn_pruner;
 
+pub use limiter_pruner::Limiter;
 pub use limiter_pruner::LimiterPruner;
 pub use limiter_pruner::LimiterPrunerCreator;
 pub use page_pruner::PagePruner;
