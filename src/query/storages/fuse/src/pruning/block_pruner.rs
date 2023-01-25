@@ -80,9 +80,21 @@ impl BlockPruner {
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
 
             blocks.next().map(|(block_idx, block_meta)| {
+                // Perf.
+                {
+                    metrics_inc_block_before_range_pruning_nums(1);
+                    metrics_inc_bytes_before_block_range_pruning(block_meta.block_size);
+                }
+
                 let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
                 if range_pruner.should_keep(&block_meta.col_stats) {
+                    // Perf.
+                    {
+                        metrics_inc_block_after_range_pruning_nums(1);
+                        metrics_inc_bytes_after_block_range_pruning(block_meta.block_size);
+                    }
+
                     // not pruned by block zone map index,
                     let bloom_pruner = bloom_pruner.clone();
                     let limit_pruner = limit_pruner.clone();
@@ -92,11 +104,25 @@ impl BlockPruner {
 
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
+                            // Perf.
+                            {
+                                metrics_inc_block_before_bloom_pruning_nums(1);
+                                metrics_inc_bytes_before_block_bloom_pruning(block_meta.block_size);
+                            }
+
                             let _permit = permit;
                             let keep = bloom_pruner.should_keep(&index_location, index_size).await
                                 && limit_pruner.within_limit(row_count);
 
                             if keep {
+                                // Perf.
+                                {
+                                    metrics_inc_block_after_bloom_pruning_nums(1);
+                                    metrics_inc_bytes_after_block_bloom_pruning(
+                                        block_meta.block_size,
+                                    );
+                                }
+
                                 let (keep, range) =
                                     page_pruner.should_keep(&block_meta.cluster_stats);
                                 (block_idx, keep, range)
@@ -147,8 +173,6 @@ impl BlockPruner {
 
         // Perf
         {
-            metrics_inc_pruning_before_block_nums(segment_info.blocks.len() as u64);
-            metrics_inc_pruning_after_block_nums(result.len() as u64);
             metrics_inc_pruning_milliseconds(start.elapsed().as_millis() as u64);
         }
 
@@ -168,6 +192,12 @@ impl BlockPruner {
 
         let mut result = Vec::with_capacity(segment_info.blocks.len());
         for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
+            // Perf.
+            {
+                metrics_inc_block_after_range_pruning_nums(1);
+                metrics_inc_bytes_before_block_range_pruning(block_meta.block_size);
+            }
+
             // check limit speculatively
             if limit_pruner.exceeded() {
                 break;
@@ -176,6 +206,12 @@ impl BlockPruner {
             if range_pruner.should_keep(&block_meta.col_stats)
                 && limit_pruner.within_limit(row_count)
             {
+                // Perf.
+                {
+                    metrics_inc_block_after_range_pruning_nums(1);
+                    metrics_inc_bytes_after_block_range_pruning(block_meta.block_size);
+                }
+
                 let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
                 if keep {
                     result.push((
@@ -192,8 +228,6 @@ impl BlockPruner {
 
         // Perf
         {
-            metrics_inc_pruning_before_block_nums(segment_info.blocks.len() as u64);
-            metrics_inc_pruning_after_block_nums(result.len() as u64);
             metrics_inc_pruning_milliseconds(start.elapsed().as_millis() as u64);
         }
 

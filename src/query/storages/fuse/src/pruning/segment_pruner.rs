@@ -25,6 +25,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 
 use crate::io::MetaReaders;
+use crate::metrics::*;
 use crate::pruning::BlockPruner;
 use crate::pruning::PruningContext;
 
@@ -123,9 +124,22 @@ impl SegmentPruner {
         // Note that it is required to explicitly release this permit before pruning blocks, to avoid deadlock.
         drop(permit);
 
+        let total_bytes = segment_info.total_bytes();
+        // Perf.
+        {
+            metrics_inc_segment_before_range_pruning_nums(1);
+            metrics_inc_bytes_before_segment_range_pruning(total_bytes);
+        }
+
         // Segment range pruning.
         let range_pruner = pruning_ctx.range_pruner.clone();
         let result = if range_pruner.should_keep(&segment_info.summary.col_stats) {
+            // Perf.
+            {
+                metrics_inc_segment_after_range_pruning_nums(1);
+                metrics_inc_bytes_after_segment_range_pruning(total_bytes);
+            }
+
             // Block pruner.
             let block_pruner = BlockPruner::create(pruning_ctx)?;
             block_pruner.pruning(segment_idx, &segment_info).await?
