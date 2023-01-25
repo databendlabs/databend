@@ -286,10 +286,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
         }
 
         // We pull the first unsplitted data block
-        if !self.initialized_all_inputs {
-            if !self.initialize_all_inputs()? {
-                return Ok(Event::NeedData);
-            }
+        if !self.initialized_all_inputs && !self.initialize_all_inputs()? {
+            return Ok(Event::NeedData);
         }
 
         if !self.buckets_blocks.is_empty() && !self.unsplitted_blocks.is_empty() {
