@@ -127,8 +127,8 @@ impl SegmentPruner {
         let total_bytes = segment_info.total_bytes();
         // Perf.
         {
-            metrics_inc_segment_before_range_pruning_nums(1);
-            metrics_inc_bytes_before_segment_range_pruning(total_bytes);
+            metrics_inc_segments_range_pruning_before(1);
+            metrics_inc_bytes_segment_range_pruning_before(total_bytes);
         }
 
         // Segment range pruning.
@@ -136,8 +136,8 @@ impl SegmentPruner {
         let result = if range_pruner.should_keep(&segment_info.summary.col_stats) {
             // Perf.
             {
-                metrics_inc_segment_after_range_pruning_nums(1);
-                metrics_inc_bytes_after_segment_range_pruning(total_bytes);
+                metrics_inc_segments_range_pruning_after(1);
+                metrics_inc_bytes_segment_range_pruning_after(total_bytes);
             }
 
             // Block pruner.
