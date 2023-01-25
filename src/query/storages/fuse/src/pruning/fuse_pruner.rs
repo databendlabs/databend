@@ -35,8 +35,8 @@ use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::Location;
 use tracing::warn;
 
-use crate::pruning::FuseBloomPruner;
-use crate::pruning::FuseBloomPrunerCreator;
+use crate::pruning::BloomPruner;
+use crate::pruning::BloomPrunerCreator;
 use crate::pruning::SegmentPruner;
 
 #[derive(Clone)]
@@ -49,7 +49,7 @@ pub struct PruningContext {
 
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
-    pub bloom_pruner: Option<Arc<dyn FuseBloomPruner + Send + Sync>>,
+    pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
 }
 
@@ -104,12 +104,8 @@ impl FusePruner {
 
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let bloom_pruner = FuseBloomPrunerCreator::create(
-            func_ctx,
-            &schema,
-            dal.clone(),
-            filter_exprs.as_deref(),
-        )?;
+        let bloom_pruner =
+            BloomPrunerCreator::create(func_ctx, &schema, dal.clone(), filter_exprs.as_deref())?;
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(

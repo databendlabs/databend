@@ -29,7 +29,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::metrics::*;
-use crate::pruning::FuseBloomPruner;
+use crate::pruning::BloomPruner;
 use crate::pruning::PruningContext;
 
 pub struct BlockPruner {
@@ -91,7 +91,7 @@ impl BlockPruner {
     // async pruning with bloom index.
     async fn block_pruning(
         &self,
-        bloom_pruner: &Arc<dyn FuseBloomPruner + Send + Sync>,
+        bloom_pruner: &Arc<dyn BloomPruner + Send + Sync>,
         segment_idx: usize,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {

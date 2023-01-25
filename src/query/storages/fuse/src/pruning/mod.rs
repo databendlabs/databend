@@ -18,8 +18,8 @@ mod fuse_pruner;
 mod segment_pruner;
 
 pub use block_pruner::BlockPruner;
-pub use bloom_pruner::FuseBloomPruner;
-pub use bloom_pruner::FuseBloomPrunerCreator;
+pub use bloom_pruner::BloomPruner;
+pub use bloom_pruner::BloomPrunerCreator;
 pub use fuse_pruner::FusePruner;
 pub use fuse_pruner::PruningContext;
 pub use segment_pruner::SegmentPruner;
