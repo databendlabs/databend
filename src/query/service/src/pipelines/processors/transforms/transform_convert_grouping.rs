@@ -235,7 +235,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                     port.finish();
                     *input = InputPortState::Finished;
                 }
-                InputPortState::Active { port, bucket } if *bucket == self.working_bucket => {
+                InputPortState::Active { port, bucket } if *bucket <= self.working_bucket => {
                     port.set_need_data();
 
                     if !port.has_data() {
@@ -302,11 +302,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                         },
                     };
                 }
-                InputPortState::Finished => { /* finished, do nothing */ }
-                InputPortState::Active { port, bucket } => {
-                    port.set_need_data();
-                    self.min_bucket = std::cmp::min(*bucket, self.min_bucket);
-                }
+                _ => {}
             }
         }
 
@@ -465,6 +461,7 @@ struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> +
 
     input_block: Option<DataBlock>,
     output_blocks: Vec<DataBlock>,
+    need_finish: bool,
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
@@ -483,6 +480,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
             params,
             input_block: None,
             output_blocks: vec![],
+            need_finish: false,
         })))
     }
 }
@@ -504,6 +502,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
             self.input_block.take();
             self.output_blocks.clear();
             self.input.finish();
+            self.output.finish();
             return Ok(Event::Finished);
         }
 
@@ -515,6 +514,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
         if let Some(output_data) = self.output_blocks.pop() {
             self.output.push_data(Ok(output_data));
             return Ok(Event::NeedConsume);
+        }
+
+        // need to finish if limit is reached
+        if self.need_finish {
+            self.input.finish();
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
         if self.input_block.is_some() {
@@ -553,6 +559,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
 
                     self.output_blocks
                         .extend(bucket_merger.merge_blocks(blocks)?);
+                    self.need_finish = bucket_merger.reach_limit;
                 }
                 false => {
                     let mut bucket_merger = BucketAggregator::<true, _>::create(
@@ -562,6 +569,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
 
                     self.output_blocks
                         .extend(bucket_merger.merge_blocks(blocks)?);
+                    self.need_finish = bucket_merger.reach_limit;
                 }
             };
         }

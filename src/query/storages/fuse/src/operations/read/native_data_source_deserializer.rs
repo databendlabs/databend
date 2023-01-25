@@ -232,6 +232,7 @@ impl Processor for NativeDeserializeDataTransform {
                 if !chunk.1.has_next() {
                     // No data anymore
                     let _ = self.chunks.pop();
+                    let _ = self.parts.pop();
                     return Ok(());
                 }
                 arrays.push((chunk.0, chunk.1.next_array()?));
