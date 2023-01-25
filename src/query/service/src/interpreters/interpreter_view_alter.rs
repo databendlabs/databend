@@ -103,7 +103,7 @@ impl AlterViewInterpreter {
                 "select * from ({}) {}({})",
                 self.plan.subquery,
                 self.plan.viewname,
-                self.plan.column_names.join(",")
+                self.plan.column_names.join(", ")
             )
         };
         options.insert("query".to_string(), subquery);
