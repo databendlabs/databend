@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
+use common_hashtable::HashtableLike;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
@@ -122,6 +123,34 @@ impl HashJoinState for JoinHashTable {
                 }
             }};
         }
+
+        macro_rules! insert_string_key {
+            ($table: expr, $markers: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, ) => {{
+                let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
+                let build_keys_iter = $method.build_keys_iter(&keys_state)?;
+
+                for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
+                    let ptr = RowPtr {
+                        chunk_index: $chunk_index,
+                        row_index,
+                        marker: $markers[row_index],
+                    };
+                    if self.hash_join_desc.join_type == JoinType::LeftMark {
+                        let mut self_row_ptrs = self.row_ptrs.write();
+                        self_row_ptrs.push(ptr);
+                    }
+                    match unsafe { $table.insert(key) } {
+                        Ok(entity) => {
+                            entity.write(vec![ptr]);
+                        }
+                        Err(entity) => {
+                            entity.push(ptr);
+                        }
+                    }
+                }
+            }};
+        }
+
         {
             let buffer = self.row_space.buffer.write().unwrap();
             if !buffer.is_empty() {
@@ -163,94 +192,34 @@ impl HashJoinState for JoinHashTable {
                     vec![None; chunk.num_rows()]
                 }
             };
+
             match (*self.hash_table.write()).borrow_mut() {
-                HashTable::SerializerHashTable(table) => {
-                    let mut build_cols_ref = Vec::with_capacity(chunk.cols.len());
-                    for build_col in chunk.cols.iter() {
-                        build_cols_ref.push(build_col.clone());
-                    }
-                    let keys_state = table
-                        .hash_method
-                        .build_keys_state(&build_cols_ref, chunk.num_rows())?;
-                    chunk.keys_state = Some(keys_state);
-                    let build_keys_iter = table
-                        .hash_method
-                        .build_keys_iter(chunk.keys_state.as_ref().unwrap())?;
-                    for (row_index, key) in build_keys_iter.enumerate().take(chunk.num_rows()) {
-                        let ptr = RowPtr {
-                            chunk_index,
-                            row_index,
-                            marker: markers[row_index],
-                        };
-                        if self.hash_join_desc.join_type == JoinType::LeftMark {
-                            let mut self_row_ptrs = self.row_ptrs.write();
-                            self_row_ptrs.push(ptr);
-                        }
-                        match unsafe { table.hash_table.insert_borrowing(key) } {
-                            Ok(entity) => {
-                                entity.write(vec![ptr]);
-                            }
-                            Err(entity) => {
-                                entity.push(ptr);
-                            }
-                        }
-                    }
-                }
-                HashTable::KeyU8HashTable(table) => insert_key! {
-                    &mut table.hash_table,
-                    &markers,
-                    &table.hash_method,
-                    chunk,
-                    columns,
-                    chunk_index,
+                HashTable::Serializer(table) => insert_string_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
                 },
-                HashTable::KeyU16HashTable(table) => insert_key! {
-                    &mut table.hash_table,
-                    &markers,
-                    &table.hash_method,
-                    chunk,
-                    columns,
-                    chunk_index,
+                HashTable::SingleString(table) => insert_string_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
                 },
-                HashTable::KeyU32HashTable(table) => insert_key! {
-                    &mut table.hash_table,
-                    &markers,
-                    &table.hash_method,
-                    chunk,
-                    columns,
-                    chunk_index,
+                HashTable::KeysU8(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
                 },
-                HashTable::KeyU64HashTable(table) => insert_key! {
-                    &mut table.hash_table,
-                    &markers,
-                    &table.hash_method,
-                    chunk,
-                    columns,
-                    chunk_index,
+                HashTable::KeysU16(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
                 },
-                HashTable::KeyU128HashTable(table) => insert_key! {
-                    &mut table.hash_table,
-                    &markers,
-                    &table.hash_method,
-                    chunk,
-                    columns,
-                    chunk_index,
+                HashTable::KeysU32(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
                 },
-                HashTable::KeyU256HashTable(table) => insert_key! {
-                    &mut table.hash_table,
-                    &markers,
-                    &table.hash_method,
-                    chunk,
-                    columns,
-                    chunk_index,
+                HashTable::KeysU64(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
                 },
-                HashTable::KeyU512HashTable(table) => insert_key! {
-                    &mut table.hash_table,
-                    &markers,
-                    &table.hash_method,
-                    chunk,
-                    columns,
-                    chunk_index,
+                HashTable::KeysU128(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
+                },
+                HashTable::KeysU256(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
+                },
+                HashTable::KeysU512(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
                 },
             }
         }

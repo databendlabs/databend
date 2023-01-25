@@ -604,6 +604,7 @@ impl SubqueryRewriter {
                         group_items,
                         aggregate_functions: agg_items,
                         from_distinct: aggregate.from_distinct,
+                        limit: aggregate.limit,
                     }
                     .into(),
                     flatten_plan,

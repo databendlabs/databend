@@ -406,6 +406,7 @@ impl SubqueryRewriter {
                     }],
                     from_distinct: false,
                     mode: AggregateMode::Initial,
+                    limit: None,
                 };
 
                 let compare = ComparisonExpr {

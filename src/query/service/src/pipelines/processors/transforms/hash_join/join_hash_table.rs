@@ -22,6 +22,7 @@ use common_base::base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::and_validities;
+use common_expression::with_hash_method;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
@@ -29,10 +30,12 @@ use common_expression::HashMethod;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodKind;
 use common_expression::HashMethodSerializer;
+use common_expression::HashMethodSingleString;
 use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
+use common_hashtable::SimpleUnsizedHashMap;
 use common_hashtable::UnsizedHashMap;
 use common_sql::plans::JoinType;
 use parking_lot::RwLock;
@@ -49,8 +52,13 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 pub struct SerializerHashTable {
-    pub(crate) hash_table: UnsizedHashMap<[u8], Vec<RowPtr>>,
+    pub(crate) hash_table: SimpleUnsizedHashMap<[u8], Vec<RowPtr>>,
     pub(crate) hash_method: HashMethodSerializer,
+}
+
+pub struct SingleStringHashTable {
+    pub(crate) hash_table: UnsizedHashMap<[u8], Vec<RowPtr>>,
+    pub(crate) hash_method: HashMethodSingleString,
 }
 
 pub struct FixedKeyHashTable<T: HashtableKeyable> {
@@ -59,14 +67,15 @@ pub struct FixedKeyHashTable<T: HashtableKeyable> {
 }
 
 pub enum HashTable {
-    SerializerHashTable(SerializerHashTable),
-    KeyU8HashTable(FixedKeyHashTable<u8>),
-    KeyU16HashTable(FixedKeyHashTable<u16>),
-    KeyU32HashTable(FixedKeyHashTable<u32>),
-    KeyU64HashTable(FixedKeyHashTable<u64>),
-    KeyU128HashTable(FixedKeyHashTable<u128>),
-    KeyU256HashTable(FixedKeyHashTable<U256>),
-    KeyU512HashTable(FixedKeyHashTable<U512>),
+    Serializer(SerializerHashTable),
+    SingleString(SingleStringHashTable),
+    KeysU8(FixedKeyHashTable<u8>),
+    KeysU16(FixedKeyHashTable<u16>),
+    KeysU32(FixedKeyHashTable<u32>),
+    KeysU64(FixedKeyHashTable<u64>),
+    KeysU128(FixedKeyHashTable<u128>),
+    KeysU256(FixedKeyHashTable<U256>),
+    KeysU512(FixedKeyHashTable<U512>),
 }
 
 pub struct JoinHashTable {
@@ -100,9 +109,19 @@ impl JoinHashTable {
         Ok(match method {
             HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::SerializerHashTable(SerializerHashTable {
-                    hash_table: UnsizedHashMap::<[u8], Vec<RowPtr>>::new(),
+                HashTable::Serializer(SerializerHashTable {
+                    hash_table: SimpleUnsizedHashMap::<[u8], Vec<RowPtr>>::new(),
                     hash_method: HashMethodSerializer::default(),
+                }),
+                build_schema,
+                probe_schema,
+                hash_join_desc,
+            )?),
+            HashMethodKind::SingleString(_) => Arc::new(JoinHashTable::try_create(
+                ctx,
+                HashTable::SingleString(SingleStringHashTable {
+                    hash_table: UnsizedHashMap::<[u8], Vec<RowPtr>>::new(),
+                    hash_method: HashMethodSingleString::default(),
                 }),
                 build_schema,
                 probe_schema,
@@ -110,7 +129,7 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU8HashTable(FixedKeyHashTable {
+                HashTable::KeysU8(FixedKeyHashTable {
                     hash_table: HashMap::<u8, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
@@ -120,7 +139,7 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU16HashTable(FixedKeyHashTable {
+                HashTable::KeysU16(FixedKeyHashTable {
                     hash_table: HashMap::<u16, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
@@ -130,7 +149,7 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU32HashTable(FixedKeyHashTable {
+                HashTable::KeysU32(FixedKeyHashTable {
                     hash_table: HashMap::<u32, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
@@ -140,7 +159,7 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU64HashTable(FixedKeyHashTable {
+                HashTable::KeysU64(FixedKeyHashTable {
                     hash_table: HashMap::<u64, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
@@ -150,7 +169,7 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU128HashTable(FixedKeyHashTable {
+                HashTable::KeysU128(FixedKeyHashTable {
                     hash_table: HashMap::<u128, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
@@ -160,7 +179,7 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU256HashTable(FixedKeyHashTable {
+                HashTable::KeysU256(FixedKeyHashTable {
                     hash_table: HashMap::<U256, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
@@ -170,7 +189,7 @@ impl JoinHashTable {
             )?),
             HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
                 ctx,
-                HashTable::KeyU512HashTable(FixedKeyHashTable {
+                HashTable::KeysU512(FixedKeyHashTable {
                     hash_table: HashMap::<U512, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
@@ -280,64 +299,14 @@ impl JoinHashTable {
             probe_state.valids = valids;
         }
 
-        match &*self.hash_table.read() {
-            HashTable::SerializerHashTable(table) => {
-                let keys_state = table
-                    .hash_method
-                    .build_keys_state(&probe_keys, input.num_rows())?;
-                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
-            }
-            HashTable::KeyU8HashTable(table) => {
+        with_hash_method!(|T| match &*self.hash_table.read() {
+            HashTable::T(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
                 self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
-            HashTable::KeyU16HashTable(table) => {
-                let keys_state = table
-                    .hash_method
-                    .build_keys_state(&probe_keys, input.num_rows())?;
-                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
-            }
-            HashTable::KeyU32HashTable(table) => {
-                let keys_state = table
-                    .hash_method
-                    .build_keys_state(&probe_keys, input.num_rows())?;
-                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
-            }
-            HashTable::KeyU64HashTable(table) => {
-                let keys_state = table
-                    .hash_method
-                    .build_keys_state(&probe_keys, input.num_rows())?;
-                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
-            }
-            HashTable::KeyU128HashTable(table) => {
-                let keys_state = table
-                    .hash_method
-                    .build_keys_state(&probe_keys, input.num_rows())?;
-                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
-            }
-            HashTable::KeyU256HashTable(table) => {
-                let keys_state = table
-                    .hash_method
-                    .build_keys_state(&probe_keys, input.num_rows())?;
-                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
-            }
-            HashTable::KeyU512HashTable(table) => {
-                let keys_state = table
-                    .hash_method
-                    .build_keys_state(&probe_keys, input.num_rows())?;
-                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
-            }
-        }
+        })
     }
 }

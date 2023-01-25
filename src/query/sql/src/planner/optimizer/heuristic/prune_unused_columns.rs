@@ -185,6 +185,7 @@ impl UnusedColumnPruner {
                         aggregate_functions: used,
                         from_distinct: p.from_distinct,
                         mode: p.mode,
+                        limit: p.limit,
                     }),
                     Self::keep_required_columns(expr.child(0)?, required)?,
                 ))

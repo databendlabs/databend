@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::with_hash_method;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
@@ -450,16 +451,9 @@ pub fn efficiently_memory_final_aggregator(
     let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
     let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
-    match method {
-        HashMethodKind::KeysU8(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU16(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU32(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU64(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU128(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU256(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU512(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::Serializer(v) => build_convert_grouping(v, pipeline, params.clone()),
-    }
+    with_hash_method!(|T| match method {
+        HashMethodKind::T(v) => build_convert_grouping(v, pipeline, params.clone()),
+    })
 }
 
 struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> {

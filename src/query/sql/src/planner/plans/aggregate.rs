@@ -47,6 +47,7 @@ pub struct Aggregate {
     pub aggregate_functions: Vec<ScalarItem>,
     // True if the plan is generated from distinct, else the plan is a normal aggregate;
     pub from_distinct: bool,
+    pub limit: Option<usize>,
 }
 
 impl Aggregate {

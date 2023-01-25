@@ -20,6 +20,7 @@ use super::group_by_hash::HashMethodKeysU64;
 use super::group_by_hash::HashMethodKeysU8;
 use super::group_by_hash::HashMethodKind;
 use super::group_by_hash::HashMethodSerializer;
+use super::group_by_hash::HashMethodSingleString;
 use crate::types::DataType;
 use crate::DataBlock;
 use crate::HashMethodKeysU128;
@@ -41,6 +42,15 @@ impl DataBlock {
     }
 
     pub fn choose_hash_method_with_types(hash_key_types: &[DataType]) -> Result<HashMethodKind> {
+        if hash_key_types.len() == 1 {
+            let typ = hash_key_types[0].clone();
+            if matches!(typ, DataType::String | DataType::Variant) {
+                return Ok(HashMethodKind::SingleString(
+                    HashMethodSingleString::default(),
+                ));
+            }
+        }
+
         let mut group_key_len = 0;
         for typ in hash_key_types {
             let not_null_type = typ.remove_nullable();
