@@ -480,21 +480,26 @@ fn union_all_to_format_tree(
 }
 
 fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
-    vec![
+    let mut items = vec![
         FormatTreeNode::new(format!("read rows: {}", info.read_rows)),
         FormatTreeNode::new(format!("read bytes: {}", info.read_bytes)),
         FormatTreeNode::new(format!("partitions total: {}", info.partitions_total)),
         FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
-        FormatTreeNode::new(format!(
-            "pruning stats: segments: <range: {} -> {}>, blocks: <range: {} -> {}, bloom: {} -> {}>",
+    ];
+
+    if info.pruning_stats.segments_range_pruning_before > 0 {
+        items.push(FormatTreeNode::new(format!(
+            "pruning stats: [segments: <range pruning: {} to {}>, blocks: <range pruning: {} to {}, bloom pruning: {} to {}>]",
             info.pruning_stats.segments_range_pruning_before,
             info.pruning_stats.segments_range_pruning_after,
             info.pruning_stats.blocks_range_pruning_before,
             info.pruning_stats.blocks_range_pruning_after,
             info.pruning_stats.blocks_bloom_pruning_before,
             info.pruning_stats.blocks_bloom_pruning_after,
-        )),
-    ]
+        )))
+    }
+
+    items
 }
 
 fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNode<String>> {
