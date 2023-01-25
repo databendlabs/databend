@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+mod block_reader;
+mod block_reader_native;
+mod block_reader_parquet;
+mod decompressor;
 
-mod column_reader;
-mod filter_reader;
-mod loader;
-
-pub use filter_reader::BloomFilterReader;
+pub use block_reader::BlockReader;
+pub use block_reader::MergeIOReadResult;
+pub use block_reader_native::NativeReaderExt;
+pub use decompressor::UncompressedBuffer;

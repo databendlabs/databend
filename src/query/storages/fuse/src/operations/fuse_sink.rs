@@ -25,6 +25,7 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use common_pipeline_core::processors::port::OutputPort;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
@@ -79,7 +80,7 @@ impl BloomIndexState {
         )?;
         if let Some(bloom_index) = bloom_index {
             let index_block = bloom_index.filter_block;
-            let mut data = Vec::with_capacity(100 * 1024);
+            let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
             let index_block_schema = &bloom_index.filter_schema;
             let (size, _) = blocks_to_parquet(
                 index_block_schema,

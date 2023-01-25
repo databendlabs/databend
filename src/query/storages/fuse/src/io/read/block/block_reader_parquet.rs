@@ -33,11 +33,11 @@ use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
 
 use crate::fuse_part::FusePartInfo;
-use crate::io::read::decompressor::BuffedBasicDecompressor;
+use crate::io::read::block::decompressor::BuffedBasicDecompressor;
 use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
-use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
+use crate::metrics::*;
 
 impl BlockReader {
     /// Read a parquet file and convert to DataBlock.
