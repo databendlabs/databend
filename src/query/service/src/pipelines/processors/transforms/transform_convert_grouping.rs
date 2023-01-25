@@ -451,7 +451,7 @@ pub fn efficiently_memory_final_aggregator(
     let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
     let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
-    with_hash_method(T, match method {
+    with_hash_method!(|T| match method {
         HashMethodKind::T(v) => build_convert_grouping(v, pipeline, params.clone()),
     })
 }
