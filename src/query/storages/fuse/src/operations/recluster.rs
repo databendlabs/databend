@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -113,11 +114,11 @@ impl FuseTable {
             .map(|meta| (None, meta.clone()))
             .collect();
         let (statistics, parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             self.table_info.schema(),
             None,
             &block_metas,
             partitions_total,
+            PruningStatistics::default(),
         )?;
         let table_info = self.get_table_info();
         let description = statistics.get_description(&table_info.desc);

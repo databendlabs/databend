@@ -18,6 +18,7 @@ use common_base::base::ProgressValues;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -271,11 +272,11 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let (_, inner_parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             self.table_info.schema(),
             None,
             &range_block_metas,
             base_snapshot.summary.block_count as usize,
+            PruningStatistics::default(),
         )?;
 
         let parts = Partitions::create(

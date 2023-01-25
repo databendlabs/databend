@@ -22,6 +22,7 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -104,10 +105,8 @@ impl FuseTable {
             segments_location.len()
         );
 
-        let block_metas = if !self.is_native() || self.cluster_key_meta.is_none() {
+        let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
             FusePruner::create(&ctx, dal, table_info.schema(), &push_downs)?
-                .pruning(segments_location)
-                .await?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
 
@@ -119,9 +118,9 @@ impl FuseTable {
                 self.cluster_key_meta.clone(),
                 cluster_keys,
             )?
-            .pruning(segments_location)
-            .await?
         };
+        let block_metas = pruner.pruning(segments_location).await?;
+        let pruning_stats = pruner.pruning_stats();
 
         info!(
             "prune snapshot block end, final block numbers:{}, cost:{}",
@@ -133,16 +132,22 @@ impl FuseTable {
             .into_iter()
             .map(|(block_meta_index, block_meta)| (block_meta_index.range, block_meta))
             .collect::<Vec<_>>();
-        self.read_partitions_with_metas(ctx, table_info.schema(), push_downs, &block_metas, summary)
+        self.read_partitions_with_metas(
+            table_info.schema(),
+            push_downs,
+            &block_metas,
+            summary,
+            pruning_stats,
+        )
     }
 
     pub fn read_partitions_with_metas(
         &self,
-        _: Arc<dyn TableContext>,
         schema: TableSchemaRef,
         push_downs: Option<PushDownInfo>,
         block_metas: &[(Option<Range<usize>>, Arc<BlockMeta>)],
         partitions_total: usize,
+        pruning_stats: PruningStatistics,
     ) -> Result<(PartStatistics, Partitions)> {
         let arrow_schema = schema.to_arrow();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema);
@@ -154,6 +159,7 @@ impl FuseTable {
         // Update planner statistics.
         statistics.partitions_total = partitions_total;
         statistics.partitions_scanned = partitions_scanned;
+        statistics.pruning_stats = pruning_stats;
 
         // Update context statistics.
         self.data_metrics

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod datasource;
-mod partition;
-mod partition_statistics;
-mod projection;
-mod pruning_statistics;
-mod pushdown;
-mod stage_file_info;
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
+pub struct PruningStatistics {
+    /// Segment range pruning stats.
+    pub segments_range_pruning_before: usize,
+    pub segments_range_pruning_after: usize,
 
-pub use datasource::*;
-pub use partition::*;
-pub use partition_statistics::PartStatistics;
-pub use projection::Projection;
-pub use pruning_statistics::PruningStatistics;
-pub use pushdown::*;
-pub use stage_file_info::StageFileInfo;
-pub use stage_file_info::StageFileStatus;
+    /// Block range pruning stats.
+    pub blocks_range_pruning_before: usize,
+    pub blocks_range_pruning_after: usize,
+
+    /// Block bloom filter pruning stats.
+    pub blocks_bloom_pruning_before: usize,
+    pub blocks_bloom_pruning_after: usize,
+}
