@@ -82,8 +82,8 @@ impl BlockPruner {
             blocks.next().map(|(block_idx, block_meta)| {
                 // Perf.
                 {
-                    metrics_inc_block_before_range_pruning_nums(1);
-                    metrics_inc_bytes_before_block_range_pruning(block_meta.block_size);
+                    metrics_inc_blocks_range_pruning_before(1);
+                    metrics_inc_bytes_block_range_pruning_before(block_meta.block_size);
                 }
 
                 let block_meta = block_meta.clone();
@@ -91,8 +91,8 @@ impl BlockPruner {
                 if range_pruner.should_keep(&block_meta.col_stats) {
                     // Perf.
                     {
-                        metrics_inc_block_after_range_pruning_nums(1);
-                        metrics_inc_bytes_after_block_range_pruning(block_meta.block_size);
+                        metrics_inc_blocks_range_pruning_after(1);
+                        metrics_inc_bytes_block_range_pruning_after(block_meta.block_size);
                     }
 
                     // not pruned by block zone map index,
@@ -106,8 +106,8 @@ impl BlockPruner {
                         Box::pin(async move {
                             // Perf.
                             {
-                                metrics_inc_block_before_bloom_pruning_nums(1);
-                                metrics_inc_bytes_before_block_bloom_pruning(block_meta.block_size);
+                                metrics_inc_blocks_bloom_pruning_before(1);
+                                metrics_inc_bytes_block_bloom_pruning_before(block_meta.block_size);
                             }
 
                             let _permit = permit;
@@ -117,8 +117,8 @@ impl BlockPruner {
                             if keep {
                                 // Perf.
                                 {
-                                    metrics_inc_block_after_bloom_pruning_nums(1);
-                                    metrics_inc_bytes_after_block_bloom_pruning(
+                                    metrics_inc_blocks_bloom_pruning_after(1);
+                                    metrics_inc_bytes_block_bloom_pruning_after(
                                         block_meta.block_size,
                                     );
                                 }
@@ -194,8 +194,8 @@ impl BlockPruner {
         for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
             // Perf.
             {
-                metrics_inc_block_after_range_pruning_nums(1);
-                metrics_inc_bytes_before_block_range_pruning(block_meta.block_size);
+                metrics_inc_blocks_range_pruning_after(1);
+                metrics_inc_bytes_block_range_pruning_before(block_meta.block_size);
             }
 
             // check limit speculatively
@@ -208,8 +208,8 @@ impl BlockPruner {
             {
                 // Perf.
                 {
-                    metrics_inc_block_after_range_pruning_nums(1);
-                    metrics_inc_bytes_after_block_range_pruning(block_meta.block_size);
+                    metrics_inc_blocks_range_pruning_after(1);
+                    metrics_inc_bytes_block_range_pruning_after(block_meta.block_size);
                 }
 
                 let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
