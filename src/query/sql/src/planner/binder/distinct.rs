@@ -75,6 +75,7 @@ impl Binder {
             group_items,
             aggregate_functions: vec![],
             from_distinct: true,
+            limit: None,
         };
 
         Ok(SExpr::create_unary(distinct_plan.into(), new_expr))

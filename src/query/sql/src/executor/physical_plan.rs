@@ -120,7 +120,6 @@ pub struct AggregatePartial {
     pub input: Box<PhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
-
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -161,6 +160,7 @@ pub struct AggregateFinal {
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub before_group_by_schema: DataSchemaRef,
 
+    pub limit: Option<usize>,
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }

@@ -105,6 +105,7 @@ pub trait PhysicalPlanReplacer {
             group_by: plan.group_by.clone(),
             agg_funcs: plan.agg_funcs.clone(),
             stat_info: plan.stat_info.clone(),
+            limit: plan.limit,
         }))
     }
 

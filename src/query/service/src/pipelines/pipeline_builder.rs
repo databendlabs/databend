@@ -323,6 +323,7 @@ impl PipelineBuilder {
             // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            None,
         )?;
 
         self.main_pipeline.add_transform(|input, output| {
@@ -343,6 +344,7 @@ impl PipelineBuilder {
             // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            aggregate.limit,
         )?;
 
         if self.ctx.get_cluster().is_empty()
@@ -367,6 +369,7 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
+        limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
         let (group_by, group_data_types) = group_by
@@ -403,6 +406,7 @@ impl PipelineBuilder {
             &group_by,
             &aggs,
             &agg_args,
+            limit,
         )?;
 
         Ok(params)

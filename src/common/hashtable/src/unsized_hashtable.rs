@@ -642,19 +642,19 @@ unsafe impl<const N: usize> Keyable for InlineKey<N> {
 
 #[derive(Copy, Clone)]
 pub(crate) struct FallbackKey {
-    key: Option<NonNull<[u8]>>,
-    hash: u64,
+    pub(crate) key: Option<NonNull<[u8]>>,
+    pub(crate) hash: u64,
 }
 
 impl FallbackKey {
-    unsafe fn new(key: &[u8]) -> Self {
+    pub(crate) unsafe fn new(key: &[u8]) -> Self {
         Self {
             key: Some(NonNull::from(key)),
             hash: key.fast_hash(),
         }
     }
 
-    unsafe fn new_with_hash(key: &[u8], hash: u64) -> Self {
+    pub(crate) unsafe fn new_with_hash(key: &[u8], hash: u64) -> Self {
         Self {
             hash,
             key: Some(NonNull::from(key)),
