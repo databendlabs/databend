@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::FormatTreeNode;
+use common_catalog::plan::PartStatistics;
 use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
@@ -105,22 +106,14 @@ fn table_scan_to_format_tree(
                 .map_or("NONE".to_string(), |limit| limit.to_string())
         });
 
-    let mut children = vec![
-        FormatTreeNode::new(format!("table: {table_name}")),
-        FormatTreeNode::new(format!("read rows: {}", plan.source.statistics.read_rows)),
-        FormatTreeNode::new(format!("read bytes: {}", plan.source.statistics.read_bytes)),
-        FormatTreeNode::new(format!(
-            "partitions total: {}",
-            plan.source.statistics.partitions_total
-        )),
-        FormatTreeNode::new(format!(
-            "partitions scanned: {}",
-            plan.source.statistics.partitions_scanned
-        )),
-        FormatTreeNode::new(format!(
-            "push downs: [filters: [{filters}], limit: {limit}]"
-        )),
-    ];
+    let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+
+    // Part stats.
+    children.extend(part_stats_info_to_format_tree(&plan.source.statistics));
+    // Push downs.
+    children.push(FormatTreeNode::new(format!(
+        "push downs: [filters: [{filters}], limit: {limit}]"
+    )));
 
     let mut output_columns: Vec<usize> = Vec::new();
     if let Some(scan_fields) = &plan.source.scan_fields {
@@ -484,6 +477,24 @@ fn union_all_to_format_tree(
         "UnionAll".to_string(),
         children,
     ))
+}
+
+fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
+    vec![
+        FormatTreeNode::new(format!("read rows: {}", info.read_rows)),
+        FormatTreeNode::new(format!("read bytes: {}", info.read_bytes)),
+        FormatTreeNode::new(format!("partitions total: {}", info.partitions_total)),
+        FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
+        FormatTreeNode::new(format!(
+            "pruning stats: segments: <range: {} -> {}>, blocks: <range: {} -> {}, bloom: {} -> {}>",
+            info.pruning_stats.segments_range_pruning_before,
+            info.pruning_stats.segments_range_pruning_after,
+            info.pruning_stats.blocks_range_pruning_before,
+            info.pruning_stats.blocks_range_pruning_after,
+            info.pruning_stats.blocks_bloom_pruning_before,
+            info.pruning_stats.blocks_bloom_pruning_after,
+        )),
+    ]
 }
 
 fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNode<String>> {
