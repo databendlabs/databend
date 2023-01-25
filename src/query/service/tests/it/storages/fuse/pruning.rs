@@ -182,7 +182,7 @@ async fn test_block_pruner() -> Result<()> {
         parse_to_remote_string_exprs(ctx.clone(), table.clone(), false, "a > 0 and b > 6")?;
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
-    // Sort asc Limit
+    // Sort asc Limit: TopN-pruner.
     let e3 = PushDownInfo {
         order_by: vec![(
             RemoteExpr::ColumnRef {
@@ -198,7 +198,7 @@ async fn test_block_pruner() -> Result<()> {
         ..Default::default()
     };
 
-    // Sort desc Limit
+    // Sort desc Limit: TopN-pruner.
     let e4 = PushDownInfo {
         order_by: vec![(
             RemoteExpr::ColumnRef {
@@ -214,12 +214,20 @@ async fn test_block_pruner() -> Result<()> {
         ..Default::default()
     };
 
+    // Limit push-down, Limit-pruner.
+    let e5 = PushDownInfo {
+        order_by: vec![],
+        limit: Some(11),
+        ..Default::default()
+    };
+
     let extras = vec![
         (None, num_blocks, num_blocks * row_per_block),
         (Some(e1), 0, 0),
         (Some(e2), b2, b2 * row_per_block),
         (Some(e3), 3, 3 * row_per_block),
         (Some(e4), 4, 4 * row_per_block),
+        (Some(e5), 2, 2 * row_per_block),
     ];
 
     for (extra, expected_blocks, expected_rows) in extras {
