@@ -101,6 +101,8 @@ fn test_statement() {
         r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"alter view v as select number % 3 as a from numbers(1000);"#,
         r#"drop view v;"#,
+        r#"create view v1(c1) as select number % 3 as a from numbers(1000);"#,
+        r#"alter view v1(c2) as select number % 3 as a from numbers(1000);"#,
         r#"rename table d.t to e.s;"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
