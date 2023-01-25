@@ -34,6 +34,9 @@ use crate::table_empty::TableEmptyIter;
 use crate::table_empty::TableEmptyIterMut;
 use crate::unsized_hashtable::FallbackKey;
 
+/// Simple unsized hashtable is used for storing unsized keys in arena. It can be worked with HashMethodSerializer.
+/// Different from `UnsizedHashtable`, it doesn't use adpative sub hashtable to store key values via key size.
+/// It can be considered as a minimal hashtable implementation of UnsizedHashtable
 pub struct SimpleUnsizedHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
 where
     K: UnsizedKeyable + ?Sized,
