@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 #[derive(Default)]
 pub struct FusePruningStatistics {
@@ -27,4 +28,60 @@ pub struct FusePruningStatistics {
     /// Block bloom filter pruning stats.
     pub blocks_bloom_pruning_before: AtomicU64,
     pub blocks_bloom_pruning_after: AtomicU64,
+}
+
+impl FusePruningStatistics {
+    pub fn set_segments_range_pruning_before(&self, v: u64) {
+        self.segments_range_pruning_before
+            .fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_segments_range_pruning_before(&self) -> u64 {
+        self.segments_range_pruning_before.load(Ordering::Relaxed)
+    }
+
+    pub fn set_segments_range_pruning_after(&self, v: u64) {
+        self.segments_range_pruning_after
+            .fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_segments_range_pruning_after(&self) -> u64 {
+        self.segments_range_pruning_after.load(Ordering::Relaxed)
+    }
+
+    pub fn set_blocks_range_pruning_before(&self, v: u64) {
+        self.blocks_range_pruning_before
+            .fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_range_pruning_before(&self) -> u64 {
+        self.blocks_range_pruning_before.load(Ordering::Relaxed)
+    }
+
+    pub fn set_blocks_range_pruning_after(&self, v: u64) {
+        self.blocks_range_pruning_after
+            .fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_range_pruning_after(&self) -> u64 {
+        self.blocks_range_pruning_after.load(Ordering::Relaxed)
+    }
+
+    pub fn set_blocks_bloom_pruning_before(&self, v: u64) {
+        self.blocks_bloom_pruning_before
+            .fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_bloom_pruning_before(&self) -> u64 {
+        self.blocks_bloom_pruning_before.load(Ordering::Relaxed)
+    }
+
+    pub fn set_blocks_bloom_pruning_after(&self, v: u64) {
+        self.blocks_bloom_pruning_after
+            .fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_bloom_pruning_after(&self) -> u64 {
+        self.blocks_bloom_pruning_after.load(Ordering::Relaxed)
+    }
 }

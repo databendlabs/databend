@@ -15,7 +15,6 @@
 use std::future::Future;
 use std::ops::Range;
 use std::pin::Pin;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -88,9 +87,7 @@ impl BlockPruner {
                     metrics_inc_blocks_range_pruning_before(1);
                     metrics_inc_bytes_block_range_pruning_before(block_meta.block_size);
 
-                    pruning_stats
-                        .blocks_range_pruning_before
-                        .fetch_add(1, Ordering::Relaxed);
+                    pruning_stats.set_blocks_range_pruning_before(1);
                 }
 
                 let block_meta = block_meta.clone();
@@ -101,9 +98,7 @@ impl BlockPruner {
                         metrics_inc_blocks_range_pruning_after(1);
                         metrics_inc_bytes_block_range_pruning_after(block_meta.block_size);
 
-                        pruning_stats
-                            .blocks_range_pruning_after
-                            .fetch_add(1, Ordering::Relaxed);
+                        pruning_stats.set_blocks_range_pruning_after(1);
                     }
 
                     // not pruned by block zone map index,
@@ -120,9 +115,7 @@ impl BlockPruner {
                                 metrics_inc_blocks_bloom_pruning_before(1);
                                 metrics_inc_bytes_block_bloom_pruning_before(block_meta.block_size);
 
-                                pruning_stats
-                                    .blocks_bloom_pruning_before
-                                    .fetch_add(1, Ordering::Relaxed);
+                                pruning_stats.set_blocks_bloom_pruning_before(1);
                             }
 
                             let _permit = permit;
@@ -137,9 +130,7 @@ impl BlockPruner {
                                         block_meta.block_size,
                                     );
 
-                                    pruning_stats
-                                        .blocks_bloom_pruning_after
-                                        .fetch_add(1, Ordering::Relaxed);
+                                    pruning_stats.set_blocks_bloom_pruning_after(1);
                                 }
 
                                 let (keep, range) =
@@ -217,9 +208,7 @@ impl BlockPruner {
                 metrics_inc_blocks_range_pruning_after(1);
                 metrics_inc_bytes_block_range_pruning_before(block_meta.block_size);
 
-                pruning_stats
-                    .blocks_range_pruning_before
-                    .fetch_add(1, Ordering::Relaxed);
+                pruning_stats.set_blocks_range_pruning_before(1);
             }
 
             // check limit speculatively
@@ -235,9 +224,7 @@ impl BlockPruner {
                     metrics_inc_blocks_range_pruning_after(1);
                     metrics_inc_bytes_block_range_pruning_after(block_meta.block_size);
 
-                    pruning_stats
-                        .blocks_range_pruning_after
-                        .fetch_add(1, Ordering::Relaxed);
+                    pruning_stats.set_blocks_range_pruning_after(1);
                 }
 
                 let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);

@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
@@ -206,18 +205,15 @@ impl FusePruner {
     // Pruning stats.
     pub fn pruning_stats(&self) -> common_catalog::plan::PruningStatistics {
         let stats = self.pruning_ctx.pruning_stats.clone();
-        let segments_range_pruning_before =
-            stats.segments_range_pruning_before.load(Ordering::Relaxed) as usize;
-        let segments_range_pruning_after =
-            stats.segments_range_pruning_after.load(Ordering::Relaxed) as usize;
-        let blocks_range_pruning_before =
-            stats.blocks_range_pruning_before.load(Ordering::Relaxed) as usize;
-        let blocks_range_pruning_after =
-            stats.blocks_range_pruning_after.load(Ordering::Relaxed) as usize;
-        let blocks_bloom_pruning_before =
-            stats.blocks_bloom_pruning_before.load(Ordering::Relaxed) as usize;
-        let blocks_bloom_pruning_after =
-            stats.blocks_bloom_pruning_after.load(Ordering::Relaxed) as usize;
+
+        let segments_range_pruning_before = stats.get_segments_range_pruning_before() as usize;
+        let segments_range_pruning_after = stats.get_segments_range_pruning_after() as usize;
+
+        let blocks_range_pruning_before = stats.get_blocks_range_pruning_before() as usize;
+        let blocks_range_pruning_after = stats.get_blocks_range_pruning_after() as usize;
+
+        let blocks_bloom_pruning_before = stats.get_blocks_bloom_pruning_before() as usize;
+        let blocks_bloom_pruning_after = stats.get_blocks_bloom_pruning_after() as usize;
 
         common_catalog::plan::PruningStatistics {
             segments_range_pruning_before,

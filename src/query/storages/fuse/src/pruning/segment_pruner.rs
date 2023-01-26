@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
@@ -132,9 +131,7 @@ impl SegmentPruner {
             metrics_inc_segments_range_pruning_before(1);
             metrics_inc_bytes_segment_range_pruning_before(total_bytes);
 
-            pruning_stats
-                .segments_range_pruning_before
-                .fetch_add(1, Ordering::Relaxed);
+            pruning_stats.set_segments_range_pruning_before(1);
         }
 
         // Segment range pruning.
@@ -145,9 +142,7 @@ impl SegmentPruner {
                 metrics_inc_segments_range_pruning_after(1);
                 metrics_inc_bytes_segment_range_pruning_after(total_bytes);
 
-                pruning_stats
-                    .segments_range_pruning_after
-                    .fetch_add(1, Ordering::Relaxed);
+                pruning_stats.set_segments_range_pruning_after(1);
             }
 
             // Block pruner.
