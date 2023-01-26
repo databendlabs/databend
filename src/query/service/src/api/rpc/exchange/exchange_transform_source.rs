@@ -21,6 +21,7 @@ use common_arrow::arrow::io::ipc::IpcSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_io::prelude::BinaryRead;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
@@ -173,15 +174,21 @@ impl ExchangeSourceTransform {
             &Default::default(),
         )?;
 
-        let meta = match bincode::deserialize(fragment_data.get_meta()) {
+        const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
+
+        let meta = match bincode::deserialize(&fragment_data.get_meta()[ROW_HEADER_SIZE..]) {
             Ok(meta) => Ok(meta),
             Err(_) => Err(ErrorCode::BadBytes(
                 "block meta deserialize error when exchange",
             )),
         }?;
-
-        self.output_data = Some(DataBlock::from_arrow_chunk(&batch, schema)?.add_meta(meta)?);
-
+        let mut block = DataBlock::from_arrow_chunk(&batch, schema)?.add_meta(meta)?;
+        if block.num_columns() == 0 {
+            let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
+            let row_count: u32 = row_count_meta.read_scalar()?;
+            block = DataBlock::new(vec![], row_count as usize).add_meta(block.take_meta())?;
+        }
+        self.output_data = Some(block);
         Ok(())
     }
 }

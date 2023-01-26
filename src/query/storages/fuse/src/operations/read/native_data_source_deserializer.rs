@@ -37,6 +37,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
+use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::metrics::metrics_inc_pruning_prewhere_nums;
 use crate::operations::read::native_data_source::DataChunks;
@@ -210,8 +211,22 @@ impl Processor for NativeDeserializeDataTransform {
 
     fn process(&mut self) -> Result<()> {
         if let Some(chunks) = self.chunks.last_mut() {
-            let mut arrays = Vec::with_capacity(chunks.len());
+            // this means it's empty projection
+            if chunks.is_empty() {
+                let _ = self.chunks.pop();
+                let part = self.parts.pop().unwrap();
+                let part = FusePartInfo::from_part(&part)?;
+                let data_block = DataBlock::new(vec![], part.nums_rows);
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                self.scan_progress.incr(&progress_values);
+                self.output_data = Some(data_block);
+                return Ok(());
+            }
 
+            let mut arrays = Vec::with_capacity(chunks.len());
             for index in self.prewhere_columns.iter() {
                 let chunk = chunks.get_mut(*index).unwrap();
                 if !chunk.1.has_next() {

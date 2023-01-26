@@ -28,17 +28,19 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
@@ -54,17 +56,19 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
@@ -78,7 +82,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 1.11
 ├── Filter(Build)
-│   ├── filters: [gt(t.number (#0), CAST(1_u8 AS UInt64))]
+│   ├── filters: [gt(t.number (#0), to_uint64(1_u8))]
 │   ├── estimated rows: 0.33
 │   └── TableScan
 │       ├── table: default.default.t
@@ -86,17 +90,19 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
+│       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
 │       ├── push downs: [filters: [gt(t.number (#0), 1_u64)], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
-    ├── filters: [lt(CAST(1_u8 AS UInt64), t1.number (#1))]
+    ├── filters: [lt(to_uint64(1_u8), t1.number (#1))]
     ├── estimated rows: 3.33
     └── TableScan
         ├── table: default.default.t1
         ├── read rows: 10
-        ├── read bytes: 68
+        ├── read bytes: 65
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [lt(1_u64, t1.number (#1))], limit: NONE]
         └── estimated rows: 10.00
 
@@ -104,7 +110,7 @@ query T
 explain select t.number from t, t1 where t.number + t1.number = 1
 ----
 Filter
-├── filters: [eq(plus(t.number (#0), t1.number (#1)), CAST(1_u8 AS UInt64))]
+├── filters: [eq(plus(t.number (#0), t1.number (#1)), to_uint64(1_u8))]
 ├── estimated rows: 3.33
 └── HashJoin
     ├── join type: CROSS
@@ -115,17 +121,19 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.t
     │   ├── read rows: 1
-    │   ├── read bytes: 31
+    │   ├── read bytes: 39
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── read rows: 10
-        ├── read bytes: 68
+        ├── read bytes: 65
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 10.00
 
@@ -140,7 +148,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
-│   ├── filters: [eq(t.number (#0), CAST(1_u8 AS UInt64))]
+│   ├── filters: [eq(t.number (#0), to_uint64(1_u8))]
 │   ├── estimated rows: 0.33
 │   └── TableScan
 │       ├── table: default.default.t
@@ -148,6 +156,7 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
+│       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
 │       ├── push downs: [filters: [eq(t.number (#0), 1_u64)], limit: NONE]
 │       └── estimated rows: 1.00
 └── HashJoin(Probe)
@@ -159,17 +168,19 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.default.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 68
+    │   ├── read bytes: 65
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 10.00
     └── TableScan(Probe)
         ├── table: default.default.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 172
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -208,17 +219,19 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
@@ -237,17 +250,19 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
@@ -266,17 +281,19 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
@@ -297,17 +314,19 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
@@ -326,17 +345,19 @@ HashJoin
 │   └── TableScan
 │       ├── table: default.default.twocolumn
 │       ├── read rows: 4
-│       ├── read bytes: 79
+│       ├── read bytes: 94
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │       ├── push downs: [filters: [gt(b.x (#1), 42_i32), lt(b.x (#1), 45_i32)], limit: NONE]
 │       └── estimated rows: 4.00
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
-    ├── read bytes: 37
+    ├── read bytes: 45
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 4.00
 

@@ -205,7 +205,7 @@ COPY INTO mytable
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ACCESS_KEY_ID = '<your-access-key-ID>'
         SECRET_ACCESS_KEY = '<your-secret-access-key>')
-  FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
+  FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
 
 This example reads 10 rows from a CSV file compressed as GZIP and inserts them into a table:
@@ -217,7 +217,7 @@ COPY INTO mytable
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ACCESS_KEY_ID = '<your-access-key-ID>'
         SECRET_ACCESS_KEY = '<your-secret-access-key>')
-  FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = 'GZIP') size_limit=10;
+  FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = 'GZIP') size_limit=10;
 ```
 
 This example loads data from a CSV file without specifying the endpoint URL:
@@ -225,7 +225,7 @@ This example loads data from a CSV file without specifying the endpoint URL:
 ```sql
 COPY INTO mytable
   FROM 's3://mybucket/data.csv'
-  FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
+  FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
 
 This is an example loading data from a `Parquet` file:
@@ -236,7 +236,7 @@ COPY INTO mytable
   CONNECTION = (
       ACCESS_KEY_ID = '<your-access-key-ID>'
       SECRET_ACCESS_KEY = '<your-secret-access-key>')
-  FILE_FORMAT = (type = 'PARQUET');
+  FILE_FORMAT = (type = PARQUET);
 ```
 
 **Azure Blob storage**
@@ -251,7 +251,7 @@ COPY INTO mytable
         ACCOUNT_NAME = '<account_name>'
         ACCOUNT_KEY = '<account_key>'
     )
-    FILE_FORMAT = (type = 'CSV');
+    FILE_FORMAT = (type = CSV);
 ```
 
 **Remote Files**
@@ -261,7 +261,7 @@ As shown in this example, data is loaded from three remote CSV files, but a file
 ```sql
 COPY INTO mytable
     FROM 'https://repo.databend.rs/dataset/stateful/ontime_200{6,7,8}_200.csv'
-    FILE_FORMAT = (type = 'CSV') ON_ERROR=continue;
+    FILE_FORMAT = (type = CSV) ON_ERROR=continue;
 ```
 
 **IPFS**
@@ -271,7 +271,7 @@ This example reads data from a CSV file on IPFS and inserts it into a table:
 ```sql
 COPY INTO mytable
     FROM 'ipfs://<your-ipfs-hash>' connection = (endpoint_url = 'https://<your-ipfs-gateway>')
-    FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+    FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 
 ### Loading Data with Pattern Matching
@@ -282,7 +282,7 @@ This example uses pattern matching to only load from CSV files containing `sales
 COPY INTO mytable
   FROM 's3://mybucket/'
   PATTERN = '.*sales.*[.]csv'
-  FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
+  FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
 ```
 Where `.*` is interpreted as `zero or more occurrences of any character`. The square brackets escape the period character `(.)` that precedes a file extension.
 
@@ -291,7 +291,7 @@ If you want to load from all the CSV files, use `PATTERN = '.*[.]csv'`:
 COPY INTO mytable
   FROM 's3://mybucket/'
   PATTERN = '.*[.]csv'
-  FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
+  FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
 ```
 
 ## Tutorials

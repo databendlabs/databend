@@ -41,6 +41,15 @@ use crate::Value;
 impl DataBlock {
     pub fn scatter<I>(&self, indices: &[I], scatter_size: usize) -> Result<Vec<Self>>
     where I: common_arrow::arrow::types::Index {
+        if indices.is_empty() {
+            let mut result = Vec::with_capacity(scatter_size);
+            result.push(self.clone());
+            for _ in 1..scatter_size {
+                result.push(self.slice(0..0));
+            }
+            return Ok(result);
+        }
+
         let scattered_columns: Vec<Vec<BlockEntry>> = self
             .columns()
             .iter()
@@ -71,7 +80,14 @@ impl DataBlock {
                     .iter()
                     .map(|entry| entry[scatter_idx].clone())
                     .collect();
-                let num_rows = chunk_columns[0].value.as_column().unwrap().len();
+                let num_rows = if chunk_columns.is_empty() {
+                    indices
+                        .iter()
+                        .filter(|&i| i.to_usize() == scatter_idx)
+                        .count()
+                } else {
+                    chunk_columns[0].value.as_column().unwrap().len()
+                };
                 DataBlock::new(chunk_columns, num_rows)
             })
             .collect();

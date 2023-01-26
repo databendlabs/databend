@@ -18,6 +18,7 @@ use common_base::base::ProgressValues;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -49,7 +50,7 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::pruning::BlockPruner;
+use crate::pruning::FusePruner;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -255,15 +256,14 @@ impl FuseTable {
             ..PushDownInfo::default()
         });
 
-        let segments_location = base_snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(
+        let segment_locations = base_snapshot.segments.clone();
+        let pruner = FusePruner::create(
             &ctx,
             self.operator.clone(),
             self.table_info.schema(),
             &push_down,
-            segments_location,
-        )
-        .await?;
+        )?;
+        let block_metas = pruner.pruning(segment_locations).await?;
 
         let range_block_metas = block_metas
             .clone()
@@ -272,11 +272,11 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let (_, inner_parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             self.table_info.schema(),
             None,
             &range_block_metas,
             base_snapshot.summary.block_count as usize,
+            PruningStatistics::default(),
         )?;
 
         let parts = Partitions::create(

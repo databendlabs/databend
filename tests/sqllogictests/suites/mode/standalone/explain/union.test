@@ -36,6 +36,7 @@ UnionAll
 │       ├── read bytes: 0
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
+│       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
 │       ├── push downs: [filters: [gt(v.a (#0), v.b (#1))], limit: NONE]
 │       └── estimated rows: 2.00
 └── Filter
@@ -47,6 +48,7 @@ UnionAll
         ├── read bytes: 0
         ├── partitions total: 1
         ├── partitions scanned: 0
+        ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [gt(a (#2), b (#3))], limit: NONE]
         └── estimated rows: 2.00
 
@@ -56,25 +58,27 @@ explain select * from v where a > 1
 UnionAll
 ├── estimated rows: 1.33
 ├── Filter
-│   ├── filters: [gt(v.a (#0), CAST(1_u8 AS Int32))]
+│   ├── filters: [gt(v.a (#0), to_int32(1_u8))]
 │   ├── estimated rows: 0.67
 │   └── TableScan
 │       ├── table: default.default.t1
 │       ├── read rows: 2
-│       ├── read bytes: 62
+│       ├── read bytes: 78
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │       ├── push downs: [filters: [gt(v.a (#0), 1_i32)], limit: NONE]
 │       └── estimated rows: 2.00
 └── Filter
-    ├── filters: [gt(a (#2), CAST(1_u8 AS Int32))]
+    ├── filters: [gt(a (#2), to_int32(1_u8))]
     ├── estimated rows: 0.67
     └── TableScan
         ├── table: default.default.t2
         ├── read rows: 2
-        ├── read bytes: 62
+        ├── read bytes: 78
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [gt(a (#2), 1_i32)], limit: NONE]
         └── estimated rows: 2.00
 
@@ -94,9 +98,10 @@ Limit
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── read rows: 2
-    │       ├── read bytes: 62
+    │       ├── read bytes: 78
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │       ├── push downs: [filters: [], limit: 3]
     │       └── estimated rows: 2.00
     └── Limit
@@ -106,9 +111,10 @@ Limit
         └── TableScan
             ├── table: default.default.t2
             ├── read rows: 2
-            ├── read bytes: 62
+            ├── read bytes: 78
             ├── partitions total: 1
             ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
             ├── push downs: [filters: [], limit: 3]
             └── estimated rows: 2.00
 
@@ -128,9 +134,10 @@ Limit
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── read rows: 2
-    │       ├── read bytes: 62
+    │       ├── read bytes: 78
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │       ├── push downs: [filters: [], limit: 4]
     │       └── estimated rows: 2.00
     └── Limit
@@ -140,9 +147,10 @@ Limit
         └── TableScan
             ├── table: default.default.t2
             ├── read rows: 2
-            ├── read bytes: 62
+            ├── read bytes: 78
             ├── partitions total: 1
             ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
             ├── push downs: [filters: [], limit: 4]
             └── estimated rows: 2.00
 
@@ -162,9 +170,10 @@ Limit
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── read rows: 2
-    │       ├── read bytes: 62
+    │       ├── read bytes: 78
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │       ├── push downs: [filters: [], limit: 1]
     │       └── estimated rows: 2.00
     └── Limit
@@ -174,9 +183,10 @@ Limit
         └── TableScan
             ├── table: default.default.t2
             ├── read rows: 2
-            ├── read bytes: 62
+            ├── read bytes: 78
             ├── partitions total: 1
             ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
             ├── push downs: [filters: [], limit: 1]
             └── estimated rows: 2.00
 

@@ -86,6 +86,7 @@ fn test_parse_uri_location() -> Result<()> {
             (
                 StorageParams::Oss(StorageOssConfig {
                     endpoint_url: "https://oss-cn-litang.example.com".to_string(),
+                    presign_endpoint_url: "".to_string(),
                     root: "/highest/".to_string(),
                     bucket: "zhen".to_string(),
                     access_key_id: "dzin".to_string(),

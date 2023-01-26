@@ -20,11 +20,14 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableSchema;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
@@ -257,15 +260,15 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
-        BlockCompactThresholds {
-            max_rows_per_block: 1000 * 1000,
-            min_rows_per_block: 800 * 1000,
-            max_bytes_per_block: 100 * 1024 * 1024,
+    fn get_block_compact_thresholds(&self) -> BlockThresholds {
+        BlockThresholds {
+            max_rows_per_block: DEFAULT_BLOCK_MAX_ROWS,
+            min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
+            max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE,
         }
     }
 
-    fn set_block_compact_thresholds(&self, _thresholds: BlockCompactThresholds) {
+    fn set_block_compact_thresholds(&self, _thresholds: BlockThresholds) {
         unimplemented!()
     }
 

@@ -177,3 +177,74 @@ Exchange
             ├── partitions scanned: 1
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 2.00
+
+query T
+explain fragments select * from (select sum(number) as number from numbers(1) group by number) t, numbers(2) t1 where t.number = t1.number
+----
+Fragment 0:
+  DataExchange: Shuffle
+    ExchangeSink
+    ├── destination fragment: [3]
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── read rows: 2
+        ├── read bytes: 16
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 2.00
+(empty)
+(empty)
+Fragment 1:
+  DataExchange: Shuffle
+    ExchangeSink
+    ├── destination fragment: [2]
+    └── AggregatePartial
+        ├── group by: [number]
+        ├── aggregate functions: [sum(number)]
+        ├── estimated rows: 1.00
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── read rows: 1
+            ├── read bytes: 8
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 1.00
+(empty)
+(empty)
+Fragment 2:
+  DataExchange: Shuffle
+    ExchangeSink
+    ├── destination fragment: [3]
+    └── EvalScalar
+        ├── expressions: [sum(number) (#3)]
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── group by: [number]
+            ├── aggregate functions: [sum(number)]
+            ├── estimated rows: 1.00
+            └── ExchangeSource
+                └── source fragment: [1]
+(empty)
+(empty)
+Fragment 3:
+  DataExchange: Merge
+    ExchangeSink
+    ├── destination fragment: [4]
+    └── HashJoin
+        ├── join type: INNER
+        ├── build keys: [t.number (#1)]
+        ├── probe keys: [TRY_CAST(t1.number (#4) AS UInt64 NULL)]
+        ├── filters: []
+        ├── estimated rows: 2.00
+        ├── ExchangeSource(Build)
+        │   └── source fragment: [2]
+        └── ExchangeSource(Probe)
+            └── source fragment: [0]
+(empty)
+(empty)
+Fragment 4:
+    ExchangeSource
+    └── source fragment: [3]
+(empty)

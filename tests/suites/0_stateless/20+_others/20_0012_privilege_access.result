@@ -1,0 +1,10 @@
+ERROR 1105 (HY000) at line 1: Code: 1063, displayText = Permission denied, user 'test-user'@'127.0.0.1' requires INSERT privilege on 'default'.'default'.'t20_0012'.
+1
+2
+ERROR 1105 (HY000) at line 1: Code: 1063, displayText = Permission denied, user 'test-user'@'127.0.0.1' requires UPDATE privilege on 'default'.'default'.'t20_0012'.
+2
+3
+ERROR 1105 (HY000) at line 1: Code: 1063, displayText = Permission denied, user 'test-user'@'127.0.0.1' requires DELETE privilege on 'default'.'default'.'t20_0012'.
+1
+ERROR 1105 (HY000) at line 1: Code: 1063, displayText = Permission denied, user 'test-user'@'127.0.0.1' requires SUPER privilege on 'default'.'default'.'t20_0012'.
+1

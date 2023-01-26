@@ -21,7 +21,7 @@ The parameter `insert_sql` is required and must include an INSERT statement as w
 
 | Parameter               | Values                              | Supported Formats         | Examples                                                                                                                              |
 |-------------------------|-------------------------------------|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
-| insert_sql              | [INSERT_statement] + [FILE_FORMAT] | All                       | -H "insert_sql: insert into ontime file_format = (type = 'CSV' skip_header = 1 compression = 'bz2')"                                                                                        |                                                                                                                                                                                          | CSV                       |                                                                                                                                       |
+| insert_sql              | [INSERT_statement] + [FILE_FORMAT] | All                       | -H "insert_sql: insert into ontime file_format = (type = CSV skip_header = 1 compression = 'bz2')"                                                                                        |                                                                                                                                                                                          | CSV                       |                                                                                                                                       |
 
 
 ## Alternatives to Streaming Load API
@@ -31,7 +31,7 @@ The [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command ena
 Example:
 
 ```sql
-COPY INTO ontime200 FROM 'fs://<file_path>/ontime_200.csv' FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
+COPY INTO ontime200 FROM 'fs://<file_path>/ontime_200.csv' FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
 ```
 To do so, you must add the setting `allow_insecure` to the configuration file `databend-query.toml` as indicated below and set it to `true`:
 

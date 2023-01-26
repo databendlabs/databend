@@ -14,7 +14,7 @@ query T
 explain select * from (select * from numbers(1)) as t1 where number = 1
 ----
 Filter
-├── filters: [eq(t1.number (#0), CAST(1_u8 AS UInt64))]
+├── filters: [eq(t1.number (#0), to_uint64(1_u8))]
 ├── estimated rows: 0.33
 └── TableScan
     ├── table: default.system.numbers
@@ -29,7 +29,7 @@ query T
 explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1 and b = 1
 ----
 Filter
-├── filters: [eq(t1.a (#0), CAST(1_u8 AS UInt64)), eq(t1.b (#1), CAST(1_u8 AS UInt64))]
+├── filters: [eq(t1.a (#0), to_uint64(1_u8)), eq(t1.b (#1), to_uint64(1_u8))]
 ├── estimated rows: 0.11
 └── EvalScalar
     ├── expressions: [plus(numbers.number (#0), 1_u8)]
@@ -50,7 +50,7 @@ EvalScalar
 ├── expressions: [plus(numbers.number (#0), 1_u8)]
 ├── estimated rows: 0.33
 └── Filter
-    ├── filters: [eq(t1.a (#0), CAST(1_u8 AS UInt64))]
+    ├── filters: [eq(t1.a (#0), to_uint64(1_u8))]
     ├── estimated rows: 0.33
     └── TableScan
         ├── table: default.system.numbers
@@ -65,7 +65,7 @@ query T
 explain select * from numbers(1) where number = pow(1, 1 + 1)
 ----
 Filter
-├── filters: [eq(CAST(numbers.number (#0) AS Float64), pow(CAST(1_u8 AS Float64), CAST(plus(1_u8, 1_u8) AS Float64)))]
+├── filters: [eq(to_float64(numbers.number (#0)), pow(to_float64(1_u8), to_float64(plus(1_u8, 1_u8))))]
 ├── estimated rows: 0.33
 └── TableScan
     ├── table: default.system.numbers
@@ -73,7 +73,7 @@ Filter
     ├── read bytes: 8
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [eq(CAST(numbers.number (#0) AS Float64), 1_f64)], limit: NONE]
+    ├── push downs: [filters: [eq(to_float64(numbers.number (#0)), 1_f64)], limit: NONE]
     └── estimated rows: 1.00
 
 query T

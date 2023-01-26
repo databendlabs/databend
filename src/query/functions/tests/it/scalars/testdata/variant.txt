@@ -535,7 +535,7 @@ output         : NULL
 
 ast            : CAST(('a', 'b') AS VARIANT)['2']
 raw expr       : get(CAST(tuple("a", "b") AS Variant), "2")
-checked expr   : get<Variant NULL, String NULL>(CAST(to_variant<T0=(String, String)><T0>(tuple<String, String>("a", "b")) AS Variant NULL), CAST("2" AS String NULL))
+checked expr   : get<Variant NULL, String NULL>(CAST(to_variant<T0=Tuple(String, String)><T0>(tuple<String, String>("a", "b")) AS Variant NULL), CAST("2" AS String NULL))
 optimized expr : 0x200000001000000162
 output type    : Variant NULL
 output domain  : Undefined

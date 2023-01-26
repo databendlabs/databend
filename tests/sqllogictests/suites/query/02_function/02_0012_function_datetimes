@@ -822,7 +822,7 @@ statement ok
 insert into ts values('2022-02-03 00:00:00', '2022-02-03', today())
 
 query B
-select to_timestamp(a) = to_timestamp(b) from ts
+select CAST(a AS DateTime) = CAST(b as DateTime) from ts
 ----
 1
 

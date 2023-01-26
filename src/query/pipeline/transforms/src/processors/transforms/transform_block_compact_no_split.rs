@@ -18,14 +18,14 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 
 use super::Compactor;
 use super::TransformCompact;
 
 pub struct BlockCompactorNoSplit {
-    thresholds: BlockCompactThresholds,
+    thresholds: BlockThresholds,
     aborting: Arc<AtomicBool>,
     // call block.memory_size() only once.
     // we may no longer need it if we start using jsonb, otherwise it should be put in CompactorState
@@ -34,7 +34,7 @@ pub struct BlockCompactorNoSplit {
 }
 
 impl BlockCompactorNoSplit {
-    pub fn new(thresholds: BlockCompactThresholds) -> Self {
+    pub fn new(thresholds: BlockThresholds) -> Self {
         BlockCompactorNoSplit {
             thresholds,
             accumulated_rows: 0,

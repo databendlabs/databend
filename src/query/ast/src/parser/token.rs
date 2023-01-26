@@ -568,6 +568,8 @@ pub enum TokenKind {
     NOTENANTSETTING,
     #[token("NULL", ignore(ascii_case))]
     NULL,
+    #[token("NULLABLE", ignore(ascii_case))]
+    NULLABLE,
     #[token("OBJECT", ignore(ascii_case))]
     OBJECT,
     #[token("OF", ignore(ascii_case))]

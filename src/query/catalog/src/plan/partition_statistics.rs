@@ -14,6 +14,8 @@
 
 use std::fmt::Debug;
 
+use crate::plan::PruningStatistics;
+
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
 pub struct PartStatistics {
     /// Total rows of the query read.
@@ -26,6 +28,8 @@ pub struct PartStatistics {
     pub partitions_total: usize,
     /// Is the statistics exact.
     pub is_exact: bool,
+    /// Pruning stats.
+    pub pruning_stats: PruningStatistics,
 }
 
 impl PartStatistics {
@@ -41,6 +45,7 @@ impl PartStatistics {
             partitions_scanned,
             partitions_total,
             is_exact: false,
+            pruning_stats: Default::default(),
         }
     }
 
@@ -56,6 +61,7 @@ impl PartStatistics {
             partitions_scanned,
             partitions_total,
             is_exact: true,
+            pruning_stats: Default::default(),
         }
     }
 

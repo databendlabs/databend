@@ -22,6 +22,7 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -32,13 +33,12 @@ use common_storage::ColumnNodes;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::TableSnapshot;
 use tracing::debug;
 use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::FusePartInfo;
-use crate::pruning::BlockPruner;
+use crate::pruning::FusePruner;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -53,10 +53,6 @@ impl FuseTable {
         let snapshot = self.read_table_snapshot().await?;
         match snapshot {
             Some(snapshot) => {
-                if let Some(result) = self.check_quick_path(&snapshot, &push_downs) {
-                    return Ok(result);
-                }
-
                 let settings = ctx.get_settings();
 
                 if settings.get_enable_distributed_eval_index()? {
@@ -109,28 +105,22 @@ impl FuseTable {
             segments_location.len()
         );
 
-        let block_metas = if !self.is_native() || self.cluster_key_meta.is_none() {
-            BlockPruner::prune(
-                &ctx,
-                dal,
-                table_info.schema(),
-                &push_downs,
-                segments_location,
-            )
-            .await?
+        let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
+            FusePruner::create(&ctx, dal, table_info.schema(), &push_downs)?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
-            BlockPruner::prune_with_pages(
+
+            FusePruner::create_with_pages(
                 &ctx,
                 dal,
                 table_info.schema(),
                 &push_downs,
                 self.cluster_key_meta.clone(),
                 cluster_keys,
-                segments_location,
-            )
-            .await?
+            )?
         };
+        let block_metas = pruner.pruning(segments_location).await?;
+        let pruning_stats = pruner.pruning_stats();
 
         info!(
             "prune snapshot block end, final block numbers:{}, cost:{}",
@@ -142,16 +132,22 @@ impl FuseTable {
             .into_iter()
             .map(|(block_meta_index, block_meta)| (block_meta_index.range, block_meta))
             .collect::<Vec<_>>();
-        self.read_partitions_with_metas(ctx, table_info.schema(), push_downs, &block_metas, summary)
+        self.read_partitions_with_metas(
+            table_info.schema(),
+            push_downs,
+            &block_metas,
+            summary,
+            pruning_stats,
+        )
     }
 
     pub fn read_partitions_with_metas(
         &self,
-        _: Arc<dyn TableContext>,
         schema: TableSchemaRef,
         push_downs: Option<PushDownInfo>,
         block_metas: &[(Option<Range<usize>>, Arc<BlockMeta>)],
         partitions_total: usize,
+        pruning_stats: PruningStatistics,
     ) -> Result<(PartStatistics, Partitions)> {
         let arrow_schema = schema.to_arrow();
         let column_nodes =
@@ -165,6 +161,7 @@ impl FuseTable {
         // Update planner statistics.
         statistics.partitions_total = partitions_total;
         statistics.partitions_scanned = partitions_scanned;
+        statistics.pruning_stats = pruning_stats;
 
         // Update context statistics.
         self.data_metrics
@@ -365,30 +362,5 @@ impl FuseTable {
             meta.compression(),
             range,
         )
-    }
-
-    fn check_quick_path(
-        &self,
-        snapshot: &TableSnapshot,
-        push_down: &Option<PushDownInfo>,
-    ) -> Option<(PartStatistics, Partitions)> {
-        push_down.as_ref().and_then(|extra| match extra {
-            PushDownInfo {
-                projection: Some(projs),
-                filters,
-                ..
-            } if projs.is_empty() && filters.is_empty() => {
-                let summary = &snapshot.summary;
-                let stats = PartStatistics {
-                    read_rows: summary.row_count as usize,
-                    read_bytes: 0,
-                    partitions_scanned: 0,
-                    partitions_total: summary.block_count as usize,
-                    is_exact: true,
-                };
-                Some((stats, Partitions::default()))
-            }
-            _ => None,
-        })
     }
 }

@@ -18,10 +18,9 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use opendal::Operator;
-use storages_common_table_meta::caches::CacheManager;
-use storages_common_table_meta::caches::LoadParams;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -51,7 +50,7 @@ pub struct BaseMutator {
     pub(crate) location_generator: TableMetaLocationGenerator,
     pub(crate) data_accessor: Operator,
     pub(crate) base_snapshot: Arc<TableSnapshot>,
-    pub(crate) thresholds: BlockCompactThresholds,
+    pub(crate) thresholds: BlockThresholds,
 }
 
 impl BaseMutator {
@@ -60,7 +59,7 @@ impl BaseMutator {
         op: Operator,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
-        thresholds: BlockCompactThresholds,
+        thresholds: BlockThresholds,
     ) -> Result<Self> {
         Ok(Self {
             mutations: HashMap::new(),
@@ -93,14 +92,10 @@ impl BaseMutator {
         let mut segments_editor =
             HashMap::<_, _, RandomState>::from_iter(segments.clone().into_iter().enumerate());
 
-        let segment_reader = MetaReaders::segment_info_reader(self.data_accessor.clone());
+        let schema = Arc::new(self.base_snapshot.schema.clone());
+        let segment_reader = MetaReaders::segment_info_reader(self.data_accessor.clone(), schema);
 
-        let segment_info_cache = CacheManager::instance().get_table_segment_cache();
-        let seg_writer = SegmentWriter::new(
-            &self.data_accessor,
-            &self.location_generator,
-            &segment_info_cache,
-        );
+        let seg_writer = SegmentWriter::new(&self.data_accessor, &self.location_generator);
 
         // apply mutations
         for (seg_idx, replacements) in self.mutations.clone() {
@@ -112,7 +107,6 @@ impl BaseMutator {
                     location: path.clone(),
                     len_hint: None,
                     ver: *version,
-                    schema: Some(Arc::new(self.base_snapshot.schema.clone())),
                 };
                 segment_reader.read(&load_params).await?
             };
@@ -177,7 +171,6 @@ impl BaseMutator {
                 location: loc.clone(),
                 len_hint: None,
                 ver: *ver,
-                schema: Some(Arc::new(self.base_snapshot.schema.clone())),
             };
             let seg = segment_reader.read(&params).await?;
             new_segment_summaries.push(seg.summary.clone())

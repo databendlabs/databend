@@ -27,8 +27,7 @@ pub const FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX: &str = "_ts";
 pub const FUSE_TBL_LAST_SNAPSHOT_HINT: &str = "last_snapshot_location_hint";
 
 pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;
-pub const DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD: usize = 100 * 1024 * 1024;
-pub const DEFAULT_ROW_PER_BLOCK: usize = 1000 * 1000;
-pub const DEFAULT_AVG_DEPTH_THRESHOLD: f64 = 0.01;
 pub const DEFAULT_ROW_PER_PAGE: usize = 8192;
 pub const DEFAULT_ROW_PER_PAGE_FOR_BLOCKING: usize = 2048;
+
+pub const DEFAULT_AVG_DEPTH_THRESHOLD: f64 = 0.01;

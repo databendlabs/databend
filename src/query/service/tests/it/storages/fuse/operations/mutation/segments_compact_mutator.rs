@@ -47,7 +47,7 @@ use databend_query::sessions::TableContext;
 use futures_util::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
-use storages_common_table_meta::caches::LoadParams;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
@@ -651,7 +651,7 @@ impl CompactSegmentTestFixture {
         let location_gen = &self.location_gen;
         let block_writer = BlockWriter::new(data_accessor, location_gen);
 
-        let segment_writer = SegmentWriter::new(data_accessor, location_gen, &None);
+        let segment_writer = SegmentWriter::new(data_accessor, location_gen);
         let seg_acc = SegmentCompactor::new(block_per_seg, segment_writer.clone());
 
         let (segments, locations, blocks) =
@@ -725,7 +725,6 @@ impl CompactSegmentTestFixture {
                 location: x.to_string(),
                 len_hint: None,
                 ver: SegmentInfo::VERSION,
-                schema: Some(TestFixture::default_table_schema()),
             };
 
             let seg = segment_reader.read(&load_params).await?;
@@ -756,7 +755,10 @@ impl CompactCase {
         limit: Option<usize>,
     ) -> Result<()> {
         // setup & run
-        let segment_reader = MetaReaders::segment_info_reader(ctx.get_data_operator()?.operator());
+        let segment_reader = MetaReaders::segment_info_reader(
+            ctx.get_data_operator()?.operator(),
+            TestFixture::default_table_schema(),
+        );
         let mut case_fixture = CompactSegmentTestFixture::try_new(ctx, block_per_segment)?;
         let r = case_fixture
             .run(&self.blocks_number_of_input_segments, limit)
@@ -803,7 +805,6 @@ impl CompactCase {
                 location: location.0.clone(),
                 len_hint: None,
                 ver: location.1,
-                schema: Some(TestFixture::default_table_schema()),
             };
 
             let segment = segment_reader.read(&load_params).await?;

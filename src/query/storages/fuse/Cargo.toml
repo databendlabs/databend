@@ -19,6 +19,7 @@ common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-functions = { path = "../../functions" }
+common-io = { path = "../../../common/io" }
 common-jsonb = { path = "../../../common/jsonb" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
@@ -30,6 +31,7 @@ common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
 
 storages-common-blocks = { path = "../common/blocks" }
+storages-common-cache = { path = "../common/cache" }
 storages-common-index = { path = "../common/index" }
 storages-common-pruner = { path = "../common/pruner" }
 storages-common-table-meta = { path = "../common/table-meta" }

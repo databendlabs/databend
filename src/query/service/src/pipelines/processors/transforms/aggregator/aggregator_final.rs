@@ -11,32 +11,3 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-use common_expression::HashMethodKeysU128;
-use common_expression::HashMethodKeysU16;
-use common_expression::HashMethodKeysU256;
-use common_expression::HashMethodKeysU32;
-use common_expression::HashMethodKeysU512;
-use common_expression::HashMethodKeysU64;
-use common_expression::HashMethodKeysU8;
-use common_expression::HashMethodSerializer;
-
-use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
-
-pub type KeysU8FinalAggregator<const HAS_AGG: bool> =
-    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU8>;
-pub type KeysU16FinalAggregator<const HAS_AGG: bool> =
-    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU16>;
-pub type KeysU32FinalAggregator<const HAS_AGG: bool> =
-    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU32>;
-pub type KeysU64FinalAggregator<const HAS_AGG: bool> =
-    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU64>;
-pub type KeysU128FinalAggregator<const HAS_AGG: bool> =
-    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU128>;
-pub type KeysU256FinalAggregator<const HAS_AGG: bool> =
-    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU256>;
-pub type KeysU512FinalAggregator<const HAS_AGG: bool> =
-    ParallelFinalAggregator<HAS_AGG, HashMethodKeysU512>;
-
-pub type SerializerFinalAggregator<const HAS_AGG: bool> =
-    ParallelFinalAggregator<HAS_AGG, HashMethodSerializer>;

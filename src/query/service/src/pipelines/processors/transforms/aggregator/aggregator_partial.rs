@@ -20,43 +20,18 @@ use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
-use common_expression::HashMethodKeysU128;
-use common_expression::HashMethodKeysU16;
-use common_expression::HashMethodKeysU256;
-use common_expression::HashMethodKeysU32;
-use common_expression::HashMethodKeysU512;
-use common_expression::HashMethodKeysU64;
-use common_expression::HashMethodKeysU8;
-use common_expression::HashMethodSerializer;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
+use super::estimated_key_size;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
-
-pub type Keys8Grouper = PartialAggregator<false, HashMethodKeysU8>;
-pub type Keys16Grouper = PartialAggregator<false, HashMethodKeysU16>;
-pub type Keys32Grouper = PartialAggregator<false, HashMethodKeysU32>;
-pub type Keys64Grouper = PartialAggregator<false, HashMethodKeysU64>;
-pub type Keys128Grouper = PartialAggregator<false, HashMethodKeysU128>;
-pub type Keys256Grouper = PartialAggregator<false, HashMethodKeysU256>;
-pub type Keys512Grouper = PartialAggregator<false, HashMethodKeysU512>;
-pub type KeysSerializerGrouper = PartialAggregator<false, HashMethodSerializer>;
-
-pub type Keys8Aggregator = PartialAggregator<true, HashMethodKeysU8>;
-pub type Keys16Aggregator = PartialAggregator<true, HashMethodKeysU16>;
-pub type Keys32Aggregator = PartialAggregator<true, HashMethodKeysU32>;
-pub type Keys64Aggregator = PartialAggregator<true, HashMethodKeysU64>;
-pub type Keys128Aggregator = PartialAggregator<true, HashMethodKeysU128>;
-pub type Keys256Aggregator = PartialAggregator<true, HashMethodKeysU256>;
-pub type Keys512Aggregator = PartialAggregator<true, HashMethodKeysU512>;
-pub type KeysSerializerAggregator = PartialAggregator<true, HashMethodSerializer>;
 
 pub struct PartialAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method>
@@ -106,10 +81,9 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             for key in keys_iter {
                 match hashtable.insert_and_entry(key) {
                     Ok(mut entry) => {
-                        if let Some(place) = params.alloc_layout(area) {
-                            places.push(place);
-                            *entry.get_mut() = place.addr();
-                        }
+                        let place = params.alloc_layout(area);
+                        places.push(place);
+                        *entry.get_mut() = place.addr();
                     }
                     Err(entry) => {
                         let place = Into::<StateAddr>::into(*entry.get());
@@ -201,7 +175,10 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             .map(|_| StringColumnBuilder::with_capacity(state_groups_len, state_groups_len * 4))
             .collect::<Vec<_>>();
 
-        let mut group_key_builder = self.method.keys_column_builder(state_groups_len);
+        let value_size = estimated_key_size(&self.hash_table);
+        let mut group_key_builder = self
+            .method
+            .keys_column_builder(state_groups_len, value_size);
         for group_entity in self.hash_table.iter() {
             let place = Into::<StateAddr>::into(*group_entity.get());
 
@@ -284,7 +261,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         }
 
         let capacity = self.hash_table.len();
-        let mut keys_column_builder = self.method.keys_column_builder(capacity);
+        let value_size = estimated_key_size(&self.hash_table);
+
+        let mut keys_column_builder = self.method.keys_column_builder(capacity, value_size);
+
         for group_entity in self.hash_table.iter() {
             keys_column_builder.append_value(group_entity.key());
         }
@@ -318,11 +298,13 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
                 .map(|(_, s)| *s)
                 .collect::<Vec<_>>();
 
-            for group_entity in self.hash_table.iter() {
-                let place = Into::<StateAddr>::into(*group_entity.get());
+            if !states.is_empty() {
+                for group_entity in self.hash_table.iter() {
+                    let place = Into::<StateAddr>::into(*group_entity.get());
 
-                for (function, state_offset) in functions.iter().zip(states.iter()) {
-                    unsafe { function.drop_state(place.next(*state_offset)) }
+                    for (function, state_offset) in functions.iter().zip(states.iter()) {
+                        unsafe { function.drop_state(place.next(*state_offset)) }
+                    }
                 }
             }
 

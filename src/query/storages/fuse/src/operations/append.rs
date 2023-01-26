@@ -19,7 +19,7 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataField;
 use common_expression::Expr;
 use common_expression::SortColumnDescription;
@@ -143,7 +143,7 @@ impl FuseTable {
         max_page_size: Option<usize>,
         pipeline: &mut Pipeline,
         level: i32,
-        block_compactor: BlockCompactThresholds,
+        block_compactor: BlockThresholds,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_keys = self.cluster_keys(ctx.clone());
         if cluster_keys.is_empty() {

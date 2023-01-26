@@ -1,0 +1,46 @@
+# orderby + limit TopN pruning
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0009_03
+
+statement ok
+CREATE DATABASE db_09_0009_03
+
+statement ok
+USE db_09_0009_03
+
+statement ok
+create table t(a Int64)
+
+statement ok
+insert into t select * from numbers(100);
+
+statement ok
+insert into t select * from numbers(100);
+
+statement ok
+insert into t select * from numbers(100);
+
+query I
+select * from t order by a limit 5;
+----
+0
+0
+0
+1
+1
+
+query I
+select * from t order by a desc limit 5;
+----
+99
+99
+99
+98
+98
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP DATABASE db_09_0009_03

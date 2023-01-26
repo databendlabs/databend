@@ -1,0 +1,66 @@
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+DROP STAGE IF EXISTS t_copy
+
+statement ok
+DROP STAGE IF EXISTS st
+
+
+statement ok
+CREATE TABLE t(c1 int)
+
+statement ok
+CREATE TABLE t_copy(c1 int)
+
+statement ok
+CREATE STAGE st
+
+statement ok
+INSERT INTO t SELECT * FROM numbers(3)
+
+statement ok
+INSERT INTO t SELECT * FROM numbers(4)
+
+statement ok
+COPY INTO @st FROM t FILE_FORMAT=(type=TSV)
+
+statement ok
+COPY INTO t_copy from @st PATTERN='.*[.]tsv' file_format = (type = TSV);
+
+statement ok
+COPY INTO @st FROM t FILE_FORMAT=(type=CSV);
+
+statement ok
+COPY INTO t_copy from @st PATTERN='.*[.]csv' file_format = (type = CSV);
+
+statement ok
+COPY INTO @st FROM t FILE_FORMAT=(type=NDJSON)
+
+statement ok
+COPY INTO t_copy from @st PATTERN='.*[.]ndjson' file_format = (type = NDJSON);
+
+statement ok
+COPY INTO @st FROM t FILE_FORMAT=(type=PARQUET)
+
+statement ok
+COPY INTO t_copy from @st PATTERN='.*[.]parquet' file_format = (type = PARQUET);
+
+statement ok
+COPY INTO @st FROM t FILE_FORMAT=(type=JSON)
+
+
+query II
+SELECT COUNT(*) FROM t_copy;
+----
+28
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP TABLE t_copy
+
+statement ok
+DROP STAGE st

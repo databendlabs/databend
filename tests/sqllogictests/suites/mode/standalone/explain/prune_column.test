@@ -41,7 +41,7 @@ Limit
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 0.33
     └── Filter
-        ├── filters: [gt(numbers.b (#0), CAST(1_u8 AS UInt64))]
+        ├── filters: [gt(numbers.b (#0), to_uint64(1_u8))]
         ├── estimated rows: 0.33
         └── AggregateFinal
             ├── group by: [number, number, number, number]
@@ -70,7 +70,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.33
 ├── Filter(Build)
-│   ├── filters: [eq(t1.c (#3), CAST(1_u8 AS UInt64))]
+│   ├── filters: [eq(t1.c (#3), to_uint64(1_u8))]
 │   ├── estimated rows: 0.33
 │   └── EvalScalar
 │       ├── expressions: [plus(numbers.number (#0), 1_u8), plus(numbers.number (#0), 1_u8), plus(numbers.number (#0), 1_u8)]
@@ -125,7 +125,7 @@ Filter
     │               ├── filters: []
     │               ├── estimated rows: 0.33
     │               ├── Filter(Build)
-    │               │   ├── filters: [eq(t2.c (#8), CAST(1_u8 AS UInt64))]
+    │               │   ├── filters: [eq(t2.c (#8), to_uint64(1_u8))]
     │               │   ├── estimated rows: 0.33
     │               │   └── EvalScalar
     │               │       ├── expressions: [plus(numbers.number (#5), 1_u8), plus(numbers.number (#5), 1_u8)]
@@ -242,14 +242,15 @@ EvalScalar
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── Filter
-            ├── filters: [eq(t.b (#1), CAST(2_u8 AS Int32))]
+            ├── filters: [eq(t.b (#1), to_int32(2_u8))]
             ├── estimated rows: 0.67
             └── TableScan
                 ├── table: default.default.t
                 ├── read rows: 2
-                ├── read bytes: 31
+                ├── read bytes: 39
                 ├── partitions total: 1
                 ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
                 ├── push downs: [filters: [eq(t.b (#1), 2_i32)], limit: NONE]
                 ├── output columns: [1]
                 └── estimated rows: 2.00

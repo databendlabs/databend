@@ -44,14 +44,15 @@ EvalScalar
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── Filter
-            ├── filters: [gt(t.number (#0), CAST(10_u8 AS UInt64))]
+            ├── filters: [gt(t.number (#0), to_uint64(10_u8))]
             ├── estimated rows: 989.89
             └── TableScan
                 ├── table: default.default.t
                 ├── read rows: 1000
-                ├── read bytes: 4028
+                ├── read bytes: 1598
                 ├── partitions total: 2
                 ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                 ├── push downs: [filters: [gt(t.number (#0), 10_u64)], limit: NONE]
                 └── estimated rows: 1001.00
 
