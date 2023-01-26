@@ -15,5 +15,5 @@ EOF
      b Int
  );" | $MYSQL_CLIENT_CONNECT
 
- curl -sH "insert_sql:insert into test_csv_header_only file_format = (type = 'CSV' skip_header = 1 record_delimiter = '-')" -F "upload=@/tmp/test_csv_header_only.csv" \
+ curl -sH "insert_sql:insert into test_csv_header_only file_format = (type = CSV skip_header = 1 record_delimiter = '-')" -F "upload=@/tmp/test_csv_header_only.csv" \
  -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c '\"rows\":0'

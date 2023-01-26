@@ -31,11 +31,11 @@ use crate::pruning::BloomPruner;
 use crate::pruning::PruningContext;
 
 pub struct BlockPruner {
-    pub pruning_ctx: PruningContext,
+    pub pruning_ctx: Arc<PruningContext>,
 }
 
 impl BlockPruner {
-    pub fn create(pruning_ctx: PruningContext) -> Result<BlockPruner> {
+    pub fn create(pruning_ctx: Arc<PruningContext>) -> Result<BlockPruner> {
         Ok(BlockPruner { pruning_ctx })
     }
 
@@ -61,6 +61,7 @@ impl BlockPruner {
         segment_idx: usize,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
@@ -79,11 +80,14 @@ impl BlockPruner {
             type BlockPruningFuture =
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
 
+            let pruning_stats = pruning_stats.clone();
             blocks.next().map(|(block_idx, block_meta)| {
                 // Perf.
                 {
                     metrics_inc_blocks_range_pruning_before(1);
                     metrics_inc_bytes_block_range_pruning_before(block_meta.block_size);
+
+                    pruning_stats.set_blocks_range_pruning_before(1);
                 }
 
                 let block_meta = block_meta.clone();
@@ -93,6 +97,8 @@ impl BlockPruner {
                     {
                         metrics_inc_blocks_range_pruning_after(1);
                         metrics_inc_bytes_block_range_pruning_after(block_meta.block_size);
+
+                        pruning_stats.set_blocks_range_pruning_after(1);
                     }
 
                     // not pruned by block zone map index,
@@ -108,6 +114,8 @@ impl BlockPruner {
                             {
                                 metrics_inc_blocks_bloom_pruning_before(1);
                                 metrics_inc_bytes_block_bloom_pruning_before(block_meta.block_size);
+
+                                pruning_stats.set_blocks_bloom_pruning_before(1);
                             }
 
                             let _permit = permit;
@@ -121,6 +129,8 @@ impl BlockPruner {
                                     metrics_inc_bytes_block_bloom_pruning_after(
                                         block_meta.block_size,
                                     );
+
+                                    pruning_stats.set_blocks_bloom_pruning_after(1);
                                 }
 
                                 let (keep, range) =
@@ -184,6 +194,7 @@ impl BlockPruner {
         segment_idx: usize,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
         let page_pruner = self.pruning_ctx.page_pruner.clone();
@@ -196,6 +207,8 @@ impl BlockPruner {
             {
                 metrics_inc_blocks_range_pruning_after(1);
                 metrics_inc_bytes_block_range_pruning_before(block_meta.block_size);
+
+                pruning_stats.set_blocks_range_pruning_before(1);
             }
 
             // check limit speculatively
@@ -210,6 +223,8 @@ impl BlockPruner {
                 {
                     metrics_inc_blocks_range_pruning_after(1);
                     metrics_inc_bytes_block_range_pruning_after(block_meta.block_size);
+
+                    pruning_stats.set_blocks_range_pruning_after(1);
                 }
 
                 let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);

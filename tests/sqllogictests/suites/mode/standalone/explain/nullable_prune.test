@@ -19,9 +19,10 @@ explain select * from t_nullable_prune
 TableScan
 ├── table: default.default.t_nullable_prune
 ├── read rows: 6
-├── read bytes: 62
+├── read bytes: 78
 ├── partitions total: 2
 ├── partitions scanned: 2
+├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
 ├── push downs: [filters: [], limit: NONE]
 └── estimated rows: 6.00
 
@@ -34,9 +35,10 @@ Filter
 └── TableScan
     ├── table: default.default.t_nullable_prune
     ├── read rows: 3
-    ├── read bytes: 37
+    ├── read bytes: 45
     ├── partitions total: 2
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [is_not_null(t_nullable_prune.a (#0))], limit: NONE]
     └── estimated rows: 6.00
 
@@ -49,9 +51,10 @@ Filter
 └── TableScan
     ├── table: default.default.t_nullable_prune
     ├── read rows: 3
-    ├── read bytes: 25
+    ├── read bytes: 33
     ├── partitions total: 2
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [not(is_not_null(t_nullable_prune.a (#0)))], limit: NONE]
     └── estimated rows: 6.00
 

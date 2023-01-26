@@ -37,9 +37,10 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── HashJoin(Probe)
@@ -51,17 +52,19 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 68
+    │   ├── read bytes: 65
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 10.00
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 172
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -77,9 +80,10 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── HashJoin(Probe)
@@ -91,17 +95,19 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 68
+    │   ├── read bytes: 65
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 10.00
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 172
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -117,9 +123,10 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── HashJoin(Probe)
@@ -131,17 +138,19 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 68
+    │   ├── read bytes: 65
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 10.00
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 172
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -157,9 +166,10 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── HashJoin(Probe)
@@ -171,17 +181,19 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 68
+    │   ├── read bytes: 65
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 10.00
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 172
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -197,9 +209,10 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── HashJoin(Probe)
@@ -211,17 +224,19 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 68
+    │   ├── read bytes: 65
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 10.00
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 172
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -237,9 +252,10 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── HashJoin(Probe)
@@ -251,17 +267,19 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 68
+    │   ├── read bytes: 65
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 10.00
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 172
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -277,17 +295,19 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
@@ -303,17 +323,19 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
@@ -329,17 +351,19 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
@@ -355,17 +379,19 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
@@ -381,17 +407,19 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
@@ -407,17 +435,19 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
