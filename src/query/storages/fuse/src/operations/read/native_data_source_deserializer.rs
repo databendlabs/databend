@@ -114,8 +114,9 @@ impl NativeDeserializeDataTransform {
             let index = src_schema.index_of(top_k.order_by.name()).unwrap();
             let sorter = TopKSorter::new(top_k.limit, top_k.asc);
 
-            if prewhere_columns.contains(&index) {
+            if !prewhere_columns.contains(&index) {
                 prewhere_columns.push(index);
+                prewhere_columns.sort();
             }
             (top_k, sorter, index)
         });
@@ -371,8 +372,13 @@ impl Processor for NativeDeserializeDataTransform {
 
                     // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
                     let filter = if let Some((_, sorter, index)) = &mut self.top_k {
+                        let index_prewhere = self
+                            .prewhere_columns
+                            .iter()
+                            .position(|x| x == index)
+                            .unwrap();
                         let top_k_column = prewhere_block
-                            .get_by_offset(*index)
+                            .get_by_offset(index_prewhere)
                             .value
                             .as_column()
                             .unwrap();
