@@ -72,7 +72,7 @@ pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     let option_type = map(
         rule! {
-        (TYPE ~ "=" ~ (JSON | CSV | NDJSON | PARQUET | JSON | XML) )
+        (TYPE ~ "=" ~ (TSV| CSV | NDJSON | PARQUET | JSON | XML) )
         },
         |(_, _, v)| ("type".to_string(), v.text().to_string()),
     );

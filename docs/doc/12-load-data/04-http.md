@@ -32,7 +32,7 @@ CREATE TABLE books
 
 ```sql
 COPY INTO books FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv'
-    FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
+    FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
 ```
 
 :::tip

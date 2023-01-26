@@ -156,7 +156,7 @@ Execute [COPY](../14-sql-commands/10-dml/dml-copy-into-table.md) to load staged 
 <TabItem value="csv" label="CSV">
 
 ```sql
-COPY INTO books FROM @my_int_stage files=('books.csv') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
+COPY INTO books FROM @my_int_stage files=('books.csv') file_format = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
 ```
 
 :::tip

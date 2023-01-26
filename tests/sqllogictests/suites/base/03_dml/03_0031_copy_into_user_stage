@@ -17,7 +17,7 @@ statement ok
 remove @~
 
 statement ok
-copy into @~ from test_table FILE_FORMAT = (type = 'CSV')
+copy into @~ from test_table FILE_FORMAT = (type = CSV)
 
 statement ok
 copy into test_table from @~
