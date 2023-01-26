@@ -111,7 +111,10 @@ impl Display for CopyStmt<'_> {
         write!(f, " SINGLE = {}", self.single)?;
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
-        write!(f, " ON_ERROR = {}", self.on_error)?;
+
+        if !self.on_error.is_empty() {
+            write!(f, " ON_ERROR = '{}'", self.on_error)?;
+        }
         Ok(())
     }
 }
