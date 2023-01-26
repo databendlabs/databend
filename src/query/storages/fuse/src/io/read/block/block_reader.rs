@@ -131,8 +131,7 @@ impl BlockReader {
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
-        let column_nodes =
-            ColumnNodes::new_from_schema(&arrow_schema, Some(schema.column_id_map()));
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
         let project_column_nodes: Vec<ColumnNode> = projection
             .project_column_nodes(&column_nodes)?
             .iter()

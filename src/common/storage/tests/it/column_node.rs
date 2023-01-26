@@ -21,8 +21,7 @@ use common_storage::ColumnNodes;
 fn test_column_leaf_schema_from_struct() -> Result<()> {
     let schema = create_test_complex_schema();
 
-    let column_leaves =
-        ColumnNodes::new_from_schema(&schema.to_arrow(), Some(schema.column_id_map()));
+    let column_leaves = ColumnNodes::new_from_schema(&schema.to_arrow(), Some(&schema));
     let column_1_ids = vec![0];
     let column_2_ids = vec![1, 2, 3];
     let column_3_ids = vec![4, 5];
@@ -57,14 +56,8 @@ fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
     let old_column_leaves = ColumnNodes::new_from_schema(&old_schema.to_arrow(), None);
 
     let new_schema = TableSchema::init_if_need(old_schema);
-    let new_column_leaves =
-        ColumnNodes::new_from_schema(&new_schema.to_arrow(), Some(new_schema.column_id_map()));
+    let new_column_leaves = ColumnNodes::new_from_schema(&new_schema.to_arrow(), Some(&new_schema));
 
-    // make sure old and new schema build the same column id map
-    assert_eq!(
-        old_column_leaves.build_column_id_map(),
-        new_column_leaves.build_column_id_map()
-    );
     for (old_leaf, new_leaf) in old_column_leaves
         .column_nodes
         .iter()
@@ -72,6 +65,7 @@ fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
     {
         assert_eq!(old_leaf.field.name, new_leaf.field.name);
         assert_eq!(old_leaf.leaf_ids, new_leaf.leaf_ids);
+        // assert new column node column ids equal to old column node leaf ids.
         for (leaf_id, column_id) in old_leaf
             .leaf_ids
             .iter()

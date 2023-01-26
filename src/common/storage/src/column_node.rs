@@ -15,13 +15,12 @@
 //! This module provides data structures for build column indexes.
 //! It's used by Fuse Engine and Parquet Engine.
 
-use std::collections::BTreeMap;
-
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchema;
 
 #[derive(Debug, Clone)]
 pub struct ColumnNodes {
@@ -29,16 +28,16 @@ pub struct ColumnNodes {
 }
 
 impl ColumnNodes {
-    pub fn new_from_schema(
-        schema: &ArrowSchema,
-        column_id_map: Option<&BTreeMap<String, u32>>,
-    ) -> Self {
+    pub fn new_from_schema(schema: &ArrowSchema, table_schema: Option<&TableSchema>) -> Self {
         let mut leaf_id = 0;
         let mut column_nodes = Vec::with_capacity(schema.fields.len());
 
-        for field in &schema.fields {
-            let column_node =
-                Self::traverse_fields_dfs(field, &field.name, column_id_map, &mut leaf_id);
+        let field_column_ids = table_schema.map(|table_schema| table_schema.field_column_ids());
+        for (i, field) in schema.fields.iter().enumerate() {
+            let mut column_node = Self::traverse_fields_dfs(field, &mut leaf_id);
+            if let Some(field_column_ids) = field_column_ids {
+                column_node.leaf_column_ids = field_column_ids[i].to_column_ids();
+            }
             column_nodes.push(column_node);
         }
 
@@ -53,67 +52,30 @@ impl ColumnNodes {
     /// It's because the inner field can also be [`ArrowType::Struct`] or other nested types.
     /// If we don't dfs into it, the inner columns information will be lost.
     /// and we can not construct the arrow-parquet reader correctly.
-    fn traverse_fields_dfs(
-        field: &ArrowField,
-        parent_name: &String,
-        column_id_map: Option<&BTreeMap<String, u32>>,
-        leaf_id: &mut usize,
-    ) -> ColumnNode {
+    fn traverse_fields_dfs(field: &ArrowField, leaf_id: &mut usize) -> ColumnNode {
         match &field.data_type {
             ArrowType::Struct(inner_fields) => {
                 let mut child_column_nodes = Vec::with_capacity(inner_fields.len());
                 let mut child_leaf_ids = Vec::with_capacity(inner_fields.len());
-                let mut child_leaf_column_ids = Vec::with_capacity(inner_fields.len());
                 for inner_field in inner_fields {
-                    let inner_field_name = format!("{}:{}", parent_name, inner_field.name);
-                    let child_column_node = Self::traverse_fields_dfs(
-                        inner_field,
-                        &inner_field_name,
-                        column_id_map,
-                        leaf_id,
-                    );
+                    let child_column_node = Self::traverse_fields_dfs(inner_field, leaf_id);
                     child_leaf_ids.extend(child_column_node.leaf_ids.clone());
-                    child_leaf_column_ids.extend(child_column_node.leaf_column_ids.clone());
                     child_column_nodes.push(child_column_node);
                 }
-                ColumnNode::new(
-                    field.clone(),
-                    child_leaf_ids,
-                    Some(child_column_nodes),
-                    child_leaf_column_ids,
-                )
+                ColumnNode::new(field.clone(), child_leaf_ids, Some(child_column_nodes))
             }
             ArrowType::List(inner_field)
             | ArrowType::LargeList(inner_field)
             | ArrowType::FixedSizeList(inner_field, _) => {
                 let mut child_column_nodes = Vec::with_capacity(1);
                 let mut child_leaf_ids = Vec::with_capacity(1);
-                let inner_field_name = &format!("{}:0", parent_name);
-                let child_column_node = Self::traverse_fields_dfs(
-                    inner_field,
-                    inner_field_name,
-                    column_id_map,
-                    leaf_id,
-                );
+                let child_column_node = Self::traverse_fields_dfs(inner_field, leaf_id);
                 child_leaf_ids.extend(child_column_node.leaf_ids.clone());
-                let child_leaf_column_ids = child_column_node.leaf_column_ids.clone();
                 child_column_nodes.push(child_column_node);
-                ColumnNode::new(
-                    field.clone(),
-                    child_leaf_ids,
-                    Some(child_column_nodes),
-                    child_leaf_column_ids,
-                )
+                ColumnNode::new(field.clone(), child_leaf_ids, Some(child_column_nodes))
             }
             _ => {
-                let leaf_column_ids = match column_id_map {
-                    Some(column_id_map) => {
-                        vec![*column_id_map.get(parent_name).unwrap()]
-                    }
-                    None => vec![],
-                };
-                let column_node =
-                    ColumnNode::new(field.clone(), vec![*leaf_id], None, leaf_column_ids);
+                let column_node = ColumnNode::new(field.clone(), vec![*leaf_id], None);
                 *leaf_id += 1;
                 column_node
             }
@@ -136,37 +98,6 @@ impl ColumnNodes {
         }
         Ok(column_node)
     }
-
-    fn build_column_id_map_from_leaf(
-        parent_name: &String,
-        node: &ColumnNode,
-        column_ids: &mut BTreeMap<String, u32>,
-    ) {
-        match node.children {
-            Some(ref children) => {
-                for child in children {
-                    let inner_field_name = format!("{}:{}", parent_name, child.field.name);
-                    Self::build_column_id_map_from_leaf(&inner_field_name, child, column_ids);
-                }
-            }
-            None => {
-                column_ids.insert(parent_name.to_string(), node.leaf_ids[0] as u32);
-            }
-        }
-    }
-
-    pub fn build_column_id_map(&self) -> BTreeMap<String, u32> {
-        let mut column_ids = BTreeMap::new();
-        for column_node in &self.column_nodes {
-            Self::build_column_id_map_from_leaf(
-                &column_node.field.name,
-                column_node,
-                &mut column_ids,
-            );
-        }
-
-        column_ids
-    }
 }
 
 /// `ColumnNode` contains all the leaf column ids of the column.
@@ -183,17 +114,12 @@ pub struct ColumnNode {
 }
 
 impl ColumnNode {
-    pub fn new(
-        field: ArrowField,
-        leaf_ids: Vec<usize>,
-        children: Option<Vec<ColumnNode>>,
-        leaf_column_ids: Vec<u32>,
-    ) -> Self {
+    pub fn new(field: ArrowField, leaf_ids: Vec<usize>, children: Option<Vec<ColumnNode>>) -> Self {
         Self {
             field,
             leaf_ids,
             children,
-            leaf_column_ids,
+            leaf_column_ids: vec![],
         }
     }
 

@@ -150,8 +150,7 @@ impl FuseTable {
         pruning_stats: PruningStatistics,
     ) -> Result<(PartStatistics, Partitions)> {
         let arrow_schema = schema.to_arrow();
-        let column_nodes =
-            ColumnNodes::new_from_schema(&arrow_schema, Some(schema.column_id_map()));
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
 
         let partitions_scanned = block_metas.len();
 

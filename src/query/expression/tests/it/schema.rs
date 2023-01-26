@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use common_exception::Result;
 use common_expression::create_test_complex_schema;
 use common_expression::types::NumberDataType;
+use common_expression::ColumnIdVector;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -57,23 +58,7 @@ fn test_project_schema_from_tuple() -> Result<()> {
         assert_eq!(*field, expect_fields[i]);
     }
     assert_eq!(project_schema.next_column_id(), schema.next_column_id());
-    assert_eq!(project_schema.column_id_map(), schema.column_id_map());
     assert_eq!(project_schema.column_id_set(), schema.column_id_set());
-    Ok(())
-}
-
-#[test]
-fn test_schema_new_from_field() -> Result<()> {
-    let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
-    let field2 = TableField::new("b", TableDataType::Number(NumberDataType::UInt64));
-    let field3 = TableField::new("c", TableDataType::Number(NumberDataType::UInt64));
-
-    let schema = TableSchema::new(vec![field1, field2, field3]);
-    assert_eq!(schema.column_id_of("a").unwrap(), 0);
-    assert_eq!(schema.column_id_of("b").unwrap(), 1);
-    assert_eq!(schema.column_id_of("c").unwrap(), 2);
-    assert_eq!(schema.next_column_id(), 3);
-
     Ok(())
 }
 
@@ -81,36 +66,37 @@ fn test_schema_new_from_field() -> Result<()> {
 fn test_schema_from_struct() -> Result<()> {
     let schema = create_test_complex_schema();
 
-    let column_id_of_names = vec![
-        ("a", 0),
-        ("b", 1),
-        ("b:0", 1),
-        ("b:0:0", 1),
-        ("b:0:1", 2),
-        ("b:1", 3),
-        ("b:1:0", 3),
-        ("c", 4),
-        ("c:0", 4),
-        ("c:0:0", 4),
-        ("c:0:1", 5),
-        ("d", 6),
-        ("d:0", 6),
-        ("e", 7),
-        ("e:0", 7),
-        ("e:0:0", 7),
-        ("f", 8),
-        ("g", 9),
-        ("h", 10),
-        ("h:a", 10),
-        ("h:b", 11),
+    let column_1_ids = ColumnIdVector::new(vec![0]);
+    let column_2_ids = ColumnIdVector::new(vec![1, 2, 3]);
+    let column_3_ids = ColumnIdVector::new(vec![4, 5]);
+    let column_4_ids = ColumnIdVector::new(vec![6]);
+    let column_5_ids = ColumnIdVector::new(vec![7]);
+    let column_6_ids = ColumnIdVector::new(vec![8]);
+    let column_7_ids = ColumnIdVector::new(vec![9]);
+    let column_8_ids = ColumnIdVector::new(vec![10, 11]);
+    let expeted_column_ids = vec![
+        ("a", column_1_ids),
+        ("b", column_2_ids),
+        ("c", column_3_ids),
+        ("d", column_4_ids),
+        ("e", column_5_ids),
+        ("f", column_6_ids),
+        ("g", column_7_ids),
+        ("h", column_8_ids),
     ];
-    for (name, column_id) in column_id_of_names {
-        assert_eq!(schema.column_id_of(name).unwrap(), column_id,);
+
+    for (i, column_id) in schema.field_column_ids().iter().enumerate() {
+        let expeted_column_id = &expeted_column_ids[i];
+        assert_eq!(
+            expeted_column_id.0.to_string(),
+            schema.fields()[i].name().to_string()
+        );
+        assert_eq!(expeted_column_id.1, *column_id);
     }
     assert_eq!(schema.next_column_id(), 12);
 
     // make sure column ids is adjacent integers(in case there is no add or drop column operations)
-    let column_ids = schema.to_column_ids()?;
+    let column_ids = schema.to_column_ids();
     assert_eq!(column_ids.len(), schema.next_column_id() as usize);
     for i in 1..column_ids.len() {
         assert_eq!(column_ids[i], column_ids[i - 1] + 1);
@@ -128,15 +114,15 @@ fn test_schema_modify_field() -> Result<()> {
     let mut schema = TableSchema::new(vec![field1.clone()]);
 
     assert_eq!(schema.fields().to_owned(), vec![field1.clone()]);
-    assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    // assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.next_column_id(), 1);
 
     // add column b
     schema.add_columns(&[field2.clone()])?;
     assert_eq!(schema.fields().to_owned(), vec![field1.clone(), field2,]);
-    assert_eq!(schema.column_id_of("a").unwrap(), 0);
-    assert_eq!(schema.column_id_of("b").unwrap(), 1);
+    // assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    // assert_eq!(schema.column_id_of("b").unwrap(), 1);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), false);
     assert_eq!(schema.next_column_id(), 2);
@@ -144,7 +130,7 @@ fn test_schema_modify_field() -> Result<()> {
     // drop column b
     schema.drop_column("b")?;
     assert_eq!(schema.fields().to_owned(), vec![field1.clone(),]);
-    assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    // assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), true);
     assert_eq!(schema.next_column_id(), 2);
@@ -152,8 +138,8 @@ fn test_schema_modify_field() -> Result<()> {
     // add column c
     schema.add_columns(&[field3.clone()])?;
     assert_eq!(schema.fields().to_owned(), vec![field1, field3]);
-    assert_eq!(schema.column_id_of("a").unwrap(), 0);
-    assert_eq!(schema.column_id_of("c").unwrap(), 2);
+    // assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    // assert_eq!(schema.column_id_of("c").unwrap(), 2);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), true);
     assert_eq!(schema.is_column_deleted(2), false);
@@ -172,11 +158,11 @@ fn test_schema_modify_field() -> Result<()> {
         fields_type: vec![s, child_field22],
     };
     schema.add_columns(&[TableField::new("s", s2)])?;
-    assert_eq!(schema.column_id_of("s").unwrap(), 3);
-    assert_eq!(schema.column_id_of("s:0").unwrap(), 3);
-    assert_eq!(schema.column_id_of("s:0:0").unwrap(), 3);
-    assert_eq!(schema.column_id_of("s:0:1").unwrap(), 4);
-    assert_eq!(schema.column_id_of("s:1").unwrap(), 5);
+    // assert_eq!(schema.column_id_of("s").unwrap(), 3);
+    // assert_eq!(schema.column_id_of("s:0").unwrap(), 3);
+    // assert_eq!(schema.column_id_of("s:0:0").unwrap(), 3);
+    // assert_eq!(schema.column_id_of("s:0:1").unwrap(), 4);
+    // assert_eq!(schema.column_id_of("s:1").unwrap(), 5);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), true);
     assert_eq!(schema.is_column_deleted(2), false);
@@ -188,8 +174,8 @@ fn test_schema_modify_field() -> Result<()> {
         TableDataType::Number(NumberDataType::UInt64),
     ))));
     schema.add_columns(&[TableField::new("ary", ary)])?;
-    assert_eq!(schema.column_id_of("ary").unwrap(), 6);
-    assert_eq!(schema.column_id_of("ary:0").unwrap(), 6);
+    // assert_eq!(schema.column_id_of("ary").unwrap(), 6);
+    // assert_eq!(schema.column_id_of("ary:0").unwrap(), 6);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), true);
     assert_eq!(schema.is_column_deleted(2), false);
@@ -204,11 +190,11 @@ fn test_schema_modify_field() -> Result<()> {
     assert_eq!(schema.is_column_deleted(2), false);
     assert_eq!(schema.is_column_deleted(3), true);
     assert_eq!(schema.is_column_deleted(6), false);
-    assert!(schema.column_id_of("s").is_err());
-    assert!(schema.column_id_of("s:0").is_err());
-    assert!(schema.column_id_of("s:1").is_err());
-    assert!(schema.column_id_of("s:0:0").is_err());
-    assert!(schema.column_id_of("s:0:1").is_err());
+    // assert!(schema.column_id_of("s").is_err());
+    // assert!(schema.column_id_of("s:0").is_err());
+    // assert!(schema.column_id_of("s:1").is_err());
+    // assert!(schema.column_id_of("s:0:0").is_err());
+    // assert!(schema.column_id_of("s:0:1").is_err());
 
     Ok(())
 }

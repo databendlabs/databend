@@ -14,6 +14,7 @@ common-arrow = { path = "../arrow" }
 common-auth = { path = "../auth" }
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
+common-expression = { path = "../../query/expression" }
 
 anyhow = { workspace = true }
 async-trait = "0.1"
@@ -38,4 +39,3 @@ percent-encoding = "2"
 serde = { workspace = true }
 
 [dev-dependencies]
-common-expression = { path = "../../query/expression" }

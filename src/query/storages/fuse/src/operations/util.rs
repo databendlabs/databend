@@ -34,7 +34,7 @@ pub fn column_metas(
             num_row_groups
         )));
     }
-    let column_ids = schema.to_column_ids()?;
+    let column_ids = schema.to_column_ids();
     let row_group = &file_meta.row_groups[0];
     // Make sure that schema and row_group has the same number column, or else it is a panic error.
     assert_eq!(column_ids.len(), row_group.columns.len());

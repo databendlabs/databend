@@ -29,6 +29,28 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 
+impl FromToProto for ex::ColumnIdVector {
+    type PB = pb::ColumnIdVector;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::ColumnIdVector) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let v = Self::new(p.column_ids);
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::ColumnIdVector, Incompatible> {
+        let p = pb::ColumnIdVector {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            column_ids: self.column_ids.clone(),
+        };
+        Ok(p)
+    }
+}
+
 impl FromToProto for ex::TableSchema {
     type PB = pb::DataSchema;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -38,18 +60,22 @@ impl FromToProto for ex::TableSchema {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let mut fs = Vec::with_capacity(p.fields.len());
-        for f in p.fields.into_iter() {
+        let mut field_column_ids = Vec::with_capacity(p.fields.len());
+        for (i, f) in p.fields.into_iter().enumerate() {
             fs.push(ex::TableField::from_pb(f)?);
+            field_column_ids.push(ex::ColumnIdVector::from_pb(p.field_column_ids[i].clone())?);
         }
 
-        let v = Self::new_from_column_id_map(fs, p.metadata, p.column_id_map, p.next_column_id);
+        let v = Self::new_from_column_id_map(fs, p.metadata, field_column_ids, p.next_column_id);
         Ok(v)
     }
 
     fn to_pb(&self) -> Result<pb::DataSchema, Incompatible> {
         let mut fs = Vec::with_capacity(self.fields().len());
-        for f in self.fields().iter() {
+        let mut field_column_ids = Vec::with_capacity(self.fields().len());
+        for (i, f) in self.fields().iter().enumerate() {
             fs.push(f.to_pb()?);
+            field_column_ids.push(self.field_column_ids()[i].to_pb()?);
         }
 
         let p = pb::DataSchema {
@@ -57,7 +83,7 @@ impl FromToProto for ex::TableSchema {
             min_reader_ver: MIN_READER_VER,
             fields: fs,
             metadata: self.meta().clone(),
-            column_id_map: self.column_id_map().clone(),
+            field_column_ids,
             next_column_id: self.next_column_id(),
         };
         Ok(p)

@@ -110,10 +110,7 @@ impl DataSourcePlan {
     pub fn schema(&self) -> Arc<TableSchema> {
         self.scan_fields
             .clone()
-            .map(|x| {
-                let fields: Vec<_> = x.values().cloned().collect();
-                Arc::new(self.source_info.schema().project_by_fields(fields))
-            })
+            .map(|x| Arc::new(self.source_info.schema().project_by_fields(&x)))
             .unwrap_or_else(|| self.source_info.schema())
     }
 

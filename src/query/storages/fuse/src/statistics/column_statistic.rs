@@ -47,10 +47,7 @@ pub fn gen_columns_statistics(
     let rows = data_block.num_rows();
 
     let leaves = get_traverse_columns_dfs(&data_block)?;
-    let column_ids = match schema {
-        Some(schema) => Some(schema.to_column_ids()?),
-        None => None,
-    };
+    let column_ids = schema.map(|schema| schema.to_column_ids());
     for (idx, (col_idx, col, data_type)) in leaves.iter().enumerate() {
         if col.is_none() {
             continue;
