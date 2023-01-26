@@ -161,17 +161,9 @@ impl UnusedColumnPruner {
                         .is_none()
                     && p.group_items.is_empty()
                 {
-                    required.insert(
-                        *rel_prop
-                            .output_columns
-                            .iter()
-                            .sorted()
-                            .take(1)
-                            .next()
-                            .ok_or_else(|| {
-                                ErrorCode::Internal("Invalid children without output column")
-                            })?,
-                    );
+                    if let Some(index) = rel_prop.output_columns.iter().sorted().take(1).next() {
+                        required.insert(*index);
+                    }
                 }
 
                 p.group_items.iter().for_each(|i| {
