@@ -28,7 +28,7 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -37,7 +37,7 @@ HashJoin
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -56,7 +56,7 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -65,7 +65,7 @@ HashJoin
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -99,7 +99,7 @@ HashJoin
     └── TableScan
         ├── table: default.default.t1
         ├── read rows: 10
-        ├── read bytes: 68
+        ├── read bytes: 65
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -121,7 +121,7 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.t
     │   ├── read rows: 1
-    │   ├── read bytes: 31
+    │   ├── read bytes: 39
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -130,7 +130,7 @@ Filter
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── read rows: 10
-        ├── read bytes: 68
+        ├── read bytes: 65
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -168,7 +168,7 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.default.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 68
+    │   ├── read bytes: 65
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -177,7 +177,7 @@ HashJoin
     └── TableScan(Probe)
         ├── table: default.default.t2
         ├── read rows: 100
-        ├── read bytes: 431
+        ├── read bytes: 172
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -219,7 +219,7 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -228,7 +228,7 @@ Filter
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -250,7 +250,7 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -259,7 +259,7 @@ Filter
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -281,7 +281,7 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -290,7 +290,7 @@ Filter
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -314,7 +314,7 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -323,7 +323,7 @@ Filter
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -345,7 +345,7 @@ HashJoin
 │   └── TableScan
 │       ├── table: default.default.twocolumn
 │       ├── read rows: 4
-│       ├── read bytes: 79
+│       ├── read bytes: 94
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -354,7 +354,7 @@ HashJoin
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
-    ├── read bytes: 37
+    ├── read bytes: 45
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
