@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::base::Progress;
@@ -20,15 +21,19 @@ use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Column;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FilterHelpers;
 use common_expression::FunctionContext;
+use common_expression::TopKSorter;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
@@ -36,6 +41,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use storages_common_index::Index;
+use storages_common_index::RangeIndex;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
@@ -51,8 +58,8 @@ pub struct NativeDeserializeDataTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
-    parts: Vec<PartInfoPtr>,
-    chunks: Vec<DataChunks>,
+    parts: VecDeque<PartInfoPtr>,
+    chunks: VecDeque<DataChunks>,
 
     prewhere_columns: Vec<usize>,
     remain_columns: Vec<usize>,
@@ -61,7 +68,11 @@ pub struct NativeDeserializeDataTransform {
     output_schema: DataSchema,
     prewhere_filter: Arc<Option<Expr>>,
 
-    prewhere_skipped: usize,
+    skipped_page: usize,
+
+    read_columns: Vec<usize>,
+    top_k: Option<(TopK, TopKSorter, usize)>,
+    topn_finish: bool,
 }
 
 impl NativeDeserializeDataTransform {
@@ -73,15 +84,24 @@ impl NativeDeserializeDataTransform {
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+
+        let table_schema = plan.source_info.schema();
         let src_schema: DataSchema = (block_reader.schema().as_ref()).into();
 
-        let prewhere_columns: Vec<usize> =
+        let top_k = plan
+            .push_downs
+            .as_ref()
+            .map(|p| p.top_k(table_schema.as_ref(), RangeIndex::supported_type))
+            .unwrap_or_default();
+
+        let mut prewhere_columns: Vec<usize> =
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => (0..src_schema.num_fields()).collect(),
                 Some(v) => {
                     let projected_arrow_schema = v
                         .prewhere_columns
                         .project_schema(plan.source_info.schema().as_ref());
+
                     projected_arrow_schema
                         .fields()
                         .iter()
@@ -89,6 +109,16 @@ impl NativeDeserializeDataTransform {
                         .collect()
                 }
             };
+
+        let top_k = top_k.map(|top_k| {
+            let index = src_schema.index_of(top_k.order_by.name()).unwrap();
+            let sorter = TopKSorter::new(top_k.limit, top_k.asc);
+
+            if prewhere_columns.contains(&index) {
+                prewhere_columns.push(index);
+            }
+            (top_k, sorter, index)
+        });
 
         let remain_columns: Vec<usize> = (0..src_schema.num_fields())
             .filter(|i| !prewhere_columns.contains(i))
@@ -117,15 +147,18 @@ impl NativeDeserializeDataTransform {
                 input,
                 output,
                 output_data: None,
-                parts: vec![],
-                chunks: vec![],
+                parts: VecDeque::new(),
+                chunks: VecDeque::new(),
 
                 prewhere_columns,
                 remain_columns,
                 src_schema,
                 output_schema,
                 prewhere_filter,
-                prewhere_skipped: 0,
+                skipped_page: 0,
+                top_k,
+                topn_finish: false,
+                read_columns: vec![],
             },
         )))
     }
@@ -147,6 +180,45 @@ impl NativeDeserializeDataTransform {
                 }
             },
         )
+    }
+
+    fn add_block(&mut self, data_block: DataBlock) -> Result<()> {
+        let rows = data_block.num_rows();
+        if rows == 0 {
+            return Ok(());
+        }
+        let progress_values = ProgressValues {
+            rows,
+            bytes: data_block.memory_size(),
+        };
+        self.scan_progress.incr(&progress_values);
+        self.output_data = Some(data_block);
+        Ok(())
+    }
+
+    /// check topk should return finished or not
+    fn check_topn(&mut self) {
+        if let Some((_, sorter, _)) = &mut self.top_k {
+            if let Some(next_part) = self.parts.front() {
+                let next_part = next_part.as_any().downcast_ref::<FusePartInfo>().unwrap();
+                if next_part.sort_min_max.is_none() {
+                    return;
+                }
+                if let Some(sort_min_max) = &next_part.sort_min_max {
+                    self.topn_finish = sorter.never_match(sort_min_max);
+                }
+            }
+        }
+    }
+
+    fn skip_chunks_page(read_columns: &[usize], chunks: &mut DataChunks) -> Result<()> {
+        for (index, chunk) in chunks.iter_mut().enumerate() {
+            if read_columns.contains(&index) {
+                continue;
+            }
+            chunk.1.skip_page()?;
+        }
+        Ok(())
     }
 }
 
@@ -179,8 +251,13 @@ impl Processor for NativeDeserializeDataTransform {
             if !self.input.has_data() {
                 self.input.set_need_data();
             }
-
             return Ok(Event::Sync);
+        }
+
+        if self.topn_finish {
+            self.input.finish();
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
         if self.input.has_data() {
@@ -190,8 +267,15 @@ impl Processor for NativeDeserializeDataTransform {
                     .as_mut_any()
                     .downcast_mut::<NativeDataSourceMeta>()
                 {
-                    self.parts = source_meta.part.clone();
-                    self.chunks = std::mem::take(&mut source_meta.chunks);
+                    self.parts = VecDeque::from(std::mem::take(&mut source_meta.part));
+
+                    self.check_topn();
+                    if self.topn_finish {
+                        self.input.finish();
+                        self.output.finish();
+                        return Ok(Event::Finished);
+                    }
+                    self.chunks = VecDeque::from(std::mem::take(&mut source_meta.chunks));
                     return Ok(Event::Sync);
                 }
             }
@@ -200,7 +284,7 @@ impl Processor for NativeDeserializeDataTransform {
         }
 
         if self.input.is_finished() {
-            metrics_inc_pruning_prewhere_nums(self.prewhere_skipped as u64);
+            metrics_inc_pruning_prewhere_nums(self.skipped_page as u64);
             self.output.finish();
             return Ok(Event::Finished);
         }
@@ -210,31 +294,62 @@ impl Processor for NativeDeserializeDataTransform {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(chunks) = self.chunks.last_mut() {
+        if let Some(chunks) = self.chunks.front_mut() {
             // this means it's empty projection
             if chunks.is_empty() {
-                let _ = self.chunks.pop();
-                let part = self.parts.pop().unwrap();
+                let _ = self.chunks.pop_front();
+                let part = self.parts.pop_front().unwrap();
+
                 let part = FusePartInfo::from_part(&part)?;
                 let data_block = DataBlock::new(vec![], part.nums_rows);
-                let progress_values = ProgressValues {
-                    rows: data_block.num_rows(),
-                    bytes: data_block.memory_size(),
-                };
-                self.scan_progress.incr(&progress_values);
-                self.output_data = Some(data_block);
+                self.add_block(data_block)?;
                 return Ok(());
             }
 
             let mut arrays = Vec::with_capacity(chunks.len());
+            self.read_columns.clear();
+
+            // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
+            if self.prewhere_columns.len() > 1 {
+                if let Some((top_k, sorter, index)) = self.top_k.as_mut() {
+                    let chunk = chunks.get_mut(*index).unwrap();
+                    if !chunk.1.has_next() {
+                        // No data anymore
+                        let _ = self.chunks.pop_front();
+                        let _ = self.parts.pop_front().unwrap();
+                        self.check_topn();
+                        // check finished
+                        return Ok(());
+                    }
+                    let array = chunk.1.next_array()?;
+                    self.read_columns.push(*index);
+
+                    let data_type = top_k.order_by.data_type().into();
+                    let col = Column::from_arrow(array.as_ref(), &data_type);
+
+                    arrays.push((chunk.0, array));
+                    if sorter.never_match_any(&col) {
+                        self.skipped_page += 1;
+                        return Self::skip_chunks_page(&self.read_columns, chunks);
+                    }
+                }
+            }
+
+            // Step 2: Read Prewhere columns and get the filter
             for index in self.prewhere_columns.iter() {
+                if self.read_columns.contains(index) {
+                    continue;
+                }
                 let chunk = chunks.get_mut(*index).unwrap();
                 if !chunk.1.has_next() {
                     // No data anymore
-                    let _ = self.chunks.pop();
-                    let _ = self.parts.pop();
+                    let _ = self.chunks.pop_front();
+                    let _ = self.parts.pop_front().unwrap();
+
+                    self.check_topn();
                     return Ok(());
                 }
+                self.read_columns.push(*index);
                 arrays.push((chunk.0, chunk.1.next_array()?));
             }
 
@@ -246,20 +361,33 @@ impl Processor for NativeDeserializeDataTransform {
                     let result = evaluator.run(filter).map_err(|(_, e)| {
                         ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
                     })?;
-                    let filter = DataBlock::cast_to_nonull_boolean(&result).unwrap();
+                    let filter = FilterHelpers::cast_to_nonull_boolean(&result).unwrap();
 
-                    let all_filtered = match &filter {
-                        Value::Scalar(v) => !v,
-                        Value::Column(bitmap) => bitmap.unset_bits() == bitmap.len(),
+                    // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
+                    if FilterHelpers::is_all_unset(&filter) {
+                        self.skipped_page += 1;
+                        return Self::skip_chunks_page(&self.read_columns, chunks);
+                    }
+
+                    // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
+                    let filter = if let Some((_, sorter, index)) = &mut self.top_k {
+                        let top_k_column = prewhere_block
+                            .get_by_offset(*index)
+                            .value
+                            .as_column()
+                            .unwrap();
+
+                        let mut bitmap =
+                            FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
+                        sorter.push_column(top_k_column, &mut bitmap);
+                        Value::Column(bitmap.into())
+                    } else {
+                        filter
                     };
 
-                    if all_filtered {
-                        self.prewhere_skipped += 1;
-                        for index in self.remain_columns.iter() {
-                            let chunk = chunks.get_mut(*index).unwrap();
-                            chunk.1.skip_page()?;
-                        }
-                        return Ok(());
+                    if FilterHelpers::is_all_unset(&filter) {
+                        self.skipped_page += 1;
+                        return Self::skip_chunks_page(&self.read_columns, chunks);
                     }
 
                     for index in self.remain_columns.iter() {
@@ -269,7 +397,7 @@ impl Processor for NativeDeserializeDataTransform {
 
                     let block = self.block_reader.build_block(arrays)?;
                     let block = block.resort(&self.src_schema, &self.output_schema)?;
-                    block.filter(&result)
+                    block.filter_boolean_value(filter)
                 }
                 None => {
                     for index in self.remain_columns.iter() {
@@ -280,12 +408,8 @@ impl Processor for NativeDeserializeDataTransform {
                 }
             }?;
 
-            let progress_values = ProgressValues {
-                rows: data_block.num_rows(),
-                bytes: data_block.memory_size(),
-            };
-            self.scan_progress.incr(&progress_values);
-            self.output_data = Some(data_block);
+            // Step 5: Add the block to topk
+            self.add_block(data_block)?;
         }
 
         Ok(())

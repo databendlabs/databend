@@ -37,7 +37,7 @@ pub struct FusePartInfo {
     pub nums_rows: usize,
     pub columns_meta: HashMap<usize, ColumnMeta>,
     pub compression: Compression,
-    
+
     pub sort_min_max: Option<(Scalar, Scalar)>,
     /// page range in the file
     pub range: Option<Range<usize>>,
@@ -70,7 +70,7 @@ impl FusePartInfo {
         rows_count: u64,
         columns_meta: HashMap<usize, ColumnMeta>,
         compression: Compression,
-       sort_min_max: Option<(Scalar, Scalar)>,
+        sort_min_max: Option<(Scalar, Scalar)>,
         range: Option<Range<usize>>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {

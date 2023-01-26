@@ -30,6 +30,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FilterHelpers;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
@@ -136,7 +137,7 @@ impl ParquetSource {
             let res = evaluator.run(filter).map_err(|(_, e)| {
                 ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
             })?;
-            let filter = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
+            let filter = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
                 ErrorCode::BadArguments(
                     "Result of filter expression cannot be converted to boolean.",
                 )

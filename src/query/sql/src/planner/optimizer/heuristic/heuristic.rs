@@ -99,6 +99,10 @@ impl HeuristicOptimizer {
         let optimized = self.optimize_expression(&pre_optimized)?;
         let post_optimized = self.post_optimize(optimized)?;
 
+        // do it again, some rules may be missed
+        let optimized = self.optimize_expression(&post_optimized)?;
+        let post_optimized = self.post_optimize(optimized)?;
+
         Ok(post_optimized)
     }
 

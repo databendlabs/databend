@@ -29,6 +29,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FilterHelpers;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
@@ -150,7 +151,7 @@ impl HiveTableSource {
             })?;
             valids.push(res.clone());
             // shortcut, if predicates is const boolean (or can be cast to boolean)
-            match DataBlock::filter_exists(&res)? {
+            match FilterHelpers::filter_exists(&res)? {
                 true => {
                     exists = true;
                 }

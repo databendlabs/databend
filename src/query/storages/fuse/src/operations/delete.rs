@@ -31,6 +31,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FilterHelpers;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
@@ -169,7 +170,7 @@ impl FuseTable {
         let res = evaluator
             .run(&filter_expr)
             .map_err(|(_, e)| ErrorCode::Internal(format!("eval try eval const failed: {}.", e)))?;
-        let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
+        let predicates = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
             ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
         })?;
 

@@ -27,6 +27,7 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FilterHelpers;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -195,7 +196,7 @@ impl JoinHashTable {
         let filter_vector: Value<AnyType> = evaluator
             .run(filter)
             .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
-        let predict_boolean_nonull = DataBlock::cast_to_nonull_boolean(&filter_vector)
+        let predict_boolean_nonull = FilterHelpers::cast_to_nonull_boolean(&filter_vector)
             .ok_or_else(|| ErrorCode::Internal("Cannot get the boolean column"))?;
 
         match predict_boolean_nonull {

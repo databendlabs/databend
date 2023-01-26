@@ -14,10 +14,10 @@
 
 use std::fmt::Debug;
 
+use common_expression::types::DataType;
 use common_expression::RemoteExpr;
 use common_expression::TableField;
 use common_expression::TableSchema;
-use common_expression::types::DataType;
 
 use crate::plan::Projection;
 
@@ -62,20 +62,24 @@ pub struct TopK {
 
 impl PushDownInfo {
     pub fn top_k(&self, schema: &TableSchema, support: fn(&DataType) -> bool) -> Option<TopK> {
-        if self.order_by.is_empty() && self.limit.is_some() {
+        if !self.order_by.is_empty() && self.limit.is_some() {
             let order = &self.order_by[0];
+            let limit = self.limit.unwrap();
+
+            const MAX_TOPK_LIMIT: usize = 1000;
+            if limit > MAX_TOPK_LIMIT {
+                return None;
+            }
+
             if let RemoteExpr::<String>::ColumnRef { id, .. } = &order.0 {
                 let field = schema.field_with_name(id).unwrap();
                 let data_type: DataType = field.data_type().into();
-                if support(&data_type) {
+                if !support(&data_type) {
                     return None;
                 }
-                
+
                 let leaf_fields = schema.leaf_fields();
-                let column_id = leaf_fields
-                .iter()
-                .position(|p| p == field)
-                .unwrap();
+                let column_id = leaf_fields.iter().position(|p| p == field).unwrap();
 
                 let top_k = TopK {
                     limit: self.limit.unwrap(),
