@@ -27,9 +27,9 @@ pub enum TableCompression {
 }
 
 impl Default for TableCompression {
-    // Default is LZ4.
+    // Default is zstd.
     fn default() -> Self {
-        TableCompression::LZ4
+        TableCompression::Zstd
     }
 }
 
@@ -39,11 +39,11 @@ impl TryFrom<&str> for TableCompression {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value.to_lowercase().as_str() {
+            "" => Ok(TableCompression::default()),
             "none" => Ok(TableCompression::None),
-            // Default is LZ4.
-            "" | "lz4" => Ok(TableCompression::LZ4),
-            "snappy" => Ok(TableCompression::Snappy),
             "zstd" => Ok(TableCompression::Zstd),
+            "lz4" => Ok(TableCompression::LZ4),
+            "snappy" => Ok(TableCompression::Snappy),
             other => Err(ErrorCode::UnknownFormat(format!(
                 "unsupported table compression: {}",
                 other
@@ -69,9 +69,9 @@ impl From<TableCompression> for native::Compression {
     fn from(value: TableCompression) -> Self {
         match value {
             TableCompression::None => native::Compression::None,
+            TableCompression::LZ4 => native::Compression::LZ4,
+            TableCompression::Snappy => native::Compression::SNAPPY,
             TableCompression::Zstd => native::Compression::ZSTD,
-            // Others to LZ4.
-            _ => native::Compression::LZ4,
         }
     }
 }
