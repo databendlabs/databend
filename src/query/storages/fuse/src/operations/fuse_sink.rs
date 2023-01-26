@@ -30,8 +30,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
 use storages_common_cache::CacheAccessor;
+use storages_common_cache_manager::CachedObject;
 use storages_common_index::*;
-use storages_common_table_meta::caches::CachedMeta;
 use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Location;
@@ -79,7 +79,7 @@ impl BloomIndexState {
             &[block],
         )?;
         if let Some(bloom_index) = maybe_bloom_index {
-            let index_block = bloom_index.serialize_to_data_block();
+            let index_block = bloom_index.serialize_to_data_block()?;
             let filter_schema = bloom_index.filter_schema;
             let column_distinct_count = bloom_index.column_distinct_count;
             let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);

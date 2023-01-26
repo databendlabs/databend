@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,14 @@
 // limitations under the License.
 //
 
-mod block_filter_reader;
-mod column_filter_reader;
+mod block_filter;
+mod block_filter_versions;
+mod xor8_filter;
 
-pub use block_filter_reader::BloomBlockFilterReader;
+pub use block_filter::BlockFilter;
+pub use block_filter_versions::BlockBloomFilterIndexVersion;
+pub use block_filter_versions::V2BloomBlock;
+pub use xor8_filter::Xor8Builder;
+pub use xor8_filter::Xor8BuildingError;
+pub use xor8_filter::Xor8CodecError;
+pub use xor8_filter::Xor8Filter;

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,9 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-mod block_filter_reader;
-mod column_filter_reader;
+use std::sync::Arc;
 
-pub use block_filter_reader::BloomBlockFilterReader;
+use common_expression::TableSchemaRef;
+
+use crate::filters::xor8::xor8_filter::Xor8Filter;
+
+/// Filters of a given DataBlock
+/// `filter_schema.fields.len()` should equals `filters.len()`
+pub struct BlockFilter {
+    // schema of index block, chosen columns only
+    pub filter_schema: TableSchemaRef,
+    // filters of index block, chosen columns only
+    pub filters: Vec<Arc<Xor8Filter>>,
+}

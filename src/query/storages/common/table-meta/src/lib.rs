@@ -15,6 +15,5 @@
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
 
-pub mod caches;
 pub mod meta;
 pub mod table;

@@ -29,8 +29,8 @@ use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
+use storages_common_cache_manager::CacheManager;
 use storages_common_index::BloomIndex;
-use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::StatisticsOfColumns;
@@ -243,7 +243,7 @@ impl Processor for CompactTransform {
                     let (index_data, index_size, index_location) = match maybe_bloom_index {
                         Some(bloom_index) => {
                             // write index
-                            let index_block = bloom_index.serialize_to_data_block();
+                            let index_block = bloom_index.serialize_to_data_block()?;
                             let index_block_schema = &bloom_index.filter_schema;
                             let location = self.location_gen.block_bloom_index_location(&block_id);
                             let mut data = Vec::with_capacity(100 * 1024);

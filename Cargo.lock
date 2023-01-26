@@ -2083,6 +2083,7 @@ dependencies = [
  "serde_json",
  "storages-common-blocks",
  "storages-common-cache",
+ "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
@@ -2119,6 +2120,7 @@ dependencies = [
  "ordered-float 3.4.0",
  "serde",
  "storages-common-cache",
+ "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
  "tracing",
@@ -3088,6 +3090,7 @@ dependencies = [
  "state",
  "storages-common-blocks",
  "storages-common-cache",
+ "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
  "temp-env",
@@ -7752,6 +7755,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "storages-common-cache-manager"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-base",
+ "common-config",
+ "common-exception",
+ "storages-common-cache",
+ "storages-common-index",
+ "storages-common-table-meta",
+]
+
+[[package]]
 name = "storages-common-index"
 version = "0.1.0"
 dependencies = [
@@ -7790,15 +7806,12 @@ dependencies = [
  "chrono",
  "common-arrow",
  "common-base",
- "common-config",
  "common-datavalues",
  "common-exception",
  "common-expression",
  "enum-as-inner",
  "once_cell",
  "serde",
- "storages-common-cache",
- "xorfilter-rs",
 ]
 
 [[package]]

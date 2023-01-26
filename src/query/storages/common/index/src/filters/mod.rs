@@ -19,6 +19,9 @@ mod xor8;
 
 pub use filter::Filter;
 pub use filter::FilterBuilder;
+pub use xor8::BlockBloomFilterIndexVersion;
+pub use xor8::BlockFilter;
+pub use xor8::V2BloomBlock;
 pub use xor8::Xor8Builder;
 pub use xor8::Xor8BuildingError;
 pub use xor8::Xor8CodecError;

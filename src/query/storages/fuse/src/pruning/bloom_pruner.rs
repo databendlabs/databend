@@ -29,7 +29,7 @@ use storages_common_index::BloomIndex;
 use storages_common_index::FilterEvalResult;
 use storages_common_table_meta::meta::Location;
 
-use crate::io::BloomFilterReader;
+use crate::io::BloomBlockFilterReader;
 
 #[async_trait::async_trait]
 pub trait FuseBloomPruner {
@@ -117,7 +117,7 @@ impl FuseBloomPrunerCreator {
     pub async fn apply(&self, index_location: &Location, index_length: u64) -> Result<bool> {
         // load the relevant index columns
         let maybe_filter = index_location
-            .read_bloom(self.dal.clone(), &self.index_columns, index_length)
+            .read_block_filter(self.dal.clone(), &self.index_columns, index_length)
             .await;
 
         match maybe_filter {

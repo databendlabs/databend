@@ -32,26 +32,25 @@ use storages_common_cache::CacheKey;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::LoaderWithCacheKey;
+use storages_common_cache_manager::CacheManager;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::Xor8Filter;
-use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta::ColumnId;
-use xorfilter::Xor8;
 
-type CachedReader = InMemoryItemCacheReader<Xor8, Xor8Loader>;
+type CachedReader = InMemoryItemCacheReader<Xor8Filter, Xor8Loader>;
 
 /// An wrapper of [InMemoryBytesCacheReader], uses [ColumnDataLoader] to
 /// load the data of a given bloom index column. Also
 /// - takes cares of getting the correct cache instance from [CacheManager]
 /// - generates the proper cache key
 ///
-/// this could be generified to be the template of cached data block column reader as well
-pub struct BloomIndexColumnReader {
+/// this could be generified to be the template of cached data block column reader
+pub struct BloomColumnFilterReader {
     cached_reader: CachedReader,
     param: LoadParams,
 }
 
-impl BloomIndexColumnReader {
+impl BloomColumnFilterReader {
     pub fn new(
         index_path: String,
         column_id: ColumnId,
@@ -69,7 +68,7 @@ impl BloomIndexColumnReader {
         };
 
         let cached_reader = CachedReader::new(
-            CacheManager::instance().get_bloom_index_cache(),
+            CacheManager::instance().get_bloom_index_filter_cache(),
             "bloom_index_data_cache".to_owned(),
             loader,
         );
@@ -80,13 +79,13 @@ impl BloomIndexColumnReader {
             ver: 0,
         };
 
-        BloomIndexColumnReader {
+        BloomColumnFilterReader {
             cached_reader,
             param,
         }
     }
 
-    pub async fn read(&self) -> Result<Arc<Xor8>> {
+    pub async fn read(&self) -> Result<Arc<Xor8Filter>> {
         self.cached_reader.read(&self.param).await
     }
 }
@@ -101,8 +100,8 @@ pub struct Xor8Loader {
 }
 
 #[async_trait::async_trait]
-impl LoaderWithCacheKey<Xor8> for Xor8Loader {
-    async fn load_with_cache_key(&self, params: &LoadParams) -> Result<Xor8> {
+impl LoaderWithCacheKey<Xor8Filter> for Xor8Loader {
+    async fn load_with_cache_key(&self, params: &LoadParams) -> Result<Xor8Filter> {
         let reader = self.operator.object(&params.location);
         let bytes = reader
             .range_read(self.offset..self.offset + self.len)
@@ -135,7 +134,7 @@ impl LoaderWithCacheKey<Xor8> for Xor8Loader {
                 Column::from_arrow(array.as_ref(), &common_expression::types::DataType::String);
             let bytes = unsafe { col.as_string().unwrap().index_unchecked(0) };
             let (filter, _size) = Xor8Filter::from_bytes(bytes)?;
-            Ok(filter.filter)
+            Ok(filter)
         } else {
             Err(ErrorCode::StorageOther(
                 "bloom index data not available as expected",

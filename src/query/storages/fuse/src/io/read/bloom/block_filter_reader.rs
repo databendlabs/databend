@@ -28,17 +28,51 @@ use common_expression::TableSchema;
 use futures_util::future::try_join_all;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
-use storages_common_table_meta::caches::BloomIndexMeta;
-use storages_common_table_meta::meta::BlockFilter;
+use storages_common_cache_manager::BloomIndexMeta;
+use storages_common_index::filters::Xor8Filter;
 use storages_common_table_meta::meta::ColumnId;
-use xorfilter::Xor8;
+use storages_common_table_meta::meta::Location;
 
-use crate::io::read::bloom::BloomIndexColumnReader;
+use crate::index::filters::BlockBloomFilterIndexVersion;
+use crate::index::filters::BlockFilter;
+use crate::io::read::bloom::column_filter_reader::BloomColumnFilterReader;
 use crate::io::MetaReaders;
+
+#[async_trait::async_trait]
+pub trait BloomBlockFilterReader {
+    async fn read_block_filter(
+        &self,
+        dal: Operator,
+        columns: &[String],
+        index_length: u64,
+    ) -> Result<BlockFilter>;
+}
+
+#[async_trait::async_trait]
+impl BloomBlockFilterReader for Location {
+    async fn read_block_filter(
+        &self,
+        dal: Operator,
+        columns: &[String],
+        index_length: u64,
+    ) -> Result<BlockFilter> {
+        let (path, ver) = &self;
+        let index_version = BlockBloomFilterIndexVersion::try_from(*ver)?;
+        match index_version {
+            BlockBloomFilterIndexVersion::V0(_) => Err(ErrorCode::DeprecatedIndexFormat(
+                "bloom filter index version(v0) is deprecated",
+            )),
+            BlockBloomFilterIndexVersion::V2(_) | BlockBloomFilterIndexVersion::V3(_) => {
+                let res = load_bloom_filter_by_columns(dal, columns, path, index_length).await?;
+                Ok(res)
+            }
+        }
+    }
+}
 
 /// load index column data
 #[tracing::instrument(level = "debug", skip_all)]
-pub async fn load_bloom_filter_by_columns<'a>(
+async fn load_bloom_filter_by_columns<'a>(
     dal: Operator,
     column_needed: &'a [String],
     index_path: &'a str,
@@ -60,6 +94,7 @@ pub async fn load_bloom_filter_by_columns<'a>(
     // 2.2 collects the column metas and their column ids
     let index_column_chunk_metas = file_meta.row_groups[0].columns();
     let mut col_metas = Vec::with_capacity(column_needed.len());
+    // TODO: wide table with kilo cols
     for column_name in column_needed {
         for (idx, column_chunk_meta) in index_column_chunk_metas.iter().enumerate() {
             if &column_chunk_meta.descriptor().path_in_schema[0] == column_name {
@@ -71,7 +106,9 @@ pub async fn load_bloom_filter_by_columns<'a>(
     // 3. load filters
     let futs = col_metas
         .iter()
-        .map(|(idx, col_chunk_meta)| load_column_xor8(*idx, col_chunk_meta, index_path, &dal))
+        .map(|(idx, col_chunk_meta)| {
+            load_column_xor8_filter(*idx, col_chunk_meta, index_path, &dal)
+        })
         .collect::<Vec<_>>();
 
     let filters = try_join_all(futs).await?.into_iter().collect();
@@ -98,16 +135,16 @@ pub async fn load_bloom_filter_by_columns<'a>(
 /// Loads bytes and index of the given column.
 /// read data from cache, or populate cache items if possible
 #[tracing::instrument(level = "debug", skip_all)]
-async fn load_column_xor8<'a>(
+async fn load_column_xor8_filter<'a>(
     idx: ColumnId,
     col_chunk_meta: &'a ColumnChunkMetaData,
     index_path: &'a str,
     dal: &'a Operator,
-) -> Result<Arc<Xor8>> {
+) -> Result<Arc<Xor8Filter>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
         let column_data_reader =
-            BloomIndexColumnReader::new(index_path.to_owned(), idx, col_chunk_meta, dal.clone());
+            BloomColumnFilterReader::new(index_path.to_owned(), idx, col_chunk_meta, dal.clone());
         async move { column_data_reader.read().await }
     }
     .execute_in_runtime(&storage_runtime)
