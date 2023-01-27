@@ -52,7 +52,7 @@ impl TopKSorter {
         });
     }
 
-    pub fn push_column_internal<T: ValueType>(&mut self, col: &Column, bitmap: &mut MutableBitmap)
+    fn push_column_internal<T: ValueType>(&mut self, col: &Column, bitmap: &mut MutableBitmap)
     where for<'a> T::ScalarRef<'a>: Ord {
         let col = T::try_downcast_column(col).unwrap();
         for (i, value) in T::iter_column(&col).enumerate() {
