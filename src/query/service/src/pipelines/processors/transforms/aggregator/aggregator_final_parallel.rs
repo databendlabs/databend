@@ -48,6 +48,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     query_ctx: Arc<QueryContext>,
     params: Arc<AggregatorParams>,
     buckets_blocks: HashMap<isize, Vec<DataBlock>>,
+    generated: bool,
 }
 
 impl<Method, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method>
@@ -63,6 +64,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             method,
             query_ctx: ctx,
             buckets_blocks: HashMap::new(),
+            generated: false,
         })
     }
 }
@@ -93,6 +95,10 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
+        if self.generated {
+            return Ok(vec![]);
+        }
+        
         let mut generate_blocks = Vec::new();
         let settings = self.query_ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
@@ -130,7 +136,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 generate_blocks.extend(join_handle.join()?);
             }
         }
-
+        self.generated = true;
         Ok(generate_blocks)
     }
 }
