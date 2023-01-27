@@ -57,7 +57,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-        ctx.try_set_partitions(parts.clone())?;
+        ctx.set_partitions(parts.clone())?;
         let stream = table
             .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
@@ -116,7 +116,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
         // inject partitions to current ctx
-        ctx.try_set_partitions(parts.clone())?;
+        ctx.set_partitions(parts.clone())?;
 
         let stream = table
             .read_data_block_stream(ctx.clone(), &DataSourcePlan {

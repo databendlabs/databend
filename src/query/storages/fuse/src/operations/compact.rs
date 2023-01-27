@@ -130,7 +130,7 @@ impl FuseTable {
             return Ok(false);
         }
 
-        ctx.try_set_partitions(mutator.compact_tasks.clone())?;
+        ctx.set_partitions(mutator.compact_tasks.clone())?;
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         // Add source pipe.

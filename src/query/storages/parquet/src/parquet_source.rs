@@ -24,6 +24,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
@@ -130,13 +131,13 @@ impl ParquetSource {
 
         if let Some(filter) = self.prewhere_filter.as_ref() {
             // do filter
-            let func_ctx = self.ctx.try_get_function_context()?;
+            let func_ctx = self.ctx.get_function_context()?;
             let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
             let res = evaluator.run(filter).map_err(|(_, e)| {
                 ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
             })?;
-            let filter = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
+            let filter = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
                 ErrorCode::BadArguments(
                     "Result of filter expression cannot be converted to boolean.",
                 )
@@ -159,7 +160,7 @@ impl ParquetSource {
 
                 // Generate a empty block.
                 self.state = Generated(
-                    self.ctx.try_get_part(),
+                    self.ctx.get_partition(),
                     DataBlock::empty_with_schema(self.output_schema.clone()),
                 );
                 return Ok(());
@@ -182,7 +183,7 @@ impl ParquetSource {
                 self.scan_progress.incr(&progress_values);
                 let block =
                     filtered_block.resort(self.src_schema.as_ref(), self.output_schema.as_ref())?;
-                self.state = Generated(self.ctx.try_get_part(), block);
+                self.state = Generated(self.ctx.get_partition(), block);
             } else {
                 self.state = State::ReadDataRemain(
                     part,
@@ -274,7 +275,7 @@ impl ParquetSource {
 
         let output_block =
             output_block.resort(self.src_schema.as_ref(), self.output_schema.as_ref())?;
-        self.state = State::Generated(self.ctx.try_get_part(), output_block);
+        self.state = State::Generated(self.ctx.get_partition(), output_block);
         Ok(())
     }
 }
@@ -291,7 +292,7 @@ impl Processor for ParquetSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadDataPrewhere(None)) {
-            self.state = match self.ctx.try_get_part() {
+            self.state = match self.ctx.get_partition() {
                 None => State::Finish,
                 Some(part) => State::ReadDataPrewhere(Some(part)),
             }

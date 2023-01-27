@@ -79,7 +79,7 @@ impl Processor for CompactSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadData(None)) {
-            self.state = match self.ctx.try_get_part() {
+            self.state = match self.ctx.get_partition() {
                 None => State::Finish,
                 Some(part) => State::ReadData(Some(part)),
             }
@@ -138,7 +138,7 @@ impl Processor for CompactSource {
             }
             State::Generate { order, tasks } => {
                 let meta = CompactSourceMeta::create(order, tasks);
-                let new_part = self.ctx.try_get_part();
+                let new_part = self.ctx.get_partition();
                 self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),

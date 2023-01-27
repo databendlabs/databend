@@ -232,7 +232,7 @@ impl Processor for CompactTransform {
                     let (block_location, block_id) = self.location_gen.gen_block_location();
 
                     // build block index.
-                    let func_ctx = self.ctx.try_get_function_context()?;
+                    let func_ctx = self.ctx.get_function_context()?;
                     let maybe_bloom_index = BloomIndex::try_create(
                         func_ctx,
                         self.schema.clone(),

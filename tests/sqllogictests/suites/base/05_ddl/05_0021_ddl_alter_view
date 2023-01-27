@@ -21,6 +21,21 @@ SELECT * FROM tmp_view
 1
 2
 
-statement ok
-DROP VIEW tmp_view
+query T
+DESCRIBE tmp_view;
+----
+number BIGINT UNSIGNED NO 0 (empty)
 
+statement ok
+ALTER VIEW tmp_view(c1) AS SELECT * from numbers(3)
+
+query T
+DESCRIBE tmp_view;
+----
+c1 BIGINT UNSIGNED NO 0 (empty)
+
+statement error 1018
+ALTER VIEW tmp_view(c1) AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a
+
+statement ok
+DROP VIEW IF EXISTS tmp_view

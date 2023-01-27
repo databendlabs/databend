@@ -87,7 +87,7 @@ pub enum Scalar {
     Variant(Vec<u8>),
 }
 
-#[derive(Clone, Default, EnumAsInner)]
+#[derive(Clone, Default, Eq, EnumAsInner)]
 pub enum ScalarRef<'a> {
     #[default]
     Null,
@@ -412,6 +412,12 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => common_jsonb::compare(v1, v2).ok(),
             _ => None,
         }
+    }
+}
+
+impl Ord for ScalarRef<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Equal)
     }
 }
 

@@ -18,11 +18,13 @@ use common_base::base::ProgressValues;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -49,7 +51,7 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::pruning::BlockPruner;
+use crate::pruning::FusePruner;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -164,12 +166,12 @@ impl FuseTable {
         let filter_expr = filter
             .as_expr(&BUILTIN_FUNCTIONS)
             .project_column_ref(|name| schema.index_of(name).unwrap());
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
         let res = evaluator
             .run(&filter_expr)
             .map_err(|(_, e)| ErrorCode::Internal(format!("eval try eval const failed: {}.", e)))?;
-        let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
+        let predicates = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
             ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
         })?;
 
@@ -255,15 +257,14 @@ impl FuseTable {
             ..PushDownInfo::default()
         });
 
-        let segments_location = base_snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(
+        let segment_locations = base_snapshot.segments.clone();
+        let pruner = FusePruner::create(
             &ctx,
             self.operator.clone(),
             self.table_info.schema(),
             &push_down,
-            segments_location,
-        )
-        .await?;
+        )?;
+        let block_metas = pruner.pruning(segment_locations).await?;
 
         let range_block_metas = block_metas
             .clone()
@@ -272,11 +273,11 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let (_, inner_parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             self.table_info.schema(),
             None,
             &range_block_metas,
             base_snapshot.summary.block_count as usize,
+            PruningStatistics::default(),
         )?;
 
         let parts = Partitions::create(
@@ -287,7 +288,7 @@ impl FuseTable {
                 .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
                 .collect(),
         );
-        ctx.try_set_partitions(parts)
+        ctx.set_partitions(parts)
     }
 
     pub fn try_add_mutation_transform(
@@ -336,7 +337,7 @@ impl FuseTable {
         let input_schema = self.table_info.schema();
         let mut merged: Vec<DataField> =
             input_schema.fields().iter().map(DataField::from).collect();
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;

@@ -498,10 +498,8 @@ impl<'a> Binder {
         // Copy options.
         {
             // on_error.
-            if !stmt.on_error.is_empty() {
-                stage.copy_options.on_error =
-                    OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
-            }
+            stage.copy_options.on_error =
+                OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
 
             // size_limit.
             if stmt.size_limit != 0 {

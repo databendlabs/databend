@@ -116,7 +116,7 @@ impl HiveTable {
         });
         let range_filter = match filter_expressions {
             Some(exprs) if !exprs.is_empty() => Some(RangeIndex::try_create(
-                ctx.try_get_function_context()?,
+                ctx.get_function_context()?,
                 &exprs,
                 self.table_info.schema(),
             )?),

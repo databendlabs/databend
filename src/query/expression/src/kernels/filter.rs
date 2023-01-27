@@ -20,124 +20,39 @@ use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::filter_helper::FilterHelpers;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
-use crate::types::number::NumberScalar;
 use crate::types::string::StringColumnBuilder;
 use crate::types::AnyType;
-use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
-use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
-use crate::Scalar;
 use crate::TypeDeserializer;
 use crate::Value;
 
 impl DataBlock {
-    // check if the predicate has any valid row
-    pub fn filter_exists(predicate: &Value<AnyType>) -> Result<bool> {
-        let predicate = Self::cast_to_nonull_boolean(predicate).ok_or_else(|| {
-            ErrorCode::BadDataValueType(format!(
-                "Filter predict column does not support type '{:?}'",
-                predicate
-            ))
-        })?;
-        match predicate {
-            Value::Scalar(s) => Ok(s),
-            Value::Column(bitmap) => Ok(bitmap.len() != bitmap.unset_bits()),
-        }
-    }
-
     pub fn filter(self, predicate: &Value<AnyType>) -> Result<DataBlock> {
         if self.num_rows() == 0 {
             return Ok(self);
         }
 
-        let predicate = Self::cast_to_nonull_boolean(predicate).ok_or_else(|| {
+        let predicate = FilterHelpers::cast_to_nonull_boolean(predicate).ok_or_else(|| {
             ErrorCode::BadDataValueType(format!(
                 "Filter predict column does not support type '{:?}'",
                 predicate
             ))
         })?;
 
-        match predicate {
-            Value::Scalar(s) => {
-                if s {
-                    Ok(self)
-                } else {
-                    Ok(self.slice(0..0))
-                }
-            }
-            Value::Column(bitmap) => Self::filter_with_bitmap(self, &bitmap),
-        }
-    }
-
-    // Must be numeric, boolean, or string value type
-    pub fn cast_to_nonull_boolean(predicate: &Value<AnyType>) -> Option<Value<BooleanType>> {
-        match predicate {
-            Value::Scalar(s) => Self::cast_scalar_to_boolean(s).map(Value::Scalar),
-            Value::Column(c) => Self::cast_column_to_boolean(c).map(Value::Column),
-        }
-    }
-
-    fn cast_scalar_to_boolean(s: &Scalar) -> Option<bool> {
-        match s {
-            Scalar::Number(num) => with_number_mapped_type!(|SRC_TYPE| match num {
-                NumberScalar::SRC_TYPE(value) => Some(value != &SRC_TYPE::default()),
-            }),
-            Scalar::Boolean(value) => Some(*value),
-            Scalar::String(value) => Some(!value.is_empty()),
-            Scalar::Timestamp(value) => Some(*value != 0),
-            Scalar::Date(value) => Some(*value != 0),
-            Scalar::Null => Some(false),
-            _ => None,
-        }
-    }
-
-    fn cast_column_to_boolean(c: &Column) -> Option<Bitmap> {
-        match c {
-            Column::Number(num) => with_number_mapped_type!(|SRC_TYPE| match num {
-                NumberColumn::SRC_TYPE(value) => Some(BooleanType::column_from_iter(
-                    value.iter().map(|v| v != &SRC_TYPE::default()),
-                    &[],
-                )),
-            }),
-            Column::Boolean(value) => Some(value.clone()),
-            Column::String(value) => Some(BooleanType::column_from_iter(
-                value.iter().map(|s| !s.is_empty()),
-                &[],
-            )),
-            Column::Timestamp(value) => Some(BooleanType::column_from_iter(
-                value.iter().map(|v| *v != 0),
-                &[],
-            )),
-            Column::Date(value) => Some(BooleanType::column_from_iter(
-                value.iter().map(|v| *v != 0),
-                &[],
-            )),
-            Column::Null { len } => Some(MutableBitmap::from_len_zeroed(*len).into()),
-            Column::Nullable(c) => {
-                let inner = Self::cast_column_to_boolean(&c.column)?;
-                Some((&inner) & (&c.validity))
-            }
-            _ => None,
-        }
-    }
-
-    pub fn try_as_const_bool(value: &Value<BooleanType>) -> Result<Option<bool>> {
-        match value {
-            Value::Scalar(v) => Ok(Some(*v)),
-            _ => Ok(None),
-        }
+        self.filter_boolean_value(predicate)
     }
 
     pub fn filter_with_bitmap(block: DataBlock, bitmap: &Bitmap) -> Result<DataBlock> {
@@ -167,6 +82,19 @@ impl DataBlock {
                     block.num_rows() - count_zeros,
                 ))
             }
+        }
+    }
+
+    pub fn filter_boolean_value(self, filter: Value<BooleanType>) -> Result<DataBlock> {
+        match filter {
+            Value::Scalar(s) => {
+                if s {
+                    Ok(self)
+                } else {
+                    Ok(self.slice(0..0))
+                }
+            }
+            Value::Column(bitmap) => Self::filter_with_bitmap(self, &bitmap),
         }
     }
 }

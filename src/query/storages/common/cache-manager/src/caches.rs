@@ -29,7 +29,7 @@ pub type TableSnapshotCache = InMemoryItemCacheHolder<TableSnapshot>;
 /// In memory object cache of TableSnapshotStatistics
 pub type TableSnapshotStatisticCache = InMemoryItemCacheHolder<TableSnapshotStatistics>;
 /// In memory data cache of bloom index data.
-/// For each indexed data block, the index data of column is cached individually
+/// For each indexed data block, the bloom xor8 filter of column is cached individually
 // TODO meter this by size?
 pub type BloomIndexFilterCache = InMemoryItemCacheHolder<Xor8Filter>;
 pub struct BloomIndexMeta(pub FileMetaData);

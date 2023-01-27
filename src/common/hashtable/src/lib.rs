@@ -26,6 +26,7 @@ mod lookup_hashtable;
 mod stack_hashtable;
 mod table0;
 
+mod simple_unsized_hashtable;
 #[allow(dead_code)]
 mod table1;
 mod table_empty;
@@ -70,11 +71,20 @@ pub type UnsizedHashMap<K, V> = unsized_hashtable::UnsizedHashtable<K, V>;
 pub type UnsizedHashMapIter<'a, K, V> = unsized_hashtable::UnsizedHashtableIter<'a, K, V>;
 pub type UnsizedHashMapIterMut<'a, K, V> = unsized_hashtable::UnsizedHashtableIterMut<'a, K, V>;
 pub type UnsizedHashSet<K> = unsized_hashtable::UnsizedHashtable<K, ()>;
-pub type UnsizedHashSetIter<'a, K> = unsized_hashtable::UnsizedHashtableIter<'a, K, ()>;
-pub type UnsizedHashSetIterMut<'a, K> = unsized_hashtable::UnsizedHashtableIterMut<'a, K, ()>;
 pub type UnsizedHashtableEntryRef<'a, K, V> = unsized_hashtable::UnsizedHashtableEntryRef<'a, K, V>;
 pub type UnsizedHashtableEntryMutRef<'a, K, V> =
     unsized_hashtable::UnsizedHashtableEntryMutRef<'a, K, V>;
+
+pub type SimpleUnsizedHashMap<K, V> = simple_unsized_hashtable::SimpleUnsizedHashtable<K, V>;
+pub type SimpleUnsizedHashMapIter<'a, K, V> =
+    simple_unsized_hashtable::SimpleUnsizedHashtableIter<'a, K, V>;
+pub type SimpleUnsizedHashMapIterMut<'a, K, V> =
+    simple_unsized_hashtable::SimpleUnsizedHashtableIterMut<'a, K, V>;
+pub type SimpleUnsizedHashSet<K> = simple_unsized_hashtable::SimpleUnsizedHashtable<K, ()>;
+pub type SimpleUnsizedHashtableEntryRef<'a, K, V> =
+    simple_unsized_hashtable::SimpleUnsizedHashtableEntryRef<'a, K, V>;
+pub type SimpleUnsizedHashtableEntryMutRef<'a, K, V> =
+    simple_unsized_hashtable::SimpleUnsizedHashtableEntryMutRef<'a, K, V>;
 
 pub type LookupHashMap<K, const CAPACITY: usize, V> = LookupHashtable<K, CAPACITY, V>;
 pub type LookupHashMapIter<'a, K, const CAPACITY: usize, V> = LookupTableIter<'a, CAPACITY, K, V>;

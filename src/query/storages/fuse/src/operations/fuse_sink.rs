@@ -72,12 +72,10 @@ impl BloomIndexState {
         location: Location,
     ) -> Result<Option<Self>> {
         // write index
-        let maybe_bloom_index = BloomIndex::try_create(
-            ctx.try_get_function_context()?,
-            source_schema,
-            location.1,
-            &[block],
-        )?;
+        let maybe_bloom_index =
+            BloomIndex::try_create(ctx.get_function_context()?, source_schema, location.1, &[
+                block,
+            ])?;
         if let Some(bloom_index) = maybe_bloom_index {
             let index_block = bloom_index.serialize_to_data_block()?;
             let filter_schema = bloom_index.filter_schema;

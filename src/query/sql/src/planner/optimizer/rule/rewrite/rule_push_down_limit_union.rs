@@ -98,8 +98,9 @@ impl Rule for RulePushDownLimitUnion {
         union_right_child = SExpr::create_unary(new_limit.into(), union_right_child);
 
         let mut result = SExpr::create_binary(union.into(), union_left_child, union_right_child);
+
         // Add original limit to top
-        result = SExpr::create_unary(limit.into(), result);
+        result = s_expr.replace_children(vec![result]);
         result.set_applied_rule(&self.id);
         state.add_result(result);
 

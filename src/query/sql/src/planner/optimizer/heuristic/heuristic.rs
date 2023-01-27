@@ -41,14 +41,15 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::PushDownLimitUnion,
         RuleID::RulePushDownLimitExpression,
         RuleID::PushDownLimitSort,
+        RuleID::PushDownLimitAggregate,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
-        RuleID::PushDownSortScan,
         RuleID::PushDownFilterEvalScalar,
         RuleID::PushDownFilterJoin,
         RuleID::FoldCountAggregate,
         RuleID::SplitAggregate,
         RuleID::PushDownFilterScan,
+        RuleID::PushDownSortScan,
     ]
 });
 
@@ -97,6 +98,13 @@ impl HeuristicOptimizer {
         let pre_optimized = self.pre_optimize(s_expr)?;
         let optimized = self.optimize_expression(&pre_optimized)?;
         let post_optimized = self.post_optimize(optimized)?;
+
+        // do it again, some rules may be missed after the post_optimized
+        // for example: push down sort + limit (topn) to scan
+        // TODO: if we push down the filter to scan, we need to remove the filter plan
+        let optimized = self.optimize_expression(&post_optimized)?;
+        let post_optimized = self.post_optimize(optimized)?;
+
         Ok(post_optimized)
     }
 
@@ -124,12 +132,10 @@ impl HeuristicOptimizer {
                     // Recursive optimize the result
                     let result = &state.results()[0];
                     let optimized_result = self.optimize_expression(result)?;
-
                     return Ok(optimized_result);
                 }
             }
         }
-
         Ok(s_expr.clone())
     }
 }

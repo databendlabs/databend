@@ -556,14 +556,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
             ~ #peroid_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
         },
-        |(_, _, opt_if_not_exists, (catalog, database, view), _, query)| {
+        |(_, _, opt_if_not_exists, (catalog, database, view), opt_columns, _, query)| {
             Statement::CreateView(CreateViewStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 catalog,
                 database,
                 view,
+                columns: opt_columns
+                    .map(|(_, columns, _)| columns)
+                    .unwrap_or_default(),
                 query: Box::new(query),
             })
         },
@@ -585,13 +589,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             ALTER ~ VIEW
             ~ #peroid_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
         },
-        |(_, _, (catalog, database, view), _, query)| {
+        |(_, _, (catalog, database, view), opt_columns, _, query)| {
             Statement::AlterView(AlterViewStmt {
                 catalog,
                 database,
                 view,
+                columns: opt_columns
+                    .map(|(_, columns, _)| columns)
+                    .unwrap_or_default(),
                 query: Box::new(query),
             })
         },
@@ -862,7 +870,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 single: Default::default(),
                 purge: Default::default(),
                 force: Default::default(),
-                on_error: Default::default(),
+                on_error: "abort".to_string(),
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -1021,9 +1029,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
         ),
         rule!(
-            #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
+            #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
-            | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
+            | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"

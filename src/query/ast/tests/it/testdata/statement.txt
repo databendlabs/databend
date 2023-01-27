@@ -1111,6 +1111,7 @@ CreateView(
             quote: None,
             span: Ident(12..13),
         },
+        columns: [],
         query: Query {
             span: [
                 SELECT(17..23),
@@ -1234,6 +1235,7 @@ AlterView(
             quote: None,
             span: Ident(11..12),
         },
+        columns: [],
         query: Query {
             span: [
                 SELECT(16..22),
@@ -1357,6 +1359,267 @@ DropView(
             name: "v",
             quote: None,
             span: Ident(10..11),
+        },
+    },
+)
+
+
+---------- Input ----------
+create view v1(c1) as select number % 3 as a from numbers(1000);
+---------- Output ---------
+CREATE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
+---------- AST ------------
+CreateView(
+    CreateViewStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v1",
+            quote: None,
+            span: Ident(12..14),
+        },
+        columns: [
+            Identifier {
+                name: "c1",
+                quote: None,
+                span: Ident(15..17),
+            },
+        ],
+        query: Query {
+            span: [
+                SELECT(22..28),
+                Ident(29..35),
+                Modulo(36..37),
+                LiteralInteger(38..39),
+                AS(40..42),
+                Ident(43..44),
+                FROM(45..49),
+                Ident(50..57),
+                LParen(57..58),
+                LiteralInteger(58..62),
+                RParen(62..63),
+            ],
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(22..28),
+                        Ident(29..35),
+                        Modulo(36..37),
+                        LiteralInteger(38..39),
+                        AS(40..42),
+                        Ident(43..44),
+                        FROM(45..49),
+                        Ident(50..57),
+                        LParen(57..58),
+                        LiteralInteger(58..62),
+                        RParen(62..63),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: BinaryOp {
+                                span: [
+                                    Modulo(36..37),
+                                ],
+                                op: Modulo,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(29..35),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "number",
+                                        quote: None,
+                                        span: Ident(29..35),
+                                    },
+                                },
+                                right: Literal {
+                                    span: [
+                                        LiteralInteger(38..39),
+                                    ],
+                                    lit: Integer(
+                                        3,
+                                    ),
+                                },
+                            },
+                            alias: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(43..44),
+                                },
+                            ),
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: [
+                                Ident(50..57),
+                                LParen(57..58),
+                                LiteralInteger(58..62),
+                                RParen(62..63),
+                            ],
+                            name: Identifier {
+                                name: "numbers",
+                                quote: None,
+                                span: Ident(50..57),
+                            },
+                            params: [
+                                Literal {
+                                    span: [
+                                        LiteralInteger(58..62),
+                                    ],
+                                    lit: Integer(
+                                        1000,
+                                    ),
+                                },
+                            ],
+                            named_params: [],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+alter view v1(c2) as select number % 3 as a from numbers(1000);
+---------- Output ---------
+ALTER VIEW v1 (c2) AS SELECT (number % 3) AS a FROM numbers(1000)
+---------- AST ------------
+AlterView(
+    AlterViewStmt {
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v1",
+            quote: None,
+            span: Ident(11..13),
+        },
+        columns: [
+            Identifier {
+                name: "c2",
+                quote: None,
+                span: Ident(14..16),
+            },
+        ],
+        query: Query {
+            span: [
+                SELECT(21..27),
+                Ident(28..34),
+                Modulo(35..36),
+                LiteralInteger(37..38),
+                AS(39..41),
+                Ident(42..43),
+                FROM(44..48),
+                Ident(49..56),
+                LParen(56..57),
+                LiteralInteger(57..61),
+                RParen(61..62),
+            ],
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: [
+                        SELECT(21..27),
+                        Ident(28..34),
+                        Modulo(35..36),
+                        LiteralInteger(37..38),
+                        AS(39..41),
+                        Ident(42..43),
+                        FROM(44..48),
+                        Ident(49..56),
+                        LParen(56..57),
+                        LiteralInteger(57..61),
+                        RParen(61..62),
+                    ],
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: BinaryOp {
+                                span: [
+                                    Modulo(35..36),
+                                ],
+                                op: Modulo,
+                                left: ColumnRef {
+                                    span: [
+                                        Ident(28..34),
+                                    ],
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "number",
+                                        quote: None,
+                                        span: Ident(28..34),
+                                    },
+                                },
+                                right: Literal {
+                                    span: [
+                                        LiteralInteger(37..38),
+                                    ],
+                                    lit: Integer(
+                                        3,
+                                    ),
+                                },
+                            },
+                            alias: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Ident(42..43),
+                                },
+                            ),
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: [
+                                Ident(49..56),
+                                LParen(56..57),
+                                LiteralInteger(57..61),
+                                RParen(61..62),
+                            ],
+                            name: Identifier {
+                                name: "numbers",
+                                quote: None,
+                                span: Ident(49..56),
+                            },
+                            params: [
+                                Literal {
+                                    span: [
+                                        LiteralInteger(57..61),
+                                    ],
+                                    lit: Integer(
+                                        1000,
+                                    ),
+                                },
+                            ],
+                            named_params: [],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
         },
     },
 )
@@ -6887,7 +7150,7 @@ Revoke(
 COPY INTO mytable
                 FROM @~/mybucket/data.csv
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -6895,7 +7158,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6929,7 +7192,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -6938,7 +7201,7 @@ Copy(
 COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -6946,7 +7209,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -6986,7 +7249,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -6998,7 +7261,7 @@ COPY INTO mytable
                     ENDPOINT_URL = 'http://127.0.0.1:9900'
                 )
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -7006,7 +7269,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7048,7 +7311,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7061,14 +7324,14 @@ COPY INTO mytable
                 )
                 size_limit=10
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
                 );
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7110,7 +7373,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7119,7 +7382,7 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7154,7 +7417,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7163,7 +7426,7 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7198,7 +7461,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7207,7 +7470,7 @@ Copy(
 COPY INTO mytable
                 FROM @my_stage
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -7215,7 +7478,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7249,7 +7512,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7258,7 +7521,7 @@ Copy(
 COPY INTO 's3://mybucket/data.csv'
                 FROM mytable
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -7266,7 +7529,7 @@ COPY INTO 's3://mybucket/data.csv'
                 size_limit=10;
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7306,7 +7569,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7315,7 +7578,7 @@ Copy(
 COPY INTO @my_stage
                 FROM mytable
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -7323,7 +7586,7 @@ COPY INTO @my_stage
                 size_limit=10;
 ---------- Output ---------
 COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7357,7 +7620,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7370,7 +7633,7 @@ COPY INTO mytable
                     AWS_SECRET_KEY = 'secret_key'
                 )
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -7378,7 +7641,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key' aws_secret_key='secret_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7421,7 +7684,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7430,7 +7693,7 @@ Copy(
 COPY INTO mytable
                 FROM @external_stage/path/to/file.csv
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -7438,7 +7701,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7472,7 +7735,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7481,7 +7744,7 @@ Copy(
 COPY INTO mytable
                 FROM @external_stage/path/to/dir/
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -7489,7 +7752,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7523,7 +7786,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7532,7 +7795,7 @@ Copy(
 COPY INTO mytable
                 FROM @external_stage/path/to/file.csv
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -7540,7 +7803,7 @@ COPY INTO mytable
                 force=true;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SINGLE = false PURGE = false FORCE = true ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SINGLE = false PURGE = false FORCE = true ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7574,7 +7837,7 @@ Copy(
         single: false,
         purge: false,
         force: true,
-        on_error: "",
+        on_error: "abort",
     },
 )
 
@@ -7583,7 +7846,7 @@ Copy(
 COPY INTO mytable
                 FROM 'fs:///path/to/data.csv'
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -7591,7 +7854,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7631,7 +7894,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        on_error: "",
+        on_error: "abort",
     },
 )
 

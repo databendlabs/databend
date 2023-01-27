@@ -26,7 +26,6 @@ use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
 use common_functions::aggregates::StateAddr;
-use common_functions::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
@@ -144,6 +143,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     params: Arc<AggregatorParams>,
     hash_table: Method::HashTable,
 
+    pub(crate) reach_limit: bool,
     // used for deserialization only, so we can reuse it during the loop
     temp_place: Option<StateAddr>,
 }
@@ -156,7 +156,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         let hash_table = method.create_hash_table()?;
         let temp_place = match params.aggregate_functions.is_empty() {
             true => None,
-            false => params.alloc_layout(&mut area),
+            false => Some(params.alloc_layout(&mut area)),
         };
 
         Ok(Self {
@@ -164,6 +164,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             method,
             params,
             hash_table,
+            reach_limit: false,
             temp_place,
         })
     }
@@ -187,6 +188,12 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 unsafe {
                     for key in keys_iter.iter() {
                         let _ = self.hash_table.insert_and_entry(key);
+                    }
+
+                    if let Some(limit) = self.params.limit {
+                        if self.hash_table.len() >= limit {
+                            break;
+                        }
                     }
                 }
             } else {
@@ -212,13 +219,13 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 let aggregate_functions = &self.params.aggregate_functions;
                 let offsets_aggregate_states = &self.params.offsets_aggregate_states;
                 if let Some(temp_place) = self.temp_place {
-                    for (row, place) in places.iter().enumerate() {
+                    for (row, place) in places.iter() {
                         for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                             let final_place = place.next(offsets_aggregate_states[idx]);
                             let state_place = temp_place.next(offsets_aggregate_states[idx]);
 
                             let mut data =
-                                unsafe { states_binary_columns[idx].index_unchecked(row) };
+                                unsafe { states_binary_columns[idx].index_unchecked(*row) };
                             aggregate_function.deserialize(state_place, &mut data)?;
                             aggregate_function.merge(final_place, state_place)?;
                         }
@@ -281,29 +288,49 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 
             let group_columns = group_columns_builder.finish()?;
             columns.extend_from_slice(&group_columns);
+
             Ok(vec![DataBlock::new_from_columns(columns)])
         }
     }
 
     /// Allocate aggregation function state for each key(the same key can always get the same state)
     #[inline(always)]
-    fn lookup_state(&mut self, keys_iter: &Method::KeysColumnIter) -> StateAddrs {
+    fn lookup_state(&mut self, keys_iter: &Method::KeysColumnIter) -> Vec<(usize, StateAddr)> {
         let iter = keys_iter.iter();
         let (len, _) = iter.size_hint();
         let mut places = Vec::with_capacity(len);
 
+        let mut current_len = self.hash_table.len();
         unsafe {
-            for key in iter {
+            for (row, key) in iter.enumerate() {
+                if self.reach_limit {
+                    let entry = self.hash_table.entry(key);
+                    match entry {
+                        Some(entry) => {
+                            let place = Into::<StateAddr>::into(*entry.get());
+                            places.push((row, place));
+                        }
+                        None => continue,
+                    }
+                }
+
                 match self.hash_table.insert_and_entry(key) {
                     Ok(mut entry) => {
-                        if let Some(place) = self.params.alloc_layout(&mut self.area) {
-                            places.push(place);
-                            *entry.get_mut() = place.addr();
+                        let place = self.params.alloc_layout(&mut self.area);
+                        places.push((row, place));
+
+                        *entry.get_mut() = place.addr();
+
+                        if let Some(limit) = self.params.limit {
+                            current_len += 1;
+                            if current_len >= limit {
+                                self.reach_limit = true;
+                            }
                         }
                     }
                     Err(entry) => {
                         let place = Into::<StateAddr>::into(*entry.get());
-                        places.push(place);
+                        places.push((row, place));
                     }
                 }
             }
