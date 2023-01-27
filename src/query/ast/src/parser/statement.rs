@@ -870,7 +870,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 single: Default::default(),
                 purge: Default::default(),
                 force: Default::default(),
-                on_error: Default::default(),
+                on_error: "abort".to_string(),
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
