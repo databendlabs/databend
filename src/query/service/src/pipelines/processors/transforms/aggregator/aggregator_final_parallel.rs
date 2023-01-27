@@ -316,8 +316,9 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                             let place = Into::<StateAddr>::into(*entry.get());
                             places.push((row, place));
                         }
-                        None => continue,
+                        None => {}
                     }
+                    continue;
                 }
 
                 match self.hash_table.insert_and_entry(key) {
@@ -365,7 +366,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
             .map(|(_, s)| *s)
             .collect::<Vec<_>>();
-
+        
         if !state_offsets.is_empty() {
             for group_entity in self.hash_table.iter() {
                 let place = Into::<StateAddr>::into(*group_entity.get());

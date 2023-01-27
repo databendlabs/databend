@@ -502,9 +502,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_block.take() {
+        if let Some(mut data_block) = self.input_block.take() {
             let mut blocks = vec![];
-            if let Some(meta) = data_block.get_meta() {
+            if let Some(meta) = data_block.take_meta() {
                 if let Some(meta) = meta.as_any().downcast_ref::<ConvertGroupingMetaInfo>() {
                     blocks.extend(meta.blocks.iter().cloned());
                 }

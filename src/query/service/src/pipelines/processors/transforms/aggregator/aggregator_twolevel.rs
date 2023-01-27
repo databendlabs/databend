@@ -154,9 +154,8 @@ where
                 continue;
             }
 
+            let capacity = inner_table.len();
             let iterator = inner_table.iter();
-
-            let (capacity, _) = iterator.size_hint();
 
             let aggregator_params = agg.params.as_ref();
             let funcs = &aggregator_params.aggregate_functions;
