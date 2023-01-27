@@ -190,7 +190,7 @@ impl JoinHashTable {
         merged_block: &DataBlock,
         filter: &Expr,
     ) -> Result<(Option<Bitmap>, bool, bool)> {
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
         // `predicate_column` contains a column, which is a boolean column.
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
         let filter_vector: Value<AnyType> = evaluator
@@ -214,7 +214,7 @@ impl JoinHashTable {
         merged_block: &DataBlock,
         filter: &Expr,
     ) -> Result<Column> {
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
 
         let filter_vector: Value<AnyType> = evaluator
@@ -350,7 +350,7 @@ impl JoinHashTable {
 
     // Add `data_block` for build table to `row_space`
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
         let mut data_block = data_block;
         if matches!(
             self.hash_join_desc.join_type,

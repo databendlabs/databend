@@ -136,7 +136,7 @@ impl NativeDeserializeDataTransform {
             }
         };
 
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         let prewhere_schema = src_schema.project(&prewhere_columns);
         let prewhere_filter = Self::build_prewhere_filter_expr(plan, func_ctx, &prewhere_schema)?;
 

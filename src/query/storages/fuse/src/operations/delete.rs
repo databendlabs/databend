@@ -166,7 +166,7 @@ impl FuseTable {
         let filter_expr = filter
             .as_expr(&BUILTIN_FUNCTIONS)
             .project_column_ref(|name| schema.index_of(name).unwrap());
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
         let res = evaluator
             .run(&filter_expr)
@@ -288,7 +288,7 @@ impl FuseTable {
                 .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
                 .collect(),
         );
-        ctx.try_set_partitions(parts)
+        ctx.set_partitions(parts)
     }
 
     pub fn try_add_mutation_transform(
@@ -337,7 +337,7 @@ impl FuseTable {
         let input_schema = self.table_info.schema();
         let mut merged: Vec<DataField> =
             input_schema.fields().iter().map(DataField::from).collect();
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;

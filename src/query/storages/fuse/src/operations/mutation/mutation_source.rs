@@ -128,7 +128,7 @@ impl Processor for MutationSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadData(None)) {
-            self.state = match self.ctx.try_get_part() {
+            self.state = match self.ctx.get_partition() {
                 None => State::Finish,
                 Some(part) => State::ReadData(Some(part)),
             }
@@ -177,7 +177,7 @@ impl Processor for MutationSource {
                 let num_rows = data_block.num_rows();
 
                 if let Some(filter) = self.filter.as_ref() {
-                    let func_ctx = self.ctx.try_get_function_context()?;
+                    let func_ctx = self.ctx.get_function_context()?;
                     let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
                     let res = evaluator.run(filter).map_err(|(_, e)| {
@@ -217,7 +217,7 @@ impl Processor for MutationSource {
                                         self.origin_stats.clone(),
                                     );
                                     self.state = State::Output(
-                                        self.ctx.try_get_part(),
+                                        self.ctx.get_partition(),
                                         DataBlock::empty_with_meta(meta),
                                     );
                                 } else {
@@ -255,7 +255,7 @@ impl Processor for MutationSource {
                         }
                     } else {
                         // Do nothing.
-                        self.state = State::Output(self.ctx.try_get_part(), DataBlock::empty());
+                        self.state = State::Output(self.ctx.get_partition(), DataBlock::empty());
                     }
                 } else {
                     let progress_values = ProgressValues {
@@ -299,13 +299,13 @@ impl Processor for MutationSource {
                 self.state = State::PerformOperator(data_block);
             }
             State::PerformOperator(data_block) => {
-                let func_ctx = self.ctx.try_get_function_context()?;
+                let func_ctx = self.ctx.get_function_context()?;
                 let block = self
                     .operators
                     .iter()
                     .try_fold(data_block, |input, op| op.execute(&func_ctx, input))?;
                 let meta = SerializeDataMeta::create(self.index.clone(), self.origin_stats.clone());
-                self.state = State::Output(self.ctx.try_get_part(), block.add_meta(Some(meta))?);
+                self.state = State::Output(self.ctx.get_partition(), block.add_meta(Some(meta))?);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

@@ -108,7 +108,7 @@ impl JoinHashTable {
         match &self.hash_join_desc.other_predicate {
             None => Ok(probed_blocks),
             Some(other_predicate) => {
-                let func_ctx = self.ctx.try_get_function_context()?;
+                let func_ctx = self.ctx.get_function_context()?;
                 let mut filtered_blocks = Vec::with_capacity(probed_blocks.len());
 
                 for probed_block in probed_blocks {

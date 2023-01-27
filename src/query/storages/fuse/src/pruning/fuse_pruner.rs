@@ -81,7 +81,7 @@ impl FusePruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
     ) -> Result<Self> {
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
 
         let filter_exprs = push_down.as_ref().map(|extra| {
             extra

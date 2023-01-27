@@ -133,7 +133,7 @@ impl FuseTable {
             push_downs: None,
         };
 
-        ctx.try_set_partitions(plan.parts.clone())?;
+        ctx.set_partitions(plan.parts.clone())?;
 
         // ReadDataKind to avoid OOM.
         self.do_read_data(ctx.clone(), &plan, pipeline)?;

@@ -238,7 +238,7 @@ impl JoinHashTable {
         input: &DataBlock,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
         let mut input = (*input).clone();
         if matches!(
             self.hash_join_desc.join_type,

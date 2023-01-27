@@ -83,7 +83,7 @@ impl SyncSource for ReadNativeDataSource<true> {
     const NAME: &'static str = "SyncReadNativeDataSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.ctx.try_get_part() {
+        match self.ctx.get_partition() {
             None => Ok(None),
             Some(part) => Ok(Some(DataBlock::empty_with_meta(
                 NativeDataSourceMeta::create(vec![part.clone()], vec![
@@ -128,7 +128,7 @@ impl Processor for ReadNativeDataSource<false> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let parts = self.ctx.try_get_parts(self.batch_size);
+        let parts = self.ctx.get_partitions(self.batch_size);
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
