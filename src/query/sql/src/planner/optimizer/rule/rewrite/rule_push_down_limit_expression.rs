@@ -72,7 +72,9 @@ impl Rule for RulePushDownLimitExpression {
 
         let limit_expr =
             SExpr::create_unary(RelOperator::Limit(limit), eval_plan.child(0)?.clone());
-        let result = SExpr::create_unary(RelOperator::EvalScalar(eval_scalar), limit_expr);
+        let mut result = SExpr::create_unary(RelOperator::EvalScalar(eval_scalar), limit_expr);
+
+        result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())
     }

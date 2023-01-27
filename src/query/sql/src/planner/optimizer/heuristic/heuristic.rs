@@ -132,7 +132,6 @@ impl HeuristicOptimizer {
                     // Recursive optimize the result
                     let result = &state.results()[0];
                     let optimized_result = self.optimize_expression(result)?;
-
                     return Ok(optimized_result);
                 }
             }

@@ -22,7 +22,6 @@ mod take;
 mod take_chunks;
 mod topk;
 
-pub use filter::FilterHelpers;
 pub use group_by::*;
 pub use group_by_hash::*;
 pub use sort::*;

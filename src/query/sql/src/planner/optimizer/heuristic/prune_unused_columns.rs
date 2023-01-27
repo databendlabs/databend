@@ -38,7 +38,9 @@ impl UnusedColumnPruner {
     }
 
     pub fn remove_unused_columns(&self, expr: &SExpr, require_columns: ColumnSet) -> Result<SExpr> {
-        Self::keep_required_columns(expr, require_columns)
+        let mut s_expr = Self::keep_required_columns(expr, require_columns)?;
+        s_expr.applied_rules = expr.applied_rules.clone();
+        Ok(s_expr)
     }
 
     /// Keep columns referenced by parent plan node.

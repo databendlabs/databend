@@ -78,7 +78,7 @@ impl Rule for RulePushDownLimitAggregate {
             agg_limit.limit = Some(agg_limit.limit.map_or(count, |c| cmp::max(c, count)));
             let agg = SExpr::create_unary(RelOperator::Aggregate(agg_limit), agg.child(0)?.clone());
 
-            let mut result = SExpr::create_unary(limit.into(), agg);
+            let mut result = s_expr.replace_children(vec![agg]);
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }
