@@ -79,12 +79,7 @@ impl StageTableSink {
             &ctx.get_settings(),
         )?;
 
-        let mut max_file_size = table_info.user_stage_info.copy_options.max_file_size;
-        if max_file_size == 0 {
-            // 64M per file by default
-            max_file_size = 64 * 1024 * 1024;
-        }
-
+        let max_file_size = Self::adjust_max_file_size(&ctx, &table_info)?;
         let single = table_info.user_stage_info.copy_options.single;
 
         Ok(ProcessorPtr::create(Box::new(StageTableSink {
@@ -95,9 +90,7 @@ impl StageTableSink {
             output,
             single,
             output_format,
-            working_buffer: Vec::with_capacity(
-                (max_file_size.min(256 * 1024) as f64 * 1.2) as usize,
-            ),
+            working_buffer: Vec::with_capacity((max_file_size as f64 * 1.2) as usize),
             working_datablocks: vec![],
             write_header: false,
 
@@ -106,6 +99,25 @@ impl StageTableSink {
             batch_id: 0,
             max_file_size,
         })))
+    }
+
+    fn adjust_max_file_size(
+        ctx: &Arc<dyn TableContext>,
+        stage_info: &StageTableInfo,
+    ) -> Result<usize> {
+        // 256M per file by default.
+        const DEFAULT_SIZE: usize = 256 * 1024 * 1024;
+        // max is half of the max memory usage.
+        let max_size = (ctx.get_settings().get_max_memory_usage()? / 2) as usize;
+
+        let mut max_file_size = stage_info.user_stage_info.copy_options.max_file_size;
+        if max_file_size == 0 {
+            max_file_size = DEFAULT_SIZE;
+        } else if max_file_size > max_size {
+            max_file_size = max_size
+        }
+
+        Ok(max_file_size)
     }
 
     pub fn unload_path(&self) -> String {

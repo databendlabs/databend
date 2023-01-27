@@ -2,7 +2,7 @@ statement ok
 DROP TABLE IF EXISTS t
 
 statement ok
-DROP STAGE IF EXISTS t_copy
+DROP TABLE IF EXISTS t_copy
 
 statement ok
 DROP STAGE IF EXISTS st
@@ -23,30 +23,37 @@ INSERT INTO t SELECT * FROM numbers(3)
 statement ok
 INSERT INTO t SELECT * FROM numbers(4)
 
+### Type tests ###
+
+###### TSV ######
 statement ok
 COPY INTO @st FROM t FILE_FORMAT=(type=TSV)
 
 statement ok
-COPY INTO t_copy from @st PATTERN='.*[.]tsv' file_format = (type = TSV);
+COPY INTO t_copy from @st PATTERN='.*[.]tsv' file_format = (type = TSV) PURGE = true
 
+###### CSV ######
 statement ok
 COPY INTO @st FROM t FILE_FORMAT=(type=CSV);
 
 statement ok
-COPY INTO t_copy from @st PATTERN='.*[.]csv' file_format = (type = CSV);
+COPY INTO t_copy from @st PATTERN='.*[.]csv' file_format = (type = CSV) PURGE = true
 
+###### NDJSON ######
 statement ok
 COPY INTO @st FROM t FILE_FORMAT=(type=NDJSON)
 
 statement ok
-COPY INTO t_copy from @st PATTERN='.*[.]ndjson' file_format = (type = NDJSON);
+COPY INTO t_copy from @st PATTERN='.*[.]ndjson' file_format = (type = NDJSON) PURGE = true
 
+###### PARQUET ######
 statement ok
 COPY INTO @st FROM t FILE_FORMAT=(type=PARQUET)
 
 statement ok
-COPY INTO t_copy from @st PATTERN='.*[.]parquet' file_format = (type = PARQUET);
+COPY INTO t_copy from @st PATTERN='.*[.]parquet' file_format = (type = PARQUET) PURGE = true
 
+###### JSON ######
 statement ok
 COPY INTO @st FROM t FILE_FORMAT=(type=JSON)
 
@@ -55,6 +62,11 @@ query II
 SELECT COUNT(*) FROM t_copy;
 ----
 28
+
+###### max_file_size check ######
+## 107374182400 = 100G
+statement ok
+COPY INTO @st FROM t FILE_FORMAT=(type=PARQUET) MAX_FILE_SIZE = 107374182400
 
 statement ok
 DROP TABLE t
