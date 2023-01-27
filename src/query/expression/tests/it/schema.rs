@@ -65,24 +65,17 @@ fn test_project_schema_from_tuple() -> Result<()> {
 #[test]
 fn test_schema_from_struct() -> Result<()> {
     let schema = create_test_complex_schema();
+    let flat_column_ids = schema.to_flat_column_ids();
 
-    let column_1_ids = ColumnIdVector::new(vec![0]);
-    let column_2_ids = ColumnIdVector::new(vec![1, 2, 3]);
-    let column_3_ids = ColumnIdVector::new(vec![4, 5]);
-    let column_4_ids = ColumnIdVector::new(vec![6]);
-    let column_5_ids = ColumnIdVector::new(vec![7]);
-    let column_6_ids = ColumnIdVector::new(vec![8]);
-    let column_7_ids = ColumnIdVector::new(vec![9]);
-    let column_8_ids = ColumnIdVector::new(vec![10, 11]);
     let expeted_column_ids = vec![
-        ("a", column_1_ids),
-        ("b", column_2_ids),
-        ("c", column_3_ids),
-        ("d", column_4_ids),
-        ("e", column_5_ids),
-        ("f", column_6_ids),
-        ("g", column_7_ids),
-        ("h", column_8_ids),
+        ("a", ColumnIdVector::new(vec![0])),
+        ("b", ColumnIdVector::new(vec![1, 1, 1, 2, 3, 3])),
+        ("c", ColumnIdVector::new(vec![4, 4, 4, 5])),
+        ("d", ColumnIdVector::new(vec![6, 6, 6])),
+        ("e", ColumnIdVector::new(vec![7, 7, 7])),
+        ("f", ColumnIdVector::new(vec![8, 8])),
+        ("g", ColumnIdVector::new(vec![9, 9])),
+        ("h", ColumnIdVector::new(vec![10, 10, 11])),
     ];
 
     for (i, column_id) in schema.field_column_ids().iter().enumerate() {
@@ -93,13 +86,42 @@ fn test_schema_from_struct() -> Result<()> {
         );
         assert_eq!(expeted_column_id.1, *column_id);
     }
+
+    let field1_flat_column_ids = vec![0];
+    let field2_flat_column_ids = vec![1, 2, 3];
+    let field3_flat_column_ids = vec![4, 5];
+    let field4_flat_column_ids = vec![6];
+    let field5_flat_column_ids = vec![7];
+    let field6_flat_column_ids = vec![8];
+    let field7_flat_column_ids = vec![9];
+    let field8_flat_column_ids = vec![10, 11];
+
+    let expeted_flat_column_ids = vec![
+        ("a", &field1_flat_column_ids),
+        ("b", &field2_flat_column_ids),
+        ("c", &field3_flat_column_ids),
+        ("d", &field4_flat_column_ids),
+        ("e", &field5_flat_column_ids),
+        ("f", &field6_flat_column_ids),
+        ("g", &field7_flat_column_ids),
+        ("h", &field8_flat_column_ids),
+    ];
+
+    for (i, column_id) in schema.field_column_ids().iter().enumerate() {
+        let expeted_column_id = &expeted_flat_column_ids[i];
+        assert_eq!(
+            expeted_column_id.0.to_string(),
+            schema.fields()[i].name().to_string()
+        );
+        assert_eq!(*expeted_column_id.1, column_id.to_flat_column_ids());
+    }
+
     assert_eq!(schema.next_column_id(), 12);
 
     // make sure column ids is adjacent integers(in case there is no add or drop column operations)
-    let column_ids = schema.to_column_ids();
-    assert_eq!(column_ids.len(), schema.next_column_id() as usize);
-    for i in 1..column_ids.len() {
-        assert_eq!(column_ids[i], column_ids[i - 1] + 1);
+    assert_eq!(flat_column_ids.len(), schema.next_column_id() as usize);
+    for i in 1..flat_column_ids.len() {
+        assert_eq!(flat_column_ids[i], flat_column_ids[i - 1] + 1);
     }
 
     Ok(())

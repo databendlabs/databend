@@ -264,8 +264,20 @@ impl ColumnIdVector {
         self.column_ids.push(id);
     }
 
+    pub fn to_flat_column_ids(&self) -> Vec<u32> {
+        let h: HashSet<u32> = HashSet::from_iter(self.column_ids.iter().cloned());
+        h.into_iter().sorted().collect()
+    }
+
+    // `to_column_ids` contains nest-type parent column id,
+    // if field is Tuple(t1, t2), it will return a column id vector of 3 column id.
+    // `to_flat_column_ids` return only the child column id.
     pub fn to_column_ids(&self) -> Vec<u32> {
         self.column_ids.clone()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.column_ids.is_empty()
     }
 }
 
@@ -295,6 +307,9 @@ impl TableSchema {
         field_column_ids: &mut ColumnIdVector,
         column_id_set: &mut HashSet<u32>,
     ) {
+        field_column_ids.push(*next_column_id);
+        column_id_set.insert(*next_column_id);
+
         match data_type {
             TableDataType::Tuple {
                 fields_name: _,
@@ -326,8 +341,6 @@ impl TableSchema {
                 );
             }
             _ => {
-                field_column_ids.push(*next_column_id);
-                column_id_set.insert(*next_column_id);
                 *next_column_id += 1;
             }
         }
@@ -339,21 +352,22 @@ impl TableSchema {
         next_column_id: u32,
     ) -> (u32, Vec<ColumnIdVector>, HashSet<u32>) {
         let mut new_next_column_id = 0;
-        let mut has_column_id_map_inited = false;
+        let mut has_column_id_inited = false;
         let mut field_column_ids = match field_column_ids {
             Some(field_column_ids) => {
-                has_column_id_map_inited = !field_column_ids.is_empty();
+                has_column_id_inited =
+                    !field_column_ids.is_empty() && !field_column_ids[0].is_empty();
                 field_column_ids
             }
             None => Vec::with_capacity(fields.len()),
         };
         let has_next_column_id_inited = next_column_id != 0;
         // make sure that column_id_map and next_column_id init at the same time
-        assert_eq!(has_column_id_map_inited, has_next_column_id_inited);
+        assert_eq!(has_column_id_inited, has_next_column_id_inited);
 
         let mut column_id_set = HashSet::new();
 
-        let has_inited = has_column_id_map_inited;
+        let has_inited = has_column_id_inited;
         if has_inited {
             field_column_ids.iter().for_each(|column_id_vector| {
                 column_id_vector.column_ids.iter().for_each(|id| {
@@ -409,7 +423,7 @@ impl TableSchema {
         }
     }
 
-    pub fn new_from_column_id_map(
+    pub fn new_from_column_ids(
         fields: Vec<TableField>,
         metadata: BTreeMap<String, String>,
         field_column_ids: Vec<ColumnIdVector>,
@@ -492,9 +506,21 @@ impl TableSchema {
             .unwrap()
             .iter()
             .for_each(|column_id_vector| {
-                column_id_vector.column_ids.iter().for_each(|id| {
-                    column_ids.push(*id);
-                });
+                column_ids.extend(column_id_vector.to_column_ids());
+            });
+
+        column_ids
+    }
+
+    pub fn to_flat_column_ids(&self) -> Vec<u32> {
+        let mut column_ids = Vec::with_capacity(self.fields.len());
+
+        self.field_column_ids
+            .as_ref()
+            .unwrap()
+            .iter()
+            .for_each(|column_id_vector| {
+                column_ids.extend(column_id_vector.to_flat_column_ids());
             });
 
         column_ids
@@ -703,9 +729,9 @@ impl TableSchema {
     #[must_use]
     pub fn project_by_fields(&self, fields: &BTreeMap<usize, TableField>) -> Self {
         let mut field_column_ids = Vec::with_capacity(fields.len());
-        let to_column_ids = self.to_column_ids();
+        let column_ids = self.to_column_ids();
         for index in fields.keys() {
-            field_column_ids.push(ColumnIdVector::new(vec![to_column_ids[*index]]));
+            field_column_ids.push(ColumnIdVector::new(vec![column_ids[*index]]));
         }
         Self {
             fields: fields.values().cloned().collect(),

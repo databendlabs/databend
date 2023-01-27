@@ -63,19 +63,24 @@ impl FromToProto for ex::TableSchema {
         let mut field_column_ids = Vec::with_capacity(p.fields.len());
         for (i, f) in p.fields.into_iter().enumerate() {
             fs.push(ex::TableField::from_pb(f)?);
-            field_column_ids.push(ex::ColumnIdVector::from_pb(p.field_column_ids[i].clone())?);
+            if i < p.field_column_ids.len() {
+                field_column_ids.push(ex::ColumnIdVector::from_pb(p.field_column_ids[i].clone())?);
+            } else {
+                field_column_ids.push(ex::ColumnIdVector::empty());
+            }
         }
 
-        let v = Self::new_from_column_id_map(fs, p.metadata, field_column_ids, p.next_column_id);
+        let v = Self::new_from_column_ids(fs, p.metadata, field_column_ids, p.next_column_id);
         Ok(v)
     }
 
     fn to_pb(&self) -> Result<pb::DataSchema, Incompatible> {
         let mut fs = Vec::with_capacity(self.fields().len());
         let mut field_column_ids = Vec::with_capacity(self.fields().len());
+        let schema_field_column_ids = self.field_column_ids();
         for (i, f) in self.fields().iter().enumerate() {
             fs.push(f.to_pb()?);
-            field_column_ids.push(self.field_column_ids()[i].to_pb()?);
+            field_column_ids.push(schema_field_column_ids[i].to_pb()?);
         }
 
         let p = pb::DataSchema {
