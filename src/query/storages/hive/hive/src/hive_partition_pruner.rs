@@ -75,7 +75,7 @@ impl HivePartitionPruner {
 
     pub fn prune(&self, partitions: Vec<String>) -> Result<Vec<String>> {
         let range_filter = RangeIndex::try_create(
-            self.ctx.try_get_function_context()?,
+            self.ctx.get_function_context()?,
             &self.filters,
             self.full_schema.clone(),
         )?;

@@ -94,7 +94,7 @@ impl FuseTable {
                     Result::<_, ErrorCode>::Ok(partitions)
                 })?;
 
-                query_ctx.try_set_partitions(partitions)?;
+                query_ctx.set_partitions(partitions)?;
 
                 Ok(())
             });

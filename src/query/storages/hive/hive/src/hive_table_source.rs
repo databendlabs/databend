@@ -126,7 +126,7 @@ impl HiveTableSource {
     }
 
     fn try_get_partitions(&mut self) -> Result<()> {
-        match self.ctx.try_get_part() {
+        match self.ctx.get_partition() {
             None => self.state = State::Finish,
             Some(part_info) => {
                 self.state = State::ReadMeta(Some(part_info));
@@ -143,7 +143,7 @@ impl HiveTableSource {
     ) -> Result<(bool, Vec<Value<AnyType>>)> {
         let mut valids = vec![];
         let mut exists = false;
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
         for datablock in data_blocks {
             let evaluator = Evaluator::new(datablock, func_ctx, &BUILTIN_FUNCTIONS);
             let res = evaluator.run(filter).map_err(|(_, e)| {
@@ -273,7 +273,7 @@ impl Processor for HiveTableSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadMeta(None)) {
-            match self.ctx.try_get_part() {
+            match self.ctx.get_partition() {
                 None => self.state = State::Finish,
                 Some(part_info) => {
                     self.state = State::ReadMeta(Some(part_info));

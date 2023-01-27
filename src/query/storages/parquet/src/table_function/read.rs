@@ -174,7 +174,7 @@ impl ParquetTable {
 
         let prewhere_reader = self.build_prewhere_reader(plan)?;
         let prewhere_filter = self.build_prewhere_filter_expr(
-            ctx.try_get_function_context()?,
+            ctx.get_function_context()?,
             plan,
             prewhere_reader.output_schema(),
         )?;

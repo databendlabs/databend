@@ -214,30 +214,36 @@ impl TableContext for QueryContext {
             }
         }
     }
+
     fn get_scan_progress(&self) -> Arc<Progress> {
         self.shared.scan_progress.clone()
     }
+
     fn get_scan_progress_value(&self) -> ProgressValues {
         self.shared.scan_progress.as_ref().get_values()
     }
+
     fn get_write_progress(&self) -> Arc<Progress> {
         self.shared.write_progress.clone()
     }
+
     fn get_write_progress_value(&self) -> ProgressValues {
         self.shared.write_progress.as_ref().get_values()
     }
+
     fn get_result_progress(&self) -> Arc<Progress> {
         self.shared.result_progress.clone()
     }
+
     fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
     }
 
-    fn try_get_part(&self) -> Option<PartInfoPtr> {
+    fn get_partition(&self) -> Option<PartInfoPtr> {
         self.partition_queue.write().pop_front()
     }
 
-    fn try_get_parts(&self, num: usize) -> Vec<PartInfoPtr> {
+    fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr> {
         let mut res = Vec::with_capacity(num);
         let mut partition_queue = self.partition_queue.write();
 
@@ -256,7 +262,7 @@ impl TableContext for QueryContext {
     }
 
     // Update the context partition pool from the pipeline builder.
-    fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
+    fn set_partitions(&self, partitions: Partitions) -> Result<()> {
         let mut partition_queue = self.partition_queue.write();
 
         partition_queue.clear();
@@ -265,8 +271,14 @@ impl TableContext for QueryContext {
         }
         Ok(())
     }
+
     fn attach_query_str(&self, kind: String, query: &str) {
         self.shared.attach_query_str(kind, query);
+    }
+
+    /// Get the session running query.
+    fn get_query_str(&self) -> String {
+        self.shared.get_query_str()
     }
 
     fn get_fragment_id(&self) -> usize {
@@ -282,6 +294,7 @@ impl TableContext for QueryContext {
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
     }
+
     fn get_current_catalog(&self) -> String {
         self.shared.get_current_catalog()
     }
@@ -293,64 +306,84 @@ impl TableContext for QueryContext {
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
+
     fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
+
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
     }
+
     fn get_fuse_version(&self) -> String {
         self.version.clone()
-    }
-    fn get_changed_settings(&self) -> Arc<Settings> {
-        self.shared.get_changed_settings()
-    }
-    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.shared.apply_changed_settings(changed_settings)
     }
 
     fn get_format_settings(&self) -> Result<FormatSettings> {
         self.shared.session.get_format_settings()
     }
+
     fn get_tenant(&self) -> String {
         self.shared.get_tenant()
-    }
-
-    /// Get the session running query.
-    fn get_query_str(&self) -> String {
-        self.shared.get_query_str()
     }
 
     fn get_query_kind(&self) -> String {
         self.shared.get_query_kind()
     }
 
-    // Get the storage data accessor operator from the session manager.
-    fn get_data_operator(&self) -> Result<DataOperator> {
-        Ok(self.shared.data_operator.clone())
-    }
-    fn push_precommit_block(&self, block: DataBlock) {
-        self.shared.push_precommit_block(block)
-    }
-    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        self.shared.consume_precommit_blocks()
-    }
-    fn try_get_function_context(&self) -> Result<FunctionContext> {
+    fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
         let tz = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
         Ok(FunctionContext { tz })
     }
+
     fn get_connection_id(&self) -> String {
         self.shared.get_connection_id()
     }
+
     fn get_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
     }
 
     fn get_cluster(&self) -> Arc<Cluster> {
         self.shared.get_cluster()
+    }
+
+    // Get all the processes list info.
+    fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        SessionManager::instance().processes_info()
+    }
+
+    // Get Stage Attachment.
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        self.shared.get_stage_attachment()
+    }
+
+    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
+        self.shared.set_on_error_map(map);
+    }
+
+    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        self.shared.apply_changed_settings(changed_settings)
+    }
+
+    fn get_changed_settings(&self) -> Arc<Settings> {
+        self.shared.get_changed_settings()
+    }
+
+    // Get the storage data accessor operator from the session manager.
+    fn get_data_operator(&self) -> Result<DataOperator> {
+        Ok(self.shared.data_operator.clone())
+    }
+
+    fn push_precommit_block(&self, block: DataBlock) {
+        self.shared.push_precommit_block(block)
+    }
+
+    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        self.shared.consume_precommit_blocks()
     }
 
     /// Fetch a Table by db and table name.
@@ -367,20 +400,6 @@ impl TableContext for QueryContext {
         table: &str,
     ) -> Result<Arc<dyn Table>> {
         self.shared.get_table(catalog, database, table).await
-    }
-
-    // Get all the processes list info.
-    fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        SessionManager::instance().processes_info()
-    }
-
-    // Get Stage Attachment.
-    fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        self.shared.get_stage_attachment()
-    }
-
-    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
-        self.shared.set_on_error_map(map);
     }
 }
 

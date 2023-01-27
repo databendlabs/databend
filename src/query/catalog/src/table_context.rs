@@ -72,17 +72,21 @@ pub trait TableContext: Send + Sync {
     /// A plan just contains raw information about a table or table function.
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
+
     fn get_scan_progress(&self) -> Arc<Progress>;
     fn get_scan_progress_value(&self) -> ProgressValues;
     fn get_write_progress(&self) -> Arc<Progress>;
     fn get_write_progress_value(&self) -> ProgressValues;
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
-    fn try_get_part(&self) -> Option<PartInfoPtr>;
-    fn try_get_parts(&self, num: usize) -> Vec<PartInfoPtr>;
-    // Update the context partition pool from the pipeline builder.
-    fn try_set_partitions(&self, partitions: Partitions) -> Result<()>;
+
+    fn get_partition(&self) -> Option<PartInfoPtr>;
+    fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;
+    fn set_partitions(&self, partitions: Partitions) -> Result<()>;
+
     fn attach_query_str(&self, kind: String, query: &str);
+    fn get_query_str(&self) -> String;
+
     fn get_fragment_id(&self) -> usize;
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
@@ -92,25 +96,26 @@ pub trait TableContext: Send + Sync {
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
     fn get_fuse_version(&self) -> String;
-    fn get_changed_settings(&self) -> Arc<Settings>;
-    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;
-    /// Get the session running query.
-    fn get_query_str(&self) -> String;
     /// Get the kind of session running query.
     fn get_query_kind(&self) -> String;
+    fn get_function_context(&self) -> Result<FunctionContext>;
+    fn get_connection_id(&self) -> String;
+    fn get_settings(&self) -> Arc<Settings>;
+    fn get_cluster(&self) -> Arc<Cluster>;
+    fn get_processes_info(&self) -> Vec<ProcessInfo>;
+    fn get_stage_attachment(&self) -> Option<StageAttachment>;
+    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>);
+
+    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
+    fn get_changed_settings(&self) -> Arc<Settings>;
+
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
-    fn try_get_function_context(&self) -> Result<FunctionContext>;
-    fn get_connection_id(&self) -> String;
-    fn get_settings(&self) -> Arc<Settings>;
-    fn get_cluster(&self) -> Arc<Cluster>;
+
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
-    fn get_processes_info(&self) -> Vec<ProcessInfo>;
-    fn get_stage_attachment(&self) -> Option<StageAttachment>;
-    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>);
 }
