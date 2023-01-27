@@ -24,6 +24,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::AnyType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
@@ -150,7 +151,7 @@ impl HiveTableSource {
             })?;
             valids.push(res.clone());
             // shortcut, if predicates is const boolean (or can be cast to boolean)
-            match DataBlock::filter_exists(&res)? {
+            match FilterHelpers::filter_exists(&res)? {
                 true => {
                     exists = true;
                 }

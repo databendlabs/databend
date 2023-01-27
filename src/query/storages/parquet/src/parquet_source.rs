@@ -24,6 +24,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
@@ -136,7 +137,7 @@ impl ParquetSource {
             let res = evaluator.run(filter).map_err(|(_, e)| {
                 ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
             })?;
-            let filter = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
+            let filter = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
                 ErrorCode::BadArguments(
                     "Result of filter expression cannot be converted to boolean.",
                 )

@@ -24,6 +24,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -170,7 +171,7 @@ impl FuseTable {
         let res = evaluator
             .run(&filter_expr)
             .map_err(|(_, e)| ErrorCode::Internal(format!("eval try eval const failed: {}.", e)))?;
-        let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
+        let predicates = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
             ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
         })?;
 

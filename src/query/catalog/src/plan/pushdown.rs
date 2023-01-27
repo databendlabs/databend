@@ -14,7 +14,9 @@
 
 use std::fmt::Debug;
 
+use common_expression::types::DataType;
 use common_expression::RemoteExpr;
+use common_expression::TableField;
 use common_expression::TableSchema;
 
 use crate::plan::Projection;
@@ -48,7 +50,52 @@ pub struct PushDownInfo {
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
 }
 
+/// TopK is a wrapper for topk push down items.
+/// We only take the first column in order_by as the topk column.
+#[derive(Debug, Clone)]
+pub struct TopK {
+    pub limit: usize,
+    pub order_by: TableField,
+    pub asc: bool,
+    pub column_id: u32,
+}
+
 impl PushDownInfo {
+    pub fn top_k(&self, schema: &TableSchema, support: fn(&DataType) -> bool) -> Option<TopK> {
+        if !self.order_by.is_empty() && self.limit.is_some() {
+            let order = &self.order_by[0];
+            let limit = self.limit.unwrap();
+
+            const MAX_TOPK_LIMIT: usize = 1000;
+            if limit > MAX_TOPK_LIMIT {
+                return None;
+            }
+
+            if let RemoteExpr::<String>::ColumnRef { id, .. } = &order.0 {
+                let field = schema.field_with_name(id).unwrap();
+                let data_type: DataType = field.data_type().into();
+                if !support(&data_type) {
+                    return None;
+                }
+
+                let leaf_fields = schema.leaf_fields();
+                let column_id = leaf_fields.iter().position(|p| p == field).unwrap();
+
+                let top_k = TopK {
+                    limit: self.limit.unwrap(),
+                    order_by: field.clone(),
+                    asc: order.1,
+                    column_id: column_id as u32,
+                };
+                Some(top_k)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     pub fn prewhere_of_push_downs(push_downs: &Option<PushDownInfo>) -> Option<PrewhereInfo> {
         if let Some(PushDownInfo { prewhere, .. }) = push_downs {
             prewhere.clone()

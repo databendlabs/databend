@@ -86,13 +86,15 @@ impl Rule for RulePushDownLimitOuterJoin {
             let join: Join = child.plan().clone().try_into()?;
             match join.join_type {
                 JoinType::Left | JoinType::Full => {
-                    state.add_result(s_expr.replace_children(vec![child.replace_children(vec![
+                    let mut result = s_expr.replace_children(vec![child.replace_children(vec![
                         SExpr::create_unary(
                             RelOperator::Limit(limit.clone()),
                             child.child(0)?.clone(),
                         ),
                         SExpr::create_unary(RelOperator::Limit(limit), child.child(1)?.clone()),
-                    ])]))
+                    ])]);
+                    result.set_applied_rule(&self.id);
+                    state.add_result(result)
                 }
                 _ => {}
             }

@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::constant_bitmap;
 use common_expression::arrow::or_validities;
+use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
@@ -195,7 +196,7 @@ impl JoinHashTable {
         let filter_vector: Value<AnyType> = evaluator
             .run(filter)
             .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
-        let predict_boolean_nonull = DataBlock::cast_to_nonull_boolean(&filter_vector)
+        let predict_boolean_nonull = FilterHelpers::cast_to_nonull_boolean(&filter_vector)
             .ok_or_else(|| ErrorCode::Internal("Cannot get the boolean column"))?;
 
         match predict_boolean_nonull {
