@@ -76,7 +76,7 @@ select count(*) from bloom_test_t where c2 = 5
 query T
 select count(*) from bloom_test_t where c1 = 5
 ----
-5 6
+1
 
 statement ok
 drop table bloom_test_t
