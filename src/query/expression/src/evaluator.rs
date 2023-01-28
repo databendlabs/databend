@@ -64,6 +64,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    #[cfg(debug_assertions)]
     fn check_expr(&self, expr: &Expr) {
         let column_refs = expr.column_refs();
         for (index, datatype) in column_refs.iter() {
