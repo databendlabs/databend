@@ -48,6 +48,7 @@ pub struct SingleStateAggregator<const FINAL: bool> {
     layout: Layout,
     offsets_aggregate_states: Vec<usize>,
     max_threads: usize,
+    generated: bool,
     states_dropped: bool,
 }
 
@@ -84,6 +85,7 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
             layout,
             offsets_aggregate_states: params.offsets_aggregate_states.clone(),
             states_dropped: false,
+            generated: false,
             max_threads,
         })
     }
@@ -145,6 +147,10 @@ impl Aggregator for SingleStateAggregator<true> {
     }
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
+        if self.generated {
+            return Ok(vec![]);
+        }
+
         let mut aggr_values = {
             let mut builders = vec![];
             for func in &self.funcs {
@@ -179,6 +185,7 @@ impl Aggregator for SingleStateAggregator<true> {
             columns.push(builder.build());
         }
 
+        self.generated = true;
         Ok(vec![DataBlock::new_from_columns(columns)])
     }
 }
@@ -209,6 +216,10 @@ impl Aggregator for SingleStateAggregator<false> {
     }
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
+        if self.generated {
+            return Ok(vec![]);
+        }
+
         let mut columns = Vec::with_capacity(self.funcs.len());
 
         for (idx, func) in self.funcs.iter().enumerate() {
@@ -221,8 +232,8 @@ impl Aggregator for SingleStateAggregator<false> {
                 value: Value::Scalar(Scalar::String(data)),
             });
         }
-
         self.drop_states();
+        self.generated = true;
         Ok(vec![DataBlock::new(columns, 1)])
     }
 }

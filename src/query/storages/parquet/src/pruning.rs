@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fs::File;
 use std::io::Read;
 use std::io::Seek;
 use std::sync::Arc;
@@ -37,6 +36,7 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
+use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
@@ -67,6 +67,7 @@ use crate::statistics::BatchStatistics;
 pub fn prune_and_set_partitions(
     ctx: &Arc<dyn TableContext>,
     locations: &[String],
+    operator: &Operator,
     schema: &TableSchemaRef,
     filters: &Option<&[Expr<String>]>,
     columns_to_read: &HashSet<usize>,
@@ -91,10 +92,8 @@ pub fn prune_and_set_partitions(
     };
 
     for location in locations {
-        let mut file = File::open(location).map_err(|e| {
-            ErrorCode::Internal(format!("Failed to open file '{}': {}", location, e))
-        })?;
-        let file_meta = pread::read_metadata(&mut file).map_err(|e| {
+        let mut reader = operator.object(location).blocking_reader()?;
+        let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
             ErrorCode::Internal(format!(
                 "Read parquet file '{}''s meta error: {}",
                 location, e
@@ -137,7 +136,7 @@ pub fn prune_and_set_partitions(
                 }) {
                 page_pruners
                     .as_ref()
-                    .map(|pruners| filter_pages(&mut file, schema, rg, pruners))
+                    .map(|pruners| filter_pages(&mut reader, schema, rg, pruners))
                     .transpose()
                     .unwrap_or(None)
             } else {

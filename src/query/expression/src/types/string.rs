@@ -260,6 +260,14 @@ impl StringColumnBuilder {
         }
     }
 
+    pub fn from_data(data: Vec<u8>, offsets: Vec<u64>) -> Self {
+        StringColumnBuilder {
+            need_estimated: false,
+            data,
+            offsets,
+        }
+    }
+
     pub fn repeat(scalar: &[u8], n: usize) -> Self {
         let len = scalar.len();
         let mut data = Vec::with_capacity(len * n);

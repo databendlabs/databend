@@ -104,6 +104,7 @@ pub trait Aggregator: Sized + Send {
     const NAME: &'static str;
 
     fn consume(&mut self, data: DataBlock) -> Result<()>;
+    // Generate could be called multiple times util it returns empty.
     fn generate(&mut self) -> Result<Vec<DataBlock>>;
 }
 
@@ -395,10 +396,13 @@ struct GenerateState<TAggregator: Aggregator> {
 impl<TAggregator: Aggregator> GenerateState<TAggregator> {
     pub fn generate(&mut self) -> Result<()> {
         if !self.is_generated {
-            self.is_generated = true;
             self.output_data_block = self.inner.generate()?;
-        }
 
+            // if it's empty, it means the aggregator is finished.
+            if self.output_data_block.is_empty() {
+                self.is_generated = true;
+            }
+        }
         Ok(())
     }
 }
