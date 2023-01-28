@@ -98,7 +98,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         if self.generated {
             return Ok(vec![]);
         }
-        
+
         let mut generate_blocks = Vec::new();
         let settings = self.query_ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
@@ -366,7 +366,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
             .map(|(_, s)| *s)
             .collect::<Vec<_>>();
-        
+
         if !state_offsets.is_empty() {
             for group_entity in self.hash_table.iter() {
                 let place = Into::<StateAddr>::into(*group_entity.get());

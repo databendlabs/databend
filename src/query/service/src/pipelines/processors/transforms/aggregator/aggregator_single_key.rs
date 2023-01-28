@@ -150,7 +150,7 @@ impl Aggregator for SingleStateAggregator<true> {
         if self.generated {
             return Ok(vec![]);
         }
-        
+
         let mut aggr_values = {
             let mut builders = vec![];
             for func in &self.funcs {
@@ -184,7 +184,7 @@ impl Aggregator for SingleStateAggregator<true> {
         for builder in aggr_values {
             columns.push(builder.build());
         }
-        
+
         self.generated = true;
         Ok(vec![DataBlock::new_from_columns(columns)])
     }
@@ -219,7 +219,7 @@ impl Aggregator for SingleStateAggregator<false> {
         if self.generated {
             return Ok(vec![]);
         }
-        
+
         let mut columns = Vec::with_capacity(self.funcs.len());
 
         for (idx, func) in self.funcs.iter().enumerate() {

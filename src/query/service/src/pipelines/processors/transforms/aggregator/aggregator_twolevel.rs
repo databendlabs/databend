@@ -208,7 +208,7 @@ where
             ));
 
             clear_table(inner_table, &agg.params);
-            
+
             // streaming return two level blocks by bucket
             return Ok(data_blocks);
         }
