@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 use std::any::Any;
-use std::fs::File;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
@@ -90,11 +89,16 @@ impl ParquetTable {
             ));
         }
 
+        let mut builder = opendal::services::fs::Builder::default();
+        builder.root("/");
+        let operator = Operator::new(builder.build()?);
+
         let mut file_locations = Vec::with_capacity(args.len());
         for arg in args.iter().take(path_num) {
             match arg {
                 Scalar::String(path) => {
                     let maybe_glob_path = std::str::from_utf8(path).unwrap();
+                    // TODO: use OpenDAL.
                     let paths = glob::glob(maybe_glob_path)
                         .map_err(|e| ErrorCode::Internal(format!("glob error: {}", e)))?;
                     for entry in paths {
@@ -122,24 +126,17 @@ impl ParquetTable {
             ));
         }
 
-        let mut builder = opendal::services::fs::Builder::default();
-        builder.root("/");
-        let operator = Operator::new(builder.build()?);
-
         // Now, `read_options` is hard-coded.
         let read_options = ReadOptions::try_from(&args[path_num..])?;
 
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let location = &file_locations[0];
-        let mut file = File::open(location).map_err(|e| {
-            ErrorCode::Internal(format!("Failed to open file '{}': {}", location, e))
-        })?;
-        let first_meta = pread::read_metadata(&mut file).map_err(|e| {
+        let mut reader = operator.object(&file_locations[0]).blocking_reader()?;
+        let first_meta = pread::read_metadata(&mut reader).map_err(|e| {
             ErrorCode::Internal(format!(
                 "Read parquet file '{}''s meta error: {}",
-                location, e
+                &file_locations[0], e
             ))
         })?;
         let arrow_schema = pread::infer_schema(&first_meta)?;

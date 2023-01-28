@@ -28,7 +28,6 @@ use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::Value;
@@ -66,11 +65,18 @@ enum State {
 
 pub struct ParquetSource {
     state: State,
+    progress_values: ProgressValues,
+
     ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
-    /// The schema before output. Some fields might be removed when outputing.
-    src_schema: DataSchemaRef,
+
+    // The schemas are used for `DataBlock::resort` to remove columns that are not needed.
+    // Remove columns before `DataBlock::filter` can reduce memory copy.
+    /// The schema after prewhere filter. (Remove columns not output)
+    after_filter_schema: DataSchemaRef,
+    /// The schema after add remain columns.
+    after_remain_schema: DataSchemaRef,
     /// The final output schema
     output_schema: DataSchemaRef,
 
@@ -85,27 +91,27 @@ impl ParquetSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        output_schema: DataSchemaRef,
+        (after_filter_schema, after_remain_schema, output_schema): (
+            DataSchemaRef,
+            DataSchemaRef,
+            DataSchemaRef,
+        ),
         prewhere_reader: Arc<ParquetReader>,
         prewhere_filter: Arc<Option<Expr>>,
         remain_reader: Arc<Option<ParquetReader>>,
         read_options: ReadOptions,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let mut src_fields = prewhere_reader.output_schema().fields().clone();
-        if let Some(reader) = remain_reader.as_ref() {
-            let remain_field = reader.output_schema().fields();
-            src_fields.extend_from_slice(remain_field);
-        }
-        let src_schema = DataSchemaRefExt::create(src_fields);
 
         Ok(ProcessorPtr::create(Box::new(ParquetSource {
             ctx,
             output,
             scan_progress,
+            progress_values: ProgressValues::default(),
             state: State::ReadDataPrewhere(None),
+            after_filter_schema,
+            after_remain_schema,
             output_schema,
-            src_schema,
             prewhere_reader,
             prewhere_filter,
             remain_reader,
@@ -128,6 +134,9 @@ impl ParquetSource {
             self.prewhere_reader
                 .deserialize(rg_part, raw_chunks, None)?
         };
+
+        self.progress_values.rows = data_block.num_rows();
+        self.progress_values.bytes = data_block.memory_size();
 
         if let Some(filter) = self.prewhere_filter.as_ref() {
             // do filter
@@ -152,12 +161,6 @@ impl ParquetSource {
                 // shortcut:
                 // all rows in this block are filtered out
                 // turn to begin the next state cycle.
-                let progress_values = ProgressValues {
-                    rows: data_block.num_rows(),
-                    bytes: data_block.memory_size(),
-                };
-                self.scan_progress.incr(&progress_values);
-
                 // Generate a empty block.
                 self.state = Generated(
                     self.ctx.get_partition(),
@@ -166,24 +169,21 @@ impl ParquetSource {
                 return Ok(());
             }
 
-            let (rows, bytes) = if self.remain_reader.is_none() {
-                (data_block.num_rows(), data_block.memory_size())
-            } else {
-                (0, 0)
-            };
+            let block_removed_columns = data_block.resort(
+                &self.prewhere_reader.output_schema,
+                &self.after_filter_schema,
+            )?;
 
             let filtered_block = match &filter {
-                Value::Scalar(_) => data_block,
-                Value::Column(bitmap) => DataBlock::filter_with_bitmap(data_block, bitmap)?,
+                Value::Scalar(_) => block_removed_columns,
+                Value::Column(bitmap) => {
+                    DataBlock::filter_with_bitmap(block_removed_columns, bitmap)?
+                }
             };
 
             if self.remain_reader.is_none() {
                 // shortcut, we don't need to read remain data
-                let progress_values = ProgressValues { rows, bytes };
-                self.scan_progress.incr(&progress_values);
-                let block =
-                    filtered_block.resort(self.src_schema.as_ref(), self.output_schema.as_ref())?;
-                self.state = Generated(self.ctx.get_partition(), block);
+                self.state = Generated(self.ctx.get_partition(), filtered_block);
             } else {
                 self.state = State::ReadDataRemain(
                     part,
@@ -223,7 +223,11 @@ impl ParquetSource {
                     Value::Scalar(_) => {
                         // The case of all filtered is already covered in `do_prewhere_filter`.
                         // don't need filter
-                        remain_reader.deserialize(rg_part, raw_chunks, None)?
+                        let block = remain_reader.deserialize(rg_part, raw_chunks, None)?;
+
+                        self.progress_values.bytes += block.memory_size();
+
+                        block
                     }
                     Value::Column(bitmap) => {
                         if !self.read_options.push_down_bitmap() || bitmap.unset_bits() == 0 {
@@ -236,9 +240,17 @@ impl ParquetSource {
                             } else {
                                 remain_reader.deserialize(rg_part, raw_chunks, None)?
                             };
+
+                            self.progress_values.bytes += block.memory_size();
+
                             DataBlock::filter_with_bitmap(block, &bitmap)?
                         } else {
-                            remain_reader.deserialize(rg_part, raw_chunks, Some(bitmap))?
+                            let block =
+                                remain_reader.deserialize(rg_part, raw_chunks, Some(bitmap))?;
+
+                            self.progress_values.bytes += block.memory_size();
+
+                            block
                         }
                     }
                 };
@@ -259,22 +271,19 @@ impl ParquetSource {
             } else {
                 return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
             };
-            block
+            block.resort(&self.after_remain_schema, &self.output_schema)?
         } else {
             // There is only prewhere reader.
             assert!(self.remain_reader.is_none());
-            self.prewhere_reader
-                .deserialize(rg_part, raw_chunks, None)?
-        };
+            let block = self
+                .prewhere_reader
+                .deserialize(rg_part, raw_chunks, None)?;
 
-        let progress_values = ProgressValues {
-            rows: output_block.num_rows(),
-            bytes: output_block.memory_size(),
-        };
-        self.scan_progress.incr(&progress_values);
+            self.progress_values.rows = block.num_rows();
+            self.progress_values.bytes = block.memory_size();
 
-        let output_block =
-            output_block.resort(self.src_schema.as_ref(), self.output_schema.as_ref())?;
+            block.resort(&self.prewhere_reader.output_schema, &self.output_schema)?
+        };
         self.state = State::Generated(self.ctx.get_partition(), output_block);
         Ok(())
     }
@@ -316,6 +325,8 @@ impl Processor for ParquetSource {
                 if let Some(part) = part {
                     self.state = State::ReadDataPrewhere(Some(part));
                 }
+                self.scan_progress.incr(&self.progress_values);
+                self.progress_values = ProgressValues::default();
                 self.output.push_data(Ok(data_block));
                 return Ok(Event::NeedConsume);
             }
