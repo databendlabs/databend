@@ -1445,69 +1445,55 @@ CreateView(
         view: Identifier {
             name: "v1",
             quote: None,
-            span: Ident(12..14),
+            span: Some(
+                12..14,
+            ),
         },
         columns: [
             Identifier {
                 name: "c1",
                 quote: None,
-                span: Ident(15..17),
+                span: Some(
+                    15..17,
+                ),
             },
         ],
         query: Query {
-            span: [
-                SELECT(22..28),
-                Ident(29..35),
-                Modulo(36..37),
-                LiteralInteger(38..39),
-                AS(40..42),
-                Ident(43..44),
-                FROM(45..49),
-                Ident(50..57),
-                LParen(57..58),
-                LiteralInteger(58..62),
-                RParen(62..63),
-            ],
+            span: Some(
+                22..63,
+            ),
             with: None,
             body: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(22..28),
-                        Ident(29..35),
-                        Modulo(36..37),
-                        LiteralInteger(38..39),
-                        AS(40..42),
-                        Ident(43..44),
-                        FROM(45..49),
-                        Ident(50..57),
-                        LParen(57..58),
-                        LiteralInteger(58..62),
-                        RParen(62..63),
-                    ],
+                    span: Some(
+                        22..63,
+                    ),
                     distinct: false,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
-                                span: [
-                                    Modulo(36..37),
-                                ],
+                                span: Some(
+                                    36..37,
+                                ),
                                 op: Modulo,
                                 left: ColumnRef {
-                                    span: [
-                                        Ident(29..35),
-                                    ],
+                                    span: Some(
+                                        29..35,
+                                    ),
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "number",
                                         quote: None,
-                                        span: Ident(29..35),
+                                        span: Some(
+                                            29..35,
+                                        ),
                                     },
                                 },
                                 right: Literal {
-                                    span: [
-                                        LiteralInteger(38..39),
-                                    ],
+                                    span: Some(
+                                        38..39,
+                                    ),
                                     lit: Integer(
                                         3,
                                     ),
@@ -1517,29 +1503,30 @@ CreateView(
                                 Identifier {
                                     name: "a",
                                     quote: None,
-                                    span: Ident(43..44),
+                                    span: Some(
+                                        43..44,
+                                    ),
                                 },
                             ),
                         },
                     ],
                     from: [
                         TableFunction {
-                            span: [
-                                Ident(50..57),
-                                LParen(57..58),
-                                LiteralInteger(58..62),
-                                RParen(62..63),
-                            ],
+                            span: Some(
+                                50..63,
+                            ),
                             name: Identifier {
                                 name: "numbers",
                                 quote: None,
-                                span: Ident(50..57),
+                                span: Some(
+                                    50..57,
+                                ),
                             },
                             params: [
                                 Literal {
-                                    span: [
-                                        LiteralInteger(58..62),
-                                    ],
+                                    span: Some(
+                                        58..62,
+                                    ),
                                     lit: Integer(
                                         1000,
                                     ),
@@ -1575,69 +1562,55 @@ AlterView(
         view: Identifier {
             name: "v1",
             quote: None,
-            span: Ident(11..13),
+            span: Some(
+                11..13,
+            ),
         },
         columns: [
             Identifier {
                 name: "c2",
                 quote: None,
-                span: Ident(14..16),
+                span: Some(
+                    14..16,
+                ),
             },
         ],
         query: Query {
-            span: [
-                SELECT(21..27),
-                Ident(28..34),
-                Modulo(35..36),
-                LiteralInteger(37..38),
-                AS(39..41),
-                Ident(42..43),
-                FROM(44..48),
-                Ident(49..56),
-                LParen(56..57),
-                LiteralInteger(57..61),
-                RParen(61..62),
-            ],
+            span: Some(
+                21..62,
+            ),
             with: None,
             body: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(21..27),
-                        Ident(28..34),
-                        Modulo(35..36),
-                        LiteralInteger(37..38),
-                        AS(39..41),
-                        Ident(42..43),
-                        FROM(44..48),
-                        Ident(49..56),
-                        LParen(56..57),
-                        LiteralInteger(57..61),
-                        RParen(61..62),
-                    ],
+                    span: Some(
+                        21..62,
+                    ),
                     distinct: false,
                     select_list: [
                         AliasedExpr {
                             expr: BinaryOp {
-                                span: [
-                                    Modulo(35..36),
-                                ],
+                                span: Some(
+                                    35..36,
+                                ),
                                 op: Modulo,
                                 left: ColumnRef {
-                                    span: [
-                                        Ident(28..34),
-                                    ],
+                                    span: Some(
+                                        28..34,
+                                    ),
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "number",
                                         quote: None,
-                                        span: Ident(28..34),
+                                        span: Some(
+                                            28..34,
+                                        ),
                                     },
                                 },
                                 right: Literal {
-                                    span: [
-                                        LiteralInteger(37..38),
-                                    ],
+                                    span: Some(
+                                        37..38,
+                                    ),
                                     lit: Integer(
                                         3,
                                     ),
@@ -1647,29 +1620,30 @@ AlterView(
                                 Identifier {
                                     name: "a",
                                     quote: None,
-                                    span: Ident(42..43),
+                                    span: Some(
+                                        42..43,
+                                    ),
                                 },
                             ),
                         },
                     ],
                     from: [
                         TableFunction {
-                            span: [
-                                Ident(49..56),
-                                LParen(56..57),
-                                LiteralInteger(57..61),
-                                RParen(61..62),
-                            ],
+                            span: Some(
+                                49..62,
+                            ),
                             name: Identifier {
                                 name: "numbers",
                                 quote: None,
-                                span: Ident(49..56),
+                                span: Some(
+                                    49..56,
+                                ),
                             },
                             params: [
                                 Literal {
-                                    span: [
-                                        LiteralInteger(57..61),
-                                    ],
+                                    span: Some(
+                                        57..61,
+                                    ),
                                     lit: Integer(
                                         1000,
                                     ),
