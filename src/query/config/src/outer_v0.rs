@@ -1293,9 +1293,13 @@ pub struct QueryConfig {
     #[clap(long, default_value = "3000")]
     pub table_cache_bloom_index_meta_count: u64,
 
-    /// Max bytes of cached bloom index, default value is 1GB
-    #[clap(long, default_value = "1073741824")]
-    pub table_cache_bloom_index_data_bytes: u64,
+    /// Max number of cached bloom index filters, default value is 1024 * 1024 items.
+    /// One bloom index filter per column of data block being indexed will be generated if necessary.
+    ///
+    /// For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
+    /// table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
+    #[clap(long, default_value = "1048576")]
+    pub table_cache_bloom_index_filter_count: u64,
 
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
@@ -1381,7 +1385,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_cache_statistic_count: self.table_cache_statistic_count,
             table_cache_segment_count: self.table_cache_segment_count,
             table_cache_bloom_index_meta_count: self.table_cache_bloom_index_meta_count,
-            table_cache_bloom_index_data_bytes: self.table_cache_bloom_index_data_bytes,
+            table_cache_bloom_index_filter_count: self.table_cache_bloom_index_filter_count,
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
             async_insert_max_data_size: self.async_insert_max_data_size,
@@ -1446,7 +1450,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_statistic_count: inner.table_cache_statistic_count,
             table_cache_segment_count: inner.table_cache_segment_count,
             table_cache_bloom_index_meta_count: inner.table_cache_bloom_index_meta_count,
-            table_cache_bloom_index_data_bytes: inner.table_cache_bloom_index_data_bytes,
+            table_cache_bloom_index_filter_count: inner.table_cache_bloom_index_filter_count,
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
             async_insert_max_data_size: inner.async_insert_max_data_size,

@@ -34,7 +34,7 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
-use storages_common_table_meta::caches::CachedMeta;
+use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;

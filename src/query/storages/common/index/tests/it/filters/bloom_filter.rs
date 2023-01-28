@@ -34,9 +34,9 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use storages_common_index::filters::BlockFilter as LatestBloom;
 use storages_common_index::BloomIndex;
 use storages_common_index::FilterEvalResult;
-use storages_common_table_meta::meta::BlockFilter as LatestBloom;
 use storages_common_table_meta::meta::Versioned;
 
 #[test]

@@ -21,7 +21,7 @@ use common_exception::Result;
 use opendal::Operator;
 use serde::Serialize;
 use storages_common_cache::CacheAccessor;
-use storages_common_table_meta::caches::CachedMeta;
+use storages_common_cache_manager::CachedObject;
 use tracing::warn;
 
 #[async_trait::async_trait]
@@ -47,7 +47,7 @@ pub trait CachedMetaWriter<T> {
 #[async_trait::async_trait]
 impl<T, C> CachedMetaWriter<T> for T
 where
-    T: CachedMeta<T, Cache = C> + Send + Sync,
+    T: CachedObject<T, Cache = C> + Send + Sync,
     T: Serialize,
     C: CacheAccessor<String, T>,
 {
