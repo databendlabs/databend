@@ -2,7 +2,7 @@
 statement ok
 create table bloom_test_t(c1 int, c2 int)
 
-# create 2 data blocks, min/max values of column c are the same
+# create 2 data blocks, min/max values of columns are of the same
 
 statement ok
 insert into  bloom_test_t values(1,1), (5,6), (10,10)
@@ -10,7 +10,7 @@ insert into  bloom_test_t values(1,1), (5,6), (10,10)
 statement ok
 insert into  bloom_test_t values(1,1), (7,8), (10,10)
 
-# range index is not effective in this query, bloom filter will be used, one block will be pruned
+# range index is not effective in this query, bloom filter will be used, one block should be pruned
 query T
 explain select * from bloom_test_t where c1 = 5
 ----
@@ -66,7 +66,7 @@ select count(*) from bloom_test_t where c1 = 6
 0
 
 # 2. filtering on column c2, of the same block, where there is no row matched
-# 2.1 if incorrect filter (bloom filter of c1) is used, this query will return a non-empty result set
+# 2.1 check that an empty result set returned
 query T
 select count(*) from bloom_test_t where c2 = 5
 ----
