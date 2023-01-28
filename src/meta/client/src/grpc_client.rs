@@ -255,7 +255,6 @@ pub struct MetaGrpcClient {
     /// If a background task is blocked, no meta-client will be able to proceed if meta-client is reused.
     ///
     /// Note that a thread_pool tokio runtime does not help: a scheduled tokio-task resides in `filo_slot` won't be stolen by other tokio-workers.
-    /// TODO: dead code
     #[allow(dead_code)]
     rt: Arc<Runtime>,
 }
