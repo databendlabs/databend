@@ -52,6 +52,7 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 
+use super::processors::transforms::efficiently_memory_final_aggregator_v2;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
@@ -81,8 +82,6 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-
-use super::processors::transforms::efficiently_memory_final_aggregator_v2;
 
 pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,

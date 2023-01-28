@@ -26,11 +26,11 @@ mod transform_mark_join;
 
 mod transform_add_const_columns;
 mod transform_convert_grouping;
+mod transform_convert_grouping_v2;
 mod transform_merge_block;
 mod transform_resort_addon;
 mod transform_right_join;
 mod transform_right_semi_anti_join;
-mod transform_convert_grouping_v2;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
@@ -53,11 +53,9 @@ pub use transform_cast_schema::TransformCastSchema;
 pub use transform_compact::Compactor;
 pub use transform_compact::TransformCompact;
 pub use transform_convert_grouping::efficiently_memory_final_aggregator;
-pub use transform_convert_grouping_v2::efficiently_memory_final_aggregator_v2;
-pub use transform_convert_grouping::TransformConvertGrouping;
 pub use transform_convert_grouping::MergeBucketTransform;
-
-
+pub use transform_convert_grouping::TransformConvertGrouping;
+pub use transform_convert_grouping_v2::efficiently_memory_final_aggregator_v2;
 pub use transform_create_sets::SubqueryReceiver;
 pub use transform_create_sets::TransformCreateSets;
 pub use transform_dummy::TransformDummy;
