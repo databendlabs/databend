@@ -63,7 +63,7 @@ message DataType {
   }
 }
 
-// TODO: going to remove
+// TODO: remove when MIN_MSG_VER becomes >=24
 // A wrapper data type of another type.
 // Such a column allows to contain `null` elements
 message NullableType {
@@ -74,7 +74,7 @@ message NullableType {
   DataType inner = 1;
 }
 
-// TODO: going to remove
+// TODO: remove when MIN_MSG_VER becomes >=24
 // Timestamp data type with customizable precision and timezone: `tz`.
 message Timestamp {
   uint64 ver = 100;
@@ -85,7 +85,7 @@ message Timestamp {
   reserved 1;
 }
 
-// TODO: going to remove
+// TODO: remove when MIN_MSG_VER becomes >=24
 // Struct is similar to a `map` with fixed keys.
 message Struct {
   uint64 ver = 100;
@@ -98,7 +98,7 @@ message Struct {
   repeated DataType types = 2;
 }
 
-// TODO: going to remove
+// TODO: remove when MIN_MSG_VER becomes >=24
 // Array contains multiple elements of the same type.
 message Array {
   uint64 ver = 100;
@@ -108,19 +108,19 @@ message Array {
   DataType inner = 1;
 }
 
-// TODO: going to remove
+// TODO: remove when MIN_MSG_VER becomes >=24
 message VariantArray {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 }
 
-// TODO: going to remove
+// TODO: remove when MIN_MSG_VER becomes >=24
 message VariantObject {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 }
 
-// TODO: going to remove
+// TODO: remove when MIN_MSG_VER becomes >=24
 enum IntervalKind {
   Year = 0;
   Month = 1;
@@ -133,7 +133,7 @@ enum IntervalKind {
   Quarter = 8;
 }
 
-// TODO: going to remove
+// TODO: remove when MIN_MSG_VER becomes >=24
 message IntervalType {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -141,7 +141,7 @@ message IntervalType {
   IntervalKind kind = 1;
 }
 
-// TODO: going to remove
+// TODO: remove when MIN_MSG_VER becomes >=24
 // Something under developing.:)
 message Variant {
   uint64 ver = 100;
