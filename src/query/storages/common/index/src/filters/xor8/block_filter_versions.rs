@@ -41,8 +41,8 @@ impl TryFrom<u64> for BlockBloomFilterIndexVersion {
     type Error = ErrorCode;
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         match value {
-            1 => Err(ErrorCode::DeprecatedIndexFormat(
-                "v1 bloom filter index is deprecated",
+            0 | 1 => Err(ErrorCode::DeprecatedIndexFormat(
+                "bloom filter index of version 0 and 1 are deprecated",
             )),
             // version 2 and version 3 are using the same StringColumn to storage the bloom filter
             2 => Ok(BlockBloomFilterIndexVersion::V2(testify_version::<_, 2>(

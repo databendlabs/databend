@@ -37,6 +37,8 @@ use storages_common_index::filters::Filter;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_table_meta::meta::ColumnId;
 
+use crate::metrics::metrics_inc_block_index_read_bytes;
+
 type CachedReader = InMemoryItemCacheReader<Xor8Filter, Xor8FilterLoader>;
 
 /// Load the filter of a given bloom index column. Also
@@ -131,8 +133,18 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
             let array = array?;
             let col =
                 Column::from_arrow(array.as_ref(), &common_expression::types::DataType::String);
-            let bytes = unsafe { col.as_string().unwrap().index_unchecked(0) };
-            let (filter, _size) = Xor8Filter::from_bytes(bytes)?;
+
+            let filter_bytes = col
+                .as_string()
+                .map(|str| unsafe { str.index_unchecked(0) })
+                .ok_or_else(|| {
+                    // BloomPruner will log and handle this exception
+                    ErrorCode::Internal(
+                        "unexpected exception: load bloom filter raw data as string failed",
+                    )
+                })?;
+            metrics_inc_block_index_read_bytes(filter_bytes.len() as u64);
+            let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
             Ok(filter)
         } else {
             Err(ErrorCode::StorageOther(

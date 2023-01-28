@@ -94,7 +94,6 @@ async fn load_bloom_filter_by_columns<'a>(
     // 2.2 collects the column metas and their column ids
     let index_column_chunk_metas = file_meta.row_groups[0].columns();
     let mut col_metas = Vec::with_capacity(column_needed.len());
-    // TODO: wide table with kilo cols
     for column_name in column_needed {
         for (idx, column_chunk_meta) in index_column_chunk_metas.iter().enumerate() {
             if &column_chunk_meta.descriptor().path_in_schema[0] == column_name {

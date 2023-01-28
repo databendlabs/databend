@@ -2091,7 +2091,6 @@ dependencies = [
  "tracing",
  "typetag",
  "uuid",
- "xorfilter-rs",
 ]
 
 [[package]]

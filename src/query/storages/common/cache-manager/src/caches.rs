@@ -30,7 +30,6 @@ pub type TableSnapshotCache = InMemoryItemCacheHolder<TableSnapshot>;
 pub type TableSnapshotStatisticCache = InMemoryItemCacheHolder<TableSnapshotStatistics>;
 /// In memory data cache of bloom index data.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
-// TODO meter this by size?
 pub type BloomIndexFilterCache = InMemoryItemCacheHolder<Xor8Filter>;
 pub struct BloomIndexMeta(pub FileMetaData);
 /// In memory object cache of parquet FileMetaData of bloom index data
