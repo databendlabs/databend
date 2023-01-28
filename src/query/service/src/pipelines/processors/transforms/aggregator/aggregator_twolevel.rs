@@ -67,20 +67,20 @@ where Self: Aggregator + Send
     }
 }
 
-impl<Method> TwoLevelAggregatorLike for PartialAggregator<true, Method>
+impl<Method, const HAS_AGG: bool> TwoLevelAggregatorLike for PartialAggregator<HAS_AGG, Method>
 where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
     const SUPPORT_TWO_LEVEL: bool = Method::SUPPORT_TWO_LEVEL;
 
-    type TwoLevelAggregator = PartialAggregator<true, TwoLevelHashMethod<Method>>;
+    type TwoLevelAggregator = PartialAggregator<HAS_AGG, TwoLevelHashMethod<Method>>;
 
     fn get_state_cardinality(&self) -> usize {
         self.hash_table.len()
     }
 
-    // PartialAggregator<true, Method> -> TwoLevelAggregator<PartialAggregator<true, Method>>
+    // PartialAggregator<HAS_AGG, Method> -> TwoLevelAggregator<PartialAggregator<HAS_AGG, Method>>
     fn convert_two_level(mut self) -> Result<TwoLevelAggregator<Self>> {
         let instant = Instant::now();
         let method = self.method.clone();
@@ -107,12 +107,13 @@ where
 
         self.states_dropped = true;
         Ok(TwoLevelAggregator::<Self> {
-            inner: PartialAggregator::<true, TwoLevelHashMethod<Method>> {
+            inner: PartialAggregator::<HAS_AGG, TwoLevelHashMethod<Method>> {
                 area: self.area.take(),
                 params: self.params.clone(),
                 states_dropped: false,
                 method: two_level_method,
                 hash_table: two_level_hashtable,
+                generated: false,
             },
         })
     }
@@ -154,9 +155,8 @@ where
                 continue;
             }
 
+            let capacity = inner_table.len();
             let iterator = inner_table.iter();
-
-            let (capacity, _) = iterator.size_hint();
 
             let aggregator_params = agg.params.as_ref();
             let funcs = &aggregator_params.aggregate_functions;
@@ -184,10 +184,8 @@ where
             }
 
             let mut columns = Vec::with_capacity(state_builders.len() + 1);
-            let mut num_rows = 0;
             for builder in state_builders.into_iter() {
                 let col = builder.build();
-                num_rows = col.len();
                 columns.push(BlockEntry {
                     value: Value::Column(Column::String(col)),
                     data_type: DataType::String,
@@ -195,6 +193,7 @@ where
             }
 
             let col = group_key_builder.finish();
+            let num_rows = col.len();
             let group_key_type = col.data_type();
 
             columns.push(BlockEntry {
@@ -209,101 +208,14 @@ where
             ));
 
             clear_table(inner_table, &agg.params);
+
+            // streaming return two level blocks by bucket
+            return Ok(data_blocks);
         }
 
         drop(agg.area.take());
         agg.states_dropped = true;
         Ok(data_blocks)
-    }
-}
-
-impl<Method> TwoLevelAggregatorLike for PartialAggregator<false, Method>
-where
-    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-    Method::HashKey: FastHash,
-{
-    const SUPPORT_TWO_LEVEL: bool = Method::SUPPORT_TWO_LEVEL;
-
-    type TwoLevelAggregator = PartialAggregator<false, TwoLevelHashMethod<Method>>;
-
-    fn get_state_cardinality(&self) -> usize {
-        self.hash_table.len()
-    }
-
-    // PartialAggregator<false, Method> -> TwoLevelAggregator<PartialAggregator<false, Method>>
-    fn convert_two_level(mut self) -> Result<TwoLevelAggregator<Self>> {
-        let instant = Instant::now();
-        let method = self.method.clone();
-        let two_level_method = TwoLevelHashMethod::create(method);
-        let mut two_level_hashtable = two_level_method.create_hash_table()?;
-
-        unsafe {
-            for item in self.hash_table.iter() {
-                match two_level_hashtable.insert_and_entry(item.key()) {
-                    Ok(mut entry) => {
-                        *entry.get_mut() = *item.get();
-                    }
-                    Err(mut entry) => {
-                        *entry.get_mut() = *item.get();
-                    }
-                };
-            }
-        }
-
-        info!(
-            "Convert to two level aggregator elapsed: {:?}",
-            instant.elapsed()
-        );
-
-        self.states_dropped = true;
-        Ok(TwoLevelAggregator::<Self> {
-            inner: PartialAggregator::<false, TwoLevelHashMethod<Method>> {
-                area: self.area.take(),
-                params: self.params.clone(),
-                states_dropped: false,
-                method: two_level_method,
-                hash_table: two_level_hashtable,
-            },
-        })
-    }
-
-    fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
-        let mut chunks = Vec::with_capacity(256);
-        for (bucket, inner_table) in agg.hash_table.iter_tables_mut().enumerate() {
-            if inner_table.len() == 0 {
-                continue;
-            }
-
-            let iterator = inner_table.iter();
-
-            let (capacity, _) = iterator.size_hint();
-            let value_size = estimated_key_size(inner_table);
-
-            let mut keys_column_builder = agg.method.keys_column_builder(capacity, value_size);
-
-            for group_entity in iterator {
-                keys_column_builder.append_value(group_entity.key());
-            }
-
-            let column = keys_column_builder.finish();
-            let num_rows = column.len();
-            let column = BlockEntry {
-                data_type: column.data_type(),
-                value: Value::Column(column),
-            };
-
-            chunks.push(DataBlock::new_with_meta(
-                vec![column],
-                num_rows,
-                Some(AggregateInfo::create(bucket as isize)),
-            ));
-
-            inner_table.clear();
-        }
-
-        drop(agg.area.take());
-        agg.states_dropped = true;
-        Ok(chunks)
     }
 }
 
@@ -317,27 +229,19 @@ impl TwoLevelAggregatorLike for SingleStateAggregator<false> {
     type TwoLevelAggregator = SingleStateAggregator<false>;
 }
 
-impl<Method> TwoLevelAggregatorLike for ParallelFinalAggregator<true, Method>
+impl<Method, const HAS_AGG: bool> TwoLevelAggregatorLike
+    for ParallelFinalAggregator<HAS_AGG, Method>
 where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
     const SUPPORT_TWO_LEVEL: bool = false;
-    type TwoLevelAggregator = ParallelFinalAggregator<true, TwoLevelHashMethod<Method>>;
+    type TwoLevelAggregator = ParallelFinalAggregator<HAS_AGG, TwoLevelHashMethod<Method>>;
 }
 
-impl<Method> TwoLevelAggregatorLike for ParallelFinalAggregator<false, Method>
-where
-    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-    Method::HashKey: FastHash,
-{
-    const SUPPORT_TWO_LEVEL: bool = false;
-    type TwoLevelAggregator = ParallelFinalAggregator<false, TwoLevelHashMethod<Method>>;
-}
-
-// Example: TwoLevelAggregator<PartialAggregator<true, Method>> ->
+// Example: TwoLevelAggregator<PartialAggregator<HAS_AGG, Method>> ->
 //      TwoLevelAggregator {
-//          inner: PartialAggregator<true, TwoLevelMethod<Method>>
+//          inner: PartialAggregator<HAS_AGG, TwoLevelMethod<Method>>
 //      }
 pub struct TwoLevelAggregator<T: TwoLevelAggregatorLike> {
     inner: T::TwoLevelAggregator,
