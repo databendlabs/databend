@@ -82,6 +82,8 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
+use super::processors::transforms::efficiently_memory_final_aggregator_v2;
+
 pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,
     main_pipeline: Pipeline,
@@ -351,7 +353,7 @@ impl PipelineBuilder {
             && !params.group_columns.is_empty()
             && self.main_pipeline.output_len() > 1
         {
-            return efficiently_memory_final_aggregator(params, &mut self.main_pipeline);
+            return efficiently_memory_final_aggregator_v2(params, &mut self.main_pipeline);
         }
 
         self.main_pipeline.resize(1)?;

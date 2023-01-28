@@ -275,7 +275,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.all_inputs_is_finished || self.output.is_finished() {
+        let has_data = self.buckets_blocks.is_empty() || self.unsplitted_blocks.is_empty();
+        
+        if (!has_data && self.all_inputs_is_finished) || self.output.is_finished() {
             self.output.finish();
 
             for input_state in &self.inputs {
@@ -422,7 +424,7 @@ pub fn efficiently_memory_final_aggregator(
     })
 }
 
-struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> {
+pub struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> {
     method: Method,
     params: Arc<AggregatorParams>,
 
