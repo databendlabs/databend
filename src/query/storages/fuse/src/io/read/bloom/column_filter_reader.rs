@@ -70,7 +70,7 @@ impl BloomColumnFilterReader {
 
         let cached_reader = CachedReader::new(
             Xor8Filter::cache(),
-            "bloom_index_data_cache".to_owned(),
+            "bloom_index_filter_cache".to_owned(),
             loader,
         );
 
