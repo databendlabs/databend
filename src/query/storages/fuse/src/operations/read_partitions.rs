@@ -22,7 +22,9 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::TopK;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -30,6 +32,8 @@ use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_storage::ColumnNodes;
 use opendal::Operator;
+use storages_common_index::Index;
+use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use tracing::debug;
@@ -37,7 +41,7 @@ use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::FusePartInfo;
-use crate::pruning::BlockPruner;
+use crate::pruning::FusePruner;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -104,28 +108,22 @@ impl FuseTable {
             segments_location.len()
         );
 
-        let block_metas = if !self.is_native() || self.cluster_key_meta.is_none() {
-            BlockPruner::prune(
-                &ctx,
-                dal,
-                table_info.schema(),
-                &push_downs,
-                segments_location,
-            )
-            .await?
+        let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
+            FusePruner::create(&ctx, dal, table_info.schema(), &push_downs)?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
-            BlockPruner::prune_with_pages(
+
+            FusePruner::create_with_pages(
                 &ctx,
                 dal,
                 table_info.schema(),
                 &push_downs,
                 self.cluster_key_meta.clone(),
                 cluster_keys,
-                segments_location,
-            )
-            .await?
+            )?
         };
+        let block_metas = pruner.pruning(segments_location).await?;
+        let pruning_stats = pruner.pruning_stats();
 
         info!(
             "prune snapshot block end, final block numbers:{}, cost:{}",
@@ -137,27 +135,39 @@ impl FuseTable {
             .into_iter()
             .map(|(block_meta_index, block_meta)| (block_meta_index.range, block_meta))
             .collect::<Vec<_>>();
-        self.read_partitions_with_metas(ctx, table_info.schema(), push_downs, &block_metas, summary)
+        self.read_partitions_with_metas(
+            table_info.schema(),
+            push_downs,
+            &block_metas,
+            summary,
+            pruning_stats,
+        )
     }
 
     pub fn read_partitions_with_metas(
         &self,
-        _: Arc<dyn TableContext>,
         schema: TableSchemaRef,
         push_downs: Option<PushDownInfo>,
         block_metas: &[(Option<Range<usize>>, Arc<BlockMeta>)],
         partitions_total: usize,
+        pruning_stats: PruningStatistics,
     ) -> Result<(PartStatistics, Partitions)> {
         let arrow_schema = schema.to_arrow();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema);
 
         let partitions_scanned = block_metas.len();
 
-        let (mut statistics, parts) = Self::to_partitions(block_metas, &column_nodes, push_downs);
+        let top_k = push_downs
+            .as_ref()
+            .map(|p| p.top_k(self.schema().as_ref(), RangeIndex::supported_type))
+            .unwrap_or_default();
+        let (mut statistics, parts) =
+            Self::to_partitions(block_metas, &column_nodes, top_k, push_downs);
 
         // Update planner statistics.
         statistics.partitions_total = partitions_total;
         statistics.partitions_scanned = partitions_scanned;
+        statistics.pruning_stats = pruning_stats;
 
         // Update context statistics.
         self.data_metrics
@@ -171,6 +181,7 @@ impl FuseTable {
     pub fn to_partitions(
         block_metas: &[(Option<Range<usize>>, Arc<BlockMeta>)],
         column_nodes: &ColumnNodes,
+        top_k: Option<TopK>,
         push_down: Option<PushDownInfo>,
     ) -> (PartStatistics, Partitions) {
         let limit = push_down
@@ -179,15 +190,37 @@ impl FuseTable {
             .and_then(|p| p.limit)
             .unwrap_or(usize::MAX);
 
-        let (mut statistics, partitions) = match &push_down {
-            None => Self::all_columns_partitions(block_metas, limit),
-            Some(extras) => match &extras.projection {
-                None => Self::all_columns_partitions(block_metas, limit),
-                Some(projection) => {
-                    Self::projection_partitions(block_metas, column_nodes, projection, limit)
+        let mut block_metas = block_metas.to_vec();
+        if let Some(top_k) = &top_k {
+            block_metas.sort_by(|a, b| {
+                let a = a.1.col_stats.get(&top_k.column_id).unwrap();
+                let b = b.1.col_stats.get(&top_k.column_id).unwrap();
+
+                if top_k.asc {
+                    (a.min.as_ref(), a.max.as_ref()).cmp(&(b.min.as_ref(), b.max.as_ref()))
+                } else {
+                    (b.max.as_ref(), b.min.as_ref()).cmp(&(a.max.as_ref(), a.min.as_ref()))
                 }
+            });
+        }
+
+        let (mut statistics, mut partitions) = match &push_down {
+            None => Self::all_columns_partitions(&block_metas, top_k.clone(), limit),
+            Some(extras) => match &extras.projection {
+                None => Self::all_columns_partitions(&block_metas, top_k.clone(), limit),
+                Some(projection) => Self::projection_partitions(
+                    &block_metas,
+                    column_nodes,
+                    projection,
+                    top_k.clone(),
+                    limit,
+                ),
             },
         };
+
+        if top_k.is_some() {
+            partitions.kind = PartitionsShuffleKind::Seq;
+        }
 
         statistics.is_exact = statistics.is_exact && Self::is_exact(&push_down);
         (statistics, partitions)
@@ -202,6 +235,7 @@ impl FuseTable {
 
     pub fn all_columns_partitions(
         block_metas: &[(Option<Range<usize>>, Arc<BlockMeta>)],
+        top_k: Option<TopK>,
         limit: usize,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
@@ -212,12 +246,11 @@ impl FuseTable {
         }
 
         let mut remaining = limit;
-
         for (range, block_meta) in block_metas.iter() {
             let rows = block_meta.row_count as usize;
             partitions
                 .partitions
-                .push(Self::all_columns_part(range.clone(), block_meta));
+                .push(Self::all_columns_part(range.clone(), &top_k, block_meta));
             statistics.read_rows += rows;
             statistics.read_bytes += block_meta.block_size as usize;
 
@@ -239,6 +272,7 @@ impl FuseTable {
         block_metas: &[(Option<Range<usize>>, Arc<BlockMeta>)],
         column_nodes: &ColumnNodes,
         projection: &Projection,
+        top_k: Option<TopK>,
         limit: usize,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
@@ -255,6 +289,7 @@ impl FuseTable {
                 block_meta,
                 range.clone(),
                 column_nodes,
+                top_k.clone(),
                 projection,
             ));
             let rows = block_meta.row_count as usize;
@@ -283,7 +318,11 @@ impl FuseTable {
         (statistics, partitions)
     }
 
-    pub fn all_columns_part(range: Option<Range<usize>>, meta: &BlockMeta) -> PartInfoPtr {
+    pub fn all_columns_part(
+        range: Option<Range<usize>>,
+        top_k: &Option<TopK>,
+        meta: &BlockMeta,
+    ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
 
         for (idx, column_meta) in &meta.col_metas {
@@ -293,12 +332,19 @@ impl FuseTable {
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
+
+        let sort_min_max = top_k.as_ref().map(|top_k| {
+            let stat = meta.col_stats.get(&top_k.column_id).unwrap();
+            (stat.min.clone(), stat.max.clone())
+        });
+
         FusePartInfo::create(
             location,
             format_version,
             rows_count,
             columns_meta,
             meta.compression(),
+            sort_min_max,
             range,
         )
     }
@@ -307,6 +353,7 @@ impl FuseTable {
         meta: &BlockMeta,
         range: Option<Range<usize>>,
         column_nodes: &ColumnNodes,
+        top_k: Option<TopK>,
         projection: &Projection,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(projection.len());
@@ -324,6 +371,12 @@ impl FuseTable {
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
+
+        let sort_min_max = top_k.map(|top_k| {
+            let stat = meta.col_stats.get(&top_k.column_id).unwrap();
+            (stat.min.clone(), stat.max.clone())
+        });
+
         // TODO
         // row_count should be a hint value of  LIMIT,
         // not the count the rows in this partition
@@ -333,6 +386,7 @@ impl FuseTable {
             rows_count,
             columns_meta,
             meta.compression(),
+            sort_min_max,
             range,
         )
     }

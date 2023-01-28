@@ -13,9 +13,7 @@
 // limitations under the License.
 //
 
-mod column_loader;
-mod column_reader;
-mod filter_reader;
+mod block_filter_reader;
+mod column_filter_reader;
 
-pub(crate) use column_reader::BloomIndexColumnReader;
-pub use filter_reader::BloomFilterReader;
+pub use block_filter_reader::BloomBlockFilterReader;

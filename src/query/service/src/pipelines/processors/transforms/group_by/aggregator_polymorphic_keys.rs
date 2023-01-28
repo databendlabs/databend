@@ -17,7 +17,6 @@ use std::marker::PhantomData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::*;
-use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::ValueType;
 use common_expression::Column;
@@ -27,11 +26,13 @@ use common_expression::HashMethodKeysU128;
 use common_expression::HashMethodKeysU256;
 use common_expression::HashMethodKeysU512;
 use common_expression::HashMethodSerializer;
+use common_expression::HashMethodSingleString;
 use common_expression::KeysState;
 use common_hashtable::FastHash;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
 use common_hashtable::LookupHashMap;
+use common_hashtable::SimpleUnsizedHashMap;
 use common_hashtable::TwoLevelHashMap;
 use common_hashtable::UnsizedHashMap;
 use primitive_types::U256;
@@ -281,7 +282,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, u128>;
     fn keys_column_builder(&self, capacity: usize, _: usize) -> LargeFixedKeysColumnBuilder<u128> {
         LargeFixedKeysColumnBuilder {
-            inner_builder: StringColumnBuilder::with_capacity(capacity, capacity * 16),
+            values: Vec::with_capacity(capacity * 16),
             _t: PhantomData,
         }
     }
@@ -322,7 +323,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, U256>;
     fn keys_column_builder(&self, capacity: usize, _: usize) -> LargeFixedKeysColumnBuilder<U256> {
         LargeFixedKeysColumnBuilder {
-            inner_builder: StringColumnBuilder::with_capacity(capacity, capacity * 32),
+            values: Vec::with_capacity(capacity * 32),
             _t: PhantomData,
         }
     }
@@ -364,7 +365,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
     fn keys_column_builder(&self, capacity: usize, _: usize) -> LargeFixedKeysColumnBuilder<U512> {
         LargeFixedKeysColumnBuilder {
             _t: PhantomData::default(),
-            inner_builder: StringColumnBuilder::with_capacity(capacity, capacity * 64),
+            values: Vec::with_capacity(capacity * 64),
         }
     }
 
@@ -392,13 +393,53 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
     }
 }
 
-impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
+impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
     const SUPPORT_TWO_LEVEL: bool = true;
 
     type HashTable = UnsizedHashMap<[u8], usize>;
 
     fn create_hash_table(&self) -> Result<Self::HashTable> {
         Ok(UnsizedHashMap::new())
+    }
+
+    type ColumnBuilder<'a> = SerializedKeysColumnBuilder<'a>;
+    fn keys_column_builder(
+        &self,
+        capacity: usize,
+        value_capacity: usize,
+    ) -> SerializedKeysColumnBuilder<'_> {
+        SerializedKeysColumnBuilder::create(capacity, value_capacity)
+    }
+
+    type KeysColumnIter = SerializedKeysColumnIter;
+    fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
+        SerializedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+            ErrorCode::IllegalDataType("Illegal data type for SerializedKeysColumnIter".to_string())
+        })?)
+    }
+
+    type GroupColumnsBuilder<'a> = SerializedKeysGroupColumnsBuilder<'a>;
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        data_capacity: usize,
+        params: &AggregatorParams,
+    ) -> SerializedKeysGroupColumnsBuilder<'_> {
+        SerializedKeysGroupColumnsBuilder::create(capacity, data_capacity, params)
+    }
+
+    fn get_hash(&self, v: &[u8]) -> u64 {
+        v.fast_hash()
+    }
+}
+
+impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
+    const SUPPORT_TWO_LEVEL: bool = true;
+
+    type HashTable = SimpleUnsizedHashMap<[u8], usize>;
+
+    fn create_hash_table(&self) -> Result<Self::HashTable> {
+        Ok(SimpleUnsizedHashMap::new())
     }
 
     type ColumnBuilder<'a> = SerializedKeysColumnBuilder<'a>;

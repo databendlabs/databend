@@ -1,0 +1,18 @@
+[package]
+name = "storages-common-cache-manager"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[features]
+
+[dependencies]
+common-arrow = { path = "../../../../common/arrow" }
+common-base = { path = "../../../../common/base" }
+common-config = { path = "../../../config" }
+common-exception = { path = "../../../../common/exception" }
+storages-common-cache = { path = "../../common/cache" }
+storages-common-index = { path = "../../common/index" }
+storages-common-table-meta = { path = "../../common/table-meta" }

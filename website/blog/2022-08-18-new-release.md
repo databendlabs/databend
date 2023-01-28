@@ -85,7 +85,7 @@ COPY capabilities have been greatly enhanced, and Databend can now:
 COPY 
     INTO ontime200 
     FROM 'https://repo.databend.rs/dataset/stateful/ontime_2006_[200-300].csv' 
-    FILE_FORMAT = (TYPE = 'CSV')
+    FILE_FORMAT = (TYPE = CSV)
 ```
 
 - Support for copying compressed files
@@ -94,7 +94,7 @@ COPY
 COPY 
     INTO ontime200 
     FROM 's3://bucket/dataset/stateful/ontime.csv.gz' 
-    FILE_FORMAT = (TYPE = 'CSV' COMPRESSION=AUTO)
+    FILE_FORMAT = (TYPE = CSV COMPRESSION=AUTO)
 ```
 
 - UNLOAD data to any supported storage service
@@ -103,7 +103,7 @@ COPY
 COPY 
     INTO 'azblob://bucket/'  
     FROM ontime200
-    FILE_FORMAT = (TYPE = 'PARQUET‘)
+    FILE_FORMAT = (TYPE = PARQUET)
 ```
 
 ### Hive Support

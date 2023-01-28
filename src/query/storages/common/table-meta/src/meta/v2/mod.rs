@@ -12,11 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod index;
 mod segment;
 mod snapshot;
 
-pub use index::BlockFilter;
 pub use segment::BlockMeta;
 pub use segment::ColumnMeta;
 pub use segment::SegmentInfo;

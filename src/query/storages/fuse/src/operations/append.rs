@@ -178,7 +178,7 @@ impl FuseTable {
             cluster_key_index.push(offset);
         }
 
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         if !operators.is_empty() {
             pipeline.add_transform(move |input, output| {
                 Ok(CompoundBlockOperator::create(

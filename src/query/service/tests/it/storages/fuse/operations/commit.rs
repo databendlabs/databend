@@ -343,19 +343,23 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn try_get_part(&self) -> Option<PartInfoPtr> {
+    fn get_partition(&self) -> Option<PartInfoPtr> {
         todo!()
     }
 
-    fn try_get_parts(&self, _: usize) -> Vec<PartInfoPtr> {
+    fn get_partitions(&self, _: usize) -> Vec<PartInfoPtr> {
         todo!()
     }
 
-    fn try_set_partitions(&self, _partitions: Partitions) -> Result<()> {
+    fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
         todo!()
     }
 
     fn attach_query_str(&self, _kind: String, _query: &str) {
+        todo!()
+    }
+
+    fn get_query_str(&self) -> String {
         todo!()
     }
 
@@ -395,14 +399,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_changed_settings(&self) -> Arc<Settings> {
-        todo!()
-    }
-
-    fn apply_changed_settings(&self, _changed_settings: Arc<Settings>) -> Result<()> {
-        todo!()
-    }
-
     fn get_format_settings(&self) -> Result<FormatSettings> {
         todo!()
     }
@@ -411,27 +407,11 @@ impl TableContext for CtxDelegation {
         self.ctx.get_tenant()
     }
 
-    fn get_query_str(&self) -> String {
-        todo!()
-    }
-
     fn get_query_kind(&self) -> String {
         todo!()
     }
 
-    fn get_data_operator(&self) -> Result<DataOperator> {
-        self.ctx.get_data_operator()
-    }
-
-    fn push_precommit_block(&self, _block: DataBlock) {
-        todo!()
-    }
-
-    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        todo!()
-    }
-
-    fn try_get_function_context(&self) -> Result<FunctionContext> {
+    fn get_function_context(&self) -> Result<FunctionContext> {
         todo!()
     }
 
@@ -447,15 +427,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_table(
-        &self,
-        _catalog: &str,
-        _database: &str,
-        _table: &str,
-    ) -> Result<Arc<dyn Table>> {
-        todo!()
-    }
-
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         todo!()
     }
@@ -465,6 +436,35 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_on_error_map(&self, _map: Option<HashMap<String, ErrorCode>>) {
+        todo!()
+    }
+
+    fn apply_changed_settings(&self, _changed_settings: Arc<Settings>) -> Result<()> {
+        todo!()
+    }
+
+    fn get_changed_settings(&self) -> Arc<Settings> {
+        todo!()
+    }
+
+    fn get_data_operator(&self) -> Result<DataOperator> {
+        self.ctx.get_data_operator()
+    }
+
+    fn push_precommit_block(&self, _block: DataBlock) {
+        todo!()
+    }
+
+    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        todo!()
+    }
+
+    async fn get_table(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+    ) -> Result<Arc<dyn Table>> {
         todo!()
     }
 }

@@ -609,8 +609,17 @@ fn vectorize_like(
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = StringType::iter_column(&arg1);
-            let mut builder = MutableBitmap::with_capacity(arg1.len());
+
             let pattern_type = check_pattern_type(arg2, false);
+            // faster path for memmem to have a single instance of Finder
+            if pattern_type == PatternType::SurroundByPercent && arg2.len() > 2 {
+                let finder = memmem::Finder::new(&arg2[1..arg2.len() - 1]);
+                let it = arg1_iter.map(|arg1| finder.find(arg1).is_some());
+                let bitmap = BooleanType::column_from_iter(it, &[]);
+                return Value::Column(bitmap);
+            }
+
+            let mut builder = MutableBitmap::with_capacity(arg1.len());
             for arg1 in arg1_iter {
                 builder.push(func(arg1, arg2, ctx, pattern_type));
             }

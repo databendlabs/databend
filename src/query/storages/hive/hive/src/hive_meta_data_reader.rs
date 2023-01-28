@@ -20,7 +20,7 @@ use opendal::Operator;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
-use storages_common_table_meta::caches::CacheManager;
+use storages_common_cache_manager::CacheManager;
 
 pub struct LoaderWrapper<T>(T);
 pub type FileMetaDataReader = InMemoryItemCacheReader<FileMetaData, LoaderWrapper<Operator>>;
@@ -30,7 +30,7 @@ impl MetaDataReader {
     pub fn meta_data_reader(dal: Operator) -> FileMetaDataReader {
         FileMetaDataReader::new(
             CacheManager::instance().get_file_meta_data_cache(),
-            "FILE_META_DATA_CACHE".to_owned(),
+            "file_meta_data_cache".to_owned(),
             LoaderWrapper(dal),
         )
     }

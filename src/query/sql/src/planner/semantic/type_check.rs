@@ -1695,7 +1695,7 @@ impl<'a> TypeChecker<'a> {
         if let Some(required_type) = required_type {
             if required_type != data_type {
                 let block = DataBlock::empty();
-                let func_ctx = self.ctx.try_get_function_context()?;
+                let func_ctx = self.ctx.get_function_context()?;
                 let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
                 let src_expr = common_expression::Expr::Constant {
                     span: None,

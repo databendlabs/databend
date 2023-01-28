@@ -52,6 +52,8 @@ impl<'a, T: Number> KeysColumnBuilder for FixedKeysColumnBuilder<'a, T> {
 pub struct SerializedKeysColumnBuilder<'a> {
     pub inner_builder: StringColumnBuilder,
 
+    initial: usize,
+
     _phantom: PhantomData<&'a ()>,
 }
 
@@ -60,6 +62,7 @@ impl<'a> SerializedKeysColumnBuilder<'a> {
         SerializedKeysColumnBuilder {
             inner_builder: StringColumnBuilder::with_capacity(capacity, value_capacity),
             _phantom: PhantomData,
+            initial: value_capacity,
         }
     }
 }
@@ -73,12 +76,13 @@ impl<'a> KeysColumnBuilder for SerializedKeysColumnBuilder<'a> {
     }
 
     fn finish(self) -> Column {
+        debug_assert!(self.initial == self.inner_builder.data.len());
         Column::String(self.inner_builder.build())
     }
 }
 
 pub struct LargeFixedKeysColumnBuilder<'a, T: LargeNumber> {
-    pub inner_builder: StringColumnBuilder,
+    pub values: Vec<u8>,
     pub _t: PhantomData<&'a T>,
 }
 
@@ -87,15 +91,18 @@ impl<'a, T: LargeNumber> KeysColumnBuilder for LargeFixedKeysColumnBuilder<'a, T
 
     #[inline]
     fn append_value(&mut self, v: Self::T) {
-        let values = &mut self.inner_builder.data;
-        let new_len = values.len() + T::BYTE_SIZE;
-        values.resize(new_len, 0);
-        v.serialize_to(&mut values[new_len - T::BYTE_SIZE..]);
-        self.inner_builder.commit_row();
+        let values = &mut self.values;
+        values.reserve(T::BYTE_SIZE);
+        let len = values.len();
+        unsafe { values.set_len(len + T::BYTE_SIZE) }
+        v.serialize_to(&mut values[len..len + T::BYTE_SIZE]);
     }
 
     #[inline]
     fn finish(self) -> Column {
-        Column::String(self.inner_builder.build())
+        let len = self.values.len() / T::BYTE_SIZE;
+        let offsets = (0..=len).map(|x| (x * T::BYTE_SIZE) as u64).collect();
+        let builder = StringColumnBuilder::from_data(self.values, offsets);
+        Column::String(builder.build())
     }
 }

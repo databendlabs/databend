@@ -146,11 +146,13 @@ impl ParquetTable {
         });
 
         let read_options = self.read_options;
+        let operator = self.operator.clone();
 
         pipeline.set_on_init(move || {
             prune_and_set_partitions(
                 &ctx_ref,
                 &locations,
+                &operator,
                 &schema,
                 &filters.as_deref(),
                 &columns_to_read,
@@ -168,17 +170,44 @@ impl ParquetTable {
             }
             Some(v) => v.output_columns,
         };
-        let output_schema = Arc::new(DataSchema::from(
-            &output_projection.project_schema(&plan.source_info.schema()),
-        ));
 
         let prewhere_reader = self.build_prewhere_reader(plan)?;
         let prewhere_filter = self.build_prewhere_filter_expr(
-            ctx.try_get_function_context()?,
+            ctx.get_function_context()?,
             plan,
             prewhere_reader.output_schema(),
         )?;
         let remain_reader = self.build_remain_reader(plan)?;
+
+        // Build three kinds of schemas.
+        // The schemas are used for `DataBlock::resort` to remove columns that are not needed.
+        // Remove columns before `DataBlock::filter` can reduce memory copy.
+        // 1. The final output schema.
+        let output_schema = Arc::new(DataSchema::from(
+            &output_projection.project_schema(&plan.source_info.schema()),
+        ));
+        // 2. The schema after filter. Remove columns read by prewhere reader but will not be output.
+        let output_fields = output_schema.fields();
+        let prewhere_schema = prewhere_reader.output_schema();
+        let remain_fields = if let Some(reader) = remain_reader.as_ref() {
+            reader.output_schema().fields().clone()
+        } else {
+            vec![]
+        };
+        let mut after_filter_fields = Vec::with_capacity(output_fields.len() - remain_fields.len());
+        // Ensure the order of fields in `after_filter_fields` is the same as `output_fields`.
+        // It will reduce the resort times.
+        for field in output_fields {
+            if prewhere_schema.field_with_name(field.name()).is_ok() {
+                after_filter_fields.push(field.clone());
+            }
+        }
+        // 3. The schema after add remain columns.
+        let mut after_remain_fields = after_filter_fields.clone();
+        after_remain_fields.extend(remain_fields);
+
+        let after_filter_schema = Arc::new(DataSchema::new(after_filter_fields));
+        let after_remain_schema = Arc::new(DataSchema::new(after_remain_fields));
 
         // Add source pipe.
         pipeline.add_source(
@@ -186,7 +215,11 @@ impl ParquetTable {
                 ParquetSource::create(
                     ctx.clone(),
                     output,
-                    output_schema.clone(),
+                    (
+                        after_filter_schema.clone(),
+                        after_remain_schema.clone(),
+                        output_schema.clone(),
+                    ),
                     prewhere_reader.clone(),
                     prewhere_filter.clone(),
                     remain_reader.clone(),

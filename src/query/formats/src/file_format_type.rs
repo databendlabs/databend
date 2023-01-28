@@ -138,7 +138,7 @@ impl FileFormatOptionsExt {
     pub fn get_output_format(&mut self, schema: TableSchemaRef) -> Result<Box<dyn OutputFormat>> {
         self.check()?;
         // println!("format {:?} {:?} {:?}", fmt, options, format_settings);
-        let output: Box<dyn OutputFormat> = match self.stage.format {
+        let output: Box<dyn OutputFormat> = match &self.stage.format {
             StageFileFormatType::Csv => match self.headers {
                 0 => Box::new(CSVOutputFormat::create(schema, self)),
                 1 => Box::new(CSVWithNamesOutputFormat::create(schema, self)),
@@ -188,17 +188,11 @@ impl FileFormatOptionsExt {
             }
             StageFileFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema, self)),
             StageFileFormatType::Json => Box::new(JSONOutputFormat::create(schema, self)),
-            StageFileFormatType::Avro => {
-                unreachable!()
-            }
-            StageFileFormatType::Orc => {
-                unreachable!()
-            }
-            StageFileFormatType::Xml => {
-                unreachable!()
-            }
-            StageFileFormatType::None => {
-                unreachable!()
+            others => {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Unsupported output file format:{:?}",
+                    others.to_string()
+                )));
             }
         };
         Ok(output)

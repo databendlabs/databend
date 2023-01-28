@@ -95,16 +95,8 @@ pub fn metrics_inc_block_index_write_milliseconds(c: u64) {
     increment_gauge!(key!("block_index_write_milliseconds"), c as f64);
 }
 
-pub fn metrics_inc_block_index_read_nums(c: u64) {
-    increment_gauge!(key!("block_index_read_nums"), c as f64);
-}
-
 pub fn metrics_inc_block_index_read_bytes(c: u64) {
     increment_gauge!(key!("block_index_read_bytes"), c as f64);
-}
-
-pub fn metrics_inc_block_index_read_milliseconds(c: u64) {
-    increment_gauge!(key!("block_index_read_milliseconds"), c as f64);
 }
 
 /// Compact metrics.
@@ -133,16 +125,56 @@ pub fn metrics_inc_compact_block_write_milliseconds(c: u64) {
 }
 
 /// Pruning metrics.
-pub fn metrics_inc_pruning_before_block_nums(c: u64) {
-    increment_gauge!(key!("pruning_before_block_nums"), c as f64);
+pub fn metrics_inc_segments_range_pruning_before(c: u64) {
+    increment_gauge!(key!("segments_range_pruning_before"), c as f64);
+}
+
+pub fn metrics_inc_segments_range_pruning_after(c: u64) {
+    increment_gauge!(key!("segments_range_pruning_after"), c as f64);
+}
+
+pub fn metrics_inc_bytes_segment_range_pruning_before(c: u64) {
+    increment_gauge!(key!("bytes_segment_range_pruning_before"), c as f64);
+}
+
+pub fn metrics_inc_bytes_segment_range_pruning_after(c: u64) {
+    increment_gauge!(key!("bytes_segment_range_pruning_after"), c as f64);
+}
+
+pub fn metrics_inc_blocks_range_pruning_before(c: u64) {
+    increment_gauge!(key!("blocks_range_pruning_before"), c as f64);
+}
+
+pub fn metrics_inc_blocks_range_pruning_after(c: u64) {
+    increment_gauge!(key!("blocks_range_pruning_after"), c as f64);
+}
+
+pub fn metrics_inc_bytes_block_range_pruning_before(c: u64) {
+    increment_gauge!(key!("bytes_block_range_pruning_before"), c as f64);
+}
+
+pub fn metrics_inc_bytes_block_range_pruning_after(c: u64) {
+    increment_gauge!(key!("bytes_block_range_pruning_after"), c as f64);
+}
+
+pub fn metrics_inc_blocks_bloom_pruning_before(c: u64) {
+    increment_gauge!(key!("blocks_bloom_pruning_before"), c as f64);
+}
+
+pub fn metrics_inc_blocks_bloom_pruning_after(c: u64) {
+    increment_gauge!(key!("blocks_bloom_pruning_after"), c as f64);
+}
+
+pub fn metrics_inc_bytes_block_bloom_pruning_before(c: u64) {
+    increment_gauge!(key!("bytes_block_bloom_pruning_before"), c as f64);
+}
+
+pub fn metrics_inc_bytes_block_bloom_pruning_after(c: u64) {
+    increment_gauge!(key!("bytes_block_bloom_pruning_after"), c as f64);
 }
 
 pub fn metrics_inc_pruning_prewhere_nums(c: u64) {
     increment_gauge!(key!("pruning_prewhere_nums"), c as f64);
-}
-
-pub fn metrics_inc_pruning_after_block_nums(c: u64) {
-    increment_gauge!(key!("pruning_after_block_nums"), c as f64);
 }
 
 pub fn metrics_inc_pruning_milliseconds(c: u64) {
@@ -181,8 +213,19 @@ pub fn metrics_reset() {
     gauge!(key!("compact_block_write_milliseconds"), c);
 
     // Pruning metrics.
-    gauge!(key!("pruning_before_block_nums"), c);
     gauge!(key!("pruning_prewhere_nums"), c);
-    gauge!(key!("pruning_after_block_nums"), c);
     gauge!(key!("pruning_milliseconds"), c);
+
+    gauge!(key!("segments_range_pruning_before"), c);
+    gauge!(key!("segments_range_pruning_after"), c);
+    gauge!(key!("blocks_range_pruning_before"), c);
+    gauge!(key!("blocks_range_pruning_after"), c);
+    gauge!(key!("blocks_bloom_pruning_before"), c);
+    gauge!(key!("blocks_bloom_pruning_after"), c);
+    gauge!(key!("bytes_segment_range_pruning_before"), c);
+    gauge!(key!("bytes_segment_range_pruning_after"), c);
+    gauge!(key!("bytes_block_bloom_pruning_before"), c);
+    gauge!(key!("bytes_block_bloom_pruning_after"), c);
+    gauge!(key!("bytes_block_range_pruning_before"), c);
+    gauge!(key!("bytes_block_range_pruning_after"), c);
 }

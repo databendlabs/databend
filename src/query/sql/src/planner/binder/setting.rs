@@ -58,11 +58,8 @@ impl Binder {
         });
         let expr = scalar.as_expr_with_col_index()?;
 
-        let (new_expr, _) = ConstantFolder::fold(
-            &expr,
-            self.ctx.try_get_function_context()?,
-            &BUILTIN_FUNCTIONS,
-        );
+        let (new_expr, _) =
+            ConstantFolder::fold(&expr, self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
         match new_expr {
             common_expression::Expr::Constant { scalar, .. } => {
                 let value = String::from_utf8(scalar.into_string().unwrap())?;

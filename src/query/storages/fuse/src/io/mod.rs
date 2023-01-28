@@ -22,7 +22,7 @@ mod write;
 pub use files::Files;
 pub use locations::TableMetaLocationGenerator;
 pub use read::BlockReader;
-pub use read::BloomFilterReader;
+pub use read::BloomBlockFilterReader;
 pub use read::MergeIOReadResult;
 pub use read::MetaReaders;
 pub use read::NativeReaderExt;

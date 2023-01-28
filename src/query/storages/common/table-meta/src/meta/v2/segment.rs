@@ -128,6 +128,11 @@ impl SegmentInfo {
     pub fn format_version(&self) -> u64 {
         self.format_version
     }
+
+    // Total block bytes of this segment.
+    pub fn total_bytes(&self) -> u64 {
+        self.blocks.iter().map(|v| v.block_size).sum()
+    }
 }
 
 use super::super::v0;

@@ -34,6 +34,7 @@ impl Binder {
             catalog,
             database,
             view,
+            columns,
             query,
         } = stmt;
 
@@ -47,6 +48,10 @@ impl Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
+        let column_names = columns
+            .iter()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .collect::<Vec<_>>();
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
@@ -55,6 +60,7 @@ impl Binder {
             catalog,
             database,
             viewname,
+            column_names,
             subquery,
         };
         Ok(Plan::CreateView(Box::new(plan)))
@@ -68,6 +74,7 @@ impl Binder {
             catalog,
             database,
             view,
+            columns,
             query,
         } = stmt;
 
@@ -81,6 +88,10 @@ impl Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
+        let column_names = columns
+            .iter()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .collect::<Vec<_>>();
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
@@ -88,6 +99,7 @@ impl Binder {
             catalog,
             database,
             viewname,
+            column_names,
             subquery,
         };
         Ok(Plan::AlterView(Box::new(plan)))

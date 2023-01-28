@@ -305,6 +305,7 @@ impl Binder {
             group_items: bind_context.aggregate_info.group_items.clone(),
             aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
             from_distinct: false,
+            limit: None,
         };
         new_expr = SExpr::create_unary(aggregate_plan.into(), new_expr);
 

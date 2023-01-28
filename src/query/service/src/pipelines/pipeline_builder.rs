@@ -216,7 +216,7 @@ impl PipelineBuilder {
 
     fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
-        self.ctx.try_set_partitions(scan.source.parts.clone())?;
+        self.ctx.set_partitions(scan.source.parts.clone())?;
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
 
         let schema = scan.source.schema();
@@ -229,7 +229,7 @@ impl PipelineBuilder {
         // if projection is sequential, no need to add projection
         if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
             let ops = vec![BlockOperator::Project { projection }];
-            let func_ctx = self.ctx.try_get_function_context()?;
+            let func_ctx = self.ctx.get_function_context()?;
             self.main_pipeline.add_transform(|input, output| {
                 Ok(CompoundBlockOperator::create(
                     input,
@@ -263,7 +263,7 @@ impl PipelineBuilder {
             Ok(CompoundBlockOperator::create(
                 input,
                 output,
-                self.ctx.try_get_function_context()?,
+                self.ctx.get_function_context()?,
                 vec![BlockOperator::Filter {
                     expr: predicate.clone(),
                 }],
@@ -275,7 +275,7 @@ impl PipelineBuilder {
 
     fn build_project(&mut self, project: &Project) -> Result<()> {
         self.build_pipeline(&project.input)?;
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundBlockOperator::create(
@@ -301,7 +301,7 @@ impl PipelineBuilder {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundBlockOperator::create(
@@ -322,6 +322,7 @@ impl PipelineBuilder {
             // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            None,
         )?;
 
         self.main_pipeline.add_transform(|input, output| {
@@ -342,6 +343,7 @@ impl PipelineBuilder {
             // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            aggregate.limit,
         )?;
 
         if self.ctx.get_cluster().is_empty()
@@ -366,6 +368,7 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
+        limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
         let (group_by, group_data_types) = group_by
@@ -402,6 +405,7 @@ impl PipelineBuilder {
             &group_by,
             &aggs,
             &agg_args,
+            limit,
         )?;
 
         Ok(params)
@@ -603,7 +607,7 @@ impl PipelineBuilder {
 
         // should render result for select
         PipelineBuilder::render_result_set(
-            &self.ctx.try_get_function_context()?,
+            &self.ctx.get_function_context()?,
             insert_select.input.output_schema()?,
             &insert_select.select_column_bindings,
             &mut self.main_pipeline,
@@ -611,7 +615,7 @@ impl PipelineBuilder {
         )?;
 
         if insert_select.cast_needed {
-            let func_ctx = self.ctx.try_get_function_context()?;
+            let func_ctx = self.ctx.get_function_context()?;
             self.main_pipeline
                 .add_transform(|transform_input_port, transform_output_port| {
                     TransformCastSchema::try_create(

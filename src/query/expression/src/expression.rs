@@ -108,7 +108,7 @@ pub enum Expr<Index: ColumnIndex = usize> {
 /// Serializable expression used to share executable expression between nodes.
 ///
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
-/// up the funciton registry with the `FunctionID`.
+/// up the function registry with the `FunctionID`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RemoteExpr<Index: ColumnIndex = usize> {
     Constant {

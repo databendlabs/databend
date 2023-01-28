@@ -89,7 +89,7 @@ INSERT INTO test_table (id,name,age) VALUES(1,'2',3), (4, '5', 6);
 CREATE STAGE s2;
 
 -- Unload the data in the table into a CSV file on the stage
-COPY INTO @s2 FROM test_table FILE_FORMAT = (TYPE = 'CSV');
+COPY INTO @s2 FROM test_table FILE_FORMAT = (TYPE = CSV);
 
 -- Unload the data from a query into a parquet file on the stage
 COPY INTO @s2 FROM (SELECT name, age, id FROM test_table LIMIT 100) FILE_FORMAT = (TYPE = 'PARQUET');

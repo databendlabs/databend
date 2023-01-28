@@ -636,7 +636,7 @@ impl FragmentCoordinator {
                     executor_id: info.current_executor.to_string(),
                     destination_ids: exchange.destination_ids.to_owned(),
                     shuffle_scatter: Arc::new(HashFlightScatter::try_create(
-                        info.query_ctx.try_get_function_context()?,
+                        info.query_ctx.get_function_context()?,
                         exchange.shuffle_keys.clone(),
                         exchange.destination_ids.len(),
                     )?),

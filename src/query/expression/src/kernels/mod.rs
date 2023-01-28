@@ -20,8 +20,10 @@ mod scatter;
 mod sort;
 mod take;
 mod take_chunks;
+mod topk;
 
 pub use group_by::*;
 pub use group_by_hash::*;
 pub use sort::*;
 pub use take_chunks::*;
+pub use topk::*;

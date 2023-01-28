@@ -20,7 +20,7 @@ use common_exception::Result;
 use parking_lot::RwLock;
 
 use super::loader::LoadParams;
-use super::loader::LoaderWithCacheKey;
+use super::loader::Loader;
 use crate::cache::StorageCache;
 use crate::metrics::metrics_inc_cache_access_count;
 use crate::metrics::metrics_inc_cache_hit_count;
@@ -43,7 +43,7 @@ pub struct CachedReader<T, L, C> {
 
 impl<T, L, C, M> CachedReader<T, L, C>
 where
-    L: LoaderWithCacheKey<T> + Sync,
+    L: Loader<T> + Sync,
     C: StorageCache<String, T, Meter = M>,
 {
     pub fn new(cache: Option<Arc<RwLock<C>>>, name: impl Into<String>, loader: L) -> Self {
@@ -58,7 +58,7 @@ where
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
     pub async fn read(&self, params: &LoadParams) -> Result<Arc<T>> {
         match &self.cache {
-            None => Ok(Arc::new(self.loader.load_with_cache_key(params).await?)),
+            None => Ok(Arc::new(self.loader.load(params).await?)),
             Some(labeled_cache) => {
                 // Perf.
                 {
@@ -78,7 +78,7 @@ where
                     None => {
                         let start = Instant::now();
 
-                        let v = self.loader.load_with_cache_key(params).await?;
+                        let v = self.loader.load(params).await?;
                         let item = Arc::new(v);
 
                         // Perf.

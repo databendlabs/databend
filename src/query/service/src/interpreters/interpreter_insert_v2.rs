@@ -881,7 +881,7 @@ async fn exprs_to_scalar(
         }],
         1,
     );
-    let func_ctx = ctx.try_get_function_context()?;
+    let func_ctx = ctx.get_function_context()?;
     let mut expression_transform = CompoundBlockOperator {
         operators,
         ctx: func_ctx,

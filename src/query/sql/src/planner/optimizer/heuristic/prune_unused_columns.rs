@@ -38,7 +38,9 @@ impl UnusedColumnPruner {
     }
 
     pub fn remove_unused_columns(&self, expr: &SExpr, require_columns: ColumnSet) -> Result<SExpr> {
-        Self::keep_required_columns(expr, require_columns)
+        let mut s_expr = Self::keep_required_columns(expr, require_columns)?;
+        s_expr.applied_rules = expr.applied_rules.clone();
+        Ok(s_expr)
     }
 
     /// Keep columns referenced by parent plan node.
@@ -161,17 +163,9 @@ impl UnusedColumnPruner {
                         .is_none()
                     && p.group_items.is_empty()
                 {
-                    required.insert(
-                        *rel_prop
-                            .output_columns
-                            .iter()
-                            .sorted()
-                            .take(1)
-                            .next()
-                            .ok_or_else(|| {
-                                ErrorCode::Internal("Invalid children without output column")
-                            })?,
-                    );
+                    if let Some(index) = rel_prop.output_columns.iter().sorted().take(1).next() {
+                        required.insert(*index);
+                    }
                 }
 
                 p.group_items.iter().for_each(|i| {
@@ -185,6 +179,7 @@ impl UnusedColumnPruner {
                         aggregate_functions: used,
                         from_distinct: p.from_distinct,
                         mode: p.mode,
+                        limit: p.limit,
                     }),
                     Self::keep_required_columns(expr.child(0)?, required)?,
                 ))

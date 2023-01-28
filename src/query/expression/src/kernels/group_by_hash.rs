@@ -81,6 +81,7 @@ pub type HashMethodKeysU512 = HashMethodFixedKeys<U512>;
 #[derive(Clone, Debug)]
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
+    SingleString(HashMethodSingleString),
     KeysU8(HashMethodKeysU8),
     KeysU16(HashMethodKeysU16),
     KeysU32(HashMethodKeysU32),
@@ -90,22 +91,48 @@ pub enum HashMethodKind {
     KeysU512(HashMethodKeysU512),
 }
 
-impl HashMethodKind {
-    pub fn name(&self) -> String {
-        match self {
-            HashMethodKind::Serializer(v) => v.name(),
-            HashMethodKind::KeysU8(v) => v.name(),
-            HashMethodKind::KeysU16(v) => v.name(),
-            HashMethodKind::KeysU32(v) => v.name(),
-            HashMethodKind::KeysU64(v) => v.name(),
-            HashMethodKind::KeysU128(v) => v.name(),
-            HashMethodKind::KeysU256(v) => v.name(),
-            HashMethodKind::KeysU512(v) => v.name(),
+#[macro_export]
+macro_rules! with_hash_method {
+    ( | $t:tt | $($tail:tt)* ) => {
+        match_template::match_template! {
+            $t = [Serializer, SingleString, KeysU8, KeysU16,
+            KeysU32, KeysU64, KeysU128, KeysU256, KeysU512],
+            $($tail)*
         }
     }
+}
+
+#[macro_export]
+macro_rules! with_mappedhash_method {
+    ( | $t:tt | $($tail:tt)* ) => {
+        match_template::match_template! {
+            $t = [
+                Serializer => HashMethodSerializer,
+                SingleString => HashMethodSingleString,
+                KeysU8 => HashMethodKeysU8,
+                KeysU16 => HashMethodKeysU16,
+                KeysU32 => HashMethodKeysU32,
+                KeysU64 => HashMethodKeysU64,
+                KeysU128 => HashMethodKeysU128,
+                KeysU256 => HashMethodKeysU256,
+                KeysU512 => HashMethodKeysU512
+            ],
+            $($tail)*
+        }
+    }
+}
+
+impl HashMethodKind {
+    pub fn name(&self) -> String {
+        with_hash_method!(|T| match self {
+            HashMethodKind::T(v) => v.name(),
+        })
+    }
+
     pub fn data_type(&self) -> DataType {
         match self {
             HashMethodKind::Serializer(_) => DataType::String,
+            HashMethodKind::SingleString(_) => DataType::String,
             HashMethodKind::KeysU8(_) => DataType::Number(NumberDataType::UInt8),
             HashMethodKind::KeysU16(_) => DataType::Number(NumberDataType::UInt16),
             HashMethodKind::KeysU32(_) => DataType::Number(NumberDataType::UInt32),
@@ -113,6 +140,34 @@ impl HashMethodKind {
             HashMethodKind::KeysU128(_)
             | HashMethodKind::KeysU256(_)
             | HashMethodKind::KeysU512(_) => DataType::String,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HashMethodSingleString {}
+
+impl HashMethod for HashMethodSingleString {
+    type HashKey = [u8];
+
+    type HashKeyIter<'a> = StringIterator<'a>;
+
+    fn name(&self) -> String {
+        "SingleString".to_string()
+    }
+
+    fn build_keys_state(
+        &self,
+        group_columns: &[(Column, DataType)],
+        _rows: usize,
+    ) -> Result<KeysState> {
+        Ok(KeysState::Column(group_columns[0].0.clone()))
+    }
+
+    fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
+        match key_state {
+            KeysState::Column(Column::String(col)) => Ok(col.iter()),
+            _ => unreachable!(),
         }
     }
 }
@@ -134,10 +189,6 @@ impl HashMethod for HashMethodSerializer {
         group_columns: &[(Column, DataType)],
         rows: usize,
     ) -> Result<KeysState> {
-        if group_columns.len() == 1 && group_columns[0].1.is_string() {
-            return Ok(KeysState::Column(group_columns[0].0.clone()));
-        }
-
         let approx_size = group_columns.len() * rows * 8;
         let mut builder = StringColumnBuilder::with_capacity(rows, approx_size);
 

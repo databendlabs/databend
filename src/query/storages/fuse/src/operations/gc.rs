@@ -25,8 +25,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_cache::CacheAccessor;
-use storages_common_table_meta::caches::BloomIndexMeta;
-use storages_common_table_meta::caches::CachedMeta;
+use storages_common_cache_manager::BloomIndexMeta;
+use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
@@ -414,7 +414,7 @@ impl FuseTable {
         locations_to_be_purged: HashSet<String>,
     ) -> Result<()>
     where
-        T: CachedMeta<T>,
+        T: CachedObject<T>,
     {
         if let Some(cache) = T::cache() {
             for loc in locations_to_be_purged.iter() {

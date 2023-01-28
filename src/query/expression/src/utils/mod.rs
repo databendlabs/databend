@@ -19,6 +19,7 @@ pub mod block_thresholds;
 mod column_from;
 pub mod date_helper;
 pub mod display;
+pub mod filter_helper;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;

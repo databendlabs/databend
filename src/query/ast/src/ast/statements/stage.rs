@@ -54,7 +54,7 @@ impl Display for CreateStageStmt {
         }
 
         if !self.on_error.is_empty() {
-            write!(f, " ON_ERROR = {}", self.on_error)?;
+            write!(f, " ON_ERROR = '{}'", self.on_error)?;
         }
 
         if self.size_limit != 0 {

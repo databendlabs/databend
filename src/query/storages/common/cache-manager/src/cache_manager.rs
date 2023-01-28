@@ -1,29 +1,29 @@
-//  Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 
 use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
 use common_config::QueryConfig;
 use common_exception::Result;
-use storages_common_cache::InMemoryBytesCacheHolder;
 use storages_common_cache::InMemoryCacheBuilder;
 use storages_common_cache::InMemoryItemCacheHolder;
 
-use crate::caches::meta_cache::BloomIndexCache;
-use crate::caches::meta_cache::BloomIndexMetaCache;
-use crate::caches::meta_cache::FileMetaDataCache;
+use crate::caches::BloomIndexFilterCache;
+use crate::caches::BloomIndexMetaCache;
+use crate::caches::FileMetaDataCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
@@ -33,11 +33,11 @@ static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 /// Where all the caches reside
 pub struct CacheManager {
     table_snapshot_cache: Option<TableSnapshotCache>,
+    table_statistic_cache: Option<TableSnapshotStatisticCache>,
     segment_info_cache: Option<SegmentInfoCache>,
-    bloom_index_data_cache: Option<BloomIndexCache>,
+    bloom_index_filter_cache: Option<BloomIndexFilterCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
-    table_statistic_cache: Option<TableSnapshotStatisticCache>,
 }
 
 impl CacheManager {
@@ -49,7 +49,7 @@ impl CacheManager {
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
-                bloom_index_data_cache: None,
+                bloom_index_filter_cache: None,
                 bloom_index_meta_cache: None,
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
@@ -58,15 +58,15 @@ impl CacheManager {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
             let table_statistic_cache = Self::new_item_cache(config.table_cache_statistic_count);
             let segment_info_cache = Self::new_item_cache(config.table_cache_segment_count);
-            let bloom_index_data_cache =
-                Self::new_bytes_cache(config.table_cache_bloom_index_data_bytes);
+            let bloom_index_filter_cache =
+                Self::new_item_cache(config.table_cache_bloom_index_filter_count);
             let bloom_index_meta_cache =
                 Self::new_item_cache(config.table_cache_bloom_index_meta_count);
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
-                bloom_index_data_cache,
+                bloom_index_filter_cache,
                 bloom_index_meta_cache,
                 file_meta_data_cache,
                 table_statistic_cache,
@@ -92,8 +92,8 @@ impl CacheManager {
         self.segment_info_cache.clone()
     }
 
-    pub fn get_bloom_index_cache(&self) -> Option<BloomIndexCache> {
-        self.bloom_index_data_cache.clone()
+    pub fn get_bloom_index_filter_cache(&self) -> Option<BloomIndexFilterCache> {
+        self.bloom_index_filter_cache.clone()
     }
 
     pub fn get_bloom_index_meta_cache(&self) -> Option<BloomIndexMetaCache> {
@@ -107,14 +107,6 @@ impl CacheManager {
     fn new_item_cache<T>(capacity: u64) -> Option<InMemoryItemCacheHolder<T>> {
         if capacity > 0 {
             Some(InMemoryCacheBuilder::new_item_cache(capacity))
-        } else {
-            None
-        }
-    }
-
-    fn new_bytes_cache(capacity: u64) -> Option<InMemoryBytesCacheHolder> {
-        if capacity > 0 {
-            Some(InMemoryCacheBuilder::new_bytes_cache(capacity))
         } else {
             None
         }

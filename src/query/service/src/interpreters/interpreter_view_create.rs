@@ -21,6 +21,7 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_sql::plans::CreateViewPlan;
+use common_sql::Planner;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
@@ -69,7 +70,28 @@ impl CreateViewInterpreter {
     async fn create_view(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let mut options = BTreeMap::new();
-        options.insert("query".to_string(), self.plan.subquery.clone());
+
+        let subquery = if self.plan.column_names.is_empty() {
+            self.plan.subquery.clone()
+        } else {
+            let mut planner = Planner::new(self.ctx.clone());
+            let (plan, _, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
+            if plan.schema().fields().len() != self.plan.column_names.len() {
+                return Err(ErrorCode::BadDataArrayLength(format!(
+                    "column name length mismatch, expect {}, got {}",
+                    plan.schema().fields().len(),
+                    self.plan.column_names.len(),
+                )));
+            }
+            format!(
+                "select * from ({}) {}({})",
+                self.plan.subquery,
+                self.plan.viewname,
+                self.plan.column_names.join(", ")
+            )
+        };
+        options.insert("query".to_string(), subquery);
+
         let plan = CreateTableReq {
             if_not_exists: self.plan.if_not_exists,
             name_ident: TableNameIdent {

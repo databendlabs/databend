@@ -17,7 +17,7 @@ statement ok
 CREATE STAGE IF NOT EXISTS test
 
 statement ok
-copy into @test from test_table FILE_FORMAT = (type = 'CSV')
+copy into @test from test_table FILE_FORMAT = (type = CSV)
 
 statement ok
 copy into test_table from @test

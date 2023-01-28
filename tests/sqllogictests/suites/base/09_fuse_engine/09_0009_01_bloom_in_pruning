@@ -1,11 +1,11 @@
 statement ok
-DROP DATABASE IF EXISTS db_09_0009
+DROP DATABASE IF EXISTS db_09_0009_01
 
 statement ok
-CREATE DATABASE db_09_0009
+CREATE DATABASE db_09_0009_01
 
 statement ok
-USE db_09_0009
+USE db_09_0009_01
 
 statement ok
 create table t(a UInt64, b Int64)
@@ -29,4 +29,4 @@ statement ok
 DROP TABLE t
 
 statement ok
-DROP DATABASE db_09_0009
+DROP DATABASE db_09_0009_01

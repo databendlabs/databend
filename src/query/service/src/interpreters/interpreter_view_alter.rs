@@ -22,6 +22,7 @@ use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_sql::plans::AlterViewPlan;
+use common_sql::Planner;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
@@ -86,7 +87,27 @@ impl AlterViewInterpreter {
 
         // create new view
         let mut options = BTreeMap::new();
-        options.insert("query".to_string(), self.plan.subquery.clone());
+        let subquery = if self.plan.column_names.is_empty() {
+            self.plan.subquery.clone()
+        } else {
+            let mut planner = Planner::new(self.ctx.clone());
+            let (plan, _, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
+            if plan.schema().fields().len() != self.plan.column_names.len() {
+                return Err(ErrorCode::BadDataArrayLength(format!(
+                    "column name length mismatch, expect {}, got {}",
+                    plan.schema().fields().len(),
+                    self.plan.column_names.len(),
+                )));
+            }
+            format!(
+                "select * from ({}) {}({})",
+                self.plan.subquery,
+                self.plan.viewname,
+                self.plan.column_names.join(", ")
+            )
+        };
+        options.insert("query".to_string(), subquery);
+
         let plan = CreateTableReq {
             if_not_exists: true,
             name_ident: TableNameIdent {

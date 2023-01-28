@@ -22,6 +22,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
@@ -127,7 +128,7 @@ impl Processor for MutationSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadData(None)) {
-            self.state = match self.ctx.try_get_part() {
+            self.state = match self.ctx.get_partition() {
                 None => State::Finish,
                 Some(part) => State::ReadData(Some(part)),
             }
@@ -176,17 +177,18 @@ impl Processor for MutationSource {
                 let num_rows = data_block.num_rows();
 
                 if let Some(filter) = self.filter.as_ref() {
-                    let func_ctx = self.ctx.try_get_function_context()?;
+                    let func_ctx = self.ctx.get_function_context()?;
                     let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
                     let res = evaluator
                         .run(filter)
                         .map_err(|e| e.add_message("eval filter failed:"))?;
-                    let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
-                        ErrorCode::BadArguments(
-                            "Result of filter expression cannot be converted to boolean.",
-                        )
-                    })?;
+                    let predicates =
+                        FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
+                            ErrorCode::BadArguments(
+                                "Result of filter expression cannot be converted to boolean.",
+                            )
+                        })?;
 
                     let affect_rows = match &predicates {
                         Value::Scalar(v) => {
@@ -215,7 +217,7 @@ impl Processor for MutationSource {
                                         self.origin_stats.clone(),
                                     );
                                     self.state = State::Output(
-                                        self.ctx.try_get_part(),
+                                        self.ctx.get_partition(),
                                         DataBlock::empty_with_meta(meta),
                                     );
                                 } else {
@@ -253,7 +255,7 @@ impl Processor for MutationSource {
                         }
                     } else {
                         // Do nothing.
-                        self.state = State::Output(self.ctx.try_get_part(), DataBlock::empty());
+                        self.state = State::Output(self.ctx.get_partition(), DataBlock::empty());
                     }
                 } else {
                     let progress_values = ProgressValues {
@@ -297,13 +299,13 @@ impl Processor for MutationSource {
                 self.state = State::PerformOperator(data_block);
             }
             State::PerformOperator(data_block) => {
-                let func_ctx = self.ctx.try_get_function_context()?;
+                let func_ctx = self.ctx.get_function_context()?;
                 let block = self
                     .operators
                     .iter()
                     .try_fold(data_block, |input, op| op.execute(&func_ctx, input))?;
                 let meta = SerializeDataMeta::create(self.index.clone(), self.origin_stats.clone());
-                self.state = State::Output(self.ctx.try_get_part(), block.add_meta(Some(meta))?);
+                self.state = State::Output(self.ctx.get_partition(), block.add_meta(Some(meta))?);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

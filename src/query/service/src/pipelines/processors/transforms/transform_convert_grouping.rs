@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::with_hash_method;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
@@ -41,8 +42,8 @@ use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
 
-static MAX_BUCKET_NUM: isize = 256;
 // Overflow to object storage data block
+#[allow(dead_code)]
 static OVERFLOW_BUCKET_NUM: isize = -2;
 // Single level data block
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
@@ -94,20 +95,23 @@ impl BlockMetaInfo for ConvertGroupingMetaInfo {
     }
 }
 
-enum InputPortState {
-    Active { port: Arc<InputPort>, bucket: isize },
-    Finished,
+struct InputPortState {
+    port: Arc<InputPort>,
+    bucket: isize,
 }
 
 pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<Method>> {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
 
-    working_bucket: isize,
-    min_bucket: isize,
     method: Method,
+    working_bucket: isize,
+    pushing_bucket: isize,
+    all_inputs_is_finished: bool,
+    initialized_all_inputs: bool,
     params: Arc<AggregatorParams>,
     buckets_blocks: HashMap<isize, Vec<DataBlock>>,
+    unsplitted_blocks: Vec<DataBlock>,
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGrouping<Method> {
@@ -119,8 +123,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
         let mut inputs = Vec::with_capacity(input_nums);
 
         for _index in 0..input_nums {
-            inputs.push(InputPortState::Active {
-                bucket: 0,
+            inputs.push(InputPortState {
+                bucket: -1,
                 port: InputPort::create(),
             });
         }
@@ -130,19 +134,20 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
             params,
             inputs,
             working_bucket: 0,
+            pushing_bucket: 0,
             output: OutputPort::create(),
             buckets_blocks: HashMap::new(),
-            min_bucket: MAX_BUCKET_NUM,
+            all_inputs_is_finished: false,
+            unsplitted_blocks: vec![],
+            initialized_all_inputs: false,
         })
     }
 
     pub fn get_inputs(&self) -> Vec<Arc<InputPort>> {
         let mut inputs = Vec::with_capacity(self.inputs.len());
 
-        for input in &self.inputs {
-            if let InputPortState::Active { port, .. } = input {
-                inputs.push(port.clone());
-            }
+        for input_state in &self.inputs {
+            inputs.push(input_state.port.clone());
         }
 
         inputs
@@ -150,6 +155,91 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
     pub fn get_output(&self) -> Arc<OutputPort> {
         self.output.clone()
+    }
+
+    fn initialize_all_inputs(&mut self) -> Result<bool> {
+        self.initialized_all_inputs = true;
+
+        for index in 0..self.inputs.len() {
+            if self.inputs[index].port.is_finished() {
+                continue;
+            }
+
+            // We pull the first unsplitted data block
+            if self.inputs[index].bucket > SINGLE_LEVEL_BUCKET_NUM {
+                continue;
+            }
+
+            self.inputs[index].port.set_need_data();
+
+            if !self.inputs[index].port.has_data() {
+                self.initialized_all_inputs = false;
+                continue;
+            }
+
+            self.inputs[index].bucket =
+                self.add_bucket(self.inputs[index].port.pull_data().unwrap()?);
+        }
+
+        Ok(self.initialized_all_inputs)
+    }
+
+    fn add_bucket(&mut self, data_block: DataBlock) -> isize {
+        let data_block_meta: Option<&AggregateInfo> = data_block
+            .get_meta()
+            .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>());
+
+        if let Some(info) = data_block_meta {
+            if info.overflow.is_none() && info.bucket > SINGLE_LEVEL_BUCKET_NUM {
+                let bucket = info.bucket;
+                match self.buckets_blocks.entry(bucket) {
+                    Entry::Vacant(v) => {
+                        v.insert(vec![data_block]);
+                    }
+                    Entry::Occupied(mut v) => {
+                        v.get_mut().push(data_block);
+                    }
+                };
+
+                return bucket;
+            }
+        }
+
+        self.unsplitted_blocks.push(data_block);
+        SINGLE_LEVEL_BUCKET_NUM
+    }
+
+    fn try_push_data_block(&mut self) -> bool {
+        match self.buckets_blocks.is_empty() {
+            true => self.try_push_single_level(),
+            false => self.try_push_two_level(),
+        }
+    }
+
+    fn try_push_two_level(&mut self) -> bool {
+        while self.pushing_bucket < self.working_bucket {
+            if let Some(bucket_blocks) = self.buckets_blocks.remove(&self.pushing_bucket) {
+                let meta = ConvertGroupingMetaInfo::create(self.pushing_bucket, bucket_blocks);
+                self.output.push_data(Ok(DataBlock::empty_with_meta(meta)));
+                self.pushing_bucket += 1;
+                return true;
+            }
+
+            self.pushing_bucket += 1;
+        }
+
+        false
+    }
+
+    fn try_push_single_level(&mut self) -> bool {
+        if self.unsplitted_blocks.is_empty() {
+            return false;
+        }
+
+        let unsplitted_blocks = std::mem::take(&mut self.unsplitted_blocks);
+        let meta = ConvertGroupingMetaInfo::create(SINGLE_LEVEL_BUCKET_NUM, unsplitted_blocks);
+        self.output.push_data(Ok(DataBlock::empty_with_meta(meta)));
+        true
     }
 
     fn convert_to_two_level(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
@@ -185,232 +275,109 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.working_bucket >= MAX_BUCKET_NUM || self.output.is_finished() {
+        if self.all_inputs_is_finished || self.output.is_finished() {
             self.output.finish();
 
-            for input in &self.inputs {
-                if let InputPortState::Active { port, .. } = input {
-                    port.finish();
-                }
+            for input_state in &self.inputs {
+                input_state.port.finish();
             }
 
             self.buckets_blocks.clear();
             return Ok(Event::Finished);
         }
 
+        // We pull the first unsplitted data block
+        if !self.initialized_all_inputs && !self.initialize_all_inputs()? {
+            return Ok(Event::NeedData);
+        }
+
+        if !self.buckets_blocks.is_empty() && !self.unsplitted_blocks.is_empty() {
+            // Split data blocks if it's unsplitted.
+            return Ok(Event::Sync);
+        }
+
         if !self.output.can_push() {
-            for input in &self.inputs {
-                if let InputPortState::Active { port, .. } = input {
-                    port.set_not_need_data();
-                }
+            for input_state in &self.inputs {
+                input_state.port.set_not_need_data();
             }
 
             return Ok(Event::NeedConsume);
         }
 
-        if self.working_bucket == 1 {
-            if self.buckets_blocks.contains_key(&OVERFLOW_BUCKET_NUM)
-                || self.buckets_blocks.contains_key(&SINGLE_LEVEL_BUCKET_NUM)
-            {
-                return Ok(Event::Sync);
-            }
+        let pushed_data_block = self.try_push_data_block();
 
-            if self.buckets_blocks.contains_key(&0) {
-                if let Some(bucket_blocks) = self.buckets_blocks.remove(&0) {
-                    self.output.push_data(Ok(DataBlock::empty_with_meta(
-                        ConvertGroupingMetaInfo::create(0, bucket_blocks),
-                    )));
+        loop {
+            // Try to pull the next data or until the port is closed
+            let mut all_inputs_is_finished = true;
+            let mut all_port_prepared_data = true;
 
-                    return Ok(Event::NeedConsume);
+            for index in 0..self.inputs.len() {
+                if self.inputs[index].port.is_finished() {
+                    continue;
                 }
+
+                all_inputs_is_finished = false;
+                if self.inputs[index].bucket >= self.working_bucket {
+                    continue;
+                }
+
+                self.inputs[index].port.set_need_data();
+                if !self.inputs[index].port.has_data() {
+                    all_port_prepared_data = false;
+                    continue;
+                }
+
+                self.inputs[index].bucket =
+                    self.add_bucket(self.inputs[index].port.pull_data().unwrap()?);
+                debug_assert!(self.unsplitted_blocks.is_empty());
             }
+
+            if all_inputs_is_finished {
+                self.all_inputs_is_finished = true;
+                break;
+            }
+
+            if !all_port_prepared_data {
+                return Ok(Event::NeedData);
+            }
+
+            self.working_bucket += 1;
         }
 
-        let mut all_port_prepared_data = true;
-
-        for input in self.inputs.iter_mut() {
-            match input {
-                InputPortState::Active { port, .. } if port.is_finished() => {
-                    port.finish();
-                    *input = InputPortState::Finished;
-                }
-                InputPortState::Active { port, bucket } if *bucket == self.working_bucket => {
-                    port.set_need_data();
-
-                    if !port.has_data() {
-                        all_port_prepared_data = false;
-                        continue;
-                    }
-
-                    let data_block = port.pull_data().unwrap()?;
-                    let data_block_meta: Option<&AggregateInfo> = data_block
-                        .get_meta()
-                        .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>());
-
-                    match data_block_meta {
-                        // XXX: None | Some(info) if info.bucket == -1 is compile failure.
-                        None => {
-                            port.finish();
-                            *input = InputPortState::Finished;
-                            match self.buckets_blocks.entry(SINGLE_LEVEL_BUCKET_NUM) {
-                                Entry::Vacant(v) => {
-                                    v.insert(vec![data_block]);
-                                }
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(data_block);
-                                }
-                            };
-                        }
-                        Some(info) if info.bucket == SINGLE_LEVEL_BUCKET_NUM => {
-                            port.finish();
-                            *input = InputPortState::Finished;
-                            match self.buckets_blocks.entry(SINGLE_LEVEL_BUCKET_NUM) {
-                                Entry::Vacant(v) => {
-                                    v.insert(vec![data_block]);
-                                }
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(data_block);
-                                }
-                            };
-                        }
-                        Some(info) => match info.overflow {
-                            None => {
-                                *bucket = info.bucket + 1;
-                                self.min_bucket = std::cmp::min(info.bucket, self.min_bucket);
-                                match self.buckets_blocks.entry(info.bucket) {
-                                    Entry::Vacant(v) => {
-                                        v.insert(vec![data_block]);
-                                    }
-                                    Entry::Occupied(mut v) => {
-                                        v.get_mut().push(data_block);
-                                    }
-                                };
-                            }
-                            Some(_) => {
-                                // Skipping overflow block.
-                                all_port_prepared_data = false;
-                                match self.buckets_blocks.entry(OVERFLOW_BUCKET_NUM) {
-                                    Entry::Vacant(v) => {
-                                        v.insert(vec![data_block]);
-                                    }
-                                    Entry::Occupied(mut v) => {
-                                        v.get_mut().push(data_block);
-                                    }
-                                };
-                            }
-                        },
-                    };
-                }
-                InputPortState::Finished => { /* finished, do nothing */ }
-                InputPortState::Active { port, bucket } => {
-                    port.set_need_data();
-                    self.min_bucket = std::cmp::min(*bucket, self.min_bucket);
-                }
-            }
-        }
-
-        if all_port_prepared_data {
-            // current working bucket is process completed.
-            if self.working_bucket == 0
-                && self.buckets_blocks.contains_key(&SINGLE_LEVEL_BUCKET_NUM)
-            {
-                // all single level data block
-                if self.buckets_blocks.len() == 1 {
-                    self.working_bucket = 256;
-
-                    if let Some(bucket_blocks) =
-                        self.buckets_blocks.remove(&SINGLE_LEVEL_BUCKET_NUM)
-                    {
-                        self.output.push_data(Ok(DataBlock::empty_with_meta(
-                            ConvertGroupingMetaInfo::create(SINGLE_LEVEL_BUCKET_NUM, bucket_blocks),
-                        )));
-                    }
-
-                    return Ok(Event::NeedConsume);
-                }
-
-                // need convert to two level data block
-                self.working_bucket += 1;
-                return Ok(Event::Sync);
-            }
-
-            if self.min_bucket == MAX_BUCKET_NUM {
-                self.output.finish();
-
-                for input in &self.inputs {
-                    if let InputPortState::Active { port, .. } = input {
-                        port.finish();
-                    }
-                }
-
-                return Ok(Event::Finished);
-            }
-
-            if let Some(bucket_blocks) = self.buckets_blocks.remove(&self.min_bucket) {
-                self.output.push_data(Ok(DataBlock::empty_with_meta(
-                    ConvertGroupingMetaInfo::create(self.min_bucket, bucket_blocks),
-                )));
-            }
-
-            self.working_bucket = self.min_bucket + 1;
-            self.min_bucket = MAX_BUCKET_NUM;
+        if pushed_data_block || self.try_push_data_block() {
             return Ok(Event::NeedConsume);
         }
 
-        Ok(Event::NeedData)
+        self.output.finish();
+        Ok(Event::Finished)
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(overflow_blocks) = self.buckets_blocks.get_mut(&OVERFLOW_BUCKET_NUM) {
-            match overflow_blocks.pop() {
-                None => {
-                    self.buckets_blocks.remove(&OVERFLOW_BUCKET_NUM);
-                }
-                Some(data_block) => {
-                    if let Some(meta) = data_block.get_meta() {
-                        if let Some(meta) = meta.as_any().downcast_ref::<AggregateInfo>() {
-                            let overflow = meta.overflow.as_ref().unwrap();
-                            for (bucket_id, (_offset, _length)) in &overflow.bucket_info {
-                                // DataBlock
-                                // DataBlock::empty_with_meta()
+        if let Some(data_block) = self.unsplitted_blocks.pop() {
+            let data_block_meta: Option<&AggregateInfo> = data_block
+                .get_meta()
+                .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>());
 
-                                match self.buckets_blocks.entry(*bucket_id as isize) {
-                                    Entry::Vacant(v) => {
-                                        v.insert(vec![]);
-                                    }
-                                    Entry::Occupied(_v) => {
-                                        // v.get_mut().push()
-                                    }
-                                };
-                            }
-                        }
-                    }
-                }
+            let data_blocks = match data_block_meta {
+                None => self.convert_to_two_level(data_block)?,
+                Some(meta) => match &meta.overflow {
+                    None => self.convert_to_two_level(data_block)?,
+                    Some(_overflow_info) => unimplemented!(),
+                },
             };
-        }
 
-        if let Some(single_level_blocks) = self.buckets_blocks.get_mut(&SINGLE_LEVEL_BUCKET_NUM) {
-            match single_level_blocks.pop() {
-                None => {
-                    self.buckets_blocks.remove(&SINGLE_LEVEL_BUCKET_NUM);
-                }
-                Some(data_block) => {
-                    let blocks = self.convert_to_two_level(data_block)?;
-
-                    for (bucket, block) in blocks.into_iter().enumerate() {
-                        if !block.is_empty() {
-                            match self.buckets_blocks.entry(bucket as isize) {
-                                Entry::Vacant(v) => {
-                                    v.insert(vec![block]);
-                                }
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(block);
-                                }
-                            };
+            for (bucket, block) in data_blocks.into_iter().enumerate() {
+                if !block.is_empty() {
+                    match self.buckets_blocks.entry(bucket as isize) {
+                        Entry::Vacant(v) => {
+                            v.insert(vec![block]);
                         }
-                    }
+                        Entry::Occupied(mut v) => {
+                            v.get_mut().push(block);
+                        }
+                    };
                 }
-            };
+            }
         }
 
         Ok(())
@@ -450,16 +417,9 @@ pub fn efficiently_memory_final_aggregator(
     let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
     let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
-    match method {
-        HashMethodKind::KeysU8(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU16(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU32(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU64(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU128(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU256(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::KeysU512(v) => build_convert_grouping(v, pipeline, params.clone()),
-        HashMethodKind::Serializer(v) => build_convert_grouping(v, pipeline, params.clone()),
-    }
+    with_hash_method!(|T| match method {
+        HashMethodKind::T(v) => build_convert_grouping(v, pipeline, params.clone()),
+    })
 }
 
 struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> {
@@ -542,9 +502,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_block.take() {
+        if let Some(mut data_block) = self.input_block.take() {
             let mut blocks = vec![];
-            if let Some(meta) = data_block.get_meta() {
+            if let Some(meta) = data_block.take_meta() {
                 if let Some(meta) = meta.as_any().downcast_ref::<ConvertGroupingMetaInfo>() {
                     blocks.extend(meta.blocks.iter().cloned());
                 }

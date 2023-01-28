@@ -306,6 +306,7 @@ impl PhysicalPlanBuilder {
                 let input = self.build(s_expr.child(0)?).await?;
                 let input_schema = input.output_schema()?;
                 let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
+
                 let result = match &agg.mode {
                     AggregateMode::Partial => {
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
@@ -443,8 +444,9 @@ impl PhysicalPlanBuilder {
                         }).collect::<Result<_>>()?;
 
                         match input {
-                            PhysicalPlan::AggregatePartial(ref agg) => {
-                                let before_group_by_schema = agg.input.output_schema()?;
+                            PhysicalPlan::AggregatePartial(ref partial) => {
+                                let before_group_by_schema = partial.input.output_schema()?;
+                                let limit = agg.limit;
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
                                     group_by: group_items,
@@ -452,14 +454,17 @@ impl PhysicalPlanBuilder {
                                     before_group_by_schema,
 
                                     stat_info: Some(stat_info),
+                                    limit,
                                 })
                             }
 
                             PhysicalPlan::Exchange(PhysicalExchange {
-                                input: box PhysicalPlan::AggregatePartial(ref agg),
+                                input: box PhysicalPlan::AggregatePartial(ref partial),
                                 ..
                             }) => {
-                                let before_group_by_schema = agg.input.output_schema()?;
+                                let before_group_by_schema = partial.input.output_schema()?;
+                                let limit = agg.limit;
+
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
                                     group_by: group_items,
@@ -467,6 +472,7 @@ impl PhysicalPlanBuilder {
                                     before_group_by_schema,
 
                                     stat_info: Some(stat_info),
+                                    limit,
                                 })
                             }
 

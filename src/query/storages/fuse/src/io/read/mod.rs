@@ -22,7 +22,7 @@ pub use block::BlockReader;
 pub use block::MergeIOReadResult;
 pub use block::NativeReaderExt;
 pub use block::UncompressedBuffer;
-pub use bloom::BloomFilterReader;
+pub use bloom::BloomBlockFilterReader;
 pub use meta::MetaReaders;
 pub use meta::SegmentInfoReader;
 pub use meta::TableSnapshotReader;

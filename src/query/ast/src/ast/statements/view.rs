@@ -15,6 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -25,6 +26,7 @@ pub struct CreateViewStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub view: Identifier,
+    pub columns: Vec<Identifier>,
     pub query: Box<Query>,
 }
 
@@ -41,6 +43,11 @@ impl Display for CreateViewStmt {
                 .chain(&self.database)
                 .chain(Some(&self.view)),
         )?;
+        if !self.columns.is_empty() {
+            write!(f, " (")?;
+            write_comma_separated_list(f, &self.columns)?;
+            write!(f, ")")?;
+        }
         write!(f, " AS {}", self.query)
     }
 }
@@ -50,6 +57,7 @@ pub struct AlterViewStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub view: Identifier,
+    pub columns: Vec<Identifier>,
     pub query: Box<Query>,
 }
 
@@ -63,6 +71,11 @@ impl Display for AlterViewStmt {
                 .chain(&self.database)
                 .chain(Some(&self.view)),
         )?;
+        if !self.columns.is_empty() {
+            write!(f, " (")?;
+            write_comma_separated_list(f, &self.columns)?;
+            write!(f, ")")?;
+        }
         write!(f, " AS {}", self.query)
     }
 }

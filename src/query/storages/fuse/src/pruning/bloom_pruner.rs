@@ -29,15 +29,15 @@ use storages_common_index::BloomIndex;
 use storages_common_index::FilterEvalResult;
 use storages_common_table_meta::meta::Location;
 
-use crate::io::BloomFilterReader;
+use crate::io::BloomBlockFilterReader;
 
 #[async_trait::async_trait]
-pub trait FuseBloomPruner {
+pub trait BloomPruner {
     // returns ture, if target should NOT be pruned (false positive allowed)
     async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool;
 }
 
-pub struct FuseBloomPrunerCreator {
+pub struct BloomPrunerCreator {
     func_ctx: FunctionContext,
 
     /// indices that should be loaded from filter block
@@ -56,20 +56,20 @@ pub struct FuseBloomPrunerCreator {
     data_schema: TableSchemaRef,
 }
 
-impl FuseBloomPrunerCreator {
+impl BloomPrunerCreator {
     pub fn create(
-        func_ctx: &FunctionContext,
-        filter_exprs: Option<&[Expr<String>]>,
+        func_ctx: FunctionContext,
         schema: &TableSchemaRef,
         dal: Operator,
-    ) -> Result<Option<Arc<dyn FuseBloomPruner + Send + Sync>>> {
-        if let Some(exprs) = filter_exprs {
-            if exprs.is_empty() {
+        filter_expr: Option<&[Expr<String>]>,
+    ) -> Result<Option<Arc<dyn BloomPruner + Send + Sync>>> {
+        if let Some(expr) = filter_expr {
+            if expr.is_empty() {
                 return Ok(None);
             }
 
             // Check if there were applicable filter conditions.
-            let expr: Expr<String> = exprs
+            let expr: Expr<String> = expr
                 .iter()
                 .cloned()
                 .reduce(|lhs, rhs| {
@@ -77,7 +77,7 @@ impl FuseBloomPrunerCreator {
                 })
                 .unwrap();
 
-            let (optimized_expr, _) = ConstantFolder::fold(&expr, *func_ctx, &BUILTIN_FUNCTIONS);
+            let (optimized_expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
             let point_query_cols = BloomIndex::find_eq_columns(&optimized_expr)?;
 
             tracing::debug!(
@@ -94,13 +94,13 @@ impl FuseBloomPrunerCreator {
                 for (col_name, scalar, ty) in point_query_cols.iter() {
                     filter_block_cols.push(BloomIndex::build_filter_column_name(col_name));
                     if !scalar_map.contains_key(scalar) {
-                        let digest = BloomIndex::calculate_scalar_digest(*func_ctx, scalar, ty)?;
+                        let digest = BloomIndex::calculate_scalar_digest(func_ctx, scalar, ty)?;
                         scalar_map.insert(scalar.clone(), digest);
                     }
                 }
 
-                let creator = FuseBloomPrunerCreator {
-                    func_ctx: *func_ctx,
+                let creator = BloomPrunerCreator {
+                    func_ctx,
                     index_columns: filter_block_cols,
                     filter_expression: optimized_expr,
                     scalar_map,
@@ -117,7 +117,7 @@ impl FuseBloomPrunerCreator {
     pub async fn apply(&self, index_location: &Location, index_length: u64) -> Result<bool> {
         // load the relevant index columns
         let maybe_filter = index_location
-            .read_bloom(self.dal.clone(), &self.index_columns, index_length)
+            .read_block_filter(self.dal.clone(), &self.index_columns, index_length)
             .await;
 
         match maybe_filter {
@@ -125,7 +125,7 @@ impl FuseBloomPrunerCreator {
                 self.func_ctx,
                 self.data_schema.clone(),
                 filter.filter_schema,
-                filter.filter_block,
+                filter.filters,
                 index_location.1,
             )?
             .apply(self.filter_expression.clone(), &self.scalar_map)?
@@ -142,7 +142,7 @@ impl FuseBloomPrunerCreator {
 }
 
 #[async_trait::async_trait]
-impl FuseBloomPruner for FuseBloomPrunerCreator {
+impl BloomPruner for BloomPrunerCreator {
     async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression

@@ -20,14 +20,6 @@ use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
-use common_expression::HashMethodKeysU128;
-use common_expression::HashMethodKeysU16;
-use common_expression::HashMethodKeysU256;
-use common_expression::HashMethodKeysU32;
-use common_expression::HashMethodKeysU512;
-use common_expression::HashMethodKeysU64;
-use common_expression::HashMethodKeysU8;
-use common_expression::HashMethodSerializer;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -41,24 +33,6 @@ use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 
-pub type Keys8Grouper = PartialAggregator<false, HashMethodKeysU8>;
-pub type Keys16Grouper = PartialAggregator<false, HashMethodKeysU16>;
-pub type Keys32Grouper = PartialAggregator<false, HashMethodKeysU32>;
-pub type Keys64Grouper = PartialAggregator<false, HashMethodKeysU64>;
-pub type Keys128Grouper = PartialAggregator<false, HashMethodKeysU128>;
-pub type Keys256Grouper = PartialAggregator<false, HashMethodKeysU256>;
-pub type Keys512Grouper = PartialAggregator<false, HashMethodKeysU512>;
-pub type KeysSerializerGrouper = PartialAggregator<false, HashMethodSerializer>;
-
-pub type Keys8Aggregator = PartialAggregator<true, HashMethodKeysU8>;
-pub type Keys16Aggregator = PartialAggregator<true, HashMethodKeysU16>;
-pub type Keys32Aggregator = PartialAggregator<true, HashMethodKeysU32>;
-pub type Keys64Aggregator = PartialAggregator<true, HashMethodKeysU64>;
-pub type Keys128Aggregator = PartialAggregator<true, HashMethodKeysU128>;
-pub type Keys256Aggregator = PartialAggregator<true, HashMethodKeysU256>;
-pub type Keys512Aggregator = PartialAggregator<true, HashMethodKeysU512>;
-pub type KeysSerializerAggregator = PartialAggregator<true, HashMethodSerializer>;
-
 pub struct PartialAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method>
 {
@@ -68,6 +42,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method>
     pub method: Method,
     pub hash_table: Method::HashTable,
     pub params: Arc<AggregatorParams>,
+    pub generated: bool,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
@@ -81,6 +56,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             hash_table,
             area: Some(Area::create()),
             states_dropped: false,
+            generated: false,
         })
     }
 
@@ -107,10 +83,9 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             for key in keys_iter {
                 match hashtable.insert_and_entry(key) {
                     Ok(mut entry) => {
-                        if let Some(place) = params.alloc_layout(area) {
-                            places.push(place);
-                            *entry.get_mut() = place.addr();
-                        }
+                        let place = params.alloc_layout(area);
+                        places.push(place);
+                        *entry.get_mut() = place.addr();
                     }
                     Err(entry) => {
                         let place = Into::<StateAddr>::into(*entry.get());
@@ -187,9 +162,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
     #[inline(always)]
     fn generate_data(&mut self) -> Result<Vec<DataBlock>> {
-        if self.hash_table.len() == 0 {
+        if self.generated || self.hash_table.len() == 0 {
+            self.drop_states();
             return Ok(vec![]);
         }
+        self.generated = true;
 
         let state_groups_len = self.hash_table.len();
         let aggregator_params = self.params.as_ref();
@@ -209,18 +186,22 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         for group_entity in self.hash_table.iter() {
             let place = Into::<StateAddr>::into(*group_entity.get());
 
-            for (idx, func) in funcs.iter().enumerate() {
-                let arg_place = place.next(offsets_aggregate_states[idx]);
-                func.serialize(arg_place, &mut state_builders[idx].data)?;
-                state_builders[idx].commit_row();
+            if HAS_AGG {
+                for (idx, func) in funcs.iter().enumerate() {
+                    let arg_place = place.next(offsets_aggregate_states[idx]);
+                    func.serialize(arg_place, &mut state_builders[idx].data)?;
+                    state_builders[idx].commit_row();
+                }
             }
-
             group_key_builder.append_value(group_entity.key());
         }
 
-        let mut columns = Vec::with_capacity(state_builders.len());
-        for builder in state_builders.into_iter() {
-            columns.push(Column::String(builder.build()));
+        let mut columns = Vec::with_capacity(state_builders.len() + 1);
+
+        if HAS_AGG {
+            for builder in state_builders.into_iter() {
+                columns.push(Column::String(builder.build()));
+            }
         }
 
         let group_key_col = group_key_builder.finish();
@@ -229,8 +210,8 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
-    for PartialAggregator<true, Method>
+impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
+    for PartialAggregator<HAS_AGG, Method>
 {
     const NAME: &'static str = "GroupByPartialTransform";
 
@@ -248,59 +229,19 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
         let group_keys_iter = self.method.build_keys_iter(&group_keys_state)?;
 
-        let area = self.area.as_mut().unwrap();
-        let places = Self::lookup_state(area, &self.params, group_keys_iter, &mut self.hash_table);
-        Self::execute(&self.params, &block, &places)
+        if HAS_AGG {
+            let area = self.area.as_mut().unwrap();
+            let places =
+                Self::lookup_state(area, &self.params, group_keys_iter, &mut self.hash_table);
+            Self::execute(&self.params, &block, &places)
+        } else {
+            Self::lookup_key(group_keys_iter, &mut self.hash_table);
+            Ok(())
+        }
     }
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
         self.generate_data()
-    }
-}
-
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
-    for PartialAggregator<false, Method>
-{
-    const NAME: &'static str = "GroupByPartialTransform";
-
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
-        let block = block.convert_to_full();
-        // 1.1 and 1.2.
-        let group_columns = Self::group_columns(&block, &self.params.group_columns);
-        let group_columns = group_columns
-            .iter()
-            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
-            .collect::<Vec<_>>();
-
-        let keys_state = self
-            .method
-            .build_keys_state(&group_columns, block.num_rows())?;
-        let group_keys_iter = self.method.build_keys_iter(&keys_state)?;
-
-        Self::lookup_key(group_keys_iter, &mut self.hash_table);
-        Ok(())
-    }
-
-    fn generate(&mut self) -> Result<Vec<DataBlock>> {
-        if self.hash_table.len() == 0 {
-            self.drop_states();
-            return Ok(vec![]);
-        }
-
-        let capacity = self.hash_table.len();
-        let value_size = estimated_key_size(&self.hash_table);
-
-        let mut keys_column_builder = self.method.keys_column_builder(capacity, value_size);
-
-        for group_entity in self.hash_table.iter() {
-            keys_column_builder.append_value(group_entity.key());
-        }
-
-        let column = keys_column_builder.finish();
-
-        self.drop_states();
-
-        Ok(vec![DataBlock::new_from_columns(vec![column])])
     }
 }
 

@@ -21,8 +21,8 @@ use opendal::Operator;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
-use storages_common_table_meta::caches::BloomIndexMeta;
-use storages_common_table_meta::caches::CacheManager;
+use storages_common_cache_manager::BloomIndexMeta;
+use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
@@ -46,7 +46,7 @@ impl MetaReaders {
     pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> SegmentInfoReader {
         SegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
-            "SEGMENT_INFO_CACHE".to_owned(),
+            "segment_info_cache".to_owned(),
             LoaderWrapper((dal, schema)),
         )
     }
@@ -54,7 +54,7 @@ impl MetaReaders {
     pub fn table_snapshot_reader(dal: Operator) -> TableSnapshotReader {
         TableSnapshotReader::new(
             CacheManager::instance().get_table_snapshot_cache(),
-            "SNAPSHOT_CACHE".to_owned(),
+            "snapshot_cache".to_owned(),
             LoaderWrapper(dal),
         )
     }
@@ -62,7 +62,7 @@ impl MetaReaders {
     pub fn table_snapshot_statistics_reader(dal: Operator) -> TableSnapshotStatisticsReader {
         TableSnapshotStatisticsReader::new(
             CacheManager::instance().get_table_snapshot_statistics_cache(),
-            "TABLE_STATISTICS_CACHE".to_owned(),
+            "table_statistics_cache".to_owned(),
             LoaderWrapper(dal),
         )
     }

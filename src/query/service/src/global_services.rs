@@ -24,7 +24,7 @@ use common_storage::ShareTableConfig;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
-use storages_common_table_meta::caches::CacheManager;
+use storages_common_cache_manager::CacheManager;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::CatalogManagerHelper;

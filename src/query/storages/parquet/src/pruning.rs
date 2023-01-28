@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fs::File;
 use std::io::Read;
 use std::io::Seek;
 use std::sync::Arc;
@@ -37,6 +36,7 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
+use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
@@ -67,6 +67,7 @@ use crate::statistics::BatchStatistics;
 pub fn prune_and_set_partitions(
     ctx: &Arc<dyn TableContext>,
     locations: &[String],
+    operator: &Operator,
     schema: &TableSchemaRef,
     filters: &Option<&[Expr<String>]>,
     columns_to_read: &HashSet<usize>,
@@ -75,10 +76,10 @@ pub fn prune_and_set_partitions(
     read_options: ReadOptions,
 ) -> Result<()> {
     let mut partitions = Vec::with_capacity(locations.len());
-    let func_ctx = ctx.try_get_function_context()?;
+    let func_ctx = ctx.get_function_context()?;
 
     let row_group_pruner = if read_options.prune_row_groups() {
-        Some(RangePrunerCreator::try_create(func_ctx, *filters, schema)?)
+        Some(RangePrunerCreator::try_create(func_ctx, schema, *filters)?)
     } else {
         None
     };
@@ -91,10 +92,8 @@ pub fn prune_and_set_partitions(
     };
 
     for location in locations {
-        let mut file = File::open(location).map_err(|e| {
-            ErrorCode::Internal(format!("Failed to open file '{}': {}", location, e))
-        })?;
-        let file_meta = pread::read_metadata(&mut file).map_err(|e| {
+        let mut reader = operator.object(location).blocking_reader()?;
+        let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
             ErrorCode::Internal(format!(
                 "Read parquet file '{}''s meta error: {}",
                 location, e
@@ -137,7 +136,7 @@ pub fn prune_and_set_partitions(
                 }) {
                 page_pruners
                     .as_ref()
-                    .map(|pruners| filter_pages(&mut file, schema, rg, pruners))
+                    .map(|pruners| filter_pages(&mut reader, schema, rg, pruners))
                     .transpose()
                     .unwrap_or(None)
             } else {
@@ -163,7 +162,7 @@ pub fn prune_and_set_partitions(
             ))
         }
     }
-    ctx.try_set_partitions(Partitions::create(PartitionsShuffleKind::Mod, partitions))?;
+    ctx.set_partitions(Partitions::create(PartitionsShuffleKind::Mod, partitions))?;
     Ok(())
 }
 
@@ -192,7 +191,7 @@ fn build_column_page_pruners(
     pruner_per_col
         .iter()
         .map(|(k, v)| {
-            let filter = RangePrunerCreator::try_create(func_ctx, Some(v), schema)?;
+            let filter = RangePrunerCreator::try_create(func_ctx, schema, Some(v))?;
             let col_idx = schema.index_of(k)?;
             Ok((col_idx, filter))
         })
@@ -599,8 +598,8 @@ mod tests {
             let filters = vec![filter.as_expr_with_col_name()?];
             let pruner = RangePrunerCreator::try_create(
                 FunctionContext::default(),
-                Some(&filters),
                 &schema,
+                Some(&filters),
             )?;
             assert!(!pruner.should_keep(&row_group_stats[0]));
         }
@@ -631,8 +630,8 @@ mod tests {
             let filters = vec![filter.as_expr_with_col_name()?];
             let pruner = RangePrunerCreator::try_create(
                 FunctionContext::default(),
-                Some(&filters),
                 &schema,
+                Some(&filters),
             )?;
             assert!(!pruner.should_keep(&row_group_stats[0]));
         }
@@ -663,8 +662,8 @@ mod tests {
             let filters = vec![filter.as_expr_with_col_name()?];
             let pruner = RangePrunerCreator::try_create(
                 FunctionContext::default(),
-                Some(&filters),
                 &schema,
+                Some(&filters),
             )?;
             assert!(pruner.should_keep(&row_group_stats[0]));
         }

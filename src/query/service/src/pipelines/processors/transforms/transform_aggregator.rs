@@ -18,8 +18,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::HashMethodKind;
+use common_expression::*;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -49,90 +48,21 @@ impl TransformAggregator {
         }
 
         match aggregator_params.aggregate_functions.is_empty() {
-            true => match transform_params.method.clone() {
-                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
+            true => with_mappedhash_method!(|T| match transform_params.method.clone() {
+                HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx.clone(),
                     transform_params,
-                    KeysU8FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                    ParallelFinalAggregator::<false, T>::create(ctx, method, aggregator_params)?,
                 ),
-                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
+            }),
+
+            false => with_mappedhash_method!(|T| match transform_params.method.clone() {
+                HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx.clone(),
                     transform_params,
-                    KeysU16FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                    ParallelFinalAggregator::<true, T>::create(ctx, method, aggregator_params)?,
                 ),
-                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU32FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU64FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::Serializer(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    SerializerFinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU128FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU256FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU512FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-            },
-            false => match transform_params.method.clone() {
-                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU8FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU16FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU32FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU64FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::Serializer(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    SerializerFinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU128FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU256FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU512FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-            },
+            }),
         }
     }
 
@@ -152,90 +82,20 @@ impl TransformAggregator {
         }
 
         match aggregator_params.aggregate_functions.is_empty() {
-            true => match transform_params.method.clone() {
-                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
+            true => with_mappedhash_method!(|T| match transform_params.method.clone() {
+                HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx,
                     transform_params,
-                    Keys8Grouper::create(method, aggregator_params)?,
+                    PartialAggregator::<false, T>::create(method, aggregator_params)?,
                 ),
-                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
+            }),
+            false => with_mappedhash_method!(|T| match transform_params.method.clone() {
+                HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx,
                     transform_params,
-                    Keys16Grouper::create(method, aggregator_params)?,
+                    PartialAggregator::<true, T>::create(method, aggregator_params)?,
                 ),
-                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys32Grouper::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys64Grouper::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys128Grouper::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys256Grouper::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys512Grouper::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::Serializer(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    KeysSerializerGrouper::create(method, aggregator_params)?,
-                ),
-            },
-            false => match transform_params.method.clone() {
-                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys8Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys16Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys32Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys64Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys128Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys256Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys512Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::Serializer(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    KeysSerializerAggregator::create(method, aggregator_params)?,
-                ),
-            },
+            }),
         }
     }
 }
@@ -244,6 +104,7 @@ pub trait Aggregator: Sized + Send {
     const NAME: &'static str;
 
     fn consume(&mut self, data: DataBlock) -> Result<()>;
+    // Generate could be called multiple times util it returns empty.
     fn generate(&mut self) -> Result<Vec<DataBlock>>;
 }
 
@@ -535,10 +396,13 @@ struct GenerateState<TAggregator: Aggregator> {
 impl<TAggregator: Aggregator> GenerateState<TAggregator> {
     pub fn generate(&mut self) -> Result<()> {
         if !self.is_generated {
-            self.is_generated = true;
             self.output_data_block = self.inner.generate()?;
-        }
 
+            // if it's empty, it means the aggregator is finished.
+            if self.output_data_block.is_empty() {
+                self.is_generated = true;
+            }
+        }
         Ok(())
     }
 }
