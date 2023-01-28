@@ -31,7 +31,7 @@ use opendal::Operator;
 use storages_common_cache::CacheKey;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
-use storages_common_cache::LoaderWithCacheKey;
+use storages_common_cache::Loader;
 use storages_common_cache_manager::CachedObject;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::Xor8Filter;
@@ -99,8 +99,8 @@ pub struct Xor8FilterLoader {
 }
 
 #[async_trait::async_trait]
-impl LoaderWithCacheKey<Xor8Filter> for Xor8FilterLoader {
-    async fn load_with_cache_key(&self, params: &LoadParams) -> Result<Xor8Filter> {
+impl Loader<Xor8Filter> for Xor8FilterLoader {
+    async fn load(&self, params: &LoadParams) -> Result<Xor8Filter> {
         let reader = self.operator.object(&params.location);
         let bytes = reader
             .range_read(self.offset..self.offset + self.len)
