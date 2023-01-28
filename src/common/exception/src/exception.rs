@@ -225,6 +225,16 @@ impl ErrorCode {
         }
     }
 
+    pub fn from_string_no_backtrace(error: String) -> Self {
+        ErrorCode {
+            code: 1001,
+            display_text: error,
+            span: None,
+            cause: None,
+            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+        }
+    }
+
     pub fn create(
         code: u16,
         display_text: String,

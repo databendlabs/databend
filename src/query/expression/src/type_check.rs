@@ -165,7 +165,7 @@ pub fn check_cast<Index: ColumnIndex>(
 
 fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
     match ty {
-        DataType::Null => Err(ErrorCode::SemanticError(
+        DataType::Null => Err(ErrorCode::from_string_no_backtrace(
             "TRY_CAST() to NULL is not supported".to_string(),
         )
         .set_span(span)),
@@ -279,11 +279,13 @@ impl Subsitution {
         subst
     }
 
-    pub fn merge(mut self, other: Self) -> std::result::Result<Self, String> {
+    pub fn merge(mut self, other: Self) -> Result<Self> {
         for (idx, ty2) in other.0 {
             if let Some(ty1) = self.0.remove(&idx) {
                 let common_ty = common_super_type(ty2.clone(), ty1.clone()).ok_or_else(|| {
-                    format!("unable to find a common super type for `{ty1}` and `{ty2}`")
+                    ErrorCode::from_string_no_backtrace(format!(
+                        "unable to find a common super type for `{ty1}` and `{ty2}`"
+                    ))
                 })?;
                 self.0.insert(idx, common_ty);
             } else {
@@ -294,13 +296,11 @@ impl Subsitution {
         Ok(self)
     }
 
-    pub fn apply(&self, ty: DataType) -> std::result::Result<DataType, String> {
+    pub fn apply(&self, ty: DataType) -> Result<DataType> {
         match ty {
-            DataType::Generic(idx) => self
-                .0
-                .get(&idx)
-                .cloned()
-                .ok_or_else(|| format!("unbound generic type `T{idx}`")),
+            DataType::Generic(idx) => self.0.get(&idx).cloned().ok_or_else(|| {
+                ErrorCode::from_string_no_backtrace(format!("unbound generic type `T{idx}`"))
+            }),
             DataType::Nullable(box ty) => Ok(DataType::Nullable(Box::new(self.apply(ty)?))),
             DataType::Array(box ty) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
             DataType::Tuple(fields_ty) => {
@@ -321,7 +321,7 @@ pub fn try_check_function<Index: ColumnIndex>(
     sig: &FunctionSignature,
     additional_rules: &AutoCastSignature,
     fn_registry: &FunctionRegistry,
-) -> std::result::Result<(Vec<Expr<Index>>, DataType, Vec<DataType>), String> {
+) -> Result<(Vec<Expr<Index>>, DataType, Vec<DataType>)> {
     assert_eq!(args.len(), sig.args_type.len());
 
     let substs = args
@@ -355,7 +355,9 @@ pub fn try_check_function<Index: ColumnIndex>(
             (0..max_generic_idx + 1)
                 .map(|idx| match subst.0.get(&idx) {
                     Some(ty) => Ok(ty.clone()),
-                    None => Err(format!("unable to resolve generic T{idx}")),
+                    None => Err(ErrorCode::from_string_no_backtrace(format!(
+                        "unable to resolve generic T{idx}"
+                    ))),
                 })
                 .collect::<Result<Vec<_>>>()
         })
@@ -368,7 +370,7 @@ pub fn unify(
     src_ty: &DataType,
     dest_ty: &DataType,
     additional_rules: &AutoCastSignature,
-) -> std::result::Result<Subsitution, String> {
+) -> Result<Subsitution> {
     match (src_ty, dest_ty) {
         (DataType::Generic(_), _) => unreachable!("source type must not contain generic type"),
         (ty, DataType::Generic(idx)) => Ok(Subsitution::equation(*idx, ty.clone())),
@@ -403,7 +405,10 @@ pub fn unify(
         {
             Ok(Subsitution::empty())
         }
-        _ => Err(format!("unable to unify `{}` with `{}`", src_ty, dest_ty)),
+        _ => Err(ErrorCode::from_string_no_backtrace(format!(
+            "unable to unify `{}` with `{}`",
+            src_ty, dest_ty
+        ))),
     }
 }
 
