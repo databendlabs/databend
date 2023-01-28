@@ -62,7 +62,6 @@ impl InputFormatTSV {
                     deserializers[column_index].de_default();
                 } else {
                     let mut reader = Cursor::new(col_data);
-                    reader.ignores(|c: u8| c == b' ');
                     if let Err(e) = field_decoder.read_field(
                         &mut deserializers[column_index],
                         &mut reader,
