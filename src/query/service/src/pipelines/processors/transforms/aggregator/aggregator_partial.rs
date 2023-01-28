@@ -42,6 +42,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method>
     pub method: Method,
     pub hash_table: Method::HashTable,
     pub params: Arc<AggregatorParams>,
+    pub generated: bool,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
@@ -55,6 +56,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             hash_table,
             area: Some(Area::create()),
             states_dropped: false,
+            generated: false,
         })
     }
 
@@ -160,10 +162,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
     #[inline(always)]
     fn generate_data(&mut self) -> Result<Vec<DataBlock>> {
-        if self.hash_table.len() == 0 {
+        if self.generated || self.hash_table.len() == 0 {
             self.drop_states();
             return Ok(vec![]);
         }
+        self.generated = true;
 
         let state_groups_len = self.hash_table.len();
         let aggregator_params = self.params.as_ref();

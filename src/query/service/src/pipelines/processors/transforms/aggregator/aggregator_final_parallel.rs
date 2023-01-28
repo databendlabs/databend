@@ -311,12 +311,9 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             for (row, key) in iter.enumerate() {
                 if self.reach_limit {
                     let entry = self.hash_table.entry(key);
-                    match entry {
-                        Some(entry) => {
-                            let place = Into::<StateAddr>::into(*entry.get());
-                            places.push((row, place));
-                        }
-                        None => {}
+                    if let Some(entry) = entry {
+                        let place = Into::<StateAddr>::into(*entry.get());
+                        places.push((row, place));
                     }
                     continue;
                 }
