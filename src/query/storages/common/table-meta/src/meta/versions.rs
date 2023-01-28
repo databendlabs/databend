@@ -20,7 +20,6 @@ use common_expression::DataBlock;
 use super::v2;
 use crate::meta::v0;
 use crate::meta::v1;
-// use crate::meta::v2::BlockFilter;
 
 // Here versions of meta are tagged with numeric values
 //
@@ -75,9 +74,9 @@ impl SnapshotVersion {
     }
 }
 
-impl Versioned<2> for DataBlock {}
-
 impl Versioned<0> for v1::TableSnapshotStatistics {}
+
+impl Versioned<2> for DataBlock {}
 
 pub enum TableSnapshotStatisticsVersion {
     V0(PhantomData<v1::TableSnapshotStatistics>),

@@ -76,6 +76,13 @@ impl CachedObject<BloomIndexMeta> for BloomIndexMeta {
     }
 }
 
+impl CachedObject<Xor8Filter> for Xor8Filter {
+    type Cache = BloomIndexFilterCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_bloom_index_filter_cache()
+    }
+}
+
 impl CachedObject<FileMetaData> for FileMetaData {
     type Cache = FileMetaDataCache;
     fn cache() -> Option<Self::Cache> {

@@ -15,7 +15,6 @@
 mod segment;
 mod snapshot;
 
-// pub use index::BlockFilter;
 pub use segment::BlockMeta;
 pub use segment::ColumnMeta;
 pub use segment::SegmentInfo;

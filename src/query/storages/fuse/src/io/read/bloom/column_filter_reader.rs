@@ -32,17 +32,16 @@ use storages_common_cache::CacheKey;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::LoaderWithCacheKey;
-use storages_common_cache_manager::CacheManager;
+use storages_common_cache_manager::CachedObject;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_table_meta::meta::ColumnId;
 
-type CachedReader = InMemoryItemCacheReader<Xor8Filter, Xor8Loader>;
+type CachedReader = InMemoryItemCacheReader<Xor8Filter, Xor8FilterLoader>;
 
-/// An wrapper of [InMemoryBytesCacheReader], uses [ColumnDataLoader] to
-/// load the data of a given bloom index column. Also
-/// - takes cares of getting the correct cache instance from [CacheManager]
+/// Load the filter of a given bloom index column. Also
 /// - generates the proper cache key
+/// - takes cares of getting the correct cache instance from [CacheManager]
 ///
 /// this could be generified to be the template of cached data block column reader
 pub struct BloomColumnFilterReader {
@@ -59,7 +58,7 @@ impl BloomColumnFilterReader {
     ) -> Self {
         let meta = colum_chunk_meta.metadata();
         let cache_key = format!("{index_path}-{column_id}");
-        let loader = Xor8Loader {
+        let loader = Xor8FilterLoader {
             offset: meta.data_page_offset as u64,
             len: meta.total_compressed_size as u64,
             cache_key,
@@ -68,7 +67,7 @@ impl BloomColumnFilterReader {
         };
 
         let cached_reader = CachedReader::new(
-            CacheManager::instance().get_bloom_index_filter_cache(),
+            Xor8Filter::cache(),
             "bloom_index_data_cache".to_owned(),
             loader,
         );
@@ -91,7 +90,7 @@ impl BloomColumnFilterReader {
 }
 
 /// Loader that fetch range of the target object with customized cache key
-pub struct Xor8Loader {
+pub struct Xor8FilterLoader {
     pub offset: u64,
     pub len: u64,
     pub cache_key: String,
@@ -100,7 +99,7 @@ pub struct Xor8Loader {
 }
 
 #[async_trait::async_trait]
-impl LoaderWithCacheKey<Xor8Filter> for Xor8Loader {
+impl LoaderWithCacheKey<Xor8Filter> for Xor8FilterLoader {
     async fn load_with_cache_key(&self, params: &LoadParams) -> Result<Xor8Filter> {
         let reader = self.operator.object(&params.location);
         let bytes = reader
