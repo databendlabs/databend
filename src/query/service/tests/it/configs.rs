@@ -132,8 +132,8 @@ fn test_env_config_s3() -> Result<()> {
             assert_eq!(256, configured.query.table_cache_snapshot_count);
             assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
             assert_eq!(
-                1024 * 1024 * 1024,
-                configured.query.table_cache_bloom_index_data_bytes
+                1024 * 1024,
+                configured.query.table_cache_bloom_index_filter_count
             );
             assert_eq!(HashMap::new(), configured.catalogs);
         },
@@ -253,8 +253,8 @@ fn test_env_config_fs() -> Result<()> {
             assert_eq!(256, configured.query.table_cache_snapshot_count);
             assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
             assert_eq!(
-                1024 * 1024 * 1024,
-                configured.query.table_cache_bloom_index_data_bytes
+                1024 * 1024,
+                configured.query.table_cache_bloom_index_filter_count
             );
         },
     );
@@ -379,8 +379,8 @@ fn test_env_config_gcs() -> Result<()> {
             assert_eq!(256, configured.query.table_cache_snapshot_count);
             assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
             assert_eq!(
-                1024 * 1024 * 1024,
-                configured.query.table_cache_bloom_index_data_bytes
+                1024 * 1024,
+                configured.query.table_cache_bloom_index_filter_count
             );
         },
     );
@@ -512,8 +512,8 @@ fn test_env_config_oss() -> Result<()> {
             assert_eq!(256, configured.query.table_cache_snapshot_count);
             assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
             assert_eq!(
-                1024 * 1024 * 1024,
-                configured.query.table_cache_bloom_index_data_bytes
+                1024 * 1024,
+                configured.query.table_cache_bloom_index_filter_count
             );
         },
     );
@@ -569,7 +569,7 @@ table_memory_cache_mb_size = 256
 table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
 table_cache_bloom_index_meta_count = 3000
-table_cache_bloom_index_data_bytes = 1073741824
+table_cache_bloom_index_filter_count = 1048576 
 management_mode = false
 jwt_key_file = ""
 async_insert_max_data_size = 10000

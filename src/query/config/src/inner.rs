@@ -165,8 +165,8 @@ pub struct QueryConfig {
     pub table_cache_segment_count: u64,
     /// Max number of cached bloom index meta objects
     pub table_cache_bloom_index_meta_count: u64,
-    /// Max bytes of cached bloom index
-    pub table_cache_bloom_index_data_bytes: u64,
+    /// Max number of cached bloom index filters
+    pub table_cache_bloom_index_filter_count: u64,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     pub management_mode: bool,
     pub jwt_key_file: String,
@@ -221,7 +221,7 @@ impl Default for QueryConfig {
             table_cache_statistic_count: 256,
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,
-            table_cache_bloom_index_data_bytes: 1024 * 1024 * 1024,
+            table_cache_bloom_index_filter_count: 1024 * 1024,
             management_mode: false,
             jwt_key_file: "".to_string(),
             async_insert_max_data_size: 10000,

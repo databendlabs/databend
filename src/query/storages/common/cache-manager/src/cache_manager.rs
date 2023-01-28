@@ -59,7 +59,7 @@ impl CacheManager {
             let table_statistic_cache = Self::new_item_cache(config.table_cache_statistic_count);
             let segment_info_cache = Self::new_item_cache(config.table_cache_segment_count);
             let bloom_index_filter_cache =
-                Self::new_item_cache(config.table_cache_bloom_index_data_bytes);
+                Self::new_item_cache(config.table_cache_bloom_index_filter_count);
             let bloom_index_meta_cache =
                 Self::new_item_cache(config.table_cache_bloom_index_meta_count);
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
