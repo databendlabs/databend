@@ -184,10 +184,8 @@ where
             }
 
             let mut columns = Vec::with_capacity(state_builders.len() + 1);
-            let mut num_rows = 0;
             for builder in state_builders.into_iter() {
                 let col = builder.build();
-                num_rows = col.len();
                 columns.push(BlockEntry {
                     value: Value::Column(Column::String(col)),
                     data_type: DataType::String,
@@ -195,6 +193,7 @@ where
             }
 
             let col = group_key_builder.finish();
+            let num_rows = col.len();
             let group_key_type = col.data_type();
 
             columns.push(BlockEntry {
