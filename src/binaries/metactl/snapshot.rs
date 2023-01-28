@@ -177,6 +177,10 @@ fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap
         nodes.insert(id, node);
     }
 
+    if nodes.is_empty() {
+        return Ok(nodes);
+    }
+
     if !nodes.contains_key(&id) {
         return Err(anyhow::anyhow!(
             "node id ({}) has to be one of cluster member({:?})",
