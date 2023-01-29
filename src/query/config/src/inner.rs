@@ -212,7 +212,7 @@ impl Default for QueryConfig {
             table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
-            table_meta_cache_enabled: false,
+            table_meta_cache_enabled: true,
             table_cache_block_meta_count: 102400,
             table_memory_cache_mb_size: 256,
             table_disk_cache_root: "_cache".to_string(),
@@ -273,7 +273,7 @@ impl Default for MetaConfig {
             username: "root".to_string(),
             password: "".to_string(),
             client_timeout_in_second: 10,
-            auto_sync_interval: 10,
+            auto_sync_interval: 0,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
         }

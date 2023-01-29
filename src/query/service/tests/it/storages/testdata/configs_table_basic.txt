@@ -14,7 +14,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "log"     | "stderr.format"                        | "text"                           | ""       |
 | "log"     | "stderr.level"                         | "INFO"                           | ""       |
 | "log"     | "stderr.on"                            | "true"                           | ""       |
-| "meta"    | "auto_sync_interval"                   | "10"                             | ""       |
+| "meta"    | "auto_sync_interval"                   | "0"                              | ""       |
 | "meta"    | "client_timeout_in_second"             | "10"                             | ""       |
 | "meta"    | "embedded_dir"                         | ""                               | ""       |
 | "meta"    | "endpoints"                            | ""                               | ""       |
@@ -70,7 +70,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "query"   | "table_disk_cache_root"                | "_cache"                         | ""       |
 | "query"   | "table_engine_memory_enabled"          | "true"                           | ""       |
 | "query"   | "table_memory_cache_mb_size"           | "256"                            | ""       |
-| "query"   | "table_meta_cache_enabled"             | "false"                          | ""       |
+| "query"   | "table_meta_cache_enabled"             | "true"                           | ""       |
 | "query"   | "tenant_id"                            | "test"                           | ""       |
 | "query"   | "users"                                | ""                               | ""       |
 | "query"   | "wait_timeout_mills"                   | "5000"                           | ""       |

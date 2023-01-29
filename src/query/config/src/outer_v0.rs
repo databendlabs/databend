@@ -1665,7 +1665,10 @@ pub struct MetaConfig {
     #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
     pub rpc_tls_meta_server_root_ca_cert: String,
 
-    #[clap(long = "meta-rpc-tls-meta-service-domain-name", default_value_t)]
+    #[clap(
+        long = "meta-rpc-tls-meta-service-domain-name",
+        default_value = "localhost"
+    )]
     pub rpc_tls_meta_service_domain_name: String,
 }
 
