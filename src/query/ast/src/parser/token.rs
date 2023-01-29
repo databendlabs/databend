@@ -311,6 +311,8 @@ pub enum TokenKind {
     COMPACT,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
+    #[token("CONTENT_TYPE", ignore(ascii_case))]
+    CONTENT_TYPE,
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
     #[token("CHARACTER", ignore(ascii_case))]

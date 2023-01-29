@@ -330,6 +330,7 @@ fn test_statement() {
         r#"PRESIGN @my_stage/path/to/file"#,
         r#"PRESIGN DOWNLOAD @my_stage/path/to/file"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
+        r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/json'"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
