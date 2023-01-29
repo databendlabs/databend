@@ -55,7 +55,7 @@ impl InputFormatTSV {
         let mut pos = 0;
         let mut err_msg = None;
         let buf_len = buf.len();
-        while pos <= buf_len {
+        while pos <= buf_len && column_index < num_columns {
             if pos == buf_len || buf[pos] == field_delimiter {
                 let col_data = &buf[field_start..pos];
                 if col_data.is_empty() {
@@ -95,12 +95,15 @@ impl InputFormatTSV {
             }
             pos += 1;
         }
-        if err_msg.is_none() && column_index < num_columns {
-            // todo(youngsofun): allow it optionally (set default)
-            err_msg = Some(format!(
-                "need {} columns, find {} only",
-                num_columns, column_index
-            ));
+        if err_msg.is_none() {
+            if column_index < num_columns {
+                err_msg = Some(format!(
+                    "need {} columns, find {} only",
+                    num_columns, column_index
+                ));
+            } else if pos < buf_len {
+                err_msg = Some("too many columns".to_string());
+            }
         }
 
         if let Some(m) = err_msg {
