@@ -10,6 +10,10 @@ import GetLatest from '@site/src/components/GetLatest';
 
 Databend works with both self-hosted and cloud object storage solutions. This topic explains how to deploy Databend with your object storage. For a list of supported object storage solutions, see [Understanding Deployment Modes](./00-understanding-deployment-modes.md).
 
+:::note
+It is not recommended to deploy Databend on top of MinIO for production environments or performance testing.
+:::
+
 ### Setting up Your Object Storage
 
 import Tabs from '@theme/Tabs';
