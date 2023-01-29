@@ -65,7 +65,8 @@ impl Display for PresignStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "PRESIGN {} EXPIRE = {}",
+            "PRESIGN {} {} EXPIRE = {}",
+            self.action,
             self.location,
             self.expire.as_secs()
         )?;
