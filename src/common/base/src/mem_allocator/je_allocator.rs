@@ -30,10 +30,6 @@ pub mod linux_or_macos {
     use crate::mem_allocator::AllocatorProxy;
     use crate::runtime::ThreadTracker;
 
-    impl<T> AllocatorProxy<T> {
-        pub const FALLBACK: bool = false;
-    }
-
     #[cfg(all(any(
         target_arch = "arm",
         target_arch = "mips",
@@ -221,10 +217,6 @@ pub mod fallback {
     use std::ptr::NonNull;
 
     use super::AllocatorProxy;
-
-    impl<T> AllocatorProxy<T> {
-        pub const FALLBACK: bool = true;
-    }
 
     unsafe impl<T: Allocator> Allocator for AllocatorProxy<T> {
         #[inline(always)]

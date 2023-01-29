@@ -43,10 +43,6 @@ pub mod linux {
 
     const THRESHOLD: usize = 64 << 20;
 
-    impl<T> MmapAllocator<T> {
-        pub const FALLBACK: bool = false;
-    }
-
     impl<T: Allocator> MmapAllocator<T> {
         #[inline(always)]
         fn mmap_alloc(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {

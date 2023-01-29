@@ -31,15 +31,15 @@ unsafe impl Allocator for SystemAllocator {
     }
 
     #[inline(always)]
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        ThreadTracker::dealloc(layout.size() as i64);
-        System.deallocate(ptr, layout)
-    }
-
-    #[inline(always)]
     fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         ThreadTracker::alloc(layout.size() as i64)?;
         System.allocate_zeroed(layout)
+    }
+
+    #[inline(always)]
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+        ThreadTracker::dealloc(layout.size() as i64);
+        System.deallocate(ptr, layout)
     }
 
     #[inline(always)]
