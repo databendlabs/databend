@@ -18,6 +18,7 @@
 
 /// mmap allocator.
 /// This is used for some hash tables.
+/// T is a fallback inner allocator for some memory special case.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MmapAllocator<T> {
     allocator: T,

@@ -20,7 +20,7 @@ use std::ptr::NonNull;
 
 use crate::runtime::ThreadTracker;
 
-/// std system Allocator.
+/// std system allocator.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StdAllocator;
 

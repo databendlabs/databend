@@ -18,7 +18,7 @@
 
 /// jemalloc allocator.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct JEAllocator {}
+pub struct JEAllocator;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod linux_or_macos {

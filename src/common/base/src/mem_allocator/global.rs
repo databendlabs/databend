@@ -19,13 +19,11 @@ use std::alloc::Layout;
 use std::ptr::null_mut;
 use std::ptr::NonNull;
 
-use crate::mem_allocator::JEAllocator;
+use crate::mem_allocator::DefaultAllocator;
 
 /// Global allocator, default is JeAllocator.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GlobalAllocator;
-
-type DefaultAllocator = JEAllocator;
 
 unsafe impl Allocator for GlobalAllocator {
     #[inline(always)]
