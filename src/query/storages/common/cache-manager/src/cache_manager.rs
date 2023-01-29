@@ -18,6 +18,8 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_config::QueryConfig;
 use common_exception::Result;
+use storages_common_cache::DiskBytesCache;
+use storages_common_cache::DiskCacheBuilder;
 use storages_common_cache::InMemoryCacheBuilder;
 use storages_common_cache::InMemoryItemCacheHolder;
 
@@ -38,12 +40,11 @@ pub struct CacheManager {
     bloom_index_filter_cache: Option<BloomIndexFilterCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
+    block_data_cache: Option<DiskBytesCache>,
 }
 
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
-    ///
-    /// For convenience, ids of cluster and tenant are also kept
     pub fn init(config: &QueryConfig) -> Result<()> {
         if !config.table_meta_cache_enabled {
             GlobalInstance::set(Arc::new(Self {
@@ -53,6 +54,7 @@ impl CacheManager {
                 bloom_index_meta_cache: None,
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
+                block_data_cache: None,
             }));
         } else {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
@@ -63,6 +65,10 @@ impl CacheManager {
             let bloom_index_meta_cache =
                 Self::new_item_cache(config.table_cache_bloom_index_meta_count);
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
+            let block_data_cache = Self::new_block_data_cache(
+                &config.table_disk_cache_root,
+                config.table_disk_cache_mb_size * 1024 * 1024,
+            )?;
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
@@ -70,6 +76,7 @@ impl CacheManager {
                 bloom_index_meta_cache,
                 file_meta_data_cache,
                 table_statistic_cache,
+                block_data_cache,
             }));
         }
 
@@ -104,11 +111,24 @@ impl CacheManager {
         self.file_meta_data_cache.clone()
     }
 
+    pub fn get_block_data_cache(&self) -> Option<DiskBytesCache> {
+        self.block_data_cache.clone()
+    }
+
     fn new_item_cache<T>(capacity: u64) -> Option<InMemoryItemCacheHolder<T>> {
         if capacity > 0 {
             Some(InMemoryCacheBuilder::new_item_cache(capacity))
         } else {
             None
+        }
+    }
+
+    fn new_block_data_cache(path: &str, capacity: u64) -> Result<Option<DiskBytesCache>> {
+        if capacity > 0 {
+            let cache_holder = DiskCacheBuilder::new_disk_cache(path, capacity)?;
+            Ok(Some(cache_holder))
+        } else {
+            Ok(None)
         }
     }
 }

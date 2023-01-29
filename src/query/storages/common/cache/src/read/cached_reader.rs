@@ -30,9 +30,9 @@ use crate::metrics::metrics_inc_cache_miss_load_millisecond;
 /// A generic cache-aware reader
 ///
 /// Given an impl of [StorageCache], e.g. `ItemCache` or `DiskCache` and a proper impl
-/// [LoaderWithCacheKey], which is able to load `T`, `CachedReader` will load the `T`
-/// by using [LoaderWithCacheKey], and populate the cache item into [StorageCache] by using
-/// the loaded `T` and the key that [LoaderWithCacheKey] provides.
+/// [Loader], which is able to load `T`, `CachedReader` will load the `T`
+/// by using [Loader], and populate the cache item into [StorageCache] by using
+/// the loaded `T` and the key that [Loader] provides.
 pub struct CachedReader<T, L, C> {
     cache: Option<Arc<RwLock<C>>>,
     loader: L,
@@ -104,6 +104,6 @@ where
     }
 
     fn get_cached(&self, key: &str, cache: &RwLock<C>) -> Option<Arc<T>> {
-        cache.write().get(key).cloned()
+        cache.write().get(key)
     }
 }

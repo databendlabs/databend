@@ -34,7 +34,7 @@ pub trait StorageCache<K, V> {
     type Meter;
     fn put(&mut self, key: K, value: Arc<V>);
 
-    fn get<Q>(&mut self, k: &Q) -> Option<&Arc<V>>
+    fn get<Q>(&mut self, k: &Q) -> Option<Arc<V>>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized;
@@ -64,7 +64,7 @@ mod impls {
             Q: Hash + Eq + ?Sized,
         {
             let mut guard = self.write();
-            guard.get(k).cloned()
+            guard.get(k).clone()
         }
 
         fn put(&self, k: String, v: Arc<V>) {

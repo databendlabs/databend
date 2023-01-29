@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,22 +13,22 @@
 // limitations under the License.
 
 use std::boxed::Box;
-use std::ffi::OsStr;
-use std::ffi::OsString;
+use std::fs;
 use std::fs::File;
-use std::fs::{self};
 use std::hash::BuildHasher;
-use std::io;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 
 use filetime::set_file_times;
 use filetime::FileTime;
-use ritelinked::DefaultHashBuilder;
+use tracing::error;
 use walkdir::WalkDir;
 
 use crate::Cache;
+use crate::DefaultHashBuilder;
 use crate::FileSize;
 use crate::LruCache;
 
@@ -59,29 +59,19 @@ fn get_all_files<P: AsRef<Path>>(path: P) -> Box<dyn Iterator<Item = (PathBuf, u
 }
 
 /// An LRU cache of files on disk.
-pub type LruDiskCache = DiskCache<LruCache<OsString, u64, DefaultHashBuilder, FileSize>>;
+pub type LruDiskCache = DiskCache<LruCache<String, u64, DefaultHashBuilder, FileSize>>;
 
 /// An basic disk cache of files on disk.
 pub struct DiskCache<C, S: BuildHasher + Clone = DefaultHashBuilder>
-where C: Cache<OsString, u64, S, FileSize>
+where C: Cache<String, u64, S, FileSize>
 {
     hash_builder: S,
     cache: C,
     root: PathBuf,
 }
 
-/// Trait objects can't be bounded by more than one non-builtin trait.
-pub trait ReadSeek: Read + Seek + Send {}
-
-impl<T: Read + Seek + Send> ReadSeek for T {}
-
-enum AddFile<'a> {
-    AbsPath(PathBuf),
-    RelPath(&'a OsStr),
-}
-
-impl<C> DiskCache<C, DefaultHashBuilder>
-where C: Cache<OsString, u64, DefaultHashBuilder, FileSize>
+impl<C> DiskCache<C>
+where C: Cache<String, u64, DefaultHashBuilder, FileSize>
 {
     /// Create an `DiskCache` with `ritelinked::DefaultHashBuilder` that stores files in `path`,
     /// limited to `size` bytes.
@@ -91,7 +81,7 @@ where C: Cache<OsString, u64, DefaultHashBuilder, FileSize>
     /// than `size` bytes will be removed.
     ///
     /// The cache is not observant of changes to files under `path` from external sources, it
-    /// expects to have sole maintence of the contents.
+    /// expects to have sole maintenance of the contents.
     pub fn new<T>(path: T, size: u64) -> Result<Self>
     where PathBuf: From<T> {
         let default_hash_builder = DefaultHashBuilder::new();
@@ -106,7 +96,7 @@ where C: Cache<OsString, u64, DefaultHashBuilder, FileSize>
 
 impl<C, S> DiskCache<C, S>
 where
-    C: Cache<OsString, u64, S, FileSize>,
+    C: Cache<String, u64, S, FileSize>,
     S: BuildHasher + Clone,
 {
     /// Create an `DiskCache` with hasher that stores files in `path`, limited to `size` bytes.
@@ -116,7 +106,7 @@ where
     /// than `size` bytes will be removed.
     ///
     /// The cache is not observant of changes to files under `path` from external sources, it
-    /// expects to have sole maintence of the contents.
+    /// expects to have sole maintenance of the contents.
     pub fn new_with_hasher<T>(path: T, size: u64, hash_builder: S) -> Result<Self>
     where PathBuf: From<T> {
         DiskCache {
@@ -168,8 +158,23 @@ where
                     )
                 });
             } else {
-                self.add_file(AddFile::AbsPath(file), size)
-                    .unwrap_or_else(|e| error!("Error adding file: {}", e));
+                while self.cache.size() as u64 + size > self.cache.capacity() as u64 {
+                    let (rel_path, _) = self
+                        .cache
+                        .pop_by_policy()
+                        .expect("Unexpectedly empty cache!");
+                    let remove_path = self.rel_to_abs_path(&rel_path);
+                    // TODO: check that files are removable during `init`, so that this is only
+                    // due to outside interference.
+                    fs::remove_file(&remove_path).unwrap_or_else(|e| {
+                        panic!("Error removing file from cache: `{:?}`: {}", remove_path, e)
+                    });
+                }
+                let rel_path = file
+                    .strip_prefix(&self.root)
+                    .map_err(|_e| self::Error::MalformedPath)?;
+                let cache_key = Self::recovery_from(rel_path);
+                self.cache.put(cache_key, size);
             }
         }
         Ok(self)
@@ -180,128 +185,85 @@ where
         size <= self.cache.capacity() as u64
     }
 
-    /// Add the file at `path` of size `size` to the cache.
-    fn add_file(&mut self, addfile_path: AddFile<'_>, size: u64) -> Result<()> {
-        if !self.can_store(size) {
-            return Err(Error::FileTooLarge);
-        }
-        let rel_path = match addfile_path {
-            AddFile::AbsPath(ref p) => p.strip_prefix(&self.root).expect("Bad path?").as_os_str(),
-            AddFile::RelPath(p) => p,
-        };
-        //TODO: ideally Cache::put would give us back the entries it had to remove.
-        while self.cache.size() as u64 + size > self.cache.capacity() as u64 {
-            let (rel_path, _) = self
-                .cache
-                .pop_by_policy()
-                .expect("Unexpectedly empty cache!");
-            let remove_path = self.rel_to_abs_path(rel_path);
-            //TODO: check that files are removable during `init`, so that this is only
-            // due to outside interference.
-            fs::remove_file(&remove_path).unwrap_or_else(|e| {
-                panic!("Error removing file from cache: `{:?}`: {}", remove_path, e)
-            });
-        }
-        self.cache.put(rel_path.to_owned(), size);
-        Ok(())
-    }
-
-    fn insert_by<K: AsRef<OsStr>, F: FnOnce(&Path) -> io::Result<()>>(
-        &mut self,
-        key: K,
-        size: Option<u64>,
-        by: F,
-    ) -> Result<()> {
-        if let Some(size) = size {
-            if !self.can_store(size) {
-                return Err(Error::FileTooLarge);
+    fn recovery_from(str: &Path) -> String {
+        let key_string = match str.as_os_str().to_str() {
+            Some(str) => str.to_owned(),
+            None => {
+                unreachable!()
             }
-        }
-        let rel_path = key.as_ref();
-        let path = self.rel_to_abs_path(rel_path);
-        fs::create_dir_all(path.parent().expect("Bad path?"))?;
-        by(&path)?;
-        let size = match size {
-            Some(size) => size,
-            None => fs::metadata(path)?.len(),
         };
-        self.add_file(AddFile::RelPath(rel_path), size)
-            .map_err(|e| {
-                error!(
-                    "Failed to insert file `{}`: {}",
-                    rel_path.to_string_lossy(),
-                    e
-                );
-                fs::remove_file(&self.rel_to_abs_path(rel_path))
-                    .expect("Failed to remove file we just created!");
-                e
-            })
+        key_string
     }
 
-    /// Add a file by calling `with` with the open `File` corresponding to the cache at path `key`.
-    pub fn insert_with<K: AsRef<OsStr>, F: FnOnce(File) -> io::Result<()>>(
-        &mut self,
-        key: K,
-        with: F,
-    ) -> Result<()> {
-        self.insert_by(key, None, |path| with(File::create(&path)?))
+    fn cache_key<K>(&self, str: &K) -> String
+    where K: Hash + Eq + ?Sized {
+        // TODO we need a 128 bit digest
+        let mut hash_state = self.hash_builder.build_hasher();
+        str.hash(&mut hash_state);
+        let digits = hash_state.finish();
+        let hex_key = format!("{:x}", digits);
+        hex_key
+    }
+
+    fn cache_path<K>(&self, str: &K) -> PathBuf
+    where K: Hash + Eq + ?Sized {
+        let hex_key = self.cache_key(str);
+        let prefix = &hex_key[0..3];
+        let mut path_buf = PathBuf::from(prefix);
+        path_buf.push(Path::new(&hex_key));
+        path_buf
     }
 
     /// Add a file with `bytes` as its contents to the cache at path `key`.
-    pub fn insert_bytes<K: AsRef<OsStr>>(&mut self, key: K, bytes: &[u8]) -> Result<()> {
-        self.insert_by(key, Some(bytes.len() as u64), |path| {
-            let mut f = File::create(&path)?;
-            f.write_all(bytes)?;
-            Ok(())
-        })
-    }
+    pub fn insert_bytes<K: AsRef<str>>(&mut self, key: K, bytes: &[u8]) -> Result<()> {
+        if !self.can_store(bytes.len() as u64) {
+            return Err(Error::FileTooLarge);
+        }
 
-    /// Add an existing file at `path` to the cache at path `key`.
-    pub fn insert_file<K: AsRef<OsStr>, P: AsRef<OsStr>>(&mut self, key: K, path: P) -> Result<()> {
-        let size = fs::metadata(path.as_ref())?.len();
-        self.insert_by(key, Some(size), |new_path| {
-            fs::rename(path.as_ref(), new_path).or_else(|_| {
-                warn!("fs::rename failed, falling back to copy!");
-                fs::copy(path.as_ref(), new_path)?;
-                fs::remove_file(path.as_ref()).unwrap_or_else(|e| {
-                    error!("Failed to remove original file in insert_file: {}", e)
-                });
-                Ok(())
-            })
-        })
+        // TODO combine these
+        let cache_key = self.cache_key(key.as_ref());
+        let rel_path = self.cache_path(key.as_ref());
+        let path = self.rel_to_abs_path(rel_path);
+        // TODO rm this panic, no nested dirs here
+        fs::create_dir_all(path.parent().expect("Bad path?"))?;
+        let mut f = File::create(&path)?;
+        f.write_all(bytes)?;
+        let size = bytes.len() as u64;
+        self.cache.put(cache_key, size);
+        Ok(())
     }
 
     /// Return `true` if a file with path `key` is in the cache.
-    pub fn contains_key<K: AsRef<OsStr>>(&self, key: K) -> bool {
+    pub fn contains_key<K: AsRef<str>>(&self, key: K) -> bool {
         self.cache.contains(key.as_ref())
     }
 
     /// Get an opened `File` for `key`, if one exists and can be opened. Updates the Cache state
     /// of the file if present. Avoid using this method if at all possible, prefer `.get`.
-    pub fn get_file<K: AsRef<OsStr>>(&mut self, key: K) -> Result<File> {
-        let rel_path = key.as_ref();
+    pub fn get_file<K>(&mut self, key: &K) -> Result<File>
+    where K: Hash + Eq + ?Sized {
+        let cache_key = self.cache_key(key);
+        let rel_path = self.cache_path(key);
         let path = self.rel_to_abs_path(rel_path);
         self.cache
-            .get(rel_path)
+            .get(&cache_key)
             .ok_or(Error::FileNotInCache)
             .and_then(|_| {
+                // TODO do we need to adjust the mtime, cross reboot?
                 let t = FileTime::now();
                 set_file_times(&path, t, t)?;
                 File::open(path).map_err(Into::into)
             })
     }
 
-    /// Get an opened readable and seekable handle to the file at `key`, if one exists and can
-    /// be opened. Updates the Cache state of the file if present.
-    pub fn get<K: AsRef<OsStr>>(&mut self, key: K) -> Result<Box<dyn ReadSeek>> {
-        self.get_file(key).map(|f| Box::new(f) as Box<dyn ReadSeek>)
-    }
-
     /// Remove the given key from the cache.
-    pub fn remove<K: AsRef<OsStr>>(&mut self, key: K) -> Result<()> {
-        match self.cache.pop(key.as_ref()) {
+    pub fn remove<K>(&mut self, key: &K) -> Result<()>
+    where K: Hash + Eq + ?Sized {
+        let cache_key = self.cache_key(key);
+        let rel_path = self.cache_path(key);
+        match self.cache.pop(&cache_key) {
             Some(_) => {
-                let path = self.rel_to_abs_path(key.as_ref());
+                let path = self.rel_to_abs_path(rel_path);
                 fs::remove_file(&path).map_err(|e| {
                     error!("Error removing file from cache: `{:?}`: {}", path, e);
                     Into::into(e)
@@ -324,6 +286,8 @@ pub mod result {
         FileTooLarge,
         /// The file was not in the cache.
         FileNotInCache,
+        /// The file was not in the cache.
+        MalformedPath,
         /// An IO Error occurred.
         Io(io::Error),
     }
@@ -333,6 +297,7 @@ pub mod result {
             match self {
                 Error::FileTooLarge => write!(f, "File too large"),
                 Error::FileNotInCache => write!(f, "File not in cache"),
+                Error::MalformedPath => write!(f, "Malformed catch file path"),
                 Error::Io(ref e) => write!(f, "{}", e),
             }
         }
@@ -341,9 +306,8 @@ pub mod result {
     impl StdError for Error {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
-                Error::FileTooLarge => None,
-                Error::FileNotInCache => None,
                 Error::Io(ref e) => Some(e),
+                _ => None,
             }
         }
     }

@@ -22,5 +22,6 @@ opendal = { workspace = true }
 parking_lot = "0.12.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = "0.1.36"
 
 [build-dependencies]

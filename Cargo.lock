@@ -1293,9 +1293,13 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
+ "filetime",
  "heapsize",
+ "hex",
  "ritelinked",
  "tempfile",
+ "tracing",
+ "walkdir",
 ]
 
 [[package]]
@@ -3576,6 +3580,18 @@ checksum = "d013fc25338cc558c5c2cfbad646908fb23591e2404481826742b651c9af7160"
 dependencies = [
  "rand_core 0.6.4",
  "subtle",
+]
+
+[[package]]
+name = "filetime"
+version = "0.2.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e884668cd0c7480504233e951174ddc3b382f7c2666e3b7310b5c4e7b0c37f9"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "redox_syscall",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]
@@ -7783,6 +7799,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

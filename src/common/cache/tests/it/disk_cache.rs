@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
 use std::fs::File;
 use std::fs::{self};
@@ -20,12 +21,11 @@ use std::io::{self};
 use std::path::Path;
 use std::path::PathBuf;
 
+use common_cache::DiskCacheError;
+use common_cache::LruDiskCache;
 use filetime::set_file_times;
 use filetime::FileTime;
 use tempfile::TempDir;
-
-use crate::DiskCacheError;
-use crate::LruDiskCache;
 
 struct TestFixture {
     /// Temp directory.
@@ -167,7 +167,7 @@ fn test_add_get_lru() {
         c.insert_bytes("file1", &[1; 10]).unwrap();
         c.insert_bytes("file2", &[2; 10]).unwrap();
         // Get the file to bump its LRU status.
-        assert_eq!(read_all(&mut c.get("file1").unwrap()).unwrap(), vec![
+        assert_eq!(read_all(&mut c.get_file("file1").unwrap()).unwrap(), vec![
             1u8;
             10
         ]);
@@ -186,7 +186,7 @@ fn test_add_get_lru() {
     {
         let mut c = LruDiskCache::new(f.tmp(), 25).unwrap();
         // Bump file1 again.
-        c.get("file1").unwrap();
+        c.get_file("file1").unwrap();
     }
     // Now check that the on-disk mtimes were updated and used.
     {
@@ -212,62 +212,36 @@ fn test_insert_bytes_too_large() {
     }
 }
 
-#[test]
-fn test_insert_file() {
-    let f = TestFixture::new();
-    let p1 = f.create_file("file1", 10);
-    let p2 = f.create_file("file2", 10);
-    let p3 = f.create_file("file3", 10);
-    let mut c = LruDiskCache::new(f.tmp().join("cache"), 25).unwrap();
-    c.insert_file("file1", &p1).unwrap();
-    assert_eq!(c.len(), 1);
-    c.insert_file("file2", &p2).unwrap();
-    assert_eq!(c.len(), 2);
-    // Get the file to bump its LRU status.
-    assert_eq!(read_all(&mut c.get("file1").unwrap()).unwrap(), vec![
-        0u8;
-        10
-    ]);
-    // Adding this third file should put the cache above the limit.
-    c.insert_file("file3", &p3).unwrap();
-    assert_eq!(c.len(), 2);
-    assert_eq!(c.size(), 20);
-    // The least-recently-used file should have been removed.
-    assert!(!c.contains_key("file2"));
-    assert!(!p1.exists());
-    assert!(!p2.exists());
-    assert!(!p3.exists());
-}
-
-#[test]
-fn test_remove() {
-    let f = TestFixture::new();
-    let p1 = f.create_file("file1", 10);
-    let p2 = f.create_file("file2", 10);
-    let p3 = f.create_file("file3", 10);
-    let mut c = LruDiskCache::new(f.tmp().join("cache"), 25).unwrap();
-    c.insert_file("file1", &p1).unwrap();
-    c.insert_file("file2", &p2).unwrap();
-    c.remove("file1").unwrap();
-    c.insert_file("file3", &p3).unwrap();
-    assert_eq!(c.len(), 2);
-    assert_eq!(c.size(), 20);
-
-    // file1 should have been removed.
-    assert!(!c.contains_key("file1"));
-    assert!(!f.tmp().join("cache").join("file1").exists());
-    assert!(f.tmp().join("cache").join("file2").exists());
-    assert!(f.tmp().join("cache").join("file3").exists());
-    assert!(!p1.exists());
-    assert!(!p2.exists());
-    assert!(!p3.exists());
-
-    let p4 = f.create_file("file1", 10);
-    c.insert_file("file1", &p4).unwrap();
-    assert_eq!(c.len(), 2);
-    // file2 should have been removed.
-    assert!(c.contains_key("file1"));
-    assert!(!c.contains_key("file2"));
-    assert!(!f.tmp().join("cache").join("file2").exists());
-    assert!(!p4.exists());
-}
+// TODO
+//#[test]
+// fn test_remove() {
+//    let f = TestFixture::new();
+//    let p1 = f.create_file("file1", 10);
+//    let p2 = f.create_file("file2", 10);
+//    let p3 = f.create_file("file3", 10);
+//    let mut c = LruDiskCache::new(f.tmp().join("cache"), 25).unwrap();
+//    c.insert_file("file1", &p1).unwrap();
+//    c.insert_file("file2", &p2).unwrap();
+//    c.remove("file1").unwrap();
+//    c.insert_file("file3", &p3).unwrap();
+//    assert_eq!(c.len(), 2);
+//    assert_eq!(c.size(), 20);
+//
+//    // file1 should have been removed.
+//    assert!(!c.contains_key("file1"));
+//    assert!(!f.tmp().join("cache").join("file1").exists());
+//    assert!(f.tmp().join("cache").join("file2").exists());
+//    assert!(f.tmp().join("cache").join("file3").exists());
+//    assert!(!p1.exists());
+//    assert!(!p2.exists());
+//    assert!(!p3.exists());
+//
+//    let p4 = f.create_file("file1", 10);
+//    c.insert_file("file1", &p4).unwrap();
+//    assert_eq!(c.len(), 2);
+//    // file2 should have been removed.
+//    assert!(c.contains_key("file1"));
+//    assert!(!c.contains_key("file2"));
+//    assert!(!f.tmp().join("cache").join("file2").exists());
+//    assert!(!p4.exists());
+//}

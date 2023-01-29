@@ -59,12 +59,12 @@ where
         Cache::put(self, key, value);
     }
 
-    fn get<Q>(&mut self, k: &Q) -> Option<&Arc<V>>
+    fn get<Q>(&mut self, k: &Q) -> Option<Arc<V>>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        Cache::get(self, k)
+        Cache::get(self, k).cloned()
     }
 
     fn evict<Q>(&mut self, k: &Q) -> bool

@@ -14,33 +14,68 @@
 
 use std::borrow::Borrow;
 use std::hash::Hash;
+use std::io::Read;
 use std::sync::Arc;
+
+pub use common_cache::LruDiskCache as DiskCache;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use parking_lot::RwLock;
+use tracing::error;
 
 use crate::cache::StorageCache;
 
-// TODO: local disk file based LRU/LFU/xxxx cache
-pub struct DiskCache {}
+pub type DiskBytesCache = Arc<RwLock<DiskCache>>;
 
-impl<K, V> StorageCache<K, V> for DiskCache {
+pub struct DiskCacheBuilder;
+impl DiskCacheBuilder {
+    pub fn new_disk_cache(path: &str, capacity: u64) -> Result<DiskBytesCache> {
+        let cache = DiskCache::new(path, capacity)
+            .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {}", e)))?;
+        Ok(Arc::new(RwLock::new(cache)))
+    }
+}
+
+impl StorageCache<String, Vec<u8>> for DiskCache {
     type Meter = ();
 
-    fn put(&mut self, _key: K, _value: Arc<V>) {
-        todo!()
+    fn put(&mut self, key: String, value: Arc<Vec<u8>>) {
+        if let Err(e) = self.insert_bytes(key, &value) {
+            error!("populate disk cache failed {}", e);
+        }
     }
 
-    fn get<Q>(&mut self, _k: &Q) -> Option<&Arc<V>>
+    fn get<Q>(&mut self, k: &Q) -> Option<Arc<Vec<u8>>>
     where
-        K: Borrow<Q>,
+        String: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        todo!()
+        let mut read_file = || {
+            let mut file = self.get_file(k)?;
+            let mut v = vec![];
+            file.read_to_end(&mut v)?;
+            Ok::<_, Box<dyn std::error::Error>>(v)
+        };
+
+        match read_file() {
+            Ok(bytes) => Some(Arc::new(bytes)),
+            Err(e) => {
+                error!("get disk cache item failed {}", e);
+                None
+            }
+        }
     }
 
-    fn evict<Q>(&mut self, _k: &Q) -> bool
+    fn evict<Q>(&mut self, k: &Q) -> bool
     where
-        K: Borrow<Q>,
+        String: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        todo!()
+        if let Err(e) = self.remove(k) {
+            error!("evict disk cache item failed {}", e);
+            false
+        } else {
+            true
+        }
     }
 }

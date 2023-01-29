@@ -18,7 +18,9 @@ mod providers;
 mod read;
 
 pub use cache::CacheAccessor;
+pub use providers::DiskBytesCache;
 pub use providers::DiskCache;
+pub use providers::DiskCacheBuilder;
 pub use providers::InMemoryBytesCacheHolder;
 pub use providers::InMemoryCacheBuilder;
 pub use providers::InMemoryItemCacheHolder;
