@@ -13,17 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::with_hash_method;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
-use common_expression::Expr;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_pipeline_core::processors::port::InputPort;
@@ -35,12 +30,13 @@ use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use strength_reduce::StrengthReducedU64;
 
-use super::MergeBucketTransform;
+use super::AggregatorTransformParams;
+use super::TransformAggregator;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
-use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
+use crate::sessions::QueryContext;
 
 pub struct TransformConvertGroupingV2<
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
@@ -51,9 +47,8 @@ pub struct TransformConvertGroupingV2<
     method: Method,
     params: Arc<AggregatorParams>,
     output_num: u64,
-    input_block: Option<DataBlock>,
     blocks: VecDeque<DataBlock>,
-    shuffle_expr: StrengthReducedU64,
+    partition_expr: StrengthReducedU64,
 }
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
@@ -75,16 +70,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
             output_port,
             output_num: output_num as u64,
             blocks: VecDeque::new(),
-            input_block: None,
-            shuffle_expr: StrengthReducedU64::new(output_num as u64),
+            partition_expr: StrengthReducedU64::new(output_num as u64),
         };
 
         Ok(ProcessorPtr::create(Box::new(transform)))
     }
 
     fn add_block(&mut self, data_block: DataBlock) -> Result<()> {
-        println!("add_block {} ", data_block.num_rows());
-
         let data_block_meta = data_block
             .get_meta()
             .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>());
@@ -97,11 +89,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
                 let data_block = data_block
                     .clone()
                     .add_meta(Some(AggregateInfo::create(bucket)))?;
+
                 self.blocks.push_back(data_block);
                 return Ok(());
             }
         }
-        let blocks = self.shuffle(data_block).unwrap();
+        let blocks = self.partition(data_block).unwrap();
 
         for (bucket, block) in blocks.into_iter().enumerate() {
             let block = block.add_meta(Some(AggregateInfo::create(bucket as isize)))?;
@@ -110,7 +103,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
         Ok(())
     }
 
-    fn shuffle(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
+    fn partition(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         let aggregate_function_len = self.params.aggregate_functions.len();
         let keys_column = data_block
             .get_by_offset(aggregate_function_len)
@@ -118,11 +111,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
             .as_column()
             .unwrap();
         let keys_iter = self.method.keys_iter_from_column(keys_column)?;
+
         let indices: Vec<u64> = keys_iter
             .iter()
             .map(|key_item| {
                 let hash = self.method.get_hash(key_item);
-                hash % self.shuffle_expr
+                hash % self.partition_expr
             })
             .collect();
 
@@ -149,15 +143,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static + Send 
             return Ok(Event::Finished);
         }
 
-        println!("len {:?}", self.blocks.len());
-
-        while !self.blocks.is_empty() {
-            if self.output_port.is_finished() {
-                self.input_port.finish();
-                self.blocks.clear();
-                return Ok(Event::Finished);
-            }
-
+        if !self.blocks.is_empty() {
             if !self.output_port.can_push() {
                 self.input_port.set_not_need_data();
                 return Ok(Event::NeedConsume);
@@ -165,9 +151,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static + Send 
 
             let block = self.blocks.pop_front().unwrap();
             self.output_port.push_data(Ok(block));
+            return Ok(Event::NeedConsume);
         }
 
-        if self.input_block.is_some() {
+        if self.input_port.has_data() {
             return Ok(Event::Sync);
         }
 
@@ -180,14 +167,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static + Send 
             self.input_port.set_need_data();
             return Ok(Event::NeedData);
         }
-        self.input_block = Some(self.input_port.pull_data().unwrap()?);
         Ok(Event::Sync)
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_block.take() {
-            self.add_block(data_block)?;
-        }
+        let data_block = self.input_port.pull_data().unwrap()?;
+        self.add_block(data_block)?;
         Ok(())
     }
 }
@@ -198,9 +183,9 @@ fn build_convert_grouping_v2<
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
+    ctx: Arc<QueryContext>,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
-
     pipeline.add_transform(|input, output| {
         TransformConvertGroupingV2::create(
             method.clone(),
@@ -229,7 +214,11 @@ fn build_convert_grouping_v2<
     });
 
     pipeline.add_transform(|input, output| {
-        MergeBucketTransform::try_create(input, output, method.clone(), params.clone())
+        TransformAggregator::try_create_final(
+            ctx.clone(),
+            AggregatorTransformParams::try_create(input, output, &params)?,
+            false,
+        )
     })
 }
 
@@ -248,9 +237,22 @@ impl Processor for BucketAggregatorCoodinator {
         self
     }
 
+    // Synchronous work.
+    fn process(&mut self) -> Result<()> {
+        let mut datablock = self.input.pull_data().unwrap()?;
+        let meta = datablock.take_meta().unwrap();
+        let bucket = meta
+            .as_any()
+            .downcast_ref::<AggregateInfo>()
+            .unwrap()
+            .bucket;
+
+        self.input_block = Some((datablock, bucket));
+        Ok(())
+    }
+
     fn event(&mut self) -> Result<Event> {
         if let Some((block, bucket)) = self.input_block.take() {
-            println!("event {bucket} {}", self.output.len());
             let output = &self.output[bucket as usize];
 
             if output.is_finished() {
@@ -262,31 +264,19 @@ impl Processor for BucketAggregatorCoodinator {
                 self.input_block = Some((block, bucket));
                 return Ok(Event::NeedConsume);
             }
-
-            println!("{:?}", "BucketAggregatorCoodinator push");
-
             output.push_data(Ok(block));
             return Ok(Event::NeedData);
         }
 
         if self.input.has_data() {
-            let mut datablock = self.input.pull_data().unwrap()?;
-            let meta = datablock.take_meta().unwrap();
-            let bucket = meta
-                .as_any()
-                .downcast_ref::<AggregateInfo>()
-                .unwrap()
-                .bucket;
-            self.input_block = Some((datablock, bucket));
-
-            println!("add input_block {bucket}");
-            return Ok(Event::NeedConsume);
+            return Ok(Event::Sync);
         }
 
         if self.input.is_finished() {
             for output in self.output.iter() {
                 output.finish();
             }
+
             return Ok(Event::Finished);
         }
         self.input.set_need_data();
@@ -297,6 +287,7 @@ impl Processor for BucketAggregatorCoodinator {
 pub fn efficiently_memory_final_aggregator_v2(
     params: Arc<AggregatorParams>,
     pipeline: &mut Pipeline,
+    ctx: Arc<QueryContext>,
 ) -> Result<()> {
     let group_cols = &params.group_columns;
     let schema_before_group_by = params.input_schema.clone();
@@ -304,6 +295,6 @@ pub fn efficiently_memory_final_aggregator_v2(
     let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
     with_hash_method!(|T| match method {
-        HashMethodKind::T(v) => build_convert_grouping_v2(v, pipeline, params.clone()),
+        HashMethodKind::T(v) => build_convert_grouping_v2(v, pipeline, params.clone(), ctx),
     })
 }

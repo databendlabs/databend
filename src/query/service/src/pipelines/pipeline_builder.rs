@@ -54,7 +54,6 @@ use common_sql::IndexType;
 
 use super::processors::transforms::efficiently_memory_final_aggregator_v2;
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
@@ -352,7 +351,11 @@ impl PipelineBuilder {
             && !params.group_columns.is_empty()
             && self.main_pipeline.output_len() > 1
         {
-            return efficiently_memory_final_aggregator_v2(params, &mut self.main_pipeline);
+            return efficiently_memory_final_aggregator_v2(
+                params,
+                &mut self.main_pipeline,
+                self.ctx.clone(),
+            );
         }
 
         self.main_pipeline.resize(1)?;
@@ -360,6 +363,7 @@ impl PipelineBuilder {
             TransformAggregator::try_create_final(
                 self.ctx.clone(),
                 AggregatorTransformParams::try_create(input, output, &params)?,
+                true,
             )
         })?;
 

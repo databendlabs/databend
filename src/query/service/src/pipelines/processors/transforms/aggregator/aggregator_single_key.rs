@@ -127,9 +127,9 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
 impl Aggregator for SingleStateAggregator<true> {
     const NAME: &'static str = "AggregatorFinalTransform";
 
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
+    fn consume(&mut self, block: DataBlock) -> Result<bool> {
         if block.is_empty() {
-            return Ok(());
+            return Ok(false);
         }
         let block = block.convert_to_full();
         let places = self.new_places();
@@ -143,7 +143,7 @@ impl Aggregator for SingleStateAggregator<true> {
             func.deserialize(places[index], &mut data)?;
             self.to_merge_places[index].push(places[index]);
         }
-        Ok(())
+        Ok(false)
     }
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
@@ -193,7 +193,7 @@ impl Aggregator for SingleStateAggregator<true> {
 impl Aggregator for SingleStateAggregator<false> {
     const NAME: &'static str = "AggregatorPartialTransform";
 
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
+    fn consume(&mut self, block: DataBlock) -> Result<bool> {
         let block = block.convert_to_full();
         let rows = block.num_rows();
         for (idx, func) in self.funcs.iter().enumerate() {
@@ -212,7 +212,7 @@ impl Aggregator for SingleStateAggregator<false> {
             func.accumulate(place, &arg_columns, None, rows)?;
         }
 
-        Ok(())
+        Ok(false)
     }
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {

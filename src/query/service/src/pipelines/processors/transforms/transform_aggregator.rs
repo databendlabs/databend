@@ -35,6 +35,7 @@ impl TransformAggregator {
     pub fn try_create_final(
         ctx: Arc<QueryContext>,
         transform_params: AggregatorTransformParams,
+        parallel: bool,
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
@@ -49,19 +50,47 @@ impl TransformAggregator {
 
         match aggregator_params.aggregate_functions.is_empty() {
             true => with_mappedhash_method!(|T| match transform_params.method.clone() {
-                HashMethodKind::T(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    ParallelFinalAggregator::<false, T>::create(ctx, method, aggregator_params)?,
-                ),
+                HashMethodKind::T(method) => {
+                    if parallel {
+                        AggregatorTransform::create(
+                            ctx.clone(),
+                            transform_params,
+                            ParallelFinalAggregator::<false, T>::create(
+                                ctx,
+                                method,
+                                aggregator_params,
+                            )?,
+                        )
+                    } else {
+                        AggregatorTransform::create(
+                            ctx,
+                            transform_params,
+                            BucketAggregator::<false, T>::create(method, aggregator_params)?,
+                        )
+                    }
+                }
             }),
 
             false => with_mappedhash_method!(|T| match transform_params.method.clone() {
-                HashMethodKind::T(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    ParallelFinalAggregator::<true, T>::create(ctx, method, aggregator_params)?,
-                ),
+                HashMethodKind::T(method) => {
+                    if parallel {
+                        AggregatorTransform::create(
+                            ctx.clone(),
+                            transform_params,
+                            ParallelFinalAggregator::<true, T>::create(
+                                ctx,
+                                method,
+                                aggregator_params,
+                            )?,
+                        )
+                    } else {
+                        AggregatorTransform::create(
+                            ctx,
+                            transform_params,
+                            BucketAggregator::<true, T>::create(method, aggregator_params)?,
+                        )
+                    }
+                }
             }),
         }
     }
@@ -103,9 +132,22 @@ impl TransformAggregator {
 pub trait Aggregator: Sized + Send {
     const NAME: &'static str;
 
-    fn consume(&mut self, data: DataBlock) -> Result<()>;
+    // Consume data and return true if the aggregator should be finished.
+    fn consume(&mut self, data: DataBlock) -> Result<bool>;
     // Generate could be called multiple times util it returns empty.
     fn generate(&mut self) -> Result<Vec<DataBlock>>;
+
+    fn should_expand_table(&self) -> bool {
+        true
+    }
+
+    // only implement for partial aggregator
+    fn streaming_consume(&mut self, _block: DataBlock) -> Result<DataBlock> {
+        Err(ErrorCode::Unimplemented(format!(
+            "Streaming_consume is unimplemented for {}",
+            Self::NAME
+        )))
+    }
 }
 
 enum AggregatorTransform<TAggregator: Aggregator + TwoLevelAggregatorLike> {
@@ -131,6 +173,9 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
             output_port: transform_params.transform_output_port,
             two_level_threshold,
             input_data_block: None,
+            output_data_block: None,
+            consume_finished: false,
+            should_expand_table: true,
         });
 
         if TAggregator::SUPPORT_TWO_LEVEL
@@ -174,6 +219,9 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                     input_port: s.input_port,
                     output_port: s.output_port,
                     input_data_block: None,
+                    output_data_block: None,
+                    consume_finished: false,
+                    should_expand_table: true,
                 },
             )),
             _ => Err(ErrorCode::Internal("")),
@@ -230,11 +278,21 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                 }
             }
 
+            if state.output_data_block.is_some() {
+                if !state.output_port.can_push() {
+                    return Ok(Event::NeedConsume);
+                }
+                state
+                    .output_port
+                    .push_data(Ok(state.output_data_block.take().unwrap()));
+            }
+
             if state.input_data_block.is_some() {
                 return Ok(Event::Sync);
             }
 
-            if state.input_port.is_finished() {
+            if state.input_port.is_finished() || state.consume_finished {
+                state.input_port.finish();
                 let mut temp_state = AggregatorTransform::Finished;
                 std::mem::swap(self, &mut temp_state);
                 temp_state = temp_state.convert_to_generate()?;
@@ -256,11 +314,21 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
         }
 
         if let AggregatorTransform::TwoLevelConsumeData(state) = self {
+            if state.output_data_block.is_some() {
+                if !state.output_port.can_push() {
+                    return Ok(Event::NeedConsume);
+                }
+                state
+                    .output_port
+                    .push_data(Ok(state.output_data_block.take().unwrap()));
+            }
+
             if state.input_data_block.is_some() {
                 return Ok(Event::Sync);
             }
 
-            if state.input_port.is_finished() {
+            if state.input_port.is_finished() || state.consume_finished {
+                state.input_port.finish();
                 let mut temp_state = AggregatorTransform::Finished;
                 std::mem::swap(self, &mut temp_state);
                 temp_state = temp_state.convert_to_generate()?;
@@ -356,14 +424,28 @@ struct ConsumeState<TAggregator: Aggregator> {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
     input_data_block: Option<DataBlock>,
+    output_data_block: Option<DataBlock>,
+    consume_finished: bool,
+    should_expand_table: bool,
 }
 
 impl<TAggregator: Aggregator> ConsumeState<TAggregator> {
     pub fn consume(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data_block.take() {
-            self.inner.consume(input_data)?;
-        }
+            if self.should_expand_table {
+                self.should_expand_table = self.inner.should_expand_table();
+            }
 
+            if !self.should_expand_table {
+                let datablock = self.inner.streaming_consume(input_data)?;
+                self.output_data_block = Some(datablock);
+                return Ok(());
+            }
+
+            if self.inner.consume(input_data)? {
+                self.consume_finished = true;
+            }
+        }
         Ok(())
     }
 }
@@ -374,12 +456,27 @@ struct TwoLevelConsumeState<TAggregator: Aggregator + TwoLevelAggregatorLike> {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
     input_data_block: Option<DataBlock>,
+    output_data_block: Option<DataBlock>,
+    consume_finished: bool,
+    should_expand_table: bool,
 }
 
 impl<TAggregator: Aggregator + TwoLevelAggregatorLike> TwoLevelConsumeState<TAggregator> {
     pub fn consume(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data_block.take() {
-            self.inner.consume(input_data)?;
+            if self.should_expand_table {
+                self.should_expand_table = self.inner.should_expand_table();
+            }
+
+            if !self.should_expand_table {
+                let datablock = self.inner.streaming_consume(input_data)?;
+                self.output_data_block = Some(datablock);
+                return Ok(());
+            }
+
+            if self.inner.consume(input_data)? {
+                self.consume_finished = true;
+            }
         }
 
         Ok(())

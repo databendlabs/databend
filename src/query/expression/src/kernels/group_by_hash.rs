@@ -32,6 +32,7 @@ use crate::types::boolean::BooleanType;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
 use crate::types::DataType;
@@ -66,6 +67,55 @@ pub trait HashMethod: Clone {
     ) -> Result<KeysState>;
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>>;
+
+    fn convert_state_to_column(&self, keys_state: KeysState) -> Result<Column> {
+        match keys_state {
+            KeysState::Column(col) => Ok(col),
+            KeysState::U128(vs) => {
+                let mut values = Vec::with_capacity(vs.len() * 16);
+                let total = vs.len();
+                for v in vs {
+                    values.extend_from_slice(&v.to_le_bytes());
+                }
+                Ok(Column::String(StringColumn {
+                    data: Buffer::from(values),
+                    offsets: Buffer::from((0..=total).map(|i| i as u64 * 16).collect::<Vec<_>>()),
+                }))
+            }
+            KeysState::U256(vs) => {
+                let mut values: Vec<u8> = Vec::with_capacity(vs.len() * 32);
+                unsafe {
+                    values.set_len(vs.len() * 32);
+                }
+                let total = vs.len();
+                let mut pos = 0;
+                for v in vs {
+                    v.to_little_endian(&mut values[pos..pos + 32]);
+                    pos += 32;
+                }
+                Ok(Column::String(StringColumn {
+                    data: Buffer::from(values),
+                    offsets: Buffer::from((0..=total).map(|i| i as u64 * 32).collect::<Vec<_>>()),
+                }))
+            }
+            KeysState::U512(vs) => {
+                let mut values: Vec<u8> = Vec::with_capacity(vs.len() * 64);
+                unsafe {
+                    values.set_len(vs.len() * 64);
+                }
+                let total = vs.len();
+                let mut pos = 0;
+                for v in vs {
+                    v.to_little_endian(&mut values[pos..pos + 64]);
+                    pos += 64;
+                }
+                Ok(Column::String(StringColumn {
+                    data: Buffer::from(values),
+                    offsets: Buffer::from((0..=total).map(|i| i as u64 * 64).collect::<Vec<_>>()),
+                }))
+            }
+        }
+    }
 }
 
 pub type HashMethodKeysU8 = HashMethodFixedKeys<u8>;
@@ -272,8 +322,6 @@ where T: Clone
         keys: Vec<T>,
         group_items: &[(usize, DataType)],
     ) -> Result<Vec<Column>> {
-        debug_assert!(!keys.is_empty());
-
         // faster path for single unsigned integer to column
         if group_items.len() == 1 && group_items[0].1.is_unsigned_numeric() {
             if let DataType::Number(ty) = group_items[0].1 {

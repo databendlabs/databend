@@ -74,7 +74,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     const NAME: &'static str = "GroupByFinalTransform";
 
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
+    fn consume(&mut self, block: DataBlock) -> Result<bool> {
         let mut bucket = -1;
         if let Some(meta_info) = block.get_meta() {
             if let Some(meta_info) = meta_info.as_any().downcast_ref::<AggregateInfo>() {
@@ -85,13 +85,12 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         match self.buckets_blocks.entry(bucket) {
             Entry::Vacant(v) => {
                 v.insert(vec![block]);
-                Ok(())
             }
             Entry::Occupied(mut v) => {
                 v.get_mut().push(block);
-                Ok(())
             }
         }
+        Ok(false)
     }
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
@@ -154,94 +153,75 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     temp_place: Option<StateAddr>,
 }
 
-impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
+impl<const HAS_AGG: bool, Method> Aggregator for BucketAggregator<HAS_AGG, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
-    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
-        let mut area = Area::create();
-        let hash_table = method.create_hash_table()?;
-        let temp_place = match params.aggregate_functions.is_empty() {
-            true => None,
-            false => Some(params.alloc_layout(&mut area)),
-        };
+    const NAME: &'static str = "BucketAggregator";
 
-        Ok(Self {
-            area,
-            method,
-            params,
-            hash_table,
-            reach_limit: false,
-            temp_place,
-        })
-    }
+    // return true if we should finish the consume opeartion
+    // only returns true if there is no HAS_AGG
+    fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
+        let block = data_block.convert_to_full();
+        // 1.1 and 1.2.
+        let aggregate_function_len = self.params.aggregate_functions.len();
+        let keys_column = block
+            .get_by_offset(aggregate_function_len)
+            .value
+            .as_column()
+            .unwrap();
+        let keys_iter = self.method.keys_iter_from_column(keys_column)?;
 
-    pub fn merge_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        if blocks.is_empty() {
-            return Ok(vec![]);
-        }
-        for data_block in blocks {
-            let block = data_block.convert_to_full();
-            // 1.1 and 1.2.
-            let aggregate_function_len = self.params.aggregate_functions.len();
-            let keys_column = block
-                .get_by_offset(aggregate_function_len)
-                .value
-                .as_column()
-                .unwrap();
-            let keys_iter = self.method.keys_iter_from_column(keys_column)?;
-
-            if !HAS_AGG {
-                unsafe {
-                    for key in keys_iter.iter() {
-                        let _ = self.hash_table.insert_and_entry(key);
-                    }
-
-                    if let Some(limit) = self.params.limit {
-                        if self.hash_table.len() >= limit {
-                            break;
-                        }
-                    }
-                }
-            } else {
-                // first state places of current block
-                let places = self.lookup_state(&keys_iter);
-
-                let states_columns = (0..aggregate_function_len)
-                    .map(|i| block.get_by_offset(i))
-                    .collect::<Vec<_>>();
-                let mut states_binary_columns = Vec::with_capacity(states_columns.len());
-
-                for agg in states_columns.iter().take(aggregate_function_len) {
-                    let aggr_column =
-                        agg.value.as_column().unwrap().as_string().ok_or_else(|| {
-                            ErrorCode::IllegalDataType(format!(
-                                "Aggregation column should be StringType, but got {:?}",
-                                agg.value
-                            ))
-                        })?;
-                    states_binary_columns.push(aggr_column);
+        if !HAS_AGG {
+            unsafe {
+                for key in keys_iter.iter() {
+                    let _ = self.hash_table.insert_and_entry(key);
                 }
 
-                let aggregate_functions = &self.params.aggregate_functions;
-                let offsets_aggregate_states = &self.params.offsets_aggregate_states;
-                if let Some(temp_place) = self.temp_place {
-                    for (row, place) in places.iter() {
-                        for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
-                            let final_place = place.next(offsets_aggregate_states[idx]);
-                            let state_place = temp_place.next(offsets_aggregate_states[idx]);
+                if let Some(limit) = self.params.limit {
+                    if self.hash_table.len() >= limit {
+                        return Ok(true);
+                    }
+                }
+            }
+        } else {
+            // first state places of current block
+            let places = self.lookup_state(&keys_iter);
 
-                            let mut data =
-                                unsafe { states_binary_columns[idx].index_unchecked(*row) };
-                            aggregate_function.deserialize(state_place, &mut data)?;
-                            aggregate_function.merge(final_place, state_place)?;
-                        }
+            let states_columns = (0..aggregate_function_len)
+                .map(|i| block.get_by_offset(i))
+                .collect::<Vec<_>>();
+            let mut states_binary_columns = Vec::with_capacity(states_columns.len());
+
+            for agg in states_columns.iter().take(aggregate_function_len) {
+                let aggr_column = agg.value.as_column().unwrap().as_string().ok_or_else(|| {
+                    ErrorCode::IllegalDataType(format!(
+                        "Aggregation column should be StringType, but got {:?}",
+                        agg.value
+                    ))
+                })?;
+                states_binary_columns.push(aggr_column);
+            }
+
+            let aggregate_functions = &self.params.aggregate_functions;
+            let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+            if let Some(temp_place) = self.temp_place {
+                for (row, place) in places.iter() {
+                    for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
+                        let final_place = place.next(offsets_aggregate_states[idx]);
+                        let state_place = temp_place.next(offsets_aggregate_states[idx]);
+
+                        let mut data = unsafe { states_binary_columns[idx].index_unchecked(*row) };
+                        aggregate_function.deserialize(state_place, &mut data)?;
+                        aggregate_function.merge(final_place, state_place)?;
                     }
                 }
             }
         }
+        Ok(false)
+    }
 
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
         let value_size = estimated_key_size(&self.hash_table);
-
         let mut group_columns_builder =
             self.method
                 .group_columns_builder(self.hash_table.len(), value_size, &self.params);
@@ -294,9 +274,42 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 
             let group_columns = group_columns_builder.finish()?;
             columns.extend_from_slice(&group_columns);
-
             Ok(vec![DataBlock::new_from_columns(columns)])
         }
+    }
+}
+
+impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+{
+    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
+        let mut area = Area::create();
+        let hash_table = method.create_hash_table()?;
+        let temp_place = match params.aggregate_functions.is_empty() {
+            true => None,
+            false => Some(params.alloc_layout(&mut area)),
+        };
+
+        Ok(Self {
+            area,
+            method,
+            params,
+            hash_table,
+            reach_limit: false,
+            temp_place,
+        })
+    }
+
+    pub fn merge_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        if blocks.is_empty() {
+            return Ok(vec![]);
+        }
+        for data_block in blocks {
+            if self.consume(data_block)? {
+                break;
+            }
+        }
+        self.generate()
     }
 
     /// Allocate aggregation function state for each key(the same key can always get the same state)

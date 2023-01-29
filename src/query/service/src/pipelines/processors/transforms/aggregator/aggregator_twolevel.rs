@@ -31,6 +31,7 @@ use common_hashtable::HashtableLike;
 use tracing::info;
 
 use super::estimated_key_size;
+use super::BucketAggregator;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
@@ -114,6 +115,7 @@ where
                 method: two_level_method,
                 hash_table: two_level_hashtable,
                 generated: false,
+                input_rows: self.input_rows,
             },
         })
     }
@@ -239,6 +241,15 @@ where
     type TwoLevelAggregator = ParallelFinalAggregator<HAS_AGG, TwoLevelHashMethod<Method>>;
 }
 
+impl<Method, const HAS_AGG: bool> TwoLevelAggregatorLike for BucketAggregator<HAS_AGG, Method>
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
+    Method::HashKey: FastHash,
+{
+    const SUPPORT_TWO_LEVEL: bool = false;
+    type TwoLevelAggregator = BucketAggregator<HAS_AGG, TwoLevelHashMethod<Method>>;
+}
+
 // Example: TwoLevelAggregator<PartialAggregator<HAS_AGG, Method>> ->
 //      TwoLevelAggregator {
 //          inner: PartialAggregator<HAS_AGG, TwoLevelMethod<Method>>
@@ -251,7 +262,7 @@ impl<T: TwoLevelAggregatorLike> Aggregator for TwoLevelAggregator<T> {
     const NAME: &'static str = "TwoLevelAggregator";
 
     #[inline(always)]
-    fn consume(&mut self, data: DataBlock) -> Result<()> {
+    fn consume(&mut self, data: DataBlock) -> Result<bool> {
         self.inner.consume(data)
     }
 

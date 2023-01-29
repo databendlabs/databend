@@ -424,8 +424,7 @@ pub fn efficiently_memory_final_aggregator(
     })
 }
 
-pub struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
-{
+struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> {
     method: Method,
     params: Arc<AggregatorParams>,
 
@@ -473,6 +472,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
             self.input_block.take();
             self.output_blocks.clear();
             self.input.finish();
+
             return Ok(Event::Finished);
         }
 
@@ -497,6 +497,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
 
         if self.input.is_finished() {
             self.output.finish();
+
             return Ok(Event::Finished);
         }
 
