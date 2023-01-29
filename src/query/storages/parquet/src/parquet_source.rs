@@ -334,10 +334,14 @@ impl Processor for ParquetSource {
 
         match self.state {
             State::Finish => Ok(Event::Finished),
-            State::ReadDataPrewhere(_)
-            | State::ReadDataRemain(_, _, _)
-            | State::PrewhereFilter(_, _, _)
-            | State::Deserialize(_, _, _, _) => Ok(Event::Sync),
+            State::PrewhereFilter(_, _, _) | State::Deserialize(_, _, _, _) => Ok(Event::Sync),
+            State::ReadDataPrewhere(_) | State::ReadDataRemain(_, _, _) => {
+                if self.prewhere_reader.support_blocking() {
+                    Ok(Event::Sync)
+                } else {
+                    Ok(Event::Async)
+                }
+            }
             State::Generated(_, _) => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
@@ -377,6 +381,40 @@ impl Processor for ParquetSource {
             }
             State::Deserialize(part, chunks, prewhere_data, row_selection) => {
                 self.do_deserialize(part, chunks, prewhere_data, row_selection)
+            }
+            _ => Err(ErrorCode::Internal("It's a bug.")),
+        }
+    }
+
+    async fn async_process(&mut self) -> Result<()> {
+        match std::mem::replace(&mut self.state, State::Finish) {
+            State::ReadDataPrewhere(Some(part)) => {
+                let rg_part = ParquetRowGroupPart::from_part(&part)?;
+                let row_selection = rg_part
+                    .row_selection
+                    .as_ref()
+                    .map(|sel| intervals_to_bitmap(sel, rg_part.num_rows));
+                let chunks = self.prewhere_reader.read_columns(rg_part).await?;
+                if self.prewhere_filter.is_some() {
+                    self.state = State::PrewhereFilter(part, chunks, row_selection);
+                } else {
+                    // If there is no prewhere filter, it means there is only the prewhere reader.
+                    assert!(self.remain_reader.is_none());
+                    // So all the needed columns are read.
+                    self.state = State::Deserialize(part, chunks, None, row_selection)
+                }
+                Ok(())
+            }
+            State::ReadDataRemain(part, prewhere_data, row_selection) => {
+                if let Some(remain_reader) = self.remain_reader.as_ref() {
+                    let rg_part = ParquetRowGroupPart::from_part(&part)?;
+                    let chunks = remain_reader.read_columns(rg_part).await?;
+                    self.state =
+                        State::Deserialize(part, chunks, Some(prewhere_data), row_selection);
+                    Ok(())
+                } else {
+                    Err(ErrorCode::Internal("It's a bug. No remain reader"))
+                }
             }
             _ => Err(ErrorCode::Internal("It's a bug.")),
         }

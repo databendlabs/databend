@@ -20,12 +20,12 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::schema_projection as ap;
+use common_base::base::tokio;
 use common_catalog::plan::Projection;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_storage::ColumnNodes;
-use opendal::Object;
 use opendal::Operator;
 
 use crate::parquet_part::ParquetRowGroupPart;
@@ -157,18 +157,36 @@ impl ParquetReader {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
         for index in &self.columns_to_read {
+            let obj = self.operator.object(&part.location);
             let meta = &part.column_metas[index];
-            let op = self.operator.clone();
-            let chunk =
-                Self::sync_read_one_column(op.object(&part.location), meta.offset, meta.length)?;
+            let chunk = obj.blocking_range_read(meta.offset..meta.offset + meta.length)?;
             chunks.push((*index, chunk));
         }
 
         Ok(chunks)
     }
 
+    /// Read columns data of one row group (but async).
+    pub async fn read_columns(&self, part: &ParquetRowGroupPart) -> Result<Vec<IndexedChunk>> {
+        let mut chunks = Vec::with_capacity(self.columns_to_read.len());
+
+        for &index in &self.columns_to_read {
+            let meta = &part.column_metas[&index];
+            let obj = self.operator.object(&part.location);
+            let range = meta.offset..meta.offset + meta.length;
+            chunks.push(async move {
+                tokio::spawn(async move { obj.range_read(range).await.map(|chunk| (index, chunk)) })
+                    .await
+                    .unwrap()
+            });
+        }
+
+        let chunks = futures::future::try_join_all(chunks).await?;
+        Ok(chunks)
+    }
+
     #[inline]
-    pub fn sync_read_one_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
-        Ok(o.blocking_range_read(offset..offset + length)?)
+    pub fn support_blocking(&self) -> bool {
+        self.operator.metadata().can_blocking()
     }
 }
