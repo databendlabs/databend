@@ -20,7 +20,7 @@ use crate::planner::binder::Binder;
 use crate::plans::KillPlan;
 use crate::plans::Plan;
 
-impl<'a> Binder {
+impl Binder {
     pub(super) async fn bind_kill_stmt(
         &mut self,
         _bind_context: &BindContext,

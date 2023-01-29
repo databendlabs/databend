@@ -143,9 +143,9 @@ impl ParquetSource {
             let func_ctx = self.ctx.get_function_context()?;
             let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
-            let res = evaluator.run(filter).map_err(|(_, e)| {
-                ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
-            })?;
+            let res = evaluator
+                .run(filter)
+                .map_err(|e| e.add_message("eval prewhere filter failed:"))?;
             let filter = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
                 ErrorCode::BadArguments(
                     "Result of filter expression cannot be converted to boolean.",

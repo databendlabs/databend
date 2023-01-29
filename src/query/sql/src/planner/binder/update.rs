@@ -27,11 +27,11 @@ use crate::plans::ScalarExpr;
 use crate::plans::UpdatePlan;
 use crate::BindContext;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_update(
         &mut self,
         bind_context: &BindContext,
-        stmt: &UpdateStmt<'a>,
+        stmt: &UpdateStmt,
     ) -> Result<Plan> {
         let UpdateStmt {
             table,

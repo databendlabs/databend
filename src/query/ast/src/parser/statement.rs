@@ -1169,15 +1169,14 @@ pub fn unset_source(i: Input) -> IResult<UnSetSource> {
     )(i)
 }
 
-#[allow(clippy::needless_lifetimes)]
-pub fn rest_str<'a>(i: Input<'a>) -> IResult<(&'a str, usize)> {
+pub fn rest_str(i: Input) -> IResult<(String, usize)> {
     // It's safe to unwrap because input must contain EOI.
     let first_token = i.0.first().unwrap();
     let last_token = i.0.last().unwrap();
     Ok((
         i.slice((i.len() - 1)..),
         (
-            &first_token.source[first_token.span.start..last_token.span.end],
+            first_token.source[first_token.span.start..last_token.span.end].to_string(),
             first_token.span.start,
         ),
     ))
@@ -1185,9 +1184,9 @@ pub fn rest_str<'a>(i: Input<'a>) -> IResult<(&'a str, usize)> {
 
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     #[derive(Clone)]
-    enum ColumnConstraint<'a> {
+    enum ColumnConstraint {
         Nullable(bool),
-        DefaultExpr(Box<Expr<'a>>),
+        DefaultExpr(Box<Expr>),
     }
 
     let nullable = alt((
@@ -1771,8 +1770,8 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
         consumed(rule! {
             #peroid_separated_idents_1_to_3
         }),
-        |(input, (catalog, database, table))| TableReference::Table {
-            span: input.0,
+        |(span, (catalog, database, table))| TableReference::Table {
+            span: transform_span(span.0),
             catalog,
             database,
             table,

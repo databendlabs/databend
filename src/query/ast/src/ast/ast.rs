@@ -15,23 +15,23 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::parser::token::Token;
+use common_exception::Span;
 
 // Identifier of table name or column name.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Identifier<'a> {
+pub struct Identifier {
     pub name: String,
     pub quote: Option<char>,
-    pub span: Token<'a>,
+    pub span: Span,
 }
 
-impl<'a> Identifier<'a> {
+impl Identifier {
     pub fn is_quoted(&self) -> bool {
         self.quote.is_some()
     }
 }
 
-impl<'a> Display for Identifier<'a> {
+impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(c) = self.quote {
             write!(f, "{}", c)?;

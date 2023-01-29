@@ -62,7 +62,6 @@ impl HashFlightScatter {
                     &[key.as_expr(&BUILTIN_FUNCTIONS)],
                     &BUILTIN_FUNCTIONS,
                 )
-                .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))
             })
             .collect::<Result<_>>()?;
 
@@ -98,8 +97,7 @@ impl OneHashKeyFlightScatter {
                     &[],
                     &[hash_key.as_expr(&BUILTIN_FUNCTIONS)],
                     &BUILTIN_FUNCTIONS,
-                )
-                .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?,
+                )?,
                 Expr::Constant {
                     span: None,
                     scalar: Scalar::Number(NumberScalar::UInt64(scatter_size as u64)),
@@ -107,8 +105,7 @@ impl OneHashKeyFlightScatter {
                 },
             ],
             &BUILTIN_FUNCTIONS,
-        )
-        .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+        )?;
 
         Ok(Box::new(OneHashKeyFlightScatter {
             scatter_size,

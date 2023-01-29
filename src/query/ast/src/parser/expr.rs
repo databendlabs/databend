@@ -156,12 +156,12 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
 /// For example, `a + b AND c is null` is parsed as `[col(a), PLUS, col(b), AND, col(c), ISNULL]` by nom parsers.
 /// Then the Pratt parser is able to parse the expression into `AND(PLUS(col(a), col(b)), ISNULL(col(c)))`.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExprElement<'a> {
+pub enum ExprElement {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
-        database: Option<Identifier<'a>>,
-        table: Option<Identifier<'a>>,
-        column: Identifier<'a>,
+        database: Option<Identifier>,
+        table: Option<Identifier>,
+        column: Identifier,
     },
     /// `IS [NOT] NULL` expression
     IsNull {
@@ -173,18 +173,18 @@ pub enum ExprElement<'a> {
     },
     /// `[ NOT ] IN (list, ...)`
     InList {
-        list: Vec<Expr<'a>>,
+        list: Vec<Expr>,
         not: bool,
     },
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
-        subquery: Box<Query<'a>>,
+        subquery: Box<Query>,
         not: bool,
     },
     /// `BETWEEN ... AND ...`
     Between {
-        low: Box<Expr<'a>>,
-        high: Box<Expr<'a>>,
+        low: Box<Expr>,
+        high: Box<Expr>,
         not: bool,
     },
     /// Binary operation
@@ -197,12 +197,12 @@ pub enum ExprElement<'a> {
     },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
-        expr: Box<Expr<'a>>,
+        expr: Box<Expr>,
         target_type: TypeName,
     },
     /// `TRY_CAST` expression`
     TryCast {
-        expr: Box<Expr<'a>>,
+        expr: Box<Expr>,
         target_type: TypeName,
     },
     /// `::<type_name>` expression
@@ -212,26 +212,26 @@ pub enum ExprElement<'a> {
     /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
         field: IntervalKind,
-        expr: Box<Expr<'a>>,
+        expr: Box<Expr>,
     },
     /// POSITION(<expr> IN <expr>)
     Position {
-        substr_expr: Box<Expr<'a>>,
-        str_expr: Box<Expr<'a>>,
+        substr_expr: Box<Expr>,
+        str_expr: Box<Expr>,
     },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     SubString {
-        expr: Box<Expr<'a>>,
-        substring_from: Box<Expr<'a>>,
-        substring_for: Option<Box<Expr<'a>>>,
+        expr: Box<Expr>,
+        substring_from: Box<Expr>,
+        substring_for: Option<Box<Expr>>,
     },
     /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
     /// Or
     /// TRIM(<expr>)
     Trim {
-        expr: Box<Expr<'a>>,
+        expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(TrimWhere, Box<Expr<'a>>)>,
+        trim_where: Option<(TrimWhere, Box<Expr>)>,
     },
     /// A literal value, such as string, number, date or NULL
     Literal {
@@ -241,69 +241,69 @@ pub enum ExprElement<'a> {
     CountAll,
     /// `(foo, bar)`
     Tuple {
-        exprs: Vec<Expr<'a>>,
+        exprs: Vec<Expr>,
     },
     /// Scalar function call
     FunctionCall {
         /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
         distinct: bool,
-        name: Identifier<'a>,
-        args: Vec<Expr<'a>>,
+        name: Identifier,
+        args: Vec<Expr>,
         params: Vec<Literal>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
-        operand: Option<Box<Expr<'a>>>,
-        conditions: Vec<Expr<'a>>,
-        results: Vec<Expr<'a>>,
-        else_result: Option<Box<Expr<'a>>>,
+        operand: Option<Box<Expr>>,
+        conditions: Vec<Expr>,
+        results: Vec<Expr>,
+        else_result: Option<Box<Expr>>,
     },
     /// `EXISTS` expression
     Exists {
-        subquery: Query<'a>,
+        subquery: Query,
         not: bool,
     },
     /// Scalar/ANY/ALL/SOME subquery
     Subquery {
         modifier: Option<SubqueryModifier>,
-        subquery: Query<'a>,
+        subquery: Query,
     },
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
-        accessor: MapAccessor<'a>,
+        accessor: MapAccessor,
     },
     /// An expression between parentheses
-    Group(Expr<'a>),
+    Group(Expr),
     /// `[1, 2, 3]`
     Array {
-        exprs: Vec<Expr<'a>>,
+        exprs: Vec<Expr>,
     },
     Interval {
-        expr: Expr<'a>,
+        expr: Expr,
         unit: IntervalKind,
     },
     DateAdd {
         unit: IntervalKind,
-        interval: Expr<'a>,
-        date: Expr<'a>,
+        interval: Expr,
+        date: Expr,
     },
     DateSub {
         unit: IntervalKind,
-        interval: Expr<'a>,
-        date: Expr<'a>,
+        interval: Expr,
+        date: Expr,
     },
     DateTrunc {
         unit: IntervalKind,
-        date: Expr<'a>,
+        date: Expr,
     },
 }
 
 struct ExprParser;
 
-impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for ExprParser {
+impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
     type Error = &'static str;
-    type Input = WithSpan<'a, ExprElement<'a>>;
-    type Output = Expr<'a>;
+    type Input = WithSpan<'a, ExprElement>;
+    type Output = Expr;
 
     fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
         let affix = match &elem.elem {
@@ -360,31 +360,31 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
         Ok(affix)
     }
 
-    fn primary(&mut self, elem: WithSpan<'a, ExprElement<'a>>) -> Result<Expr<'a>, &'static str> {
+    fn primary(&mut self, elem: WithSpan<'a, ExprElement>) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
             ExprElement::ColumnRef {
                 database,
                 table,
                 column,
             } => Expr::ColumnRef {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 database,
                 table,
                 column,
             },
             ExprElement::Cast { expr, target_type } => Expr::Cast {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr,
                 target_type,
                 pg_style: false,
             },
             ExprElement::TryCast { expr, target_type } => Expr::TryCast {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr,
                 target_type,
             },
             ExprElement::Extract { field, expr } => Expr::Extract {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 kind: field,
                 expr,
             },
@@ -392,7 +392,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 substr_expr,
                 str_expr,
             } => Expr::Position {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 substr_expr,
                 str_expr,
             },
@@ -401,23 +401,25 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 substring_from,
                 substring_for,
             } => Expr::Substring {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr,
                 substring_from,
                 substring_for,
             },
             ExprElement::Trim { expr, trim_where } => Expr::Trim {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr,
                 trim_where,
             },
             ExprElement::Literal { lit } => Expr::Literal {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 lit,
             },
-            ExprElement::CountAll => Expr::CountAll { span: elem.span.0 },
+            ExprElement::CountAll => Expr::CountAll {
+                span: transform_span(elem.span.0),
+            },
             ExprElement::Tuple { exprs } => Expr::Tuple {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 exprs,
             },
             ExprElement::FunctionCall {
@@ -426,7 +428,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 args,
                 params,
             } => Expr::FunctionCall {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 distinct,
                 name,
                 args,
@@ -438,29 +440,29 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 results,
                 else_result,
             } => Expr::Case {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 operand,
                 conditions,
                 results,
                 else_result,
             },
             ExprElement::Exists { subquery, not } => Expr::Exists {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 not,
                 subquery: Box::new(subquery),
             },
             ExprElement::Subquery { subquery, modifier } => Expr::Subquery {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 modifier,
                 subquery: Box::new(subquery),
             },
             ExprElement::Group(expr) => expr,
             ExprElement::Array { exprs } => Expr::Array {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 exprs,
             },
             ExprElement::Interval { expr, unit } => Expr::Interval {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr: Box::new(expr),
                 unit,
             },
@@ -469,7 +471,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 interval,
                 date,
             } => Expr::DateAdd {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 unit,
                 interval: Box::new(interval),
                 date: Box::new(date),
@@ -479,13 +481,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
                 interval,
                 date,
             } => Expr::DateSub {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 unit,
                 interval: Box::new(interval),
                 date: Box::new(date),
             },
             ExprElement::DateTrunc { unit, date } => Expr::DateTrunc {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 unit,
                 date: Box::new(date),
             },
@@ -496,19 +498,19 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
 
     fn infix(
         &mut self,
-        lhs: Expr<'a>,
+        lhs: Expr,
         elem: WithSpan<'a, ExprElement>,
-        rhs: Expr<'a>,
-    ) -> Result<Expr<'a>, &'static str> {
+        rhs: Expr,
+    ) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
             ExprElement::BinaryOp { op } => Expr::BinaryOp {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 op,
             },
             ExprElement::IsDistinctFrom { not } => Expr::IsDistinctFrom {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 not,
@@ -518,14 +520,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
         Ok(expr)
     }
 
-    fn prefix(
-        &mut self,
-        elem: WithSpan<'a, ExprElement>,
-        rhs: Expr<'a>,
-    ) -> Result<Expr<'a>, &'static str> {
+    fn prefix(&mut self, elem: WithSpan<'a, ExprElement>, rhs: Expr) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 op,
                 expr: Box::new(rhs),
             },
@@ -536,41 +534,41 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement<'a>>>> PrattParser<I> for E
 
     fn postfix(
         &mut self,
-        lhs: Expr<'a>,
-        elem: WithSpan<'a, ExprElement<'a>>,
-    ) -> Result<Expr<'a>, &'static str> {
+        lhs: Expr,
+        elem: WithSpan<'a, ExprElement>,
+    ) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
             ExprElement::MapAccess { accessor } => Expr::MapAccess {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr: Box::new(lhs),
                 accessor,
             },
             ExprElement::IsNull { not } => Expr::IsNull {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr: Box::new(lhs),
                 not,
             },
             ExprElement::InList { list, not } => Expr::InList {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr: Box::new(lhs),
                 list,
                 not,
             },
             ExprElement::InSubquery { subquery, not } => Expr::InSubquery {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr: Box::new(lhs),
                 subquery,
                 not,
             },
             ExprElement::Between { low, high, not } => Expr::Between {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr: Box::new(lhs),
                 low,
                 high,
                 not,
             },
             ExprElement::PgCast { target_type } => Expr::Cast {
-                span: elem.span.0,
+                span: transform_span(elem.span.0),
                 expr: Box::new(lhs),
                 target_type,
                 pg_style: true,

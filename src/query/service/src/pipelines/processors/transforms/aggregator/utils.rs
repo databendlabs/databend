@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_hashtable::HashtableLike;
+
 #[inline]
-pub fn estimated_key_size<Table: common_hashtable::HashtableLike>(table: &Table) -> usize {
+pub fn estimated_key_size<Table: HashtableLike>(table: &Table) -> usize {
     table.unsize_key_size().unwrap_or_default()
 }

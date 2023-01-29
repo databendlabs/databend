@@ -34,7 +34,7 @@ use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
 use crate::Binder;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_grant(
         &mut self,
         stmt: &GrantStmt,

@@ -19,6 +19,9 @@ use std::sync::Arc;
 use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_exception::Span;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
@@ -95,7 +98,7 @@ impl<'a> EvalContext<'a> {
         }
     }
 
-    pub fn render_error(&self, args: &[Value<AnyType>], func_name: &str) -> Result<(), String> {
+    pub fn render_error(&self, span: Span, args: &[Value<AnyType>], func_name: &str) -> Result<()> {
         match &self.errors {
             Some((valids, error)) => {
                 let first_error_row = valids
@@ -114,8 +117,10 @@ impl<'a> EvalContext<'a> {
                     })
                     .join(", ");
 
-                let error_msg = format!("{error} while evaluating function `{func_name}({args})`");
-                Err(error_msg)
+                Err(ErrorCode::Internal(format!(
+                    "{error} while evaluating function `{func_name}({args})`"
+                ))
+                .set_span(span))
             }
             None => Ok(()),
         }

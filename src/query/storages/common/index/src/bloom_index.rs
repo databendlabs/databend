@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 use common_expression::converts::scalar_to_datavalue;
 use common_expression::eval_function;
 use common_expression::types::DataType;
@@ -34,7 +35,6 @@ use common_expression::DataField;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_expression::Span;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -286,8 +286,7 @@ impl BloomIndex {
             func_ctx,
             column.len(),
             &BUILTIN_FUNCTIONS,
-        )
-        .map_err(|(_, e)| ErrorCode::Internal(format!("eval siphash failed: {}.", e)))?;
+        )?;
         let column = value.convert_to_full_column(target_type, column.len());
         Ok(column)
     }
@@ -305,8 +304,7 @@ impl BloomIndex {
             func_ctx,
             1,
             &BUILTIN_FUNCTIONS,
-        )
-        .map_err(|(_, e)| ErrorCode::Internal(format!("eval siphash failed: {}.", e)))?;
+        )?;
         let number_scalar = value.into_scalar().unwrap().into_number().unwrap();
         let digest = u64::try_downcast_scalar(&number_scalar).unwrap();
         Ok(digest)
@@ -390,7 +388,7 @@ fn visit_expr_column_eq_constant(
                 Expr::ColumnRef { id, data_type, .. },
             ] => {
                 // If the visitor returns a new expression, then replace with the current expression.
-                if let Some(new_expr) = visitor(span.clone(), id, scalar, data_type, return_type)? {
+                if let Some(new_expr) = visitor(*span, id, scalar, data_type, return_type)? {
                     *expr = new_expr;
                     return Ok(());
                 }

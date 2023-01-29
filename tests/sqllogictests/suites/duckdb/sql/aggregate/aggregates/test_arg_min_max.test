@@ -4,7 +4,7 @@ drop table if exists names
 statement ok
 drop table if exists args
 
-statement error 1065
+statement error 1028
 select arg_min()
 
 statement error 1065
@@ -24,7 +24,7 @@ select arg_min(i,i) from range (100) tbl(i)
 statement error 1025
 select arg_min(i,i) from range (100) tbl(i) where 1 = 0
 
-statement error 1065
+statement error 1028
 select arg_max()
 
 statement error 1065

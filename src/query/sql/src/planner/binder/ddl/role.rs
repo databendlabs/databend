@@ -19,7 +19,7 @@ use crate::plans::SetRolePlan;
 use crate::BindContext;
 use crate::Binder;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_set_role(
         &mut self,
         _bind_context: &BindContext,

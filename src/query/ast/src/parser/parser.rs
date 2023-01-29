@@ -17,6 +17,7 @@ use common_exception::Result;
 
 use crate::ast::Expr;
 use crate::ast::Statement;
+use crate::error::display_parser_error;
 use crate::input::Dialect;
 use crate::input::Input;
 use crate::parser::expr;
@@ -27,8 +28,8 @@ use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
 use crate::util::comma_separated_list0;
+use crate::util::transform_span;
 use crate::Backtrace;
-use crate::DisplayError;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
     Tokenizer::new(sql).collect::<Result<Vec<_>>>()
@@ -38,15 +39,19 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 pub fn parse_sql<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
-    backtrace: &'a Backtrace<'a>,
-) -> Result<(Statement<'a>, Option<String>)> {
+    backtrace: &'a Backtrace,
+) -> Result<(Statement, Option<String>)> {
     match statement(Input(sql_tokens, dialect, backtrace)) {
         Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok((stmts.stmt, stmts.format)),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
-            rest[0].display_error("unable to parse rest of the sql".to_string()),
-        )),
+            "unable to parse rest of the sql".to_string(),
+        )
+        .set_span(transform_span(&rest[..1]))),
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-            Err(ErrorCode::SyntaxException(err.display_error(())))
+            let source = sql_tokens[0].source;
+            Err(ErrorCode::SyntaxException(display_parser_error(
+                err, source,
+            )))
         }
         Err(nom::Err::Incomplete(_)) => unreachable!(),
     }
@@ -56,15 +61,19 @@ pub fn parse_sql<'a>(
 pub fn parse_expr<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
-    backtrace: &'a Backtrace<'a>,
-) -> Result<Expr<'a>> {
+    backtrace: &'a Backtrace,
+) -> Result<Expr> {
     match expr::expr(Input(sql_tokens, dialect, backtrace)) {
         Ok((rest, expr)) if rest[0].kind == TokenKind::EOI => Ok(expr),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
-            rest[0].display_error("unable to parse rest of the sql".to_string()),
-        )),
+            "unable to parse rest of the sql".to_string(),
+        )
+        .set_span(transform_span(&rest[..1]))),
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-            Err(ErrorCode::SyntaxException(err.display_error(())))
+            let source = sql_tokens[0].source;
+            Err(ErrorCode::SyntaxException(display_parser_error(
+                err, source,
+            )))
         }
         Err(nom::Err::Incomplete(_)) => unreachable!(),
     }
@@ -73,13 +82,16 @@ pub fn parse_expr<'a>(
 pub fn parse_comma_separated_exprs<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
-    backtrace: &'a Backtrace<'a>,
-) -> Result<Vec<Expr<'a>>> {
+    backtrace: &'a Backtrace,
+) -> Result<Vec<Expr>> {
     let mut comma_separated_exprs_parser = comma_separated_list0(subexpr(0));
     match comma_separated_exprs_parser(Input(sql_tokens, dialect, backtrace)) {
         Ok((_rest, exprs)) => Ok(exprs),
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-            Err(ErrorCode::SyntaxException(err.display_error(())))
+            let source = sql_tokens[0].source;
+            Err(ErrorCode::SyntaxException(display_parser_error(
+                err, source,
+            )))
         }
         Err(nom::Err::Incomplete(_)) => unreachable!(),
     }
@@ -88,15 +100,19 @@ pub fn parse_comma_separated_exprs<'a>(
 pub fn parser_values_with_placeholder<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
-    backtrace: &'a Backtrace<'a>,
-) -> Result<Vec<Option<Expr<'a>>>> {
+    backtrace: &'a Backtrace,
+) -> Result<Vec<Option<Expr>>> {
     match values_with_placeholder(Input(sql_tokens, dialect, backtrace)) {
         Ok((rest, exprs)) if rest[0].kind == TokenKind::EOI => Ok(exprs),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
-            rest[0].display_error("unable to parse rest of the sql".to_string()),
-        )),
+            "unable to parse rest of the sql".to_string(),
+        )
+        .set_span(transform_span(&rest[..1]))),
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-            Err(ErrorCode::SyntaxException(err.display_error(())))
+            let source = sql_tokens[0].source;
+            Err(ErrorCode::SyntaxException(display_parser_error(
+                err, source,
+            )))
         }
         Err(nom::Err::Incomplete(_)) => unreachable!(),
     }

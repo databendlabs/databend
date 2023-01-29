@@ -27,8 +27,8 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_delete(
         &mut self,
         bind_context: &BindContext,
-        table_reference: &'a TableReference<'a>,
-        filter: &'a Option<Expr<'a>>,
+        table_reference: &'a TableReference,
+        filter: &'a Option<Expr>,
     ) -> Result<Plan> {
         let (catalog_name, database_name, table_name) = if let TableReference::Table {
             catalog,

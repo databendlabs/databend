@@ -4,65 +4,15 @@ select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on
 SELECT * EXCLUDE (c1), b.* EXCLUDE (c2, c3, c4) FROM customer INNER JOIN orders ON (a = b) LIMIT 1
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        EXCLUDE(9..16),
-        Ident(17..19),
-        Comma(19..20),
-        Ident(21..22),
-        Period(22..23),
-        Multiply(23..24),
-        EXCLUDE(25..32),
-        LParen(33..34),
-        Ident(34..36),
-        Comma(36..37),
-        Ident(38..40),
-        Comma(40..41),
-        Ident(42..44),
-        RParen(44..45),
-        FROM(46..50),
-        Ident(51..59),
-        INNER(60..65),
-        JOIN(66..70),
-        Ident(71..77),
-        ON(78..80),
-        Ident(81..82),
-        Eq(83..84),
-        Ident(85..86),
-        LIMIT(87..92),
-        LiteralInteger(93..94),
-    ],
+    span: Some(
+        0..94,
+    ),
     with: None,
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(0..6),
-                Multiply(7..8),
-                EXCLUDE(9..16),
-                Ident(17..19),
-                Comma(19..20),
-                Ident(21..22),
-                Period(22..23),
-                Multiply(23..24),
-                EXCLUDE(25..32),
-                LParen(33..34),
-                Ident(34..36),
-                Comma(36..37),
-                Ident(38..40),
-                Comma(40..41),
-                Ident(42..44),
-                RParen(44..45),
-                FROM(46..50),
-                Ident(51..59),
-                INNER(60..65),
-                JOIN(66..70),
-                Ident(71..77),
-                ON(78..80),
-                Ident(81..82),
-                Eq(83..84),
-                Ident(85..86),
-            ],
+            span: Some(
+                0..86,
+            ),
             distinct: false,
             select_list: [
                 QualifiedName {
@@ -74,7 +24,9 @@ Query {
                             Identifier {
                                 name: "c1",
                                 quote: None,
-                                span: Ident(17..19),
+                                span: Some(
+                                    17..19,
+                                ),
                             },
                         ],
                     ),
@@ -85,7 +37,9 @@ Query {
                             Identifier {
                                 name: "b",
                                 quote: None,
-                                span: Ident(21..22),
+                                span: Some(
+                                    21..22,
+                                ),
                             },
                         ),
                         Star,
@@ -95,17 +49,23 @@ Query {
                             Identifier {
                                 name: "c2",
                                 quote: None,
-                                span: Ident(34..36),
+                                span: Some(
+                                    34..36,
+                                ),
                             },
                             Identifier {
                                 name: "c3",
                                 quote: None,
-                                span: Ident(38..40),
+                                span: Some(
+                                    38..40,
+                                ),
                             },
                             Identifier {
                                 name: "c4",
                                 quote: None,
-                                span: Ident(42..44),
+                                span: Some(
+                                    42..44,
+                                ),
                             },
                         ],
                     ),
@@ -113,68 +73,75 @@ Query {
             ],
             from: [
                 Join {
-                    span: [
-                        INNER(60..65),
-                        JOIN(66..70),
-                    ],
+                    span: Some(
+                        60..70,
+                    ),
                     join: Join {
                         op: Inner,
                         condition: On(
                             BinaryOp {
-                                span: [
-                                    Eq(83..84),
-                                ],
+                                span: Some(
+                                    83..84,
+                                ),
                                 op: Eq,
                                 left: ColumnRef {
-                                    span: [
-                                        Ident(81..82),
-                                    ],
+                                    span: Some(
+                                        81..82,
+                                    ),
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "a",
                                         quote: None,
-                                        span: Ident(81..82),
+                                        span: Some(
+                                            81..82,
+                                        ),
                                     },
                                 },
                                 right: ColumnRef {
-                                    span: [
-                                        Ident(85..86),
-                                    ],
+                                    span: Some(
+                                        85..86,
+                                    ),
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "b",
                                         quote: None,
-                                        span: Ident(85..86),
+                                        span: Some(
+                                            85..86,
+                                        ),
                                     },
                                 },
                             },
                         ),
                         left: Table {
-                            span: [
-                                Ident(51..59),
-                            ],
+                            span: Some(
+                                51..59,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "customer",
                                 quote: None,
-                                span: Ident(51..59),
+                                span: Some(
+                                    51..59,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
                         },
                         right: Table {
-                            span: [
-                                Ident(71..77),
-                            ],
+                            span: Some(
+                                71..77,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "orders",
                                 quote: None,
-                                span: Ident(71..77),
+                                span: Some(
+                                    71..77,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -190,9 +157,9 @@ Query {
     order_by: [],
     limit: [
         Literal {
-            span: [
-                LiteralInteger(93..94),
-            ],
+            span: Some(
+                93..94,
+            ),
             lit: Integer(
                 1,
             ),
@@ -209,27 +176,15 @@ select * from customer inner join orders
 SELECT * FROM customer INNER JOIN orders
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..22),
-        INNER(23..28),
-        JOIN(29..33),
-        Ident(34..40),
-    ],
+    span: Some(
+        0..40,
+    ),
     with: None,
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(0..6),
-                Multiply(7..8),
-                FROM(9..13),
-                Ident(14..22),
-                INNER(23..28),
-                JOIN(29..33),
-                Ident(34..40),
-            ],
+            span: Some(
+                0..40,
+            ),
             distinct: false,
             select_list: [
                 QualifiedName {
@@ -241,37 +196,40 @@ Query {
             ],
             from: [
                 Join {
-                    span: [
-                        INNER(23..28),
-                        JOIN(29..33),
-                    ],
+                    span: Some(
+                        23..33,
+                    ),
                     join: Join {
                         op: Inner,
                         condition: None,
                         left: Table {
-                            span: [
-                                Ident(14..22),
-                            ],
+                            span: Some(
+                                14..22,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "customer",
                                 quote: None,
-                                span: Ident(14..22),
+                                span: Some(
+                                    14..22,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
                         },
                         right: Table {
-                            span: [
-                                Ident(34..40),
-                            ],
+                            span: Some(
+                                34..40,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "orders",
                                 quote: None,
-                                span: Ident(34..40),
+                                span: Some(
+                                    34..40,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -297,27 +255,15 @@ select * from customer cross join orders
 SELECT * FROM customer CROSS JOIN orders
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..22),
-        CROSS(23..28),
-        JOIN(29..33),
-        Ident(34..40),
-    ],
+    span: Some(
+        0..40,
+    ),
     with: None,
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(0..6),
-                Multiply(7..8),
-                FROM(9..13),
-                Ident(14..22),
-                CROSS(23..28),
-                JOIN(29..33),
-                Ident(34..40),
-            ],
+            span: Some(
+                0..40,
+            ),
             distinct: false,
             select_list: [
                 QualifiedName {
@@ -329,37 +275,40 @@ Query {
             ],
             from: [
                 Join {
-                    span: [
-                        CROSS(23..28),
-                        JOIN(29..33),
-                    ],
+                    span: Some(
+                        23..33,
+                    ),
                     join: Join {
                         op: CrossJoin,
                         condition: None,
                         left: Table {
-                            span: [
-                                Ident(14..22),
-                            ],
+                            span: Some(
+                                14..22,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "customer",
                                 quote: None,
-                                span: Ident(14..22),
+                                span: Some(
+                                    14..22,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
                         },
                         right: Table {
-                            span: [
-                                Ident(34..40),
-                            ],
+                            span: Some(
+                                34..40,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "orders",
                                 quote: None,
-                                span: Ident(34..40),
+                                span: Some(
+                                    34..40,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -385,37 +334,15 @@ select * from customer inner join orders on a = b limit 1
 SELECT * FROM customer INNER JOIN orders ON (a = b) LIMIT 1
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..22),
-        INNER(23..28),
-        JOIN(29..33),
-        Ident(34..40),
-        ON(41..43),
-        Ident(44..45),
-        Eq(46..47),
-        Ident(48..49),
-        LIMIT(50..55),
-        LiteralInteger(56..57),
-    ],
+    span: Some(
+        0..57,
+    ),
     with: None,
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(0..6),
-                Multiply(7..8),
-                FROM(9..13),
-                Ident(14..22),
-                INNER(23..28),
-                JOIN(29..33),
-                Ident(34..40),
-                ON(41..43),
-                Ident(44..45),
-                Eq(46..47),
-                Ident(48..49),
-            ],
+            span: Some(
+                0..49,
+            ),
             distinct: false,
             select_list: [
                 QualifiedName {
@@ -427,68 +354,75 @@ Query {
             ],
             from: [
                 Join {
-                    span: [
-                        INNER(23..28),
-                        JOIN(29..33),
-                    ],
+                    span: Some(
+                        23..33,
+                    ),
                     join: Join {
                         op: Inner,
                         condition: On(
                             BinaryOp {
-                                span: [
-                                    Eq(46..47),
-                                ],
+                                span: Some(
+                                    46..47,
+                                ),
                                 op: Eq,
                                 left: ColumnRef {
-                                    span: [
-                                        Ident(44..45),
-                                    ],
+                                    span: Some(
+                                        44..45,
+                                    ),
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "a",
                                         quote: None,
-                                        span: Ident(44..45),
+                                        span: Some(
+                                            44..45,
+                                        ),
                                     },
                                 },
                                 right: ColumnRef {
-                                    span: [
-                                        Ident(48..49),
-                                    ],
+                                    span: Some(
+                                        48..49,
+                                    ),
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "b",
                                         quote: None,
-                                        span: Ident(48..49),
+                                        span: Some(
+                                            48..49,
+                                        ),
                                     },
                                 },
                             },
                         ),
                         left: Table {
-                            span: [
-                                Ident(14..22),
-                            ],
+                            span: Some(
+                                14..22,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "customer",
                                 quote: None,
-                                span: Ident(14..22),
+                                span: Some(
+                                    14..22,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
                         },
                         right: Table {
-                            span: [
-                                Ident(34..40),
-                            ],
+                            span: Some(
+                                34..40,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "orders",
                                 quote: None,
-                                span: Ident(34..40),
+                                span: Some(
+                                    34..40,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -504,9 +438,9 @@ Query {
     order_by: [],
     limit: [
         Literal {
-            span: [
-                LiteralInteger(56..57),
-            ],
+            span: Some(
+                56..57,
+            ),
             lit: Integer(
                 1,
             ),
@@ -523,39 +457,15 @@ select * from customer inner join orders on a = b limit 2 offset 3
 SELECT * FROM customer INNER JOIN orders ON (a = b) LIMIT 2 OFFSET 3
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..22),
-        INNER(23..28),
-        JOIN(29..33),
-        Ident(34..40),
-        ON(41..43),
-        Ident(44..45),
-        Eq(46..47),
-        Ident(48..49),
-        LIMIT(50..55),
-        LiteralInteger(56..57),
-        OFFSET(58..64),
-        LiteralInteger(65..66),
-    ],
+    span: Some(
+        0..66,
+    ),
     with: None,
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(0..6),
-                Multiply(7..8),
-                FROM(9..13),
-                Ident(14..22),
-                INNER(23..28),
-                JOIN(29..33),
-                Ident(34..40),
-                ON(41..43),
-                Ident(44..45),
-                Eq(46..47),
-                Ident(48..49),
-            ],
+            span: Some(
+                0..49,
+            ),
             distinct: false,
             select_list: [
                 QualifiedName {
@@ -567,68 +477,75 @@ Query {
             ],
             from: [
                 Join {
-                    span: [
-                        INNER(23..28),
-                        JOIN(29..33),
-                    ],
+                    span: Some(
+                        23..33,
+                    ),
                     join: Join {
                         op: Inner,
                         condition: On(
                             BinaryOp {
-                                span: [
-                                    Eq(46..47),
-                                ],
+                                span: Some(
+                                    46..47,
+                                ),
                                 op: Eq,
                                 left: ColumnRef {
-                                    span: [
-                                        Ident(44..45),
-                                    ],
+                                    span: Some(
+                                        44..45,
+                                    ),
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "a",
                                         quote: None,
-                                        span: Ident(44..45),
+                                        span: Some(
+                                            44..45,
+                                        ),
                                     },
                                 },
                                 right: ColumnRef {
-                                    span: [
-                                        Ident(48..49),
-                                    ],
+                                    span: Some(
+                                        48..49,
+                                    ),
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "b",
                                         quote: None,
-                                        span: Ident(48..49),
+                                        span: Some(
+                                            48..49,
+                                        ),
                                     },
                                 },
                             },
                         ),
                         left: Table {
-                            span: [
-                                Ident(14..22),
-                            ],
+                            span: Some(
+                                14..22,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "customer",
                                 quote: None,
-                                span: Ident(14..22),
+                                span: Some(
+                                    14..22,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
                         },
                         right: Table {
-                            span: [
-                                Ident(34..40),
-                            ],
+                            span: Some(
+                                34..40,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "orders",
                                 quote: None,
-                                span: Ident(34..40),
+                                span: Some(
+                                    34..40,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -644,9 +561,9 @@ Query {
     order_by: [],
     limit: [
         Literal {
-            span: [
-                LiteralInteger(56..57),
-            ],
+            span: Some(
+                56..57,
+            ),
             lit: Integer(
                 2,
             ),
@@ -654,9 +571,9 @@ Query {
     ],
     offset: Some(
         Literal {
-            span: [
-                LiteralInteger(65..66),
-            ],
+            span: Some(
+                65..66,
+            ),
             lit: Integer(
                 3,
             ),
@@ -672,29 +589,15 @@ select * from customer natural full join orders
 SELECT * FROM customer NATURAL FULL OUTER JOIN orders
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..22),
-        NATURAL(23..30),
-        FULL(31..35),
-        JOIN(36..40),
-        Ident(41..47),
-    ],
+    span: Some(
+        0..47,
+    ),
     with: None,
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(0..6),
-                Multiply(7..8),
-                FROM(9..13),
-                Ident(14..22),
-                NATURAL(23..30),
-                FULL(31..35),
-                JOIN(36..40),
-                Ident(41..47),
-            ],
+            span: Some(
+                0..47,
+            ),
             distinct: false,
             select_list: [
                 QualifiedName {
@@ -706,38 +609,40 @@ Query {
             ],
             from: [
                 Join {
-                    span: [
-                        NATURAL(23..30),
-                        FULL(31..35),
-                        JOIN(36..40),
-                    ],
+                    span: Some(
+                        23..40,
+                    ),
                     join: Join {
                         op: FullOuter,
                         condition: Natural,
                         left: Table {
-                            span: [
-                                Ident(14..22),
-                            ],
+                            span: Some(
+                                14..22,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "customer",
                                 quote: None,
-                                span: Ident(14..22),
+                                span: Some(
+                                    14..22,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
                         },
                         right: Table {
-                            span: [
-                                Ident(41..47),
-                            ],
+                            span: Some(
+                                41..47,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "orders",
                                 quote: None,
-                                span: Ident(41..47),
+                                span: Some(
+                                    41..47,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -763,43 +668,15 @@ select * from customer natural join orders left outer join detail using (id)
 SELECT * FROM customer NATURAL INNER JOIN orders LEFT OUTER JOIN detail USING(id)
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..22),
-        NATURAL(23..30),
-        JOIN(31..35),
-        Ident(36..42),
-        LEFT(43..47),
-        OUTER(48..53),
-        JOIN(54..58),
-        Ident(59..65),
-        USING(66..71),
-        LParen(72..73),
-        Ident(73..75),
-        RParen(75..76),
-    ],
+    span: Some(
+        0..76,
+    ),
     with: None,
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(0..6),
-                Multiply(7..8),
-                FROM(9..13),
-                Ident(14..22),
-                NATURAL(23..30),
-                JOIN(31..35),
-                Ident(36..42),
-                LEFT(43..47),
-                OUTER(48..53),
-                JOIN(54..58),
-                Ident(59..65),
-                USING(66..71),
-                LParen(72..73),
-                Ident(73..75),
-                RParen(75..76),
-            ],
+            span: Some(
+                0..76,
+            ),
             distinct: false,
             select_list: [
                 QualifiedName {
@@ -811,11 +688,9 @@ Query {
             ],
             from: [
                 Join {
-                    span: [
-                        LEFT(43..47),
-                        OUTER(48..53),
-                        JOIN(54..58),
-                    ],
+                    span: Some(
+                        43..58,
+                    ),
                     join: Join {
                         op: LeftOuter,
                         condition: Using(
@@ -823,42 +698,47 @@ Query {
                                 Identifier {
                                     name: "id",
                                     quote: None,
-                                    span: Ident(73..75),
+                                    span: Some(
+                                        73..75,
+                                    ),
                                 },
                             ],
                         ),
                         left: Join {
-                            span: [
-                                NATURAL(23..30),
-                                JOIN(31..35),
-                            ],
+                            span: Some(
+                                23..35,
+                            ),
                             join: Join {
                                 op: Inner,
                                 condition: Natural,
                                 left: Table {
-                                    span: [
-                                        Ident(14..22),
-                                    ],
+                                    span: Some(
+                                        14..22,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "customer",
                                         quote: None,
-                                        span: Ident(14..22),
+                                        span: Some(
+                                            14..22,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
                                 },
                                 right: Table {
-                                    span: [
-                                        Ident(36..42),
-                                    ],
+                                    span: Some(
+                                        36..42,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "orders",
                                         quote: None,
-                                        span: Ident(36..42),
+                                        span: Some(
+                                            36..42,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -866,15 +746,17 @@ Query {
                             },
                         },
                         right: Table {
-                            span: [
-                                Ident(59..65),
-                            ],
+                            span: Some(
+                                59..65,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "detail",
                                 quote: None,
-                                span: Ident(59..65),
+                                span: Some(
+                                    59..65,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -900,107 +782,63 @@ with t2(tt) as (select a from t) select t2.tt from t2  where t2.tt > 1
 WITH t2(tt) AS (SELECT a FROM t) SELECT t2.tt FROM t2 WHERE (t2.tt > 1)
 ---------- AST ------------
 Query {
-    span: [
-        WITH(0..4),
-        Ident(5..7),
-        LParen(7..8),
-        Ident(8..10),
-        RParen(10..11),
-        AS(12..14),
-        LParen(15..16),
-        SELECT(16..22),
-        Ident(23..24),
-        FROM(25..29),
-        Ident(30..31),
-        RParen(31..32),
-        SELECT(33..39),
-        Ident(40..42),
-        Period(42..43),
-        Ident(43..45),
-        FROM(46..50),
-        Ident(51..53),
-        WHERE(55..60),
-        Ident(61..63),
-        Period(63..64),
-        Ident(64..66),
-        Gt(67..68),
-        LiteralInteger(69..70),
-    ],
+    span: Some(
+        0..70,
+    ),
     with: Some(
         With {
-            span: [
-                WITH(0..4),
-                Ident(5..7),
-                LParen(7..8),
-                Ident(8..10),
-                RParen(10..11),
-                AS(12..14),
-                LParen(15..16),
-                SELECT(16..22),
-                Ident(23..24),
-                FROM(25..29),
-                Ident(30..31),
-                RParen(31..32),
-            ],
+            span: Some(
+                0..32,
+            ),
             recursive: false,
             ctes: [
                 CTE {
-                    span: [
-                        Ident(5..7),
-                        LParen(7..8),
-                        Ident(8..10),
-                        RParen(10..11),
-                        AS(12..14),
-                        LParen(15..16),
-                        SELECT(16..22),
-                        Ident(23..24),
-                        FROM(25..29),
-                        Ident(30..31),
-                        RParen(31..32),
-                    ],
+                    span: Some(
+                        5..32,
+                    ),
                     alias: TableAlias {
                         name: Identifier {
                             name: "t2",
                             quote: None,
-                            span: Ident(5..7),
+                            span: Some(
+                                5..7,
+                            ),
                         },
                         columns: [
                             Identifier {
                                 name: "tt",
                                 quote: None,
-                                span: Ident(8..10),
+                                span: Some(
+                                    8..10,
+                                ),
                             },
                         ],
                     },
                     query: Query {
-                        span: [
-                            SELECT(16..22),
-                            Ident(23..24),
-                            FROM(25..29),
-                            Ident(30..31),
-                        ],
+                        span: Some(
+                            16..31,
+                        ),
                         with: None,
                         body: Select(
                             SelectStmt {
-                                span: [
-                                    SELECT(16..22),
-                                    Ident(23..24),
-                                    FROM(25..29),
-                                    Ident(30..31),
-                                ],
+                                span: Some(
+                                    16..31,
+                                ),
                                 distinct: false,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
-                                            span: [
-                                                Ident(23..24),
-                                            ],
+                                            span: Some(
+                                                23..24,
+                                            ),
                                             database: None,
                                             table: None,
                                             column: Identifier {
                                                 name: "a",
                                                 quote: None,
-                                                span: Ident(23..24),
+                                                span: Some(
+                                                    23..24,
+                                                ),
                                             },
                                         },
                                         alias: None,
@@ -1008,15 +846,17 @@ Query {
                                 ],
                                 from: [
                                     Table {
-                                        span: [
-                                            Ident(30..31),
-                                        ],
+                                        span: Some(
+                                            30..31,
+                                        ),
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
                                             name: "t",
                                             quote: None,
-                                            span: Ident(30..31),
+                                            span: Some(
+                                                30..31,
+                                            ),
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -1038,41 +878,32 @@ Query {
     ),
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(33..39),
-                Ident(40..42),
-                Period(42..43),
-                Ident(43..45),
-                FROM(46..50),
-                Ident(51..53),
-                WHERE(55..60),
-                Ident(61..63),
-                Period(63..64),
-                Ident(64..66),
-                Gt(67..68),
-                LiteralInteger(69..70),
-            ],
+            span: Some(
+                33..70,
+            ),
             distinct: false,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
-                        span: [
-                            Ident(40..42),
-                            Period(42..43),
-                            Ident(43..45),
-                        ],
+                        span: Some(
+                            40..45,
+                        ),
                         database: None,
                         table: Some(
                             Identifier {
                                 name: "t2",
                                 quote: None,
-                                span: Ident(40..42),
+                                span: Some(
+                                    40..42,
+                                ),
                             },
                         ),
                         column: Identifier {
                             name: "tt",
                             quote: None,
-                            span: Ident(43..45),
+                            span: Some(
+                                43..45,
+                            ),
                         },
                     },
                     alias: None,
@@ -1080,15 +911,17 @@ Query {
             ],
             from: [
                 Table {
-                    span: [
-                        Ident(51..53),
-                    ],
+                    span: Some(
+                        51..53,
+                    ),
                     catalog: None,
                     database: None,
                     table: Identifier {
                         name: "t2",
                         quote: None,
-                        span: Ident(51..53),
+                        span: Some(
+                            51..53,
+                        ),
                     },
                     alias: None,
                     travel_point: None,
@@ -1096,34 +929,36 @@ Query {
             ],
             selection: Some(
                 BinaryOp {
-                    span: [
-                        Gt(67..68),
-                    ],
+                    span: Some(
+                        67..68,
+                    ),
                     op: Gt,
                     left: ColumnRef {
-                        span: [
-                            Ident(61..63),
-                            Period(63..64),
-                            Ident(64..66),
-                        ],
+                        span: Some(
+                            61..66,
+                        ),
                         database: None,
                         table: Some(
                             Identifier {
                                 name: "t2",
                                 quote: None,
-                                span: Ident(61..63),
+                                span: Some(
+                                    61..63,
+                                ),
                             },
                         ),
                         column: Identifier {
                             name: "tt",
                             quote: None,
-                            span: Ident(64..66),
+                            span: Some(
+                                64..66,
+                            ),
                         },
                     },
                     right: Literal {
-                        span: [
-                            LiteralInteger(69..70),
-                        ],
+                        span: Some(
+                            69..70,
+                        ),
                         lit: Integer(
                             1,
                         ),
@@ -1147,92 +982,55 @@ with t2 as (select a from t) select t2.a from t2  where t2.a > 1
 WITH t2 AS (SELECT a FROM t) SELECT t2.a FROM t2 WHERE (t2.a > 1)
 ---------- AST ------------
 Query {
-    span: [
-        WITH(0..4),
-        Ident(5..7),
-        AS(8..10),
-        LParen(11..12),
-        SELECT(12..18),
-        Ident(19..20),
-        FROM(21..25),
-        Ident(26..27),
-        RParen(27..28),
-        SELECT(29..35),
-        Ident(36..38),
-        Period(38..39),
-        Ident(39..40),
-        FROM(41..45),
-        Ident(46..48),
-        WHERE(50..55),
-        Ident(56..58),
-        Period(58..59),
-        Ident(59..60),
-        Gt(61..62),
-        LiteralInteger(63..64),
-    ],
+    span: Some(
+        0..64,
+    ),
     with: Some(
         With {
-            span: [
-                WITH(0..4),
-                Ident(5..7),
-                AS(8..10),
-                LParen(11..12),
-                SELECT(12..18),
-                Ident(19..20),
-                FROM(21..25),
-                Ident(26..27),
-                RParen(27..28),
-            ],
+            span: Some(
+                0..28,
+            ),
             recursive: false,
             ctes: [
                 CTE {
-                    span: [
-                        Ident(5..7),
-                        AS(8..10),
-                        LParen(11..12),
-                        SELECT(12..18),
-                        Ident(19..20),
-                        FROM(21..25),
-                        Ident(26..27),
-                        RParen(27..28),
-                    ],
+                    span: Some(
+                        5..28,
+                    ),
                     alias: TableAlias {
                         name: Identifier {
                             name: "t2",
                             quote: None,
-                            span: Ident(5..7),
+                            span: Some(
+                                5..7,
+                            ),
                         },
                         columns: [],
                     },
                     query: Query {
-                        span: [
-                            SELECT(12..18),
-                            Ident(19..20),
-                            FROM(21..25),
-                            Ident(26..27),
-                        ],
+                        span: Some(
+                            12..27,
+                        ),
                         with: None,
                         body: Select(
                             SelectStmt {
-                                span: [
-                                    SELECT(12..18),
-                                    Ident(19..20),
-                                    FROM(21..25),
-                                    Ident(26..27),
-                                ],
+                                span: Some(
+                                    12..27,
+                                ),
                                 distinct: false,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
-                                            span: [
-                                                Ident(19..20),
-                                            ],
+                                            span: Some(
+                                                19..20,
+                                            ),
                                             database: None,
                                             table: None,
                                             column: Identifier {
                                                 name: "a",
                                                 quote: None,
-                                                span: Ident(19..20),
+                                                span: Some(
+                                                    19..20,
+                                                ),
                                             },
                                         },
                                         alias: None,
@@ -1240,15 +1038,17 @@ Query {
                                 ],
                                 from: [
                                     Table {
-                                        span: [
-                                            Ident(26..27),
-                                        ],
+                                        span: Some(
+                                            26..27,
+                                        ),
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
                                             name: "t",
                                             quote: None,
-                                            span: Ident(26..27),
+                                            span: Some(
+                                                26..27,
+                                            ),
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -1270,41 +1070,32 @@ Query {
     ),
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(29..35),
-                Ident(36..38),
-                Period(38..39),
-                Ident(39..40),
-                FROM(41..45),
-                Ident(46..48),
-                WHERE(50..55),
-                Ident(56..58),
-                Period(58..59),
-                Ident(59..60),
-                Gt(61..62),
-                LiteralInteger(63..64),
-            ],
+            span: Some(
+                29..64,
+            ),
             distinct: false,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
-                        span: [
-                            Ident(36..38),
-                            Period(38..39),
-                            Ident(39..40),
-                        ],
+                        span: Some(
+                            36..40,
+                        ),
                         database: None,
                         table: Some(
                             Identifier {
                                 name: "t2",
                                 quote: None,
-                                span: Ident(36..38),
+                                span: Some(
+                                    36..38,
+                                ),
                             },
                         ),
                         column: Identifier {
                             name: "a",
                             quote: None,
-                            span: Ident(39..40),
+                            span: Some(
+                                39..40,
+                            ),
                         },
                     },
                     alias: None,
@@ -1312,15 +1103,17 @@ Query {
             ],
             from: [
                 Table {
-                    span: [
-                        Ident(46..48),
-                    ],
+                    span: Some(
+                        46..48,
+                    ),
                     catalog: None,
                     database: None,
                     table: Identifier {
                         name: "t2",
                         quote: None,
-                        span: Ident(46..48),
+                        span: Some(
+                            46..48,
+                        ),
                     },
                     alias: None,
                     travel_point: None,
@@ -1328,34 +1121,36 @@ Query {
             ],
             selection: Some(
                 BinaryOp {
-                    span: [
-                        Gt(61..62),
-                    ],
+                    span: Some(
+                        61..62,
+                    ),
                     op: Gt,
                     left: ColumnRef {
-                        span: [
-                            Ident(56..58),
-                            Period(58..59),
-                            Ident(59..60),
-                        ],
+                        span: Some(
+                            56..60,
+                        ),
                         database: None,
                         table: Some(
                             Identifier {
                                 name: "t2",
                                 quote: None,
-                                span: Ident(56..58),
+                                span: Some(
+                                    56..58,
+                                ),
                             },
                         ),
                         column: Identifier {
                             name: "a",
                             quote: None,
-                            span: Ident(59..60),
+                            span: Some(
+                                59..60,
+                            ),
                         },
                     },
                     right: Literal {
-                        span: [
-                            LiteralInteger(63..64),
-                        ],
+                        span: Some(
+                            63..64,
+                        ),
                         lit: Integer(
                             1,
                         ),
@@ -1379,163 +1174,63 @@ with t2(tt) as (select a from t), t3 as (select * from t), t4 as (select a from 
 WITH t2(tt) AS (SELECT a FROM t), t3 AS (SELECT * FROM t), t4 AS (SELECT a FROM t WHERE (a > 1)) SELECT t2.tt, t3.a, t4.a FROM t2, t3, t4 WHERE (t2.tt > 1)
 ---------- AST ------------
 Query {
-    span: [
-        WITH(0..4),
-        Ident(5..7),
-        LParen(7..8),
-        Ident(8..10),
-        RParen(10..11),
-        AS(12..14),
-        LParen(15..16),
-        SELECT(16..22),
-        Ident(23..24),
-        FROM(25..29),
-        Ident(30..31),
-        RParen(31..32),
-        Comma(32..33),
-        Ident(34..36),
-        AS(37..39),
-        LParen(40..41),
-        SELECT(41..47),
-        Multiply(48..49),
-        FROM(50..54),
-        Ident(55..56),
-        RParen(56..57),
-        Comma(57..58),
-        Ident(59..61),
-        AS(62..64),
-        LParen(65..66),
-        SELECT(66..72),
-        Ident(73..74),
-        FROM(75..79),
-        Ident(80..81),
-        WHERE(82..87),
-        Ident(88..89),
-        Gt(90..91),
-        LiteralInteger(92..93),
-        RParen(93..94),
-        SELECT(95..101),
-        Ident(102..104),
-        Period(104..105),
-        Ident(105..107),
-        Comma(107..108),
-        Ident(109..111),
-        Period(111..112),
-        Ident(112..113),
-        Comma(113..114),
-        Ident(115..117),
-        Period(117..118),
-        Ident(118..119),
-        FROM(120..124),
-        Ident(125..127),
-        Comma(127..128),
-        Ident(129..131),
-        Comma(131..132),
-        Ident(133..135),
-        WHERE(136..141),
-        Ident(142..144),
-        Period(144..145),
-        Ident(145..147),
-        Gt(148..149),
-        LiteralInteger(150..151),
-    ],
+    span: Some(
+        0..151,
+    ),
     with: Some(
         With {
-            span: [
-                WITH(0..4),
-                Ident(5..7),
-                LParen(7..8),
-                Ident(8..10),
-                RParen(10..11),
-                AS(12..14),
-                LParen(15..16),
-                SELECT(16..22),
-                Ident(23..24),
-                FROM(25..29),
-                Ident(30..31),
-                RParen(31..32),
-                Comma(32..33),
-                Ident(34..36),
-                AS(37..39),
-                LParen(40..41),
-                SELECT(41..47),
-                Multiply(48..49),
-                FROM(50..54),
-                Ident(55..56),
-                RParen(56..57),
-                Comma(57..58),
-                Ident(59..61),
-                AS(62..64),
-                LParen(65..66),
-                SELECT(66..72),
-                Ident(73..74),
-                FROM(75..79),
-                Ident(80..81),
-                WHERE(82..87),
-                Ident(88..89),
-                Gt(90..91),
-                LiteralInteger(92..93),
-                RParen(93..94),
-            ],
+            span: Some(
+                0..94,
+            ),
             recursive: false,
             ctes: [
                 CTE {
-                    span: [
-                        Ident(5..7),
-                        LParen(7..8),
-                        Ident(8..10),
-                        RParen(10..11),
-                        AS(12..14),
-                        LParen(15..16),
-                        SELECT(16..22),
-                        Ident(23..24),
-                        FROM(25..29),
-                        Ident(30..31),
-                        RParen(31..32),
-                    ],
+                    span: Some(
+                        5..32,
+                    ),
                     alias: TableAlias {
                         name: Identifier {
                             name: "t2",
                             quote: None,
-                            span: Ident(5..7),
+                            span: Some(
+                                5..7,
+                            ),
                         },
                         columns: [
                             Identifier {
                                 name: "tt",
                                 quote: None,
-                                span: Ident(8..10),
+                                span: Some(
+                                    8..10,
+                                ),
                             },
                         ],
                     },
                     query: Query {
-                        span: [
-                            SELECT(16..22),
-                            Ident(23..24),
-                            FROM(25..29),
-                            Ident(30..31),
-                        ],
+                        span: Some(
+                            16..31,
+                        ),
                         with: None,
                         body: Select(
                             SelectStmt {
-                                span: [
-                                    SELECT(16..22),
-                                    Ident(23..24),
-                                    FROM(25..29),
-                                    Ident(30..31),
-                                ],
+                                span: Some(
+                                    16..31,
+                                ),
                                 distinct: false,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
-                                            span: [
-                                                Ident(23..24),
-                                            ],
+                                            span: Some(
+                                                23..24,
+                                            ),
                                             database: None,
                                             table: None,
                                             column: Identifier {
                                                 name: "a",
                                                 quote: None,
-                                                span: Ident(23..24),
+                                                span: Some(
+                                                    23..24,
+                                                ),
                                             },
                                         },
                                         alias: None,
@@ -1543,15 +1238,17 @@ Query {
                                 ],
                                 from: [
                                     Table {
-                                        span: [
-                                            Ident(30..31),
-                                        ],
+                                        span: Some(
+                                            30..31,
+                                        ),
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
                                             name: "t",
                                             quote: None,
-                                            span: Ident(30..31),
+                                            span: Some(
+                                                30..31,
+                                            ),
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -1569,40 +1266,29 @@ Query {
                     },
                 },
                 CTE {
-                    span: [
-                        Ident(34..36),
-                        AS(37..39),
-                        LParen(40..41),
-                        SELECT(41..47),
-                        Multiply(48..49),
-                        FROM(50..54),
-                        Ident(55..56),
-                        RParen(56..57),
-                    ],
+                    span: Some(
+                        34..57,
+                    ),
                     alias: TableAlias {
                         name: Identifier {
                             name: "t3",
                             quote: None,
-                            span: Ident(34..36),
+                            span: Some(
+                                34..36,
+                            ),
                         },
                         columns: [],
                     },
                     query: Query {
-                        span: [
-                            SELECT(41..47),
-                            Multiply(48..49),
-                            FROM(50..54),
-                            Ident(55..56),
-                        ],
+                        span: Some(
+                            41..56,
+                        ),
                         with: None,
                         body: Select(
                             SelectStmt {
-                                span: [
-                                    SELECT(41..47),
-                                    Multiply(48..49),
-                                    FROM(50..54),
-                                    Ident(55..56),
-                                ],
+                                span: Some(
+                                    41..56,
+                                ),
                                 distinct: false,
                                 select_list: [
                                     QualifiedName {
@@ -1614,15 +1300,17 @@ Query {
                                 ],
                                 from: [
                                     Table {
-                                        span: [
-                                            Ident(55..56),
-                                        ],
+                                        span: Some(
+                                            55..56,
+                                        ),
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
                                             name: "t",
                                             quote: None,
-                                            span: Ident(55..56),
+                                            span: Some(
+                                                55..56,
+                                            ),
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -1640,65 +1328,44 @@ Query {
                     },
                 },
                 CTE {
-                    span: [
-                        Ident(59..61),
-                        AS(62..64),
-                        LParen(65..66),
-                        SELECT(66..72),
-                        Ident(73..74),
-                        FROM(75..79),
-                        Ident(80..81),
-                        WHERE(82..87),
-                        Ident(88..89),
-                        Gt(90..91),
-                        LiteralInteger(92..93),
-                        RParen(93..94),
-                    ],
+                    span: Some(
+                        59..94,
+                    ),
                     alias: TableAlias {
                         name: Identifier {
                             name: "t4",
                             quote: None,
-                            span: Ident(59..61),
+                            span: Some(
+                                59..61,
+                            ),
                         },
                         columns: [],
                     },
                     query: Query {
-                        span: [
-                            SELECT(66..72),
-                            Ident(73..74),
-                            FROM(75..79),
-                            Ident(80..81),
-                            WHERE(82..87),
-                            Ident(88..89),
-                            Gt(90..91),
-                            LiteralInteger(92..93),
-                        ],
+                        span: Some(
+                            66..93,
+                        ),
                         with: None,
                         body: Select(
                             SelectStmt {
-                                span: [
-                                    SELECT(66..72),
-                                    Ident(73..74),
-                                    FROM(75..79),
-                                    Ident(80..81),
-                                    WHERE(82..87),
-                                    Ident(88..89),
-                                    Gt(90..91),
-                                    LiteralInteger(92..93),
-                                ],
+                                span: Some(
+                                    66..93,
+                                ),
                                 distinct: false,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
-                                            span: [
-                                                Ident(73..74),
-                                            ],
+                                            span: Some(
+                                                73..74,
+                                            ),
                                             database: None,
                                             table: None,
                                             column: Identifier {
                                                 name: "a",
                                                 quote: None,
-                                                span: Ident(73..74),
+                                                span: Some(
+                                                    73..74,
+                                                ),
                                             },
                                         },
                                         alias: None,
@@ -1706,15 +1373,17 @@ Query {
                                 ],
                                 from: [
                                     Table {
-                                        span: [
-                                            Ident(80..81),
-                                        ],
+                                        span: Some(
+                                            80..81,
+                                        ),
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
                                             name: "t",
                                             quote: None,
-                                            span: Ident(80..81),
+                                            span: Some(
+                                                80..81,
+                                            ),
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -1722,26 +1391,28 @@ Query {
                                 ],
                                 selection: Some(
                                     BinaryOp {
-                                        span: [
-                                            Gt(90..91),
-                                        ],
+                                        span: Some(
+                                            90..91,
+                                        ),
                                         op: Gt,
                                         left: ColumnRef {
-                                            span: [
-                                                Ident(88..89),
-                                            ],
+                                            span: Some(
+                                                88..89,
+                                            ),
                                             database: None,
                                             table: None,
                                             column: Identifier {
                                                 name: "a",
                                                 quote: None,
-                                                span: Ident(88..89),
+                                                span: Some(
+                                                    88..89,
+                                                ),
                                             },
                                         },
                                         right: Literal {
-                                            span: [
-                                                LiteralInteger(92..93),
-                                            ],
+                                            span: Some(
+                                                92..93,
+                                            ),
                                             lit: Integer(
                                                 1,
                                             ),
@@ -1763,99 +1434,82 @@ Query {
     ),
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(95..101),
-                Ident(102..104),
-                Period(104..105),
-                Ident(105..107),
-                Comma(107..108),
-                Ident(109..111),
-                Period(111..112),
-                Ident(112..113),
-                Comma(113..114),
-                Ident(115..117),
-                Period(117..118),
-                Ident(118..119),
-                FROM(120..124),
-                Ident(125..127),
-                Comma(127..128),
-                Ident(129..131),
-                Comma(131..132),
-                Ident(133..135),
-                WHERE(136..141),
-                Ident(142..144),
-                Period(144..145),
-                Ident(145..147),
-                Gt(148..149),
-                LiteralInteger(150..151),
-            ],
+            span: Some(
+                95..151,
+            ),
             distinct: false,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
-                        span: [
-                            Ident(102..104),
-                            Period(104..105),
-                            Ident(105..107),
-                        ],
+                        span: Some(
+                            102..107,
+                        ),
                         database: None,
                         table: Some(
                             Identifier {
                                 name: "t2",
                                 quote: None,
-                                span: Ident(102..104),
+                                span: Some(
+                                    102..104,
+                                ),
                             },
                         ),
                         column: Identifier {
                             name: "tt",
                             quote: None,
-                            span: Ident(105..107),
+                            span: Some(
+                                105..107,
+                            ),
                         },
                     },
                     alias: None,
                 },
                 AliasedExpr {
                     expr: ColumnRef {
-                        span: [
-                            Ident(109..111),
-                            Period(111..112),
-                            Ident(112..113),
-                        ],
+                        span: Some(
+                            109..113,
+                        ),
                         database: None,
                         table: Some(
                             Identifier {
                                 name: "t3",
                                 quote: None,
-                                span: Ident(109..111),
+                                span: Some(
+                                    109..111,
+                                ),
                             },
                         ),
                         column: Identifier {
                             name: "a",
                             quote: None,
-                            span: Ident(112..113),
+                            span: Some(
+                                112..113,
+                            ),
                         },
                     },
                     alias: None,
                 },
                 AliasedExpr {
                     expr: ColumnRef {
-                        span: [
-                            Ident(115..117),
-                            Period(117..118),
-                            Ident(118..119),
-                        ],
+                        span: Some(
+                            115..119,
+                        ),
                         database: None,
                         table: Some(
                             Identifier {
                                 name: "t4",
                                 quote: None,
-                                span: Ident(115..117),
+                                span: Some(
+                                    115..117,
+                                ),
                             },
                         ),
                         column: Identifier {
                             name: "a",
                             quote: None,
-                            span: Ident(118..119),
+                            span: Some(
+                                118..119,
+                            ),
                         },
                     },
                     alias: None,
@@ -1863,43 +1517,49 @@ Query {
             ],
             from: [
                 Table {
-                    span: [
-                        Ident(125..127),
-                    ],
+                    span: Some(
+                        125..127,
+                    ),
                     catalog: None,
                     database: None,
                     table: Identifier {
                         name: "t2",
                         quote: None,
-                        span: Ident(125..127),
+                        span: Some(
+                            125..127,
+                        ),
                     },
                     alias: None,
                     travel_point: None,
                 },
                 Table {
-                    span: [
-                        Ident(129..131),
-                    ],
+                    span: Some(
+                        129..131,
+                    ),
                     catalog: None,
                     database: None,
                     table: Identifier {
                         name: "t3",
                         quote: None,
-                        span: Ident(129..131),
+                        span: Some(
+                            129..131,
+                        ),
                     },
                     alias: None,
                     travel_point: None,
                 },
                 Table {
-                    span: [
-                        Ident(133..135),
-                    ],
+                    span: Some(
+                        133..135,
+                    ),
                     catalog: None,
                     database: None,
                     table: Identifier {
                         name: "t4",
                         quote: None,
-                        span: Ident(133..135),
+                        span: Some(
+                            133..135,
+                        ),
                     },
                     alias: None,
                     travel_point: None,
@@ -1907,34 +1567,36 @@ Query {
             ],
             selection: Some(
                 BinaryOp {
-                    span: [
-                        Gt(148..149),
-                    ],
+                    span: Some(
+                        148..149,
+                    ),
                     op: Gt,
                     left: ColumnRef {
-                        span: [
-                            Ident(142..144),
-                            Period(144..145),
-                            Ident(145..147),
-                        ],
+                        span: Some(
+                            142..147,
+                        ),
                         database: None,
                         table: Some(
                             Identifier {
                                 name: "t2",
                                 quote: None,
-                                span: Ident(142..144),
+                                span: Some(
+                                    142..144,
+                                ),
                             },
                         ),
                         column: Identifier {
                             name: "tt",
                             quote: None,
-                            span: Ident(145..147),
+                            span: Some(
+                                145..147,
+                            ),
                         },
                     },
                     right: Literal {
-                        span: [
-                            LiteralInteger(150..151),
-                        ],
+                        span: Some(
+                            150..151,
+                        ),
                         lit: Integer(
                             1,
                         ),
@@ -1958,130 +1620,70 @@ with recursive t2(tt) as (select a from t1 union select tt from t2) select t2.tt
 WITH RECURSIVE t2(tt) AS (SELECT a FROM t1 UNION SELECT tt FROM t2) SELECT t2.tt FROM t2
 ---------- AST ------------
 Query {
-    span: [
-        WITH(0..4),
-        RECURSIVE(5..14),
-        Ident(15..17),
-        LParen(17..18),
-        Ident(18..20),
-        RParen(20..21),
-        AS(22..24),
-        LParen(25..26),
-        SELECT(26..32),
-        Ident(33..34),
-        FROM(35..39),
-        Ident(40..42),
-        UNION(43..48),
-        SELECT(49..55),
-        Ident(56..58),
-        FROM(59..63),
-        Ident(64..66),
-        RParen(66..67),
-        SELECT(68..74),
-        Ident(75..77),
-        Period(77..78),
-        Ident(78..80),
-        FROM(81..85),
-        Ident(86..88),
-    ],
+    span: Some(
+        0..88,
+    ),
     with: Some(
         With {
-            span: [
-                WITH(0..4),
-                RECURSIVE(5..14),
-                Ident(15..17),
-                LParen(17..18),
-                Ident(18..20),
-                RParen(20..21),
-                AS(22..24),
-                LParen(25..26),
-                SELECT(26..32),
-                Ident(33..34),
-                FROM(35..39),
-                Ident(40..42),
-                UNION(43..48),
-                SELECT(49..55),
-                Ident(56..58),
-                FROM(59..63),
-                Ident(64..66),
-                RParen(66..67),
-            ],
+            span: Some(
+                0..67,
+            ),
             recursive: true,
             ctes: [
                 CTE {
-                    span: [
-                        Ident(15..17),
-                        LParen(17..18),
-                        Ident(18..20),
-                        RParen(20..21),
-                        AS(22..24),
-                        LParen(25..26),
-                        SELECT(26..32),
-                        Ident(33..34),
-                        FROM(35..39),
-                        Ident(40..42),
-                        UNION(43..48),
-                        SELECT(49..55),
-                        Ident(56..58),
-                        FROM(59..63),
-                        Ident(64..66),
-                        RParen(66..67),
-                    ],
+                    span: Some(
+                        15..67,
+                    ),
                     alias: TableAlias {
                         name: Identifier {
                             name: "t2",
                             quote: None,
-                            span: Ident(15..17),
+                            span: Some(
+                                15..17,
+                            ),
                         },
                         columns: [
                             Identifier {
                                 name: "tt",
                                 quote: None,
-                                span: Ident(18..20),
+                                span: Some(
+                                    18..20,
+                                ),
                             },
                         ],
                     },
                     query: Query {
-                        span: [
-                            SELECT(26..32),
-                            Ident(33..34),
-                            FROM(35..39),
-                            Ident(40..42),
-                            UNION(43..48),
-                            SELECT(49..55),
-                            Ident(56..58),
-                            FROM(59..63),
-                            Ident(64..66),
-                        ],
+                        span: Some(
+                            26..66,
+                        ),
                         with: None,
                         body: SetOperation(
                             SetOperation {
-                                span: [
-                                    UNION(43..48),
-                                ],
+                                span: Some(
+                                    43..48,
+                                ),
                                 op: Union,
                                 all: false,
                                 left: Select(
                                     SelectStmt {
-                                        span: [
-                                            SELECT(26..32),
-                                            Ident(33..34),
-                                            FROM(35..39),
-                                            Ident(40..42),
-                                        ],
+                                        span: Some(
+                                            26..42,
+                                        ),
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
-                                                    span: [
-                                                        Ident(33..34),
-                                                    ],
+                                                    span: Some(
+                                                        33..34,
+                                                    ),
                                                     database: None,
                                                     table: None,
                                                     column: Identifier {
                                                         name: "a",
                                                         quote: None,
-                                                        span: Ident(33..34),
+                                                        span: Some(
+                                                            33..34,
+                                                        ),
                                                     },
                                                 },
                                                 alias: None,
@@ -2089,15 +1691,17 @@ Query {
                                         ],
                                         from: [
                                             Table {
-                                                span: [
-                                                    Ident(40..42),
-                                                ],
+                                                span: Some(
+                                                    40..42,
+                                                ),
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
                                                     name: "t1",
                                                     quote: None,
-                                                    span: Ident(40..42),
+                                                    span: Some(
+                                                        40..42,
+                                                    ),
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -2110,25 +1714,24 @@ Query {
                                 ),
                                 right: Select(
                                     SelectStmt {
-                                        span: [
-                                            SELECT(49..55),
-                                            Ident(56..58),
-                                            FROM(59..63),
-                                            Ident(64..66),
-                                        ],
+                                        span: Some(
+                                            49..66,
+                                        ),
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
-                                                    span: [
-                                                        Ident(56..58),
-                                                    ],
+                                                    span: Some(
+                                                        56..58,
+                                                    ),
                                                     database: None,
                                                     table: None,
                                                     column: Identifier {
                                                         name: "tt",
                                                         quote: None,
-                                                        span: Ident(56..58),
+                                                        span: Some(
+                                                            56..58,
+                                                        ),
                                                     },
                                                 },
                                                 alias: None,
@@ -2136,15 +1739,17 @@ Query {
                                         ],
                                         from: [
                                             Table {
-                                                span: [
-                                                    Ident(64..66),
-                                                ],
+                                                span: Some(
+                                                    64..66,
+                                                ),
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
                                                     name: "t2",
                                                     quote: None,
-                                                    span: Ident(64..66),
+                                                    span: Some(
+                                                        64..66,
+                                                    ),
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -2168,35 +1773,32 @@ Query {
     ),
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(68..74),
-                Ident(75..77),
-                Period(77..78),
-                Ident(78..80),
-                FROM(81..85),
-                Ident(86..88),
-            ],
+            span: Some(
+                68..88,
+            ),
             distinct: false,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
-                        span: [
-                            Ident(75..77),
-                            Period(77..78),
-                            Ident(78..80),
-                        ],
+                        span: Some(
+                            75..80,
+                        ),
                         database: None,
                         table: Some(
                             Identifier {
                                 name: "t2",
                                 quote: None,
-                                span: Ident(75..77),
+                                span: Some(
+                                    75..77,
+                                ),
                             },
                         ),
                         column: Identifier {
                             name: "tt",
                             quote: None,
-                            span: Ident(78..80),
+                            span: Some(
+                                78..80,
+                            ),
                         },
                     },
                     alias: None,
@@ -2204,15 +1806,17 @@ Query {
             ],
             from: [
                 Table {
-                    span: [
-                        Ident(86..88),
-                    ],
+                    span: Some(
+                        86..88,
+                    ),
                     catalog: None,
                     database: None,
                     table: Identifier {
                         name: "t2",
                         quote: None,
-                        span: Ident(86..88),
+                        span: Some(
+                            86..88,
+                        ),
                     },
                     alias: None,
                     travel_point: None,
@@ -2251,205 +1855,84 @@ select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
 SELECT c_count AS cc, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer, orders AS ODS, (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON ((c_custkey = o_custkey) AND (o_comment NOT LIKE '%:1%:2%')) GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC NULLS FIRST, c_count ASC, totacctbal NULLS LAST LIMIT 10, totacctbal
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Ident(7..14),
-        Ident(15..17),
-        Comma(17..18),
-        COUNT(19..24),
-        LParen(24..25),
-        Multiply(25..26),
-        RParen(26..27),
-        AS(28..30),
-        Ident(31..39),
-        Comma(39..40),
-        Ident(41..44),
-        LParen(44..45),
-        Ident(45..54),
-        RParen(54..55),
-        AS(56..58),
-        Ident(59..69),
-        FROM(82..86),
-        Ident(87..95),
-        Comma(95..96),
-        Ident(97..103),
-        Ident(104..107),
-        Comma(107..108),
-        LParen(125..126),
-        SELECT(147..153),
-        Ident(178..187),
-        Comma(187..188),
-        COUNT(213..218),
-        LParen(218..219),
-        Ident(219..229),
-        RParen(229..230),
-        FROM(251..255),
-        Ident(280..288),
-        LEFT(289..293),
-        OUTER(294..299),
-        JOIN(300..304),
-        Ident(305..311),
-        ON(312..314),
-        Ident(343..352),
-        Eq(353..354),
-        Ident(355..364),
-        AND(393..396),
-        Ident(397..406),
-        NOT(407..410),
-        LIKE(411..415),
-        QuotedString(416..425),
-        GROUP(446..451),
-        BY(452..454),
-        Ident(479..488),
-        RParen(505..506),
-        AS(507..509),
-        Ident(510..518),
-        GROUP(531..536),
-        BY(537..539),
-        Ident(540..547),
-        ORDER(560..565),
-        BY(566..568),
-        Ident(569..577),
-        DESC(578..582),
-        NULLS(583..588),
-        FIRST(589..594),
-        Comma(594..595),
-        Ident(596..603),
-        ASC(604..607),
-        Comma(607..608),
-        Ident(609..619),
-        NULLS(620..625),
-        LAST(626..630),
-        LIMIT(643..648),
-        LiteralInteger(649..651),
-        Comma(651..652),
-        Ident(653..663),
-    ],
+    span: Some(
+        0..663,
+    ),
     with: None,
     body: Select(
         SelectStmt {
-            span: [
-                SELECT(0..6),
-                Ident(7..14),
-                Ident(15..17),
-                Comma(17..18),
-                COUNT(19..24),
-                LParen(24..25),
-                Multiply(25..26),
-                RParen(26..27),
-                AS(28..30),
-                Ident(31..39),
-                Comma(39..40),
-                Ident(41..44),
-                LParen(44..45),
-                Ident(45..54),
-                RParen(54..55),
-                AS(56..58),
-                Ident(59..69),
-                FROM(82..86),
-                Ident(87..95),
-                Comma(95..96),
-                Ident(97..103),
-                Ident(104..107),
-                Comma(107..108),
-                LParen(125..126),
-                SELECT(147..153),
-                Ident(178..187),
-                Comma(187..188),
-                COUNT(213..218),
-                LParen(218..219),
-                Ident(219..229),
-                RParen(229..230),
-                FROM(251..255),
-                Ident(280..288),
-                LEFT(289..293),
-                OUTER(294..299),
-                JOIN(300..304),
-                Ident(305..311),
-                ON(312..314),
-                Ident(343..352),
-                Eq(353..354),
-                Ident(355..364),
-                AND(393..396),
-                Ident(397..406),
-                NOT(407..410),
-                LIKE(411..415),
-                QuotedString(416..425),
-                GROUP(446..451),
-                BY(452..454),
-                Ident(479..488),
-                RParen(505..506),
-                AS(507..509),
-                Ident(510..518),
-                GROUP(531..536),
-                BY(537..539),
-                Ident(540..547),
-            ],
+            span: Some(
+                0..547,
+            ),
             distinct: false,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
-                        span: [
-                            Ident(7..14),
-                        ],
+                        span: Some(
+                            7..14,
+                        ),
                         database: None,
                         table: None,
                         column: Identifier {
                             name: "c_count",
                             quote: None,
-                            span: Ident(7..14),
+                            span: Some(
+                                7..14,
+                            ),
                         },
                     },
                     alias: Some(
                         Identifier {
                             name: "cc",
                             quote: None,
-                            span: Ident(15..17),
+                            span: Some(
+                                15..17,
+                            ),
                         },
                     ),
                 },
                 AliasedExpr {
                     expr: CountAll {
-                        span: [
-                            COUNT(19..24),
-                            LParen(24..25),
-                            Multiply(25..26),
-                            RParen(26..27),
-                        ],
+                        span: Some(
+                            19..27,
+                        ),
                     },
                     alias: Some(
                         Identifier {
                             name: "custdist",
                             quote: None,
-                            span: Ident(31..39),
+                            span: Some(
+                                31..39,
+                            ),
                         },
                     ),
                 },
                 AliasedExpr {
                     expr: FunctionCall {
-                        span: [
-                            Ident(41..44),
-                            LParen(44..45),
-                            Ident(45..54),
-                            RParen(54..55),
-                        ],
+                        span: Some(
+                            41..55,
+                        ),
                         distinct: false,
                         name: Identifier {
                             name: "sum",
                             quote: None,
-                            span: Ident(41..44),
+                            span: Some(
+                                41..44,
+                            ),
                         },
                         args: [
                             ColumnRef {
-                                span: [
-                                    Ident(45..54),
-                                ],
+                                span: Some(
+                                    45..54,
+                                ),
                                 database: None,
                                 table: None,
                                 column: Identifier {
                                     name: "c_acctbal",
                                     quote: None,
-                                    span: Ident(45..54),
+                                    span: Some(
+                                        45..54,
+                                    ),
                                 },
                             },
                         ],
@@ -2459,44 +1942,51 @@ Query {
                         Identifier {
                             name: "totacctbal",
                             quote: None,
-                            span: Ident(59..69),
+                            span: Some(
+                                59..69,
+                            ),
                         },
                     ),
                 },
             ],
             from: [
                 Table {
-                    span: [
-                        Ident(87..95),
-                    ],
+                    span: Some(
+                        87..95,
+                    ),
                     catalog: None,
                     database: None,
                     table: Identifier {
                         name: "customer",
                         quote: None,
-                        span: Ident(87..95),
+                        span: Some(
+                            87..95,
+                        ),
                     },
                     alias: None,
                     travel_point: None,
                 },
                 Table {
-                    span: [
-                        Ident(97..103),
-                        Ident(104..107),
-                    ],
+                    span: Some(
+                        97..107,
+                    ),
                     catalog: None,
                     database: None,
                     table: Identifier {
                         name: "orders",
                         quote: None,
-                        span: Ident(97..103),
+                        span: Some(
+                            97..103,
+                        ),
                     },
                     alias: Some(
                         TableAlias {
                             name: Identifier {
                                 name: "ODS",
                                 quote: None,
-                                span: Ident(104..107),
+                                span: Some(
+                                    104..107,
+                                ),
                             },
                             columns: [],
                         },
@@ -2504,137 +1994,64 @@ Query {
                     travel_point: None,
                 },
                 Subquery {
-                    span: [
-                        LParen(125..126),
-                        SELECT(147..153),
-                        Ident(178..187),
-                        Comma(187..188),
-                        COUNT(213..218),
-                        LParen(218..219),
-                        Ident(219..229),
-                        RParen(229..230),
-                        FROM(251..255),
-                        Ident(280..288),
-                        LEFT(289..293),
-                        OUTER(294..299),
-                        JOIN(300..304),
-                        Ident(305..311),
-                        ON(312..314),
-                        Ident(343..352),
-                        Eq(353..354),
-                        Ident(355..364),
-                        AND(393..396),
-                        Ident(397..406),
-                        NOT(407..410),
-                        LIKE(411..415),
-                        QuotedString(416..425),
-                        GROUP(446..451),
-                        BY(452..454),
-                        Ident(479..488),
-                        RParen(505..506),
-                        AS(507..509),
-                        Ident(510..518),
-                    ],
+                    span: Some(
+                        125..518,
+                    ),
                     subquery: Query {
-                        span: [
-                            SELECT(147..153),
-                            Ident(178..187),
-                            Comma(187..188),
-                            COUNT(213..218),
-                            LParen(218..219),
-                            Ident(219..229),
-                            RParen(229..230),
-                            FROM(251..255),
-                            Ident(280..288),
-                            LEFT(289..293),
-                            OUTER(294..299),
-                            JOIN(300..304),
-                            Ident(305..311),
-                            ON(312..314),
-                            Ident(343..352),
-                            Eq(353..354),
-                            Ident(355..364),
-                            AND(393..396),
-                            Ident(397..406),
-                            NOT(407..410),
-                            LIKE(411..415),
-                            QuotedString(416..425),
-                            GROUP(446..451),
-                            BY(452..454),
-                            Ident(479..488),
-                        ],
+                        span: Some(
+                            147..488,
+                        ),
                         with: None,
                         body: Select(
                             SelectStmt {
-                                span: [
-                                    SELECT(147..153),
-                                    Ident(178..187),
-                                    Comma(187..188),
-                                    COUNT(213..218),
-                                    LParen(218..219),
-                                    Ident(219..229),
-                                    RParen(229..230),
-                                    FROM(251..255),
-                                    Ident(280..288),
-                                    LEFT(289..293),
-                                    OUTER(294..299),
-                                    JOIN(300..304),
-                                    Ident(305..311),
-                                    ON(312..314),
-                                    Ident(343..352),
-                                    Eq(353..354),
-                                    Ident(355..364),
-                                    AND(393..396),
-                                    Ident(397..406),
-                                    NOT(407..410),
-                                    LIKE(411..415),
-                                    QuotedString(416..425),
-                                    GROUP(446..451),
-                                    BY(452..454),
-                                    Ident(479..488),
-                                ],
+                                span: Some(
+                                    147..488,
+                                ),
                                 distinct: false,
                                 select_list: [
                                     AliasedExpr {
                                         expr: ColumnRef {
-                                            span: [
-                                                Ident(178..187),
-                                            ],
+                                            span: Some(
+                                                178..187,
+                                            ),
                                             database: None,
                                             table: None,
                                             column: Identifier {
                                                 name: "c_custkey",
                                                 quote: None,
-                                                span: Ident(178..187),
+                                                span: Some(
+                                                    178..187,
+                                                ),
                                             },
                                         },
                                         alias: None,
                                     },
                                     AliasedExpr {
                                         expr: FunctionCall {
-                                            span: [
-                                                COUNT(213..218),
-                                                LParen(218..219),
-                                                Ident(219..229),
-                                                RParen(229..230),
-                                            ],
+                                            span: Some(
+                                                213..230,
+                                            ),
                                             distinct: false,
                                             name: Identifier {
                                                 name: "count",
                                                 quote: None,
-                                                span: COUNT(213..218),
+                                                span: Some(
+                                                    213..218,
+                                                ),
                                             },
                                             args: [
                                                 ColumnRef {
-                                                    span: [
-                                                        Ident(219..229),
-                                                    ],
+                                                    span: Some(
+                                                        219..229,
+                                                    ),
                                                     database: None,
                                                     table: None,
                                                     column: Identifier {
                                                         name: "o_orderkey",
                                                         quote: None,
-                                                        span: Ident(219..229),
+                                                        span: Some(
+                                                            219..229,
+                                                        ),
                                                     },
                                                 },
                                             ],
@@ -2645,71 +2062,74 @@ Query {
                                 ],
                                 from: [
                                     Join {
-                                        span: [
-                                            LEFT(289..293),
-                                            OUTER(294..299),
-                                            JOIN(300..304),
-                                        ],
+                                        span: Some(
+                                            289..304,
+                                        ),
                                         join: Join {
                                             op: LeftOuter,
                                             condition: On(
                                                 BinaryOp {
-                                                    span: [
-                                                        AND(393..396),
-                                                    ],
+                                                    span: Some(
+                                                        393..396,
+                                                    ),
                                                     op: And,
                                                     left: BinaryOp {
-                                                        span: [
-                                                            Eq(353..354),
-                                                        ],
+                                                        span: Some(
+                                                            353..354,
+                                                        ),
                                                         op: Eq,
                                                         left: ColumnRef {
-                                                            span: [
-                                                                Ident(343..352),
-                                                            ],
+                                                            span: Some(
+                                                                343..352,
+                                                            ),
                                                             database: None,
                                                             table: None,
                                                             column: Identifier {
                                                                 name: "c_custkey",
                                                                 quote: None,
-                                                                span: Ident(343..352),
+                                                                span: Some(
+                                                                    343..352,
+                                                                ),
                                                             },
                                                         },
                                                         right: ColumnRef {
-                                                            span: [
-                                                                Ident(355..364),
-                                                            ],
+                                                            span: Some(
+                                                                355..364,
+                                                            ),
                                                             database: None,
                                                             table: None,
                                                             column: Identifier {
                                                                 name: "o_custkey",
                                                                 quote: None,
-                                                                span: Ident(355..364),
+                                                                span: Some(
+                                                                    355..364,
+                                                                ),
                                                             },
                                                         },
                                                     },
                                                     right: BinaryOp {
-                                                        span: [
-                                                            NOT(407..410),
-                                                            LIKE(411..415),
-                                                        ],
+                                                        span: Some(
+                                                            407..415,
+                                                        ),
                                                         op: NotLike,
                                                         left: ColumnRef {
-                                                            span: [
-                                                                Ident(397..406),
-                                                            ],
+                                                            span: Some(
+                                                                397..406,
+                                                            ),
                                                             database: None,
                                                             table: None,
                                                             column: Identifier {
                                                                 name: "o_comment",
                                                                 quote: None,
-                                                                span: Ident(397..406),
+                                                                span: Some(
+                                                                    397..406,
+                                                                ),
                                                             },
                                                         },
                                                         right: Literal {
-                                                            span: [
-                                                                QuotedString(416..425),
-                                                            ],
+                                                            span: Some(
+                                                                416..425,
+                                                            ),
                                                             lit: String(
                                                                 "%:1%:2%",
                                                             ),
@@ -2718,29 +2138,33 @@ Query {
                                                 },
                                             ),
                                             left: Table {
-                                                span: [
-                                                    Ident(280..288),
-                                                ],
+                                                span: Some(
+                                                    280..288,
+                                                ),
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
                                                     name: "customer",
                                                     quote: None,
-                                                    span: Ident(280..288),
+                                                    span: Some(
+                                                        280..288,
+                                                    ),
                                                 },
                                                 alias: None,
                                                 travel_point: None,
                                             },
                                             right: Table {
-                                                span: [
-                                                    Ident(305..311),
-                                                ],
+                                                span: Some(
+                                                    305..311,
+                                                ),
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
                                                     name: "orders",
                                                     quote: None,
-                                                    span: Ident(305..311),
+                                                    span: Some(
+                                                        305..311,
+                                                    ),
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -2751,15 +2175,17 @@ Query {
                                 selection: None,
                                 group_by: [
                                     ColumnRef {
-                                        span: [
-                                            Ident(479..488),
-                                        ],
+                                        span: Some(
+                                            479..488,
+                                        ),
                                         database: None,
                                         table: None,
                                         column: Identifier {
                                             name: "c_custkey",
                                             quote: None,
-                                            span: Ident(479..488),
+                                            span: Some(
+                                                479..488,
+                                            ),
                                         },
                                     },
                                 ],
@@ -2776,7 +2202,9 @@ Query {
                             name: Identifier {
                                 name: "c_orders",
                                 quote: None,
-                                span: Ident(510..518),
+                                span: Some(
+                                    510..518,
+                                ),
                             },
                             columns: [],
                         },
@@ -2786,15 +2214,17 @@ Query {
             selection: None,
             group_by: [
                 ColumnRef {
-                    span: [
-                        Ident(540..547),
-                    ],
+                    span: Some(
+                        540..547,
+                    ),
                     database: None,
                     table: None,
                     column: Identifier {
                         name: "c_count",
                         quote: None,
-                        span: Ident(540..547),
+                        span: Some(
+                            540..547,
+                        ),
                     },
                 },
             ],
@@ -2804,15 +2234,17 @@ Query {
     order_by: [
         OrderByExpr {
             expr: ColumnRef {
-                span: [
-                    Ident(569..577),
-                ],
+                span: Some(
+                    569..577,
+                ),
                 database: None,
                 table: None,
                 column: Identifier {
                     name: "custdist",
                     quote: None,
-                    span: Ident(569..577),
+                    span: Some(
+                        569..577,
+                    ),
                 },
             },
             asc: Some(
@@ -2824,15 +2256,17 @@ Query {
         },
         OrderByExpr {
             expr: ColumnRef {
-                span: [
-                    Ident(596..603),
-                ],
+                span: Some(
+                    596..603,
+                ),
                 database: None,
                 table: None,
                 column: Identifier {
                     name: "c_count",
                     quote: None,
-                    span: Ident(596..603),
+                    span: Some(
+                        596..603,
+                    ),
                 },
             },
             asc: Some(
@@ -2842,15 +2276,17 @@ Query {
         },
         OrderByExpr {
             expr: ColumnRef {
-                span: [
-                    Ident(609..619),
-                ],
+                span: Some(
+                    609..619,
+                ),
                 database: None,
                 table: None,
                 column: Identifier {
                     name: "totacctbal",
                     quote: None,
-                    span: Ident(609..619),
+                    span: Some(
+                        609..619,
+                    ),
                 },
             },
             asc: None,
@@ -2861,23 +2297,25 @@ Query {
     ],
     limit: [
         Literal {
-            span: [
-                LiteralInteger(649..651),
-            ],
+            span: Some(
+                649..651,
+            ),
             lit: Integer(
                 10,
             ),
         },
         ColumnRef {
-            span: [
-                Ident(653..663),
-            ],
+            span: Some(
+                653..663,
+            ),
             database: None,
             table: None,
             column: Identifier {
                 name: "totacctbal",
                 quote: None,
-                span: Ident(653..663),
+                span: Some(
+                    653..663,
+                ),
             },
         },
     ],
@@ -2892,33 +2330,22 @@ select * from t1 union select * from t2
 SELECT * FROM t1 UNION SELECT * FROM t2
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..16),
-        UNION(17..22),
-        SELECT(23..29),
-        Multiply(30..31),
-        FROM(32..36),
-        Ident(37..39),
-    ],
+    span: Some(
+        0..39,
+    ),
     with: None,
     body: SetOperation(
         SetOperation {
-            span: [
-                UNION(17..22),
-            ],
+            span: Some(
+                17..22,
+            ),
             op: Union,
             all: false,
             left: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(0..6),
-                        Multiply(7..8),
-                        FROM(9..13),
-                        Ident(14..16),
-                    ],
+                    span: Some(
+                        0..16,
+                    ),
                     distinct: false,
                     select_list: [
                         QualifiedName {
@@ -2930,15 +2357,17 @@ Query {
                     ],
                     from: [
                         Table {
-                            span: [
-                                Ident(14..16),
-                            ],
+                            span: Some(
+                                14..16,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t1",
                                 quote: None,
-                                span: Ident(14..16),
+                                span: Some(
+                                    14..16,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -2951,12 +2380,9 @@ Query {
             ),
             right: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(23..29),
-                        Multiply(30..31),
-                        FROM(32..36),
-                        Ident(37..39),
-                    ],
+                    span: Some(
+                        23..39,
+                    ),
                     distinct: false,
                     select_list: [
                         QualifiedName {
@@ -2968,15 +2394,17 @@ Query {
                     ],
                     from: [
                         Table {
-                            span: [
-                                Ident(37..39),
-                            ],
+                            span: Some(
+                                37..39,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t2",
                                 quote: None,
-                                span: Ident(37..39),
+                                span: Some(
+                                    37..39,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -3002,33 +2430,22 @@ select * from t1 except select * from t2
 SELECT * FROM t1 EXCEPT SELECT * FROM t2
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..16),
-        EXCEPT(17..23),
-        SELECT(24..30),
-        Multiply(31..32),
-        FROM(33..37),
-        Ident(38..40),
-    ],
+    span: Some(
+        0..40,
+    ),
     with: None,
     body: SetOperation(
         SetOperation {
-            span: [
-                EXCEPT(17..23),
-            ],
+            span: Some(
+                17..23,
+            ),
             op: Except,
             all: false,
             left: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(0..6),
-                        Multiply(7..8),
-                        FROM(9..13),
-                        Ident(14..16),
-                    ],
+                    span: Some(
+                        0..16,
+                    ),
                     distinct: false,
                     select_list: [
                         QualifiedName {
@@ -3040,15 +2457,17 @@ Query {
                     ],
                     from: [
                         Table {
-                            span: [
-                                Ident(14..16),
-                            ],
+                            span: Some(
+                                14..16,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t1",
                                 quote: None,
-                                span: Ident(14..16),
+                                span: Some(
+                                    14..16,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -3061,12 +2480,9 @@ Query {
             ),
             right: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(24..30),
-                        Multiply(31..32),
-                        FROM(33..37),
-                        Ident(38..40),
-                    ],
+                    span: Some(
+                        24..40,
+                    ),
                     distinct: false,
                     select_list: [
                         QualifiedName {
@@ -3078,15 +2494,17 @@ Query {
                     ],
                     from: [
                         Table {
-                            span: [
-                                Ident(38..40),
-                            ],
+                            span: Some(
+                                38..40,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t2",
                                 quote: None,
-                                span: Ident(38..40),
+                                span: Some(
+                                    38..40,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -3112,45 +2530,29 @@ select * from t1 union select * from t2 union select * from t3
 SELECT * FROM t1 UNION SELECT * FROM t2 UNION SELECT * FROM t3
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..16),
-        UNION(17..22),
-        SELECT(23..29),
-        Multiply(30..31),
-        FROM(32..36),
-        Ident(37..39),
-        UNION(40..45),
-        SELECT(46..52),
-        Multiply(53..54),
-        FROM(55..59),
-        Ident(60..62),
-    ],
+    span: Some(
+        0..62,
+    ),
     with: None,
     body: SetOperation(
         SetOperation {
-            span: [
-                UNION(40..45),
-            ],
+            span: Some(
+                40..45,
+            ),
             op: Union,
             all: false,
             left: SetOperation(
                 SetOperation {
-                    span: [
-                        UNION(17..22),
-                    ],
+                    span: Some(
+                        17..22,
+                    ),
                     op: Union,
                     all: false,
                     left: Select(
                         SelectStmt {
-                            span: [
-                                SELECT(0..6),
-                                Multiply(7..8),
-                                FROM(9..13),
-                                Ident(14..16),
-                            ],
+                            span: Some(
+                                0..16,
+                            ),
                             distinct: false,
                             select_list: [
                                 QualifiedName {
@@ -3162,15 +2564,17 @@ Query {
                             ],
                             from: [
                                 Table {
-                                    span: [
-                                        Ident(14..16),
-                                    ],
+                                    span: Some(
+                                        14..16,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "t1",
                                         quote: None,
-                                        span: Ident(14..16),
+                                        span: Some(
+                                            14..16,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3183,12 +2587,9 @@ Query {
                     ),
                     right: Select(
                         SelectStmt {
-                            span: [
-                                SELECT(23..29),
-                                Multiply(30..31),
-                                FROM(32..36),
-                                Ident(37..39),
-                            ],
+                            span: Some(
+                                23..39,
+                            ),
                             distinct: false,
                             select_list: [
                                 QualifiedName {
@@ -3200,15 +2601,17 @@ Query {
                             ],
                             from: [
                                 Table {
-                                    span: [
-                                        Ident(37..39),
-                                    ],
+                                    span: Some(
+                                        37..39,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "t2",
                                         quote: None,
-                                        span: Ident(37..39),
+                                        span: Some(
+                                            37..39,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3223,12 +2626,9 @@ Query {
             ),
             right: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(46..52),
-                        Multiply(53..54),
-                        FROM(55..59),
-                        Ident(60..62),
-                    ],
+                    span: Some(
+                        46..62,
+                    ),
                     distinct: false,
                     select_list: [
                         QualifiedName {
@@ -3240,15 +2640,17 @@ Query {
                     ],
                     from: [
                         Table {
-                            span: [
-                                Ident(60..62),
-                            ],
+                            span: Some(
+                                60..62,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t3",
                                 quote: None,
-                                span: Ident(60..62),
+                                span: Some(
+                                    60..62,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -3274,47 +2676,29 @@ select * from t1 union select * from t2 union all select * from t3
 SELECT * FROM t1 UNION SELECT * FROM t2 UNION ALL SELECT * FROM t3
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..16),
-        UNION(17..22),
-        SELECT(23..29),
-        Multiply(30..31),
-        FROM(32..36),
-        Ident(37..39),
-        UNION(40..45),
-        ALL(46..49),
-        SELECT(50..56),
-        Multiply(57..58),
-        FROM(59..63),
-        Ident(64..66),
-    ],
+    span: Some(
+        0..66,
+    ),
     with: None,
     body: SetOperation(
         SetOperation {
-            span: [
-                UNION(40..45),
-                ALL(46..49),
-            ],
+            span: Some(
+                40..49,
+            ),
             op: Union,
             all: true,
             left: SetOperation(
                 SetOperation {
-                    span: [
-                        UNION(17..22),
-                    ],
+                    span: Some(
+                        17..22,
+                    ),
                     op: Union,
                     all: false,
                     left: Select(
                         SelectStmt {
-                            span: [
-                                SELECT(0..6),
-                                Multiply(7..8),
-                                FROM(9..13),
-                                Ident(14..16),
-                            ],
+                            span: Some(
+                                0..16,
+                            ),
                             distinct: false,
                             select_list: [
                                 QualifiedName {
@@ -3326,15 +2710,17 @@ Query {
                             ],
                             from: [
                                 Table {
-                                    span: [
-                                        Ident(14..16),
-                                    ],
+                                    span: Some(
+                                        14..16,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "t1",
                                         quote: None,
-                                        span: Ident(14..16),
+                                        span: Some(
+                                            14..16,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3347,12 +2733,9 @@ Query {
                     ),
                     right: Select(
                         SelectStmt {
-                            span: [
-                                SELECT(23..29),
-                                Multiply(30..31),
-                                FROM(32..36),
-                                Ident(37..39),
-                            ],
+                            span: Some(
+                                23..39,
+                            ),
                             distinct: false,
                             select_list: [
                                 QualifiedName {
@@ -3364,15 +2747,17 @@ Query {
                             ],
                             from: [
                                 Table {
-                                    span: [
-                                        Ident(37..39),
-                                    ],
+                                    span: Some(
+                                        37..39,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "t2",
                                         quote: None,
-                                        span: Ident(37..39),
+                                        span: Some(
+                                            37..39,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3387,12 +2772,9 @@ Query {
             ),
             right: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(50..56),
-                        Multiply(57..58),
-                        FROM(59..63),
-                        Ident(64..66),
-                    ],
+                    span: Some(
+                        50..66,
+                    ),
                     distinct: false,
                     select_list: [
                         QualifiedName {
@@ -3404,15 +2786,17 @@ Query {
                     ],
                     from: [
                         Table {
-                            span: [
-                                Ident(64..66),
-                            ],
+                            span: Some(
+                                64..66,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t3",
                                 quote: None,
-                                span: Ident(64..66),
+                                span: Some(
+                                    64..66,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -3438,38 +2822,22 @@ select * from t1 union select * from t2 intersect select * from t3
 SELECT * FROM t1 UNION SELECT * FROM t2 INTERSECT SELECT * FROM t3
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..16),
-        UNION(17..22),
-        SELECT(23..29),
-        Multiply(30..31),
-        FROM(32..36),
-        Ident(37..39),
-        INTERSECT(40..49),
-        SELECT(50..56),
-        Multiply(57..58),
-        FROM(59..63),
-        Ident(64..66),
-    ],
+    span: Some(
+        0..66,
+    ),
     with: None,
     body: SetOperation(
         SetOperation {
-            span: [
-                UNION(17..22),
-            ],
+            span: Some(
+                17..22,
+            ),
             op: Union,
             all: false,
             left: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(0..6),
-                        Multiply(7..8),
-                        FROM(9..13),
-                        Ident(14..16),
-                    ],
+                    span: Some(
+                        0..16,
+                    ),
                     distinct: false,
                     select_list: [
                         QualifiedName {
@@ -3481,15 +2849,17 @@ Query {
                     ],
                     from: [
                         Table {
-                            span: [
-                                Ident(14..16),
-                            ],
+                            span: Some(
+                                14..16,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t1",
                                 quote: None,
-                                span: Ident(14..16),
+                                span: Some(
+                                    14..16,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -3502,19 +2872,16 @@ Query {
             ),
             right: SetOperation(
                 SetOperation {
-                    span: [
-                        INTERSECT(40..49),
-                    ],
+                    span: Some(
+                        40..49,
+                    ),
                     op: Intersect,
                     all: false,
                     left: Select(
                         SelectStmt {
-                            span: [
-                                SELECT(23..29),
-                                Multiply(30..31),
-                                FROM(32..36),
-                                Ident(37..39),
-                            ],
+                            span: Some(
+                                23..39,
+                            ),
                             distinct: false,
                             select_list: [
                                 QualifiedName {
@@ -3526,15 +2893,17 @@ Query {
                             ],
                             from: [
                                 Table {
-                                    span: [
-                                        Ident(37..39),
-                                    ],
+                                    span: Some(
+                                        37..39,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "t2",
                                         quote: None,
-                                        span: Ident(37..39),
+                                        span: Some(
+                                            37..39,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3547,12 +2916,9 @@ Query {
                     ),
                     right: Select(
                         SelectStmt {
-                            span: [
-                                SELECT(50..56),
-                                Multiply(57..58),
-                                FROM(59..63),
-                                Ident(64..66),
-                            ],
+                            span: Some(
+                                50..66,
+                            ),
                             distinct: false,
                             select_list: [
                                 QualifiedName {
@@ -3564,15 +2930,17 @@ Query {
                             ],
                             from: [
                                 Table {
-                                    span: [
-                                        Ident(64..66),
-                                    ],
+                                    span: Some(
+                                        64..66,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "t3",
                                         quote: None,
-                                        span: Ident(64..66),
+                                        span: Some(
+                                            64..66,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3600,47 +2968,29 @@ Query {
 SELECT * FROM t1 UNION SELECT * FROM t2 UNION SELECT * FROM t3
 ---------- AST ------------
 Query {
-    span: [
-        LParen(0..1),
-        SELECT(1..7),
-        Multiply(8..9),
-        FROM(10..14),
-        Ident(15..17),
-        UNION(18..23),
-        SELECT(24..30),
-        Multiply(31..32),
-        FROM(33..37),
-        Ident(38..40),
-        RParen(40..41),
-        UNION(42..47),
-        SELECT(48..54),
-        Multiply(55..56),
-        FROM(57..61),
-        Ident(62..64),
-    ],
+    span: Some(
+        0..64,
+    ),
     with: None,
     body: SetOperation(
         SetOperation {
-            span: [
-                UNION(42..47),
-            ],
+            span: Some(
+                42..47,
+            ),
             op: Union,
             all: false,
             left: SetOperation(
                 SetOperation {
-                    span: [
-                        UNION(18..23),
-                    ],
+                    span: Some(
+                        18..23,
+                    ),
                     op: Union,
                     all: false,
                     left: Select(
                         SelectStmt {
-                            span: [
-                                SELECT(1..7),
-                                Multiply(8..9),
-                                FROM(10..14),
-                                Ident(15..17),
-                            ],
+                            span: Some(
+                                1..17,
+                            ),
                             distinct: false,
                             select_list: [
                                 QualifiedName {
@@ -3652,15 +3002,17 @@ Query {
                             ],
                             from: [
                                 Table {
-                                    span: [
-                                        Ident(15..17),
-                                    ],
+                                    span: Some(
+                                        15..17,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "t1",
                                         quote: None,
-                                        span: Ident(15..17),
+                                        span: Some(
+                                            15..17,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3673,12 +3025,9 @@ Query {
                     ),
                     right: Select(
                         SelectStmt {
-                            span: [
-                                SELECT(24..30),
-                                Multiply(31..32),
-                                FROM(33..37),
-                                Ident(38..40),
-                            ],
+                            span: Some(
+                                24..40,
+                            ),
                             distinct: false,
                             select_list: [
                                 QualifiedName {
@@ -3690,15 +3039,17 @@ Query {
                             ],
                             from: [
                                 Table {
-                                    span: [
-                                        Ident(38..40),
-                                    ],
+                                    span: Some(
+                                        38..40,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "t2",
                                         quote: None,
-                                        span: Ident(38..40),
+                                        span: Some(
+                                            38..40,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3713,12 +3064,9 @@ Query {
             ),
             right: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(48..54),
-                        Multiply(55..56),
-                        FROM(57..61),
-                        Ident(62..64),
-                    ],
+                    span: Some(
+                        48..64,
+                    ),
                     distinct: false,
                     select_list: [
                         QualifiedName {
@@ -3730,15 +3078,17 @@ Query {
                     ],
                     from: [
                         Table {
-                            span: [
-                                Ident(62..64),
-                            ],
+                            span: Some(
+                                62..64,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t3",
                                 quote: None,
-                                span: Ident(62..64),
+                                span: Some(
+                                    62..64,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -3764,40 +3114,22 @@ select * from t1 union (select * from t2 union select * from t3)
 SELECT * FROM t1 UNION SELECT * FROM t2 UNION SELECT * FROM t3
 ---------- AST ------------
 Query {
-    span: [
-        SELECT(0..6),
-        Multiply(7..8),
-        FROM(9..13),
-        Ident(14..16),
-        UNION(17..22),
-        LParen(23..24),
-        SELECT(24..30),
-        Multiply(31..32),
-        FROM(33..37),
-        Ident(38..40),
-        UNION(41..46),
-        SELECT(47..53),
-        Multiply(54..55),
-        FROM(56..60),
-        Ident(61..63),
-        RParen(63..64),
-    ],
+    span: Some(
+        0..64,
+    ),
     with: None,
     body: SetOperation(
         SetOperation {
-            span: [
-                UNION(17..22),
-            ],
+            span: Some(
+                17..22,
+            ),
             op: Union,
             all: false,
             left: Select(
                 SelectStmt {
-                    span: [
-                        SELECT(0..6),
-                        Multiply(7..8),
-                        FROM(9..13),
-                        Ident(14..16),
-                    ],
+                    span: Some(
+                        0..16,
+                    ),
                     distinct: false,
                     select_list: [
                         QualifiedName {
@@ -3809,15 +3141,17 @@ Query {
                     ],
                     from: [
                         Table {
-                            span: [
-                                Ident(14..16),
-                            ],
+                            span: Some(
+                                14..16,
+                            ),
                             catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t1",
                                 quote: None,
-                                span: Ident(14..16),
+                                span: Some(
+                                    14..16,
+                                ),
                             },
                             alias: None,
                             travel_point: None,
@@ -3830,19 +3164,16 @@ Query {
             ),
             right: SetOperation(
                 SetOperation {
-                    span: [
-                        UNION(41..46),
-                    ],
+                    span: Some(
+                        41..46,
+                    ),
                     op: Union,
                     all: false,
                     left: Select(
                         SelectStmt {
-                            span: [
-                                SELECT(24..30),
-                                Multiply(31..32),
-                                FROM(33..37),
-                                Ident(38..40),
-                            ],
+                            span: Some(
+                                24..40,
+                            ),
                             distinct: false,
                             select_list: [
                                 QualifiedName {
@@ -3854,15 +3185,17 @@ Query {
                             ],
                             from: [
                                 Table {
-                                    span: [
-                                        Ident(38..40),
-                                    ],
+                                    span: Some(
+                                        38..40,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "t2",
                                         quote: None,
-                                        span: Ident(38..40),
+                                        span: Some(
+                                            38..40,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3875,12 +3208,9 @@ Query {
                     ),
                     right: Select(
                         SelectStmt {
-                            span: [
-                                SELECT(47..53),
-                                Multiply(54..55),
-                                FROM(56..60),
-                                Ident(61..63),
-                            ],
+                            span: Some(
+                                47..63,
+                            ),
                             distinct: false,
                             select_list: [
                                 QualifiedName {
@@ -3892,15 +3222,17 @@ Query {
                             ],
                             from: [
                                 Table {
-                                    span: [
-                                        Ident(61..63),
-                                    ],
+                                    span: Some(
+                                        61..63,
+                                    ),
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "t3",
                                         quote: None,
-                                        span: Ident(61..63),
+                                        span: Some(
+                                            61..63,
+                                        ),
                                     },
                                     alias: None,
                                     travel_point: None,

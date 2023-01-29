@@ -97,11 +97,11 @@ use crate::ColumnBinding;
 use crate::Planner;
 use crate::SelectBuilder;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_show_tables(
         &mut self,
         bind_context: &BindContext,
-        stmt: &ShowTablesStmt<'a>,
+        stmt: &ShowTablesStmt,
     ) -> Result<Plan> {
         let ShowTablesStmt {
             catalog,
@@ -173,7 +173,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_show_create_table(
         &mut self,
-        stmt: &ShowCreateTableStmt<'a>,
+        stmt: &ShowCreateTableStmt,
     ) -> Result<Plan> {
         let ShowCreateTableStmt {
             catalog,
@@ -205,7 +205,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_describe_table(
         &mut self,
-        stmt: &DescribeTableStmt<'a>,
+        stmt: &DescribeTableStmt,
     ) -> Result<Plan> {
         let DescribeTableStmt {
             catalog,
@@ -241,7 +241,7 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_show_tables_status(
         &mut self,
         bind_context: &BindContext,
-        stmt: &ShowTablesStatusStmt<'a>,
+        stmt: &ShowTablesStatusStmt,
     ) -> Result<Plan> {
         let ShowTablesStatusStmt { database, limit } = stmt;
 
@@ -283,7 +283,7 @@ impl<'a> Binder {
         self.bind_statement(bind_context, &stmt).await
     }
 
-    async fn check_database_exist(&mut self, database: &Option<Identifier<'_>>) -> Result<String> {
+    async fn check_database_exist(&mut self, database: &Option<Identifier>) -> Result<String> {
         match database {
             None => Ok(self.ctx.get_current_database()),
             Some(ident) => {
@@ -299,7 +299,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_create_table(
         &mut self,
-        stmt: &CreateTableStmt<'a>,
+        stmt: &CreateTableStmt,
     ) -> Result<Plan> {
         let CreateTableStmt {
             if_not_exists,
@@ -477,7 +477,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_drop_table(
         &mut self,
-        stmt: &DropTableStmt<'a>,
+        stmt: &DropTableStmt,
     ) -> Result<Plan> {
         let DropTableStmt {
             if_exists,
@@ -510,7 +510,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_undrop_table(
         &mut self,
-        stmt: &UndropTableStmt<'a>,
+        stmt: &UndropTableStmt,
     ) -> Result<Plan> {
         let UndropTableStmt {
             catalog,
@@ -540,7 +540,7 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_alter_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &AlterTableStmt<'a>,
+        stmt: &AlterTableStmt,
     ) -> Result<Plan> {
         let AlterTableStmt {
             if_exists,
@@ -664,7 +664,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_rename_table(
         &mut self,
-        stmt: &RenameTableStmt<'a>,
+        stmt: &RenameTableStmt,
     ) -> Result<Plan> {
         let RenameTableStmt {
             if_exists,
@@ -719,7 +719,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_truncate_table(
         &mut self,
-        stmt: &TruncateTableStmt<'a>,
+        stmt: &TruncateTableStmt,
     ) -> Result<Plan> {
         let TruncateTableStmt {
             catalog,
@@ -749,7 +749,7 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_optimize_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &OptimizeTableStmt<'a>,
+        stmt: &OptimizeTableStmt,
     ) -> Result<Plan> {
         let OptimizeTableStmt {
             catalog,
@@ -806,7 +806,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_analyze_table(
         &mut self,
-        stmt: &AnalyzeTableStmt<'a>,
+        stmt: &AnalyzeTableStmt,
     ) -> Result<Plan> {
         let AnalyzeTableStmt {
             catalog,
@@ -833,7 +833,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_exists_table(
         &mut self,
-        stmt: &ExistsTableStmt<'a>,
+        stmt: &ExistsTableStmt,
     ) -> Result<Plan> {
         let ExistsTableStmt {
             catalog,
@@ -860,7 +860,7 @@ impl<'a> Binder {
 
     async fn analyze_create_table_schema(
         &self,
-        source: &CreateTableSource<'a>,
+        source: &CreateTableSource,
     ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         let bind_context = BindContext::new();
         match source {
@@ -963,7 +963,7 @@ impl<'a> Binder {
 
     async fn analyze_cluster_keys(
         &mut self,
-        cluster_by: &[Expr<'a>],
+        cluster_by: &[Expr],
         schema: TableSchemaRef,
     ) -> Result<Vec<String>> {
         // Build a temporary BindContext to resolve the expr

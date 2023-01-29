@@ -19,7 +19,6 @@ use common_ast::ast::Literal as ASTLiteral;
 use common_ast::ast::MapAccessor;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
-use common_ast::parser::token::Token;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
@@ -27,7 +26,6 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Literal;
 use common_expression::RawExpr;
-use common_expression::Span;
 use ordered_float::OrderedFloat;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
@@ -54,7 +52,7 @@ macro_rules! transform_interval_add_sub {
         if $op == BinaryOperator::Plus {
             with_interval_mapped_name!(|INTERVAL| match $unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
-                    span: transform_span($span),
+                    span: $span,
                     name: concat!("add_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
@@ -69,7 +67,7 @@ macro_rules! transform_interval_add_sub {
         } else if $op == BinaryOperator::Minus {
             with_interval_mapped_name!(|INTERVAL| match $unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
-                    span: transform_span($span),
+                    span: $span,
                     name: concat!("subtract_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
@@ -90,7 +88,7 @@ macro_rules! transform_interval_add_sub {
 pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
     match ast {
         AExpr::Literal { span, lit } => RawExpr::Literal {
-            span: transform_span(span),
+            span,
             lit: transform_literal(lit),
         },
         AExpr::ColumnRef {
@@ -104,7 +102,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 .position(|(col_name, _)| *col_name == column.name)
                 .unwrap_or_else(|| panic!("expected column {}", column.name));
             RawExpr::ColumnRef {
-                span: transform_span(span),
+                span,
                 id: col_id,
                 data_type: columns[col_id].1.clone(),
                 display_name: columns[col_id].0.to_string(),
@@ -116,7 +114,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             target_type,
             ..
         } => RawExpr::Cast {
-            span: transform_span(span),
+            span,
             is_try: false,
             expr: Box::new(transform_expr(*expr, columns)),
             dest_type: transform_data_type(target_type),
@@ -127,7 +125,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             target_type,
             ..
         } => RawExpr::Cast {
-            span: transform_span(span),
+            span,
             is_try: true,
             expr: Box::new(transform_expr(*expr, columns)),
             dest_type: transform_data_type(target_type),
@@ -139,7 +137,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             params,
             ..
         } => RawExpr::FunctionCall {
-            span: transform_span(span),
+            span,
             name: name.name,
             args: args
                 .into_iter()
@@ -154,7 +152,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 .collect(),
         },
         AExpr::UnaryOp { span, op, expr } => RawExpr::FunctionCall {
-            span: transform_span(span),
+            span,
             name: format!("{op:?}").to_lowercase(),
             params: vec![],
             args: vec![transform_expr(*expr, columns)],
@@ -183,7 +181,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     transform_interval_add_sub!(span, columns, op, unit, left, expr)
                 }
                 (_, _) => RawExpr::FunctionCall {
-                    span: transform_span(span),
+                    span,
                     name: format!("{op:?}").to_lowercase(),
                     params: vec![],
                     args: vec![
@@ -198,7 +196,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             substr_expr,
             str_expr,
         } => RawExpr::FunctionCall {
-            span: transform_span(span),
+            span,
             name: "position".to_string(),
             params: vec![],
             args: vec![
@@ -214,7 +212,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             if let Some(inner) = trim_where {
                 match inner.0 {
                     common_ast::ast::TrimWhere::Both => RawExpr::FunctionCall {
-                        span: transform_span(span),
+                        span,
                         name: "trim_both".to_string(),
                         params: vec![],
                         args: vec![
@@ -223,7 +221,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                         ],
                     },
                     common_ast::ast::TrimWhere::Leading => RawExpr::FunctionCall {
-                        span: transform_span(span),
+                        span,
                         name: "trim_leading".to_string(),
                         params: vec![],
                         args: vec![
@@ -232,7 +230,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                         ],
                     },
                     common_ast::ast::TrimWhere::Trailing => RawExpr::FunctionCall {
-                        span: transform_span(span),
+                        span,
                         name: "trim_trailing".to_string(),
                         params: vec![],
                         args: vec![
@@ -243,7 +241,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 }
             } else {
                 RawExpr::FunctionCall {
-                    span: transform_span(span),
+                    span,
                     name: "trim".to_string(),
                     params: vec![],
                     args: vec![transform_expr(*expr, columns)],
@@ -264,14 +262,14 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 args.push(transform_expr(*substring_for, columns));
             }
             RawExpr::FunctionCall {
-                span: transform_span(span),
+                span,
                 name: "substr".to_string(),
                 params: vec![],
                 args,
             }
         }
         AExpr::Array { span, exprs } => RawExpr::FunctionCall {
-            span: transform_span(span),
+            span,
             name: "array".to_string(),
             params: vec![],
             args: exprs
@@ -280,7 +278,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 .collect(),
         },
         AExpr::Tuple { span, exprs } => RawExpr::FunctionCall {
-            span: transform_span(span),
+            span,
             name: "tuple".to_string(),
             params: vec![],
             args: exprs
@@ -301,7 +299,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 MapAccessor::Period { key } | MapAccessor::Colon { key } => (vec![], vec![
                     transform_expr(*expr, columns),
                     RawExpr::Literal {
-                        span: transform_span(span),
+                        span,
                         lit: Literal::String(key.name.into_bytes()),
                     },
                 ]),
@@ -310,7 +308,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 }
             };
             RawExpr::FunctionCall {
-                span: transform_span(span),
+                span,
                 name: "get".to_string(),
                 params,
                 args,
@@ -319,7 +317,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         AExpr::IsNull { span, expr, not } => {
             let expr = transform_expr(*expr, columns);
             let result = RawExpr::FunctionCall {
-                span: transform_span(span),
+                span,
                 name: "is_not_null".to_string(),
                 params: vec![],
                 args: vec![expr],
@@ -329,7 +327,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 result
             } else {
                 RawExpr::FunctionCall {
-                    span: transform_span(span),
+                    span,
                     name: "not".to_string(),
                     params: vec![],
                     args: vec![result],
@@ -344,7 +342,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         } => {
             with_interval_mapped_name!(|INTERVAL| match unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
-                    span: transform_span(span),
+                    span,
                     name: concat!("add_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
@@ -365,7 +363,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         } => {
             with_interval_mapped_name!(|INTERVAL| match unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
-                    span: transform_span(span),
+                    span,
                     name: concat!("subtract_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
@@ -381,7 +379,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         AExpr::DateTrunc { span, unit, date } => {
             with_interval_mapped_name!(|INTERVAL| match unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
-                    span: transform_span(span),
+                    span,
                     name: concat!("to_start_of_", INTERVAL).to_string(),
                     params: vec![],
                     args: vec![transform_expr(*date, columns),],
@@ -418,12 +416,9 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             if list.is_empty()
                 || (list.len() > 3 && list.iter().all(|e| matches!(e, AExpr::Literal { .. })))
             {
-                let array_expr = AExpr::Array {
-                    span,
-                    exprs: list.clone(),
-                };
+                let array_expr = AExpr::Array { span, exprs: list };
                 RawExpr::FunctionCall {
-                    span: transform_span(span),
+                    span,
                     name: "contains".to_string(),
                     params: vec![],
                     args: vec![
@@ -438,7 +433,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                         span,
                         op: BinaryOperator::Eq,
                         left: expr.clone(),
-                        right: Box::new(e.clone()),
+                        right: Box::new(e),
                     })
                     .fold(None, |mut acc, e| {
                         match acc.as_mut() {
@@ -448,7 +443,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                                     span,
                                     op: BinaryOperator::Or,
                                     left: Box::new(acc.clone()),
-                                    right: Box::new(e.clone()),
+                                    right: Box::new(e),
                                 }
                             }
                         }
@@ -512,10 +507,4 @@ pub fn transform_literal(lit: ASTLiteral) -> Literal {
         ASTLiteral::Float(f) => Literal::Float64(OrderedFloat(f)),
         _ => unimplemented!("{lit}"),
     }
-}
-
-pub fn transform_span(span: &[Token]) -> Span {
-    let start = span.first().unwrap().span.start;
-    let end = span.last().unwrap().span.end;
-    Some(start..end)
 }

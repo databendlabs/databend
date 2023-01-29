@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(try_blocks)]
 
 mod local;
 

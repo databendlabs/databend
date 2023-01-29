@@ -17,12 +17,14 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use common_arrow::arrow::bitmap;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_exception::Span;
 use itertools::Itertools;
 use tracing::error;
 
 use crate::block::DataBlock;
 use crate::expression::Expr;
-use crate::expression::Span;
 use crate::function::EvalContext;
 use crate::property::Domain;
 use crate::type_check::check_function;
@@ -42,7 +44,6 @@ use crate::ColumnIndex;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionRegistry;
-use crate::Result;
 
 pub struct Evaluator<'a> {
     input_columns: &'a DataBlock,
@@ -63,6 +64,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    #[cfg(debug_assertions)]
     fn check_expr(&self, expr: &Expr) {
         let column_refs = expr.column_refs();
         for (index, datatype) in column_refs.iter() {
@@ -148,8 +150,7 @@ impl<'a> Evaluator<'a> {
                     tz: self.func_ctx.tz,
                 };
                 let result = (function.eval)(cols_ref.as_slice(), &mut ctx);
-                ctx.render_error(&cols, &function.signature.name)
-                    .map_err(|msg| (span.clone(), msg))?;
+                ctx.render_error(*span, &cols, &function.signature.name)?;
                 Ok(result)
             }
             Expr::Cast {
@@ -160,9 +161,9 @@ impl<'a> Evaluator<'a> {
             } => {
                 let value = self.run(expr)?;
                 if *is_try {
-                    Ok(self.run_try_cast(span.clone(), expr.data_type(), dest_type, value))
+                    Ok(self.run_try_cast(*span, expr.data_type(), dest_type, value))
                 } else {
-                    self.run_cast(span.clone(), expr.data_type(), dest_type, value)
+                    self.run_cast(*span, expr.data_type(), dest_type, value)
                 }
             }
         };
@@ -207,7 +208,7 @@ impl<'a> Evaluator<'a> {
 
         if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
             if let Some(new_value) =
-                self.run_simple_cast(span.clone(), src_type, dest_type, value.clone(), &cast_fn)?
+                self.run_simple_cast(span, src_type, dest_type, value.clone(), &cast_fn)?
             {
                 return Ok(new_value);
             }
@@ -241,17 +242,17 @@ impl<'a> Evaluator<'a> {
                 other => unreachable!("source: {}", other),
             },
             (DataType::Nullable(inner_src_ty), _) => match value {
-                Value::Scalar(Scalar::Null) => Err((
-                    span,
-                    (format!("unable to cast type `{src_type}` to type `{dest_type}`")),
-                )),
+                Value::Scalar(Scalar::Null) => Err(ErrorCode::Internal(format!(
+                    "unable to cast type `{src_type}` to type `{dest_type}`"
+                ))
+                .set_span(span)),
                 Value::Scalar(_) => self.run_cast(span, inner_src_ty, dest_type, value),
                 Value::Column(Column::Nullable(col)) => {
                     if col.validity.unset_bits() > 0 {
-                        return Err((
-                            span,
-                            (format!("unable to cast `NULL` to type `{dest_type}`")),
-                        ));
+                        return Err(ErrorCode::Internal(format!(
+                            "unable to cast `NULL` to type `{dest_type}`"
+                        ))
+                        .set_span(span));
                     }
                     let column = self
                         .run_cast(span, inner_src_ty, dest_type, Value::Column(col.column))?
@@ -322,7 +323,7 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                self.run_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))
+                                self.run_cast(span, src_ty, dest_ty, Value::Scalar(field))
                                     .map(|val| val.into_scalar().unwrap())
                             })
                             .collect::<Result<Vec<_>>>()?;
@@ -334,7 +335,7 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                self.run_cast(span.clone(), src_ty, dest_ty, Value::Column(field))
+                                self.run_cast(span, src_ty, dest_ty, Value::Column(field))
                                     .map(|val| val.into_column().unwrap())
                             })
                             .collect::<Result<_>>()?;
@@ -347,10 +348,10 @@ impl<'a> Evaluator<'a> {
                 }
             }
 
-            _ => Err((
-                span,
-                (format!("unable to cast type `{src_type}` to type `{dest_type}`")),
-            )),
+            _ => Err(ErrorCode::Internal(format!(
+                "unable to cast type `{src_type}` to type `{dest_type}`"
+            ))
+            .set_span(span)),
         }
     }
 
@@ -370,7 +371,7 @@ impl<'a> Evaluator<'a> {
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
             if let Ok(Some(new_value)) =
-                self.run_simple_cast(span.clone(), src_type, dest_type, value.clone(), &cast_fn)
+                self.run_simple_cast(span, src_type, dest_type, value.clone(), &cast_fn)
             {
                 return new_value;
             }
@@ -464,14 +465,9 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                self.run_try_cast(
-                                    span.clone(),
-                                    src_ty,
-                                    dest_ty,
-                                    Value::Scalar(field),
-                                )
-                                .into_scalar()
-                                .unwrap()
+                                self.run_try_cast(span, src_ty, dest_ty, Value::Scalar(field))
+                                    .into_scalar()
+                                    .unwrap()
                             })
                             .collect::<Vec<_>>();
                         Value::Scalar(Scalar::Tuple(new_fields))
@@ -482,14 +478,9 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                self.run_try_cast(
-                                    span.clone(),
-                                    src_ty,
-                                    dest_ty,
-                                    Value::Column(field),
-                                )
-                                .into_column()
-                                .unwrap()
+                                self.run_try_cast(span, src_ty, dest_ty, Value::Column(field))
+                                    .into_column()
+                                    .unwrap()
                             })
                             .collect();
                         let new_col = Column::Tuple {
@@ -515,7 +506,7 @@ impl<'a> Evaluator<'a> {
         cast_fn: &str,
     ) -> Result<Option<Value<AnyType>>> {
         let expr = Expr::ColumnRef {
-            span: span.clone(),
+            span,
             id: 0,
             data_type: src_type.clone(),
             display_name: String::new(),
@@ -632,7 +623,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 let expr = domain
                     .as_singleton()
                     .map(|scalar| Expr::Constant {
-                        span: span.clone(),
+                        span: *span,
                         scalar,
                         data_type: data_type.clone(),
                     })
@@ -649,26 +640,16 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 let new_domain = if *is_try {
                     inner_domain.and_then(|inner_domain| {
-                        self.calculate_try_cast(
-                            span.clone(),
-                            expr.data_type(),
-                            dest_type,
-                            &inner_domain,
-                        )
+                        self.calculate_try_cast(*span, expr.data_type(), dest_type, &inner_domain)
                     })
                 } else {
                     inner_domain.and_then(|inner_domain| {
-                        self.calculate_cast(
-                            span.clone(),
-                            expr.data_type(),
-                            dest_type,
-                            &inner_domain,
-                        )
+                        self.calculate_cast(*span, expr.data_type(), dest_type, &inner_domain)
                     })
                 };
 
                 let cast_expr = Expr::Cast {
-                    span: span.clone(),
+                    span: *span,
                     is_try: *is_try,
                     expr: Box::new(inner_expr.clone()),
                     dest_type: dest_type.clone(),
@@ -682,7 +663,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
                         return (
                             Expr::Constant {
-                                span: span.clone(),
+                                span: *span,
                                 scalar,
                                 data_type: dest_type.clone(),
                             },
@@ -696,7 +677,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         .as_ref()
                         .and_then(Domain::as_singleton)
                         .map(|scalar| Expr::Constant {
-                            span: span.clone(),
+                            span: *span,
                             scalar,
                             data_type: dest_type.clone(),
                         })
@@ -733,7 +714,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
                     return (
                         Expr::Constant {
-                            span: span.clone(),
+                            span: *span,
                             scalar,
                             data_type: return_type.clone(),
                         },
@@ -742,7 +723,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 }
 
                 let func_expr = Expr::FunctionCall {
-                    span: span.clone(),
+                    span: *span,
                     id: id.clone(),
                     function: function.clone(),
                     generics: generics.clone(),
@@ -758,7 +739,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
                             Expr::Constant {
-                                span: span.clone(),
+                                span: *span,
                                 scalar,
                                 data_type: return_type.clone(),
                             },
@@ -789,7 +770,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
         if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
             if let Some(new_domain) =
-                self.calculate_simple_cast(span.clone(), src_type, dest_type, domain, &cast_fn)
+                self.calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
             {
                 return new_domain;
             }
@@ -848,7 +829,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         .zip(fields_src_ty)
                         .zip(fields_dest_ty)
                         .map(|((field_domain, src_ty), dest_ty)| {
-                            self.calculate_cast(span.clone(), src_ty, dest_ty, field_domain)
+                            self.calculate_cast(span, src_ty, dest_ty, field_domain)
                         })
                         .collect::<Option<Vec<_>>>()?,
                 ))
@@ -874,7 +855,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
             if let Some(new_domain) =
-                self.calculate_simple_cast(span.clone(), src_type, dest_type, domain, &cast_fn)
+                self.calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
             {
                 return new_domain;
             }
@@ -934,7 +915,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     .zip(fields_src_ty)
                     .zip(fields_dest_ty)
                     .map(|((domain, src_ty), dest_ty)| {
-                        self.calculate_try_cast(span.clone(), src_ty, dest_ty, domain)
+                        self.calculate_try_cast(span, src_ty, dest_ty, domain)
                     })
                     .collect::<Option<_>>()?;
                 Some(Domain::Tuple(new_fields_domain))
@@ -956,7 +937,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         cast_fn: &str,
     ) -> Option<Option<Domain>> {
         let expr = Expr::ColumnRef {
-            span: span.clone(),
+            span,
             id: 0,
             data_type: src_type.clone(),
             display_name: String::new(),

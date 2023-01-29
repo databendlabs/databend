@@ -22,14 +22,14 @@ use itertools::Itertools;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CreateShareStmt<'a> {
+pub struct CreateShareStmt {
     pub if_not_exists: bool,
-    pub share: Identifier<'a>,
+    pub share: Identifier,
     pub comment: Option<String>,
 }
 
-impl Display for CreateShareStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for CreateShareStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE SHARE ")?;
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
@@ -43,13 +43,13 @@ impl Display for CreateShareStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DropShareStmt<'a> {
+pub struct DropShareStmt {
     pub if_exists: bool,
-    pub share: Identifier<'a>,
+    pub share: Identifier,
 }
 
-impl Display for DropShareStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for DropShareStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP SHARE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -61,14 +61,14 @@ impl Display for DropShareStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GrantShareObjectStmt<'a> {
-    pub share: Identifier<'a>,
+pub struct GrantShareObjectStmt {
+    pub share: Identifier,
     pub object: ShareGrantObjectName,
     pub privilege: ShareGrantObjectPrivilege,
 }
 
-impl Display for GrantShareObjectStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for GrantShareObjectStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "GRANT {} ON {} TO SHARE {}",
@@ -80,14 +80,14 @@ impl Display for GrantShareObjectStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RevokeShareObjectStmt<'a> {
-    pub share: Identifier<'a>,
+pub struct RevokeShareObjectStmt {
+    pub share: Identifier,
     pub object: ShareGrantObjectName,
     pub privilege: ShareGrantObjectPrivilege,
 }
 
-impl Display for RevokeShareObjectStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for RevokeShareObjectStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "REVOKE {} ON {} FROM SHARE {}",
@@ -99,15 +99,15 @@ impl Display for RevokeShareObjectStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AlterShareTenantsStmt<'a> {
-    pub share: Identifier<'a>,
+pub struct AlterShareTenantsStmt {
+    pub share: Identifier,
     pub if_exists: bool,
-    pub tenants: Vec<Identifier<'a>>,
+    pub tenants: Vec<Identifier>,
     pub is_add: bool,
 }
 
-impl Display for AlterShareTenantsStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for AlterShareTenantsStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER SHARE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -129,12 +129,12 @@ impl Display for AlterShareTenantsStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DescShareStmt<'a> {
-    pub share: Identifier<'a>,
+pub struct DescShareStmt {
+    pub share: Identifier,
 }
 
-impl Display for DescShareStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for DescShareStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DESC SHARE {}", self.share)?;
 
         Ok(())

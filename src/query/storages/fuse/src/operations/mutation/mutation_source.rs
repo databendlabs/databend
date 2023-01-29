@@ -180,9 +180,9 @@ impl Processor for MutationSource {
                     let func_ctx = self.ctx.get_function_context()?;
                     let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
-                    let res = evaluator.run(filter).map_err(|(_, e)| {
-                        ErrorCode::Internal(format!("eval filter failed: {}.", e))
-                    })?;
+                    let res = evaluator
+                        .run(filter)
+                        .map_err(|e| e.add_message("eval filter failed:"))?;
                     let predicates =
                         FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
                             ErrorCode::BadArguments(

@@ -24,10 +24,10 @@ use crate::plans::CreateViewPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::Plan;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_create_view(
         &mut self,
-        stmt: &CreateViewStmt<'a>,
+        stmt: &CreateViewStmt,
     ) -> Result<Plan> {
         let CreateViewStmt {
             if_not_exists,
@@ -68,7 +68,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_alter_view(
         &mut self,
-        stmt: &AlterViewStmt<'a>,
+        stmt: &AlterViewStmt,
     ) -> Result<Plan> {
         let AlterViewStmt {
             catalog,
@@ -107,7 +107,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_drop_view(
         &mut self,
-        stmt: &DropViewStmt<'a>,
+        stmt: &DropViewStmt,
     ) -> Result<Plan> {
         let DropViewStmt {
             if_exists,
