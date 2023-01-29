@@ -231,7 +231,7 @@ impl ErrorCode {
             display_text: error,
             span: None,
             cause: None,
-            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+            backtrace: None,
         }
     }
 
