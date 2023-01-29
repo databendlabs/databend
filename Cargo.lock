@@ -1337,6 +1337,7 @@ dependencies = [
  "databend-thrift",
  "hex",
  "once_cell",
+ "pretty_assertions",
  "semver",
  "serde",
  "serfig",
