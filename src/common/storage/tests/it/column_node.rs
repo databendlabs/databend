@@ -31,14 +31,14 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
     let column_7_ids = vec![9];
     let column_8_ids = vec![10, 11];
     let expeted_column_ids = vec![
-        ("a", &column_1_ids),
-        ("b", &column_2_ids),
-        ("c", &column_3_ids),
-        ("d", &column_4_ids),
-        ("e", &column_5_ids),
-        ("f", &column_6_ids),
-        ("g", &column_7_ids),
-        ("h", &column_8_ids),
+        ("u64", &column_1_ids),
+        ("tuplearray", &column_2_ids),
+        ("arraytuple", &column_3_ids),
+        ("nullarray", &column_4_ids),
+        ("maparray", &column_5_ids),
+        ("nullu64", &column_6_ids),
+        ("u64array", &column_7_ids),
+        ("tuplesimple", &column_8_ids),
     ];
 
     for (i, column_leaf) in column_leaves.column_nodes.iter().enumerate() {

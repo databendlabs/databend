@@ -264,14 +264,14 @@ impl ColumnIdVector {
         self.column_ids.push(id);
     }
 
-    pub fn to_flat_column_ids(&self) -> Vec<u32> {
+    pub fn to_leaf_column_ids(&self) -> Vec<u32> {
         let h: HashSet<u32> = HashSet::from_iter(self.column_ids.iter().cloned());
         h.into_iter().sorted().collect()
     }
 
     // `to_column_ids` contains nest-type parent column id,
     // if field is Tuple(t1, t2), it will return a column id vector of 3 column id.
-    // `to_flat_column_ids` return only the child column id.
+    // `to_leaf_column_ids` return only the child column id.
     pub fn to_column_ids(&self) -> Vec<u32> {
         self.column_ids.clone()
     }
@@ -504,7 +504,7 @@ impl TableSchema {
         column_ids
     }
 
-    pub fn to_flat_column_ids(&self) -> Vec<u32> {
+    pub fn to_leaf_column_ids(&self) -> Vec<u32> {
         let mut column_ids = Vec::with_capacity(self.fields.len());
 
         self.field_column_ids
@@ -512,7 +512,7 @@ impl TableSchema {
             .unwrap()
             .iter()
             .for_each(|column_id_vector| {
-                column_ids.extend(column_id_vector.to_flat_column_ids());
+                column_ids.extend(column_id_vector.to_leaf_column_ids());
             });
 
         column_ids
@@ -695,7 +695,8 @@ impl TableSchema {
         )))
     }
 
-    pub fn leaf_fields(&self) -> Vec<TableField> {
+    // return leaf fields and column ids
+    pub fn leaf_fields(&self) -> (Vec<u32>, Vec<TableField>) {
         fn collect_in_field(field: &TableField, fields: &mut Vec<TableField>) {
             match field.data_type() {
                 TableDataType::Tuple {
@@ -706,6 +707,12 @@ impl TableSchema {
                         collect_in_field(&TableField::new(name, ty.clone()), fields);
                     }
                 }
+                TableDataType::Array(ty) => {
+                    collect_in_field(
+                        &TableField::new(&format!("{}:0", field.name()), ty.as_ref().to_owned()),
+                        fields,
+                    );
+                }
                 _ => fields.push(field.clone()),
             }
         }
@@ -714,7 +721,7 @@ impl TableSchema {
         for field in self.fields() {
             collect_in_field(field, &mut fields);
         }
-        fields
+        (self.to_leaf_column_ids(), fields)
     }
 
     /// project will do column pruning.
@@ -1398,20 +1405,20 @@ pub fn create_test_complex_schema() -> TableSchema {
         TableDataType::Number(NumberDataType::UInt64),
     ))));
 
-    let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
-    let field2 = TableField::new("b", tuple);
-    let field3 = TableField::new("c", array);
-    let field4 = TableField::new("d", nullarray);
-    let field5 = TableField::new("e", maparray);
+    let field1 = TableField::new("u64", TableDataType::Number(NumberDataType::UInt64));
+    let field2 = TableField::new("tuplearray", tuple);
+    let field3 = TableField::new("arraytuple", array);
+    let field4 = TableField::new("nullarray", nullarray);
+    let field5 = TableField::new("maparray", maparray);
     let field6 = TableField::new(
-        "f",
+        "nullu64",
         TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
     );
     let field7 = TableField::new(
-        "g",
+        "u64array",
         TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt64))),
     );
-    let field8 = TableField::new("h", TableDataType::Tuple {
+    let field8 = TableField::new("tuplesimple", TableDataType::Tuple {
         fields_name: vec!["a".to_string(), "b".to_string()],
         fields_type: vec![
             TableDataType::Number(NumberDataType::Int32),

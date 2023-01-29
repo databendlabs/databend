@@ -73,8 +73,15 @@ fn test_schema_from_simple_type() -> Result<()> {
 
     let schema = TableSchema::new(vec![field1, field2, field3]);
     assert_eq!(schema.to_column_ids(), vec![0, 1, 2]);
-    assert_eq!(schema.to_flat_column_ids(), vec![0, 1, 2]);
+    assert_eq!(schema.to_leaf_column_ids(), vec![0, 1, 2]);
     assert_eq!(schema.next_column_id(), 3);
+
+    let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
+    assert_eq!(leaf_column_ids, schema.to_leaf_column_ids());
+    let leaf_field_names = vec!["a", "b", "c"];
+    for (i, field) in leaf_fields.iter().enumerate() {
+        assert_eq!(field.name(), leaf_field_names[i])
+    }
 
     Ok(())
 }
@@ -82,17 +89,53 @@ fn test_schema_from_simple_type() -> Result<()> {
 #[test]
 fn test_schema_from_struct() -> Result<()> {
     let schema = create_test_complex_schema();
-    let flat_column_ids = schema.to_flat_column_ids();
+    let flat_column_ids = schema.to_leaf_column_ids();
+
+    let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
+    assert_eq!(leaf_column_ids, schema.to_leaf_column_ids());
+    println!("leaf_fields: {:?}", leaf_fields);
+    let expected_fields = vec![
+        ("u64", TableDataType::Number(NumberDataType::UInt64)),
+        ("0", TableDataType::Number(NumberDataType::UInt64)),
+        ("1", TableDataType::Number(NumberDataType::UInt64)),
+        ("1:0", TableDataType::Number(NumberDataType::UInt64)),
+        ("0", TableDataType::Number(NumberDataType::UInt64)),
+        ("1", TableDataType::Number(NumberDataType::UInt64)),
+        (
+            "nullarray",
+            TableDataType::Nullable(Box::new(TableDataType::Array(Box::new(
+                TableDataType::Number(NumberDataType::UInt64),
+            )))),
+        ),
+        (
+            "maparray",
+            TableDataType::Map(Box::new(TableDataType::Array(Box::new(
+                TableDataType::Number(NumberDataType::UInt64),
+            )))),
+        ),
+        (
+            "nullu64",
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+        ),
+        ("u64array:0", TableDataType::Number(NumberDataType::UInt64)),
+        ("a", TableDataType::Number(NumberDataType::Int32)),
+        ("b", TableDataType::Number(NumberDataType::Int32)),
+    ];
+    for (i, field) in leaf_fields.iter().enumerate() {
+        let expected_field = &expected_fields[i];
+        assert_eq!(field.name(), expected_field.0);
+        assert_eq!(field.data_type().to_owned(), expected_field.1);
+    }
 
     let expeted_column_ids = vec![
-        ("a", ColumnIdVector::new(vec![0])),
-        ("b", ColumnIdVector::new(vec![1, 1, 1, 2, 3, 3])),
-        ("c", ColumnIdVector::new(vec![4, 4, 4, 5])),
-        ("d", ColumnIdVector::new(vec![6, 6, 6])),
-        ("e", ColumnIdVector::new(vec![7, 7, 7])),
-        ("f", ColumnIdVector::new(vec![8])),
-        ("g", ColumnIdVector::new(vec![9, 9])),
-        ("h", ColumnIdVector::new(vec![10, 10, 11])),
+        ("u64", ColumnIdVector::new(vec![0])),
+        ("tuplearray", ColumnIdVector::new(vec![1, 1, 1, 2, 3, 3])),
+        ("arraytuple", ColumnIdVector::new(vec![4, 4, 4, 5])),
+        ("nullarray", ColumnIdVector::new(vec![6])),
+        ("maparray", ColumnIdVector::new(vec![7, 7, 7])),
+        ("nullu64", ColumnIdVector::new(vec![8])),
+        ("u64array", ColumnIdVector::new(vec![9, 9])),
+        ("tuplesimple", ColumnIdVector::new(vec![10, 10, 11])),
     ];
 
     for (i, column_id) in schema.field_column_ids().iter().enumerate() {
@@ -114,14 +157,14 @@ fn test_schema_from_struct() -> Result<()> {
     let field8_flat_column_ids = vec![10, 11];
 
     let expeted_flat_column_ids = vec![
-        ("a", &field1_flat_column_ids),
-        ("b", &field2_flat_column_ids),
-        ("c", &field3_flat_column_ids),
-        ("d", &field4_flat_column_ids),
-        ("e", &field5_flat_column_ids),
-        ("f", &field6_flat_column_ids),
-        ("g", &field7_flat_column_ids),
-        ("h", &field8_flat_column_ids),
+        ("u64", &field1_flat_column_ids),
+        ("tuplearray", &field2_flat_column_ids),
+        ("arraytuple", &field3_flat_column_ids),
+        ("nullarray", &field4_flat_column_ids),
+        ("maparray", &field5_flat_column_ids),
+        ("nullu64", &field6_flat_column_ids),
+        ("u64array", &field7_flat_column_ids),
+        ("tuplesimple", &field8_flat_column_ids),
     ];
 
     for (i, column_id) in schema.field_column_ids().iter().enumerate() {
@@ -130,7 +173,7 @@ fn test_schema_from_struct() -> Result<()> {
             expeted_column_id.0.to_string(),
             schema.fields()[i].name().to_string()
         );
-        assert_eq!(*expeted_column_id.1, column_id.to_flat_column_ids());
+        assert_eq!(*expeted_column_id.1, column_id.to_leaf_column_ids());
     }
 
     assert_eq!(schema.next_column_id(), 12);

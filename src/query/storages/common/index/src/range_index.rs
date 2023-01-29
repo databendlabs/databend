@@ -43,7 +43,7 @@ use crate::Index;
 pub struct RangeIndex {
     expr: Expr<String>,
     func_ctx: FunctionContext,
-    column_indices: HashMap<String, usize>,
+    column_ids: HashMap<String, u32>,
 }
 
 impl RangeIndex {
@@ -62,16 +62,16 @@ impl RangeIndex {
 
         let (new_expr, _) = ConstantFolder::fold(&conjunction, func_ctx, &BUILTIN_FUNCTIONS);
 
-        let leaf_fields = schema.leaf_fields();
-        let mut column_indices: HashMap<String, usize> = HashMap::new();
+        let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
+        let mut column_ids: HashMap<String, u32> = HashMap::new();
         for (leaf_index, field) in leaf_fields.iter().enumerate() {
-            column_indices.insert(field.name().clone(), leaf_index);
+            column_ids.insert(field.name().clone(), leaf_column_ids[leaf_index]);
         }
 
         Ok(Self {
             expr: new_expr,
             func_ctx,
-            column_indices,
+            column_ids,
         })
     }
 
@@ -90,8 +90,8 @@ impl RangeIndex {
             .column_refs()
             .into_iter()
             .map(|(name, ty)| {
-                let stat = match self.column_indices.get(&name) {
-                    Some(index) => stats.get(&(*index as u32)),
+                let stat = match self.column_ids.get(&name) {
+                    Some(column_id) => stats.get(column_id),
                     None => None,
                 };
                 let domain = statistics_to_domain(stat, &ty);
