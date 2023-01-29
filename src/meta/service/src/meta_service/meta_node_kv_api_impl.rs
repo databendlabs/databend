@@ -40,6 +40,8 @@ use crate::meta_service::MetaNode;
 /// E.g. Read is not guaranteed to see a write.
 #[async_trait]
 impl KVApi for MetaNode {
+    type Error = KVAppError;
+
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let ent = LogEntry {
             txid: None,

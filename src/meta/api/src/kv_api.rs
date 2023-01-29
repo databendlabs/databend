@@ -69,22 +69,37 @@ pub fn get_start_and_end_of_prefix(prefix: &str) -> common_exception::Result<(St
     Ok((prefix.to_string(), prefix_of_string(prefix)?))
 }
 
+/// API of a key-value store.
 #[async_trait]
 pub trait KVApi: Send + Sync {
+    /// The Error an implementation returns.
+    ///
+    /// Depends on the implementation the error could be different.
+    /// E.g., a remove KVApi impl returns network error or remote storage error.
+    /// A local KVApi impl just returns storage error.
+    type Error: std::error::Error;
+
+    /// Update or insert a key-value record.
     async fn upsert_kv(&self, req: UpsertKVReq) -> Result<UpsertKVReply, KVAppError>;
 
+    /// Get a key-value record by key.
     async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError>;
 
-    // mockall complains about AsRef... so we use String here
+    // TODO: mockall complains about AsRef... so we use String here
+    /// Get several key-values by keys.
     async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError>;
 
+    /// List key-value records that are starts with the specified prefix.
     async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError>;
 
+    /// Run transaction: update one or more records if specified conditions are met.
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError>;
 }
 
 #[async_trait]
 impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
+    type Error = U::Error;
+
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         self.deref().upsert_kv(act).await
     }
@@ -107,11 +122,15 @@ impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
 }
 
 pub trait AsKVApi {
-    fn as_kv_api(&self) -> &dyn KVApi;
+    type Error: std::error::Error;
+
+    fn as_kv_api(&self) -> &dyn KVApi<Error = Self::Error>;
 }
 
 impl<T: KVApi> AsKVApi for T {
-    fn as_kv_api(&self) -> &dyn KVApi {
+    type Error = T::Error;
+
+    fn as_kv_api(&self) -> &dyn KVApi<Error = Self::Error> {
         self
     }
 }

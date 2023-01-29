@@ -30,6 +30,7 @@ use crate::MetaGrpcClient;
 
 #[tonic::async_trait]
 impl KVApi for MetaGrpcClient {
+    type Error = KVAppError;
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let reply = self.kv_api(act).await?;
         Ok(reply)
@@ -67,6 +68,8 @@ impl KVApi for MetaGrpcClient {
 
 #[tonic::async_trait]
 impl KVApi for ClientHandle {
+    type Error = KVAppError;
+
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let reply = self.request(act).await?;
         Ok(reply)

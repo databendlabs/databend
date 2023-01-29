@@ -69,6 +69,8 @@ impl MetaStore {
 
 #[async_trait::async_trait]
 impl KVApi for MetaStore {
+    type Error = KVAppError;
+
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         match self {
             MetaStore::L(x) => x.upsert_kv(act).await,

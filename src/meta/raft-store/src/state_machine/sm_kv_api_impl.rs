@@ -30,6 +30,8 @@ use crate::state_machine::StateMachine;
 
 #[async_trait::async_trait]
 impl KVApi for StateMachine {
+    type Error = KVAppError;
+
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let cmd = Cmd::UpsertKV(UpsertKV {
             key: act.key,
@@ -57,6 +59,7 @@ impl KVApi for StateMachine {
         let cmd = Cmd::Transaction(txn);
 
         let res = self.sm_tree.txn(true, |mut txn_sled_tree| {
+            // TODO(xp): unwrap???
             let r = self
                 .apply_cmd(&cmd, &mut txn_sled_tree, None, SeqV::<()>::now_ms())
                 .unwrap();
