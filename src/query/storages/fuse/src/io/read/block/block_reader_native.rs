@@ -152,6 +152,7 @@ impl BlockReader {
         if let Some(range) = range {
             column_meta = column_meta.slice(range.start, range.end);
         }
+
         let (offset, length) = (
             column_meta.offset,
             column_meta.pages.iter().map(|p| p.length).sum::<u64>(),

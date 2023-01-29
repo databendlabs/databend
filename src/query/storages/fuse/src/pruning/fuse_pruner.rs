@@ -81,7 +81,7 @@ impl FusePruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
     ) -> Result<Self> {
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
 
         let filter_exprs = push_down.as_ref().map(|extra| {
             extra
@@ -181,7 +181,7 @@ impl FusePruner {
     }
 
     // topn pruner:
-    // if there are ordering + limit clause, use topn pruner
+    // if there are ordering + limit clause and no filters, use topn pruner
     fn topn_pruning(
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
@@ -189,7 +189,7 @@ impl FusePruner {
         let push_down = self.push_down.clone();
         if push_down
             .as_ref()
-            .filter(|p| !p.order_by.is_empty() && p.limit.is_some())
+            .filter(|p| !p.order_by.is_empty() && p.limit.is_some() && p.filters.is_empty())
             .is_some()
         {
             let schema = self.table_schema.clone();

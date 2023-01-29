@@ -118,7 +118,7 @@ async fn test_drive_clustering_information(
         .as_table()
         .read_plan(ctx.clone(), Some(PushDownInfo::default()))
         .await?;
-    ctx.try_set_partitions(source_plan.parts.clone())?;
+    ctx.set_partitions(source_plan.parts.clone())?;
     func.as_table()
         .read_data_block_stream(ctx, &source_plan)
         .await

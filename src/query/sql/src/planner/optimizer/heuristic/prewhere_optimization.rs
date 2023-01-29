@@ -92,7 +92,6 @@ impl PrewhereOptimizer {
     }
 
     pub fn prewhere_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
-        let rel_op = s_expr.plan();
         if s_expr.match_pattern(&self.pattern) {
             let filter: Filter = s_expr.plan().clone().try_into()?;
             let mut get: Scan = s_expr.child(0)?.plan().clone().try_into()?;
@@ -132,7 +131,7 @@ impl PrewhereOptimizer {
                 .iter()
                 .map(|expr| self.prewhere_optimize(expr.clone()))
                 .collect::<Result<Vec<_>>>()?;
-            Ok(SExpr::create(rel_op.clone(), children, None, None))
+            Ok(s_expr.replace_children(children))
         }
     }
 }

@@ -73,7 +73,7 @@ where Self: Transform
             ops.push(BlockOperator::Map { expr });
         }
 
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         let expression_transform = CompoundBlockOperator {
             ctx: func_ctx,
             operators: ops,

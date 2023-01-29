@@ -75,7 +75,7 @@ pub fn prune_and_set_partitions(
     read_options: ReadOptions,
 ) -> Result<()> {
     let mut partitions = Vec::with_capacity(locations.len());
-    let func_ctx = ctx.try_get_function_context()?;
+    let func_ctx = ctx.get_function_context()?;
 
     let row_group_pruner = if read_options.prune_row_groups() {
         Some(RangePrunerCreator::try_create(func_ctx, schema, *filters)?)
@@ -163,7 +163,7 @@ pub fn prune_and_set_partitions(
             ))
         }
     }
-    ctx.try_set_partitions(Partitions::create(PartitionsShuffleKind::Mod, partitions))?;
+    ctx.set_partitions(Partitions::create(PartitionsShuffleKind::Mod, partitions))?;
     Ok(())
 }
 

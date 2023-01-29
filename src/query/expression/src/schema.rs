@@ -332,14 +332,6 @@ impl TableSchema {
                     column_id_set,
                 );
             }
-            TableDataType::Nullable(a) => {
-                Self::build_from_data_type(
-                    a.as_ref(),
-                    next_column_id,
-                    field_column_ids,
-                    column_id_set,
-                );
-            }
             _ => {
                 *next_column_id += 1;
             }

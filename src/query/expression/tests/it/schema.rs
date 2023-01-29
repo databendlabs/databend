@@ -63,6 +63,23 @@ fn test_project_schema_from_tuple() -> Result<()> {
 }
 
 #[test]
+fn test_schema_from_simple_type() -> Result<()> {
+    let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
+    let field2 = TableField::new("b", TableDataType::Number(NumberDataType::UInt64));
+    let field3 = TableField::new(
+        "c",
+        TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+    );
+
+    let schema = TableSchema::new(vec![field1, field2, field3]);
+    assert_eq!(schema.to_column_ids(), vec![0, 1, 2]);
+    assert_eq!(schema.to_flat_column_ids(), vec![0, 1, 2]);
+    assert_eq!(schema.next_column_id(), 3);
+
+    Ok(())
+}
+
+#[test]
 fn test_schema_from_struct() -> Result<()> {
     let schema = create_test_complex_schema();
     let flat_column_ids = schema.to_flat_column_ids();
@@ -73,7 +90,7 @@ fn test_schema_from_struct() -> Result<()> {
         ("c", ColumnIdVector::new(vec![4, 4, 4, 5])),
         ("d", ColumnIdVector::new(vec![6, 6, 6])),
         ("e", ColumnIdVector::new(vec![7, 7, 7])),
-        ("f", ColumnIdVector::new(vec![8, 8])),
+        ("f", ColumnIdVector::new(vec![8])),
         ("g", ColumnIdVector::new(vec![9, 9])),
         ("h", ColumnIdVector::new(vec![10, 10, 11])),
     ];

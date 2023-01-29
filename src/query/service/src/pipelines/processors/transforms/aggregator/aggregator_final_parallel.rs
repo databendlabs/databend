@@ -143,7 +143,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     params: Arc<AggregatorParams>,
     hash_table: Method::HashTable,
 
-    reach_limit: bool,
+    pub(crate) reach_limit: bool,
     // used for deserialization only, so we can reuse it during the loop
     temp_place: Option<StateAddr>,
 }
