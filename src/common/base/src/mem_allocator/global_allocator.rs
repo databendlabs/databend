@@ -19,28 +19,28 @@ use std::alloc::Layout;
 use std::ptr::null_mut;
 use std::ptr::NonNull;
 
-use super::je_allocator::JEAllocator;
-use super::system_allocator::SystemAllocator;
+use crate::mem_allocator::JEAllocator;
 
+/// Global allocator, default is JeAllocator.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GlobalAllocator;
 
-type Fallback = JEAllocator<SystemAllocator>;
+type DefaultAllocator = JEAllocator;
 
 unsafe impl Allocator for GlobalAllocator {
     #[inline(always)]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        Fallback::new(Default::default()).allocate(layout)
+        DefaultAllocator::default().allocate(layout)
     }
 
     #[inline(always)]
     fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        Fallback::new(Default::default()).allocate_zeroed(layout)
+        DefaultAllocator::default().allocate_zeroed(layout)
     }
 
     #[inline(always)]
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        Fallback::new(Default::default()).deallocate(ptr, layout)
+        DefaultAllocator::default().deallocate(ptr, layout)
     }
 
     #[inline(always)]
@@ -50,7 +50,7 @@ unsafe impl Allocator for GlobalAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        Fallback::new(Default::default()).grow(ptr, old_layout, new_layout)
+        DefaultAllocator::default().grow(ptr, old_layout, new_layout)
     }
 
     #[inline(always)]
@@ -60,7 +60,7 @@ unsafe impl Allocator for GlobalAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        Fallback::new(Default::default()).grow_zeroed(ptr, old_layout, new_layout)
+        DefaultAllocator::default().grow_zeroed(ptr, old_layout, new_layout)
     }
 
     #[inline(always)]
@@ -70,7 +70,7 @@ unsafe impl Allocator for GlobalAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        Fallback::new(Default::default()).shrink(ptr, old_layout, new_layout)
+        DefaultAllocator::default().shrink(ptr, old_layout, new_layout)
     }
 }
 

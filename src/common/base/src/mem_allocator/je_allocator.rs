@@ -16,17 +16,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+/// jemalloc allocator.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct JEAllocator<T> {
-    #[allow(dead_code)]
-    allocator: T,
-}
-
-impl<T> JEAllocator<T> {
-    pub fn new(allocator: T) -> Self {
-        Self { allocator }
-    }
-}
+pub struct JEAllocator {}
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod linux_or_macos {
@@ -41,10 +33,6 @@ pub mod linux_or_macos {
 
     use super::JEAllocator;
     use crate::runtime::ThreadTracker;
-
-    impl<T> JEAllocator<T> {
-        pub const FALLBACK: bool = false;
-    }
 
     #[cfg(all(any(
         target_arch = "arm",
@@ -80,7 +68,7 @@ pub mod linux_or_macos {
         }
     }
 
-    unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
+    unsafe impl Allocator for JEAllocator {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
             ThreadTracker::alloc(layout.size() as i64)?;
@@ -221,64 +209,6 @@ pub mod linux_or_macos {
             };
 
             Ok(new_ptr)
-        }
-    }
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub mod fallback {
-    use std::alloc::AllocError;
-    use std::alloc::Allocator;
-    use std::alloc::Layout;
-    use std::ptr::NonNull;
-
-    use super::JEAllocator;
-
-    impl<T> JEAllocator<T> {
-        pub const FALLBACK: bool = true;
-    }
-
-    unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
-        #[inline(always)]
-        fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.allocate(layout)
-        }
-
-        #[inline(always)]
-        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-            self.allocator.deallocate(ptr, layout)
-        }
-
-        #[inline(always)]
-        fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.allocate_zeroed(layout)
-        }
-
-        unsafe fn grow(
-            &self,
-            ptr: NonNull<u8>,
-            old_layout: Layout,
-            new_layout: Layout,
-        ) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.grow(ptr, old_layout, new_layout)
-        }
-
-        unsafe fn grow_zeroed(
-            &self,
-            ptr: NonNull<u8>,
-            old_layout: Layout,
-            new_layout: Layout,
-        ) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.grow_zeroed(ptr, old_layout, new_layout)
-        }
-
-        unsafe fn shrink(
-            &self,
-            ptr: NonNull<u8>,
-            old_layout: Layout,
-            new_layout: Layout,
-        ) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.shrink(ptr, old_layout, new_layout)
         }
     }
 }

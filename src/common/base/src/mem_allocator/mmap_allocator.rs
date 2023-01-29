@@ -16,6 +16,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+/// mmap allocator.
+/// This is used for some hash tables.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MmapAllocator<T> {
     allocator: T,
@@ -42,10 +44,6 @@ pub mod linux {
     const MADV_POPULATE_WRITE: i32 = 23;
 
     const THRESHOLD: usize = 64 << 20;
-
-    impl<T> MmapAllocator<T> {
-        pub const FALLBACK: bool = false;
-    }
 
     impl<T: Allocator> MmapAllocator<T> {
         #[inline(always)]
@@ -303,17 +301,13 @@ pub mod linux {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub mod fallback {
+pub mod not_linux {
     use std::alloc::AllocError;
     use std::alloc::Allocator;
     use std::alloc::Layout;
     use std::ptr::NonNull;
 
     use super::MmapAllocator;
-
-    impl<T> MmapAllocator<T> {
-        pub const FALLBACK: bool = true;
-    }
 
     unsafe impl<T: Allocator> Allocator for MmapAllocator<T> {
         #[inline(always)]

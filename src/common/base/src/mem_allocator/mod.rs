@@ -15,12 +15,12 @@
 mod global_allocator;
 mod je_allocator;
 mod mmap_allocator;
-mod system_allocator;
+mod std_allocator;
 
 pub use global_allocator::GlobalAllocator;
 pub use je_allocator::JEAllocator;
 pub use mmap_allocator::MmapAllocator;
-pub use system_allocator::SystemAllocator;
+pub use std_allocator::StdAllocator;
 
 #[cfg(feature = "memory-profiling")]
 mod profiling;
