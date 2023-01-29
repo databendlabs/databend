@@ -63,7 +63,7 @@ pub const TXN_MAX_RETRY_TIMES: u32 = 10;
 /// It returns (seq, `u64` value).
 /// If not found, (0,0) is returned.
 pub async fn get_u64_value<T: KVApiKey>(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     key: &T,
 ) -> Result<(u64, u64), KVAppError> {
     let res = kv_api.get_kv(&key.to_key()).await?;
@@ -79,7 +79,7 @@ pub async fn get_u64_value<T: KVApiKey>(
 ///
 /// It returns seq number and the data.
 pub async fn get_struct_value<K, T>(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     k: &K,
 ) -> Result<(u64, Option<T>), KVAppError>
 where
@@ -99,7 +99,7 @@ where
 /// It returns a vec of structured key(such as DatabaseNameIdent), such as:
 /// all the `db_name` with prefix `__fd_database/<tenant>/`.
 pub async fn list_keys<K: KVApiKey>(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     key: &K,
 ) -> Result<Vec<K>, KVAppError> {
     let res = kv_api.prefix_list_kv(&key.to_key()).await?;
@@ -127,7 +127,7 @@ pub async fn list_keys<K: KVApiKey>(
 ///
 /// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of `u64`.
 pub async fn list_u64_value<K: KVApiKey>(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     key: &K,
 ) -> Result<(Vec<K>, Vec<u64>), KVAppError> {
     let res = kv_api.prefix_list_kv(&key.to_key()).await?;
@@ -172,7 +172,10 @@ pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaNetworkError> {
 ///
 /// Ids are categorized by generators.
 /// Ids may not be consecutive.
-pub async fn fetch_id<T: KVApiKey>(kv_api: &impl KVApi, generator: T) -> Result<u64, KVAppError> {
+pub async fn fetch_id<T: KVApiKey>(
+    kv_api: &impl KVApi<Error = KVAppError>,
+    generator: T,
+) -> Result<u64, KVAppError> {
     let res = kv_api
         .upsert_kv(UpsertKVReq {
             key: generator.to_key(),
@@ -222,7 +225,7 @@ where
 }
 
 pub async fn send_txn(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     txn_req: TxnRequest,
 ) -> Result<(bool, Vec<TxnOpResponse>), KVAppError> {
     let tx_reply = kv_api.transaction(txn_req).await?;
@@ -317,7 +320,7 @@ pub fn table_has_to_exist(
 
 // Return (share_id_seq, share_id, share_meta_seq, share_meta)
 pub async fn get_share_or_err(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     name_key: &ShareNameIdent,
     msg: impl Display,
 ) -> Result<(u64, u64, u64, ShareMeta), KVAppError> {
@@ -331,7 +334,7 @@ pub async fn get_share_or_err(
 
 /// Returns (share_meta_seq, share_meta)
 pub async fn get_share_meta_by_id_or_err(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     share_id: u64,
     msg: impl Display,
 ) -> Result<(u64, ShareMeta), KVAppError> {
@@ -379,7 +382,7 @@ fn share_has_to_exist(
 
 /// Returns (share_account_meta_seq, share_account_meta)
 pub async fn get_share_account_meta_or_err(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     name_key: &ShareAccountNameIdent,
     msg: impl Display,
 ) -> Result<(u64, ShareAccountMeta), KVAppError> {
@@ -419,7 +422,7 @@ fn share_account_meta_has_to_exist(
 
 /// Returns (share_meta_seq, share_meta)
 pub async fn get_share_id_to_name_or_err(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     share_id: u64,
     msg: impl Display,
 ) -> Result<(u64, ShareNameIdent), KVAppError> {
@@ -456,7 +459,7 @@ pub fn get_share_database_id_and_privilege(
 
 // Return true if all the database data has been removed.
 pub async fn is_all_db_data_removed(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     db_id: u64,
 ) -> Result<bool, KVAppError> {
     let dbid = DatabaseId { db_id };
@@ -484,7 +487,7 @@ pub async fn is_all_db_data_removed(
 // When the database needs to be removed, add `TxnCondition` into `condition`
 //    and `TxnOp` into the `if_then`.
 pub async fn is_db_need_to_be_remove<F>(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     db_id: u64,
     mut f: F,
     condition: &mut Vec<TxnCondition>,
@@ -521,7 +524,7 @@ where
 }
 
 pub async fn get_object_shared_by_share_ids(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     object: &ShareGrantObject,
 ) -> Result<(u64, ObjectSharedByShareIds), KVAppError> {
     let (seq, share_ids): (u64, Option<ObjectSharedByShareIds>) =

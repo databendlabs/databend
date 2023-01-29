@@ -18,7 +18,6 @@ use async_trait::async_trait;
 use common_base::base::replace_nth_char;
 use common_exception::ErrorCode;
 use common_meta_types::GetKVReply;
-use common_meta_types::KVAppError;
 use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
 use common_meta_types::TxnReply;
@@ -69,49 +68,67 @@ pub fn get_start_and_end_of_prefix(prefix: &str) -> common_exception::Result<(St
     Ok((prefix.to_string(), prefix_of_string(prefix)?))
 }
 
+/// API of a key-value store.
 #[async_trait]
 pub trait KVApi: Send + Sync {
-    async fn upsert_kv(&self, req: UpsertKVReq) -> Result<UpsertKVReply, KVAppError>;
+    /// The Error an implementation returns.
+    ///
+    /// Depends on the implementation the error could be different.
+    /// E.g., a remove KVApi impl returns network error or remote storage error.
+    /// A local KVApi impl just returns storage error.
+    type Error: std::error::Error + Send + Sync + 'static;
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError>;
+    /// Update or insert a key-value record.
+    async fn upsert_kv(&self, req: UpsertKVReq) -> Result<UpsertKVReply, Self::Error>;
 
-    // mockall complains about AsRef... so we use String here
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError>;
+    /// Get a key-value record by key.
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error>;
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError>;
+    /// Get several key-values by keys.
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error>;
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError>;
+    /// List key-value records that are starts with the specified prefix.
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error>;
+
+    /// Run transaction: update one or more records if specified conditions are met.
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error>;
 }
 
 #[async_trait]
 impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
+    type Error = U::Error;
+
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         self.deref().upsert_kv(act).await
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
         self.deref().get_kv(key).await
     }
 
-    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, KVAppError> {
+    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, Self::Error> {
         self.deref().mget_kv(key).await
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
         self.deref().prefix_list_kv(prefix).await
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         self.deref().transaction(txn).await
     }
 }
 
 pub trait AsKVApi {
-    fn as_kv_api(&self) -> &dyn KVApi;
+    type Error: std::error::Error;
+
+    fn as_kv_api(&self) -> &dyn KVApi<Error = Self::Error>;
 }
 
 impl<T: KVApi> AsKVApi for T {
-    fn as_kv_api(&self) -> &dyn KVApi {
+    type Error = T::Error;
+
+    fn as_kv_api(&self) -> &dyn KVApi<Error = Self::Error> {
         self
     }
 }

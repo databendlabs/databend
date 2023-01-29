@@ -47,7 +47,7 @@ use crate::ShareApi;
 pub struct ShareApiTestSuite {}
 
 async fn if_share_object_data_exists(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     entry: &ShareGrantEntry,
 ) -> Result<bool, KVAppError> {
     if let Ok((_seq, _share_ids)) = get_object_shared_by_share_ids(kv_api, &entry.object).await {
@@ -58,7 +58,7 @@ async fn if_share_object_data_exists(
 
 // Return true if all the share data has been removed.
 async fn is_all_share_data_removed(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     share_name: &ShareNameIdent,
     share_id: u64,
     share_meta: &ShareMeta,
@@ -110,7 +110,7 @@ impl ShareApiTestSuite {
     pub async fn test_single_node_share<B, MT>(b: B) -> anyhow::Result<()>
     where
         B: ApiBuilder<MT>,
-        MT: ShareApi + AsKVApi + SchemaApi,
+        MT: ShareApi + AsKVApi<Error = KVAppError> + SchemaApi,
     {
         let suite = ShareApiTestSuite {};
 
@@ -126,7 +126,10 @@ impl ShareApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn share_create_show_drop<MT: ShareApi + AsKVApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn share_create_show_drop<MT: ShareApi + AsKVApi<Error = KVAppError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let share1 = "share1";
         let share_name = ShareNameIdent {
@@ -190,7 +193,7 @@ impl ShareApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn share_add_remove_account<MT: ShareApi + AsKVApi>(
+    async fn share_add_remove_account<MT: ShareApi + AsKVApi<Error = KVAppError>>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -483,7 +486,7 @@ impl ShareApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn share_grant_revoke_object<MT: ShareApi + AsKVApi + SchemaApi>(
+    async fn share_grant_revoke_object<MT: ShareApi + AsKVApi<Error = KVAppError> + SchemaApi>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -824,7 +827,7 @@ impl ShareApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn get_share_grant_objects<MT: ShareApi + AsKVApi + SchemaApi>(
+    async fn get_share_grant_objects<MT: ShareApi + AsKVApi<Error = KVAppError> + SchemaApi>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -952,7 +955,9 @@ impl ShareApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn get_grant_privileges_of_object<MT: ShareApi + AsKVApi + SchemaApi>(
+    async fn get_grant_privileges_of_object<
+        MT: ShareApi + AsKVApi<Error = KVAppError> + SchemaApi,
+    >(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {

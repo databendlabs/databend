@@ -27,7 +27,7 @@ use crate::KVApiKey;
 
 /// Get existing value by key. Panic if key is absent.
 pub(crate) async fn get_kv_data<T>(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     key: &impl KVApiKey,
 ) -> Result<T, KVAppError>
 where

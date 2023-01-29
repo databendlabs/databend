@@ -177,7 +177,7 @@ fn calc_and_compare_drop_on_table_result(result: Vec<Arc<TableInfo>>, expected: 
 }
 
 async fn upsert_test_data(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     key: &impl KVApiKey,
     value: Vec<u8>,
 ) -> Result<u64, KVAppError> {
@@ -195,7 +195,7 @@ async fn upsert_test_data(
 }
 
 async fn delete_test_data(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     key: &impl KVApiKey,
 ) -> Result<(), KVAppError> {
     let _res = kv_api
@@ -215,7 +215,7 @@ impl SchemaApiTestSuite {
     pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
     where
         B: ApiBuilder<MT>,
-        MT: ShareApi + AsKVApi + SchemaApi,
+        MT: ShareApi + AsKVApi<Error = KVAppError> + SchemaApi,
     {
         let suite = SchemaApiTestSuite {};
 
@@ -322,7 +322,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn database_and_table_rename<MT: SchemaApi + AsKVApi>(
+    async fn database_and_table_rename<MT: SchemaApi + AsKVApi<Error = KVAppError>>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -637,7 +637,9 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn database_create_from_share_and_drop<MT: ShareApi + AsKVApi + SchemaApi>(
+    async fn database_create_from_share_and_drop<
+        MT: ShareApi + AsKVApi<Error = KVAppError> + SchemaApi,
+    >(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -2236,7 +2238,9 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn database_drop_out_of_retention_time_history<MT: SchemaApi + AsKVApi>(
+    async fn database_drop_out_of_retention_time_history<
+        MT: SchemaApi + AsKVApi<Error = KVAppError>,
+    >(
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -2298,7 +2302,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn create_out_of_retention_time_db<MT: SchemaApi + AsKVApi>(
+    async fn create_out_of_retention_time_db<MT: SchemaApi + AsKVApi<Error = KVAppError>>(
         self,
         mt: &MT,
         db_name: DatabaseNameIdent,
@@ -2335,7 +2339,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn database_gc_out_of_retention_time<MT: SchemaApi + AsKVApi>(
+    async fn database_gc_out_of_retention_time<MT: SchemaApi + AsKVApi<Error = KVAppError>>(
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -2418,7 +2422,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn create_out_of_retention_time_table<MT: SchemaApi + AsKVApi>(
+    async fn create_out_of_retention_time_table<MT: SchemaApi + AsKVApi<Error = KVAppError>>(
         self,
         mt: &MT,
         name_ident: TableNameIdent,
@@ -2470,7 +2474,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn table_gc_out_of_retention_time<MT: SchemaApi + AsKVApi>(
+    async fn table_gc_out_of_retention_time<MT: SchemaApi + AsKVApi<Error = KVAppError>>(
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -2604,7 +2608,9 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn table_drop_out_of_retention_time_history<MT: SchemaApi + AsKVApi>(
+    async fn table_drop_out_of_retention_time_history<
+        MT: SchemaApi + AsKVApi<Error = KVAppError>,
+    >(
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -3398,7 +3404,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    async fn get_tables_from_share<MT: ShareApi + AsKVApi + SchemaApi>(
+    async fn get_tables_from_share<MT: ShareApi + AsKVApi<Error = KVAppError> + SchemaApi>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {

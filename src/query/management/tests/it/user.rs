@@ -42,6 +42,8 @@ mock! {
     pub KV {}
     #[async_trait]
     impl KVApi for KV {
+        type Error = KVAppError;
+
         async fn upsert_kv(
             &self,
             act: UpsertKVReq,
