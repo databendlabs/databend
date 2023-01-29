@@ -32,7 +32,7 @@ echo "CREATE TABLE test_tsv
 
 # do copy
 echo "SET GLOBAL input_read_buffer_size = 111;" | $MYSQL_CLIENT_CONNECT
-COPY_SQL="copy into test_tsv from 's3://testbucket/tmp/multi_tsv/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900/') PATTERN = '.*' FILE_FORMAT = (type = 'TSV') force=true"
+COPY_SQL="copy into test_tsv from 's3://testbucket/tmp/multi_tsv/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900/') PATTERN = '.*' FILE_FORMAT = (type = TSV) force=true"
 echo "${COPY_SQL}" |  $MYSQL_CLIENT_CONNECT
 echo "SET GLOBAL input_read_buffer_size = 1048576;" | $MYSQL_CLIENT_CONNECT
 
