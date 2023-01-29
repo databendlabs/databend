@@ -25,7 +25,6 @@ use common_arrow::arrow::io::parquet::read as pread;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
@@ -42,13 +41,12 @@ use common_pipeline_core::Pipeline;
 use opendal::Operator;
 
 use super::TableContext;
-use crate::parquet_part::ParquetLocationPart;
 use crate::ReadOptions;
 
 pub struct ParquetTable {
     table_args: Vec<Scalar>,
 
-    file_locations: Vec<String>,
+    pub(super) file_locations: Vec<String>,
     pub(super) table_info: TableInfo,
     pub(super) arrow_schema: ArrowSchema,
     pub(super) operator: Operator,
@@ -198,24 +196,10 @@ impl Table for ParquetTable {
     /// So they don't have any real statistics.
     async fn read_partitions(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _push_down: Option<PushDownInfo>,
+        ctx: Arc<dyn TableContext>,
+        push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((
-            PartStatistics::new_estimated(
-                0,
-                0,
-                self.file_locations.len(),
-                self.file_locations.len(),
-            ),
-            Partitions::create(
-                PartitionsShuffleKind::Mod,
-                self.file_locations
-                    .iter()
-                    .map(|location| ParquetLocationPart::create(location.clone()))
-                    .collect(),
-            ),
-        ))
+        self.do_read_partitions(ctx, push_down).await
     }
 
     fn read_data(

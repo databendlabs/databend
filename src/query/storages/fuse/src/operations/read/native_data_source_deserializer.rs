@@ -413,7 +413,7 @@ impl Processor for NativeDeserializeDataTransform {
                 }
             }?;
 
-            // Step 5: Add the block to topk
+            // Step 5: Add the block to output data
             self.add_block(data_block)?;
         }
 
