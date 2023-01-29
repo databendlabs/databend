@@ -11,6 +11,6 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
      b Int NULL
  );" | $MYSQL_CLIENT_CONNECT
 
- curl -sH "insert_sql:insert into test_tsv file_format = (type = 'TSV')" -F "upload=@${CURDIR}/too_many_columns.tsv" -H "max_threads: 1" \
+ curl -sH "insert_sql:insert into test_tsv file_format = (type = TSV)" -F "upload=@${CURDIR}/too_many_columns.tsv" -H "max_threads: 1" \
  -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "too many columns"
 
