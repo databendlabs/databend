@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod global;
-mod jemalloc;
-mod mmap;
-mod std_;
+use crate::mem_allocator::JEAllocator;
 
-pub use default::DefaultAllocator;
-pub use global::GlobalAllocator;
-pub use jemalloc::JEAllocator;
-pub use mmap::MmapAllocator;
-pub use std_::StdAllocator;
-
-mod default;
-#[cfg(feature = "memory-profiling")]
-mod profiling;
-
-#[cfg(feature = "memory-profiling")]
-pub use profiling::dump_profile;
+// Default allocator is jemalloc, you can change it to std:
+// pub type DefaultAllocator = StdAllocator;
+pub type DefaultAllocator = JEAllocator;
