@@ -19,13 +19,13 @@ use std::alloc::Layout;
 use std::ptr::null_mut;
 use std::ptr::NonNull;
 
-use super::je_allocator::JEAllocator;
 use super::system_allocator::SystemAllocator;
+use crate::mem_allocator::AllocatorProxy;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GlobalAllocator;
 
-type Fallback = JEAllocator<SystemAllocator>;
+type Fallback = AllocatorProxy<SystemAllocator>;
 
 unsafe impl Allocator for GlobalAllocator {
     #[inline(always)]

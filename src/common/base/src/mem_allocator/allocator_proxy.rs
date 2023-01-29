@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod allocator_proxy;
-mod global_allocator;
-mod je_allocator;
-mod mmap_allocator;
-mod system_allocator;
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-pub use allocator_proxy::AllocatorProxy;
-pub use global_allocator::GlobalAllocator;
-pub use mmap_allocator::MmapAllocator;
-pub use system_allocator::SystemAllocator;
+/// Proxy for the allocators.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AllocatorProxy<T> {
+    #[allow(dead_code)]
+    allocator: T,
+}
 
-#[cfg(feature = "memory-profiling")]
-mod profiling;
-
-#[cfg(feature = "memory-profiling")]
-pub use profiling::dump_profile;
+impl<T> AllocatorProxy<T> {
+    pub fn new(allocator: T) -> Self {
+        Self { allocator }
+    }
+}

@@ -16,18 +16,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct JEAllocator<T> {
-    #[allow(dead_code)]
-    allocator: T,
-}
-
-impl<T> JEAllocator<T> {
-    pub fn new(allocator: T) -> Self {
-        Self { allocator }
-    }
-}
-
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod linux_or_macos {
     use std::alloc::AllocError;
@@ -39,10 +27,10 @@ pub mod linux_or_macos {
     use libc::c_void;
     use tikv_jemalloc_sys as ffi;
 
-    use super::JEAllocator;
+    use crate::mem_allocator::AllocatorProxy;
     use crate::runtime::ThreadTracker;
 
-    impl<T> JEAllocator<T> {
+    impl<T> AllocatorProxy<T> {
         pub const FALLBACK: bool = false;
     }
 
@@ -80,7 +68,7 @@ pub mod linux_or_macos {
         }
     }
 
-    unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
+    unsafe impl<T: Allocator> Allocator for AllocatorProxy<T> {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
             ThreadTracker::alloc(layout.size() as i64)?;
@@ -232,13 +220,13 @@ pub mod fallback {
     use std::alloc::Layout;
     use std::ptr::NonNull;
 
-    use super::JEAllocator;
+    use super::AllocatorProxy;
 
-    impl<T> JEAllocator<T> {
+    impl<T> AllocatorProxy<T> {
         pub const FALLBACK: bool = true;
     }
 
-    unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
+    unsafe impl<T: Allocator> Allocator for AllocatorProxy<T> {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
             self.allocator.allocate(layout)
