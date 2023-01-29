@@ -99,7 +99,10 @@ pub async fn main() -> Result<()> {
 }
 
 async fn run_mysql_client() -> Result<()> {
-    println!("MySQL client starts to run...");
+    println!(
+        "MySQL client starts to run with: {:?}",
+        SqlLogicTestArgs::parse()
+    );
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
     run_suits(suits, ClientType::MySQL).await?;
@@ -107,7 +110,10 @@ async fn run_mysql_client() -> Result<()> {
 }
 
 async fn run_http_client() -> Result<()> {
-    println!("Http client starts to run...");
+    println!(
+        "Http client starts to run with: {:?}",
+        SqlLogicTestArgs::parse()
+    );
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
     run_suits(suits, ClientType::Http).await?;
@@ -115,7 +121,10 @@ async fn run_http_client() -> Result<()> {
 }
 
 async fn run_ck_http_client() -> Result<()> {
-    println!("Clickhouse http client starts to run...");
+    println!(
+        "Clickhouse http client starts to run with: {:?}",
+        SqlLogicTestArgs::parse()
+    );
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
     run_suits(suits, ClientType::Clickhouse).await?;
@@ -223,6 +232,8 @@ async fn run_file_async(
     client_type: &ClientType,
     filename: impl AsRef<Path>,
 ) -> std::result::Result<Vec<TestError>, TestError> {
+    let start = Instant::now();
+
     println!(
         "Running {} test for file: {} ...",
         client_type,
@@ -250,10 +261,11 @@ async fn run_file_async(
         false => "❌",
     };
     println!(
-        "Completed {} test for file: {} {}",
+        "Completed {} test for file: {} {} ({:?})",
         client_type,
         filename.as_ref().display(),
         run_file_status,
+        start.elapsed(),
     );
     Ok(error_records)
 }
