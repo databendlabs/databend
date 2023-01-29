@@ -348,6 +348,7 @@ impl ScheduleQueue {
     ) {
         unsafe {
             workers_condvar.inc_active_async_worker();
+            let process_future = proc.async_process();
             executor
                 .async_runtime
                 .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
@@ -356,7 +357,7 @@ impl ScheduleQueue {
                     proc.clone(),
                     global_queue,
                     workers_condvar,
-                    proc.async_process(),
+                    process_future,
                 )));
         }
     }
