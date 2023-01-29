@@ -611,6 +611,7 @@ impl MetaNode {
 
         // Joining cluster has to use advertise host instead of listen host.
         let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
+
         #[allow(clippy::never_loop)]
         for addr in addrs {
             let timeout = Some(Duration::from_millis(10_000));
@@ -723,6 +724,32 @@ impl MetaNode {
 
         if membership.membership.contains(&self.sto.id) {
             return Ok(Err(format!("node {} already in cluster", self.sto.id)));
+        }
+
+        Ok(Ok(()))
+    }
+
+    /// Check if a node is allowed to leave the cluster.
+    ///
+    /// A cluster must have at least one node in it.
+    pub async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
+        let m = {
+            let sm = self.sto.get_state_machine().await;
+            sm.get_membership()?
+        };
+        info!("check can_leave: id: {}, membership: {:?}", id, m);
+
+        let membership = match m {
+            None => {
+                return Ok(Err("no membership, can not leave".to_string()));
+            }
+            Some(x) => x.membership,
+        };
+
+        let config0 = membership.get_ith_config(0).unwrap();
+
+        if config0.contains(&id) && config0.len() == 1 {
+            return Ok(Err(format!("can not remove the last node: {:?}", config0)));
         }
 
         Ok(Ok(()))
@@ -917,11 +944,11 @@ impl MetaNode {
 
         let forward = req.forward_to_leader;
 
-        let as_leader_res = self.assume_leader().await;
-        debug!("as_leader: is_err: {}", as_leader_res.is_err());
+        let assume_leader_res = self.assume_leader().await;
+        debug!("assume_leader: is_err: {}", assume_leader_res.is_err());
 
         // Handle the request locally or return a ForwardToLeader error
-        let op_err = match as_leader_res {
+        let op_err = match assume_leader_res {
             Ok(leader) => {
                 let res = leader.handle_forwardable_req(req.clone()).await;
                 match res {
