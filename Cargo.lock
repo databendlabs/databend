@@ -1800,7 +1800,10 @@ dependencies = [
  "common-io",
  "futures",
  "petgraph",
+ "serde",
+ "serde_json",
  "tokio",
+ "typetag",
 ]
 
 [[package]]

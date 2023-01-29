@@ -21,4 +21,7 @@ futures = "0.3.24"
 petgraph = "0.6.2"
 
 [dev-dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
 tokio = { version = "1.23.1", features = ["full"] }
+typetag = "0.2.3"
