@@ -143,14 +143,16 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 pub struct BucketAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
-    area: Area,
-    method: Method,
-    params: Arc<AggregatorParams>,
-    hash_table: Method::HashTable,
+    pub(crate) area: Area,
+    pub(crate) method: Method,
+    pub(crate) params: Arc<AggregatorParams>,
 
+    pub(crate) hash_table: Method::HashTable,
     pub(crate) reach_limit: bool,
     // used for deserialization only, so we can reuse it during the loop
-    temp_place: Option<StateAddr>,
+    pub(crate) temp_place: Option<StateAddr>,
+    pub(crate) generated: bool,
+    pub(crate) states_dropped: bool,
 }
 
 impl<const HAS_AGG: bool, Method> Aggregator for BucketAggregator<HAS_AGG, Method>
@@ -221,61 +223,11 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
-        let value_size = estimated_key_size(&self.hash_table);
-        let mut group_columns_builder =
-            self.method
-                .group_columns_builder(self.hash_table.len(), value_size, &self.params);
-
-        if !HAS_AGG {
-            for group_entity in self.hash_table.iter() {
-                group_columns_builder.append_value(group_entity.key());
-            }
-
-            let columns = group_columns_builder.finish()?;
-
-            Ok(vec![DataBlock::new_from_columns(columns)])
-        } else {
-            let aggregate_functions = &self.params.aggregate_functions;
-            let offsets_aggregate_states = &self.params.offsets_aggregate_states;
-
-            let mut aggregates_column_builder = {
-                let mut values = vec![];
-                for aggregate_function in aggregate_functions {
-                    let data_type = aggregate_function.return_type()?;
-                    let builder = ColumnBuilder::with_capacity(&data_type, self.hash_table.len());
-                    values.push(builder)
-                }
-                values
-            };
-
-            for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
-                let places = self
-                    .hash_table
-                    .iter()
-                    .map(|group_entity| {
-                        let place = Into::<StateAddr>::into(*group_entity.get());
-                        place.next(offsets_aggregate_states[idx])
-                    })
-                    .collect();
-
-                let builder = aggregates_column_builder[idx].borrow_mut();
-                aggregate_function.batch_merge_result(places, builder)?;
-            }
-
-            for group_entity in self.hash_table.iter() {
-                group_columns_builder.append_value(group_entity.key());
-            }
-
-            // Build final state block.
-            let mut columns = aggregates_column_builder
-                .into_iter()
-                .map(|builder| builder.build())
-                .collect::<Vec<_>>();
-
-            let group_columns = group_columns_builder.finish()?;
-            columns.extend_from_slice(&group_columns);
-            Ok(vec![DataBlock::new_from_columns(columns)])
+        if self.generated {
+            return Ok(vec![]);
         }
+        self.generated = true;
+        Self::generate_data(&self.hash_table, &self.params, &self.method)
     }
 }
 
@@ -297,6 +249,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             hash_table,
             reach_limit: false,
             temp_place,
+            generated: false,
+            states_dropped: false,
         })
     }
 
@@ -310,6 +264,67 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
         }
         self.generate()
+    }
+
+    pub(crate) fn generate_data(
+        hash_table: &Method::HashTable,
+        params: &AggregatorParams,
+        method: &Method,
+    ) -> Result<Vec<DataBlock>> {
+        let value_size = estimated_key_size(hash_table);
+        let mut group_columns_builder =
+            method
+                .group_columns_builder(hash_table.len(), value_size, params);
+
+        if !HAS_AGG {
+            for group_entity in hash_table.iter() {
+                group_columns_builder.append_value(group_entity.key());
+            }
+
+            let columns = group_columns_builder.finish()?;
+
+            Ok(vec![DataBlock::new_from_columns(columns)])
+        } else {
+            let aggregate_functions = &params.aggregate_functions;
+            let offsets_aggregate_states = &params.offsets_aggregate_states;
+
+            let mut aggregates_column_builder = {
+                let mut values = vec![];
+                for aggregate_function in aggregate_functions {
+                    let data_type = aggregate_function.return_type()?;
+                    let builder = ColumnBuilder::with_capacity(&data_type, hash_table.len());
+                    values.push(builder)
+                }
+                values
+            };
+
+            for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
+                let places = hash_table
+                    .iter()
+                    .map(|group_entity| {
+                        let place = Into::<StateAddr>::into(*group_entity.get());
+                        place.next(offsets_aggregate_states[idx])
+                    })
+                    .collect();
+
+                let builder = aggregates_column_builder[idx].borrow_mut();
+                aggregate_function.batch_merge_result(places, builder)?;
+            }
+
+            for group_entity in hash_table.iter() {
+                group_columns_builder.append_value(group_entity.key());
+            }
+
+            // Build final state block.
+            let mut columns = aggregates_column_builder
+                .into_iter()
+                .map(|builder| builder.build())
+                .collect::<Vec<_>>();
+
+            let group_columns = group_columns_builder.finish()?;
+            columns.extend_from_slice(&group_columns);
+            Ok(vec![DataBlock::new_from_columns(columns)])
+        }
     }
 
     /// Allocate aggregation function state for each key(the same key can always get the same state)
@@ -355,13 +370,15 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 
         places
     }
-}
 
-impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
-{
-    fn drop(&mut self) {
-        let aggregator_params = self.params.as_ref();
+    pub(crate) fn clear_table<T: HashtableLike<Value = usize>>(
+        table: &mut T,
+        aggregator_params: &AggregatorParams,
+    ) {
+        if table.len() == 0 {
+            return;
+        }
+
         let aggregate_functions = &aggregator_params.aggregate_functions;
         let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
 
@@ -378,7 +395,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             .collect::<Vec<_>>();
 
         if !state_offsets.is_empty() {
-            for group_entity in self.hash_table.iter() {
+            for group_entity in table.iter() {
                 let place = Into::<StateAddr>::into(*group_entity.get());
 
                 for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
@@ -386,12 +403,38 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 }
             }
         }
+        table.clear();
+    }
+}
 
+impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+{
+    fn drop(&mut self) {
+        if self.states_dropped {
+            return;
+        }
+        Self::clear_table(&mut self.hash_table, &self.params);
         if let Some(temp_place) = self.temp_place {
+            let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+            let aggregate_functions = &self.params.aggregate_functions;
+            
+            let functions = aggregate_functions
+                .iter()
+                .filter(|p| p.need_manual_drop_state())
+                .collect::<Vec<_>>();
+            let state_offsets = offsets_aggregate_states
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+                .map(|(_, s)| *s)
+                .collect::<Vec<_>>();
+
             for (state_offset, function) in state_offsets.iter().zip(functions.iter()) {
                 let place = temp_place.next(*state_offset);
                 unsafe { function.drop_state(place) }
             }
         }
+        self.states_dropped = true;
     }
 }

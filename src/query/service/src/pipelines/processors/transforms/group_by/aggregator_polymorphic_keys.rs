@@ -475,7 +475,7 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 
 #[derive(Clone)]
 pub struct TwoLevelHashMethod<Method: HashMethod + Send> {
-    method: Method,
+    pub(crate) method: Method,
 }
 
 impl<Method: HashMethod + Send> TwoLevelHashMethod<Method> {

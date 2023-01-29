@@ -16,31 +16,22 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::BlockEntry;
-use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
-use common_expression::Value;
-use common_functions::aggregates::StateAddr;
 use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use tracing::info;
 
-use super::estimated_key_size;
 use super::BucketAggregator;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
 use crate::pipelines::processors::transforms::aggregator::SingleStateAggregator;
-use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::group_by::TwoLevelHashMethod;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
-use crate::pipelines::processors::AggregatorParams;
 
 pub trait TwoLevelAggregatorLike
 where Self: Aggregator + Send
@@ -121,103 +112,29 @@ where
     }
 
     fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
-        let mut data_blocks = Vec::with_capacity(256);
-
-        fn clear_table<T: HashtableLike<Value = usize>>(table: &mut T, params: &AggregatorParams) {
-            let aggregate_functions = &params.aggregate_functions;
-            let offsets_aggregate_states = &params.offsets_aggregate_states;
-
-            let functions = aggregate_functions
-                .iter()
-                .filter(|p| p.need_manual_drop_state())
-                .collect::<Vec<_>>();
-
-            let states = offsets_aggregate_states
-                .iter()
-                .enumerate()
-                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
-                .map(|(_, s)| *s)
-                .collect::<Vec<_>>();
-
-            if !states.is_empty() {
-                for group_entity in table.iter() {
-                    let place = Into::<StateAddr>::into(*group_entity.get());
-
-                    for (function, state_offset) in functions.iter().zip(states.iter()) {
-                        unsafe { function.drop_state(place.next(*state_offset)) }
-                    }
-                }
-            }
-
-            table.clear();
-        }
-
         for (bucket, inner_table) in agg.hash_table.iter_tables_mut().enumerate() {
             if inner_table.len() == 0 {
                 continue;
             }
 
-            let capacity = inner_table.len();
-            let iterator = inner_table.iter();
-
-            let aggregator_params = agg.params.as_ref();
-            let funcs = &aggregator_params.aggregate_functions;
-            let aggr_len = funcs.len();
-            let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
-
-            // Builders.
-            let mut state_builders: Vec<StringColumnBuilder> = (0..aggr_len)
-                .map(|_| StringColumnBuilder::with_capacity(capacity, capacity * 4))
-                .collect();
-
-            let value_size = estimated_key_size(inner_table);
-            let mut group_key_builder = agg.method.keys_column_builder(capacity, value_size);
-
-            for group_entity in iterator {
-                let place = Into::<StateAddr>::into(*group_entity.get());
-
-                for (idx, func) in funcs.iter().enumerate() {
-                    let arg_place = place.next(offsets_aggregate_states[idx]);
-                    func.serialize(arg_place, &mut state_builders[idx].data)?;
-                    state_builders[idx].commit_row();
-                }
-
-                group_key_builder.append_value(group_entity.key());
-            }
-
-            let mut columns = Vec::with_capacity(state_builders.len() + 1);
-            for builder in state_builders.into_iter() {
-                let col = builder.build();
-                columns.push(BlockEntry {
-                    value: Value::Column(Column::String(col)),
-                    data_type: DataType::String,
-                });
-            }
-
-            let col = group_key_builder.finish();
-            let num_rows = col.len();
-            let group_key_type = col.data_type();
-
-            columns.push(BlockEntry {
-                value: Value::Column(col),
-                data_type: group_key_type,
-            });
-
-            data_blocks.push(DataBlock::new_with_meta(
-                columns,
-                num_rows,
-                Some(AggregateInfo::create(bucket as isize)),
-            ));
-
-            clear_table(inner_table, &agg.params);
-
+            let blocks = Self::generate_data(inner_table, &agg.params, &agg.method.method)?;
+            Self::clear_table(inner_table, &agg.params);
             // streaming return two level blocks by bucket
-            return Ok(data_blocks);
+            let blocks = blocks
+                .into_iter()
+                .map(|block| {
+                    block
+                        .add_meta(Some(AggregateInfo::create(bucket as isize)))
+                        .unwrap()
+                })
+                .collect::<Vec<_>>();
+
+            return Ok(blocks);
         }
 
         drop(agg.area.take());
         agg.states_dropped = true;
-        Ok(data_blocks)
+        Ok(vec![])
     }
 }
 
@@ -246,8 +163,62 @@ where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
-    const SUPPORT_TWO_LEVEL: bool = false;
+    const SUPPORT_TWO_LEVEL: bool = true;
     type TwoLevelAggregator = BucketAggregator<HAS_AGG, TwoLevelHashMethod<Method>>;
+
+    fn get_state_cardinality(&self) -> usize {
+        self.hash_table.len()
+    }
+
+    fn convert_two_level(mut self) -> Result<TwoLevelAggregator<Self>> {
+        let instant = Instant::now();
+        let method = self.method.clone();
+        let two_level_method = TwoLevelHashMethod::create(method);
+        let mut two_level_hashtable = two_level_method.create_hash_table()?;
+
+        unsafe {
+            for item in self.hash_table.iter() {
+                match two_level_hashtable.insert_and_entry(item.key()) {
+                    Ok(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                    Err(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                };
+            }
+        }
+
+        info!(
+            "Convert to two level BucketAggregator elapsed: {:?}",
+            instant.elapsed()
+        );
+
+        self.states_dropped = true;
+        let mut inner = BucketAggregator::<HAS_AGG, TwoLevelHashMethod<Method>>::create(
+            two_level_method,
+            self.params.clone(),
+        )?;
+        inner.temp_place = self.temp_place.clone();
+
+        Ok(TwoLevelAggregator::<Self> { inner })
+    }
+
+    fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
+        for inner_table in agg.hash_table.iter_tables_mut() {
+            if inner_table.len() == 0 {
+                continue;
+            }
+
+            let blocks = Self::generate_data(inner_table, &agg.params, &agg.method.method)?;
+            Self::clear_table(inner_table, &agg.params);
+            return Ok(blocks);
+        }
+        
+        // some temp place stats dropped in drop function
+        // agg.states_dropped = true;
+        Ok(vec![])
+    }
 }
 
 // Example: TwoLevelAggregator<PartialAggregator<HAS_AGG, Method>> ->
@@ -269,5 +240,14 @@ impl<T: TwoLevelAggregatorLike> Aggregator for TwoLevelAggregator<T> {
     #[inline(always)]
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
         T::convert_two_level_block(&mut self.inner)
+    }
+    #[inline(always)]
+    fn should_expand_table(&self) -> bool {
+        self.inner.should_expand_table()
+    }
+
+    // only implement for partial aggregator
+    fn streaming_consume(&mut self, block: DataBlock) -> Result<DataBlock> {
+        self.inner.streaming_consume(block)
     }
 }

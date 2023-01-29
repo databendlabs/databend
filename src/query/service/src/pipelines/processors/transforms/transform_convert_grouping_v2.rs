@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -49,6 +50,7 @@ pub struct TransformConvertGroupingV2<
     output_num: u64,
     blocks: VecDeque<DataBlock>,
     partition_expr: StrengthReducedU64,
+    counts: BTreeMap<isize, usize>,
 }
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
@@ -71,6 +73,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
             output_num: output_num as u64,
             blocks: VecDeque::new(),
             partition_expr: StrengthReducedU64::new(output_num as u64),
+            counts: BTreeMap::new(),
         };
 
         Ok(ProcessorPtr::create(Box::new(transform)))
@@ -90,13 +93,25 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
                     .clone()
                     .add_meta(Some(AggregateInfo::create(bucket)))?;
 
+                self.counts
+                    .entry(1)
+                    .and_modify(|e| *e += data_block.num_rows())
+                    .or_insert(data_block.num_rows());
                 self.blocks.push_back(data_block);
                 return Ok(());
             }
         }
+        self.counts
+            .entry(-1)
+            .and_modify(|e| *e += data_block.num_rows())
+            .or_insert(data_block.num_rows());
+
         let blocks = self.partition(data_block).unwrap();
 
         for (bucket, block) in blocks.into_iter().enumerate() {
+            if block.num_rows() == 0 {
+                continue;
+            }
             let block = block.add_meta(Some(AggregateInfo::create(bucket as isize)))?;
             self.blocks.push_back(block);
         }
@@ -159,6 +174,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static + Send 
         }
 
         if self.input_port.is_finished() {
+            println!("counts {:?}", self.counts);
             self.output_port.finish();
             return Ok(Event::Finished);
         }

@@ -215,15 +215,16 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    fn generate_data(&mut self) -> Result<Vec<DataBlock>> {
-        if self.generated || self.hash_table.len() == 0 {
-            self.drop_states();
+    pub(crate) fn generate_data(
+        hashtable: &Method::HashTable,
+        aggregator_params: &AggregatorParams,
+        method: &Method,
+    ) -> Result<Vec<DataBlock>> {
+        if hashtable.len() == 0 {
             return Ok(vec![]);
         }
-        self.generated = true;
 
-        let state_groups_len = self.hash_table.len();
-        let aggregator_params = self.params.as_ref();
+        let state_groups_len = hashtable.len();
         let funcs = &aggregator_params.aggregate_functions;
         let aggr_len = funcs.len();
         let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
@@ -233,11 +234,9 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             .map(|_| StringColumnBuilder::with_capacity(state_groups_len, state_groups_len * 4))
             .collect::<Vec<_>>();
 
-        let value_size = estimated_key_size(&self.hash_table);
-        let mut group_key_builder = self
-            .method
-            .keys_column_builder(state_groups_len, value_size);
-        for group_entity in self.hash_table.iter() {
+        let value_size = estimated_key_size(hashtable);
+        let mut group_key_builder = method.keys_column_builder(state_groups_len, value_size);
+        for group_entity in hashtable.iter() {
             let place = Into::<StateAddr>::into(*group_entity.get());
 
             if HAS_AGG {
@@ -297,7 +296,14 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
-        self.generate_data()
+        if self.generated {
+            return Ok(vec![]);
+        }
+        self.generated = true;
+        let result = Self::generate_data(&self.hash_table, &self.params, &self.method);
+
+        Self::clear_table(&mut self.hash_table, &self.params);
+        result
     }
 
     fn should_expand_table(&self) -> bool {
@@ -308,6 +314,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let ht_mem = self.hash_table.bytes_len();
         let ht_rows = self.hash_table.len();
 
+        println!("{:?} {}", self.input_rows, ht_rows);
         if ht_rows == 0 {
             return true;
         }
@@ -348,38 +355,39 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
     PartialAggregator<HAS_AGG, Method>
 {
-    pub fn drop_states(&mut self) {
-        if !self.states_dropped {
-            let aggregator_params = self.params.as_ref();
-            let aggregate_functions = &aggregator_params.aggregate_functions;
-            let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+    pub(crate) fn clear_table<T: HashtableLike<Value = usize>>(
+        table: &mut T,
+        params: &AggregatorParams,
+    ) {
+        if table.len() == 0 {
+            return;
+        }
 
-            let functions = aggregate_functions
-                .iter()
-                .filter(|p| p.need_manual_drop_state())
-                .collect::<Vec<_>>();
+        let aggregate_functions = &params.aggregate_functions;
+        let offsets_aggregate_states = &params.offsets_aggregate_states;
 
-            let states = offsets_aggregate_states
-                .iter()
-                .enumerate()
-                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
-                .map(|(_, s)| *s)
-                .collect::<Vec<_>>();
+        let functions = aggregate_functions
+            .iter()
+            .filter(|p| p.need_manual_drop_state())
+            .collect::<Vec<_>>();
 
-            if !states.is_empty() {
-                for group_entity in self.hash_table.iter() {
-                    let place = Into::<StateAddr>::into(*group_entity.get());
+        let states = offsets_aggregate_states
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+            .map(|(_, s)| *s)
+            .collect::<Vec<_>>();
 
-                    for (function, state_offset) in functions.iter().zip(states.iter()) {
-                        unsafe { function.drop_state(place.next(*state_offset)) }
-                    }
+        if !states.is_empty() {
+            for group_entity in table.iter() {
+                let place = Into::<StateAddr>::into(*group_entity.get());
+
+                for (function, state_offset) in functions.iter().zip(states.iter()) {
+                    unsafe { function.drop_state(place.next(*state_offset)) }
                 }
             }
-
-            self.hash_table.clear();
-            drop(self.area.take());
-            self.states_dropped = true;
         }
+        table.clear();
     }
 }
 
@@ -387,6 +395,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>> Dr
     for PartialAggregator<HAS_AGG, Method>
 {
     fn drop(&mut self) {
-        self.drop_states();
+        Self::clear_table(&mut self.hash_table, &self.params);
     }
 }
