@@ -42,6 +42,18 @@ pub struct SharedStatus {
 
 unsafe impl Send for SharedStatus {}
 
+impl Drop for SharedStatus {
+    fn drop(&mut self) {
+        unsafe {
+            let address = self.swap(std::ptr::null_mut(), 0, HAS_DATA);
+
+            if !address.is_null() {
+                drop(Box::from_raw(address));
+            }
+        }
+    }
+}
+
 impl SharedStatus {
     pub fn create() -> Arc<SharedStatus> {
         Arc::new(SharedStatus {

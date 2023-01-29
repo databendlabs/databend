@@ -196,12 +196,8 @@ pub struct CompletedAsyncTask {
 }
 
 impl CompletedAsyncTask {
-    pub fn create(proc: ProcessorPtr, worker_id: usize, res: Result<()>) -> Self {
-        CompletedAsyncTask {
-            id: unsafe { proc.id() },
-            worker_id,
-            res,
-        }
+    pub fn create(id: NodeIndex, worker_id: usize, res: Result<()>) -> Self {
+        CompletedAsyncTask { id, worker_id, res }
     }
 }
 
