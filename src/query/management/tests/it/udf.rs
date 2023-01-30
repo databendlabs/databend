@@ -18,7 +18,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_management::*;
 use common_meta_embedded::MetaEmbedded;
-use common_meta_kvapi::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::SeqV;
 use common_meta_types::UserDefinedFunction;
 

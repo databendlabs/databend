@@ -16,7 +16,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
-use common_meta_kvapi::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_types::AppliedState;

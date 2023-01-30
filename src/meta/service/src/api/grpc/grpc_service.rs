@@ -22,7 +22,7 @@ use common_base::base::tokio::sync::mpsc;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_client::MetaGrpcReq;
-use common_meta_kvapi::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::Empty;

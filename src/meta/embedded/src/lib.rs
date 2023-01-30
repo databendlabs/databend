@@ -14,7 +14,7 @@
 
 //! Meta store backed with a local sled::Tree.
 //!
-//! `MetaEmbedded` talks the same API defined in `KVApi`.
+//! `MetaEmbedded` talks the same API defined in `kvapi::KVApi`.
 //!
 //! `MetaEmbedded` behave exactly the same as a metasrv without distributed logs(raft), since it is driven by
 //! a embedded raft `StateMachine`.

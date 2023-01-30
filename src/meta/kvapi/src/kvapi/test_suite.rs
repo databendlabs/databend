@@ -43,17 +43,16 @@ use common_meta_types::With;
 use tracing::debug;
 use tracing::info;
 
-use crate::ApiBuilder;
-use crate::KVApi;
+use crate::kvapi;
 
-pub struct KVApiTestSuite {}
+pub struct TestSuite {}
 
-impl KVApiTestSuite {
+impl kvapi::TestSuite {
     #[tracing::instrument(level = "info", skip(self, builder))]
     pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
     where
-        KV: KVApi,
-        B: ApiBuilder<KV>,
+        KV: kvapi::KVApi,
+        B: kvapi::ApiBuilder<KV>,
     {
         self.kv_write_read(&builder.build().await).await?;
         self.kv_delete(&builder.build().await).await?;
@@ -84,10 +83,10 @@ impl KVApiTestSuite {
     }
 }
 
-impl KVApiTestSuite {
+impl kvapi::TestSuite {
     #[tracing::instrument(level = "info", skip(self, kv))]
-    pub async fn kv_write_read<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- KVApiTestSuite::kv_write_read() start");
+    pub async fn kv_write_read<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_write_read() start");
         {
             // write
             let res = kv.upsert_kv(UpsertKVReq::update("foo", b"bar")).await?;
@@ -131,8 +130,8 @@ impl KVApiTestSuite {
     }
 
     #[tracing::instrument(level = "info", skip(self, kv))]
-    pub async fn kv_delete<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- KVApiTestSuite::kv_delete() start");
+    pub async fn kv_delete<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_delete() start");
         let test_key = "test_key";
         kv.upsert_kv(UpsertKVReq::update(test_key, b"v1")).await?;
 
@@ -182,8 +181,8 @@ impl KVApiTestSuite {
     }
 
     #[tracing::instrument(level = "info", skip(self, kv))]
-    pub async fn kv_update<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- KVApiTestSuite::kv_update() start");
+    pub async fn kv_update<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_update() start");
         let test_key = "test_key_for_update";
 
         let r = kv
@@ -228,8 +227,8 @@ impl KVApiTestSuite {
     }
 
     #[tracing::instrument(level = "info", skip(self, kv))]
-    pub async fn kv_timeout<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- KVApiTestSuite::kv_timeout() start");
+    pub async fn kv_timeout<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_timeout() start");
 
         // - Test get  expired and non-expired.
         // - Test mget expired and non-expired.
@@ -325,8 +324,8 @@ impl KVApiTestSuite {
     }
 
     #[tracing::instrument(level = "info", skip(self, kv))]
-    pub async fn kv_meta<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- KVApiTestSuite::kv_meta() start");
+    pub async fn kv_meta<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_meta() start");
 
         let test_key = "test_key_for_update_meta";
 
@@ -396,8 +395,8 @@ impl KVApiTestSuite {
     }
 
     #[tracing::instrument(level = "info", skip(self, kv))]
-    pub async fn kv_list<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- KVApiTestSuite::kv_list() start");
+    pub async fn kv_list<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_list() start");
 
         let mut values = vec![];
         {
@@ -427,8 +426,8 @@ impl KVApiTestSuite {
     }
 
     #[tracing::instrument(level = "info", skip(self, kv))]
-    pub async fn kv_mget<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- KVApiTestSuite::kv_mget() start");
+    pub async fn kv_mget<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_mget() start");
 
         kv.upsert_kv(UpsertKVReq::update("k1", b"v1")).await?;
         kv.upsert_kv(UpsertKVReq::update("k2", b"v2")).await?;
@@ -466,7 +465,7 @@ impl KVApiTestSuite {
         }
     }
 
-    pub async fn kv_txn_absent_seq_0<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+    pub async fn kv_txn_absent_seq_0<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- Absent record should has seq as 0");
 
         let k1 = "txn_0_absent";
@@ -509,8 +508,11 @@ impl KVApiTestSuite {
         Ok(())
     }
 
-    pub async fn kv_delete_by_prefix_transaction<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- KVApiTestSuite::kv_delete_by_prefix_transaction() start");
+    pub async fn kv_delete_by_prefix_transaction<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_delete_by_prefix_transaction() start");
         let test_prefix = "test";
 
         let match_keys = vec![
@@ -618,8 +620,8 @@ impl KVApiTestSuite {
         Ok(())
     }
 
-    pub async fn kv_transaction<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- KVApiTestSuite::kv_transaction() start");
+    pub async fn kv_transaction<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_transaction() start");
         // first case: get and set one key transaction
         {
             let k1 = "txn_1_K1";
@@ -901,9 +903,9 @@ impl KVApiTestSuite {
 }
 
 /// Test that write and read should be forwarded to leader
-impl KVApiTestSuite {
+impl kvapi::TestSuite {
     #[tracing::instrument(level = "info", skip(self, kv1, kv2))]
-    pub async fn kv_write_read_across_nodes<KV: KVApi>(
+    pub async fn kv_write_read_across_nodes<KV: kvapi::KVApi>(
         &self,
         kv1: &KV,
         kv2: &KV,

@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use common_base::base::tokio;
 use common_base::base::tokio::time::sleep;
-use common_meta_kvapi::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_sled_store::openraft::LogIdOptionExt;
 use common_meta_sled_store::openraft::State;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;

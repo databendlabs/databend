@@ -12,16 +12,21 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
+mod api;
+mod key;
+mod test_suite;
 
-pub mod kvapi;
-
-pub use kvapi::check_segment;
-pub use kvapi::check_segment_absent;
-pub use kvapi::check_segment_present;
-pub use kvapi::decode_id;
-pub use kvapi::escape;
-pub use kvapi::get_start_and_end_of_prefix;
-pub use kvapi::prefix_of_string;
-pub use kvapi::unescape;
+pub use api::get_start_and_end_of_prefix;
+pub use api::prefix_of_string;
+pub use api::ApiBuilder;
+pub use api::AsKVApi;
+pub use api::KVApi;
+pub use key::check_segment;
+pub use key::check_segment_absent;
+pub use key::check_segment_present;
+pub use key::decode_id;
+pub use key::escape;
+pub use key::unescape;
+pub use key::Key;
+pub use key::KeyError;
+pub use test_suite::TestSuite;

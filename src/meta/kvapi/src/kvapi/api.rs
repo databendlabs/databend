@@ -25,6 +25,8 @@ use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 
+use crate::kvapi;
+
 /// Build an API impl instance or a cluster of API impl
 #[async_trait]
 pub trait ApiBuilder<T>: Clone {
@@ -74,8 +76,8 @@ pub trait KVApi: Send + Sync {
     /// The Error an implementation returns.
     ///
     /// Depends on the implementation the error could be different.
-    /// E.g., a remove KVApi impl returns network error or remote storage error.
-    /// A local KVApi impl just returns storage error.
+    /// E.g., a remove kvapi::KVApi impl returns network error or remote storage error.
+    /// A local kvapi::KVApi impl just returns storage error.
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Update or insert a key-value record.
@@ -95,7 +97,7 @@ pub trait KVApi: Send + Sync {
 }
 
 #[async_trait]
-impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
+impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
     type Error = U::Error;
 
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
@@ -122,13 +124,13 @@ impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
 pub trait AsKVApi {
     type Error: std::error::Error;
 
-    fn as_kv_api(&self) -> &dyn KVApi<Error = Self::Error>;
+    fn as_kv_api(&self) -> &dyn kvapi::KVApi<Error = Self::Error>;
 }
 
-impl<T: KVApi> AsKVApi for T {
+impl<T: kvapi::KVApi> kvapi::AsKVApi for T {
     type Error = T::Error;
 
-    fn as_kv_api(&self) -> &dyn KVApi<Error = Self::Error> {
+    fn as_kv_api(&self) -> &dyn kvapi::KVApi<Error = Self::Error> {
         self
     }
 }

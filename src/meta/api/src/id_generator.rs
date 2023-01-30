@@ -12,11 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_meta_kvapi::kv_api_key::check_segment;
-use common_meta_kvapi::kv_api_key::check_segment_absent;
-use common_meta_kvapi::kv_api_key::check_segment_present;
-use common_meta_kvapi::KVApiKey;
-use common_meta_kvapi::KVApiKeyError;
+use common_meta_kvapi::check_segment;
+use common_meta_kvapi::check_segment_absent;
+use common_meta_kvapi::check_segment_present;
+use common_meta_kvapi::kvapi;
 
 use crate::schema_api_keys::ID_GEN_DATABASE;
 use crate::schema_api_keys::ID_GEN_TABLE;
@@ -26,30 +25,30 @@ pub(crate) const PREFIX_ID_GEN: &str = "__fd_id_gen";
 
 /// Key for resource id generator
 ///
-/// This is a special key for an application to generate unique id with KVApi.
-/// Generating an id by updating a record in KVApi and retrieve the seq number.
-/// A seq number is monotonically incremental in KVApi.
+/// This is a special key for an application to generate unique id with kvapi::KVApi.
+/// Generating an id by updating a record in kvapi::KVApi and retrieve the seq number.
+/// A seq number is monotonically incremental in kvapi::KVApi.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdGenerator {
     pub resource: String,
 }
 
 impl IdGenerator {
-    /// Create a key for generating table id with KVApi
+    /// Create a key for generating table id with kvapi::KVApi
     pub fn table_id() -> Self {
         Self {
             resource: ID_GEN_TABLE.to_string(),
         }
     }
 
-    /// Create a key for generating database id with KVApi
+    /// Create a key for generating database id with kvapi::KVApi
     pub fn database_id() -> Self {
         Self {
             resource: ID_GEN_DATABASE.to_string(),
         }
     }
 
-    /// Create a key for generating share id with KVApi
+    /// Create a key for generating share id with kvapi::KVApi
     pub fn share_id() -> Self {
         Self {
             resource: ID_GEN_SHARE.to_string(),
@@ -57,14 +56,14 @@ impl IdGenerator {
     }
 }
 
-impl KVApiKey for IdGenerator {
+impl kvapi::Key for IdGenerator {
     const PREFIX: &'static str = PREFIX_ID_GEN;
 
     fn to_string_key(&self) -> String {
         format!("{}/{}", Self::PREFIX, self.resource)
     }
 
-    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -82,7 +81,7 @@ impl KVApiKey for IdGenerator {
 
 #[cfg(test)]
 mod t {
-    use common_meta_kvapi::KVApiKey;
+    use common_meta_kvapi::kvapi::Key;
 
     use crate::id_generator::IdGenerator;
 

@@ -23,7 +23,7 @@ use common_base::base::GlobalSequence;
 use common_base::base::Stoppable;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
-use common_meta_kvapi::ApiBuilder;
+use common_meta_kvapi::kvapi;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::ForwardRequest;
@@ -208,7 +208,7 @@ pub struct MetaSrvBuilder {
 }
 
 #[async_trait]
-impl ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
+impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
     async fn build(&self) -> Arc<ClientHandle> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
