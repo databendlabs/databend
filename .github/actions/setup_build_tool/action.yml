@@ -42,7 +42,7 @@ runs:
           aws)
             echo "setting up sccache for AWS S3..."
             cat <<EOF >>$BIN_LOCAL/build-tool
-        export RUSTC_WRAPPER=/opt/rust/cargo/bin/sccache
+        export RUSTC_WRAPPER="/opt/rust/cargo/bin/sccache --show-stats"
         export SCCACHE_BUCKET=databend-ci
         export SCCACHE_REGION=us-east-2
         export SCCACHE_S3_KEY_PREFIX="cache/"
@@ -78,7 +78,6 @@ runs:
         ln -s build-tool $BIN_LOCAL/rustup
         ln -s build-tool $BIN_LOCAL/make
         ln -s build-tool $BIN_LOCAL/taplo
-        ln -s build-tool $BIN_LOCAL/sccache
 
     - name: check cargo version
       shell: bash
