@@ -30,6 +30,7 @@ mod simple_unsized_hashtable;
 #[allow(dead_code)]
 mod table1;
 mod table_empty;
+mod tail_array;
 mod traits;
 mod twolevel_hashtable;
 mod unsized_hashtable;

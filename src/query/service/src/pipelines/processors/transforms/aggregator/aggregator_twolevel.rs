@@ -114,6 +114,8 @@ where
                 method: two_level_method,
                 hash_table: two_level_hashtable,
                 generated: false,
+                should_expand_table: true,
+                input_rows: self.input_rows,
             },
         })
     }
@@ -252,6 +254,8 @@ impl<T: TwoLevelAggregatorLike> Aggregator for TwoLevelAggregator<T> {
 
     #[inline(always)]
     fn consume(&mut self, data: DataBlock) -> Result<()> {
+        // only checked in two level aggregator for high cardinality group by
+        self.inner.check_expandsion();
         self.inner.consume(data)
     }
 

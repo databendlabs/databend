@@ -43,6 +43,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method>
     pub hash_table: Method::HashTable,
     pub params: Arc<AggregatorParams>,
     pub generated: bool,
+    pub should_expand_table: bool,
+    pub input_rows: usize,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
@@ -57,6 +59,8 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             area: Some(Area::create()),
             states_dropped: false,
             generated: false,
+            should_expand_table: true,
+            input_rows: 0,
         })
     }
 
@@ -183,6 +187,8 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let mut group_key_builder = self
             .method
             .keys_column_builder(state_groups_len, value_size);
+
+        // TODO use batch
         for group_entity in self.hash_table.iter() {
             let place = Into::<StateAddr>::into(*group_entity.get());
 
@@ -208,6 +214,46 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         columns.push(group_key_col);
         Ok(vec![DataBlock::new_from_columns(columns)])
     }
+
+    fn should_expand_table(&self) -> bool {
+        /// ideas from https://github.com/apache/impala/blob/b3e9c4a65fa63da6f373c9ecec41fe4247e5e7d8/be/src/exec/grouping-aggregator.cc
+        static STREAMING_HT_MIN_REDUCTION: [(usize, f64); 3] =
+            [(0, 0.0), (256 * 1024, 1.1), (2 * 1024 * 1024, 2.0)];
+
+        let ht_mem = self.hash_table.bytes_len();
+        let ht_rows = self.hash_table.len();
+
+        if ht_rows == 0 {
+            return true;
+        }
+
+        let mut cache_level = 0;
+        loop {
+            if cache_level + 1 < STREAMING_HT_MIN_REDUCTION.len()
+                && ht_mem >= STREAMING_HT_MIN_REDUCTION[cache_level + 1].0
+            {
+                cache_level += 1;
+                continue;
+            }
+            break;
+        }
+
+        let aggregated_input_rows = self.input_rows;
+        let current_reduction = aggregated_input_rows as f64 / ht_rows as f64;
+        // TODO ADD estimated reduction, currently we use current reduction
+        let estimated_reduction = current_reduction;
+        let min_reduction = STREAMING_HT_MIN_REDUCTION[cache_level].1;
+
+        if estimated_reduction <= min_reduction {
+            println!(
+                "YY: {:?} {:?} {}",
+                estimated_reduction,
+                min_reduction,
+                estimated_reduction > min_reduction
+            );
+        }
+        estimated_reduction > min_reduction
+    }
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
@@ -216,6 +262,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     const NAME: &'static str = "GroupByPartialTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
+        self.input_rows += block.num_rows();
         let block = block.convert_to_full();
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&block, &self.params.group_columns);
@@ -242,6 +289,16 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
         self.generate_data()
+    }
+
+    fn check_expandsion(&mut self) {
+        if self.should_expand_table {
+            self.should_expand_table = self.should_expand_table();
+
+            if !self.should_expand_table {
+                self.hash_table.enable_tail_array();
+            }
+        }
     }
 }
 

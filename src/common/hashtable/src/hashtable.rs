@@ -27,6 +27,9 @@ use super::table0::Table0IterMut;
 use super::traits::HashtableLike;
 use super::traits::Keyable;
 use super::utils::ZeroEntry;
+use crate::tail_array::TailArray;
+use crate::tail_array::TailArrayIter;
+use crate::tail_array::TailArrayIterMut;
 use crate::FastHash;
 
 pub struct Hashtable<K, V, A = MmapAllocator<GlobalAllocator>>
@@ -36,6 +39,7 @@ where
 {
     pub(crate) zero: ZeroEntry<K, V>,
     pub(crate) table: Table0<K, V, HeapContainer<Entry<K, V>, A>, A>,
+    pub(crate) tails: Option<TailArray<K, V, A>>,
 }
 
 unsafe impl<K: Keyable + Send, V: Send, A: Allocator + Clone + Send> Send for Hashtable<K, V, A> {}
@@ -77,6 +81,7 @@ where
         Self {
             table: Table0::with_capacity_in(capacity, allocator),
             zero: ZeroEntry(None),
+            tails: None,
         }
     }
     #[inline(always)]
@@ -145,6 +150,11 @@ where
                 return Ok(zero);
             }
         }
+
+        if let Some(tails) = &mut self.tails {
+            return Ok(tails.insert(key));
+        }
+
         self.table.check_grow();
         self.table.insert(key)
     }
@@ -159,8 +169,10 @@ where
         }
     }
     pub fn iter(&self) -> HashtableIter<'_, K, V> {
+        let tail_iter = self.tails.as_ref().map(|tails| tails.iter());
         HashtableIter {
-            inner: self.zero.iter().chain(self.table.iter()),
+            inner: Some(self.zero.iter().chain(self.table.iter())),
+            tail_iter,
         }
     }
 }
@@ -191,7 +203,8 @@ where
 }
 
 pub struct HashtableIter<'a, K, V> {
-    pub inner: std::iter::Chain<std::option::Iter<'a, Entry<K, V>>, Table0Iter<'a, K, V>>,
+    pub inner: Option<std::iter::Chain<std::option::Iter<'a, Entry<K, V>>, Table0Iter<'a, K, V>>>,
+    pub tail_iter: Option<TailArrayIter<'a, K, V>>,
 }
 
 impl<'a, K, V> Iterator for HashtableIter<'a, K, V>
@@ -200,12 +213,26 @@ where K: Keyable
     type Item = &'a Entry<K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
+        if let Some(it) = self.inner.as_mut() {
+            if let Some(e) = it.next() {
+                return Some(e);
+            }
+            self.inner = None;
+        }
+
+        if let Some(it) = self.tail_iter.as_mut() {
+            if let Some(e) = it.next() {
+                return Some(e);
+            }
+            self.tail_iter = None;
+        }
+        None
     }
 }
 
 pub struct HashtableIterMut<'a, K, V> {
-    inner: std::iter::Chain<std::option::IterMut<'a, Entry<K, V>>, Table0IterMut<'a, K, V>>,
+    inner: Option<std::iter::Chain<std::option::IterMut<'a, Entry<K, V>>, Table0IterMut<'a, K, V>>>,
+    tail_iter: Option<TailArrayIterMut<'a, K, V>>,
 }
 
 impl<'a, K, V> Iterator for HashtableIterMut<'a, K, V>
@@ -214,14 +241,27 @@ where K: Keyable
     type Item = &'a mut Entry<K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
+        if let Some(it) = self.inner.as_mut() {
+            if let Some(e) = it.next() {
+                return Some(e);
+            }
+            self.inner = None;
+        }
+
+        if let Some(it) = self.tail_iter.as_mut() {
+            if let Some(e) = it.next() {
+                return Some(e);
+            }
+            self.tail_iter = None;
+        }
+        None
     }
 }
 
 impl<K, V, A> HashtableLike for Hashtable<K, V, A>
 where
     K: Keyable + FastHash,
-    A: Allocator + Clone + 'static,
+    A: Allocator + Default + Clone + 'static,
 {
     type Key = K;
     type Value = V;
@@ -309,13 +349,22 @@ where
     }
 
     fn iter(&self) -> Self::Iterator<'_> {
+        let tail_iter = self.tails.as_ref().map(|tails| tails.iter());
         HashtableIter {
-            inner: self.zero.iter().chain(self.table.iter()),
+            inner: Some(self.zero.iter().chain(self.table.iter())),
+            tail_iter,
         }
     }
 
     fn clear(&mut self) {
         self.zero.0.take();
         self.table.clear();
+        let _ = self.tails.take();
+    }
+
+    fn enable_tail_array(&mut self) {
+        if self.tails.is_none() {
+            self.tails = Some(TailArray::new(Default::default()));
+        }
     }
 }

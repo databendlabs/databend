@@ -37,6 +37,9 @@ use crate::table0::Table0IterMut;
 use crate::table_empty::TableEmpty;
 use crate::table_empty::TableEmptyIter;
 use crate::table_empty::TableEmptyIterMut;
+use crate::tail_array::TailArray;
+use crate::tail_array::TailArrayIter;
+use crate::tail_array::TailArrayIterMut;
 
 pub struct UnsizedHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
 where
@@ -50,6 +53,7 @@ where
     pub(crate) table2: Table0<InlineKey<1>, V, HeapContainer<Entry<InlineKey<1>, V>, A>, A>,
     pub(crate) table3: Table0<InlineKey<2>, V, HeapContainer<Entry<InlineKey<2>, V>, A>, A>,
     pub(crate) table4: Table0<FallbackKey, V, HeapContainer<Entry<FallbackKey, V>, A>, A>,
+    pub(crate) tails: Option<TailArray<FallbackKey, V, A>>,
     pub(crate) _phantom: PhantomData<K>,
 }
 
@@ -123,6 +127,7 @@ where
             table2: Table0::with_capacity_in(capacity, allocator.clone()),
             table3: Table0::with_capacity_in(capacity, allocator.clone()),
             table4: Table0::with_capacity_in(capacity, allocator),
+            tails: None,
             _phantom: PhantomData,
         }
     }
@@ -160,6 +165,16 @@ where
         key: *const K,
     ) -> Result<UnsizedHashtableEntryMutRef<'_, K, V>, UnsizedHashtableEntryMutRef<'_, K, V>> {
         let key = (*key).as_bytes();
+
+        if !key.is_empty() {
+            if let Some(tails) = &mut self.tails {
+                let key = FallbackKey::new(key);
+                return Ok(UnsizedHashtableEntryMutRef(
+                    UnsizedHashtableEntryMutRefInner::Table4(tails.insert(key)),
+                ));
+            }
+        }
+
         match key.len() {
             _ if key.last().copied() == Some(0) => {
                 self.table4.check_grow();
@@ -271,6 +286,7 @@ where K: UnsizedKeyable + ?Sized
     it_2: Option<Table0Iter<'a, InlineKey<1>, V>>,
     it_3: Option<Table0Iter<'a, InlineKey<2>, V>>,
     it_4: Option<Table0Iter<'a, FallbackKey, V>>,
+    tail_it: Option<TailArrayIter<'a, FallbackKey, V>>,
     _phantom: PhantomData<&'a mut K>,
 }
 
@@ -320,6 +336,15 @@ where K: UnsizedKeyable + ?Sized
             }
             self.it_4 = None;
         }
+
+        if let Some(it) = self.tail_it.as_mut() {
+            if let Some(e) = it.next() {
+                return Some(UnsizedHashtableEntryRef(
+                    UnsizedHashtableEntryRefInner::Table4(e),
+                ));
+            }
+            self.tail_it = None;
+        }
         None
     }
 }
@@ -332,6 +357,8 @@ where K: UnsizedKeyable + ?Sized
     it_2: Option<Table0IterMut<'a, InlineKey<1>, V>>,
     it_3: Option<Table0IterMut<'a, InlineKey<2>, V>>,
     it_4: Option<Table0IterMut<'a, FallbackKey, V>>,
+
+    tail_it: Option<TailArrayIterMut<'a, FallbackKey, V>>,
     _phantom: PhantomData<&'a mut K>,
 }
 
@@ -380,6 +407,15 @@ where K: UnsizedKeyable + ?Sized
                 ));
             }
             self.it_4 = None;
+        }
+
+        if let Some(it) = self.tail_it.as_mut() {
+            if let Some(e) = it.next() {
+                return Some(UnsizedHashtableEntryMutRef(
+                    UnsizedHashtableEntryMutRefInner::Table4(e),
+                ));
+            }
+            self.tail_it = None;
         }
         None
     }
@@ -877,6 +913,16 @@ where A: Allocator + Clone + Default
         key: &Self::Key,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
         let key = key.as_bytes();
+
+        if !key.is_empty() {
+            if let Some(tails) = &mut self.tails {
+                let key = FallbackKey::new(key);
+                return Ok(UnsizedHashtableEntryMutRef(
+                    UnsizedHashtableEntryMutRefInner::Table4(tails.insert(key)),
+                ));
+            }
+        }
+
         match key.len() {
             _ if key.last().copied() == Some(0) => {
                 self.table4.check_grow();
@@ -988,6 +1034,16 @@ where A: Allocator + Clone + Default
         hash: u64,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
         let key = key.as_bytes();
+
+        if !key.is_empty() {
+            if let Some(tails) = &mut self.tails {
+                let key = FallbackKey::new(key);
+                return Ok(UnsizedHashtableEntryMutRef(
+                    UnsizedHashtableEntryMutRefInner::Table4(tails.insert(key)),
+                ));
+            }
+        }
+
         match key.len() {
             _ if key.last().copied() == Some(0) => {
                 self.table4.check_grow();
@@ -1103,7 +1159,14 @@ where A: Allocator + Clone + Default
             it_2: Some(self.table2.iter()),
             it_3: Some(self.table3.iter()),
             it_4: Some(self.table4.iter()),
+            tail_it: self.tails.as_ref().map(|x| x.iter()),
             _phantom: PhantomData,
+        }
+    }
+
+    fn enable_tail_array(&mut self) {
+        if self.tails.is_none() {
+            self.tails = Some(TailArray::new(Default::default()));
         }
     }
 
@@ -1113,6 +1176,8 @@ where A: Allocator + Clone + Default
         self.table2.clear();
         self.table3.clear();
         self.table4.clear();
+
+        let _ = self.tails.take();
         // NOTE: Bump provides the reset function to free memory, but it will cause memory leakage(maybe a bug).
         // In fact, we don't need to call the drop function. rust will call it, But we call it to improve the readability of the code.
         drop(std::mem::take(&mut self.arena));
