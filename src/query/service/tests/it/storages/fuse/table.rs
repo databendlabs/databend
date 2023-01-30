@@ -66,7 +66,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
                 parts,
                 statistics: Default::default(),
                 description: "".to_string(),
-                tbl_args: None,
+                table_func_id: None,
                 push_downs: None,
             })
             .await?;
@@ -126,7 +126,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
                 parts,
                 statistics: Default::default(),
                 description: "".to_string(),
-                tbl_args: None,
+                table_func_id: None,
                 push_downs: None,
             })
             .await?;

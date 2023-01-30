@@ -118,4 +118,6 @@ pub trait TableContext: Send + Sync {
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
+
+    fn add_table_function_instance(&self, table: Arc<dyn Table>) -> Result<()>;
 }

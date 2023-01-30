@@ -467,6 +467,10 @@ impl TableContext for CtxDelegation {
     ) -> Result<Arc<dyn Table>> {
         todo!()
     }
+
+    fn add_table_function_instance(&self, _table: Arc<dyn Table>) -> Result<()> {
+        todo!()
+    }
 }
 
 #[derive(Clone)]

@@ -17,7 +17,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
@@ -29,6 +28,7 @@ use crate::plan::Partitions;
 use crate::plan::Projection;
 use crate::plan::PushDownInfo;
 use crate::plan::StageFileInfo;
+use crate::table_function::TableFunctionID;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
@@ -101,7 +101,7 @@ pub struct DataSourcePlan {
     pub statistics: PartStatistics,
     pub description: String,
 
-    pub tbl_args: Option<Vec<Scalar>>,
+    pub table_func_id: Option<TableFunctionID>,
     pub push_downs: Option<PushDownInfo>,
 }
 

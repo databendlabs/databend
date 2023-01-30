@@ -81,7 +81,7 @@ impl ToReadDataSourcePlan for dyn Table {
             parts,
             statistics,
             description,
-            tbl_args: self.table_args(),
+            table_func_id: self.table_function_id(),
             push_downs,
         })
     }

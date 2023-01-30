@@ -285,6 +285,7 @@ impl Binder {
                         table_args,
                     )?;
                 let table = table_meta.as_table();
+                self.ctx.add_table_function_instance(table.clone())?;
                 let table_alias_name = if let Some(table_alias) = alias {
                     Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
                 } else {

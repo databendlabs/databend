@@ -14,7 +14,7 @@
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
-use common_catalog::table_args::TableArgs;
+use common_catalog::table_function::TableFunctionID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use glob::Pattern;
@@ -30,7 +30,7 @@ use crate::ReadOptions;
 impl ParquetTable {
     pub fn blocking_create(
         table_id: u64,
-        table_args: TableArgs,
+        table_func_id: TableFunctionID,
         operator: Operator,
         maybe_glob_locations: Vec<String>,
         read_options: ReadOptions,
@@ -41,7 +41,7 @@ impl ParquetTable {
         let table_info = create_parquet_table_info(table_id, arrow_schema.clone());
 
         Ok(ParquetTable {
-            table_args,
+            table_func_id,
             file_locations,
             table_info,
             arrow_schema,

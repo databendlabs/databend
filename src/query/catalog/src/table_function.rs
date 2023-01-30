@@ -22,3 +22,5 @@ pub trait TableFunction: Sync + Send + Table {
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
     where Self: 'a;
 }
+
+pub type TableFunctionID = String;

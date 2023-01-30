@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::table_function::TableFunctionID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Scalar;
@@ -43,13 +44,14 @@ pub trait TableFunctionCreator: Send + Sync {
         db_name: &str,
         tbl_func_name: &str,
         tbl_id: MetaId,
+        tbl_func_id: TableFunctionID,
         arg: TableArgs,
     ) -> Result<Arc<dyn TableFunction>>;
 }
 
 impl<T> TableFunctionCreator for T
 where
-    T: Fn(&str, &str, MetaId, TableArgs) -> Result<Arc<dyn TableFunction>>,
+    T: Fn(&str, &str, MetaId, TableFunctionID, TableArgs) -> Result<Arc<dyn TableFunction>>,
     T: Send + Sync,
 {
     fn try_create(
@@ -57,9 +59,10 @@ where
         db_name: &str,
         tbl_func_name: &str,
         tbl_id: MetaId,
+        tbl_func_id: TableFunctionID,
         arg: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        self(db_name, tbl_func_name, tbl_id, arg)
+        self(db_name, tbl_func_name, tbl_id, tbl_func_id, arg)
     }
 }
 
@@ -148,7 +151,8 @@ impl TableFunctionFactory {
         let (id, factory) = lock.get(&func_name).ok_or_else(|| {
             ErrorCode::UnknownTable(format!("Unknown table function {}", func_name))
         })?;
-        let func = factory.try_create("", &func_name, *id, tbl_args)?;
+        let table_func_id = format!("{}-{}", id, uuid::Uuid::new_v4());
+        let func = factory.try_create("", &func_name, *id, table_func_id, tbl_args)?;
         Ok(func)
     }
 }

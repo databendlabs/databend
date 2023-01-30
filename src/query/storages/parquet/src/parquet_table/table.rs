@@ -26,10 +26,9 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
-use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
+use common_catalog::table_function::TableFunctionID;
 use common_exception::Result;
-use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -40,7 +39,7 @@ use opendal::Operator;
 use crate::ReadOptions;
 
 pub struct ParquetTable {
-    pub(super) table_args: TableArgs,
+    pub(super) table_func_id: TableFunctionID,
 
     pub(super) file_locations: Vec<String>,
     pub(super) table_info: TableInfo,
@@ -71,8 +70,8 @@ impl Table for ParquetTable {
         true
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
-        self.table_args.clone()
+    fn table_function_id(&self) -> Option<TableFunctionID> {
+        Some(self.table_func_id.clone())
     }
 
     /// The returned partitions only record the locations of files to read.

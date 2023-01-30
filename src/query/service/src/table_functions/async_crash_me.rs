@@ -26,10 +26,10 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_function::TableFunction;
+use common_catalog::table_function::TableFunctionID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -46,6 +46,7 @@ use crate::storages::Table;
 use crate::table_functions::table_function_factory::TableArgs;
 
 pub struct AsyncCrashMeTable {
+    table_func_id: TableFunctionID,
     table_info: TableInfo,
     panic_message: Option<String>,
 }
@@ -55,6 +56,7 @@ impl AsyncCrashMeTable {
         database_name: &str,
         _table_func_name: &str,
         table_id: u64,
+        table_func_id: TableFunctionID,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut panic_message = None;
@@ -85,6 +87,7 @@ impl AsyncCrashMeTable {
         };
 
         Ok(Arc::new(AsyncCrashMeTable {
+            table_func_id,
             table_info,
             panic_message,
         }))
@@ -114,10 +117,8 @@ impl Table for AsyncCrashMeTable {
         Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
-        self.panic_message
-            .clone()
-            .map(|s| vec![Scalar::String(s.as_bytes().to_vec())])
+    fn table_function_id(&self) -> Option<TableFunctionID> {
+        Some(self.table_func_id.clone())
     }
 
     fn read_data(

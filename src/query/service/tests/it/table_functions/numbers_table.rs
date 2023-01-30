@@ -29,7 +29,7 @@ use pretty_assertions::assert_eq;
 async fn test_number_table() -> Result<()> {
     let tbl_args = Some(vec![Scalar::from(8u64)]);
     let (_guard, ctx) = crate::tests::create_query_context().await?;
-    let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
+    let table = NumbersTable::create("system", "numbers_mt", 1, "aaa".to_string(), tbl_args)?;
 
     let source_plan = table
         .clone()

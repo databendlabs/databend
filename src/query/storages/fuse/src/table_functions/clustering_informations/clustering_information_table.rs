@@ -20,9 +20,9 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table_function::TableFunctionID;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::Scalar;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -36,7 +36,6 @@ use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
-use crate::table_functions::string_literal;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::FuseTable;
@@ -45,6 +44,7 @@ use crate::Table;
 const FUSE_FUNC_CLUSTERING: &str = "clustering_information";
 
 pub struct ClusteringInformationTable {
+    table_func_id: TableFunctionID,
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
@@ -57,6 +57,7 @@ impl ClusteringInformationTable {
         database_name: &str,
         table_func_name: &str,
         table_id: u64,
+        table_func_id: TableFunctionID,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let (arg_database_name, arg_table_name) = parse_func_table_args(&table_args)?;
@@ -76,6 +77,7 @@ impl ClusteringInformationTable {
         };
 
         Ok(Arc::new(Self {
+            table_func_id,
             table_info,
             arg_database_name,
             arg_table_name,
@@ -102,11 +104,8 @@ impl Table for ClusteringInformationTable {
         Ok((PartStatistics::default(), Partitions::default()))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
-        Some(vec![
-            string_literal(self.arg_database_name.as_str()),
-            string_literal(self.arg_table_name.as_str()),
-        ])
+    fn table_function_id(&self) -> Option<TableFunctionID> {
+        Some(self.table_func_id.clone())
     }
 
     fn read_data(

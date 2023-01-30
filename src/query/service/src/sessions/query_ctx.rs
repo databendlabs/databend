@@ -34,12 +34,12 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::StageAttachment;
+use common_catalog::table_function::TableFunctionID;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
-use common_expression::Scalar;
 use common_io::prelude::FormatSettings;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::RoleInfo;
@@ -70,6 +70,7 @@ pub struct QueryContext {
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     fragment_id: Arc<AtomicUsize>,
+    table_function_instances: Arc<RwLock<HashMap<TableFunctionID, Arc<dyn Table>>>>,
 }
 
 impl QueryContext {
@@ -85,6 +86,7 @@ impl QueryContext {
             version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
             shared,
             fragment_id: Arc::new(AtomicUsize::new(0)),
+            table_function_instances: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -93,27 +95,35 @@ impl QueryContext {
         &self,
         catalog_name: &str,
         table_info: &TableInfo,
-        table_args: Option<Vec<Scalar>>,
+        table_func_id: &Option<TableFunctionID>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog(catalog_name)?;
-        if table_args.is_none() {
-            catalog.get_table_by_info(table_info)
+
+        if let Some(id) = table_func_id {
+            // Current table is a table function.
+            self.get_table_function(id)
         } else {
-            Ok(catalog
-                .get_table_function(&table_info.name, table_args)?
-                .as_table())
+            catalog.get_table_by_info(table_info)
         }
+    }
+
+    fn get_table_function(&self, id: &TableFunctionID) -> Result<Arc<dyn Table>> {
+        self.table_function_instances
+            .read()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| {
+                ErrorCode::UnknownTableId(format!(
+                    "Table function {} is not found in current query context",
+                    id
+                ))
+            })
     }
 
     // Build external table by stage info, this is used in:
     // COPY INTO t1 FROM 's3://'
     // 's3://' here is a s3 external stage, and build it to the external table.
-    fn build_external_by_table_info(
-        &self,
-        _catalog: &str,
-        table_info: &StageTableInfo,
-        _table_args: Option<Vec<Scalar>>,
-    ) -> Result<Arc<dyn Table>> {
+    fn build_external_by_table_info(&self, table_info: &StageTableInfo) -> Result<Arc<dyn Table>> {
         StageTable::try_create(table_info.clone())
     }
 
@@ -207,10 +217,10 @@ impl TableContext for QueryContext {
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
             DataSourceInfo::TableSource(table_info) => {
-                self.build_table_by_table_info(&plan.catalog, table_info, plan.tbl_args.clone())
+                self.build_table_by_table_info(&plan.catalog, table_info, &plan.table_func_id)
             }
             DataSourceInfo::StageSource(stage_info) => {
-                self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
+                self.build_external_by_table_info(stage_info)
             }
         }
     }
@@ -400,6 +410,20 @@ impl TableContext for QueryContext {
         table: &str,
     ) -> Result<Arc<dyn Table>> {
         self.shared.get_table(catalog, database, table).await
+    }
+
+    fn add_table_function_instance(&self, table: Arc<dyn Table>) -> Result<()> {
+        if let Some(ref id) = table.table_function_id() {
+            self.table_function_instances
+                .write()
+                .insert(id.clone(), table);
+            Ok(())
+        } else {
+            Err(ErrorCode::BadArguments(format!(
+                "Table {} is not a table function",
+                table.name()
+            )))
+        }
     }
 }
 

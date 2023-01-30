@@ -25,14 +25,13 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::TableStatistics;
+use common_catalog::table_function::TableFunctionID;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::number::NumberScalar;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::NumberDataType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
-use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -55,6 +54,7 @@ use crate::table_functions::table_function_factory::TableArgs;
 use crate::table_functions::TableFunction;
 
 pub struct NumbersTable {
+    table_func_id: TableFunctionID,
     table_info: TableInfo,
     total: u64,
 }
@@ -64,6 +64,7 @@ impl NumbersTable {
         database_name: &str,
         table_func_name: &str,
         table_id: u64,
+        table_func_id: TableFunctionID,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut total = None;
@@ -106,7 +107,11 @@ impl NumbersTable {
             ..Default::default()
         };
 
-        Ok(Arc::new(NumbersTable { table_info, total }))
+        Ok(Arc::new(NumbersTable {
+            table_info,
+            total,
+            table_func_id,
+        }))
     }
 }
 
@@ -165,8 +170,8 @@ impl Table for NumbersTable {
         Ok((statistics, parts))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
-        Some(vec![Scalar::Number(NumberScalar::UInt64(self.total))])
+    fn table_function_id(&self) -> Option<TableFunctionID> {
+        Some(self.table_func_id.clone())
     }
 
     fn read_data(

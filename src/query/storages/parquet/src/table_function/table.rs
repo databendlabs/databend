@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
+use common_catalog::table_function::TableFunctionID;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -40,6 +41,7 @@ impl ParquetTable {
         _database_name: &str,
         _table_func_name: &str,
         table_id: u64,
+        table_func_id: TableFunctionID,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         if !GlobalConfig::instance().storage.allow_insecure {
@@ -53,8 +55,13 @@ impl ParquetTable {
 
         let (file_locations, read_options) = parse_parquet_table_args(&table_args)?;
 
-        let table =
-            Self::blocking_create(table_id, table_args, operator, file_locations, read_options)?;
+        let table = Self::blocking_create(
+            table_id,
+            table_func_id,
+            operator,
+            file_locations,
+            read_options,
+        )?;
 
         Ok(Arc::new(table))
     }

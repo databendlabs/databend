@@ -41,6 +41,7 @@ use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
+use crate::table_function::TableFunctionID;
 use crate::table_mutator::TableMutator;
 
 pub type ColumnId = u32;
@@ -144,7 +145,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
+    fn table_function_id(&self) -> Option<TableFunctionID> {
         None
     }
 

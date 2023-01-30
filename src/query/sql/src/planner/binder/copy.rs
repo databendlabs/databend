@@ -251,7 +251,7 @@ impl<'a> Binder {
             parts: Partitions::default(),
             statistics: Default::default(),
             description: "".to_string(),
-            tbl_args: None,
+            table_func_id: None,
             push_downs: None,
         };
 
@@ -309,7 +309,7 @@ impl<'a> Binder {
             parts: Partitions::default(),
             statistics: Default::default(),
             description: "".to_string(),
-            tbl_args: None,
+            table_func_id: None,
             push_downs: None,
         };
 

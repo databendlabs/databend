@@ -112,7 +112,13 @@ async fn test_drive_clustering_information(
     tbl_args: TableArgs,
     ctx: Arc<QueryContext>,
 ) -> Result<SendableDataBlockStream> {
-    let func = ClusteringInformationTable::create("system", "clustering_information", 1, tbl_args)?;
+    let func = ClusteringInformationTable::create(
+        "system",
+        "clustering_information",
+        1,
+        "aaa".to_string(),
+        tbl_args,
+    )?;
     let source_plan = func
         .clone()
         .as_table()

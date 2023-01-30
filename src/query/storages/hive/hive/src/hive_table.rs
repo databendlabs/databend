@@ -37,7 +37,6 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
-use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -584,10 +583,6 @@ impl Table for HiveTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
-    }
-
-    fn table_args(&self) -> Option<Vec<Scalar>> {
-        None
     }
 
     fn read_data(
