@@ -32,6 +32,10 @@ use crate::DefaultHashBuilder;
 use crate::FileSize;
 use crate::LruCache;
 
+// TODO doc the disk cache path layout
+// TODO extract new type CacheKey
+// TODO checksum of cached data
+
 /// Return an iterator of `(path, size)` of files under `path` sorted by ascending last-modified
 /// time, such that the oldest modified file is returned first.
 fn get_all_files<P: AsRef<Path>>(path: P) -> Box<dyn Iterator<Item = (PathBuf, u64)>> {
@@ -158,7 +162,7 @@ where
                     )
                 });
             } else {
-                while self.cache.size() as u64 + size > self.cache.capacity() as u64 {
+                while self.cache.size() + size > self.cache.capacity() {
                     let (rel_path, _) = self
                         .cache
                         .pop_by_policy()
@@ -182,10 +186,10 @@ where
 
     /// Returns `true` if the disk cache can store a file of `size` bytes.
     pub fn can_store(&self, size: u64) -> bool {
-        size <= self.cache.capacity() as u64
+        size <= self.cache.capacity()
     }
 
-    fn recovery_from(str: &Path) -> String {
+    pub fn recovery_from(str: &Path) -> String {
         let key_string = match str.as_os_str().to_str() {
             Some(str) => str.to_owned(),
             None => {
@@ -195,7 +199,7 @@ where
         key_string
     }
 
-    fn cache_key<K>(&self, str: &K) -> String
+    pub fn cache_key<K>(&self, str: &K) -> String
     where K: Hash + Eq + ?Sized {
         // TODO we need a 128 bit digest
         let mut hash_state = self.hash_builder.build_hasher();
@@ -205,7 +209,7 @@ where
         hex_key
     }
 
-    fn cache_path<K>(&self, str: &K) -> PathBuf
+    pub fn cache_path<K>(&self, str: &K) -> PathBuf
     where K: Hash + Eq + ?Sized {
         let hex_key = self.cache_key(str);
         let prefix = &hex_key[0..3];
@@ -229,13 +233,17 @@ where
         let mut f = File::create(&path)?;
         f.write_all(bytes)?;
         let size = bytes.len() as u64;
-        self.cache.put(cache_key, size);
+        if let Some(_replaced) = self.cache.put(cache_key, size) {
+            // TODO remove the replaced item from disk
+        }
         Ok(())
     }
 
     /// Return `true` if a file with path `key` is in the cache.
-    pub fn contains_key<K: AsRef<str>>(&self, key: K) -> bool {
-        self.cache.contains(key.as_ref())
+    pub fn contains_key<K: AsRef<str>>(&self, key: &K) -> bool
+    where K: Hash + Eq + ?Sized {
+        let cache_key = self.cache_key(key);
+        self.cache.contains(&cache_key)
     }
 
     /// Get an opened `File` for `key`, if one exists and can be opened. Updates the Cache state

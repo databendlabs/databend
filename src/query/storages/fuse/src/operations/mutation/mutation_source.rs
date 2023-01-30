@@ -35,6 +35,7 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::meta::ColumnId;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
@@ -46,6 +47,8 @@ use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::MergeIOReadResult;
+
+type DataChunks = Vec<(ColumnId, Vec<u8>)>;
 
 pub enum MutationAction {
     Deletion,

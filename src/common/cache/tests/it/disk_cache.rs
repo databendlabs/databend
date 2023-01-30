@@ -105,10 +105,11 @@ fn test_some_existing_files() {
 #[test]
 fn test_existing_file_too_large() {
     let f = TestFixture::new();
+    let c = LruDiskCache::new(f.tmp(), 15).unwrap();
+    let cache_key =
     // Create files explicitly in the past.
     set_mtime_back(f.create_file("file1", 10), 10);
     set_mtime_back(f.create_file("file2", 10), 5);
-    let c = LruDiskCache::new(f.tmp(), 15).unwrap();
     assert_eq!(c.size(), 10);
     assert_eq!(c.len(), 1);
     assert!(!c.contains_key("file1"));

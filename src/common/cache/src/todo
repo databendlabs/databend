@@ -1,0 +1,12 @@
+- cache data crc
+- metrics
+- performance evaluation
+    - without threshold
+    - just put bytes to disk (no sync)
+    - what happens if cache is full? will performance degrade significantly?
+- if performance do not meet requirement
+    - consider make it tiered
+     - a in-memory moka at front
+     - disk cache layer listen to the eviction event (serving in dedicate thread pool)
+- misc: restart maybe slow if cached a large amount of data, consider make the startup of data cache layer async
+        silently drop cache admissions during starting up

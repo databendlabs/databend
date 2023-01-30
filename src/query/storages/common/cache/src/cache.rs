@@ -64,7 +64,7 @@ mod impls {
             Q: Hash + Eq + ?Sized,
         {
             let mut guard = self.write();
-            guard.get(k).clone()
+            guard.get(k)
         }
 
         fn put(&self, k: String, v: Arc<V>) {

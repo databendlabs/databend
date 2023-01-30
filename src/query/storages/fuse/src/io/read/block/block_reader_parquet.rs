@@ -29,6 +29,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
 
@@ -55,12 +56,12 @@ impl BlockReader {
             .collect::<HashMap<_, _>>();
 
         // Get the merged IO read result.
-        let read_res = self
+        let fetched = self
             .read_columns_data_by_merge_io(settings, &meta.location.0, &columns_meta)
             .await?;
 
         // Get the columns chunk.
-        let chunks = read_res
+        let chunks = fetched
             .columns_chunks()?
             .into_iter()
             .map(|(column_idx, column_chunk)| (column_idx, column_chunk))
@@ -85,7 +86,7 @@ impl BlockReader {
     pub fn deserialize_parquet_chunks(
         &self,
         part: PartInfoPtr,
-        chunks: Vec<(usize, &[u8])>,
+        chunks: Vec<(ColumnId, &[u8])>,
     ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&part)?;
         let start = Instant::now();
@@ -121,14 +122,14 @@ impl BlockReader {
         num_rows: usize,
         compression: &Compression,
         columns_meta: &HashMap<usize, ColumnMeta>,
-        columns_chunks: Vec<(usize, &[u8])>,
+        columns_chunks: Vec<(ColumnId, &[u8])>,
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if columns_chunks.is_empty() {
             return Ok(DataBlock::new(vec![], num_rows));
         }
 
-        let chunk_map: HashMap<usize, &[u8]> = columns_chunks.into_iter().collect();
+        let chunk_map: HashMap<ColumnId, &[u8]> = columns_chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         let columns = self.projection.project_column_nodes(&self.column_nodes)?;
@@ -140,7 +141,8 @@ impl BlockReader {
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
             for index in indices {
-                let column_read = <&[u8]>::clone(&chunk_map[index]);
+                let column_id = *index as ColumnId;
+                let column_read = <&[u8]>::clone(&chunk_map[&column_id]);
                 let column_meta = &columns_meta[index];
                 let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
                 column_metas.push(column_meta);

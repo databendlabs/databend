@@ -31,7 +31,7 @@ pub struct DiskCacheBuilder;
 impl DiskCacheBuilder {
     pub fn new_disk_cache(path: &str, capacity: u64) -> Result<DiskBytesCache> {
         let cache = DiskCache::new(path, capacity)
-            .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {}", e)))?;
+            .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
         Ok(Arc::new(RwLock::new(cache)))
     }
 }
@@ -39,12 +39,14 @@ impl DiskCacheBuilder {
 impl StorageCache<String, Vec<u8>> for DiskCache {
     type Meter = ();
 
+    // TODO change this signature, takes &[u8]
     fn put(&mut self, key: String, value: Arc<Vec<u8>>) {
         if let Err(e) = self.insert_bytes(key, &value) {
             error!("populate disk cache failed {}", e);
         }
     }
 
+    // TODO change this signature, remove tha Arc
     fn get<Q>(&mut self, k: &Q) -> Option<Arc<Vec<u8>>>
     where
         String: Borrow<Q>,
