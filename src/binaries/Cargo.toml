@@ -33,10 +33,10 @@ common-exception = { path = "../common/exception" }
 common-expression = { path = "../query/expression" }
 common-grpc = { path = "../common/grpc" }
 common-meta-api = { path = "../meta/api" }
-common-meta-kvapi = { path = "../meta/kvapi" }
 common-meta-app = { path = "../meta/app" }
 common-meta-client = { path = "../meta/client" }
 common-meta-embedded = { path = "../meta/embedded" }
+common-meta-kvapi = { path = "../meta/kvapi" }
 common-meta-raft-store = { path = "../meta/raft-store" }
 common-meta-sled-store = { path = "../meta/sled-store" }
 common-meta-stoerr = { path = "../meta/stoerr" }
