@@ -128,7 +128,9 @@ impl Runtime {
 
     fn tracker_builder(mem_stat: Arc<MemStat>) -> tokio::runtime::Builder {
         let mut builder = tokio::runtime::Builder::new_multi_thread();
-        builder.on_thread_start(mem_stat.on_start_thread());
+        builder
+            .enable_time()
+            .on_thread_start(mem_stat.on_start_thread());
 
         builder
     }

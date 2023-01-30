@@ -596,7 +596,9 @@ mod tests {
             let f = Foo { i: 3 };
             let f = TrackedFuture::create_with_mem_stat(Some(mem_stat.clone()), f);
 
-            let rt = tokio::runtime::Builder::new_multi_thread().build()?;
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_time()
+                .build()?;
 
             let v = rt.block_on(f);
 
@@ -663,6 +665,7 @@ mod tests {
 
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .worker_threads(5)
+                    .enable_time()
                     .build()
                     .unwrap();
 
