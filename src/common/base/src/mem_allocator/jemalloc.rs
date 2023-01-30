@@ -212,3 +212,58 @@ pub mod linux_or_macos {
         }
     }
 }
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub mod not_linux_or_macos {
+    use std::alloc::AllocError;
+    use std::alloc::Allocator;
+    use std::alloc::Layout;
+    use std::ptr::NonNull;
+
+    use super::JEAllocator;
+    use crate::mem_allocator::StdAllocator;
+
+    unsafe impl Allocator for JEAllocator {
+        #[inline(always)]
+        fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            StdAllocator.allocate(layout)
+        }
+
+        #[inline(always)]
+        fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            StdAllocator.allocate_zeroed(layout)
+        }
+
+        #[inline(always)]
+        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            StdAllocator.deallocate(ptr, layout)
+        }
+
+        unsafe fn grow(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            StdAllocator.grow(ptr, old_layout, new_layout)
+        }
+
+        unsafe fn grow_zeroed(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            StdAllocator.grow_zeroed(ptr, old_layout, new_layout)
+        }
+
+        unsafe fn shrink(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            StdAllocator.shrink(ptr, old_layout, new_layout)
+        }
+    }
+}
