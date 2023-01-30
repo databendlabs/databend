@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api::KVApi;
+use common_meta_kvapi::KVApi;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::KVAppError;

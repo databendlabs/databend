@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use common_meta_api::KVApi;
+use common_meta_kvapi::KVApi;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVReply;

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_meta_api::KVApi;
+use common_meta_kvapi::KVApi;
 use common_meta_types::KVAppError;
 use common_meta_types::KVMeta;
 use common_meta_types::SeqV;

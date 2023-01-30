@@ -68,6 +68,7 @@ members = [
     "src/meta/api",
     "src/meta/app",
     "src/meta/embedded",
+    "src/meta/kvapi",
     "src/meta/raft-store",
     "src/meta/sled-store",
     "src/meta/stoerr",

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_meta_api::KVApiTestSuite;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_kvapi::KVApiTestSuite;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_kv_write_read() -> anyhow::Result<()> {

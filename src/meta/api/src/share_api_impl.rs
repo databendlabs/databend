@@ -21,6 +21,7 @@ use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
+use common_meta_kvapi::KVApi;
 use common_meta_types::errors::app_error::AppError;
 use common_meta_types::errors::app_error::ShareAccountsAlreadyExists;
 use common_meta_types::errors::app_error::ShareAlreadyExists;
@@ -58,7 +59,6 @@ use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
-use crate::KVApi;
 use crate::ShareApi;
 use crate::TXN_MAX_RETRY_TIMES;
 

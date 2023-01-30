@@ -20,6 +20,8 @@ use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
+use common_meta_kvapi::KVApi;
+use common_meta_kvapi::KVApiKey;
 use common_meta_types::errors::app_error::AppError;
 use common_meta_types::errors::app_error::ShareHasNoGrantedDatabase;
 use common_meta_types::errors::app_error::UnknownDatabase;
@@ -49,8 +51,6 @@ use tracing::debug;
 use ConditionResult::Eq;
 
 use crate::Id;
-use crate::KVApi;
-use crate::KVApiKey;
 
 pub const TXN_MAX_RETRY_TIMES: u32 = 10;
 

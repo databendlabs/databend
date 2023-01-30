@@ -76,6 +76,8 @@ use common_meta_app::share::ShareGrantObject;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
+use common_meta_kvapi::KVApi;
+use common_meta_kvapi::KVApiKey;
 use common_meta_types::errors::app_error::AppError;
 use common_meta_types::errors::app_error::CreateDatabaseWithDropTime;
 use common_meta_types::errors::app_error::CreateTableWithDropTime;
@@ -133,8 +135,6 @@ use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::txn_op_put_with_expire;
 use crate::IdGenerator;
-use crate::KVApi;
-use crate::KVApiKey;
 use crate::SchemaApi;
 use crate::TXN_MAX_RETRY_TIMES;
 
