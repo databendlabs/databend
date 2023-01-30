@@ -19,6 +19,76 @@ use crate::processors::port::OutputPort;
 use crate::processors::processor::ProcessorPtr;
 
 #[derive(Clone)]
+pub struct PipeItem {
+    pub processor: ProcessorPtr,
+    pub inputs_port: Vec<Arc<InputPort>>,
+    pub outputs_port: Vec<Arc<OutputPort>>,
+}
+
+#[derive(Clone)]
+pub struct NewPipe {
+    pub items: Vec<PipeItem>,
+    pub input_length: usize,
+    pub output_length: usize,
+}
+
+impl NewPipe {
+    pub fn create_resize(
+        processor: &ProcessorPtr,
+        inputs: &[Arc<InputPort>],
+        outputs: &[Arc<OutputPort>]) -> NewPipe {
+        NewPipe {
+            items: vec![
+                PipeItem {
+                    processor: processor.clone(),
+                    inputs_port: inputs.to_vec(),
+                    outputs_port: outputs.to_vec(),
+                }
+            ],
+            input_length: inputs.len(),
+            output_length: outputs.len(),
+        }
+    }
+
+    pub fn create_simple(
+        processors: &[ProcessorPtr],
+        inputs: &[Arc<InputPort>],
+        outputs: &[Arc<OutputPort>],
+    ) -> NewPipe {
+        let mut items = Vec::with_capacity(processors.len());
+
+        for (index, processor) in processors.iter().enumerate() {
+            if inputs.is_empty() {
+                items.push(PipeItem {
+                    processor: processor.clone(),
+                    inputs_port: vec![],
+                    outputs_port: vec![outputs[index].clone()],
+                });
+            } else if outputs.is_empty() {
+                items.push(PipeItem {
+                    processor: processor.clone(),
+                    inputs_port: vec![inputs[index].clone()],
+                    outputs_port: vec![],
+                });
+            } else {
+                items.push(PipeItem {
+                    processor: processor.clone(),
+                    inputs_port: vec![inputs[index].clone()],
+                    outputs_port: vec![outputs[index].clone()],
+                });
+            }
+        }
+
+        NewPipe {
+            items,
+            input_length: inputs.len(),
+            output_length: outputs.len(),
+        }
+    }
+}
+
+
+#[derive(Clone)]
 pub enum Pipe {
     SimplePipe {
         processors: Vec<ProcessorPtr>,

@@ -22,6 +22,7 @@ use crate::processors::port::OutputPort;
 use crate::processors::processor::ProcessorPtr;
 use crate::processors::ResizeProcessor;
 use crate::Pipe;
+use crate::pipe::NewPipe;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -47,6 +48,7 @@ use crate::TransformPipeBuilder;
 pub struct Pipeline {
     max_threads: usize,
     pub pipes: Vec<Pipe>,
+    pub new_pipes: Vec<NewPipe>,
     on_init: Option<InitCallback>,
     on_finished: Option<FinishedCallback>,
 }
@@ -54,13 +56,14 @@ pub struct Pipeline {
 pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;
 
 pub type FinishedCallback =
-    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
 
 impl Pipeline {
     pub fn create() -> Pipeline {
         Pipeline {
             max_threads: 0,
             pipes: Vec::new(),
+            new_pipes: Vec::new(),
             on_init: None,
             on_finished: None,
         }
@@ -129,7 +132,7 @@ impl Pipeline {
     }
 
     pub fn add_transform<F>(&mut self, f: F) -> Result<()>
-    where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
+        where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
         let mut transform_builder = TransformPipeBuilder::create();
         for _index in 0..self.output_len() {
             let input_port = InputPort::create();
@@ -146,7 +149,7 @@ impl Pipeline {
     // Add source processor to pipeline.
     // numbers: how many output pipe numbers.
     pub fn add_source<F>(&mut self, f: F, numbers: usize) -> Result<()>
-    where F: Fn(Arc<OutputPort>) -> Result<ProcessorPtr> {
+        where F: Fn(Arc<OutputPort>) -> Result<ProcessorPtr> {
         if numbers == 0 {
             return Err(ErrorCode::Internal(
                 "Source output port numbers cannot be zero.",
@@ -164,7 +167,7 @@ impl Pipeline {
 
     // Add sink processor to pipeline.
     pub fn add_sink<F>(&mut self, f: F) -> Result<()>
-    where F: Fn(Arc<InputPort>) -> Result<ProcessorPtr> {
+        where F: Fn(Arc<InputPort>) -> Result<ProcessorPtr> {
         let mut sink_builder = SinkPipeBuilder::create();
         for _ in 0..self.output_len() {
             let input = InputPort::create();
