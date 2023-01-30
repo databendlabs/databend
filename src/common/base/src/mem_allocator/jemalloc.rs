@@ -20,8 +20,8 @@
 #[derive(Debug, Clone, Copy, Default)]
 pub struct JEAllocator;
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub mod linux_or_macos {
+#[cfg(target_os = "linux")]
+pub mod linux {
     use std::alloc::AllocError;
     use std::alloc::Allocator;
     use std::alloc::Layout;
@@ -213,8 +213,9 @@ pub mod linux_or_macos {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub mod not_linux_or_macos {
+/// Other target fallback to std allocator.
+#[cfg(not(target_os = "linux"))]
+pub mod not_linux {
     use std::alloc::AllocError;
     use std::alloc::Allocator;
     use std::alloc::Layout;
