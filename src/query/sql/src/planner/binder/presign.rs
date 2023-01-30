@@ -45,6 +45,7 @@ impl Binder {
                         AstPresignAction::Upload => PresignAction::Upload,
                     },
                     expire: Duration::seconds(stmt.expire.as_secs() as i64),
+                    content_type: stmt.content_type.clone(),
                 })))
             }
         }

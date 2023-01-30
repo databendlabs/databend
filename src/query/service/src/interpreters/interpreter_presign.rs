@@ -24,6 +24,7 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_jsonb::Value as JsonbValue;
 use common_storages_stage::StageTable;
+use opendal::OpWrite;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -66,7 +67,13 @@ impl Interpreter for PresignInterpreter {
         let o = op.object(&self.plan.path);
         let presigned_req = match self.plan.action {
             PresignAction::Download => o.presign_read(self.plan.expire)?,
-            PresignAction::Upload => o.presign_write(self.plan.expire)?,
+            PresignAction::Upload => {
+                let mut presign_args = OpWrite::new(0);
+                if let Some(content_type) = &self.plan.content_type {
+                    presign_args = presign_args.with_content_type(content_type);
+                }
+                o.presign_write_with(presign_args, self.plan.expire)?
+            }
         };
 
         let header = JsonbValue::Object(

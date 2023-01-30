@@ -7423,7 +7423,7 @@ ShowSettings {
 ---------- Input ----------
 PRESIGN @my_stage
 ---------- Output ---------
-PRESIGN @my_stage/ EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/ EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -7435,6 +7435,7 @@ Presign(
             },
         ),
         expire: 3600s,
+        content_type: None,
     },
 )
 
@@ -7442,7 +7443,7 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/path/to/dir/
 ---------- Output ---------
-PRESIGN @my_stage/path/to/dir/ EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/path/to/dir/ EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -7454,6 +7455,7 @@ Presign(
             },
         ),
         expire: 3600s,
+        content_type: None,
     },
 )
 
@@ -7461,7 +7463,7 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/path/to/file
 ---------- Output ---------
-PRESIGN @my_stage/path/to/file EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -7473,6 +7475,7 @@ Presign(
             },
         ),
         expire: 3600s,
+        content_type: None,
     },
 )
 
@@ -7480,7 +7483,7 @@ Presign(
 ---------- Input ----------
 PRESIGN DOWNLOAD @my_stage/path/to/file
 ---------- Output ---------
-PRESIGN @my_stage/path/to/file EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -7492,6 +7495,7 @@ Presign(
             },
         ),
         expire: 3600s,
+        content_type: None,
     },
 )
 
@@ -7499,7 +7503,7 @@ Presign(
 ---------- Input ----------
 PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200
 ---------- Output ---------
-PRESIGN @my_stage/path/to/file EXPIRE = 7200
+PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -7511,6 +7515,51 @@ Presign(
             },
         ),
         expire: 7200s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'
+---------- Output ---------
+PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Upload,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/path/to/file",
+            },
+        ),
+        expire: 7200s,
+        content_type: Some(
+            "application/octet-stream",
+        ),
+    },
+)
+
+
+---------- Input ----------
+PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200
+---------- Output ---------
+PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Upload,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/path/to/file",
+            },
+        ),
+        expire: 7200s,
+        content_type: Some(
+            "application/octet-stream",
+        ),
     },
 )
 
