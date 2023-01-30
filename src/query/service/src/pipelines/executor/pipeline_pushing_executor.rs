@@ -78,10 +78,10 @@ impl PipelinePushingExecutor {
         let pushing_source = PushingSource::create(ctx, rx, output.clone())?;
         source_pipe_builder.add_source(output, pushing_source);
 
-        new_pipeline.add_new_pipe(source_pipe_builder.finalize());
+        new_pipeline.add_pipe(source_pipe_builder.finalize());
         new_pipeline.resize(pipeline.input_len())?;
         for pipe in &pipeline.pipes {
-            new_pipeline.add_new_pipe(pipe.clone())
+            new_pipeline.add_pipe(pipe.clone())
         }
 
         *pipeline = new_pipeline;

@@ -32,60 +32,6 @@ pub struct Pipe {
     pub output_length: usize,
 }
 
-impl Pipe {
-    pub fn create_resize(
-        processor: &ProcessorPtr,
-        inputs: &[Arc<InputPort>],
-        outputs: &[Arc<OutputPort>],
-    ) -> Pipe {
-        Pipe {
-            items: vec![PipeItem {
-                processor: processor.clone(),
-                inputs_port: inputs.to_vec(),
-                outputs_port: outputs.to_vec(),
-            }],
-            input_length: inputs.len(),
-            output_length: outputs.len(),
-        }
-    }
-
-    pub fn create_simple(
-        processors: &[ProcessorPtr],
-        inputs: &[Arc<InputPort>],
-        outputs: &[Arc<OutputPort>],
-    ) -> Pipe {
-        let mut items = Vec::with_capacity(processors.len());
-
-        for (index, processor) in processors.iter().enumerate() {
-            if inputs.is_empty() {
-                items.push(PipeItem {
-                    processor: processor.clone(),
-                    inputs_port: vec![],
-                    outputs_port: vec![outputs[index].clone()],
-                });
-            } else if outputs.is_empty() {
-                items.push(PipeItem {
-                    processor: processor.clone(),
-                    inputs_port: vec![inputs[index].clone()],
-                    outputs_port: vec![],
-                });
-            } else {
-                items.push(PipeItem {
-                    processor: processor.clone(),
-                    inputs_port: vec![inputs[index].clone()],
-                    outputs_port: vec![outputs[index].clone()],
-                });
-            }
-        }
-
-        Pipe {
-            items,
-            input_length: inputs.len(),
-            output_length: outputs.len(),
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct SourcePipeBuilder {
     items: Vec<PipeItem>,
@@ -146,9 +92,6 @@ impl SinkPipeBuilder {
 
 pub struct TransformPipeBuilder {
     items: Vec<PipeItem>,
-    // processors: Vec<ProcessorPtr>,
-    // inputs_port: Vec<Arc<InputPort>>,
-    // outputs_port: Vec<Arc<OutputPort>>,
 }
 
 impl TransformPipeBuilder {

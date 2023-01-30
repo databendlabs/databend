@@ -164,9 +164,9 @@ fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
 
     let mut pipeline = Pipeline::create();
-    pipeline.add_new_pipe(source_pipe);
-    pipeline.add_new_pipe(create_transform_pipe(1)?);
-    pipeline.add_new_pipe(sink_pipe);
+    pipeline.add_pipe(source_pipe);
+    pipeline.add_pipe(create_transform_pipe(1)?);
+    pipeline.add_pipe(sink_pipe);
 
     RunningGraph::create(pipeline)
 }
@@ -176,9 +176,9 @@ fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGrap
     let (_tx, source_pipe) = create_source_pipe(ctx, 2)?;
 
     let mut pipeline = Pipeline::create();
-    pipeline.add_new_pipe(source_pipe);
-    pipeline.add_new_pipe(create_transform_pipe(2)?);
-    pipeline.add_new_pipe(sink_pipe);
+    pipeline.add_pipe(source_pipe);
+    pipeline.add_pipe(create_transform_pipe(2)?);
+    pipeline.add_pipe(sink_pipe);
 
     RunningGraph::create(pipeline)
 }
@@ -188,13 +188,13 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
 
     let mut pipeline = Pipeline::create();
-    pipeline.add_new_pipe(source_pipe);
+    pipeline.add_pipe(source_pipe);
     pipeline.resize(2)?;
-    pipeline.add_new_pipe(create_transform_pipe(2)?);
+    pipeline.add_pipe(create_transform_pipe(2)?);
     pipeline.resize(1)?;
-    pipeline.add_new_pipe(create_transform_pipe(1)?);
+    pipeline.add_pipe(create_transform_pipe(1)?);
     pipeline.resize(2)?;
-    pipeline.add_new_pipe(sink_pipe);
+    pipeline.add_pipe(sink_pipe);
 
     RunningGraph::create(pipeline)
 }

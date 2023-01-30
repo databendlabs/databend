@@ -206,7 +206,7 @@ mod impls {
             let output = OutputPort::create();
             let source = StreamSource::create(ctx, Some(block_stream), output.clone())?;
 
-            pipeline.add_new_pipe(Pipe {
+            pipeline.add_pipe(Pipe {
                 input_length: 0,
                 output_length: 1,
                 items: vec![PipeItem {

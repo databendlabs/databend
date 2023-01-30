@@ -100,7 +100,7 @@ impl Pipeline {
         )
     }
 
-    pub fn add_new_pipe(&mut self, pipe: Pipe) {
+    pub fn add_pipe(&mut self, pipe: Pipe) {
         self.pipes.push(pipe);
     }
 
@@ -142,7 +142,7 @@ impl Pipeline {
             transform_builder.add_transform(input_port, output_port, processor);
         }
 
-        self.add_new_pipe(transform_builder.finalize());
+        self.add_pipe(transform_builder.finalize());
         Ok(())
     }
 
@@ -161,7 +161,7 @@ impl Pipeline {
             let output = OutputPort::create();
             source_builder.add_source(output.clone(), f(output)?);
         }
-        self.add_new_pipe(source_builder.finalize());
+        self.add_pipe(source_builder.finalize());
         Ok(())
     }
 
@@ -173,7 +173,7 @@ impl Pipeline {
             let input = InputPort::create();
             sink_builder.add_sink(input.clone(), f(input)?);
         }
-        self.add_new_pipe(sink_builder.finalize());
+        self.add_pipe(sink_builder.finalize());
         Ok(())
     }
 

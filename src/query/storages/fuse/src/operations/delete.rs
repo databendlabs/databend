@@ -310,7 +310,7 @@ impl FuseTable {
                     inputs_port.push(InputPort::create());
                 }
                 let output_port = OutputPort::create();
-                pipeline.add_new_pipe(Pipe {
+                pipeline.add_pipe(Pipe {
                     output_length: 1,
                     input_length: inputs_port.len(),
                     items: vec![PipeItem {

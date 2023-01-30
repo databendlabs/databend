@@ -78,7 +78,7 @@ pub fn try_add_multi_sort_merge(
                 sort_columns_descriptions,
             )?;
 
-            pipeline.add_new_pipe(Pipe {
+            pipeline.add_pipe(Pipe {
                 input_length: inputs_port.len(),
                 output_length: 1,
                 items: vec![PipeItem {

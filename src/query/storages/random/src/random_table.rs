@@ -173,7 +173,7 @@ impl Table for RandomTable {
             );
         }
 
-        pipeline.add_new_pipe(builder.finalize());
+        pipeline.add_pipe(builder.finalize());
         Ok(())
     }
 }

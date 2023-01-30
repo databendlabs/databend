@@ -396,7 +396,7 @@ fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + S
     let output = transform.get_output();
     let inputs_port = transform.get_inputs();
 
-    pipeline.add_new_pipe(Pipe {
+    pipeline.add_pipe(Pipe {
         input_length: inputs_port.len(),
         output_length: 1,
         items: vec![PipeItem {
