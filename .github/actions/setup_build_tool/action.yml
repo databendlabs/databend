@@ -35,7 +35,34 @@ runs:
         export IMAGE=${{ inputs.registry }}/build-tool:${{ inputs.image }}
         export CARGO_INCREMENTAL=0
         export CARGO_TERM_COLOR=always
+        EOF
+
+        RUNNER_PROVIDER="${RUNNER_PROVIDER:-github}"
+        case ${RUNNER_PROVIDER} in
+          aws)
+            echo "Setting up sccache for AWS S3..."
+            cat <<EOF >>$BIN_LOCAL/build-tool
+        export RUSTC_WRAPPER=/opt/rust/cargo/bin/sccache
+        export SCCACHE_BUCKET=databend-ci
+        export SCCACHE_REGION=us-east-2
+        export SCCACHE_S3_KEY_PREFIX="cache/"
+        export SCCACHE_S3_USE_SSL="true"
+        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR,BUILD_PROFILE,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_REGION,SCCACHE_S3_KEY_PREFIX,SCCACHE_S3_USE_SSL
+        EOF
+            ;;
+
+          github)
+            echo "sccache disabled on GitHub-hosted Runner"
+            cat <<EOF >>$BIN_LOCAL/build-tool
         export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR,BUILD_PROFILE
+        EOF
+            ;;
+
+          *)
+            ;;
+        esac
+
+        cat <<EOF >>$BIN_LOCAL/build-tool
         if [[ \${script_name} == "build-tool" ]]; then
           scripts/setup/run_build_tool.sh \$@
         else
@@ -49,6 +76,7 @@ runs:
         ln -s build-tool $BIN_LOCAL/rustup
         ln -s build-tool $BIN_LOCAL/make
         ln -s build-tool $BIN_LOCAL/taplo
+        ln -s build-tool $BIN_LOCAL/sccache
 
     - name: check cargo version
       shell: bash

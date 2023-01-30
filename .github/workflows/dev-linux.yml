@@ -18,6 +18,7 @@ concurrency:
 
 env:
   BUILD_PROFILE: debug
+  RUNNER_PROVIDER: aws
 
 jobs:
   check:
@@ -245,6 +246,16 @@ jobs:
         with:
           target: x86_64-unknown-linux-gnu
           profile: debug
+
+  # build_release:
+  #   timeout-minutes: 30
+  #   runs-on: [self-hosted, X64, Linux, development]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: ./.github/actions/build_linux
+  #       with:
+  #         target: x86_64-unknown-linux-gnu
+  #         profile: release
 
   test_stateful_hive_standalone:
     timeout-minutes: 10

@@ -14,23 +14,21 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         image: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_REGION,SCCACHE_S3_KEY_PREFIX,SCCACHE_S3_USE_SSL,je_cv_pthread_getname_np
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,je_cv_pthread_getname_np
 
     - name: Build Debug
       if: inputs.profile == 'debug'
       shell: bash
-      run: cargo -Z sparse-registry build --target ${{ inputs.target }}
-      env:
-        RUSTC_WRAPPER: /opt/rust/cargo/bin/sccache
-        SCCACHE_BUCKET: databend-ci
-        SCCACHE_REGION: us-east-2
-        SCCACHE_S3_KEY_PREFIX: cache/
-        SCCACHE_S3_USE_SSL: "true"
+      run: |
+        cargo -Z sparse-registry build --target ${{ inputs.target }}
+        sccache --show-stats
 
     - name: Build Release
       if: inputs.profile == 'release'
       shell: bash
-      run: cargo -Z sparse-registry build --target ${{ inputs.target }} --release
+      run: |
+        cargo -Z sparse-registry build --target ${{ inputs.target }} --release
+        sccache --show-stats
 
     - shell: bash
       run: readelf -p .comment ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-query
