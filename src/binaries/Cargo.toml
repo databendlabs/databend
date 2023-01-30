@@ -33,6 +33,7 @@ common-exception = { path = "../common/exception" }
 common-expression = { path = "../query/expression" }
 common-grpc = { path = "../common/grpc" }
 common-meta-api = { path = "../meta/api" }
+common-meta-kvapi = { path = "../meta/kvapi" }
 common-meta-app = { path = "../meta/app" }
 common-meta-client = { path = "../meta/client" }
 common-meta-embedded = { path = "../meta/embedded" }

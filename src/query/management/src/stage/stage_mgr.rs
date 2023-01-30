@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_meta_api::txn_cond_seq;
 use common_meta_api::txn_op_del;
 use common_meta_api::txn_op_put;
-use common_meta_api::KVApi;
+use common_meta_kvapi::KVApi;
 use common_meta_types::errors::app_error::TxnRetryMaxTimes;
 use common_meta_types::ConditionResult::Eq;
 use common_meta_types::KVAppError;

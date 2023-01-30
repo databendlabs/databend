@@ -29,7 +29,7 @@ use common_management::UdfApi;
 use common_management::UdfMgr;
 use common_management::UserApi;
 use common_management::UserMgr;
-use common_meta_api::KVApi;
+use common_meta_kvapi::KVApi;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::AuthInfo;

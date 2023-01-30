@@ -17,7 +17,7 @@ io-uring = ["common-meta-embedded/io-uring"]
 [dependencies]
 # Workspace dependencies
 common-grpc = { path = "../../common/grpc" }
-common-meta-api = { path = "../api" }
+common-meta-kvapi = { path = "../kvapi" }
 common-meta-client = { path = "../client" }
 common-meta-embedded = { path = "../embedded" }
 common-meta-types = { path = "../types" }

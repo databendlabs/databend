@@ -12,14 +12,15 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use crate::kv_api_key::check_segment;
-use crate::kv_api_key::check_segment_absent;
-use crate::kv_api_key::check_segment_present;
+use common_meta_kvapi::kv_api_key::check_segment;
+use common_meta_kvapi::kv_api_key::check_segment_absent;
+use common_meta_kvapi::kv_api_key::check_segment_present;
+use common_meta_kvapi::KVApiKey;
+use common_meta_kvapi::KVApiKeyError;
+
 use crate::schema_api_keys::ID_GEN_DATABASE;
 use crate::schema_api_keys::ID_GEN_TABLE;
 use crate::share_api_keys::ID_GEN_SHARE;
-use crate::KVApiKey;
-use crate::KVApiKeyError;
 
 pub(crate) const PREFIX_ID_GEN: &str = "__fd_id_gen";
 
@@ -81,8 +82,9 @@ impl KVApiKey for IdGenerator {
 
 #[cfg(test)]
 mod t {
+    use common_meta_kvapi::KVApiKey;
+
     use crate::id_generator::IdGenerator;
-    use crate::KVApiKey;
 
     #[test]
     fn test_id_generator() -> anyhow::Result<()> {

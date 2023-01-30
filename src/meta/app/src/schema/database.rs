@@ -289,3 +289,133 @@ impl GetDatabaseReq {
 pub struct ListDatabaseReq {
     pub tenant: String,
 }
+
+mod kvapi_key_impl {
+    use common_meta_kvapi::kv_api_key::check_segment;
+    use common_meta_kvapi::kv_api_key::check_segment_absent;
+    use common_meta_kvapi::kv_api_key::check_segment_present;
+    use common_meta_kvapi::kv_api_key::decode_id;
+    use common_meta_kvapi::kv_api_key::escape;
+    use common_meta_kvapi::kv_api_key::unescape;
+    use common_meta_kvapi::KVApiKey;
+    use common_meta_kvapi::KVApiKeyError;
+
+    use crate::schema::DatabaseId;
+    use crate::schema::DatabaseIdToName;
+    use crate::schema::DatabaseNameIdent;
+    use crate::schema::DbIdListKey;
+    use crate::schema::PREFIX_DATABASE;
+    use crate::schema::PREFIX_DATABASE_BY_ID;
+    use crate::schema::PREFIX_DATABASE_ID_TO_NAME;
+    use crate::schema::PREFIX_DB_ID_LIST;
+
+    /// __fd_database/<tenant>/<db_name> -> <db_id>
+    impl KVApiKey for DatabaseNameIdent {
+        const PREFIX: &'static str = PREFIX_DATABASE;
+
+        fn to_string_key(&self) -> String {
+            format!(
+                "{}/{}/{}",
+                Self::PREFIX,
+                escape(&self.tenant),
+                escape(&self.db_name),
+            )
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
+            let mut elts = s.split('/');
+
+            let prefix = check_segment_present(elts.next(), 0, s)?;
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let tenant = check_segment_present(elts.next(), 1, s)?;
+
+            let db_name = check_segment_present(elts.next(), 2, s)?;
+
+            check_segment_absent(elts.next(), 3, s)?;
+
+            let tenant = unescape(tenant)?;
+            let db_name = unescape(db_name)?;
+
+            Ok(DatabaseNameIdent { tenant, db_name })
+        }
+    }
+
+    /// "__fd_database_by_id/<db_id>"
+    impl KVApiKey for DatabaseId {
+        const PREFIX: &'static str = PREFIX_DATABASE_BY_ID;
+
+        fn to_string_key(&self) -> String {
+            format!("{}/{}", Self::PREFIX, self.db_id,)
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
+            let mut elts = s.split('/');
+
+            let prefix = check_segment_present(elts.next(), 0, s)?;
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let db_id = check_segment_present(elts.next(), 1, s)?;
+            let db_id = decode_id(db_id)?;
+
+            check_segment_absent(elts.next(), 2, s)?;
+
+            Ok(DatabaseId { db_id })
+        }
+    }
+
+    /// "__fd_database_id_to_name/<db_id> -> DatabaseNameIdent"
+    impl KVApiKey for DatabaseIdToName {
+        const PREFIX: &'static str = PREFIX_DATABASE_ID_TO_NAME;
+
+        fn to_string_key(&self) -> String {
+            format!("{}/{}", Self::PREFIX, self.db_id,)
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
+            let mut elts = s.split('/');
+
+            let prefix = check_segment_present(elts.next(), 0, s)?;
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let db_id = check_segment_present(elts.next(), 1, s)?;
+            let db_id = decode_id(db_id)?;
+
+            check_segment_absent(elts.next(), 2, s)?;
+
+            Ok(DatabaseIdToName { db_id })
+        }
+    }
+
+    /// "_fd_db_id_list/<tenant>/<db_name> -> db_id_list"
+    impl KVApiKey for DbIdListKey {
+        const PREFIX: &'static str = PREFIX_DB_ID_LIST;
+
+        fn to_string_key(&self) -> String {
+            format!(
+                "{}/{}/{}",
+                Self::PREFIX,
+                escape(&self.tenant),
+                escape(&self.db_name),
+            )
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
+            let mut elts = s.split('/');
+
+            let prefix = check_segment_present(elts.next(), 0, s)?;
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let tenant = check_segment_present(elts.next(), 1, s)?;
+
+            let db_name = check_segment_present(elts.next(), 2, s)?;
+
+            check_segment_absent(elts.next(), 3, s)?;
+
+            let tenant = unescape(tenant)?;
+            let db_name = unescape(db_name)?;
+
+            Ok(DbIdListKey { tenant, db_name })
+        }
+    }
+}
