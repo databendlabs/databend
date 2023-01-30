@@ -118,6 +118,7 @@ where
             }
 
             let blocks = Self::generate_data(inner_table, &agg.params, &agg.method.method)?;
+            println!("start to clear {:?}", bucket);
             Self::clear_table(inner_table, &agg.params);
             // streaming return two level blocks by bucket
             let blocks = blocks
@@ -211,7 +212,7 @@ where
     }
 
     fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
-        for (bucket, inner_table) in agg.hash_table.iter_tables_mut().enumerate() {
+        for (_bucket, inner_table) in agg.hash_table.iter_tables_mut().enumerate() {
             if inner_table.len() == 0 {
                 continue;
             }
@@ -219,8 +220,6 @@ where
             let blocks = Self::generate_data(inner_table, &agg.params, &agg.method.method)?;
             Self::clear_table(inner_table, &agg.params);
             
-            let rows: usize = blocks.iter().map(|c| c.num_rows()).sum();
-            println!("rows: {bucket}  {rows}");
             return Ok(blocks);
         }
 
@@ -230,10 +229,6 @@ where
     }
 }
 
-// Example: TwoLevelAggregator<PartialAggregator<HAS_AGG, Method>> ->
-//      TwoLevelAggregator {
-//          inner: PartialAggregator<HAS_AGG, TwoLevelMethod<Method>>
-//      }
 pub struct TwoLevelAggregator<T: TwoLevelAggregatorLike> {
     inner: T::TwoLevelAggregator,
 }

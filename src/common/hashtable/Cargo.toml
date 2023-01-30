@@ -18,7 +18,7 @@ common-base = { path = "../base" }
 
 ## Must disable feature "runtime-rng", it will make the hash results unstable in cluster
 ahash = { version = "0.8.2", features = ["no-rng"] }
-bumpalo = "3.10.0"
+bumpalo = "3.11.0"
 cfg-if = "1.0.0"
 libc = "0.2.126"
 ordered-float = { workspace = true, features = ["serde"] }

@@ -301,10 +301,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             return Ok(vec![]);
         }
         self.generated = true;
-        let result = Self::generate_data(&self.hash_table, &self.params, &self.method);
-
-        Self::clear_table(&mut self.hash_table, &self.params);
-        result
+        Self::generate_data(&self.hash_table, &self.params, &self.method)
     }
 
     fn should_expand_table(&self) -> bool {
@@ -315,7 +312,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let ht_mem = self.hash_table.bytes_len();
         let ht_rows = self.hash_table.len();
 
-        println!("{:?} {}", self.input_rows, ht_rows);
         if ht_rows == 0 {
             return true;
         }
@@ -336,13 +332,16 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         // TODO ADD estimated reduction, currently we use current reduction
         let estimated_reduction = current_reduction;
         let min_reduction = STREAMING_HT_MIN_REDUCTION[cache_level].1;
-
-        println!(
-            "YY: {:?} {:?} {}",
-            estimated_reduction,
-            min_reduction,
-            estimated_reduction > min_reduction
-        );
+        
+        if estimated_reduction <= min_reduction {
+            println!(
+                "YY: {:?} {:?} {}",
+                estimated_reduction,
+                min_reduction,
+                estimated_reduction > min_reduction
+            );
+        }
+      
         estimated_reduction > min_reduction
     }
 
@@ -363,7 +362,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
         if table.len() == 0 {
             return;
         }
-
         let aggregate_functions = &params.aggregate_functions;
         let offsets_aggregate_states = &params.offsets_aggregate_states;
 
@@ -396,6 +394,9 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>> Dr
     for PartialAggregator<HAS_AGG, Method>
 {
     fn drop(&mut self) {
-        Self::clear_table(&mut self.hash_table, &self.params);
+        if !self.states_dropped {
+            Self::clear_table(&mut self.hash_table, &self.params);
+            self.states_dropped = true;
+        }
     }
 }
