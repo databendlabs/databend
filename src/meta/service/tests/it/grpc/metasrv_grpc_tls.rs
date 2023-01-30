@@ -19,7 +19,7 @@ use common_exception::ErrorCode;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_api::SchemaApi;
 use common_meta_client::MetaGrpcClient;
-use common_meta_kvapi::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 

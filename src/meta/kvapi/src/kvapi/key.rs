@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Defines kvapi::KVApi key behaviors.
+
 use std::fmt::Debug;
 use std::string::FromUtf8Error;
 
+use crate::kvapi;
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum KVApiKeyError {
+pub enum KeyError {
     #[error(transparent)]
     FromUtf8Error(#[from] FromUtf8Error),
 
@@ -37,8 +41,8 @@ pub enum KVApiKeyError {
     InvalidId { s: String, reason: String },
 }
 
-/// Convert structured key to a string key used by KVApi and backwards
-pub trait KVApiKey: Debug
+/// Convert structured key to a string key used by kvapi::KVApi and backwards
+pub trait Key: Debug
 where Self: Sized
 {
     const PREFIX: &'static str;
@@ -47,17 +51,17 @@ where Self: Sized
     fn to_string_key(&self) -> String;
 
     /// Decode str into a structured key.
-    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError>;
+    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError>;
 }
 
-impl KVApiKey for String {
+impl kvapi::Key for String {
     const PREFIX: &'static str = "";
 
     fn to_string_key(&self) -> String {
         self.clone()
     }
 
-    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
         Ok(s.to_string())
     }
 }
@@ -146,9 +150,9 @@ pub fn check_segment_absent(
     elt: Option<&str>,
     i: usize,
     encoded: &str,
-) -> Result<(), KVApiKeyError> {
+) -> Result<(), kvapi::KeyError> {
     if elt.is_some() {
-        Err(KVApiKeyError::WrongNumberOfSegments {
+        Err(kvapi::KeyError::WrongNumberOfSegments {
             expect: i,
             got: encoded.to_string(),
         })
@@ -162,11 +166,11 @@ pub fn check_segment_present<'a>(
     elt: Option<&'a str>,
     i: usize,
     key: &str,
-) -> Result<&'a str, KVApiKeyError> {
+) -> Result<&'a str, kvapi::KeyError> {
     if let Some(s) = elt {
         Ok(s)
     } else {
-        Err(KVApiKeyError::WrongNumberOfSegments {
+        Err(kvapi::KeyError::WrongNumberOfSegments {
             expect: i + 1,
             got: key.to_string(),
         })
@@ -174,9 +178,9 @@ pub fn check_segment_present<'a>(
 }
 
 /// Check if the `i`-th segment equals `expect`.
-pub fn check_segment(elt: &str, i: usize, expect: &str) -> Result<(), KVApiKeyError> {
+pub fn check_segment(elt: &str, i: usize, expect: &str) -> Result<(), kvapi::KeyError> {
     if elt != expect {
-        return Err(KVApiKeyError::InvalidSegment {
+        return Err(kvapi::KeyError::InvalidSegment {
             i,
             expect: expect.to_string(),
             got: elt.to_string(),
@@ -186,8 +190,8 @@ pub fn check_segment(elt: &str, i: usize, expect: &str) -> Result<(), KVApiKeyEr
 }
 
 /// Decode a string into u64 id.
-pub fn decode_id(s: &str) -> Result<u64, KVApiKeyError> {
-    let id = s.parse::<u64>().map_err(|e| KVApiKeyError::InvalidId {
+pub fn decode_id(s: &str) -> Result<u64, kvapi::KeyError> {
+    let id = s.parse::<u64>().map_err(|e| kvapi::KeyError::InvalidId {
         s: s.to_string(),
         reason: e.to_string(),
     })?;

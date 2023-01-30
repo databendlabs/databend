@@ -30,7 +30,7 @@ use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
-use common_meta_kvapi::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::UpsertKVReq;

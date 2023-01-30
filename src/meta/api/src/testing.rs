@@ -14,8 +14,7 @@
 
 //! Supporting utilities for tests.
 
-use common_meta_kvapi::KVApi;
-use common_meta_kvapi::KVApiKey;
+use common_meta_kvapi::kvapi;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::KVAppError;
 use common_meta_types::MetaAPIError;
@@ -26,8 +25,8 @@ use common_proto_conv::FromToProto;
 
 /// Get existing value by key. Panic if key is absent.
 pub(crate) async fn get_kv_data<T>(
-    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
-    key: &impl KVApiKey,
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    key: &impl kvapi::Key,
 ) -> Result<T, KVAppError>
 where
     T: FromToProto,
