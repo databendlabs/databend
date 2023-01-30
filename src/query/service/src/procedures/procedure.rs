@@ -85,9 +85,9 @@ pub trait Procedure: Sync + Send {
 #[async_trait::async_trait]
 pub trait OneBlockProcedure {
     fn into_procedure(self) -> Box<dyn Procedure>
-        where
-            Self: Send + Sync,
-            Self: Sized + 'static,
+    where
+        Self: Send + Sync,
+        Self: Sized + 'static,
     {
         Box::new(impls::OneBlockProcedureWrapper(self))
     }
@@ -107,12 +107,12 @@ pub trait OneBlockProcedure {
 /// The method `into_procedure` is be used while registering to [ProcedureFactory],
 #[async_trait::async_trait]
 pub trait StreamProcedure
-    where Self: Sized
+where Self: Sized
 {
     fn into_procedure(self) -> Box<dyn Procedure>
-        where
-            Self: Send + Sync,
-            Self: Sized + 'static,
+    where
+        Self: Send + Sync,
+        Self: Sized + 'static,
     {
         Box::new(impls::StreamProcedureWrapper(self))
     }
@@ -131,7 +131,9 @@ pub trait StreamProcedure
 }
 
 mod impls {
-    use common_pipeline_core::pipe::{NewPipe, PipeItem};
+    use common_pipeline_core::pipe::Pipe;
+    use common_pipeline_core::pipe::PipeItem;
+
     use super::*;
     use crate::stream::DataBlockStream;
 
@@ -140,7 +142,7 @@ mod impls {
 
     #[async_trait::async_trait]
     impl<T> Procedure for OneBlockProcedureWrapper<T>
-        where T: OneBlockProcedure + Sync + Send
+    where T: OneBlockProcedure + Sync + Send
     {
         fn name(&self) -> &str {
             self.0.name()
@@ -183,7 +185,7 @@ mod impls {
 
     #[async_trait::async_trait]
     impl<T> Procedure for StreamProcedureWrapper<T>
-        where T: StreamProcedure + Sync + Send
+    where T: StreamProcedure + Sync + Send
     {
         fn name(&self) -> &str {
             self.0.name()
@@ -204,8 +206,7 @@ mod impls {
             let output = OutputPort::create();
             let source = StreamSource::create(ctx, Some(block_stream), output.clone())?;
 
-
-            pipeline.add_new_pipe(NewPipe {
+            pipeline.add_new_pipe(Pipe {
                 input_length: 0,
                 output_length: 1,
                 items: vec![PipeItem {

@@ -37,7 +37,8 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_pipeline_core::pipe::{NewPipe, PipeItem};
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -196,7 +197,7 @@ impl FuseTable {
             projection.clone(),
             base_snapshot,
         )
-            .await?;
+        .await?;
 
         let block_reader = self.create_block_reader(projection)?;
         let schema = block_reader.schema();
@@ -297,19 +298,19 @@ impl FuseTable {
         base_segments: Vec<Location>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        match pipeline.pipes.last() {
-            None => Err(ErrorCode::Internal("The pipeline is empty.")),
-            Some(pipe) if pipe.output_size() == 0 => {
-                Err(ErrorCode::Internal("The output of the last pipe is 0."))
-            }
-            Some(pipe) => {
-                let input_size = pipe.output_size();
-                let mut inputs_port = Vec::with_capacity(input_size);
-                for _ in 0..input_size {
+        if pipeline.is_empty() {
+            return Err(ErrorCode::Internal("The pipeline is empty."));
+        }
+
+        match pipeline.output_len() {
+            0 => Err(ErrorCode::Internal("The output of the last pipe is 0.")),
+            last_pipe_size => {
+                let mut inputs_port = Vec::with_capacity(last_pipe_size);
+                for _ in 0..last_pipe_size {
                     inputs_port.push(InputPort::create());
                 }
                 let output_port = OutputPort::create();
-                pipeline.add_new_pipe(NewPipe {
+                pipeline.add_new_pipe(Pipe {
                     output_length: 1,
                     input_length: inputs_port.len(),
                     items: vec![PipeItem {

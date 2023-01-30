@@ -20,7 +20,8 @@ use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::pipe::{NewPipe, PipeItem};
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_sources::processors::sources::SyncReceiverSource;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::processors::port::InputPort;
@@ -201,7 +202,7 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
 fn create_source_pipe(
     ctx: Arc<QueryContext>,
     size: usize,
-) -> Result<(Vec<Sender<Result<DataBlock>>>, NewPipe)> {
+) -> Result<(Vec<Sender<Result<DataBlock>>>, Pipe)> {
     let mut txs = Vec::with_capacity(size);
     let mut items = Vec::with_capacity(size);
 
@@ -215,14 +216,14 @@ fn create_source_pipe(
             processor: SyncReceiverSource::create(ctx.clone(), rx, output)?,
         });
     }
-    Ok((txs, NewPipe {
+    Ok((txs, Pipe {
         items,
         input_length: 0,
         output_length: size,
     }))
 }
 
-fn create_transform_pipe(size: usize) -> Result<NewPipe> {
+fn create_transform_pipe(size: usize) -> Result<Pipe> {
     let mut items = Vec::with_capacity(size);
 
     for _index in 0..size {
@@ -236,14 +237,14 @@ fn create_transform_pipe(size: usize) -> Result<NewPipe> {
         });
     }
 
-    Ok(NewPipe {
+    Ok(Pipe {
         items,
         input_length: size,
         output_length: size,
     })
 }
 
-fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, NewPipe)> {
+fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pipe)> {
     let mut rxs = Vec::with_capacity(size);
     let mut items = Vec::with_capacity(size);
     for _index in 0..size {
@@ -257,7 +258,7 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Ne
         });
     }
 
-    Ok((rxs, NewPipe {
+    Ok((rxs, Pipe {
         items,
         output_length: 0,
         input_length: size,

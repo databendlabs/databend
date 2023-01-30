@@ -61,7 +61,7 @@ pub trait Interpreter: Sync + Send {
             }
         };
 
-        if build_res.main_pipeline.pipes.is_empty() {
+        if build_res.main_pipeline.is_empty() {
             InterpreterMetrics::record_query_finished(&ctx, None);
             log_query_finished(&ctx, None);
 

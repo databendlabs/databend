@@ -26,19 +26,19 @@ pub struct PipeItem {
 }
 
 #[derive(Clone)]
-pub struct NewPipe {
+pub struct Pipe {
     pub items: Vec<PipeItem>,
     pub input_length: usize,
     pub output_length: usize,
 }
 
-impl NewPipe {
+impl Pipe {
     pub fn create_resize(
         processor: &ProcessorPtr,
         inputs: &[Arc<InputPort>],
         outputs: &[Arc<OutputPort>],
-    ) -> NewPipe {
-        NewPipe {
+    ) -> Pipe {
+        Pipe {
             items: vec![PipeItem {
                 processor: processor.clone(),
                 inputs_port: inputs.to_vec(),
@@ -53,7 +53,7 @@ impl NewPipe {
         processors: &[ProcessorPtr],
         inputs: &[Arc<InputPort>],
         outputs: &[Arc<OutputPort>],
-    ) -> NewPipe {
+    ) -> Pipe {
         let mut items = Vec::with_capacity(processors.len());
 
         for (index, processor) in processors.iter().enumerate() {
@@ -78,54 +78,10 @@ impl NewPipe {
             }
         }
 
-        NewPipe {
+        Pipe {
             items,
             input_length: inputs.len(),
             output_length: outputs.len(),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub enum Pipe {
-    SimplePipe {
-        processors: Vec<ProcessorPtr>,
-        inputs_port: Vec<Arc<InputPort>>,
-        outputs_port: Vec<Arc<OutputPort>>,
-    },
-    ResizePipe {
-        processor: ProcessorPtr,
-        inputs_port: Vec<Arc<InputPort>>,
-        outputs_port: Vec<Arc<OutputPort>>,
-    },
-}
-
-impl Pipe {
-    pub fn size(&self) -> usize {
-        match self {
-            Pipe::ResizePipe { .. } => 1,
-            Pipe::SimplePipe { processors, .. } => processors.len(),
-        }
-    }
-
-    pub fn input_size(&self) -> usize {
-        match self {
-            Pipe::SimplePipe { inputs_port, .. } => inputs_port.len(),
-            Pipe::ResizePipe { inputs_port, .. } => inputs_port.len(),
-        }
-    }
-
-    pub fn output_size(&self) -> usize {
-        match self {
-            Pipe::SimplePipe { outputs_port, .. } => outputs_port.len(),
-            Pipe::ResizePipe { outputs_port, .. } => outputs_port.len(),
-        }
-    }
-
-    pub fn processor_by_index(&self, index: usize) -> ProcessorPtr {
-        match self {
-            Pipe::SimplePipe { processors, .. } => processors[index].clone(),
-            Pipe::ResizePipe { processor, .. } => processor.clone(),
         }
     }
 }
@@ -140,10 +96,10 @@ impl SourcePipeBuilder {
         SourcePipeBuilder { items: vec![] }
     }
 
-    pub fn finalize(self) -> NewPipe {
+    pub fn finalize(self) -> Pipe {
         let outputs_length = self.items.len();
 
-        NewPipe {
+        Pipe {
             items: self.items,
             input_length: 0,
             output_length: outputs_length,
@@ -170,9 +126,9 @@ impl SinkPipeBuilder {
         SinkPipeBuilder { items: vec![] }
     }
 
-    pub fn finalize(self) -> NewPipe {
+    pub fn finalize(self) -> Pipe {
         let input_length = self.items.len();
-        NewPipe {
+        Pipe {
             input_length,
             items: self.items,
             output_length: 0,
@@ -200,9 +156,9 @@ impl TransformPipeBuilder {
         TransformPipeBuilder { items: vec![] }
     }
 
-    pub fn finalize(self) -> NewPipe {
+    pub fn finalize(self) -> Pipe {
         let items_length = self.items.len();
-        NewPipe {
+        Pipe {
             items: self.items,
             input_length: items_length,
             output_length: items_length,

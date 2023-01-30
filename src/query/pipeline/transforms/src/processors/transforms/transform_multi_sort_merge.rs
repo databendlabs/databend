@@ -34,12 +34,13 @@ use common_expression::with_number_mapped_type;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::pipe::{NewPipe, PipeItem};
 use common_pipeline_core::Pipeline;
 
 use super::sort::Cursor;
@@ -55,16 +56,16 @@ pub fn try_add_multi_sort_merge(
     limit: Option<usize>,
     sort_columns_descriptions: Vec<SortColumnDescription>,
 ) -> Result<()> {
-    match pipeline.pipes.last() {
-        None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
-        Some(pipe) if pipe.output_size() == 0 => {
-            Err(ErrorCode::Internal("Cannot resize empty pipe."))
-        }
-        Some(pipe) if pipe.output_size() == 1 => Ok(()),
-        Some(pipe) => {
-            let input_size = pipe.output_size();
-            let mut inputs_port = Vec::with_capacity(input_size);
-            for _ in 0..input_size {
+    if pipeline.is_empty() {
+        return Err(ErrorCode::Internal("Cannot resize empty pipe."));
+    }
+
+    match pipeline.output_len() {
+        0 => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+        1 => Ok(()),
+        last_pipe_size => {
+            let mut inputs_port = Vec::with_capacity(last_pipe_size);
+            for _ in 0..last_pipe_size {
                 inputs_port.push(InputPort::create());
             }
             let output_port = OutputPort::create();
@@ -77,7 +78,7 @@ pub fn try_add_multi_sort_merge(
                 sort_columns_descriptions,
             )?;
 
-            pipeline.add_new_pipe(NewPipe {
+            pipeline.add_new_pipe(Pipe {
                 input_length: inputs_port.len(),
                 output_length: 1,
                 items: vec![PipeItem {
@@ -181,9 +182,9 @@ fn create_processor(
 
 /// TransformMultiSortMerge is a processor with multiple input ports;
 pub struct MultiSortMergeProcessor<R, Converter>
-    where
-        R: Rows,
-        Converter: RowConverter<R>,
+where
+    R: Rows,
+    Converter: RowConverter<R>,
 {
     /// Data from inputs (every input is sorted)
     inputs: Vec<Arc<InputPort>>,
@@ -218,9 +219,9 @@ pub struct MultiSortMergeProcessor<R, Converter>
 }
 
 impl<R, Converter> MultiSortMergeProcessor<R, Converter>
-    where
-        R: Rows,
-        Converter: RowConverter<R>,
+where
+    R: Rows,
+    Converter: RowConverter<R>,
 {
     pub fn create(
         inputs: Vec<Arc<InputPort>>,
@@ -434,9 +435,9 @@ impl<R, Converter> MultiSortMergeProcessor<R, Converter>
 
 #[async_trait::async_trait]
 impl<R, Converter> Processor for MultiSortMergeProcessor<R, Converter>
-    where
-        R: Rows + Send + 'static,
-        Converter: RowConverter<R> + Send + 'static,
+where
+    R: Rows + Send + 'static,
+    Converter: RowConverter<R> + Send + 'static,
 {
     fn name(&self) -> String {
         "MultiSortMerge".to_string()
@@ -569,5 +570,5 @@ enum ProcessorState {
     // Need to preserve blocks in memory.
     Output,
     // Need to generate output block.
-    Generated(DataBlock),              // Need to push output block to output port.
+    Generated(DataBlock), // Need to push output block to output port.
 }

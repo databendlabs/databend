@@ -20,7 +20,6 @@ use std::sync::Arc;
 use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::Result;
-use common_pipeline_core::pipe::NewPipe;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
@@ -35,7 +34,6 @@ use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::pipe::Pipe;
 use crate::pipelines::pipeline::Pipeline;
 use crate::pipelines::processors::connect;
 use crate::pipelines::processors::port::InputPort;
@@ -111,7 +109,7 @@ impl ExecutingGraph {
         Ok(ExecutingGraph { graph })
     }
 
-    fn init_node(pipeline: &Pipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
+    fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
         #[derive(Debug)]
         struct Edge {
             source_port: usize,
@@ -121,7 +119,7 @@ impl ExecutingGraph {
         }
 
         let mut pipes_edges: Vec<Vec<Edge>> = Vec::new();
-        for pipe in &pipeline.new_pipes {
+        for pipe in &pipeline.pipes {
             assert_eq!(
                 pipe.input_length,
                 pipes_edges.last().map(|x| x.len()).unwrap_or_default()
@@ -182,112 +180,6 @@ impl ExecutingGraph {
                 }
             }
         }
-    }
-
-    fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
-        for pipe in &pipeline.pipes {
-            pipeline.new_pipes.push(match pipe {
-                Pipe::ResizePipe {
-                    processor,
-                    inputs_port,
-                    outputs_port,
-                } => NewPipe::create_resize(processor, inputs_port, outputs_port),
-                Pipe::SimplePipe {
-                    processors,
-                    inputs_port,
-                    outputs_port,
-                } => NewPipe::create_simple(processors, inputs_port, outputs_port),
-            });
-        }
-
-        Self::init_node(pipeline, graph);
-
-        // let mut node_stack = Vec::new();
-        // let mut edge_stack: Vec<Arc<OutputPort>> = Vec::new();
-        // for query_pipe in &pipeline.pipes {
-        //     match query_pipe {
-        //         Pipe::ResizePipe {
-        //             processor,
-        //             inputs_port,
-        //             outputs_port,
-        //         } => unsafe {
-        //             assert_eq!(node_stack.len(), inputs_port.len());
-        //
-        //             let resize_node = Node::create(processor, inputs_port, outputs_port);
-        //             let target_index = graph.add_node(resize_node.clone());
-        //             processor.set_id(target_index);
-        //
-        //             for index in 0..node_stack.len() {
-        //                 let source_index = node_stack[index];
-        //                 let edge_index = graph.add_edge(source_index, target_index, ());
-        //
-        //                 let input_trigger = resize_node.create_trigger(edge_index);
-        //                 inputs_port[index].set_trigger(input_trigger);
-        //                 edge_stack[index]
-        //                     .set_trigger(graph[source_index].create_trigger(edge_index));
-        //                 connect(&inputs_port[index], &edge_stack[index]);
-        //             }
-        //
-        //             node_stack.clear();
-        //             edge_stack.clear();
-        //             for output_port in outputs_port {
-        //                 node_stack.push(target_index);
-        //                 edge_stack.push(output_port.clone());
-        //             }
-        //         },
-        //         Pipe::SimplePipe {
-        //             processors,
-        //             inputs_port,
-        //             outputs_port,
-        //         } => unsafe {
-        //             assert_eq!(node_stack.len(), inputs_port.len());
-        //             assert!(inputs_port.is_empty() || inputs_port.len() == processors.len());
-        //             assert!(outputs_port.is_empty() || outputs_port.len() == processors.len());
-        //
-        //             let mut new_node_stack = Vec::with_capacity(outputs_port.len());
-        //             let mut new_edge_stack = Vec::with_capacity(outputs_port.len());
-        //
-        //             for index in 0..processors.len() {
-        //                 let mut p_inputs_port = Vec::with_capacity(1);
-        //                 let mut p_outputs_port = Vec::with_capacity(1);
-        //
-        //                 if !inputs_port.is_empty() {
-        //                     p_inputs_port.push(inputs_port[index].clone());
-        //                 }
-        //
-        //                 if !outputs_port.is_empty() {
-        //                     p_outputs_port.push(outputs_port[index].clone());
-        //                 }
-        //
-        //                 let target_node =
-        //                     Node::create(&processors[index], &p_inputs_port, &p_outputs_port);
-        //                 let target_index = graph.add_node(target_node.clone());
-        //                 processors[index].set_id(target_index);
-        //
-        //                 if !node_stack.is_empty() {
-        //                     let source_index = node_stack[index];
-        //                     let edge_index = graph.add_edge(source_index, target_index, ());
-        //
-        //                     inputs_port[index].set_trigger(target_node.create_trigger(edge_index));
-        //                     edge_stack[index]
-        //                         .set_trigger(graph[source_index].create_trigger(edge_index));
-        //                     connect(&inputs_port[index], &edge_stack[index]);
-        //                 }
-        //
-        //                 if !outputs_port.is_empty() {
-        //                     new_node_stack.push(target_index);
-        //                     new_edge_stack.push(outputs_port[index].clone());
-        //                 }
-        //             }
-        //
-        //             node_stack = new_node_stack;
-        //             edge_stack = new_edge_stack;
-        //         },
-        //     };
-        // }
-        //
-        // // Assert no output.
-        // assert_eq!(node_stack.len(), 0);
     }
 
     /// # Safety

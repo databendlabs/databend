@@ -557,12 +557,9 @@ impl PipelineBuilder {
 
         let (tx, rx) = async_channel::unbounded();
 
-        build_res.main_pipeline.add_sink(|input_port| {
-            Ok(UnionReceiveSink::create(
-                Some(tx.clone()),
-                input_port,
-            ))
-        })?;
+        build_res
+            .main_pipeline
+            .add_sink(|input_port| Ok(UnionReceiveSink::create(Some(tx.clone()), input_port)))?;
 
         self.pipelines.push(build_res.main_pipeline);
         self.pipelines

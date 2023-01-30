@@ -99,7 +99,8 @@ pub async fn do_deletion(
     fuse_table
         .delete(ctx.clone(), filter, col_indices, &mut pipeline)
         .await?;
-    if !pipeline.pipes.is_empty() {
+
+    if !pipeline.is_empty() {
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let query_id = ctx.get_id();
         let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;

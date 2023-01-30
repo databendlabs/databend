@@ -80,7 +80,7 @@ impl PipelinePushingExecutor {
 
         new_pipeline.add_new_pipe(source_pipe_builder.finalize());
         new_pipeline.resize(pipeline.input_len())?;
-        for pipe in &pipeline.new_pipes {
+        for pipe in &pipeline.pipes {
             new_pipeline.add_new_pipe(pipe.clone())
         }
 
