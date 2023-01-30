@@ -55,7 +55,7 @@ pub(crate) const ID_GEN_DATABASE: &str = "database_id";
 impl KVApiKey for DatabaseNameIdent {
     const PREFIX: &'static str = PREFIX_DATABASE;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!(
             "{}/{}/{}",
             Self::PREFIX,
@@ -64,7 +64,7 @@ impl KVApiKey for DatabaseNameIdent {
         )
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -87,11 +87,11 @@ impl KVApiKey for DatabaseNameIdent {
 impl KVApiKey for DatabaseId {
     const PREFIX: &'static str = PREFIX_DATABASE_BY_ID;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!("{}/{}", Self::PREFIX, self.db_id,)
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -110,11 +110,11 @@ impl KVApiKey for DatabaseId {
 impl KVApiKey for DatabaseIdToName {
     const PREFIX: &'static str = PREFIX_DATABASE_ID_TO_NAME;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!("{}/{}", Self::PREFIX, self.db_id,)
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -133,11 +133,11 @@ impl KVApiKey for DatabaseIdToName {
 impl KVApiKey for TableIdToName {
     const PREFIX: &'static str = PREFIX_TABLE_ID_TO_NAME;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!("{}/{}", Self::PREFIX, self.table_id,)
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -156,7 +156,7 @@ impl KVApiKey for TableIdToName {
 impl KVApiKey for DbIdListKey {
     const PREFIX: &'static str = PREFIX_DB_ID_LIST;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!(
             "{}/{}/{}",
             Self::PREFIX,
@@ -165,7 +165,7 @@ impl KVApiKey for DbIdListKey {
         )
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -188,7 +188,7 @@ impl KVApiKey for DbIdListKey {
 impl KVApiKey for DBIdTableName {
     const PREFIX: &'static str = PREFIX_TABLE;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!(
             "{}/{}/{}",
             Self::PREFIX,
@@ -197,7 +197,7 @@ impl KVApiKey for DBIdTableName {
         )
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -222,11 +222,11 @@ impl KVApiKey for DBIdTableName {
 impl KVApiKey for TableId {
     const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!("{}/{}", Self::PREFIX, self.table_id,)
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -245,7 +245,7 @@ impl KVApiKey for TableId {
 impl KVApiKey for TableIdListKey {
     const PREFIX: &'static str = PREFIX_TABLE_ID_LIST;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!(
             "{}/{}/{}",
             Self::PREFIX,
@@ -254,7 +254,7 @@ impl KVApiKey for TableIdListKey {
         )
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -279,11 +279,11 @@ impl KVApiKey for TableIdListKey {
 impl KVApiKey for CountTablesKey {
     const PREFIX: &'static str = PREFIX_TABLE_COUNT;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!("{}/{}", Self::PREFIX, self.tenant)
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -303,11 +303,11 @@ impl KVApiKey for CountTablesKey {
 impl KVApiKey for TableCopiedFileNameIdent {
     const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!("{}/{}/{}", Self::PREFIX, self.table_id, self.file)
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let elts: Vec<&str> = s.splitn(3, '/').collect();
         if elts.len() < 3 {
             return Err(KVApiKeyError::AtleastSegments {
@@ -329,11 +329,11 @@ impl KVApiKey for TableCopiedFileNameIdent {
 impl KVApiKey for TableCopiedFileLockKey {
     const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES_LOCK;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!("{}/{}", Self::PREFIX, self.table_id)
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -362,7 +362,7 @@ mod tests {
                 file: "/path/to/file".to_owned(),
             };
 
-            let key = name.to_key();
+            let key = name.to_string_key();
             assert_eq!(
                 key,
                 format!(
@@ -372,14 +372,14 @@ mod tests {
                     name.file,
                 )
             );
-            let from = TableCopiedFileNameIdent::from_key(&key)?;
+            let from = TableCopiedFileNameIdent::from_str_key(&key)?;
             assert_eq!(from, name);
         }
 
         // test with a key has only 2 sub-path
         {
             let key = format!("{}/{}", TableCopiedFileNameIdent::PREFIX, 2,);
-            let res = TableCopiedFileNameIdent::from_key(&key);
+            let res = TableCopiedFileNameIdent::from_str_key(&key);
             assert!(res.is_err());
             let err = res.unwrap_err();
             assert_eq!(err, KVApiKeyError::AtleastSegments {
@@ -391,7 +391,7 @@ mod tests {
         // test with a key has 5 sub-path but an empty file string
         {
             let key = format!("{}/{}/{}", TableCopiedFileNameIdent::PREFIX, 2, "");
-            let res = TableCopiedFileNameIdent::from_key(&key)?;
+            let res = TableCopiedFileNameIdent::from_str_key(&key)?;
             assert_eq!(res, TableCopiedFileNameIdent {
                 table_id: 2,
                 file: "".to_string(),

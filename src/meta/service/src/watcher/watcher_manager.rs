@@ -19,12 +19,12 @@ use common_base::base::tokio::sync::oneshot;
 use common_base::rangemap::RangeMap;
 use common_base::rangemap::RangeMapKey;
 use common_meta_raft_store::state_machine::StateMachineSubscriber;
+use common_meta_types::protobuf as pb;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::Change;
-use common_meta_types::PbSeqV;
 use prost::Message;
 use tonic::Status;
 use tracing::info;
@@ -161,8 +161,8 @@ impl EventDispatcher {
             let resp = WatchResponse {
                 event: Some(Event {
                     key: k.to_string(),
-                    current: current.clone().map(PbSeqV::from),
-                    prev: prev.clone().map(PbSeqV::from),
+                    current: current.clone().map(pb::SeqV::from),
+                    prev: prev.clone().map(pb::SeqV::from),
                 }),
             };
 

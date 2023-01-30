@@ -20,7 +20,7 @@ use std::time::UNIX_EPOCH;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub type PbSeqV = crate::protobuf::SeqV;
+use crate::protobuf as pb;
 
 /// The meta data of a record in kv
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
@@ -121,11 +121,11 @@ impl<T> SeqV<T> {
     }
 }
 
-impl From<SeqV> for PbSeqV {
-    fn from(seqv: SeqV) -> Self {
-        PbSeqV {
-            seq: seqv.seq,
-            data: seqv.data,
+impl From<SeqV> for pb::SeqV {
+    fn from(seq_v: SeqV) -> Self {
+        pb::SeqV {
+            seq: seq_v.seq,
+            data: seq_v.data,
         }
     }
 }

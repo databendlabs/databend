@@ -43,18 +43,21 @@ where Self: Sized
 {
     const PREFIX: &'static str;
 
-    fn to_key(&self) -> String;
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError>;
+    /// Encode structured key into a string.
+    fn to_string_key(&self) -> String;
+
+    /// Decode str into a structured key.
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError>;
 }
 
 impl KVApiKey for String {
     const PREFIX: &'static str = "";
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         self.clone()
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         Ok(s.to_string())
     }
 }
@@ -67,7 +70,7 @@ impl KVApiKey for String {
 /// # Example
 /// ```
 /// let key = "data_bend!!";
-/// let new_key = escape_for_key(&key);
+/// let new_key = escape(&key);
 /// assert_eq!("data_bend%21%21".to_string(), new_key);
 /// ```
 pub fn escape(key: &str) -> String {
@@ -102,7 +105,7 @@ pub fn escape(key: &str) -> String {
 /// # Example
 /// ```
 /// let key = "data_bend%21%21";
-/// let original_key = unescape_for_key(&key);
+/// let original_key = unescape(&key);
 /// assert_eq!(Ok("data_bend!!".to_string()), original_key);
 /// ```
 pub fn unescape(key: &str) -> Result<String, FromUtf8Error> {
@@ -139,11 +142,15 @@ pub fn unescape(key: &str) -> Result<String, FromUtf8Error> {
 }
 
 /// Check if the `i`-th segment absent.
-pub fn check_segment_absent(elt: Option<&str>, i: usize, key: &str) -> Result<(), KVApiKeyError> {
+pub fn check_segment_absent(
+    elt: Option<&str>,
+    i: usize,
+    encoded: &str,
+) -> Result<(), KVApiKeyError> {
     if elt.is_some() {
         Err(KVApiKeyError::WrongNumberOfSegments {
             expect: i,
-            got: key.to_string(),
+            got: encoded.to_string(),
         })
     } else {
         Ok(())
@@ -178,6 +185,7 @@ pub fn check_segment(elt: &str, i: usize, expect: &str) -> Result<(), KVApiKeyEr
     Ok(())
 }
 
+/// Decode a string into u64 id.
 pub fn decode_id(s: &str) -> Result<u64, KVApiKeyError> {
     let id = s.parse::<u64>().map_err(|e| KVApiKeyError::InvalidId {
         s: s.to_string(),

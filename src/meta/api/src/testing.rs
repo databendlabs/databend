@@ -34,7 +34,7 @@ where
     T: FromToProto,
     T::PB: common_protos::prost::Message + Default,
 {
-    let res = kv_api.get_kv(&key.to_key()).await?;
+    let res = kv_api.get_kv(&key.to_string_key()).await?;
     if let Some(res) = res {
         let s = crate::deserialize_struct(&res.data)?;
         return Ok(s);
