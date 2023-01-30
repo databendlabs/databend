@@ -22,6 +22,4 @@ pub use kvapi::check_segment_absent;
 pub use kvapi::check_segment_present;
 pub use kvapi::decode_id;
 pub use kvapi::escape;
-pub use kvapi::get_start_and_end_of_prefix;
-pub use kvapi::prefix_of_string;
 pub use kvapi::unescape;

@@ -15,7 +15,6 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_base::base::tokio;
 use common_meta_types::protobuf as pb;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op;

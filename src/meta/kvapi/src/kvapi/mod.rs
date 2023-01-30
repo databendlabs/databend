@@ -14,10 +14,9 @@
 
 mod api;
 mod key;
+mod prefix;
 mod test_suite;
 
-pub use api::get_start_and_end_of_prefix;
-pub use api::prefix_of_string;
 pub use api::ApiBuilder;
 pub use api::AsKVApi;
 pub use api::KVApi;
@@ -29,4 +28,5 @@ pub use key::escape;
 pub use key::unescape;
 pub use key::Key;
 pub use key::KeyError;
+pub use prefix::prefix_to_range;
 pub use test_suite::TestSuite;
