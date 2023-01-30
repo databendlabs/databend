@@ -35,6 +35,7 @@ runs:
         export IMAGE=${{ inputs.registry }}/build-tool:${{ inputs.image }}
         export CARGO_INCREMENTAL=0
         export CARGO_TERM_COLOR=always
+        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR,BUILD_PROFILE
         EOF
 
         RUNNER_PROVIDER="${RUNNER_PROVIDER:-github}"
@@ -42,20 +43,16 @@ runs:
           aws)
             echo "setting up sccache for AWS S3..."
             cat <<EOF >>$BIN_LOCAL/build-tool
-        export RUSTC_WRAPPER="/opt/rust/cargo/bin/sccache --show-stats"
+        export ENABLE_SCCACHE=true
         export SCCACHE_BUCKET=databend-ci
         export SCCACHE_REGION=us-east-2
         export SCCACHE_S3_KEY_PREFIX="cache/"
         export SCCACHE_S3_USE_SSL="true"
-        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR,BUILD_PROFILE,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_REGION,SCCACHE_S3_KEY_PREFIX,SCCACHE_S3_USE_SSL
         EOF
             ;;
 
           github)
             echo "sccache disabled on GitHub-hosted Runner"
-            cat <<EOF >>$BIN_LOCAL/build-tool
-        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR,BUILD_PROFILE
-        EOF
             ;;
 
           *)
