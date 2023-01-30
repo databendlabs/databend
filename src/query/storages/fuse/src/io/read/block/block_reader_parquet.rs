@@ -63,13 +63,13 @@ impl BlockReader {
         let chunks = read_res
             .columns_chunks()?
             .into_iter()
-            .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+            .map(|(column_idx, column_chunk)| (column_idx, column_chunk))
             .collect::<Vec<_>>();
 
         let num_rows = meta.row_count as usize;
         let columns_chunk = chunks
             .iter()
-            .map(|(index, chunk)| (*index, chunk.as_slice()))
+            .map(|(index, chunk)| (*index, *chunk))
             .collect::<Vec<_>>();
 
         self.deserialize_parquet_chunks_with_buffer(
@@ -85,7 +85,7 @@ impl BlockReader {
     pub fn deserialize_parquet_chunks(
         &self,
         part: PartInfoPtr,
-        chunks: Vec<(usize, Vec<u8>)>,
+        chunks: Vec<(usize, &[u8])>,
     ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&part)?;
         let start = Instant::now();
@@ -96,7 +96,7 @@ impl BlockReader {
 
         let reads = chunks
             .iter()
-            .map(|(index, chunk)| (*index, chunk.as_slice()))
+            .map(|(index, chunk)| (*index, *chunk))
             .collect::<Vec<_>>();
 
         let deserialized_res = self.deserialize_parquet_chunks_with_buffer(
