@@ -211,9 +211,9 @@ fn create_source_pipe(
         let (tx, rx) = channel(1);
         txs.push(tx);
         items.push(PipeItem::create(
-            SyncReceiverSource::create(ctx.clone(), rx, output)?,
+            SyncReceiverSource::create(ctx.clone(), rx, output.clone())?,
             vec![],
-            vec![output.clone()],
+            vec![output],
         ));
     }
     Ok((txs, Pipe::create(0, size, items)))
@@ -227,9 +227,9 @@ fn create_transform_pipe(size: usize) -> Result<Pipe> {
         let output = OutputPort::create();
 
         items.push(PipeItem::create(
-            TransformDummy::create(input, output),
-            vec![input.clone()],
-            vec![output.clone()],
+            TransformDummy::create(input.clone(), output.clone()),
+            vec![input],
+            vec![output],
         ));
     }
 
@@ -244,8 +244,8 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pi
         let (tx, rx) = channel(1);
         rxs.push(rx);
         items.push(PipeItem::create(
-            SyncSenderSink::create(tx, input),
-            vec![input.clone()],
+            SyncSenderSink::create(tx, input.clone()),
+            vec![input],
             vec![],
         ));
     }

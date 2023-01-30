@@ -176,7 +176,7 @@ impl Table for NumbersTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         if plan.parts.partitions.is_empty() {
-            pipeline.add_source(|output| EmptySource::create(output), 1)?;
+            pipeline.add_source(EmptySource::create, 1)?;
             return Ok(());
         }
 

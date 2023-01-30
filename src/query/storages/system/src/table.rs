@@ -120,15 +120,13 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     ) -> Result<()> {
         // avoid duplicate read in cluster mode.
         if plan.parts.partitions.is_empty() {
-            pipeline.add_source(|output| EmptySource::create(output), 1)?;
+            pipeline.add_source(EmptySource::create, 1)?;
             return Ok(());
         }
 
         let inner_table = self.inner_table.clone();
         pipeline.add_source(
-            |output| {
-                SystemTableSyncSource::create(ctx.clone(), output.clone(), inner_table.clone())
-            },
+            |output| SystemTableSyncSource::create(ctx.clone(), output, inner_table.clone()),
             1,
         )?;
 
@@ -236,9 +234,7 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
     ) -> Result<()> {
         let inner_table = self.inner_table.clone();
         pipeline.add_source(
-            |output| {
-                SystemTableAsyncSource::create(output.clone(), inner_table.clone(), ctx.clone())
-            },
+            |output| SystemTableAsyncSource::create(output, inner_table.clone(), ctx.clone()),
             1,
         )?;
 
