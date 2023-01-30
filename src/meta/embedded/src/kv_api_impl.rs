@@ -28,6 +28,7 @@ use crate::MetaEmbedded;
 
 #[async_trait]
 impl KVApi for MetaEmbedded {
+    type Error = KVAppError;
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let sm = self.inner.lock().await;
         sm.upsert_kv(act).await
