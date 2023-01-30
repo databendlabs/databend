@@ -13,11 +13,10 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../common/base" }
-common-exception = { path = "../../common/exception" }
 common-meta-types = { path = "../types" }
 
 anyhow = { workspace = true }
 async-trait = "0.1.57"
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tracing = "0.1.36"

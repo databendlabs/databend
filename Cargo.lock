@@ -1676,10 +1676,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "common-base",
- "common-exception",
  "common-meta-types",
  "thiserror",
+ "tokio",
  "tracing",
 ]
 
