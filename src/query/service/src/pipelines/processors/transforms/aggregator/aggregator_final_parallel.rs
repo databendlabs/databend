@@ -201,6 +201,15 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                         agg.value
                     ))
                 })?;
+
+                if aggr_column.offsets.windows(2).any(|a| a[0] > a[1]) {
+                    println!("error: {:?}", aggr_column.offsets);
+                    println!(
+                        "states_binary_columns {:?} / {}",
+                        states_binary_columns.len(),
+                        data_block.num_columns()
+                    );
+                }
                 states_binary_columns.push(aggr_column);
             }
 
@@ -273,8 +282,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     ) -> Result<Vec<DataBlock>> {
         let value_size = estimated_key_size(hash_table);
         let mut group_columns_builder =
-            method
-                .group_columns_builder(hash_table.len(), value_size, params);
+            method.group_columns_builder(hash_table.len(), value_size, params);
 
         if !HAS_AGG {
             for group_entity in hash_table.iter() {
@@ -418,7 +426,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         if let Some(temp_place) = self.temp_place {
             let offsets_aggregate_states = &self.params.offsets_aggregate_states;
             let aggregate_functions = &self.params.aggregate_functions;
-            
+
             let functions = aggregate_functions
                 .iter()
                 .filter(|p| p.need_manual_drop_state())

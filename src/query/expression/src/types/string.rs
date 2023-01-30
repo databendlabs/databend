@@ -253,6 +253,10 @@ impl StringColumnBuilder {
     }
 
     pub fn from_column(col: StringColumn) -> Self {
+        if !col.offsets.is_sorted() {
+            panic!("offsets must be sorted {:?}", col);
+        }
+        
         StringColumnBuilder {
             need_estimated: col.data.is_empty(),
             data: buffer_into_mut(col.data),
@@ -261,6 +265,10 @@ impl StringColumnBuilder {
     }
 
     pub fn from_data(data: Vec<u8>, offsets: Vec<u64>) -> Self {
+        if !offsets.is_sorted() {
+            panic!("offsets must be sorted {:?}", offsets);
+        }
+        
         StringColumnBuilder {
             need_estimated: false,
             data,
@@ -318,23 +326,24 @@ impl StringColumnBuilder {
     pub fn put(&mut self, item: &[u8]) {
         self.data.extend_from_slice(item);
     }
-
+    
     #[inline]
     pub fn commit_row(&mut self) {
+        debug_assert!(self.data.len() >= *self.offsets.last().unwrap() as usize);
         self.offsets.push(self.data.len() as u64);
+        
+        // if self.need_estimated
+        //     && self.offsets.len() - 1 == 64
+        //     && self.offsets.len() < self.offsets.capacity()
+        // {
+        //     let bytes_per_row = self.data.len() / 64 + 1;
+        //     let bytes_estimate = bytes_per_row * self.offsets.capacity();
 
-        if self.need_estimated
-            && self.offsets.len() - 1 == 64
-            && self.offsets.len() < self.offsets.capacity()
-        {
-            let bytes_per_row = self.data.len() / 64 + 1;
-            let bytes_estimate = bytes_per_row * self.offsets.capacity();
-
-            // if we are more than 10% over the capacity, we reserve more
-            if bytes_estimate as f64 > self.data.capacity() as f64 * 1.10f64 {
-                self.data.reserve(bytes_estimate - self.data.capacity());
-            }
-        }
+        //     // if we are more than 10% over the capacity, we reserve more
+        //     if bytes_estimate as f64 > self.data.capacity() as f64 * 1.10f64 {
+        //         self.data.reserve(bytes_estimate - self.data.capacity());
+        //     }
+        // }
     }
 
     pub fn append_column(&mut self, other: &StringColumn) {
@@ -351,6 +360,7 @@ impl StringColumnBuilder {
                 .skip(1)
                 .map(|offset| start + offset - other_start),
         );
+      
     }
 
     pub fn build(self) -> StringColumn {

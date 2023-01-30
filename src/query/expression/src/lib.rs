@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(is_sorted)]
 #![feature(fmt_internals)]
 #![feature(const_try)]
 #![feature(iterator_try_reduce)]

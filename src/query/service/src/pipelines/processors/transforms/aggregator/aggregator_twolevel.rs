@@ -214,7 +214,7 @@ where
             Self::clear_table(inner_table, &agg.params);
             return Ok(blocks);
         }
-        
+
         // some temp place stats dropped in drop function
         // agg.states_dropped = true;
         Ok(vec![])

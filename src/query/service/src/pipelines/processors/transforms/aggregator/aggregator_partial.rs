@@ -140,9 +140,9 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let mut columns = Vec::with_capacity(self.params.aggregate_functions.len() + 1);
 
         if HAS_AGG {
-            let area = self.area.as_mut().unwrap();
+            let mut area = Area::create();
             let places = (0..block.num_rows())
-                .map(|_| self.params.alloc_layout(area))
+                .map(|_| self.params.alloc_layout(&mut area))
                 .collect::<Vec<_>>();
             Self::execute(&self.params, &block, &places)?;
 
@@ -161,11 +161,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
                 for (idx, func) in funcs.iter().enumerate() {
                     let arg_place = place.next(offsets_aggregate_states[idx]);
                     func.serialize(arg_place, &mut state_builders[idx].data)?;
+                    state_builders[idx].commit_row();
 
                     unsafe {
                         func.drop_state(arg_place);
                     }
-                    state_builders[idx].commit_row();
                 }
             }
             for builder in state_builders.into_iter() {
