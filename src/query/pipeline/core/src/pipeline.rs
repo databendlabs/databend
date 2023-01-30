@@ -17,11 +17,12 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::pipe::Pipe;
+use crate::pipe::PipeItem;
 use crate::processors::port::InputPort;
 use crate::processors::port::OutputPort;
 use crate::processors::processor::ProcessorPtr;
 use crate::processors::ResizeProcessor;
-use crate::Pipe;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -66,10 +67,14 @@ impl Pipeline {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.pipes.is_empty()
+    }
+
     // We need to push data to executor
     pub fn is_pushing_pipeline(&self) -> Result<bool> {
         match self.pipes.first() {
-            Some(pipe) => Ok(pipe.input_size() != 0),
+            Some(pipe) => Ok(pipe.input_length != 0),
             None => Err(ErrorCode::Internal(
                 "Logical error, call is_pushing on empty pipeline.",
             )),
@@ -79,7 +84,7 @@ impl Pipeline {
     // We need to pull data from executor
     pub fn is_pulling_pipeline(&self) -> Result<bool> {
         match self.pipes.last() {
-            Some(pipe) => Ok(pipe.output_size() != 0),
+            Some(pipe) => Ok(pipe.output_length != 0),
             None => Err(ErrorCode::Internal(
                 "Logical error, call is_pulling on empty pipeline.",
             )),
@@ -102,23 +107,21 @@ impl Pipeline {
     pub fn input_len(&self) -> usize {
         match self.pipes.first() {
             None => 0,
-            Some(Pipe::SimplePipe { inputs_port, .. }) => inputs_port.len(),
-            Some(Pipe::ResizePipe { inputs_port, .. }) => inputs_port.len(),
+            Some(pipe) => pipe.input_length,
         }
     }
 
     pub fn output_len(&self) -> usize {
         match self.pipes.last() {
             None => 0,
-            Some(Pipe::SimplePipe { outputs_port, .. }) => outputs_port.len(),
-            Some(Pipe::ResizePipe { outputs_port, .. }) => outputs_port.len(),
+            Some(pipe) => pipe.output_length,
         }
     }
 
     pub fn set_max_threads(&mut self, max_threads: usize) {
         let mut max_pipe_size = 0;
         for pipe in &self.pipes {
-            max_pipe_size = std::cmp::max(max_pipe_size, pipe.size());
+            max_pipe_size = std::cmp::max(max_pipe_size, pipe.items.len());
         }
 
         self.max_threads = std::cmp::min(max_pipe_size, max_threads);
@@ -178,19 +181,22 @@ impl Pipeline {
     pub fn resize(&mut self, new_size: usize) -> Result<()> {
         match self.pipes.last() {
             None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
-            Some(pipe) if pipe.output_size() == 0 => {
+            Some(pipe) if pipe.output_length == 0 => {
                 Err(ErrorCode::Internal("Cannot resize empty pipe."))
             }
-            Some(pipe) if pipe.output_size() == new_size => Ok(()),
+            Some(pipe) if pipe.output_length == new_size => Ok(()),
             Some(pipe) => {
-                let processor = ResizeProcessor::create(pipe.output_size(), new_size);
+                let processor = ResizeProcessor::create(pipe.output_length, new_size);
                 let inputs_port = processor.get_inputs().to_vec();
                 let outputs_port = processor.get_outputs().to_vec();
-                self.pipes.push(Pipe::ResizePipe {
-                    inputs_port,
-                    outputs_port,
-                    processor: ProcessorPtr::create(Box::new(processor)),
-                });
+                self.pipes
+                    .push(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
+                        PipeItem::create(
+                            ProcessorPtr::create(Box::new(processor)),
+                            inputs_port,
+                            outputs_port,
+                        ),
+                    ]));
                 Ok(())
             }
         }

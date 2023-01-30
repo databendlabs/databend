@@ -34,7 +34,6 @@ use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::pipe::Pipe;
 use crate::pipelines::pipeline::Pipeline;
 use crate::pipelines::processors::connect;
 use crate::pipelines::processors::port::InputPort;
@@ -94,109 +93,93 @@ struct ExecutingGraph {
 type StateLockGuard = ExecutingGraph;
 
 impl ExecutingGraph {
-    pub fn create(pipeline: Pipeline) -> Result<ExecutingGraph> {
+    pub fn create(mut pipeline: Pipeline) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
-        Self::init_graph(&pipeline, &mut graph);
+        Self::init_graph(&mut pipeline, &mut graph);
         Ok(ExecutingGraph { graph })
     }
 
-    pub fn from_pipelines(pipelines: Vec<Pipeline>) -> Result<ExecutingGraph> {
+    pub fn from_pipelines(mut pipelines: Vec<Pipeline>) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
 
-        for pipeline in &pipelines {
+        for pipeline in &mut pipelines {
             Self::init_graph(pipeline, &mut graph);
         }
 
         Ok(ExecutingGraph { graph })
     }
 
-    fn init_graph(pipeline: &Pipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
-        let mut node_stack = Vec::new();
-        let mut edge_stack: Vec<Arc<OutputPort>> = Vec::new();
-        for query_pipe in &pipeline.pipes {
-            match query_pipe {
-                Pipe::ResizePipe {
-                    processor,
-                    inputs_port,
-                    outputs_port,
-                } => unsafe {
-                    assert_eq!(node_stack.len(), inputs_port.len());
-
-                    let resize_node = Node::create(processor, inputs_port, outputs_port);
-                    let target_index = graph.add_node(resize_node.clone());
-                    processor.set_id(target_index);
-
-                    for index in 0..node_stack.len() {
-                        let source_index = node_stack[index];
-                        let edge_index = graph.add_edge(source_index, target_index, ());
-
-                        let input_trigger = resize_node.create_trigger(edge_index);
-                        inputs_port[index].set_trigger(input_trigger);
-                        edge_stack[index]
-                            .set_trigger(graph[source_index].create_trigger(edge_index));
-                        connect(&inputs_port[index], &edge_stack[index]);
-                    }
-
-                    node_stack.clear();
-                    edge_stack.clear();
-                    for output_port in outputs_port {
-                        node_stack.push(target_index);
-                        edge_stack.push(output_port.clone());
-                    }
-                },
-                Pipe::SimplePipe {
-                    processors,
-                    inputs_port,
-                    outputs_port,
-                } => unsafe {
-                    assert_eq!(node_stack.len(), inputs_port.len());
-                    assert!(inputs_port.is_empty() || inputs_port.len() == processors.len());
-                    assert!(outputs_port.is_empty() || outputs_port.len() == processors.len());
-
-                    let mut new_node_stack = Vec::with_capacity(outputs_port.len());
-                    let mut new_edge_stack = Vec::with_capacity(outputs_port.len());
-
-                    for index in 0..processors.len() {
-                        let mut p_inputs_port = Vec::with_capacity(1);
-                        let mut p_outputs_port = Vec::with_capacity(1);
-
-                        if !inputs_port.is_empty() {
-                            p_inputs_port.push(inputs_port[index].clone());
-                        }
-
-                        if !outputs_port.is_empty() {
-                            p_outputs_port.push(outputs_port[index].clone());
-                        }
-
-                        let target_node =
-                            Node::create(&processors[index], &p_inputs_port, &p_outputs_port);
-                        let target_index = graph.add_node(target_node.clone());
-                        processors[index].set_id(target_index);
-
-                        if !node_stack.is_empty() {
-                            let source_index = node_stack[index];
-                            let edge_index = graph.add_edge(source_index, target_index, ());
-
-                            inputs_port[index].set_trigger(target_node.create_trigger(edge_index));
-                            edge_stack[index]
-                                .set_trigger(graph[source_index].create_trigger(edge_index));
-                            connect(&inputs_port[index], &edge_stack[index]);
-                        }
-
-                        if !outputs_port.is_empty() {
-                            new_node_stack.push(target_index);
-                            new_edge_stack.push(outputs_port[index].clone());
-                        }
-                    }
-
-                    node_stack = new_node_stack;
-                    edge_stack = new_edge_stack;
-                },
-            };
+    fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
+        #[derive(Debug)]
+        struct Edge {
+            source_port: usize,
+            source_node: NodeIndex,
+            target_port: usize,
+            target_node: NodeIndex,
         }
 
-        // Assert no output.
-        assert_eq!(node_stack.len(), 0);
+        let mut pipes_edges: Vec<Vec<Edge>> = Vec::new();
+        for pipe in &pipeline.pipes {
+            assert_eq!(
+                pipe.input_length,
+                pipes_edges.last().map(|x| x.len()).unwrap_or_default()
+            );
+
+            let mut edge_index = 0;
+            let mut pipe_edges = Vec::with_capacity(pipe.output_length);
+
+            for item in &pipe.items {
+                let node = Node::create(&item.processor, &item.inputs_port, &item.outputs_port);
+
+                let graph_node_index = graph.add_node(node.clone());
+                unsafe {
+                    item.processor.set_id(graph_node_index);
+                }
+
+                for offset in 0..item.inputs_port.len() {
+                    let last_edges = pipes_edges.last_mut().unwrap();
+
+                    last_edges[edge_index].target_port = offset;
+                    last_edges[edge_index].target_node = graph_node_index;
+                    edge_index += 1;
+                }
+
+                for offset in 0..item.outputs_port.len() {
+                    pipe_edges.push(Edge {
+                        source_port: offset,
+                        source_node: graph_node_index,
+                        target_port: 0,
+                        target_node: Default::default(),
+                    });
+                }
+            }
+
+            pipes_edges.push(pipe_edges);
+        }
+
+        // The last pipe cannot contain any output edge.
+        assert!(pipes_edges.last().map(|x| x.is_empty()).unwrap_or_default());
+        pipes_edges.pop();
+
+        for pipe_edges in &pipes_edges {
+            for edge in pipe_edges {
+                let edge_index = graph.add_edge(edge.source_node, edge.target_node, ());
+                unsafe {
+                    let (target_node, target_port) = (edge.target_node, edge.target_port);
+                    let input_trigger = graph[target_node].create_trigger(edge_index);
+                    graph[target_node].inputs_port[target_port].set_trigger(input_trigger);
+
+                    let (source_node, source_port) = (edge.source_node, edge.source_port);
+                    let output_trigger = graph[source_node].create_trigger(edge_index);
+                    graph[source_node].outputs_port[source_port].set_trigger(output_trigger);
+
+                    connect(
+                        &graph[target_node].inputs_port[target_port],
+                        &graph[source_node].outputs_port[source_port],
+                    );
+                }
+            }
+        }
     }
 
     /// # Safety

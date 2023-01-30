@@ -33,7 +33,6 @@ use common_pipeline_sources::processors::sources::AsyncSourcer;
 use super::fuse_snapshot::FuseSnapshot;
 use super::table_args::parse_func_history_args;
 use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::table_functions::string_literal;
@@ -112,18 +111,18 @@ impl Table for FuseSnapshotTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let output = OutputPort::create();
-        pipeline.add_pipe(Pipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![FuseSnapshotSource::create(
-                ctx,
-                output,
-                self.arg_database_name.to_owned(),
-                self.arg_table_name.to_owned(),
-                plan.push_downs.as_ref().and_then(|extras| extras.limit),
-            )?],
-        });
+        pipeline.add_source(
+            |output| {
+                FuseSnapshotSource::create(
+                    ctx.clone(),
+                    output,
+                    self.arg_database_name.to_owned(),
+                    self.arg_table_name.to_owned(),
+                    plan.push_downs.as_ref().and_then(|extras| extras.limit),
+                )
+            },
+            1,
+        )?;
 
         Ok(())
     }

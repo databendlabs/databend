@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::Pipe;
+use crate::pipe::Pipe;
 use crate::Pipeline;
 
 impl Pipeline {
@@ -30,12 +30,7 @@ struct PipelineIndentDisplayWrapper<'a> {
 
 impl<'a> PipelineIndentDisplayWrapper<'a> {
     fn pipe_name(pipe: &Pipe) -> String {
-        unsafe {
-            match pipe {
-                Pipe::SimplePipe { processors, .. } => processors[0].name(),
-                Pipe::ResizePipe { processor, .. } => processor.name(),
-            }
-        }
+        unsafe { pipe.items[0].processor.name() }
     }
 }
 
@@ -51,54 +46,50 @@ impl<'a> Display for PipelineIndentDisplayWrapper<'a> {
                 write!(f, "  ")?;
             }
 
-            match pipe {
-                Pipe::SimplePipe { processors, .. } => {
+            if pipe.input_length == pipe.output_length
+                || pipe.input_length == 0
+                || pipe.output_length == 0
+            {
+                write!(
+                    f,
+                    "{} × {} {}",
+                    Self::pipe_name(pipe),
+                    pipe.items.len(),
+                    if pipe.items.len() == 1 {
+                        "processor"
+                    } else {
+                        "processors"
+                    },
+                )?;
+            } else {
+                let prev_name = Self::pipe_name(&pipes[pipes.len() - index - 2]);
+                if index > 0 {
+                    let post_name = Self::pipe_name(&pipes[pipes.len() - index]);
                     write!(
                         f,
-                        "{} × {} {}",
-                        Self::pipe_name(pipe),
-                        processors.len(),
-                        if processors.len() == 1 {
+                        "Merge ({} × {} {}) to ({} × {})",
+                        prev_name,
+                        pipe.input_length,
+                        if pipe.input_length == 1 {
+                            "processor"
+                        } else {
+                            "processors"
+                        },
+                        post_name,
+                        pipe.output_length,
+                    )?;
+                } else {
+                    write!(
+                        f,
+                        "Merge ({} × {} {})",
+                        prev_name,
+                        pipe.input_length,
+                        if pipe.input_length == 1 {
                             "processor"
                         } else {
                             "processors"
                         },
                     )?;
-                }
-                Pipe::ResizePipe {
-                    inputs_port,
-                    outputs_port,
-                    ..
-                } => {
-                    let prev_name = Self::pipe_name(&pipes[pipes.len() - index - 2]);
-                    if index > 0 {
-                        let post_name = Self::pipe_name(&pipes[pipes.len() - index]);
-                        write!(
-                            f,
-                            "Merge ({} × {} {}) to ({} × {})",
-                            prev_name,
-                            inputs_port.len(),
-                            if inputs_port.len() == 1 {
-                                "processor"
-                            } else {
-                                "processors"
-                            },
-                            post_name,
-                            outputs_port.len(),
-                        )?;
-                    } else {
-                        write!(
-                            f,
-                            "Merge ({} × {} {})",
-                            prev_name,
-                            inputs_port.len(),
-                            if inputs_port.len() == 1 {
-                                "processor"
-                            } else {
-                                "processors"
-                            },
-                        )?;
-                    }
                 }
             }
         }
