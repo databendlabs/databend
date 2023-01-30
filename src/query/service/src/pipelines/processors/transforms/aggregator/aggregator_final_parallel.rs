@@ -143,7 +143,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 pub struct BucketAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
-    pub(crate) area: Area,
+    pub(crate) area: Option<Area>,
     pub(crate) method: Method,
     pub(crate) params: Arc<AggregatorParams>,
 
@@ -194,7 +194,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 .collect::<Vec<_>>();
             let mut states_binary_columns = Vec::with_capacity(states_columns.len());
 
-            for agg in states_columns.iter().take(aggregate_function_len) {
+            for agg in states_columns.iter() {
                 let aggr_column = agg.value.as_column().unwrap().as_string().ok_or_else(|| {
                     ErrorCode::IllegalDataType(format!(
                         "Aggregation column should be StringType, but got {:?}",
@@ -252,7 +252,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         };
 
         Ok(Self {
-            area,
+            area: Some(area),
             method,
             params,
             hash_table,
@@ -356,7 +356,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 
                 match self.hash_table.insert_and_entry(key) {
                     Ok(mut entry) => {
-                        let place = self.params.alloc_layout(&mut self.area);
+                        let place = self.params.alloc_layout(self.area.as_mut().unwrap());
                         places.push((row, place));
 
                         *entry.get_mut() = place.addr();

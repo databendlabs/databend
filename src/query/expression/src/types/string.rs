@@ -329,7 +329,11 @@ impl StringColumnBuilder {
     
     #[inline]
     pub fn commit_row(&mut self) {
-        debug_assert!(self.data.len() >= *self.offsets.last().unwrap() as usize);
+        if self.data.len() < *self.offsets.last().unwrap() as usize {
+            println!("data {:?}", self.data);
+            println!("offsets {:?}", self.offsets);
+            panic!("data.len() < *self.offsets.last().unwrap() as usize");
+        }
         self.offsets.push(self.data.len() as u64);
         
         // if self.need_estimated

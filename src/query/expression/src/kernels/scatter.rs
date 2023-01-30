@@ -266,6 +266,7 @@ impl Column {
     where
         I: common_arrow::arrow::types::Index,
     {
+        // let mut builders: Vec<StringColumnBuilder> = (0..scatter_size).map(|_| StringColumnBuilder::with_capacity(col.len(), 0)).collect();
         let mut builders: Vec<StringColumnBuilder> = (0..scatter_size).map(|_| builder.clone()).collect();
 
         indices

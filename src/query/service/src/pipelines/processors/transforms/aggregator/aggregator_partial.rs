@@ -131,6 +131,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     pub fn do_streaming_consume(&mut self, block: DataBlock) -> Result<DataBlock> {
         let block = block.convert_to_full();
         // 1.1 and 1.2.
+        
         let group_columns = Self::group_columns(&block, &self.params.group_columns);
         let group_columns = group_columns
             .iter()

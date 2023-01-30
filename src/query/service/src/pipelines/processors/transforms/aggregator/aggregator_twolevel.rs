@@ -195,12 +195,18 @@ where
         );
 
         self.states_dropped = true;
-        let mut inner = BucketAggregator::<HAS_AGG, TwoLevelHashMethod<Method>>::create(
-            two_level_method,
-            self.params.clone(),
-        )?;
-        inner.temp_place = self.temp_place.clone();
-
+        
+        // TODO drop temp_place
+        let inner = BucketAggregator::<HAS_AGG, TwoLevelHashMethod<Method>> {
+            area:  self.area.take(),
+            method: two_level_method,
+            params: self.params.clone(),
+            hash_table:  two_level_hashtable,
+            reach_limit: false,
+            temp_place: self.temp_place,
+            generated:  false,
+            states_dropped: false,
+        };
         Ok(TwoLevelAggregator::<Self> { inner })
     }
 
