@@ -21,7 +21,6 @@ use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::SendableDataBlockStream;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::StreamSource;
 use common_sql::validate_function_arg;
@@ -86,9 +85,9 @@ pub trait Procedure: Sync + Send {
 #[async_trait::async_trait]
 pub trait OneBlockProcedure {
     fn into_procedure(self) -> Box<dyn Procedure>
-    where
-        Self: Send + Sync,
-        Self: Sized + 'static,
+        where
+            Self: Send + Sync,
+            Self: Sized + 'static,
     {
         Box::new(impls::OneBlockProcedureWrapper(self))
     }
@@ -108,12 +107,12 @@ pub trait OneBlockProcedure {
 /// The method `into_procedure` is be used while registering to [ProcedureFactory],
 #[async_trait::async_trait]
 pub trait StreamProcedure
-where Self: Sized
+    where Self: Sized
 {
     fn into_procedure(self) -> Box<dyn Procedure>
-    where
-        Self: Send + Sync,
-        Self: Sized + 'static,
+        where
+            Self: Send + Sync,
+            Self: Sized + 'static,
     {
         Box::new(impls::StreamProcedureWrapper(self))
     }
@@ -132,6 +131,7 @@ where Self: Sized
 }
 
 mod impls {
+    use common_pipeline_core::pipe::{NewPipe, PipeItem};
     use super::*;
     use crate::stream::DataBlockStream;
 
@@ -140,7 +140,7 @@ mod impls {
 
     #[async_trait::async_trait]
     impl<T> Procedure for OneBlockProcedureWrapper<T>
-    where T: OneBlockProcedure + Sync + Send
+        where T: OneBlockProcedure + Sync + Send
     {
         fn name(&self) -> &str {
             self.0.name()
@@ -158,18 +158,17 @@ mod impls {
         ) -> Result<()> {
             self.validate(ctx.clone(), &args)?;
             let block = self.0.all_data(ctx.clone(), args).await?;
-            let output = OutputPort::create();
-            let source = StreamSource::create(
-                ctx,
-                Some(DataBlockStream::create(None, vec![block]).boxed()),
-                output.clone(),
-            )?;
 
-            pipeline.add_pipe(Pipe::SimplePipe {
-                inputs_port: vec![],
-                outputs_port: vec![output],
-                processors: vec![source],
-            });
+            pipeline.add_source(
+                |output| {
+                    StreamSource::create(
+                        ctx.clone(),
+                        Some(DataBlockStream::create(None, vec![block.clone()]).boxed()),
+                        output,
+                    )
+                },
+                1,
+            )?;
 
             Ok(())
         }
@@ -184,7 +183,7 @@ mod impls {
 
     #[async_trait::async_trait]
     impl<T> Procedure for StreamProcedureWrapper<T>
-    where T: StreamProcedure + Sync + Send
+        where T: StreamProcedure + Sync + Send
     {
         fn name(&self) -> &str {
             self.0.name()
@@ -205,10 +204,15 @@ mod impls {
             let output = OutputPort::create();
             let source = StreamSource::create(ctx, Some(block_stream), output.clone())?;
 
-            pipeline.add_pipe(Pipe::SimplePipe {
-                inputs_port: vec![],
-                outputs_port: vec![output],
-                processors: vec![source],
+
+            pipeline.add_new_pipe(NewPipe {
+                input_length: 0,
+                output_length: 1,
+                items: vec![PipeItem {
+                    processor: source,
+                    inputs_port: vec![],
+                    outputs_port: vec![output],
+                }],
             });
 
             Ok(())

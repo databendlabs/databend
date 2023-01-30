@@ -20,13 +20,13 @@ use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_pipeline_core::pipe::{NewPipe, PipeItem};
 use common_pipeline_sources::processors::sources::SyncReceiverSource;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::processors::port::InputPort;
 use databend_query::pipelines::processors::port::OutputPort;
 use databend_query::pipelines::processors::SyncSenderSink;
 use databend_query::pipelines::processors::TransformDummy;
-use databend_query::pipelines::Pipe;
 use databend_query::pipelines::Pipeline;
 use databend_query::sessions::QueryContext;
 
@@ -163,9 +163,9 @@ fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
 
     let mut pipeline = Pipeline::create();
-    pipeline.add_pipe(source_pipe);
-    pipeline.add_pipe(create_transform_pipe(1)?);
-    pipeline.add_pipe(sink_pipe);
+    pipeline.add_new_pipe(source_pipe);
+    pipeline.add_new_pipe(create_transform_pipe(1)?);
+    pipeline.add_new_pipe(sink_pipe);
 
     RunningGraph::create(pipeline)
 }
@@ -175,9 +175,9 @@ fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGrap
     let (_tx, source_pipe) = create_source_pipe(ctx, 2)?;
 
     let mut pipeline = Pipeline::create();
-    pipeline.add_pipe(source_pipe);
-    pipeline.add_pipe(create_transform_pipe(2)?);
-    pipeline.add_pipe(sink_pipe);
+    pipeline.add_new_pipe(source_pipe);
+    pipeline.add_new_pipe(create_transform_pipe(2)?);
+    pipeline.add_new_pipe(sink_pipe);
 
     RunningGraph::create(pipeline)
 }
@@ -187,13 +187,13 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
 
     let mut pipeline = Pipeline::create();
-    pipeline.add_pipe(source_pipe);
+    pipeline.add_new_pipe(source_pipe);
     pipeline.resize(2)?;
-    pipeline.add_pipe(create_transform_pipe(2)?);
+    pipeline.add_new_pipe(create_transform_pipe(2)?);
     pipeline.resize(1)?;
-    pipeline.add_pipe(create_transform_pipe(1)?);
+    pipeline.add_new_pipe(create_transform_pipe(1)?);
     pipeline.resize(2)?;
-    pipeline.add_pipe(sink_pipe);
+    pipeline.add_new_pipe(sink_pipe);
 
     RunningGraph::create(pipeline)
 }
@@ -201,61 +201,65 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
 fn create_source_pipe(
     ctx: Arc<QueryContext>,
     size: usize,
-) -> Result<(Vec<Sender<Result<DataBlock>>>, Pipe)> {
+) -> Result<(Vec<Sender<Result<DataBlock>>>, NewPipe)> {
     let mut txs = Vec::with_capacity(size);
-    let mut outputs = Vec::with_capacity(size);
-    let mut processors = Vec::with_capacity(size);
+    let mut items = Vec::with_capacity(size);
 
     for _index in 0..size {
         let output = OutputPort::create();
         let (tx, rx) = channel(1);
         txs.push(tx);
-        outputs.push(output.clone());
-        processors.push(SyncReceiverSource::create(ctx.clone(), rx, output)?);
+        items.push(PipeItem {
+            inputs_port: vec![],
+            outputs_port: vec![output.clone()],
+            processor: SyncReceiverSource::create(ctx.clone(), rx, output)?,
+        });
     }
-    Ok((txs, Pipe::SimplePipe {
-        processors,
-        inputs_port: vec![],
-        outputs_port: outputs,
+    Ok((txs, NewPipe {
+        items,
+        input_length: 0,
+        output_length: size,
     }))
 }
 
-fn create_transform_pipe(size: usize) -> Result<Pipe> {
-    let mut inputs = Vec::with_capacity(size);
-    let mut outputs = Vec::with_capacity(size);
-    let mut processors = Vec::with_capacity(size);
+fn create_transform_pipe(size: usize) -> Result<NewPipe> {
+    let mut items = Vec::with_capacity(size);
 
     for _index in 0..size {
         let input = InputPort::create();
         let output = OutputPort::create();
 
-        inputs.push(input.clone());
-        outputs.push(output.clone());
-        processors.push(TransformDummy::create(input, output));
+        items.push(PipeItem {
+            inputs_port: vec![input.clone()],
+            outputs_port: vec![output.clone()],
+            processor: TransformDummy::create(input, output),
+        });
     }
 
-    Ok(Pipe::SimplePipe {
-        processors,
-        inputs_port: inputs,
-        outputs_port: outputs,
+    Ok(NewPipe {
+        items,
+        input_length: size,
+        output_length: size,
     })
 }
 
-fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pipe)> {
+fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, NewPipe)> {
     let mut rxs = Vec::with_capacity(size);
-    let mut inputs = Vec::with_capacity(size);
-    let mut processors = Vec::with_capacity(size);
+    let mut items = Vec::with_capacity(size);
     for _index in 0..size {
         let input = InputPort::create();
         let (tx, rx) = channel(1);
         rxs.push(rx);
-        inputs.push(input.clone());
-        processors.push(SyncSenderSink::create(tx, input));
+        items.push(PipeItem {
+            outputs_port: vec![],
+            inputs_port: vec![input.clone()],
+            processor: SyncSenderSink::create(tx, input),
+        });
     }
 
-    Ok((rxs, Pipe::SimplePipe {
-        processors,
-        inputs_port: inputs,
-        outputs_port: vec![],
+    Ok((rxs, NewPipe {
+        items,
+        output_length: 0,
+        input_length: size,
     }))
 }

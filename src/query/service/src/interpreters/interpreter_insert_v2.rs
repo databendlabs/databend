@@ -360,7 +360,7 @@ impl Interpreter for InsertInterpreterV2 {
         let mut build_res = PipelineBuildResult::create();
 
         if self.async_insert {
-            build_res.main_pipeline.add_pipe(
+            build_res.main_pipeline.add_new_pipe(
                 ((*self.source_pipe_builder.lock()).clone())
                     .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
                     .finalize(),

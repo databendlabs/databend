@@ -29,12 +29,12 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use common_pipeline_core::pipe::{NewPipe, PipeItem};
 
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
@@ -58,14 +58,14 @@ struct ConvertGroupingMetaInfo {
 
 impl Serialize for ConvertGroupingMetaInfo {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+        where S: Serializer {
         unreachable!("ConvertGroupingMetaInfo does not support exchanging between multiple nodes")
     }
 }
 
 impl<'de> Deserialize<'de> for ConvertGroupingMetaInfo {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+        where D: Deserializer<'de> {
         unreachable!("ConvertGroupingMetaInfo does not support exchanging between multiple nodes")
     }
 }
@@ -264,7 +264,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
 #[async_trait::async_trait]
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-    for TransformConvertGrouping<Method>
+for TransformConvertGrouping<Method>
 {
     fn name(&self) -> String {
         String::from("TransformConvertGrouping")
@@ -395,10 +395,14 @@ fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + S
     let output = transform.get_output();
     let inputs_port = transform.get_inputs();
 
-    pipeline.add_pipe(Pipe::ResizePipe {
-        inputs_port,
-        outputs_port: vec![output],
-        processor: ProcessorPtr::create(Box::new(transform)),
+    pipeline.add_new_pipe(NewPipe {
+        input_length: inputs_port.len(),
+        output_length: 1,
+        items: vec![PipeItem {
+            inputs_port,
+            outputs_port: vec![output],
+            processor: ProcessorPtr::create(Box::new(transform)),
+        }],
     });
 
     pipeline.resize(input_nums)?;
@@ -434,7 +438,7 @@ struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> +
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
-    MergeBucketTransform<Method>
+MergeBucketTransform<Method>
 {
     pub fn try_create(
         input: Arc<InputPort>,
@@ -455,7 +459,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
 
 #[async_trait::async_trait]
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-    for MergeBucketTransform<Method>
+for MergeBucketTransform<Method>
 {
     fn name(&self) -> String {
         String::from("MergeBucketTransform")

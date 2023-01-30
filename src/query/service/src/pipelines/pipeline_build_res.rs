@@ -42,7 +42,7 @@ impl PipelineBuildResult {
         }
 
         let mut main_pipeline = Pipeline::create();
-        main_pipeline.add_pipe(source_builder.finalize());
+        main_pipeline.add_new_pipe(source_builder.finalize());
 
         Ok(PipelineBuildResult {
             main_pipeline,

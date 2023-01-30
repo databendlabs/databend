@@ -39,7 +39,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::Pipe;
+use common_pipeline_core::pipe::{NewPipe, PipeItem};
 use common_pipeline_core::Pipeline;
 
 use super::sort::Cursor;
@@ -76,11 +76,17 @@ pub fn try_add_multi_sort_merge(
                 limit,
                 sort_columns_descriptions,
             )?;
-            pipeline.pipes.push(Pipe::ResizePipe {
-                inputs_port,
-                outputs_port: vec![output_port],
-                processor,
+
+            pipeline.add_new_pipe(NewPipe {
+                input_length: inputs_port.len(),
+                output_length: 1,
+                items: vec![PipeItem {
+                    processor,
+                    inputs_port,
+                    outputs_port: vec![output_port],
+                }],
             });
+
             Ok(())
         }
     }
@@ -175,9 +181,9 @@ fn create_processor(
 
 /// TransformMultiSortMerge is a processor with multiple input ports;
 pub struct MultiSortMergeProcessor<R, Converter>
-where
-    R: Rows,
-    Converter: RowConverter<R>,
+    where
+        R: Rows,
+        Converter: RowConverter<R>,
 {
     /// Data from inputs (every input is sorted)
     inputs: Vec<Arc<InputPort>>,
@@ -212,9 +218,9 @@ where
 }
 
 impl<R, Converter> MultiSortMergeProcessor<R, Converter>
-where
-    R: Rows,
-    Converter: RowConverter<R>,
+    where
+        R: Rows,
+        Converter: RowConverter<R>,
 {
     pub fn create(
         inputs: Vec<Arc<InputPort>>,
@@ -428,9 +434,9 @@ where
 
 #[async_trait::async_trait]
 impl<R, Converter> Processor for MultiSortMergeProcessor<R, Converter>
-where
-    R: Rows + Send + 'static,
-    Converter: RowConverter<R> + Send + 'static,
+    where
+        R: Rows + Send + 'static,
+        Converter: RowConverter<R> + Send + 'static,
 {
     fn name(&self) -> String {
         "MultiSortMerge".to_string()
@@ -557,8 +563,11 @@ where
 }
 
 enum ProcessorState {
-    Consume,                           // Need to consume data from input.
-    Preserve(Vec<(usize, DataBlock)>), // Need to preserve blocks in memory.
-    Output,                            // Need to generate output block.
+    Consume,
+    // Need to consume data from input.
+    Preserve(Vec<(usize, DataBlock)>),
+    // Need to preserve blocks in memory.
+    Output,
+    // Need to generate output block.
     Generated(DataBlock),              // Need to push output block to output port.
 }

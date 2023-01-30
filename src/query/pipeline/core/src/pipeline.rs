@@ -17,12 +17,12 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::pipe::NewPipe;
 use crate::processors::port::InputPort;
 use crate::processors::port::OutputPort;
 use crate::processors::processor::ProcessorPtr;
 use crate::processors::ResizeProcessor;
 use crate::Pipe;
-use crate::pipe::NewPipe;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -56,7 +56,7 @@ pub struct Pipeline {
 pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;
 
 pub type FinishedCallback =
-Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
 
 impl Pipeline {
     pub fn create() -> Pipeline {
@@ -98,8 +98,8 @@ impl Pipeline {
         )
     }
 
-    pub fn add_pipe(&mut self, pipe: Pipe) {
-        self.pipes.push(pipe);
+    pub fn add_new_pipe(&mut self, pipe: NewPipe) {
+        self.new_pipes.push(pipe);
     }
 
     pub fn input_len(&self) -> usize {
@@ -132,7 +132,7 @@ impl Pipeline {
     }
 
     pub fn add_transform<F>(&mut self, f: F) -> Result<()>
-        where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
+    where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
         let mut transform_builder = TransformPipeBuilder::create();
         for _index in 0..self.output_len() {
             let input_port = InputPort::create();
@@ -142,14 +142,14 @@ impl Pipeline {
             transform_builder.add_transform(input_port, output_port, processor);
         }
 
-        self.add_pipe(transform_builder.finalize());
+        self.add_new_pipe(transform_builder.finalize());
         Ok(())
     }
 
     // Add source processor to pipeline.
     // numbers: how many output pipe numbers.
     pub fn add_source<F>(&mut self, f: F, numbers: usize) -> Result<()>
-        where F: Fn(Arc<OutputPort>) -> Result<ProcessorPtr> {
+    where F: Fn(Arc<OutputPort>) -> Result<ProcessorPtr> {
         if numbers == 0 {
             return Err(ErrorCode::Internal(
                 "Source output port numbers cannot be zero.",
@@ -161,19 +161,19 @@ impl Pipeline {
             let output = OutputPort::create();
             source_builder.add_source(output.clone(), f(output)?);
         }
-        self.add_pipe(source_builder.finalize());
+        self.add_new_pipe(source_builder.finalize());
         Ok(())
     }
 
     // Add sink processor to pipeline.
     pub fn add_sink<F>(&mut self, f: F) -> Result<()>
-        where F: Fn(Arc<InputPort>) -> Result<ProcessorPtr> {
+    where F: Fn(Arc<InputPort>) -> Result<ProcessorPtr> {
         let mut sink_builder = SinkPipeBuilder::create();
         for _ in 0..self.output_len() {
             let input = InputPort::create();
             sink_builder.add_sink(input.clone(), f(input)?);
         }
-        self.add_pipe(sink_builder.finalize());
+        self.add_new_pipe(sink_builder.finalize());
         Ok(())
     }
 

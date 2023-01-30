@@ -16,20 +16,18 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
-use itertools::Itertools;
 
 use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::Result;
+use common_pipeline_core::pipe::NewPipe;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
 use petgraph::Direction;
-use petgraph::graph::Edge;
 use tracing::debug;
-use common_pipeline_core::pipe::NewPipe;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
@@ -133,14 +131,12 @@ impl ExecutingGraph {
             let mut pipe_edges = Vec::with_capacity(pipe.output_length);
 
             for item in &pipe.items {
-                let node = Node::create(
-                    &item.processor,
-                    &item.inputs_port,
-                    &item.outputs_port,
-                );
+                let node = Node::create(&item.processor, &item.inputs_port, &item.outputs_port);
 
                 let graph_node_index = graph.add_node(node.clone());
-                unsafe { item.processor.set_id(graph_node_index); }
+                unsafe {
+                    item.processor.set_id(graph_node_index);
+                }
 
                 for offset in 0..item.inputs_port.len() {
                     let last_edges = pipes_edges.last_mut().unwrap();
@@ -191,12 +187,16 @@ impl ExecutingGraph {
     fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
         for pipe in &pipeline.pipes {
             pipeline.new_pipes.push(match pipe {
-                Pipe::ResizePipe { processor, inputs_port, outputs_port } => {
-                    NewPipe::create_resize(processor, inputs_port, outputs_port)
-                }
-                Pipe::SimplePipe { processors, inputs_port, outputs_port } => {
-                    NewPipe::create_simple(processors, inputs_port, outputs_port)
-                }
+                Pipe::ResizePipe {
+                    processor,
+                    inputs_port,
+                    outputs_port,
+                } => NewPipe::create_resize(processor, inputs_port, outputs_port),
+                Pipe::SimplePipe {
+                    processors,
+                    inputs_port,
+                    outputs_port,
+                } => NewPipe::create_simple(processors, inputs_port, outputs_port),
             });
         }
 

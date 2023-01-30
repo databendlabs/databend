@@ -233,7 +233,7 @@ impl HiveTable {
             );
         }
 
-        pipeline.add_pipe(source_builder.finalize());
+        pipeline.add_new_pipe(source_builder.finalize());
         Ok(())
     }
 

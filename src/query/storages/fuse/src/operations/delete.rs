@@ -37,6 +37,7 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_pipeline_core::pipe::{NewPipe, PipeItem};
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -49,7 +50,6 @@ use crate::operations::mutation::MutationTransform;
 use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pruning::FusePruner;
 use crate::statistics::ClusterStatsGenerator;
@@ -196,7 +196,7 @@ impl FuseTable {
             projection.clone(),
             base_snapshot,
         )
-        .await?;
+            .await?;
 
         let block_reader = self.create_block_reader(projection)?;
         let schema = block_reader.schema();
@@ -309,21 +309,25 @@ impl FuseTable {
                     inputs_port.push(InputPort::create());
                 }
                 let output_port = OutputPort::create();
-                let processor = MutationTransform::try_create(
-                    ctx,
-                    self.schema(),
-                    inputs_port.clone(),
-                    output_port.clone(),
-                    self.get_operator(),
-                    self.meta_location_generator().clone(),
-                    base_segments,
-                    self.get_block_compact_thresholds(),
-                )?;
-                pipeline.pipes.push(Pipe::ResizePipe {
-                    inputs_port,
-                    outputs_port: vec![output_port],
-                    processor,
+                pipeline.add_new_pipe(NewPipe {
+                    output_length: 1,
+                    input_length: inputs_port.len(),
+                    items: vec![PipeItem {
+                        inputs_port: inputs_port.clone(),
+                        outputs_port: vec![output_port.clone()],
+                        processor: MutationTransform::try_create(
+                            ctx,
+                            self.schema(),
+                            inputs_port.clone(),
+                            output_port.clone(),
+                            self.get_operator(),
+                            self.meta_location_generator().clone(),
+                            base_segments,
+                            self.get_block_compact_thresholds(),
+                        )?,
+                    }],
                 });
+
                 Ok(())
             }
         }

@@ -18,6 +18,7 @@ use common_catalog::plan::Projection;
 use common_catalog::table::CompactTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::pipe::{NewPipe, PipeItem};
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::BlockCompactMutator;
@@ -28,7 +29,6 @@ use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;
@@ -193,10 +193,15 @@ impl FuseTable {
                     inputs_port.clone(),
                     output_port.clone(),
                 )?;
-                pipeline.pipes.push(Pipe::ResizePipe {
-                    inputs_port,
-                    outputs_port: vec![output_port],
-                    processor,
+
+                pipeline.add_new_pipe(NewPipe {
+                    output_length: 1,
+                    input_length: inputs_port.len(),
+                    items: vec![PipeItem {
+                        processor,
+                        inputs_port,
+                        outputs_port: vec![output_port],
+                    }],
                 });
                 Ok(())
             }

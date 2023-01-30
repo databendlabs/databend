@@ -28,7 +28,6 @@ use common_expression::DataBlock;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
@@ -121,27 +120,17 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     ) -> Result<()> {
         // avoid duplicate read in cluster mode.
         if plan.parts.partitions.is_empty() {
-            let output = OutputPort::create();
-            pipeline.add_pipe(Pipe::SimplePipe {
-                inputs_port: vec![],
-                outputs_port: vec![output.clone()],
-                processors: vec![EmptySource::create(output)?],
-            });
-
+            pipeline.add_source(|output| EmptySource::create(output), 1)?;
             return Ok(());
         }
 
-        let output = OutputPort::create();
         let inner_table = self.inner_table.clone();
-        pipeline.add_pipe(Pipe::SimplePipe {
-            processors: vec![SystemTableSyncSource::create(
-                ctx,
-                output.clone(),
-                inner_table,
-            )?],
-            inputs_port: vec![],
-            outputs_port: vec![output],
-        });
+        pipeline.add_source(
+            |output| {
+                SystemTableSyncSource::create(ctx.clone(), output.clone(), inner_table.clone())
+            },
+            1,
+        )?;
 
         Ok(())
     }
@@ -245,17 +234,13 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let output = OutputPort::create();
         let inner_table = self.inner_table.clone();
-        pipeline.add_pipe(Pipe::SimplePipe {
-            processors: vec![SystemTableAsyncSource::create(
-                output.clone(),
-                inner_table,
-                ctx,
-            )?],
-            inputs_port: vec![],
-            outputs_port: vec![output],
-        });
+        pipeline.add_source(
+            |output| {
+                SystemTableAsyncSource::create(output.clone(), inner_table.clone(), ctx.clone())
+            },
+            1,
+        )?;
 
         Ok(())
     }
