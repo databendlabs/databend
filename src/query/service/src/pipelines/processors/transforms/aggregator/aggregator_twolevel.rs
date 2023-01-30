@@ -128,7 +128,7 @@ where
                         .unwrap()
                 })
                 .collect::<Vec<_>>();
-
+            
             return Ok(blocks);
         }
 
@@ -211,13 +211,16 @@ where
     }
 
     fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
-        for inner_table in agg.hash_table.iter_tables_mut() {
+        for (bucket, inner_table) in agg.hash_table.iter_tables_mut().enumerate() {
             if inner_table.len() == 0 {
                 continue;
             }
 
             let blocks = Self::generate_data(inner_table, &agg.params, &agg.method.method)?;
             Self::clear_table(inner_table, &agg.params);
+            
+            let rows: usize = blocks.iter().map(|c| c.num_rows()).sum();
+            println!("rows: {bucket}  {rows}");
             return Ok(blocks);
         }
 

@@ -329,25 +329,19 @@ impl StringColumnBuilder {
     
     #[inline]
     pub fn commit_row(&mut self) {
-        if self.data.len() < *self.offsets.last().unwrap() as usize {
-            println!("data {:?}", self.data);
-            println!("offsets {:?}", self.offsets);
-            panic!("data.len() < *self.offsets.last().unwrap() as usize");
-        }
         self.offsets.push(self.data.len() as u64);
-        
-        // if self.need_estimated
-        //     && self.offsets.len() - 1 == 64
-        //     && self.offsets.len() < self.offsets.capacity()
-        // {
-        //     let bytes_per_row = self.data.len() / 64 + 1;
-        //     let bytes_estimate = bytes_per_row * self.offsets.capacity();
+        if self.need_estimated
+            && self.offsets.len() - 1 == 64
+            && self.offsets.len() < self.offsets.capacity()
+        {
+            let bytes_per_row = self.data.len() / 64 + 1;
+            let bytes_estimate = bytes_per_row * self.offsets.capacity();
 
-        //     // if we are more than 10% over the capacity, we reserve more
-        //     if bytes_estimate as f64 > self.data.capacity() as f64 * 1.10f64 {
-        //         self.data.reserve(bytes_estimate - self.data.capacity());
-        //     }
-        // }
+            // if we are more than 10% over the capacity, we reserve more
+            if bytes_estimate as f64 > self.data.capacity() as f64 * 1.10f64 {
+                self.data.reserve(bytes_estimate - self.data.capacity());
+            }
+        }
     }
 
     pub fn append_column(&mut self, other: &StringColumn) {
@@ -368,6 +362,7 @@ impl StringColumnBuilder {
     }
 
     pub fn build(self) -> StringColumn {
+        debug_assert!(self.offsets.is_sorted());
         StringColumn {
             data: self.data.into(),
             offsets: self.offsets.into(),
@@ -375,7 +370,7 @@ impl StringColumnBuilder {
     }
 
     pub fn build_scalar(self) -> Vec<u8> {
-        assert_eq!(self.offsets.len(), 2);
+        debug_assert_eq!(self.offsets.len(), 2);
         self.data[(self.offsets[0] as usize)..(self.offsets[1] as usize)].to_vec()
     }
 

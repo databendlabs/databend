@@ -150,7 +150,7 @@ impl Column {
                 indices,
                 scatter_size,
             ),
-            Column::String(column) => Self::scatter_string::<_>(
+            Column::String(column) => Self::scatter_scalars::<StringType, _>(
                 column,
                 StringColumnBuilder::with_capacity(length, 0),
                 indices,
@@ -255,44 +255,5 @@ impl Column {
             .into_iter()
             .map(|b| T::upcast_column(T::build_column(b)))
             .collect()
-    }
-    
-    fn scatter_string<I>(
-        col: &StringColumn,
-        builder: StringColumnBuilder,
-        indices: &[I],
-        scatter_size: usize,
-    ) -> Vec<Self>
-    where
-        I: common_arrow::arrow::types::Index,
-    {
-        // let mut builders: Vec<StringColumnBuilder> = (0..scatter_size).map(|_| StringColumnBuilder::with_capacity(col.len(), 0)).collect();
-        let mut builders: Vec<StringColumnBuilder> = (0..scatter_size).map(|_| builder.clone()).collect();
-
-        indices
-            .iter()
-            .zip(StringType::iter_column(col))
-            .for_each(|(index, item)| {
-                StringType::push_item(&mut builders[index.to_usize()], item);
-            });
-        let result = builders
-            .into_iter()
-            .enumerate()
-            .map(|(i, b)| {
-                let result = StringType::build_column(b);
-                
-                if !result.offsets.is_sorted() {
-                    let indices: Vec<usize> = indices.iter().map(|i| i.to_usize()).collect::<Vec<_>>();
-                    println!("result {:?}", result);
-                    println!("original {:?}", col);
-                    println!("i {:?}", i);
-                    println!("indices {:?}", indices);
-                    panic!("not sorted");
-                }
-                
-                StringType::upcast_column(result)
-            })
-            .collect();
-        result
     }
 }
