@@ -18,13 +18,6 @@ package databend_proto;
 
 import "datatype.proto";
 
-message ColumnIdVector {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  repeated uint32 column_ids = 1;
-}
-
 // The schema of a table, such as column data types and other meta info.
 message DataSchema {
   uint64 ver = 100;
@@ -37,9 +30,6 @@ message DataSchema {
   map<string, string> metadata = 2;
 
   uint32 next_column_id = 3;
-
-  // Map column name to column id
-  repeated ColumnIdVector field_column_ids = 4;
 }
 
 // One field, AKA column
@@ -56,4 +46,6 @@ message DataField {
 
   // Column data type
   DataType data_type = 3;
+
+  uint32 column_id = 4;
 }

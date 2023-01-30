@@ -65,6 +65,7 @@ fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
     {
         assert_eq!(old_leaf.field.name, new_leaf.field.name);
         assert_eq!(old_leaf.leaf_ids, new_leaf.leaf_ids);
+
         // assert new column node column ids equal to old column node leaf ids.
         for (leaf_id, column_id) in old_leaf
             .leaf_ids

@@ -74,18 +74,12 @@ pub struct DataField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct ColumnIdVector {
-    pub column_ids: Vec<u32>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TableSchema {
     pub(crate) fields: Vec<TableField>,
     pub(crate) metadata: BTreeMap<String, String>,
 
     // define new fields as Option for compatibility
     pub next_column_id: Option<u32>,
-    field_column_ids: Option<Vec<ColumnIdVector>>,
 
     // column_id_set will be calculate every time init a TableSchema, so it need not to be serialize.
     #[serde(skip_serializing)]
@@ -97,6 +91,13 @@ pub struct TableField {
     name: String,
     default_expr: Option<String>,
     data_type: TableDataType,
+    // column id of this field, define as Option for compatibility
+    column_id: Option<u32>,
+
+    // column_ids include all the column id(including child column ids) of this field
+    // column_ids will be calculate every time init a TableField, so it need not to be serialize.
+    #[serde(skip_serializing)]
+    column_ids: Option<Vec<u32>>,
 }
 
 /// DataType with more information that is only available for table field, e.g, the
@@ -251,43 +252,12 @@ impl DataSchema {
     }
 }
 
-impl ColumnIdVector {
-    pub fn empty() -> Self {
-        Self { column_ids: vec![] }
-    }
-
-    pub fn new(column_ids: Vec<u32>) -> Self {
-        Self { column_ids }
-    }
-
-    pub fn push(&mut self, id: u32) {
-        self.column_ids.push(id);
-    }
-
-    pub fn to_leaf_column_ids(&self) -> Vec<u32> {
-        let h: HashSet<u32> = HashSet::from_iter(self.column_ids.iter().cloned());
-        h.into_iter().sorted().collect()
-    }
-
-    // `to_column_ids` contains nest-type parent column id,
-    // if field is Tuple(t1, t2), it will return a column id vector of 3 column id.
-    // `to_leaf_column_ids` return only the child column id.
-    pub fn to_column_ids(&self) -> Vec<u32> {
-        self.column_ids.clone()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.column_ids.is_empty()
-    }
-}
-
 impl TableSchema {
     pub fn empty() -> Self {
         Self {
             fields: vec![],
             metadata: BTreeMap::new(),
             next_column_id: Some(0),
-            field_column_ids: Some(Vec::new()),
             column_id_set: Some(HashSet::new()),
         }
     }
@@ -301,116 +271,54 @@ impl TableSchema {
         }
     }
 
-    fn build_from_data_type(
-        data_type: &TableDataType,
-        next_column_id: &mut u32,
-        field_column_ids: &mut ColumnIdVector,
-        column_id_set: &mut HashSet<u32>,
-    ) {
-        field_column_ids.push(*next_column_id);
-        column_id_set.insert(*next_column_id);
-
-        match data_type {
-            TableDataType::Tuple {
-                fields_name: _,
-                ref fields_type,
-            } => {
-                for inner_type in fields_type {
-                    Self::build_from_data_type(
-                        inner_type,
-                        next_column_id,
-                        field_column_ids,
-                        column_id_set,
-                    );
-                }
-            }
-            TableDataType::Array(a) | TableDataType::Map(a) => {
-                Self::build_from_data_type(
-                    a.as_ref(),
-                    next_column_id,
-                    field_column_ids,
-                    column_id_set,
-                );
-            }
-            _ => {
-                *next_column_id += 1;
-            }
-        }
-    }
-
     fn build_members_from_fields(
         fields: &[TableField],
-        field_column_ids: Option<Vec<ColumnIdVector>>,
         next_column_id: u32,
-    ) -> (u32, Vec<ColumnIdVector>, HashSet<u32>) {
-        let mut new_next_column_id = 0;
-        let mut has_column_id_inited = false;
-        let mut field_column_ids = match field_column_ids {
-            Some(field_column_ids) => {
-                has_column_id_inited =
-                    !field_column_ids.is_empty() && !field_column_ids[0].is_empty();
-                field_column_ids
-            }
-            None => Vec::with_capacity(fields.len()),
-        };
-        let has_next_column_id_inited = next_column_id != 0;
-        // make sure that column_id_map and next_column_id init at the same time
-        assert_eq!(has_column_id_inited, has_next_column_id_inited);
-
-        let mut column_id_set = HashSet::new();
-
-        let has_inited = has_column_id_inited;
-        if has_inited {
-            field_column_ids.iter().for_each(|column_id_vector| {
-                column_id_vector.column_ids.iter().for_each(|id| {
-                    column_id_set.insert(*id);
-                });
-            });
-        } else {
-            fields.iter().for_each(|f| {
-                let mut one_field_column_ids = ColumnIdVector::empty();
-                let data_type = f.data_type();
-                Self::build_from_data_type(
-                    data_type,
-                    &mut new_next_column_id,
-                    &mut one_field_column_ids,
-                    &mut column_id_set,
-                );
-                field_column_ids.push(one_field_column_ids);
-            });
-        }
-
-        let new_next_column_id = if has_next_column_id_inited {
+    ) -> (u32, HashSet<u32>, Vec<TableField>) {
+        let mut new_next_column_id = if next_column_id > 0 {
             next_column_id
         } else {
-            new_next_column_id
+            0
         };
+        let mut column_id_set = HashSet::new();
+        let mut new_fields = Vec::with_capacity(fields.len());
+        fields.iter().for_each(|f| {
+            let new_field = f.build_column_ids(&mut new_next_column_id);
+            // check next_column_id value cannot fallback
+            assert!(new_next_column_id >= new_field.column_id());
+            new_fields.push(new_field);
+        });
+
+        new_fields.iter().for_each(|field| {
+            for column_id in field.column_ids() {
+                column_id_set.insert(*column_id);
+            }
+        });
+
         // check next_column_id value cannot fallback
         assert!(new_next_column_id >= next_column_id);
 
-        (new_next_column_id, field_column_ids, column_id_set)
+        (new_next_column_id, column_id_set, new_fields)
     }
 
     pub fn new(fields: Vec<TableField>) -> Self {
-        let (next_column_id, field_column_ids, column_id_set) =
-            Self::build_members_from_fields(&fields, None, 0);
+        let (next_column_id, column_id_set, new_fields) =
+            Self::build_members_from_fields(&fields, 0);
         Self {
-            fields,
+            fields: new_fields,
             metadata: BTreeMap::new(),
             next_column_id: Some(next_column_id),
-            field_column_ids: Some(field_column_ids),
             column_id_set: Some(column_id_set),
         }
     }
 
     pub fn new_from(fields: Vec<TableField>, metadata: BTreeMap<String, String>) -> Self {
-        let (next_column_id, field_column_ids, column_id_set) =
-            Self::build_members_from_fields(&fields, None, 0);
+        let (next_column_id, column_id_set, new_fields) =
+            Self::build_members_from_fields(&fields, 0);
         Self {
-            fields,
+            fields: new_fields,
             metadata,
             next_column_id: Some(next_column_id),
-            field_column_ids: Some(field_column_ids),
             column_id_set: Some(column_id_set),
         }
     }
@@ -418,16 +326,14 @@ impl TableSchema {
     pub fn new_from_column_ids(
         fields: Vec<TableField>,
         metadata: BTreeMap<String, String>,
-        field_column_ids: Vec<ColumnIdVector>,
         next_column_id: u32,
     ) -> Self {
-        let (next_column_id, field_column_ids, column_id_set) =
-            Self::build_members_from_fields(&fields, Some(field_column_ids), next_column_id);
+        let (next_column_id, column_id_set, new_fields) =
+            Self::build_members_from_fields(&fields, next_column_id);
         Self {
-            fields,
+            fields: new_fields,
             metadata,
             next_column_id: Some(next_column_id),
-            field_column_ids: Some(field_column_ids),
             column_id_set: Some(column_id_set),
         }
     }
@@ -438,7 +344,7 @@ impl TableSchema {
     }
 
     pub fn column_id_of_index(&self, i: usize) -> Result<u32> {
-        Ok(self.field_column_ids.as_ref().unwrap()[i].column_ids[0])
+        Ok(self.fields[i].column_id())
     }
 
     pub fn is_column_deleted(&self, column_id: u32) -> bool {
@@ -457,19 +363,11 @@ impl TableSchema {
                     f.name(),
                 )));
             }
-            let data_type = f.data_type();
-            let mut one_field_column_ids = ColumnIdVector::empty();
-            Self::build_from_data_type(
-                data_type,
-                self.next_column_id.as_mut().unwrap(),
-                &mut one_field_column_ids,
-                self.column_id_set.as_mut().unwrap(),
-            );
-            self.fields.push(f.to_owned());
-            self.field_column_ids
-                .as_mut()
-                .unwrap()
-                .push(one_field_column_ids);
+            let field = f.build_column_ids(self.next_column_id.as_mut().unwrap());
+            for column_id in field.column_ids() {
+                self.column_id_set.as_mut().unwrap().insert(*column_id);
+            }
+            self.fields.push(field);
         }
         Ok(())
     }
@@ -481,10 +379,9 @@ impl TableSchema {
             ));
         }
         let i = self.index_of(column)?;
-        for column_id in &self.field_column_ids.as_ref().unwrap()[i].column_ids {
+        for column_id in self.fields[i].column_ids() {
             self.column_id_set.as_mut().unwrap().remove(column_id);
         }
-        self.field_column_ids.as_mut().unwrap().remove(i);
         self.fields.remove(i);
 
         Ok(())
@@ -493,13 +390,9 @@ impl TableSchema {
     pub fn to_column_ids(&self) -> Vec<u32> {
         let mut column_ids = Vec::with_capacity(self.fields.len());
 
-        self.field_column_ids
-            .as_ref()
-            .unwrap()
-            .iter()
-            .for_each(|column_id_vector| {
-                column_ids.extend(column_id_vector.to_column_ids());
-            });
+        self.fields.iter().for_each(|f| {
+            column_ids.extend(f.column_ids());
+        });
 
         column_ids
     }
@@ -507,13 +400,9 @@ impl TableSchema {
     pub fn to_leaf_column_ids(&self) -> Vec<u32> {
         let mut column_ids = Vec::with_capacity(self.fields.len());
 
-        self.field_column_ids
-            .as_ref()
-            .unwrap()
-            .iter()
-            .for_each(|column_id_vector| {
-                column_ids.extend(column_id_vector.to_leaf_column_ids());
-            });
+        self.fields.iter().for_each(|f| {
+            column_ids.extend(f.leaf_column_ids());
+        });
 
         column_ids
     }
@@ -525,8 +414,25 @@ impl TableSchema {
     }
 
     #[inline]
-    pub fn field_column_ids(&self) -> &Vec<ColumnIdVector> {
-        self.field_column_ids.as_ref().unwrap()
+    pub fn field_column_ids(&self) -> Vec<&Vec<u32>> {
+        let mut field_column_ids = Vec::with_capacity(self.fields.len());
+
+        self.fields.iter().for_each(|f| {
+            field_column_ids.push(f.column_ids());
+        });
+
+        field_column_ids
+    }
+
+    #[inline]
+    pub fn field_leaf_column_ids(&self) -> Vec<Vec<u32>> {
+        let mut field_column_ids = Vec::with_capacity(self.fields.len());
+
+        self.fields.iter().for_each(|f| {
+            field_column_ids.push(f.leaf_column_ids());
+        });
+
+        field_column_ids
     }
 
     #[inline]
@@ -607,18 +513,15 @@ impl TableSchema {
     /// project will do column pruning.
     #[must_use]
     pub fn project(&self, projection: &[usize]) -> Self {
-        let mut field_column_ids = Vec::with_capacity(projection.len());
         let mut fields = Vec::with_capacity(projection.len());
         for idx in projection {
             fields.push(self.fields[*idx].clone());
-            field_column_ids.push(self.field_column_ids.as_ref().unwrap()[*idx].clone());
         }
 
         Self {
             fields,
             metadata: self.metadata.clone(),
             next_column_id: self.next_column_id,
-            field_column_ids: Some(field_column_ids),
             column_id_set: self.column_id_set.clone(),
         }
     }
@@ -626,40 +529,37 @@ impl TableSchema {
     /// project with inner columns by path.
     pub fn inner_project(&self, path_indices: &BTreeMap<usize, Vec<usize>>) -> Self {
         let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
-        let mut field_column_ids = Vec::new();
-        let to_column_ids = self.to_column_ids();
+        let schema_fields = self.fields();
+        let column_ids = self.to_column_ids();
 
         let fields = paths
             .iter()
-            .map(|path| {
-                for index in path {
-                    field_column_ids.push(ColumnIdVector::new(vec![to_column_ids[*index]]));
-                }
-                Self::traverse_paths(self.fields(), path).unwrap()
-            })
+            .map(|path| Self::traverse_paths(schema_fields, path, &column_ids).unwrap())
             .collect();
 
         Self {
             fields,
             metadata: self.metadata.clone(),
             next_column_id: self.next_column_id,
-            field_column_ids: Some(field_column_ids),
             column_id_set: self.column_id_set.clone(),
         }
     }
 
-    fn traverse_paths(fields: &[TableField], path: &[usize]) -> Result<TableField> {
+    fn traverse_paths(
+        fields: &[TableField],
+        path: &[usize],
+        column_ids: &[u32],
+    ) -> Result<TableField> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "path should not be empty".to_string(),
             ));
         }
-        let field = &fields[path[0]];
+        let index = path[0];
+        let field = &fields[index];
         if path.len() == 1 {
             return Ok(field.clone());
         }
-
-        let field_name = field.name();
 
         // If the data type is Tuple, we can read the innner columns directly.
         // For example, `select t:a from table`, we can only read column t:a.
@@ -678,15 +578,18 @@ impl TableSchema {
             fields_type,
         } = &field.data_type
         {
+            let field_name = field.name();
+            let mut next_column_id = column_ids[1 + index];
             let fields = fields_name
                 .iter()
                 .zip(fields_type)
                 .map(|(name, ty)| {
                     let inner_name = format!("{}:{}", field_name, name.to_lowercase());
-                    TableField::new(&inner_name, ty.clone())
+                    let field = TableField::new(&inner_name, ty.clone());
+                    field.build_column_ids(&mut next_column_id)
                 })
                 .collect::<Vec<_>>();
-            return Self::traverse_paths(&fields, &path[1..]);
+            return Self::traverse_paths(&fields, &path[1..], &column_ids[index + 1..]);
         }
         let valid_fields: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
         Err(ErrorCode::BadArguments(format!(
@@ -727,16 +630,17 @@ impl TableSchema {
     /// project will do column pruning.
     #[must_use]
     pub fn project_by_fields(&self, fields: &BTreeMap<usize, TableField>) -> Self {
-        let mut field_column_ids = Vec::with_capacity(fields.len());
         let column_ids = self.to_column_ids();
-        for index in fields.keys() {
-            field_column_ids.push(ColumnIdVector::new(vec![column_ids[*index]]));
+        let mut new_fields = Vec::with_capacity(fields.len());
+        for (index, f) in fields.iter() {
+            let mut column_id = column_ids[*index];
+            let field = f.build_column_ids(&mut column_id);
+            new_fields.push(field);
         }
         Self {
-            fields: fields.values().cloned().collect(),
+            fields: new_fields,
             metadata: self.metadata.clone(),
             next_column_id: self.next_column_id,
-            field_column_ids: Some(field_column_ids),
             column_id_set: self.column_id_set.clone(),
         }
     }
@@ -809,7 +713,103 @@ impl TableField {
             name: name.to_string(),
             default_expr: None,
             data_type,
+            column_id: None,
+            column_ids: None,
         }
+    }
+
+    pub fn new_from_column_ids(
+        name: &str,
+        data_type: TableDataType,
+        column_id: u32,
+        column_ids: Vec<u32>,
+    ) -> Self {
+        TableField {
+            name: name.to_string(),
+            default_expr: None,
+            data_type,
+            column_id: Some(column_id),
+            column_ids: Some(column_ids),
+        }
+    }
+
+    pub fn new_from_column_id(name: &str, data_type: TableDataType, column_id: u32) -> Self {
+        TableField {
+            name: name.to_string(),
+            default_expr: None,
+            data_type,
+            column_id: Some(column_id),
+            column_ids: None,
+        }
+    }
+
+    fn build_from_data_type(
+        data_type: &TableDataType,
+        column_ids: &mut Vec<u32>,
+        next_column_id: &mut u32,
+    ) {
+        column_ids.push(*next_column_id);
+
+        match data_type {
+            TableDataType::Tuple {
+                fields_name: _,
+                ref fields_type,
+            } => {
+                for inner_type in fields_type {
+                    Self::build_from_data_type(inner_type, column_ids, next_column_id);
+                }
+            }
+            TableDataType::Array(a) => {
+                Self::build_from_data_type(a.as_ref(), column_ids, next_column_id);
+            }
+            _ => {
+                *next_column_id += 1;
+            }
+        }
+    }
+
+    pub fn build_column_ids(&self, next_column_id: &mut u32) -> Self {
+        let column_id = *next_column_id;
+        let data_type = self.data_type();
+        let mut new_next_column_id = match self.column_id {
+            Some(column_id) => column_id,
+            None => *next_column_id,
+        };
+        let mut column_ids = vec![];
+
+        Self::build_from_data_type(data_type, &mut column_ids, &mut new_next_column_id);
+
+        *next_column_id = new_next_column_id;
+        Self {
+            name: self.name.clone(),
+            default_expr: self.default_expr.clone(),
+            data_type: self.data_type.clone(),
+            column_id: match self.column_id {
+                Some(_column_id) => self.column_id,
+                None => Some(column_id),
+            },
+            column_ids: Some(column_ids),
+        }
+    }
+
+    pub fn has_column_id(&self) -> bool {
+        self.column_id.is_some()
+    }
+
+    // `column_ids` contains nest-type parent column id,
+    // if field is Tuple(t1, t2), it will return a column id vector of 3 column id.
+    // `leaf_column_ids` return only the child column id.
+    pub fn leaf_column_ids(&self) -> Vec<u32> {
+        let h: HashSet<u32> = HashSet::from_iter(self.column_ids.as_ref().unwrap().iter().cloned());
+        h.into_iter().sorted().collect()
+    }
+
+    pub fn column_ids(&self) -> &Vec<u32> {
+        self.column_ids.as_ref().unwrap()
+    }
+
+    pub fn column_id(&self) -> u32 {
+        self.column_id.unwrap()
     }
 
     #[must_use]
@@ -1138,6 +1138,8 @@ impl From<&ArrowField> for TableField {
             name: f.name.clone(),
             data_type: f.into(),
             default_expr: None,
+            column_id: None,
+            column_ids: None,
         }
     }
 }

@@ -32,11 +32,12 @@ impl ColumnNodes {
         let mut leaf_id = 0;
         let mut column_nodes = Vec::with_capacity(schema.fields.len());
 
-        let field_column_ids = table_schema.map(|table_schema| table_schema.field_column_ids());
+        let field_column_ids =
+            table_schema.map(|table_schema| table_schema.field_leaf_column_ids());
         for (i, field) in schema.fields.iter().enumerate() {
             let mut column_node = Self::traverse_fields_dfs(field, &mut leaf_id);
-            if let Some(field_column_ids) = field_column_ids {
-                column_node.leaf_column_ids = field_column_ids[i].to_column_ids();
+            if let Some(ref field_column_ids) = field_column_ids {
+                column_node.leaf_column_ids = field_column_ids[i].to_owned();
             }
             column_nodes.push(column_node);
         }

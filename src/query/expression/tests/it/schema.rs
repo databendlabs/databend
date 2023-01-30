@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use common_exception::Result;
 use common_expression::create_test_complex_schema;
 use common_expression::types::NumberDataType;
-use common_expression::ColumnIdVector;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -31,34 +30,128 @@ fn test_project_schema_from_tuple() -> Result<()> {
     };
     let b = TableDataType::Tuple {
         fields_name: vec!["b1".to_string(), "b2".to_string()],
-        fields_type: vec![b1, TableDataType::Number(NumberDataType::Int64)],
+        fields_type: vec![b1.clone(), TableDataType::Number(NumberDataType::Int64)],
     };
     let fields = vec![
         TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
-        TableField::new("b", b),
+        TableField::new("b", b.clone()),
         TableField::new("c", TableDataType::Number(NumberDataType::UInt64)),
     ];
-    let schema = TableSchema::new(fields);
+    let mut schema = TableSchema::new(fields);
 
-    let expect_fields = vec![
-        TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
-        TableField::new("b:b1:b11", TableDataType::Boolean),
-        TableField::new("b:b1:b12", TableDataType::String),
-        TableField::new("b:b2", TableDataType::Number(NumberDataType::Int64)),
-    ];
+    // project schema
+    {
+        let expect_fields = vec![
+            TableField::new_from_column_ids(
+                "a",
+                TableDataType::Number(NumberDataType::UInt64),
+                0,
+                vec![0],
+            ),
+            TableField::new_from_column_ids("b:b1:b11", TableDataType::Boolean, 1, vec![1]),
+            TableField::new_from_column_ids("b:b1:b12", TableDataType::String, 2, vec![2]),
+            TableField::new_from_column_ids(
+                "b:b2",
+                TableDataType::Number(NumberDataType::Int64),
+                3,
+                vec![3],
+            ),
+            TableField::new_from_column_ids("b:b1", b1.clone(), 1, vec![1, 1, 2]),
+            TableField::new_from_column_ids("b", b.clone(), 1, vec![1, 1, 1, 2, 3]),
+        ];
 
-    let mut path_indices = BTreeMap::new();
-    path_indices.insert(0, vec![0]);
-    path_indices.insert(1, vec![1, 0, 0]);
-    path_indices.insert(2, vec![1, 0, 1]);
-    path_indices.insert(3, vec![1, 1]);
-    let project_schema = schema.inner_project(&path_indices);
+        let mut path_indices = BTreeMap::new();
+        path_indices.insert(0, vec![0]);
+        path_indices.insert(1, vec![1, 0, 0]);
+        path_indices.insert(2, vec![1, 0, 1]);
+        path_indices.insert(3, vec![1, 1]);
+        path_indices.insert(4, vec![1, 0]);
+        path_indices.insert(5, vec![1]);
+        let project_schema = schema.inner_project(&path_indices);
 
-    for (i, field) in project_schema.fields().iter().enumerate() {
-        assert_eq!(*field, expect_fields[i]);
+        for (i, field) in project_schema.fields().iter().enumerate() {
+            assert_eq!(*field, expect_fields[i]);
+        }
+        assert_eq!(project_schema.next_column_id(), schema.next_column_id());
+        assert_eq!(project_schema.column_id_set(), schema.column_id_set());
     }
-    assert_eq!(project_schema.next_column_id(), schema.next_column_id());
-    assert_eq!(project_schema.column_id_set(), schema.column_id_set());
+
+    // drop column
+    {
+        schema.drop_column("b")?;
+        let mut path_indices = BTreeMap::new();
+        path_indices.insert(0, vec![0]);
+        path_indices.insert(1, vec![1]);
+        let project_schema = schema.inner_project(&path_indices);
+
+        let expect_fields = vec![
+            TableField::new_from_column_ids(
+                "a",
+                TableDataType::Number(NumberDataType::UInt64),
+                0,
+                vec![0],
+            ),
+            TableField::new_from_column_ids(
+                "c",
+                TableDataType::Number(NumberDataType::UInt64),
+                4,
+                vec![4],
+            ),
+        ];
+
+        for (i, field) in project_schema.fields().iter().enumerate() {
+            assert_eq!(*field, expect_fields[i]);
+        }
+        assert_eq!(project_schema.next_column_id(), schema.next_column_id());
+        assert_eq!(project_schema.column_id_set(), schema.column_id_set());
+    }
+
+    // add column
+    {
+        schema.add_columns(&[TableField::new("b", b.clone())])?;
+
+        let mut path_indices = BTreeMap::new();
+        path_indices.insert(0, vec![0]);
+        path_indices.insert(1, vec![1]);
+        path_indices.insert(2, vec![2, 0, 0]);
+        path_indices.insert(3, vec![2, 0, 1]);
+        path_indices.insert(4, vec![2, 1]);
+        path_indices.insert(5, vec![2, 0]);
+        path_indices.insert(6, vec![2]);
+
+        let expect_fields = vec![
+            TableField::new_from_column_ids(
+                "a",
+                TableDataType::Number(NumberDataType::UInt64),
+                0,
+                vec![0],
+            ),
+            TableField::new_from_column_ids(
+                "c",
+                TableDataType::Number(NumberDataType::UInt64),
+                4,
+                vec![4],
+            ),
+            TableField::new_from_column_ids("b:b1:b11", TableDataType::Boolean, 5, vec![5]),
+            TableField::new_from_column_ids("b:b1:b12", TableDataType::String, 6, vec![6]),
+            TableField::new_from_column_ids(
+                "b:b2",
+                TableDataType::Number(NumberDataType::Int64),
+                7,
+                vec![7],
+            ),
+            TableField::new_from_column_ids("b:b1", b1, 5, vec![5, 5, 6]),
+            TableField::new_from_column_ids("b", b, 5, vec![5, 5, 5, 6, 7]),
+        ];
+        let project_schema = schema.inner_project(&path_indices);
+
+        for (i, field) in project_schema.fields().iter().enumerate() {
+            assert_eq!(*field, expect_fields[i]);
+        }
+        assert_eq!(project_schema.next_column_id(), schema.next_column_id());
+        assert_eq!(project_schema.column_id_set(), schema.column_id_set());
+    }
+
     Ok(())
 }
 
@@ -93,7 +186,6 @@ fn test_schema_from_struct() -> Result<()> {
 
     let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
     assert_eq!(leaf_column_ids, schema.to_leaf_column_ids());
-    println!("leaf_fields: {:?}", leaf_fields);
     let expected_fields = vec![
         ("u64", TableDataType::Number(NumberDataType::UInt64)),
         ("0", TableDataType::Number(NumberDataType::UInt64)),
@@ -128,14 +220,14 @@ fn test_schema_from_struct() -> Result<()> {
     }
 
     let expeted_column_ids = vec![
-        ("u64", ColumnIdVector::new(vec![0])),
-        ("tuplearray", ColumnIdVector::new(vec![1, 1, 1, 2, 3, 3])),
-        ("arraytuple", ColumnIdVector::new(vec![4, 4, 4, 5])),
-        ("nullarray", ColumnIdVector::new(vec![6])),
-        ("maparray", ColumnIdVector::new(vec![7, 7, 7])),
-        ("nullu64", ColumnIdVector::new(vec![8])),
-        ("u64array", ColumnIdVector::new(vec![9, 9])),
-        ("tuplesimple", ColumnIdVector::new(vec![10, 10, 11])),
+        ("u64", vec![0]),
+        ("tuplearray", vec![1, 1, 1, 2, 3, 3]),
+        ("arraytuple", vec![4, 4, 4, 5]),
+        ("nullarray", vec![6]),
+        ("maparray", vec![7]),
+        ("nullu64", vec![8]),
+        ("u64array", vec![9, 9]),
+        ("tuplesimple", vec![10, 10, 11]),
     ];
 
     for (i, column_id) in schema.field_column_ids().iter().enumerate() {
@@ -144,36 +236,24 @@ fn test_schema_from_struct() -> Result<()> {
             expeted_column_id.0.to_string(),
             schema.fields()[i].name().to_string()
         );
-        assert_eq!(expeted_column_id.1, *column_id);
+        assert_eq!(expeted_column_id.1, **column_id);
     }
 
-    let field1_flat_column_ids = vec![0];
-    let field2_flat_column_ids = vec![1, 2, 3];
-    let field3_flat_column_ids = vec![4, 5];
-    let field4_flat_column_ids = vec![6];
-    let field5_flat_column_ids = vec![7];
-    let field6_flat_column_ids = vec![8];
-    let field7_flat_column_ids = vec![9];
-    let field8_flat_column_ids = vec![10, 11];
-
     let expeted_flat_column_ids = vec![
-        ("u64", &field1_flat_column_ids),
-        ("tuplearray", &field2_flat_column_ids),
-        ("arraytuple", &field3_flat_column_ids),
-        ("nullarray", &field4_flat_column_ids),
-        ("maparray", &field5_flat_column_ids),
-        ("nullu64", &field6_flat_column_ids),
-        ("u64array", &field7_flat_column_ids),
-        ("tuplesimple", &field8_flat_column_ids),
+        ("u64", vec![0]),
+        ("tuplearray", vec![1, 2, 3]),
+        ("arraytuple", vec![4, 5]),
+        ("nullarray", vec![6]),
+        ("maparray", vec![7]),
+        ("nullu64", vec![8]),
+        ("u64array", vec![9]),
+        ("tuplesimple", vec![10, 11]),
     ];
 
-    for (i, column_id) in schema.field_column_ids().iter().enumerate() {
+    for (i, field) in schema.fields().iter().enumerate() {
         let expeted_column_id = &expeted_flat_column_ids[i];
-        assert_eq!(
-            expeted_column_id.0.to_string(),
-            schema.fields()[i].name().to_string()
-        );
-        assert_eq!(*expeted_column_id.1, column_id.to_leaf_column_ids());
+        assert_eq!(expeted_column_id.0.to_string(), field.name().to_string());
+        assert_eq!(expeted_column_id.1, field.leaf_column_ids());
     }
 
     assert_eq!(schema.next_column_id(), 12);
@@ -193,16 +273,38 @@ fn test_schema_modify_field() -> Result<()> {
     let field2 = TableField::new("b", TableDataType::Number(NumberDataType::UInt64));
     let field3 = TableField::new("c", TableDataType::Number(NumberDataType::UInt64));
 
-    let mut schema = TableSchema::new(vec![field1.clone()]);
+    let mut schema = TableSchema::new(vec![field1]);
 
-    assert_eq!(schema.fields().to_owned(), vec![field1.clone()]);
+    let expected_field1 = TableField::new_from_column_ids(
+        "a",
+        TableDataType::Number(NumberDataType::UInt64),
+        0,
+        vec![0],
+    );
+    let expected_field2 = TableField::new_from_column_ids(
+        "b",
+        TableDataType::Number(NumberDataType::UInt64),
+        1,
+        vec![1],
+    );
+    let expected_field3 = TableField::new_from_column_ids(
+        "c",
+        TableDataType::Number(NumberDataType::UInt64),
+        2,
+        vec![2],
+    );
+
+    assert_eq!(schema.fields().to_owned(), vec![expected_field1.clone()]);
     // assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.next_column_id(), 1);
 
     // add column b
-    schema.add_columns(&[field2.clone()])?;
-    assert_eq!(schema.fields().to_owned(), vec![field1.clone(), field2,]);
+    schema.add_columns(&[field2])?;
+    assert_eq!(schema.fields().to_owned(), vec![
+        expected_field1.clone(),
+        expected_field2,
+    ]);
     // assert_eq!(schema.column_id_of("a").unwrap(), 0);
     // assert_eq!(schema.column_id_of("b").unwrap(), 1);
     assert_eq!(schema.is_column_deleted(0), false);
@@ -211,15 +313,18 @@ fn test_schema_modify_field() -> Result<()> {
 
     // drop column b
     schema.drop_column("b")?;
-    assert_eq!(schema.fields().to_owned(), vec![field1.clone(),]);
+    assert_eq!(schema.fields().to_owned(), vec![expected_field1.clone(),]);
     // assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), true);
     assert_eq!(schema.next_column_id(), 2);
 
     // add column c
-    schema.add_columns(&[field3.clone()])?;
-    assert_eq!(schema.fields().to_owned(), vec![field1, field3]);
+    schema.add_columns(&[field3])?;
+    assert_eq!(schema.fields().to_owned(), vec![
+        expected_field1,
+        expected_field3
+    ]);
     // assert_eq!(schema.column_id_of("a").unwrap(), 0);
     // assert_eq!(schema.column_id_of("c").unwrap(), 2);
     assert_eq!(schema.is_column_deleted(0), false);
