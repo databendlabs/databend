@@ -66,7 +66,7 @@ pub async fn get_u64_value<T: KVApiKey>(
     kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     key: &T,
 ) -> Result<(u64, u64), KVAppError> {
-    let res = kv_api.get_kv(&key.to_key()).await?;
+    let res = kv_api.get_kv(&key.to_string_key()).await?;
 
     if let Some(seq_v) = res {
         Ok((seq_v.seq, *deserialize_u64(&seq_v.data)?))
@@ -87,7 +87,7 @@ where
     T: FromToProto,
     T::PB: common_protos::prost::Message + Default,
 {
-    let res = kv_api.get_kv(&k.to_key()).await?;
+    let res = kv_api.get_kv(&k.to_string_key()).await?;
 
     if let Some(seq_v) = res {
         Ok((seq_v.seq, Some(deserialize_struct(&seq_v.data)?)))
@@ -102,14 +102,14 @@ pub async fn list_keys<K: KVApiKey>(
     kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     key: &K,
 ) -> Result<Vec<K>, KVAppError> {
-    let res = kv_api.prefix_list_kv(&key.to_key()).await?;
+    let res = kv_api.prefix_list_kv(&key.to_string_key()).await?;
 
     let n = res.len();
 
     let mut structured_keys = Vec::with_capacity(n);
 
     for (str_key, _seq_id) in res.iter() {
-        let struct_key = K::from_key(str_key).map_err(|e| {
+        let struct_key = K::from_str_key(str_key).map_err(|e| {
             let inv = InvalidReply::new("fail to list_keys", &e);
             MetaNetworkError::InvalidReply(inv)
         })?;
@@ -130,7 +130,7 @@ pub async fn list_u64_value<K: KVApiKey>(
     kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
     key: &K,
 ) -> Result<(Vec<K>, Vec<u64>), KVAppError> {
-    let res = kv_api.prefix_list_kv(&key.to_key()).await?;
+    let res = kv_api.prefix_list_kv(&key.to_string_key()).await?;
 
     let n = res.len();
 
@@ -142,7 +142,7 @@ pub async fn list_u64_value<K: KVApiKey>(
         values.push(id);
 
         // Parse key
-        let struct_key = K::from_key(str_key).map_err(|e| {
+        let struct_key = K::from_str_key(str_key).map_err(|e| {
             let inv = InvalidReply::new("list_u64_value", &e);
             MetaNetworkError::InvalidReply(inv)
         })?;
@@ -178,7 +178,7 @@ pub async fn fetch_id<T: KVApiKey>(
 ) -> Result<u64, KVAppError> {
     let res = kv_api
         .upsert_kv(UpsertKVReq {
-            key: generator.to_key(),
+            key: generator.to_string_key(),
             seq: MatchSeq::Any,
             value: Operation::Update(b"".to_vec()),
             value_meta: None,
@@ -237,7 +237,7 @@ pub async fn send_txn(
 /// Build a TxnCondition that compares the seq of a record.
 pub fn txn_cond_seq(key: &impl KVApiKey, op: ConditionResult, seq: u64) -> TxnCondition {
     TxnCondition {
-        key: key.to_key(),
+        key: key.to_string_key(),
         expected: op as i32,
         target: Some(Target::Seq(seq)),
     }
@@ -247,7 +247,7 @@ pub fn txn_cond_seq(key: &impl KVApiKey, op: ConditionResult, seq: u64) -> TxnCo
 pub fn txn_op_put(key: &impl KVApiKey, value: Vec<u8>) -> TxnOp {
     TxnOp {
         request: Some(Request::Put(TxnPutRequest {
-            key: key.to_key(),
+            key: key.to_string_key(),
             value,
             prev_value: true,
             expire_at: None,
@@ -259,7 +259,7 @@ pub fn txn_op_put(key: &impl KVApiKey, value: Vec<u8>) -> TxnOp {
 pub fn txn_op_put_with_expire(key: &impl KVApiKey, value: Vec<u8>, expire_at: u64) -> TxnOp {
     TxnOp {
         request: Some(Request::Put(TxnPutRequest {
-            key: key.to_key(),
+            key: key.to_string_key(),
             value,
             prev_value: true,
             expire_at: Some(expire_at),
@@ -271,7 +271,7 @@ pub fn txn_op_put_with_expire(key: &impl KVApiKey, value: Vec<u8>, expire_at: u6
 pub fn txn_op_del(key: &impl KVApiKey) -> TxnOp {
     TxnOp {
         request: Some(Request::Delete(TxnDeleteRequest {
-            key: key.to_key(),
+            key: key.to_string_key(),
             prev_value: true,
         })),
     }

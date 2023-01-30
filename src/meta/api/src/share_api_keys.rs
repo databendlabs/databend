@@ -42,7 +42,7 @@ pub(crate) const ID_GEN_SHARE: &str = "share_id";
 impl KVApiKey for ShareGrantObject {
     const PREFIX: &'static str = PREFIX_SHARE_BY;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         match *self {
             ShareGrantObject::Database(db_id) => {
                 format!("{}/db/{}", Self::PREFIX, db_id,)
@@ -53,7 +53,7 @@ impl KVApiKey for ShareGrantObject {
         }
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -84,7 +84,7 @@ impl KVApiKey for ShareGrantObject {
 impl KVApiKey for ShareNameIdent {
     const PREFIX: &'static str = PREFIX_SHARE;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!(
             "{}/{}/{}",
             Self::PREFIX,
@@ -93,7 +93,7 @@ impl KVApiKey for ShareNameIdent {
         )
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -116,11 +116,11 @@ impl KVApiKey for ShareNameIdent {
 impl KVApiKey for ShareId {
     const PREFIX: &'static str = PREFIX_SHARE_ID;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!("{}/{}", Self::PREFIX, self.share_id)
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -138,7 +138,7 @@ impl KVApiKey for ShareId {
 impl KVApiKey for ShareAccountNameIdent {
     const PREFIX: &'static str = PREFIX_SHARE_ACCOUNT_ID;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         if self.share_id != 0 {
             format!(
                 "{}/{}/{}",
@@ -151,7 +151,7 @@ impl KVApiKey for ShareAccountNameIdent {
         }
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -173,11 +173,11 @@ impl KVApiKey for ShareAccountNameIdent {
 impl KVApiKey for ShareIdToName {
     const PREFIX: &'static str = PREFIX_SHARE_ID_TO_NAME;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!("{}/{}", Self::PREFIX, self.share_id,)
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;

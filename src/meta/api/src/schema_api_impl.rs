@@ -163,7 +163,7 @@ impl<KV: KVApi<Error = KVAppError>> SchemaApi for KV {
         if let Some(from_share) = &req.meta.from_share {
             if from_share.tenant == req.name_ident.tenant {
                 return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
-                    req.name_ident.to_string(),
+                    req.name_ident.to_string_key(),
                 ))));
             }
         }
@@ -823,7 +823,7 @@ impl<KV: KVApi<Error = KVAppError>> SchemaApi for KV {
         let mut kv_keys = Vec::with_capacity(db_ids.len());
 
         for db_id in db_ids.iter() {
-            let k = DatabaseId { db_id: *db_id }.to_key();
+            let k = DatabaseId { db_id: *db_id }.to_string_key();
             kv_keys.push(k);
         }
 
@@ -1032,7 +1032,7 @@ impl<KV: KVApi<Error = KVAppError>> SchemaApi for KV {
         let mut res = vec![];
 
         for (kk, vv) in reply.into_iter() {
-            let table_id = TableId::from_key(&kk).map_err(|e| {
+            let table_id = TableId::from_str_key(&kk).map_err(|e| {
                 let inv = InvalidReply::new("list_all_tables", &e);
                 let meta_net_err = MetaNetworkError::InvalidReply(inv);
                 MetaError::NetworkError(meta_net_err)
@@ -2018,7 +2018,7 @@ impl<KV: KVApi<Error = KVAppError>> SchemaApi for KV {
                         opts.remove(k);
                     }
                     Some(v) => {
-                        opts.insert(k.to_string(), v.to_string());
+                        opts.insert(k.to_string_key(), v.to_string_key());
                     }
                 }
             }
@@ -2137,7 +2137,7 @@ impl<KV: KVApi<Error = KVAppError>> SchemaApi for KV {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let key = CountTablesKey {
-            tenant: req.tenant.to_string(),
+            tenant: req.tenant.to_string_key(),
         };
 
         let count = loop {
@@ -2593,7 +2593,7 @@ async fn get_table_id_from_share_by_name(
     };
     if share_id_seq == 0 {
         return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
-            share.to_string(),
+            share.to_string_key(),
         ))));
     }
     if !share_meta.share_from_db_ids.contains(&db_id) {
@@ -2613,7 +2613,7 @@ async fn get_table_id_from_share_by_name(
     match table_names.binary_search(table_name) {
         Ok(i) => Ok(ids[i]),
         Err(_) => Err(KVAppError::AppError(AppError::WrongShareObject(
-            WrongShareObject::new(table_name.to_string()),
+            WrongShareObject::new(table_name.to_string_key()),
         ))),
     }
 }
@@ -2652,7 +2652,7 @@ async fn get_tableinfos_by_ids(
     for id in ids.iter() {
         let tbid = TableId { table_id: *id };
 
-        tb_meta_keys.push(tbid.to_key());
+        tb_meta_keys.push(tbid.to_string_key());
     }
 
     // mget() corresponding table_metas
@@ -2744,7 +2744,7 @@ async fn list_tables_from_share_db(
     };
     if share_id_seq == 0 {
         return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
-            share.to_string(),
+            share.to_string_key(),
         ))));
     }
     if !share_meta.share_from_db_ids.contains(&db_id) {

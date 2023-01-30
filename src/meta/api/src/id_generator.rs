@@ -59,11 +59,11 @@ impl IdGenerator {
 impl KVApiKey for IdGenerator {
     const PREFIX: &'static str = PREFIX_ID_GEN;
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         format!("{}/{}", Self::PREFIX, self.resource)
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, KVApiKeyError> {
         let mut elts = s.split('/');
 
         let prefix = check_segment_present(elts.next(), 0, s)?;
@@ -89,30 +89,30 @@ mod t {
         // Table id generator
         {
             let g = IdGenerator::table_id();
-            let k = g.to_key();
+            let k = g.to_string_key();
             assert_eq!("__fd_id_gen/table_id", k);
 
-            let t2 = IdGenerator::from_key(&k)?;
+            let t2 = IdGenerator::from_str_key(&k)?;
             assert_eq!(g, t2);
         }
 
         // Database id generator
         {
             let g = IdGenerator::database_id();
-            let k = g.to_key();
+            let k = g.to_string_key();
             assert_eq!("__fd_id_gen/database_id", k);
 
-            let t2 = IdGenerator::from_key(&k)?;
+            let t2 = IdGenerator::from_str_key(&k)?;
             assert_eq!(g, t2);
         }
 
         // Share id generator
         {
             let g = IdGenerator::share_id();
-            let k = g.to_key();
+            let k = g.to_string_key();
             assert_eq!("__fd_id_gen/share_id", k);
 
-            let t2 = IdGenerator::from_key(&k)?;
+            let t2 = IdGenerator::from_str_key(&k)?;
             assert_eq!(g, t2);
         }
 
@@ -121,10 +121,10 @@ mod t {
 
     #[test]
     fn test_id_generator_from_key_error() -> anyhow::Result<()> {
-        assert!(IdGenerator::from_key("__fd_id_gen").is_err());
-        assert!(IdGenerator::from_key("__fd_id_gen/foo/bar").is_err());
+        assert!(IdGenerator::from_str_key("__fd_id_gen").is_err());
+        assert!(IdGenerator::from_str_key("__fd_id_gen/foo/bar").is_err());
 
-        assert!(IdGenerator::from_key("__foo/table_id").is_err());
+        assert!(IdGenerator::from_str_key("__foo/table_id").is_err());
         Ok(())
     }
 }

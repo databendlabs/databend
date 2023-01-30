@@ -16,6 +16,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
+use common_meta_types::protobuf as pb;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
 use common_meta_types::txn_op_response;
@@ -23,7 +24,6 @@ use common_meta_types::ConditionResult;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::PbSeqV;
 use common_meta_types::SeqV;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteByPrefixRequest;
@@ -657,7 +657,7 @@ impl KVApiTestSuite {
             let expected: Vec<TxnOpResponse> = vec![TxnOpResponse {
                 response: Some(txn_op_response::Response::Put(TxnPutResponse {
                     key: txn_key.clone(),
-                    prev_value: Some(PbSeqV::from(SeqV::new(1, val1.clone()))),
+                    prev_value: Some(pb::SeqV::from(SeqV::new(1, val1.clone()))),
                 })),
             }];
 
@@ -795,21 +795,21 @@ impl KVApiTestSuite {
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key1.clone(),
-                        prev_value: Some(PbSeqV::from(SeqV::new(4, val1.clone()))),
+                        prev_value: Some(pb::SeqV::from(SeqV::new(4, val1.clone()))),
                     })),
                 },
                 // change k2
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key2.clone(),
-                        prev_value: Some(PbSeqV::from(SeqV::new(5, val2.clone()))),
+                        prev_value: Some(pb::SeqV::from(SeqV::new(5, val2.clone()))),
                     })),
                 },
                 // get k1
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Get(TxnGetResponse {
                         key: txn_key1.clone(),
-                        value: Some(PbSeqV::from(SeqV::new(6, val1_new.clone()))),
+                        value: Some(pb::SeqV::from(SeqV::new(6, val1_new.clone()))),
                     })),
                 },
                 // delete k1
@@ -817,7 +817,7 @@ impl KVApiTestSuite {
                     response: Some(txn_op_response::Response::Delete(TxnDeleteResponse {
                         key: txn_key1.clone(),
                         success: true,
-                        prev_value: Some(PbSeqV::from(SeqV::new(6, val1_new.clone()))),
+                        prev_value: Some(pb::SeqV::from(SeqV::new(6, val1_new.clone()))),
                     })),
                 },
                 // get k1
@@ -882,14 +882,14 @@ impl KVApiTestSuite {
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key1.clone(),
-                        prev_value: Some(PbSeqV::from(SeqV::new(8, val1.clone()))),
+                        prev_value: Some(pb::SeqV::from(SeqV::new(8, val1.clone()))),
                     })),
                 },
                 // get k1
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Get(TxnGetResponse {
                         key: txn_key1.clone(),
-                        value: Some(PbSeqV::from(SeqV::new(9, val1_new.clone()))),
+                        value: Some(pb::SeqV::from(SeqV::new(9, val1_new.clone()))),
                     })),
                 },
             ];

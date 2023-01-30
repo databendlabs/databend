@@ -120,7 +120,7 @@ fn calc_and_compare_drop_on_db_result(result: Vec<Arc<DatabaseInfo>>, expected: 
 
     let mut get = BTreeMap::new();
     for item in result.iter() {
-        let name = item.name_ident.to_string();
+        let name = item.name_ident.to_string_key();
         let mut drop_on_info = match get.get_mut(&name) {
             Some(drop_on_info) => drop_on_info,
             None => {
@@ -183,7 +183,7 @@ async fn upsert_test_data(
 ) -> Result<u64, KVAppError> {
     let res = kv_api
         .upsert_kv(UpsertKVReq {
-            key: key.to_key(),
+            key: key.to_string_key(),
             seq: MatchSeq::Any,
             value: Operation::Update(value),
             value_meta: None,
@@ -200,7 +200,7 @@ async fn delete_test_data(
 ) -> Result<(), KVAppError> {
     let _res = kv_api
         .upsert_kv(UpsertKVReq {
-            key: key.to_key(),
+            key: key.to_string_key(),
             seq: MatchSeq::Any,
             value: Operation::Delete,
             value_meta: None,
@@ -1209,7 +1209,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
-                name: db_name_ident.to_string(),
+                name: db_name_ident.to_string_key(),
                 desc: "".to_string(),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
@@ -1227,7 +1227,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
-                name: db_name_ident.to_string(),
+                name: db_name_ident.to_string_key(),
                 desc: "".to_string(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
@@ -1244,7 +1244,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
-                name: db_name_ident.to_string(),
+                name: db_name_ident.to_string_key(),
                 desc: "".to_string(),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
@@ -1265,7 +1265,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
-                name: db_name_ident.to_string(),
+                name: db_name_ident.to_string_key(),
                 desc: "".to_string(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
@@ -1289,7 +1289,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
-                name: db_name_ident.to_string(),
+                name: db_name_ident.to_string_key(),
                 desc: "".to_string(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
@@ -1317,13 +1317,13 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
-                    name: db_name_ident.to_string(),
+                    name: db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
-                    name: new_db_name_ident.to_string(),
+                    name: new_db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 0,
                     non_drop_on_cnt: 1,
@@ -1343,13 +1343,13 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
-                    name: db_name_ident.to_string(),
+                    name: db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
-                    name: new_db_name_ident.to_string(),
+                    name: new_db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
@@ -1373,13 +1373,13 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
-                    name: db_name_ident.to_string(),
+                    name: db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
                 DroponInfo {
-                    name: new_db_name_ident.to_string(),
+                    name: new_db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
