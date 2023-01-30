@@ -40,7 +40,7 @@ runs:
         RUNNER_PROVIDER="${RUNNER_PROVIDER:-github}"
         case ${RUNNER_PROVIDER} in
           aws)
-            echo "Setting up sccache for AWS S3..."
+            echo "setting up sccache for AWS S3..."
             cat <<EOF >>$BIN_LOCAL/build-tool
         export RUSTC_WRAPPER=/opt/rust/cargo/bin/sccache
         export SCCACHE_BUCKET=databend-ci
@@ -59,6 +59,8 @@ runs:
             ;;
 
           *)
+            echo "unknown runner provider"
+            exit 1
             ;;
         esac
 

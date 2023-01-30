@@ -39,7 +39,7 @@ runs:
         fi
         echo "path=${path}" >> $GITHUB_OUTPUT
 
-        if [[ "{RUNNER_PROVIDER}" == "aws" ]]; then
+        if [[ "${RUNNER_PROVIDER}" == "aws" ]]; then
           src="s3"
         else
           src="github"
