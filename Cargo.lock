@@ -1391,6 +1391,7 @@ dependencies = [
  "educe",
  "enum-as-inner",
  "enum_dispatch",
+ "ethnum",
  "futures",
  "goldenfile",
  "hex",
@@ -3541,6 +3542,9 @@ name = "ethnum"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0198b9d0078e0f30dedc7acbb21c974e838fc8fae3ee170128658a98cb2c1c04"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "event-listener"

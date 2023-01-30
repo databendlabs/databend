@@ -38,7 +38,7 @@ use crate::Scalar;
 use crate::TypeDeserializer;
 use crate::Value;
 
-// Chunk idx, row idx in the block, times
+// Block idx, row idx in the block, repeat times
 pub type BlockRowIndex = (usize, usize, usize);
 
 impl DataBlock {
@@ -303,12 +303,14 @@ impl Column {
         mut builder: T::ColumnBuilder,
         indices: &[BlockRowIndex],
     ) -> Column {
-        unsafe {
-            for &(block_index, row, times) in indices {
-                let col = T::try_downcast_column(&columns[block_index]).unwrap();
-                for _ in 0..times {
-                    T::push_item(&mut builder, T::index_column_unchecked(&col, row))
-                }
+        let columns = columns
+            .iter()
+            .map(|col| T::try_downcast_column(col).unwrap())
+            .collect_vec();
+        for &(block_index, row, times) in indices {
+            let val = unsafe { T::index_column_unchecked(&columns[block_index], row) };
+            for _ in 0..times {
+                T::push_item(&mut builder, val.clone())
             }
         }
         T::upcast_column(T::build_column(builder))

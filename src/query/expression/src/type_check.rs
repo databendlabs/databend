@@ -460,7 +460,7 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
             Some(DataType::Array(Box::new(common_super_type(ty1, ty2)?)))
         }
         (DataType::Number(num1), DataType::Number(num2)) => {
-            Some(DataType::Number(num1.lossful_super_type(num2)))
+            Some(DataType::Number(num1.super_type(num2)))
         }
 
         (DataType::String, DataType::Timestamp) | (DataType::Timestamp, DataType::String) => {

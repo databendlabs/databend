@@ -349,7 +349,7 @@ impl NumberDataType {
         }
     }
 
-    pub fn lossful_super_type(self, other: Self) -> Self {
+    pub fn super_type(self, other: Self) -> Self {
         if self.can_lossless_cast_to(other) {
             return other;
         } else if other.can_lossless_cast_to(self) {
@@ -392,69 +392,6 @@ impl NumberDataType {
             },
         }
     }
-
-    pub const fn lossless_super_type(self, other: Self) -> Option<Self> {
-        if self.can_lossless_cast_to(other) {
-            return Some(other);
-        } else if other.can_lossless_cast_to(self) {
-            return Some(self);
-        }
-        Some(match (self.is_float(), other.is_float()) {
-            (true, true) => NumberDataType::new(
-                max_bit_with(self.bit_width(), other.bit_width()),
-                true,
-                true,
-            ),
-            (true, false) => {
-                let bin_width =
-                    if let Some(next_other_bit_width) = next_bit_width(other.bit_width()) {
-                        max_bit_with(self.bit_width(), next_other_bit_width)
-                    } else {
-                        return None;
-                    };
-                NumberDataType::new(bin_width, true, true)
-            }
-            (false, true) => {
-                let bin_width = if let Some(next_self_bit_width) = next_bit_width(self.bit_width())
-                {
-                    max_bit_with(next_self_bit_width, other.bit_width())
-                } else {
-                    return None;
-                };
-                NumberDataType::new(bin_width, true, true)
-            }
-            (false, false) => match (self.is_signed(), other.is_signed()) {
-                (true, true) => NumberDataType::new(
-                    max_bit_with(self.bit_width(), other.bit_width()),
-                    true,
-                    false,
-                ),
-                (false, false) => NumberDataType::new(
-                    max_bit_with(self.bit_width(), other.bit_width()),
-                    false,
-                    false,
-                ),
-                (false, true) => {
-                    let bin_width =
-                        if let Some(next_other_bit_width) = next_bit_width(other.bit_width()) {
-                            max_bit_with(self.bit_width(), next_other_bit_width)
-                        } else {
-                            return None;
-                        };
-                    NumberDataType::new(bin_width, true, false)
-                }
-                (true, false) => {
-                    let bin_width =
-                        if let Some(next_self_bit_width) = next_bit_width(self.bit_width()) {
-                            max_bit_with(next_self_bit_width, other.bit_width())
-                        } else {
-                            return None;
-                        };
-                    NumberDataType::new(bin_width, true, false)
-                }
-            },
-        })
-    }
 }
 
 const fn next_bit_width(width: u8) -> Option<u8> {
@@ -475,6 +412,16 @@ impl PartialOrd for NumberScalar {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         crate::with_number_type!(|NUM_TYPE| match (self, other) {
             (NumberScalar::NUM_TYPE(lhs), NumberScalar::NUM_TYPE(rhs)) => lhs.partial_cmp(rhs),
+            _ => None,
+        })
+    }
+}
+
+impl PartialOrd for NumberColumn {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        crate::with_number_type!(|NUM_TYPE| match (self, other) {
+            (NumberColumn::NUM_TYPE(lhs), NumberColumn::NUM_TYPE(rhs)) =>
+                lhs.iter().partial_cmp(rhs.iter()),
             _ => None,
         })
     }
