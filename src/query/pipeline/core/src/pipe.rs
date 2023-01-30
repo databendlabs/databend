@@ -25,11 +25,35 @@ pub struct PipeItem {
     pub outputs_port: Vec<Arc<OutputPort>>,
 }
 
+impl PipeItem {
+    pub fn create(
+        proc: ProcessorPtr,
+        inputs: Vec<Arc<InputPort>>,
+        outputs: Vec<Arc<OutputPort>>,
+    ) -> PipeItem {
+        PipeItem {
+            processor: proc,
+            inputs_port: inputs,
+            outputs_port: outputs,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Pipe {
     pub items: Vec<PipeItem>,
     pub input_length: usize,
     pub output_length: usize,
+}
+
+impl Pipe {
+    pub fn create(inputs: usize, outputs: usize, items: Vec<PipeItem>) -> Pipe {
+        Pipe {
+            items,
+            input_length: inputs,
+            output_length: outputs,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -43,21 +67,12 @@ impl SourcePipeBuilder {
     }
 
     pub fn finalize(self) -> Pipe {
-        let outputs_length = self.items.len();
-
-        Pipe {
-            items: self.items,
-            input_length: 0,
-            output_length: outputs_length,
-        }
+        Pipe::create(0, self.items.len(), self.items)
     }
 
     pub fn add_source(&mut self, output_port: Arc<OutputPort>, source: ProcessorPtr) {
-        self.items.push(PipeItem {
-            processor: source,
-            inputs_port: vec![],
-            outputs_port: vec![output_port],
-        });
+        self.items
+            .push(PipeItem::create(source, vec![], vec![output_port]));
     }
 }
 
@@ -73,20 +88,12 @@ impl SinkPipeBuilder {
     }
 
     pub fn finalize(self) -> Pipe {
-        let input_length = self.items.len();
-        Pipe {
-            input_length,
-            items: self.items,
-            output_length: 0,
-        }
+        Pipe::create(self.items.len(), 0, self.items)
     }
 
     pub fn add_sink(&mut self, inputs_port: Arc<InputPort>, sink: ProcessorPtr) {
-        self.items.push(PipeItem {
-            processor: sink,
-            inputs_port: vec![inputs_port],
-            outputs_port: vec![],
-        });
+        self.items
+            .push(PipeItem::create(sink, vec![inputs_port], vec![]));
     }
 }
 
@@ -100,12 +107,7 @@ impl TransformPipeBuilder {
     }
 
     pub fn finalize(self) -> Pipe {
-        let items_length = self.items.len();
-        Pipe {
-            items: self.items,
-            input_length: items_length,
-            output_length: items_length,
-        }
+        Pipe::create(self.items.len(), self.items.len(), self.items)
     }
 
     pub fn add_transform(
@@ -114,10 +116,7 @@ impl TransformPipeBuilder {
         output: Arc<OutputPort>,
         proc: ProcessorPtr,
     ) {
-        self.items.push(PipeItem {
-            processor: proc,
-            inputs_port: vec![input],
-            outputs_port: vec![output],
-        });
+        self.items
+            .push(PipeItem::create(proc, vec![input], vec![output]));
     }
 }

@@ -396,15 +396,11 @@ fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + S
     let output = transform.get_output();
     let inputs_port = transform.get_inputs();
 
-    pipeline.add_pipe(Pipe {
-        input_length: inputs_port.len(),
-        output_length: 1,
-        items: vec![PipeItem {
-            inputs_port,
-            outputs_port: vec![output],
-            processor: ProcessorPtr::create(Box::new(transform)),
-        }],
-    });
+    pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(transform)),
+        inputs_port,
+        vec![output],
+    )]));
 
     pipeline.resize(input_nums)?;
 

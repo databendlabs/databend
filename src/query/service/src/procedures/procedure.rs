@@ -206,15 +206,11 @@ mod impls {
             let output = OutputPort::create();
             let source = StreamSource::create(ctx, Some(block_stream), output.clone())?;
 
-            pipeline.add_pipe(Pipe {
-                input_length: 0,
-                output_length: 1,
-                items: vec![PipeItem {
-                    processor: source,
-                    inputs_port: vec![],
-                    outputs_port: vec![output],
-                }],
-            });
+            pipeline.add_pipe(Pipe::create(0, 1, vec![PipeItem::create(
+                source,
+                vec![],
+                vec![output],
+            )]));
 
             Ok(())
         }

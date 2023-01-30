@@ -78,15 +78,11 @@ pub fn try_add_multi_sort_merge(
                 sort_columns_descriptions,
             )?;
 
-            pipeline.add_pipe(Pipe {
-                input_length: inputs_port.len(),
-                output_length: 1,
-                items: vec![PipeItem {
-                    processor,
-                    inputs_port,
-                    outputs_port: vec![output_port],
-                }],
-            });
+            pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+                processor,
+                inputs_port,
+                vec![output_port],
+            )]));
 
             Ok(())
         }

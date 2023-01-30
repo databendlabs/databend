@@ -196,15 +196,11 @@ impl FuseTable {
                     output_port.clone(),
                 )?;
 
-                pipeline.add_pipe(Pipe {
-                    output_length: 1,
-                    input_length: inputs_port.len(),
-                    items: vec![PipeItem {
-                        processor,
-                        inputs_port,
-                        outputs_port: vec![output_port],
-                    }],
-                });
+                pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+                    processor,
+                    inputs_port,
+                    vec![output_port],
+                )]));
 
                 Ok(())
             }

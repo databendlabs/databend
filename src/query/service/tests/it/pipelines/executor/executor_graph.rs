@@ -210,17 +210,13 @@ fn create_source_pipe(
         let output = OutputPort::create();
         let (tx, rx) = channel(1);
         txs.push(tx);
-        items.push(PipeItem {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processor: SyncReceiverSource::create(ctx.clone(), rx, output)?,
-        });
+        items.push(PipeItem::create(
+            SyncReceiverSource::create(ctx.clone(), rx, output)?,
+            vec![],
+            vec![output.clone()],
+        ));
     }
-    Ok((txs, Pipe {
-        items,
-        input_length: 0,
-        output_length: size,
-    }))
+    Ok((txs, Pipe::create(0, size, items)))
 }
 
 fn create_transform_pipe(size: usize) -> Result<Pipe> {
@@ -230,18 +226,14 @@ fn create_transform_pipe(size: usize) -> Result<Pipe> {
         let input = InputPort::create();
         let output = OutputPort::create();
 
-        items.push(PipeItem {
-            inputs_port: vec![input.clone()],
-            outputs_port: vec![output.clone()],
-            processor: TransformDummy::create(input, output),
-        });
+        items.push(PipeItem::create(
+            TransformDummy::create(input, output),
+            vec![input.clone()],
+            vec![output.clone()],
+        ));
     }
 
-    Ok(Pipe {
-        items,
-        input_length: size,
-        output_length: size,
-    })
+    Ok(Pipe::create(size, size, items))
 }
 
 fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pipe)> {
@@ -251,16 +243,12 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pi
         let input = InputPort::create();
         let (tx, rx) = channel(1);
         rxs.push(rx);
-        items.push(PipeItem {
-            outputs_port: vec![],
-            inputs_port: vec![input.clone()],
-            processor: SyncSenderSink::create(tx, input),
-        });
+        items.push(PipeItem::create(
+            SyncSenderSink::create(tx, input),
+            vec![input.clone()],
+            vec![],
+        ));
     }
 
-    Ok((rxs, Pipe {
-        items,
-        output_length: 0,
-        input_length: size,
-    }))
+    Ok((rxs, Pipe::create(size, 0, items)))
 }
