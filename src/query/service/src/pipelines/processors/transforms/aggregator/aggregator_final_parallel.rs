@@ -35,6 +35,7 @@ use super::estimated_key_size;
 use super::AggregateHashStateInfo;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::group_by::Area;
+use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -149,6 +150,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     method: Method,
     params: Arc<AggregatorParams>,
     hash_table: Method::HashTable,
+    state_holders: Vec<Option<ArenaHolder>>,
 
     pub(crate) reach_limit: bool,
     // used for deserialization only if has agg, so we can reuse it during the loop
@@ -172,6 +174,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             params,
             hash_table,
             reach_limit: false,
+            state_holders: Vec::new(),
             temp_place,
         })
     }
@@ -226,6 +229,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         if blocks.is_empty() {
             return Ok(vec![]);
         }
+
         for mut data_block in blocks {
             if let Some(mut meta) = data_block.take_meta() {
                 let info = meta
@@ -233,6 +237,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                     .downcast_mut::<AggregateHashStateInfo>()
                     .unwrap();
                 let hashtable = info.hash_state.downcast_mut::<Method::HashTable>().unwrap();
+                self.state_holders.push(info.state_holder.take());
                 self.merge_partial_hashstates(hashtable)?;
                 continue;
             }
@@ -397,12 +402,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 
         places
     }
-}
 
-impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
-{
-    fn drop(&mut self) {
+    fn drop_states(&mut self) {
         let aggregator_params = self.params.as_ref();
         let aggregate_functions = &aggregator_params.aggregate_functions;
         let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
@@ -435,5 +436,14 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 unsafe { function.drop_state(place) }
             }
         }
+        self.state_holders.clear();
+    }
+}
+
+impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+{
+    fn drop(&mut self) {
+        self.drop_states();
     }
 }

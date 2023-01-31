@@ -38,7 +38,7 @@ use serde::Serialize;
 use serde::Serializer;
 
 use super::aggregator::AggregateHashStateInfo;
-use super::group_by::ArenaHolder;
+
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
@@ -409,7 +409,6 @@ fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + S
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
-    arena_holder: ArenaHolder,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
     let transform = TransformConvertGrouping::create(method.clone(), params.clone(), input_nums)?;
@@ -426,19 +425,12 @@ fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + S
     pipeline.resize(input_nums)?;
 
     pipeline.add_transform(|input, output| {
-        MergeBucketTransform::try_create(
-            input,
-            output,
-            method.clone(),
-            params.clone(),
-            arena_holder.clone(),
-        )
+        MergeBucketTransform::try_create(input, output, method.clone(), params.clone())
     })
 }
 
 pub fn efficiently_memory_final_aggregator(
     params: Arc<AggregatorParams>,
-    arena_holder: ArenaHolder,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
     let group_cols = &params.group_columns;
@@ -447,7 +439,7 @@ pub fn efficiently_memory_final_aggregator(
     let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
     with_hash_method!(|T| match method {
-        HashMethodKind::T(v) => build_convert_grouping(v, pipeline, params.clone(), arena_holder),
+        HashMethodKind::T(v) => build_convert_grouping(v, pipeline, params.clone()),
     })
 }
 
@@ -460,9 +452,6 @@ struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> +
 
     input_block: Option<DataBlock>,
     output_blocks: Vec<DataBlock>,
-
-    // holds the state from partial group by
-    _arena_holder: ArenaHolder,
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
@@ -473,7 +462,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
         output: Arc<OutputPort>,
         method: Method,
         params: Arc<AggregatorParams>,
-        arena_holder: ArenaHolder,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MergeBucketTransform {
             input,
@@ -482,7 +470,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
             params,
             input_block: None,
             output_blocks: vec![],
-            _arena_holder: arena_holder,
         })))
     }
 }

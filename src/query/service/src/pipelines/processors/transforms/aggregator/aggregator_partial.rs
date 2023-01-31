@@ -40,13 +40,13 @@ where Method: HashMethod + PolymorphicKeysHelper<Method>
     pub states_dropped: bool,
 
     pub area: Option<Area>,
+    pub area_holder: Option<ArenaHolder>,
     pub method: Method,
     pub hash_table: Method::HashTable,
     pub params: Arc<AggregatorParams>,
     pub generated: bool,
     pub input_rows: usize,
     pub pass_state_to_final: bool,
-    pub arena_holder: ArenaHolder,
     pub two_level_mode: bool,
 }
 
@@ -57,7 +57,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         method: Method,
         params: Arc<AggregatorParams>,
         pass_state_to_final: bool,
-        arena_holder: ArenaHolder,
     ) -> Result<Self> {
         let hash_table = method.create_hash_table()?;
         Ok(Self {
@@ -65,11 +64,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             method,
             hash_table,
             area: Some(Area::create()),
+            area_holder: None,
             states_dropped: false,
             generated: false,
             input_rows: 0,
             pass_state_to_final,
-            arena_holder,
             two_level_mode: false,
         })
     }
@@ -173,6 +172,13 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             .map(|&index| block.get_by_offset(index))
             .collect::<Vec<_>>()
     }
+    
+    pub fn try_holder_state(&mut self) {
+        let area = self.area.take();
+        if self.area.is_some() {
+            self.area_holder = Some(ArenaHolder::create(area));
+        }
+    }
 
     #[inline(always)]
     fn generate_data(&mut self) -> Result<Vec<DataBlock>> {
@@ -263,7 +269,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
     PartialAggregator<HAS_AGG, Method>
-{
+{   
     pub fn drop_states(&mut self) {
         if !self.states_dropped {
             let aggregator_params = self.params.as_ref();
@@ -292,6 +298,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
                 }
             }
             drop(self.area.take());
+            drop(self.area_holder.take());
             self.hash_table.clear();
             self.states_dropped = true;
         }

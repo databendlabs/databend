@@ -21,16 +21,27 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+use crate::pipelines::processors::transforms::group_by::ArenaHolder;
+
 #[derive(Debug)]
 pub struct AggregateHashStateInfo {
     pub bucket: usize,
     // a subhashtable state
     pub hash_state: Box<dyn Any + Send + Sync>,
+    pub state_holder: Option<ArenaHolder>,
 }
 
 impl AggregateHashStateInfo {
-    pub fn create(bucket: usize, hash_state: Box<dyn Any + Send + Sync>) -> BlockMetaInfoPtr {
-        Box::new(AggregateHashStateInfo { bucket, hash_state })
+    pub fn create(
+        bucket: usize,
+        hash_state: Box<dyn Any + Send + Sync>,
+        state_holder: Option<ArenaHolder>,
+    ) -> BlockMetaInfoPtr {
+        Box::new(AggregateHashStateInfo {
+            bucket,
+            hash_state,
+            state_holder,
+        })
     }
 }
 

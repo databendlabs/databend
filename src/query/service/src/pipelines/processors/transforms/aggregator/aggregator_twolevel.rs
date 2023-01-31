@@ -110,6 +110,7 @@ where
         Ok(TwoLevelAggregator::<Self> {
             inner: PartialAggregator::<HAS_AGG, TwoLevelHashMethod<Method>> {
                 area: self.area.take(),
+                area_holder: None,
                 params: self.params.clone(),
                 states_dropped: false,
                 method: two_level_method,
@@ -117,7 +118,6 @@ where
                 generated: false,
                 input_rows: self.input_rows,
                 pass_state_to_final: self.pass_state_to_final,
-                arena_holder: self.arena_holder.clone(),
                 two_level_mode: true,
             },
         })
@@ -163,7 +163,12 @@ where
             if agg.pass_state_to_final {
                 let table = std::mem::replace(inner_table, agg.method.method.create_hash_table()?);
                 let rows = table.len();
-                let meta = AggregateHashStateInfo::create(bucket, Box::new(table));
+                agg.try_holder_state();
+                let meta = AggregateHashStateInfo::create(
+                    bucket,
+                    Box::new(table),
+                    agg.area_holder.clone(),
+                );
                 let block = DataBlock::new_with_meta(vec![], rows, Some(meta));
                 return Ok(vec![block]);
             }
@@ -226,9 +231,9 @@ where
             return Ok(data_blocks);
         }
 
-        if agg.pass_state_to_final {
-            agg.arena_holder.put_area(agg.area.take());
-            agg.states_dropped = true;
+        if !agg.pass_state_to_final {
+            drop(agg.area.take());
+            drop(agg.area_holder.take());
         }
 
         Ok(data_blocks)

@@ -20,7 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::*;
 
-use super::group_by::ArenaHolder;
+
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -71,7 +71,6 @@ impl TransformAggregator {
         transform_params: AggregatorTransformParams,
         ctx: Arc<QueryContext>,
         pass_state_to_final: bool,
-        arena_holder: ArenaHolder,
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
@@ -93,7 +92,6 @@ impl TransformAggregator {
                         method,
                         aggregator_params,
                         pass_state_to_final,
-                        arena_holder
                     )?,
                 ),
             }),
@@ -105,7 +103,6 @@ impl TransformAggregator {
                         method,
                         aggregator_params,
                         pass_state_to_final,
-                        arena_holder
                     )?,
                 ),
             }),

@@ -51,7 +51,7 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 
-use super::processors::transforms::group_by::ArenaHolder;
+
 use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
@@ -85,7 +85,6 @@ pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,
     main_pipeline: Pipeline,
     pub pipelines: Vec<Pipeline>,
-    pub arena_holder: Option<ArenaHolder>,
 }
 
 impl PipelineBuilder {
@@ -94,7 +93,6 @@ impl PipelineBuilder {
             ctx,
             pipelines: vec![],
             main_pipeline: Pipeline::create(),
-            arena_holder: None,
         }
     }
 
@@ -328,15 +326,11 @@ impl PipelineBuilder {
 
         let pass_state_to_final = self.enable_memory_efficient_aggregator(&params);
 
-        let arena_holder = ArenaHolder::create();
-        self.arena_holder = Some(arena_holder.clone());
-
         self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_partial(
                 AggregatorTransformParams::try_create(input, output, &params)?,
                 self.ctx.clone(),
                 pass_state_to_final,
-                arena_holder.clone(),
             )
         })?;
 
@@ -361,15 +355,7 @@ impl PipelineBuilder {
         )?;
 
         if self.enable_memory_efficient_aggregator(&params) {
-            let arena_holder = self
-                .arena_holder
-                .take()
-                .ok_or_else(|| ErrorCode::Internal("ArenaHolder is not initialized"))?;
-            return efficiently_memory_final_aggregator(
-                params,
-                arena_holder,
-                &mut self.main_pipeline,
-            );
+            return efficiently_memory_final_aggregator(params, &mut self.main_pipeline);
         }
 
         self.main_pipeline.resize(1)?;
