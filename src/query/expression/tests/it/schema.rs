@@ -42,22 +42,12 @@ fn test_project_schema_from_tuple() -> Result<()> {
     // project schema
     {
         let expect_fields = vec![
-            TableField::new_from_column_ids(
-                "a",
-                TableDataType::Number(NumberDataType::UInt64),
-                0,
-                vec![0],
-            ),
-            TableField::new_from_column_ids("b:b1:b11", TableDataType::Boolean, 1, vec![1]),
-            TableField::new_from_column_ids("b:b1:b12", TableDataType::String, 2, vec![2]),
-            TableField::new_from_column_ids(
-                "b:b2",
-                TableDataType::Number(NumberDataType::Int64),
-                3,
-                vec![3],
-            ),
-            TableField::new_from_column_ids("b:b1", b1.clone(), 1, vec![1, 1, 2]),
-            TableField::new_from_column_ids("b", b.clone(), 1, vec![1, 1, 1, 2, 3]),
+            TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::UInt64), 0),
+            TableField::new_from_column_id("b:b1:b11", TableDataType::Boolean, 1),
+            TableField::new_from_column_id("b:b1:b12", TableDataType::String, 2),
+            TableField::new_from_column_id("b:b2", TableDataType::Number(NumberDataType::Int64), 3),
+            TableField::new_from_column_id("b:b1", b1.clone(), 1),
+            TableField::new_from_column_id("b", b.clone(), 1),
         ];
 
         let mut path_indices = BTreeMap::new();
@@ -73,7 +63,6 @@ fn test_project_schema_from_tuple() -> Result<()> {
             assert_eq!(*field, expect_fields[i]);
         }
         assert_eq!(project_schema.next_column_id(), schema.next_column_id());
-        assert_eq!(project_schema.column_id_set(), schema.column_id_set());
 
         // check leaf fields
         {
@@ -105,25 +94,14 @@ fn test_project_schema_from_tuple() -> Result<()> {
         let project_schema = schema.inner_project(&path_indices);
 
         let expect_fields = vec![
-            TableField::new_from_column_ids(
-                "a",
-                TableDataType::Number(NumberDataType::UInt64),
-                0,
-                vec![0],
-            ),
-            TableField::new_from_column_ids(
-                "c",
-                TableDataType::Number(NumberDataType::UInt64),
-                4,
-                vec![4],
-            ),
+            TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::UInt64), 0),
+            TableField::new_from_column_id("c", TableDataType::Number(NumberDataType::UInt64), 4),
         ];
 
         for (i, field) in project_schema.fields().iter().enumerate() {
             assert_eq!(*field, expect_fields[i]);
         }
         assert_eq!(project_schema.next_column_id(), schema.next_column_id());
-        assert_eq!(project_schema.column_id_set(), schema.column_id_set());
     }
 
     // add column
@@ -140,28 +118,13 @@ fn test_project_schema_from_tuple() -> Result<()> {
         path_indices.insert(6, vec![2]);
 
         let expect_fields = vec![
-            TableField::new_from_column_ids(
-                "a",
-                TableDataType::Number(NumberDataType::UInt64),
-                0,
-                vec![0],
-            ),
-            TableField::new_from_column_ids(
-                "c",
-                TableDataType::Number(NumberDataType::UInt64),
-                4,
-                vec![4],
-            ),
-            TableField::new_from_column_ids("b:b1:b11", TableDataType::Boolean, 5, vec![5]),
-            TableField::new_from_column_ids("b:b1:b12", TableDataType::String, 6, vec![6]),
-            TableField::new_from_column_ids(
-                "b:b2",
-                TableDataType::Number(NumberDataType::Int64),
-                7,
-                vec![7],
-            ),
-            TableField::new_from_column_ids("b:b1", b1, 5, vec![5, 5, 6]),
-            TableField::new_from_column_ids("b", b, 5, vec![5, 5, 5, 6, 7]),
+            TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::UInt64), 0),
+            TableField::new_from_column_id("c", TableDataType::Number(NumberDataType::UInt64), 4),
+            TableField::new_from_column_id("b:b1:b11", TableDataType::Boolean, 5),
+            TableField::new_from_column_id("b:b1:b12", TableDataType::String, 6),
+            TableField::new_from_column_id("b:b2", TableDataType::Number(NumberDataType::Int64), 7),
+            TableField::new_from_column_id("b:b1", b1, 5),
+            TableField::new_from_column_id("b", b, 5),
         ];
         let project_schema = schema.inner_project(&path_indices);
 
@@ -169,7 +132,6 @@ fn test_project_schema_from_tuple() -> Result<()> {
             assert_eq!(*field, expect_fields[i]);
         }
         assert_eq!(project_schema.next_column_id(), schema.next_column_id());
-        assert_eq!(project_schema.column_id_set(), schema.column_id_set());
     }
 
     Ok(())
@@ -256,7 +218,7 @@ fn test_schema_from_struct() -> Result<()> {
             expeted_column_id.0.to_string(),
             schema.fields()[i].name().to_string()
         );
-        assert_eq!(expeted_column_id.1, **column_id);
+        assert_eq!(expeted_column_id.1, *column_id);
     }
 
     let expeted_flat_column_ids = vec![
@@ -318,24 +280,12 @@ fn test_schema_modify_field() -> Result<()> {
 
     let mut schema = TableSchema::new(vec![field1.clone()]);
 
-    let expected_field1 = TableField::new_from_column_ids(
-        "a",
-        TableDataType::Number(NumberDataType::UInt64),
-        0,
-        vec![0],
-    );
-    let expected_field2 = TableField::new_from_column_ids(
-        "b",
-        TableDataType::Number(NumberDataType::UInt64),
-        1,
-        vec![1],
-    );
-    let expected_field3 = TableField::new_from_column_ids(
-        "c",
-        TableDataType::Number(NumberDataType::UInt64),
-        2,
-        vec![2],
-    );
+    let expected_field1 =
+        TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::UInt64), 0);
+    let expected_field2 =
+        TableField::new_from_column_id("b", TableDataType::Number(NumberDataType::UInt64), 1);
+    let expected_field3 =
+        TableField::new_from_column_id("c", TableDataType::Number(NumberDataType::UInt64), 2);
 
     assert_eq!(schema.fields().to_owned(), vec![expected_field1.clone()]);
     assert_eq!(schema.column_id_of("a").unwrap(), 0);
@@ -473,7 +423,7 @@ fn test_schema_modify_field() -> Result<()> {
         for (project_schema_index, (_i, column_ids)) in expected_column_ids.into_iter().enumerate()
         {
             let field = &project_schema.fields()[project_schema_index];
-            assert_eq!(field.column_ids(), &column_ids);
+            assert_eq!(field.column_ids(), column_ids);
         }
     }
 
