@@ -68,6 +68,10 @@ fn compute_cost_join(memo: &Memo, m_expr: &MExpr, plan: &Join) -> Result<Cost> {
     let build_card = build_group.relational_prop.cardinality;
     let probe_card = probe_group.relational_prop.cardinality;
 
+    if let JoinType::Cross = plan.join_type {
+        return Ok(Cost(build_card * probe_card * COST_FACTOR_COMPUTE_PER_ROW));
+    }
+
     let mut cost =
         build_card * COST_FACTOR_HASH_TABLE_PER_ROW + probe_card * COST_FACTOR_COMPUTE_PER_ROW;
 

@@ -35,7 +35,7 @@ pub fn display_memo(memo: &Memo, cost_map: &HashMap<IndexType, CostContext>) -> 
 
 pub fn display_rel_op(rel_op: &RelOperator) -> String {
     match rel_op {
-        RelOperator::Scan(_) => "Scan".to_string(),
+        RelOperator::Scan(scan) => format!("Scan: {}", scan.table_index),
         RelOperator::Join(_) => "Join".to_string(),
         RelOperator::EvalScalar(_) => "EvalScalar".to_string(),
         RelOperator::Filter(_) => "Filter".to_string(),
@@ -72,7 +72,7 @@ fn group_to_format_tree(
 
 fn m_expr_to_format_tree(m_expr: &MExpr) -> FormatTreeNode<String> {
     FormatTreeNode::new(format!(
-        "{} [{}]",
+        "Plan type:[{}] children:[{}]",
         display_rel_op(&m_expr.plan),
         m_expr
             .children
