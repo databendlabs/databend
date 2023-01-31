@@ -12,9 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_meta_kvapi::check_segment;
-use common_meta_kvapi::check_segment_absent;
-use common_meta_kvapi::check_segment_present;
 use common_meta_kvapi::kvapi;
 
 use crate::schema_api_keys::ID_GEN_DATABASE;
@@ -64,14 +61,10 @@ impl kvapi::Key for IdGenerator {
     }
 
     fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-        let mut elts = s.split('/');
+        let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-        let prefix = check_segment_present(elts.next(), 0, s)?;
-        check_segment(prefix, 0, Self::PREFIX)?;
-
-        let resource = check_segment_present(elts.next(), 1, s)?;
-
-        check_segment_absent(elts.next(), 2, s)?;
+        let resource = p.next_raw()?;
+        p.done()?;
 
         Ok(IdGenerator {
             resource: resource.to_string(),
