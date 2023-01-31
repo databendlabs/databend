@@ -170,6 +170,48 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_2_arg_core::<NullableType<EmptyArrayType>, NullableType<EmptyArrayType>, EmptyArrayType, _, _>(
+        "concat",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
+    registry.register_combine_nullable_2_arg::<EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, ArrayType<NullableType<GenericType<0>>>, _, _>(
+        "concat",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, NullableType<ArrayType<NullableType<GenericType<0>>>>>(
+            |_, arr, output, _| {
+                output.push(arr)
+            }
+        ),
+    );
+
+    registry.register_combine_nullable_2_arg::<ArrayType<NullableType<GenericType<0>>>, EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, _, _>(
+        "concat",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<GenericType<0>>>, EmptyArrayType, NullableType<ArrayType<NullableType<GenericType<0>>>>>(
+            |arr, _, output, _| {
+                output.push(arr)
+            }
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+        "concat",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
+            |lhs, rhs, output, _| {
+                output.builder.append_column(&lhs);
+                output.builder.append_column(&rhs);
+                output.commit_row()
+            }
+        ),
+    );
+
     registry.register_passthrough_nullable_3_arg::<EmptyArrayType, UInt64Type, UInt64Type, EmptyArrayType, _, _>(
         "slice",
         FunctionProperty::default(),
