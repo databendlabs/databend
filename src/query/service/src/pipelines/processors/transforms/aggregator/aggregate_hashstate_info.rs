@@ -59,7 +59,7 @@ impl<'de> Deserialize<'de> for AggregateHashStateInfo {
     }
 }
 
-#[typetag::serde(name = "aggregate_info")]
+#[typetag::serde(name = "aggregate_hash_state_info")]
 impl BlockMetaInfo for AggregateHashStateInfo {
     fn as_any(&self) -> &dyn Any {
         self
