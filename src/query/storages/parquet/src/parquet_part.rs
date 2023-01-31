@@ -26,12 +26,14 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Scalar;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ColumnMeta {
     pub offset: u64,
     pub length: u64,
     pub compression: Compression,
+    pub min_max: Option<(Scalar, Scalar)>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -40,6 +42,17 @@ pub struct ParquetRowGroupPart {
     pub num_rows: usize,
     pub column_metas: HashMap<ColumnId, ColumnMeta>,
     pub row_selection: Option<Vec<Interval>>,
+    /// If all row group parts have min/max stats. This is used for topk push down optimization.
+    ///
+    /// If there is one row group part does not have min/max stats, we cannot conduct topk push down optimization.
+    pub all_have_minmax: bool,
+}
+
+impl ParquetRowGroupPart {
+    pub fn convert_to_part_info(mut self, all_have_minmax: bool) -> PartInfoPtr {
+        self.all_have_minmax = all_have_minmax;
+        Arc::new(Box::new(self))
+    }
 }
 
 #[typetag::serde(name = "parquet_row_group")]
@@ -63,20 +76,6 @@ impl PartInfo for ParquetRowGroupPart {
 }
 
 impl ParquetRowGroupPart {
-    pub fn create(
-        location: String,
-        num_rows: usize,
-        column_metas: HashMap<ColumnId, ColumnMeta>,
-        row_selection: Option<Vec<Interval>>,
-    ) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(ParquetRowGroupPart {
-            location,
-            num_rows,
-            column_metas,
-            row_selection,
-        }))
-    }
-
     pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetRowGroupPart> {
         match info.as_any().downcast_ref::<ParquetRowGroupPart>() {
             Some(part_ref) => Ok(part_ref),

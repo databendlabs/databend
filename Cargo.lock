@@ -2290,6 +2290,7 @@ dependencies = [
  "futures",
  "opendal",
  "serde",
+ "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
  "typetag",
