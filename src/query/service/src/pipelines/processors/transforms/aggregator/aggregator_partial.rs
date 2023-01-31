@@ -44,7 +44,6 @@ where Method: HashMethod + PolymorphicKeysHelper<Method>
     pub hash_table: Method::HashTable,
     pub params: Arc<AggregatorParams>,
     pub generated: bool,
-    pub should_expand_table: bool,
     pub input_rows: usize,
     pub pass_state_to_final: bool,
     pub arena_holder: ArenaHolder,
@@ -68,7 +67,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             area: Some(Area::create()),
             states_dropped: false,
             generated: false,
-            should_expand_table: true,
             input_rows: 0,
             pass_state_to_final,
             arena_holder,
@@ -225,45 +223,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         columns.push(group_key_col);
         Ok(vec![DataBlock::new_from_columns(columns)])
     }
-
-    fn should_expand_table(&self) -> bool {
-        /// ideas from https://github.com/apache/impala/blob/b3e9c4a65fa63da6f373c9ecec41fe4247e5e7d8/be/src/exec/grouping-aggregator.cc
-        static STREAMING_HT_MIN_REDUCTION: [(usize, f64); 3] =
-            [(0, 0.0), (256 * 1024, 1.1), (2 * 1024 * 1024, 2.0)];
-
-        let ht_mem = self.hash_table.bytes_len();
-        let ht_rows = self.hash_table.len();
-
-        if ht_rows == 0 {
-            return true;
-        }
-
-        let mut cache_level = 0;
-        loop {
-            if cache_level + 1 < STREAMING_HT_MIN_REDUCTION.len()
-                && ht_mem >= STREAMING_HT_MIN_REDUCTION[cache_level + 1].0
-            {
-                cache_level += 1;
-                continue;
-            }
-            break;
-        }
-
-        let aggregated_input_rows = self.input_rows;
-        let current_reduction = aggregated_input_rows as f64 / ht_rows as f64;
-        // TODO ADD estimated reduction, currently we use current reduction
-        let estimated_reduction = current_reduction;
-        let min_reduction = STREAMING_HT_MIN_REDUCTION[cache_level].1;
-
-        if estimated_reduction <= min_reduction {
-            tracing::info!(
-                "HashTable expansion is disabled because the reduce factor is too low: estimated_reduction: {}, min_reduction: {}",
-                estimated_reduction,
-                min_reduction
-            )
-        }
-        estimated_reduction > min_reduction
-    }
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
@@ -299,16 +258,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
         self.generate_data()
-    }
-
-    fn check_expandsion(&mut self) {
-        if self.should_expand_table {
-            self.should_expand_table = self.should_expand_table();
-
-            if !self.should_expand_table {
-                self.hash_table.enable_tail_array();
-            }
-        }
     }
 }
 

@@ -491,11 +491,5 @@ pub trait HashtableLike {
 
     fn iter(&self) -> Self::Iterator<'_>;
 
-    /// Note: don't call this function unless you want what you are doing.
-    /// This function will make hashtable not like `hashtable` but a linked list.
-    /// If it's enabled, we will push all new keys into the tail of the linked list.
-    /// This is used in partial aggregation
-    fn enable_tail_array(&mut self) {}
-
     fn clear(&mut self);
 }

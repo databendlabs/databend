@@ -66,7 +66,7 @@ unsafe impl<T, A: Allocator> Container for HeapContainer<T, A> {
 
     #[inline(always)]
     fn len(&self) -> usize {
-        self.0.len()
+        self.as_ref().len()
     }
 
     fn heap_bytes(&self) -> usize {

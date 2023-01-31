@@ -32,9 +32,6 @@ use crate::table0::Table0IterMut;
 use crate::table_empty::TableEmpty;
 use crate::table_empty::TableEmptyIter;
 use crate::table_empty::TableEmptyIterMut;
-use crate::tail_array::TailArray;
-use crate::tail_array::TailArrayIter;
-use crate::tail_array::TailArrayIterMut;
 use crate::unsized_hashtable::FallbackKey;
 
 /// Simple unsized hashtable is used for storing unsized keys in arena. It can be worked with HashMethodSerializer.
@@ -49,7 +46,6 @@ where
     pub(crate) key_size: usize,
     pub(crate) table_empty: TableEmpty<V, A>,
     pub(crate) table: Table0<FallbackKey, V, HeapContainer<Entry<FallbackKey, V>, A>, A>,
-    pub(crate) tails: Option<TailArray<FallbackKey, V, A>>,
     pub(crate) _phantom: PhantomData<K>,
 }
 
@@ -117,7 +113,6 @@ where
             key_size: 0,
             table_empty: TableEmpty::new_in(allocator.clone()),
             table: Table0::with_capacity_in(capacity, allocator),
-            tails: None,
             _phantom: PhantomData,
         }
     }
@@ -129,24 +124,12 @@ where
 
     #[inline(always)]
     pub fn len(&self) -> usize {
-        // AsRef it's cost
-        let tail_len = match &self.tails {
-            Some(tails) => tails.len(),
-            None => 0,
-        };
-
-        self.table_empty.len() + self.table.len() + tail_len
+        self.table_empty.len() + self.table.len()
     }
 
     #[inline(always)]
     pub fn capacity(&self) -> usize {
-        // AsRef it's cost
-        let tail_capacity = match &self.tails {
-            Some(tails) => tails.capacity(),
-            None => 0,
-        };
-
-        self.table_empty.capacity() + self.table.capacity() + tail_capacity
+        self.table_empty.capacity() + self.table.capacity()
     }
 
     /// # Safety
@@ -177,14 +160,6 @@ where
                     )
                 }),
             _ => {
-                if let Some(tails) = &mut self.tails {
-                    self.key_size += key.len();
-                    let key = FallbackKey::new(key);
-                    return Ok(SimpleUnsizedHashtableEntryMutRef(
-                        SimpleUnsizedHashtableEntryMutRefInner::Table(tails.insert(key)),
-                    ));
-                }
-
                 self.table.check_grow();
                 self.table
                     .insert(FallbackKey::new(key))
@@ -220,7 +195,6 @@ where K: UnsizedKeyable + ?Sized
 {
     it_empty: Option<TableEmptyIter<'a, V>>,
     it: Option<Table0Iter<'a, FallbackKey, V>>,
-    tail_it: Option<TailArrayIter<'a, FallbackKey, V>>,
     _phantom: PhantomData<&'a mut K>,
 }
 
@@ -246,15 +220,6 @@ where K: UnsizedKeyable + ?Sized
             }
             self.it = None;
         }
-
-        if let Some(it) = self.tail_it.as_mut() {
-            if let Some(e) = it.next() {
-                return Some(SimpleUnsizedHashtableEntryRef(
-                    SimpleUnsizedHashtableEntryRefInner::Table(e),
-                ));
-            }
-            self.tail_it = None;
-        }
         None
     }
 }
@@ -264,7 +229,6 @@ where K: UnsizedKeyable + ?Sized
 {
     it_empty: Option<TableEmptyIterMut<'a, V>>,
     it: Option<Table0IterMut<'a, FallbackKey, V>>,
-    tail_it: Option<TailArrayIterMut<'a, FallbackKey, V>>,
     _phantom: PhantomData<&'a mut K>,
 }
 
@@ -290,15 +254,6 @@ where K: UnsizedKeyable + ?Sized
                 ));
             }
             self.it = None;
-        }
-
-        if let Some(it) = self.tail_it.as_mut() {
-            if let Some(e) = it.next() {
-                return Some(SimpleUnsizedHashtableEntryMutRef(
-                    SimpleUnsizedHashtableEntryMutRefInner::Table(e),
-                ));
-            }
-            self.tail_it = None;
         }
         None
     }
@@ -580,16 +535,6 @@ where A: Allocator + Clone + Default
                 }),
 
             _ => {
-                if let Some(tails) = &mut self.tails {
-                    self.key_size += key.len();
-                    let s = self.arena.alloc_slice_copy(key);
-                    let key = FallbackKey::new(s);
-
-                    return Ok(SimpleUnsizedHashtableEntryMutRef(
-                        SimpleUnsizedHashtableEntryMutRefInner::Table(tails.insert(key)),
-                    ));
-                }
-
                 self.table.check_grow();
                 match self.table.insert(FallbackKey::new(key)) {
                     Ok(e) => {
@@ -632,16 +577,6 @@ where A: Allocator + Clone + Default
                     )
                 }),
             _ => {
-                if let Some(tails) = &mut self.tails {
-                    self.key_size += key.len();
-                    let s = self.arena.alloc_slice_copy(key);
-                    let key = FallbackKey::new_with_hash(s, hash);
-
-                    return Ok(SimpleUnsizedHashtableEntryMutRef(
-                        SimpleUnsizedHashtableEntryMutRefInner::Table(tails.insert(key)),
-                    ));
-                }
-
                 self.table.check_grow();
                 match self
                     .table
@@ -669,21 +604,13 @@ where A: Allocator + Clone + Default
         SimpleUnsizedHashtableIter {
             it_empty: Some(self.table_empty.iter()),
             it: Some(self.table.iter()),
-            tail_it: self.tails.as_ref().map(|x| x.iter()),
             _phantom: PhantomData,
-        }
-    }
-
-    fn enable_tail_array(&mut self) {
-        if self.tails.is_none() {
-            self.tails = Some(TailArray::new(Default::default()));
         }
     }
 
     fn clear(&mut self) {
         self.table_empty.clear();
         self.table.clear();
-        let _ = self.tails.take();
         drop(std::mem::take(&mut self.arena));
     }
 }

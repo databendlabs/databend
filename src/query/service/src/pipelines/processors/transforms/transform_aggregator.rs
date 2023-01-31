@@ -116,8 +116,6 @@ impl TransformAggregator {
 pub trait Aggregator: Sized + Send {
     const NAME: &'static str;
 
-    fn check_expandsion(&mut self) {}
-
     fn consume(&mut self, data: DataBlock) -> Result<()>;
     // Generate could be called multiple times util it returns empty.
     fn generate(&mut self) -> Result<Vec<DataBlock>>;
