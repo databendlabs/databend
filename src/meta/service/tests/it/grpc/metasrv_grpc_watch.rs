@@ -19,11 +19,10 @@ use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
 use common_base::base::tokio::time::sleep;
-use common_meta_api::get_start_and_end_of_prefix;
-use common_meta_api::prefix_of_string;
-use common_meta_api::KVApi;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
+use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::SeqV;
@@ -115,7 +114,7 @@ async fn test_watch_txn_main(
 }
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_watch() -> common_exception::Result<()> {
+async fn test_watch() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Watch some key.
     // - Write some data.
@@ -276,7 +275,7 @@ async fn test_watch() -> common_exception::Result<()> {
         let txn_key = k1.to_string();
         let txn_val = "txn_val".as_bytes().to_vec();
 
-        let (start, end) = get_start_and_end_of_prefix(watch_prefix)?;
+        let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
 
         let watch = WatchRequest {
             key: start,
@@ -428,7 +427,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         client.transaction(txn).await?;
     }
 
-    let (start, end) = get_start_and_end_of_prefix(watch_prefix)?;
+    let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
     let watch = WatchRequest {
         key: start,
         key_end: Some(end),
@@ -565,85 +564,6 @@ async fn test_watch_stream_count() -> common_exception::Result<()> {
         assert_eq!(1, *watcher_count.lock().unwrap());
     }
 
-    Ok(())
-}
-
-#[test]
-fn prefix_of_string_test() -> common_exception::Result<()> {
-    assert_eq!("b".to_string(), prefix_of_string("a")?);
-    assert_eq!("2".to_string(), prefix_of_string("1")?);
-    assert_eq!(
-        "__fd_table_by_ie".to_string(),
-        prefix_of_string("__fd_table_by_id")?
-    );
-    {
-        let str = 127 as char;
-        let s = str.to_string();
-        let ret = prefix_of_string(&s)?;
-        for byte in ret.as_bytes() {
-            assert_eq!(*byte, 127_u8);
-        }
-    }
-    {
-        let s = format!("ab{}", 127 as char);
-        let ret = prefix_of_string(&s)?;
-        assert_eq!(ret, format!("ac{}", 127 as char));
-    }
-    {
-        let s = "我".to_string();
-        let ret = prefix_of_string(&s);
-        match ret {
-            Err(e) => {
-                assert_eq!(
-                    e.to_string(),
-                    common_exception::ErrorCode::OnlySupportAsciiChars(format!(
-                        "Only support ASCII characters: {}",
-                        "我"
-                    ))
-                    .to_string()
-                );
-            }
-            Ok(_) => panic!("MUST return error "),
-        }
-    }
-
-    Ok(())
-}
-
-#[test]
-fn test_get_start_and_end_of_prefix() -> common_exception::Result<()> {
-    assert_eq!(
-        ("aa".to_string(), "ab".to_string()),
-        get_start_and_end_of_prefix("aa")?
-    );
-    assert_eq!(
-        ("a1".to_string(), "a2".to_string()),
-        get_start_and_end_of_prefix("a1")?
-    );
-    {
-        let str = 127 as char;
-        let s = str.to_string();
-        let (_, end) = get_start_and_end_of_prefix(&s)?;
-        for byte in end.as_bytes() {
-            assert_eq!(*byte, 127_u8);
-        }
-    }
-    {
-        let ret = get_start_and_end_of_prefix("我");
-        match ret {
-            Err(e) => {
-                assert_eq!(
-                    e.to_string(),
-                    common_exception::ErrorCode::OnlySupportAsciiChars(format!(
-                        "Only support ASCII characters: {}",
-                        "我"
-                    ))
-                    .to_string()
-                );
-            }
-            Ok(_) => panic!("MUST return error "),
-        }
-    }
     Ok(())
 }
 

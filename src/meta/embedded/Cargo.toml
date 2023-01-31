@@ -18,6 +18,7 @@ io-uring = ["common-meta-sled-store/io-uring", "common-meta-raft-store/io-uring"
 # Workspace dependencies
 common-base = { path = "../../common/base" }
 common-meta-api = { path = "../api" }
+common-meta-kvapi = { path = "../kvapi" }
 common-meta-raft-store = { path = "../raft-store" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-stoerr = { path = "../stoerr" }

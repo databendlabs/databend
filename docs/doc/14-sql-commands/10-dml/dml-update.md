@@ -2,7 +2,7 @@
 title: UPDATE
 ---
 
-Updates statement modifies rows to new value in a table.
+Modifies rows in a table with new values.
 
 ## Syntax
 
@@ -29,7 +29,7 @@ INSERT INTO bookstore VALUES (103, 'The long answer');
 INSERT INTO bookstore VALUES (104, 'Wartime friends');
 INSERT INTO bookstore VALUES (105, 'Deconstructed');
 
--- show the table before deletion
+-- show the table before update
 SELECT * FROM bookstore;
 
 101|After the death of Don Juan
@@ -38,10 +38,10 @@ SELECT * FROM bookstore;
 104|Wartime friends
 105|Deconstructed
 
--- Update delete a book (Id: 103)
+-- Update a book (Id: 103)
 UPDATE bookstore SET book_name = 'The long answer (2nd)' WHERE book_id = 103;
 
--- show the table again after deletion
+-- show the table again after update
 SELECT * FROM bookstore;
 
 101|After the death of Don Juan

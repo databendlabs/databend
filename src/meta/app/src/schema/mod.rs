@@ -79,3 +79,16 @@ pub use table::UpsertTableCopiedFileReply;
 pub use table::UpsertTableCopiedFileReq;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
+
+const PREFIX_DB_ID_LIST: &str = "__fd_db_id_list";
+const PREFIX_DATABASE: &str = "__fd_database";
+const PREFIX_DATABASE_BY_ID: &str = "__fd_database_by_id";
+const PREFIX_DATABASE_ID_TO_NAME: &str = "__fd_database_id_to_name";
+
+const PREFIX_TABLE: &str = "__fd_table";
+const PREFIX_TABLE_BY_ID: &str = "__fd_table_by_id";
+const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
+const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
+const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
+const PREFIX_TABLE_COPIED_FILES: &str = "__fd_table_copied_files";
+const PREFIX_TABLE_COPIED_FILES_LOCK: &str = "__fd_table_copied_file_lock";

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_sled_store::openraft::LogIdOptionExt;
 use common_meta_sled_store::openraft::State;
 use common_meta_types::Cmd;

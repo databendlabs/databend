@@ -68,6 +68,7 @@ members = [
     "src/meta/api",
     "src/meta/app",
     "src/meta/embedded",
+    "src/meta/kvapi",
     "src/meta/raft-store",
     "src/meta/sled-store",
     "src/meta/stoerr",
@@ -117,6 +118,9 @@ reqwest = { version = "0.11", default-features = false, features = [
     "rustls-tls-native-roots",
     "trust-dns",
 ] }
+
+# runtime
+tokio = { version = "1.23.1", features = ["full"] }
 
 [profile.release]
 debug = 1

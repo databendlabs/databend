@@ -18,6 +18,7 @@ io-uring = ["common-meta-sled-store/io-uring"]
 common-exception = { path = "../../common/exception" }
 common-grpc = { path = "../../common/grpc" }
 common-meta-api = { path = "../api" }
+common-meta-kvapi = { path = "../kvapi" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-stoerr = { path = "../stoerr" }
 common-meta-types = { path = "../types" }

@@ -18,9 +18,6 @@ extern crate common_meta_types;
 
 mod id;
 mod id_generator;
-mod kv_api;
-mod kv_api_key;
-mod kv_api_test_suite;
 mod schema_api;
 mod schema_api_impl;
 mod schema_api_keys;
@@ -34,14 +31,6 @@ pub(crate) mod util;
 
 pub use id::Id;
 pub(crate) use id_generator::IdGenerator;
-pub use kv_api::get_start_and_end_of_prefix;
-pub use kv_api::prefix_of_string;
-pub use kv_api::ApiBuilder;
-pub use kv_api::AsKVApi;
-pub use kv_api::KVApi;
-pub use kv_api_key::KVApiKey;
-pub use kv_api_key::KVApiKeyError;
-pub use kv_api_test_suite::KVApiTestSuite;
 pub use schema_api::SchemaApi;
 pub(crate) use schema_api_impl::get_db_or_err;
 pub use schema_api_test_suite::SchemaApiTestSuite;

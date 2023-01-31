@@ -18,6 +18,7 @@ common-arrow = { path = "../../common/arrow" }
 common-base = { path = "../../common/base" }
 common-grpc = { path = "../../common/grpc" }
 common-meta-api = { path = "../api" }
+common-meta-kvapi = { path = "../kvapi" }
 common-meta-types = { path = "../types" }
 common-metrics = { path = "../../common/metrics" }
 common-tracing = { path = "../../common/tracing" }

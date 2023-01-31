@@ -25,7 +25,7 @@ use common_meta_types::anyerror::AnyError;
 use once_cell::sync::Lazy;
 use tracing::warn;
 
-/// Local storage that provides the API defined by `KVApi+SchemaApi`.
+/// Local storage that provides the API defined by `kvapi::KVApi+SchemaApi`.
 ///
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven metasrv.
 /// For a local kv, there is no distributed WAL involved,
@@ -43,7 +43,7 @@ static GLOBAL_META_EMBEDDED: Lazy<Arc<Mutex<Option<Arc<MetaEmbedded>>>>> =
     Lazy::new(|| Arc::new(Mutex::new(None)));
 
 impl MetaEmbedded {
-    /// Creates a KVApi impl backed with a `StateMachine`.
+    /// Creates a kvapi::KVApi impl backed with a `StateMachine`.
     ///
     /// A MetaEmbedded is identified by the `name`.
     /// Caveat: Two instances with the same `name` reference to the same underlying sled::Tree.
@@ -69,7 +69,7 @@ impl MetaEmbedded {
         })
     }
 
-    /// Creates a KVApi impl with a random and unique name.
+    /// Creates a kvapi::KVApi impl with a random and unique name.
     pub async fn new_temp() -> Result<MetaEmbedded, MetaStorageError> {
         let temp_dir =
             tempfile::tempdir().map_err(|e| MetaStorageError::SledError(AnyError::new(&e)))?;

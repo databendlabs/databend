@@ -15,8 +15,6 @@
 use std::ops::Deref;
 
 use async_trait::async_trait;
-use common_base::base::replace_nth_char;
-use common_exception::ErrorCode;
 use common_meta_types::GetKVReply;
 use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
@@ -24,6 +22,8 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
+
+use crate::kvapi;
 
 /// Build an API impl instance or a cluster of API impl
 #[async_trait]
@@ -35,47 +35,14 @@ pub trait ApiBuilder<T>: Clone {
     async fn build_cluster(&self) -> Vec<T>;
 }
 
-/// Return a string that bigger than all the string prefix with input string(only support ASCII char).
-/// "a" -> "b"
-/// "1" -> "2"
-/// [96,97,127] -> [96,98,127]
-/// [127] -> [127, 127]
-/// [127,127,127, 127] -> [127,127,127, 127, 127]
-pub fn prefix_of_string(s: &str) -> common_exception::Result<String> {
-    for c in s.chars() {
-        if !c.is_ascii() {
-            return common_exception::Result::Err(ErrorCode::OnlySupportAsciiChars(format!(
-                "Only support ASCII characters: {}",
-                c
-            )));
-        }
-    }
-    let mut l = s.len();
-    while l > 0 {
-        l -= 1;
-        if let Some(c) = s.chars().nth(l) {
-            if c == 127 as char {
-                continue;
-            }
-            return Ok(replace_nth_char(s, l, (c as u8 + 1) as char));
-        }
-    }
-    Ok(format!("{}{}", s, 127 as char))
-}
-
-// return watch prefix (start, end) tuple(only support ASCII characters)
-pub fn get_start_and_end_of_prefix(prefix: &str) -> common_exception::Result<(String, String)> {
-    Ok((prefix.to_string(), prefix_of_string(prefix)?))
-}
-
 /// API of a key-value store.
 #[async_trait]
 pub trait KVApi: Send + Sync {
     /// The Error an implementation returns.
     ///
     /// Depends on the implementation the error could be different.
-    /// E.g., a remove KVApi impl returns network error or remote storage error.
-    /// A local KVApi impl just returns storage error.
+    /// E.g., a remove kvapi::KVApi impl returns network error or remote storage error.
+    /// A local kvapi::KVApi impl just returns storage error.
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Update or insert a key-value record.
@@ -95,7 +62,7 @@ pub trait KVApi: Send + Sync {
 }
 
 #[async_trait]
-impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
+impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
     type Error = U::Error;
 
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
@@ -122,13 +89,13 @@ impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
 pub trait AsKVApi {
     type Error: std::error::Error;
 
-    fn as_kv_api(&self) -> &dyn KVApi<Error = Self::Error>;
+    fn as_kv_api(&self) -> &dyn kvapi::KVApi<Error = Self::Error>;
 }
 
-impl<T: KVApi> AsKVApi for T {
+impl<T: kvapi::KVApi> kvapi::AsKVApi for T {
     type Error = T::Error;
 
-    fn as_kv_api(&self) -> &dyn KVApi<Error = Self::Error> {
+    fn as_kv_api(&self) -> &dyn kvapi::KVApi<Error = Self::Error> {
         self
     }
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi;
 use common_meta_types::GetKVReply;
 use common_meta_types::GetKVReq;
 use common_meta_types::KVAppError;
@@ -29,7 +29,7 @@ use crate::ClientHandle;
 use crate::MetaGrpcClient;
 
 #[tonic::async_trait]
-impl KVApi for MetaGrpcClient {
+impl kvapi::KVApi for MetaGrpcClient {
     type Error = KVAppError;
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let reply = self.kv_api(act).await?;
@@ -67,7 +67,7 @@ impl KVApi for MetaGrpcClient {
 }
 
 #[tonic::async_trait]
-impl KVApi for ClientHandle {
+impl kvapi::KVApi for ClientHandle {
     type Error = KVAppError;
 
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {

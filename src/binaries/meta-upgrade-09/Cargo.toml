@@ -11,6 +11,7 @@ edition = { workspace = true }
 # Workspace dependencies
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
+common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-raft-store = { path = "../../meta/raft-store" }
 common-meta-sled-store = { path = "../../meta/sled-store" }
 common-meta-types = { path = "../../meta/types" }
@@ -24,7 +25,7 @@ clap = { workspace = true }
 openraft = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { version = "1.21.1", features = ["full"] }
+tokio = { workspace = true }
 
 [[bin]]
 name = "databend-meta-upgrade-09"

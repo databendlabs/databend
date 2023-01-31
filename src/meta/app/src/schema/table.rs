@@ -708,3 +708,268 @@ pub struct TableCopiedFileLockKey {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TableCopiedFileLock {}
+
+mod kvapi_key_impl {
+    use common_meta_kvapi::check_segment;
+    use common_meta_kvapi::check_segment_absent;
+    use common_meta_kvapi::check_segment_present;
+    use common_meta_kvapi::decode_id;
+    use common_meta_kvapi::escape;
+    use common_meta_kvapi::kvapi;
+    use common_meta_kvapi::unescape;
+
+    use crate::schema::CountTablesKey;
+    use crate::schema::DBIdTableName;
+    use crate::schema::TableCopiedFileLockKey;
+    use crate::schema::TableCopiedFileNameIdent;
+    use crate::schema::TableId;
+    use crate::schema::TableIdListKey;
+    use crate::schema::TableIdToName;
+    use crate::schema::PREFIX_TABLE;
+    use crate::schema::PREFIX_TABLE_BY_ID;
+    use crate::schema::PREFIX_TABLE_COPIED_FILES;
+    use crate::schema::PREFIX_TABLE_COPIED_FILES_LOCK;
+    use crate::schema::PREFIX_TABLE_COUNT;
+    use crate::schema::PREFIX_TABLE_ID_LIST;
+    use crate::schema::PREFIX_TABLE_ID_TO_NAME;
+
+    /// "__fd_table/<db_id>/<tb_name>"
+    impl kvapi::Key for DBIdTableName {
+        const PREFIX: &'static str = PREFIX_TABLE;
+
+        fn to_string_key(&self) -> String {
+            format!(
+                "{}/{}/{}",
+                Self::PREFIX,
+                self.db_id,
+                escape(&self.table_name),
+            )
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut elts = s.split('/');
+
+            let prefix = check_segment_present(elts.next(), 0, s)?;
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let db_id = check_segment_present(elts.next(), 1, s)?;
+            let db_id = decode_id(db_id)?;
+
+            let tb_name = check_segment_present(elts.next(), 2, s)?;
+            let tb_name = unescape(tb_name)?;
+
+            check_segment_absent(elts.next(), 3, s)?;
+
+            Ok(DBIdTableName {
+                db_id,
+                table_name: tb_name,
+            })
+        }
+    }
+
+    /// "__fd_table_id_to_name/<table_id> -> DBIdTableName"
+    impl kvapi::Key for TableIdToName {
+        const PREFIX: &'static str = PREFIX_TABLE_ID_TO_NAME;
+
+        fn to_string_key(&self) -> String {
+            format!("{}/{}", Self::PREFIX, self.table_id,)
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut elts = s.split('/');
+
+            let prefix = check_segment_present(elts.next(), 0, s)?;
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let table_id = check_segment_present(elts.next(), 1, s)?;
+            let table_id = decode_id(table_id)?;
+
+            check_segment_absent(elts.next(), 2, s)?;
+
+            Ok(TableIdToName { table_id })
+        }
+    }
+
+    /// "__fd_table_by_id/<tb_id> -> TableMeta"
+    impl kvapi::Key for TableId {
+        const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
+
+        fn to_string_key(&self) -> String {
+            format!("{}/{}", Self::PREFIX, self.table_id,)
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut elts = s.split('/');
+
+            let prefix = check_segment_present(elts.next(), 0, s)?;
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let tb_id = check_segment_present(elts.next(), 1, s)?;
+            let tb_id = decode_id(tb_id)?;
+
+            check_segment_absent(elts.next(), 2, s)?;
+
+            Ok(TableId { table_id: tb_id })
+        }
+    }
+
+    /// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
+    impl kvapi::Key for TableIdListKey {
+        const PREFIX: &'static str = PREFIX_TABLE_ID_LIST;
+
+        fn to_string_key(&self) -> String {
+            format!(
+                "{}/{}/{}",
+                Self::PREFIX,
+                self.db_id,
+                escape(&self.table_name),
+            )
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut elts = s.split('/');
+
+            let prefix = check_segment_present(elts.next(), 0, s)?;
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let db_id = check_segment_present(elts.next(), 1, s)?;
+            let db_id = decode_id(db_id)?;
+
+            let tb_name = check_segment_present(elts.next(), 2, s)?;
+            let tb_name = unescape(tb_name)?;
+
+            check_segment_absent(elts.next(), 3, s)?;
+
+            Ok(TableIdListKey {
+                db_id,
+                table_name: tb_name,
+            })
+        }
+    }
+
+    /// "__fd_table_count/<tenant>" -> <table_count>
+    impl kvapi::Key for CountTablesKey {
+        const PREFIX: &'static str = PREFIX_TABLE_COUNT;
+
+        fn to_string_key(&self) -> String {
+            format!("{}/{}", Self::PREFIX, self.tenant)
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut elts = s.split('/');
+
+            let prefix = check_segment_present(elts.next(), 0, s)?;
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let tenant = check_segment_present(elts.next(), 1, s)?;
+
+            check_segment_absent(elts.next(), 2, s)?;
+
+            let tenant = unescape(tenant)?;
+
+            Ok(CountTablesKey { tenant })
+        }
+    }
+
+    // __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
+    impl kvapi::Key for TableCopiedFileNameIdent {
+        const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
+
+        fn to_string_key(&self) -> String {
+            format!("{}/{}/{}", Self::PREFIX, self.table_id, self.file)
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let elts: Vec<&str> = s.splitn(3, '/').collect();
+            if elts.len() < 3 {
+                return Err(kvapi::KeyError::AtleastSegments {
+                    expect: 3,
+                    actual: elts.len(),
+                });
+            }
+            let prefix = elts[0];
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let table_id = decode_id(elts[1])?;
+            let file = unescape(elts[2])?;
+
+            Ok(TableCopiedFileNameIdent { table_id, file })
+        }
+    }
+
+    // __fd_table_copied_file_lock/table_id -> ""
+    impl kvapi::Key for TableCopiedFileLockKey {
+        const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES_LOCK;
+
+        fn to_string_key(&self) -> String {
+            format!("{}/{}", Self::PREFIX, self.table_id)
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut elts = s.split('/');
+
+            let prefix = check_segment_present(elts.next(), 0, s)?;
+            check_segment(prefix, 0, Self::PREFIX)?;
+
+            let table_id = check_segment_present(elts.next(), 1, s)?;
+            let table_id = decode_id(table_id)?;
+
+            Ok(TableCopiedFileLockKey { table_id })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_meta_kvapi::kvapi;
+    use common_meta_kvapi::kvapi::Key;
+
+    use crate::schema::TableCopiedFileNameIdent;
+
+    #[test]
+    fn test_table_copied_file_name_ident_conversion() -> Result<(), kvapi::KeyError> {
+        // test with a key has a file has multi path
+        {
+            let name = TableCopiedFileNameIdent {
+                table_id: 2,
+                file: "/path/to/file".to_owned(),
+            };
+
+            let key = name.to_string_key();
+            assert_eq!(
+                key,
+                format!(
+                    "{}/{}/{}",
+                    TableCopiedFileNameIdent::PREFIX,
+                    name.table_id,
+                    name.file,
+                )
+            );
+            let from = TableCopiedFileNameIdent::from_str_key(&key)?;
+            assert_eq!(from, name);
+        }
+
+        // test with a key has only 2 sub-path
+        {
+            let key = format!("{}/{}", TableCopiedFileNameIdent::PREFIX, 2,);
+            let res = TableCopiedFileNameIdent::from_str_key(&key);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(err, kvapi::KeyError::AtleastSegments {
+                expect: 3,
+                actual: 2,
+            });
+        }
+
+        // test with a key has 5 sub-path but an empty file string
+        {
+            let key = format!("{}/{}/{}", TableCopiedFileNameIdent::PREFIX, 2, "");
+            let res = TableCopiedFileNameIdent::from_str_key(&key)?;
+            assert_eq!(res, TableCopiedFileNameIdent {
+                table_id: 2,
+                file: "".to_string(),
+            });
+        }
+        Ok(())
+    }
+}

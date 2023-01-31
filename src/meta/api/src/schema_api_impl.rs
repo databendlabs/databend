@@ -76,6 +76,8 @@ use common_meta_app::share::ShareGrantObject;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
+use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::Key;
 use common_meta_types::errors::app_error::AppError;
 use common_meta_types::errors::app_error::CreateDatabaseWithDropTime;
 use common_meta_types::errors::app_error::CreateTableWithDropTime;
@@ -133,17 +135,15 @@ use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::txn_op_put_with_expire;
 use crate::IdGenerator;
-use crate::KVApi;
-use crate::KVApiKey;
 use crate::SchemaApi;
 use crate::TXN_MAX_RETRY_TIMES;
 
 const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 
-/// SchemaApi is implemented upon KVApi.
-/// Thus every type that impl KVApi impls SchemaApi.
+/// SchemaApi is implemented upon kvapi::KVApi.
+/// Thus every type that impl kvapi::KVApi impls SchemaApi.
 #[tonic::async_trait]
-impl<KV: KVApi<Error = KVAppError>> SchemaApi for KV {
+impl<KV: kvapi::KVApi<Error = KVAppError>> SchemaApi for KV {
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn create_database(
         &self,
@@ -819,7 +819,7 @@ impl<KV: KVApi<Error = KVAppError>> SchemaApi for KV {
         // Pairs of db-name and db_id with seq
         let (tenant_dbnames, db_ids) = list_u64_value(self, &name_key).await?;
 
-        // Keys for fetching serialized DatabaseMeta from KVApi
+        // Keys for fetching serialized DatabaseMeta from kvapi::KVApi
         let mut kv_keys = Vec::with_capacity(db_ids.len());
 
         for db_id in db_ids.iter() {
@@ -2190,7 +2190,7 @@ impl<KV: KVApi<Error = KVAppError>> SchemaApi for KV {
 }
 
 async fn remove_table_copied_files(
-    kv_api: &impl KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
     table_id: u64,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
@@ -2220,7 +2220,7 @@ async fn remove_table_copied_files(
 }
 
 async fn gc_dropped_table(
-    kv_api: &impl KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
     tenant: String,
     at_least: u32,
 ) -> Result<u32, KVAppError> {
@@ -2351,7 +2351,7 @@ async fn gc_dropped_table(
 }
 
 async fn remove_db_id_from_share(
-    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     db_id: u64,
     from_share: ShareNameIdent,
     condition: &mut Vec<TxnCondition>,
@@ -2377,7 +2377,7 @@ async fn remove_db_id_from_share(
 }
 
 async fn gc_dropped_db(
-    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     tenant: String,
     at_least: u32,
 ) -> Result<u32, KVAppError> {
@@ -2485,7 +2485,7 @@ fn is_drop_time_out_of_retention_time(
 
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)
 pub(crate) async fn get_db_or_err(
-    kv_api: &(impl KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     name_key: &DatabaseNameIdent,
     msg: impl Display,
 ) -> Result<(u64, u64, u64, DatabaseMeta), KVAppError> {
@@ -2549,7 +2549,7 @@ fn table_has_to_not_exist(
 /// It returns (seq, `u64` value).
 /// If the count value is not in the kv space, (0, `u64` value) is returned.
 async fn count_tables(
-    kv_api: &impl KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
     key: &CountTablesKey,
 ) -> Result<u64, KVAppError> {
     // For backward compatibility:
@@ -2573,7 +2573,7 @@ async fn count_tables(
 }
 
 async fn get_table_id_from_share_by_name(
-    kv_api: &impl KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
     share: &ShareNameIdent,
     db_id: u64,
     table_name: &String,
@@ -2619,7 +2619,7 @@ async fn get_table_id_from_share_by_name(
 }
 
 async fn get_table_names_by_ids(
-    kv_api: &impl KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
     ids: &[u64],
 ) -> Result<Vec<String>, KVAppError> {
     let mut table_names = vec![];
@@ -2642,7 +2642,7 @@ async fn get_table_names_by_ids(
 }
 
 async fn get_tableinfos_by_ids(
-    kv_api: &impl KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
     ids: &[u64],
     tenant_dbname: &DatabaseNameIdent,
     dbid_tbnames_opt: Option<Vec<DBIdTableName>>,
@@ -2699,7 +2699,7 @@ async fn get_tableinfos_by_ids(
 }
 
 async fn list_tables_from_unshare_db(
-    kv_api: &impl KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
     db_id: u64,
     tenant_dbname: &DatabaseNameIdent,
 ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
@@ -2724,7 +2724,7 @@ async fn list_tables_from_unshare_db(
 }
 
 async fn list_tables_from_share_db(
-    kv_api: &impl KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
     share: ShareNameIdent,
     db_id: u64,
     tenant_dbname: &DatabaseNameIdent,

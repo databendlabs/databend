@@ -20,8 +20,6 @@ use std::time::UNIX_EPOCH;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::protobuf as pb;
-
 /// The meta data of a record in kv
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct KVMeta {
@@ -118,14 +116,5 @@ impl<T> SeqV<T> {
     pub fn set_value(mut self, v: T) -> SeqV<T> {
         self.data = v;
         self
-    }
-}
-
-impl From<SeqV> for pb::SeqV {
-    fn from(seq_v: SeqV) -> Self {
-        pb::SeqV {
-            seq: seq_v.seq,
-            data: seq_v.data,
-        }
     }
 }
