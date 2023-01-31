@@ -37,6 +37,16 @@ impl ParquetTable {
         read_options: ParquetReadOptions,
         stage_info: Option<UserStageInfo>,
     ) -> Result<Self> {
+        if operator.metadata().can_blocking() {
+            return Self::blocking_create(
+                table_id,
+                operator,
+                maybe_glob_locations,
+                read_options,
+                stage_info,
+            );
+        }
+
         let (file_locations, arrow_schema) =
             Self::prepare_metas(maybe_glob_locations, operator.clone()).await?;
 
