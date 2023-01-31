@@ -177,22 +177,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| Value::Scalar(()),
     );
 
-    registry.register_combine_nullable_2_arg::<EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, ArrayType<NullableType<GenericType<0>>>, _, _>(
+    registry.register_passthrough_nullable_2_arg::<EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, ArrayType<NullableType<GenericType<0>>>, _, _>(
         "concat",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, NullableType<ArrayType<NullableType<GenericType<0>>>>>(
+        vectorize_with_builder_2_arg::<EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, ArrayType<NullableType<GenericType<0>>>>(
             |_, arr, output, _| {
                 output.push(arr)
             }
         ),
     );
 
-    registry.register_combine_nullable_2_arg::<ArrayType<NullableType<GenericType<0>>>, EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, _, _>(
+    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<GenericType<0>>>, EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, _, _>(
         "concat",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<ArrayType<NullableType<GenericType<0>>>, EmptyArrayType, NullableType<ArrayType<NullableType<GenericType<0>>>>>(
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<GenericType<0>>>, EmptyArrayType, ArrayType<NullableType<GenericType<0>>>>(
             |arr, _, output, _| {
                 output.push(arr)
             }
