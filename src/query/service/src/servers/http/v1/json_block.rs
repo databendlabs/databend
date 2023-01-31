@@ -55,9 +55,7 @@ pub fn block_to_json_value(
         for column in &columns {
             buf.clear();
             encoder.write_field(column, row_index, &mut buf, true);
-            row.push(serde_json::to_value(unsafe {
-                core::str::from_utf8_unchecked(&buf)
-            })?);
+            row.push(serde_json::to_value(String::from_utf8_lossy(&buf))?);
         }
         res.push(row)
     }
