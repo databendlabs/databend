@@ -16,6 +16,7 @@ common-io = { path = "../../common/io" }
 common-meta-stoerr = { path = "../stoerr" }
 common-storage = { path = "../../common/storage" }
 
+opendal = { workspace = true }
 openraft = { workspace = true }
 
 anyerror = { workspace = true }
