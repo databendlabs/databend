@@ -786,6 +786,7 @@ async fn fill_default_value(
         let backtrace = Backtrace::new();
         let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
         let (mut scalar, ty) = binder.bind(&ast).await?;
+
         if !field.data_type().eq(&ty) {
             scalar = ScalarExpr::CastExpr(CastExpr {
                 is_try: false,
