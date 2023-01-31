@@ -174,7 +174,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             params,
             hash_table,
             reach_limit: false,
-            state_holders: Vec::new(),
+            state_holders: Vec::with_capacity(16),
             temp_place,
         })
     }

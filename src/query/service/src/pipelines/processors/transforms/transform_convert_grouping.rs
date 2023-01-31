@@ -38,7 +38,6 @@ use serde::Serialize;
 use serde::Serializer;
 
 use super::aggregator::AggregateHashStateInfo;
-
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;

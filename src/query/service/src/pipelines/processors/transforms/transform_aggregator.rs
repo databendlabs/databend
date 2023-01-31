@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::*;
 
-
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;

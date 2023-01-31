@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 
-
 pub struct Area {
     bump: Bump,
 }

@@ -172,10 +172,10 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             .map(|&index| block.get_by_offset(index))
             .collect::<Vec<_>>()
     }
-    
+
     pub fn try_holder_state(&mut self) {
         let area = self.area.take();
-        if self.area.is_some() {
+        if area.is_some() {
             self.area_holder = Some(ArenaHolder::create(area));
         }
     }
@@ -269,7 +269,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
     PartialAggregator<HAS_AGG, Method>
-{   
+{
     pub fn drop_states(&mut self) {
         if !self.states_dropped {
             let aggregator_params = self.params.as_ref();
