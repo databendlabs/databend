@@ -17,10 +17,13 @@ use std::ops::Range;
 use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::datatypes::Field as ArrowField;
+use common_arrow::arrow::io::parquet::read::ColumnDescriptor;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
@@ -55,22 +58,39 @@ impl BlockReader {
         let part = FusePartInfo::from_part(&part)?;
         let mut join_handlers = Vec::with_capacity(self.project_indices.len());
 
-        for (index, (field, _)) in self.project_indices.iter() {
-            let column_meta = &part.columns_meta[index];
+        for (index, column_node) in self.project_column_nodes.iter().enumerate() {
+            let leaves: Vec<ColumnDescriptor> = column_node
+                .leaf_ids
+                .iter()
+                .map(|index| self.parquet_schema_descriptor.columns()[*index].clone())
+                .collect::<Vec<_>>();
+            let metas: Vec<ColumnMeta> = column_node
+                .leaf_ids
+                .iter()
+                .map(|index| part.columns_meta[index].clone())
+                .collect::<Vec<_>>();
 
             join_handlers.push(Self::read_native_columns_data(
                 self.operator.object(&part.location),
-                *index,
-                column_meta,
+                index,
+                leaves,
+                metas,
                 &part.range,
-                field.data_type().clone(),
+                column_node.field.clone(),
             ));
 
             // Perf
             {
-                let (_, len) = column_meta.offset_length();
-                metrics_inc_remote_io_seeks(1);
-                metrics_inc_remote_io_read_bytes(len);
+                let total_len = column_node
+                    .leaf_ids
+                    .iter()
+                    .map(|index| {
+                        let (_, len) = part.columns_meta[index].offset_length();
+                        len
+                    })
+                    .sum();
+                metrics_inc_remote_io_seeks(column_node.leaf_ids.len() as u64);
+                metrics_inc_remote_io_read_bytes(total_len);
             }
         }
 
@@ -88,27 +108,36 @@ impl BlockReader {
     pub async fn read_native_columns_data(
         o: Object,
         index: usize,
-        meta: &ColumnMeta,
+        leaves: Vec<ColumnDescriptor>,
+        metas: Vec<ColumnMeta>,
         range: &Option<Range<usize>>,
-        data_type: common_arrow::arrow::datatypes::DataType,
+        field: ArrowField,
     ) -> Result<(usize, NativeReader<Reader>)> {
         use backon::ExponentialBackoff;
         use backon::Retryable;
 
-        let (offset, length) = meta.offset_length();
-        let mut meta = meta.as_native().unwrap().clone();
+        let mut readers = Vec::with_capacity(metas.len());
+        let mut scratchs = Vec::with_capacity(metas.len());
+        let mut native_metas = Vec::with_capacity(metas.len());
+        for meta in metas {
+            let (offset, length) = meta.offset_length();
+            let mut native_meta = meta.as_native().unwrap().clone();
 
-        if let Some(range) = range {
-            meta = meta.slice(range.start, range.end);
+            if let Some(range) = range {
+                native_meta = native_meta.slice(range.start, range.end);
+            }
+            native_metas.push(native_meta);
+
+            let reader = { || async { o.range_read(offset..offset + length).await } }
+                .retry(ExponentialBackoff::default())
+                .when(|err| err.is_temporary())
+                .await?;
+
+            let reader: Reader = Box::new(std::io::Cursor::new(reader));
+            readers.push(reader);
+            scratchs.push(Vec::with_capacity(8 * 1024));
         }
-
-        let reader = { || async { o.range_read(offset..offset + length).await } }
-            .retry(ExponentialBackoff::default())
-            .when(|err| err.is_temporary())
-            .await?;
-
-        let reader: Reader = Box::new(std::io::Cursor::new(reader));
-        let fuse_reader = NativeReader::new(reader, data_type, meta.pages.clone(), vec![]);
+        let fuse_reader = NativeReader::new(readers, field, leaves, native_metas, scratchs);
         Ok((index, fuse_reader))
     }
 
@@ -118,21 +147,29 @@ impl BlockReader {
     ) -> Result<Vec<(usize, NativeReader<Reader>)>> {
         let part = FusePartInfo::from_part(&part)?;
 
-        let mut results = Vec::with_capacity(self.project_indices.len());
-
-        for (index, (field, _)) in self.project_indices.iter() {
-            let column_meta = &part.columns_meta[index];
+        let mut results = Vec::with_capacity(self.project_column_nodes.len());
+        for (index, column_node) in self.project_column_nodes.iter().enumerate() {
             let op = self.operator.clone();
-
             let location = part.location.clone();
+            let leaves: Vec<ColumnDescriptor> = column_node
+                .leaf_ids
+                .iter()
+                .map(|index| self.parquet_schema_descriptor.columns()[*index].clone())
+                .collect::<Vec<_>>();
+            let metas: Vec<ColumnMeta> = column_node
+                .leaf_ids
+                .iter()
+                .map(|index| part.columns_meta[index].clone())
+                .collect::<Vec<_>>();
+
             let result = Self::sync_read_native_column(
                 op.object(&location),
-                *index,
-                column_meta,
+                index,
+                leaves,
+                metas,
                 &part.range,
-                field.data_type().clone(),
+                column_node.field.clone(),
             );
-
             results.push(result?);
         }
 
@@ -142,36 +179,43 @@ impl BlockReader {
     pub fn sync_read_native_column(
         o: Object,
         index: usize,
-        column_meta: &ColumnMeta,
+        leaves: Vec<ColumnDescriptor>,
+        metas: Vec<ColumnMeta>,
         range: &Option<Range<usize>>,
-        data_type: common_arrow::arrow::datatypes::DataType,
+        field: ArrowField,
     ) -> Result<(usize, NativeReader<Reader>)> {
-        let mut column_meta = column_meta.as_native().unwrap().clone();
+        let mut readers = Vec::with_capacity(metas.len());
+        let mut scratchs = Vec::with_capacity(metas.len());
+        let mut native_metas = Vec::with_capacity(metas.len());
+        for meta in metas {
+            let mut native_meta = meta.as_native().unwrap().clone();
+            if let Some(range) = range {
+                native_meta = native_meta.slice(range.start, range.end);
+            }
+            let (offset, length) = (
+                native_meta.offset,
+                native_meta.pages.iter().map(|p| p.length).sum::<u64>(),
+            );
+            native_metas.push(native_meta);
 
-        if let Some(range) = range {
-            column_meta = column_meta.slice(range.start, range.end);
+            let reader = o.blocking_range_reader(offset..offset + length)?;
+            let reader: Reader = Box::new(BufReader::new(reader));
+            readers.push(reader);
+            scratchs.push(Vec::with_capacity(8 * 1024));
         }
-
-        let (offset, length) = (
-            column_meta.offset,
-            column_meta.pages.iter().map(|p| p.length).sum::<u64>(),
-        );
-        let reader = o.blocking_range_reader(offset..offset + length)?;
-        let reader: Reader = Box::new(BufReader::new(reader));
-        let fuse_reader = NativeReader::new(reader, data_type, column_meta.pages, vec![]);
+        let fuse_reader = NativeReader::new(readers, field, leaves, native_metas, scratchs);
         Ok((index, fuse_reader))
     }
 
     pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
-        let mut entries = Vec::with_capacity(chunks.len());
-        // they are already the leaf columns without inner
-        // TODO support tuple in native storage
         let mut rows = 0;
-        for (id, (_, f)) in self.project_indices.iter() {
-            if let Some(array) = chunks.iter().find(|c| c.0 == *id).map(|c| c.1.clone()) {
+        let mut entries = Vec::with_capacity(chunks.len());
+        for (index, _column_node) in self.project_column_nodes.iter().enumerate() {
+            if let Some(array) = chunks.iter().find(|c| c.0 == index).map(|c| c.1.clone()) {
+                let data_type: DataType = self.projected_schema.field(index).data_type().into();
                 entries.push(BlockEntry {
-                    data_type: f.clone(),
-                    value: Value::Column(Column::from_arrow(array.as_ref(), f)),
+                    data_type: data_type.clone(),
+                    value: Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
                 });
                 rows = array.len();
             }

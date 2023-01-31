@@ -131,11 +131,9 @@ impl BlockReader {
         let chunk_map: HashMap<usize, &[u8]> = columns_chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
-        let columns = self.projection.project_column_nodes(&self.column_nodes)?;
-
-        for column in &columns {
-            let field = column.field.clone();
-            let indices = &column.leaf_ids;
+        for column_node in &self.project_column_nodes {
+            let field = column_node.field.clone();
+            let indices = &column_node.leaf_ids;
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());

@@ -166,7 +166,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.15.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=211be21#211be21991c29c235253a19413f43a76a367955f"
+source = "git+https://github.com/b41sh/arrow2?rev=faf92ac#faf92ac9c90126422f76910587edfb5aac501b15"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -188,9 +188,11 @@ dependencies = [
  "itertools",
  "json-deserializer",
  "lexical-core",
+ "lz4",
  "multiversion",
  "num-traits",
  "parquet2",
+ "rand 0.8.5",
  "regex",
  "regex-syntax",
  "rustc_version",
@@ -5936,6 +5938,7 @@ dependencies = [
  "serde",
  "snap",
  "streaming-decompression",
+ "xxhash-rust",
  "zstd 0.12.1+zstd.1.5.2",
 ]
 
@@ -7826,11 +7829,12 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.1.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=92a8e4f#92a8e4fcf499827145ac7f32315b2228552507e5"
+source = "git+https://github.com/b41sh/strawboat?rev=b59d194#b59d1948cab66308c5d49d1402ee5f8c10a0619e"
 dependencies = [
  "arrow2",
  "bytemuck",
  "lz4",
+ "parquet2",
  "serde",
  "serde_json",
  "snap",
@@ -9181,6 +9185,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "xxhash-rust"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "735a71d46c4d68d71d4b24d03fdc2b98e38cea81730595801db779c04fe80d70"
+
+[[package]]
 name = "xz2"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9248,3 +9258,8 @@ dependencies = [
  "cc",
  "libc",
 ]
+
+[[patch.unused]]
+name = "arrow2"
+version = "0.15.0"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=211be21#211be21991c29c235253a19413f43a76a367955f"

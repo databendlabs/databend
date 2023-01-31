@@ -50,7 +50,7 @@ pub struct BlockReader {
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
     pub(crate) project_indices: BTreeMap<usize, (Field, DataType)>,
-    pub(crate) column_nodes: ColumnNodes,
+    pub(crate) project_column_nodes: Vec<ColumnNode>,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
 }
 
@@ -142,7 +142,7 @@ impl BlockReader {
             projection,
             projected_schema,
             parquet_schema_descriptor,
-            column_nodes,
+            project_column_nodes,
             project_indices,
         }))
     }
