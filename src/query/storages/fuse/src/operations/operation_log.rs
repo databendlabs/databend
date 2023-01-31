@@ -53,10 +53,10 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
     fn try_from(block: &DataBlock) -> Result<Self, Self::Error> {
         let err = ErrorCode::Internal(format!(
             "invalid data block meta of AppendOperation log, {:?}",
-            block.meta()
+            block.get_meta()
         ));
 
-        if let Some(meta) = block.meta()? {
+        if let Some(meta) = block.get_meta() {
             let cast = meta.as_any().downcast_ref::<AppendOperationLogEntry>();
             return match cast {
                 None => Err(err),

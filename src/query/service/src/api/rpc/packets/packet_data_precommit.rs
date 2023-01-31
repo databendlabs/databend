@@ -40,7 +40,7 @@ impl PrecommitBlock {
 
     pub fn write<T: Write>(self, bytes: &mut T) -> Result<()> {
         let data_block = self.0;
-        let serialized_meta = bincode::serialize(&data_block.meta()?).map_err_to_code(
+        let serialized_meta = bincode::serialize(&data_block.get_meta()).map_err_to_code(
             ErrorCode::BadBytes,
             || "precommit block serialize error when exchange",
         )?;

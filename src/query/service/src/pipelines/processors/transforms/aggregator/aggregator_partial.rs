@@ -28,6 +28,7 @@ use common_hashtable::HashtableLike;
 
 use super::estimated_key_size;
 use crate::pipelines::processors::transforms::group_by::Area;
+use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
@@ -45,12 +46,20 @@ where Method: HashMethod + PolymorphicKeysHelper<Method>
     pub generated: bool,
     pub should_expand_table: bool,
     pub input_rows: usize,
+    pub pass_state_to_final: bool,
+    pub arena_holder: ArenaHolder,
+    pub two_level_mode: bool,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
     PartialAggregator<HAS_AGG, Method>
 {
-    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
+    pub fn create(
+        method: Method,
+        params: Arc<AggregatorParams>,
+        pass_state_to_final: bool,
+        arena_holder: ArenaHolder,
+    ) -> Result<Self> {
         let hash_table = method.create_hash_table()?;
         Ok(Self {
             params,
@@ -61,6 +70,9 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             generated: false,
             should_expand_table: true,
             input_rows: 0,
+            pass_state_to_final,
+            arena_holder,
+            two_level_mode: false,
         })
     }
 
@@ -167,7 +179,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     #[inline(always)]
     fn generate_data(&mut self) -> Result<Vec<DataBlock>> {
         if self.generated || self.hash_table.len() == 0 {
-            self.drop_states();
             return Ok(vec![]);
         }
         self.generated = true;
@@ -245,12 +256,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let min_reduction = STREAMING_HT_MIN_REDUCTION[cache_level].1;
 
         if estimated_reduction <= min_reduction {
-            println!(
-                "YY: {:?} {:?} {}",
+            tracing::info!(
+                "HashTable expansion is disabled because the reduce factor is too low: estimated_reduction: {}, min_reduction: {}",
                 estimated_reduction,
-                min_reduction,
-                estimated_reduction > min_reduction
-            );
+                min_reduction
+            )
         }
         estimated_reduction > min_reduction
     }
@@ -332,9 +342,8 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
                     }
                 }
             }
-
-            self.hash_table.clear();
             drop(self.area.take());
+            self.hash_table.clear();
             self.states_dropped = true;
         }
     }

@@ -49,25 +49,25 @@ impl<'a, T: Number> KeysColumnBuilder for FixedKeysColumnBuilder<'a, T> {
     }
 }
 
-pub struct SerializedKeysColumnBuilder<'a> {
+pub struct StringKeysColumnBuilder<'a> {
     pub inner_builder: StringColumnBuilder,
 
-    initial: usize,
+    _initial: usize,
 
     _phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> SerializedKeysColumnBuilder<'a> {
+impl<'a> StringKeysColumnBuilder<'a> {
     pub fn create(capacity: usize, value_capacity: usize) -> Self {
-        SerializedKeysColumnBuilder {
+        StringKeysColumnBuilder {
             inner_builder: StringColumnBuilder::with_capacity(capacity, value_capacity),
             _phantom: PhantomData,
-            initial: value_capacity,
+            _initial: value_capacity,
         }
     }
 }
 
-impl<'a> KeysColumnBuilder for SerializedKeysColumnBuilder<'a> {
+impl<'a> KeysColumnBuilder for StringKeysColumnBuilder<'a> {
     type T = &'a [u8];
 
     fn append_value(&mut self, v: &'a [u8]) {
@@ -76,7 +76,7 @@ impl<'a> KeysColumnBuilder for SerializedKeysColumnBuilder<'a> {
     }
 
     fn finish(self) -> Column {
-        debug_assert!(self.initial == self.inner_builder.data.len());
+        debug_assert_eq!(self._initial, self.inner_builder.data.len());
         Column::String(self.inner_builder.build())
     }
 }

@@ -129,12 +129,24 @@ where
 
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.table_empty.len() + self.table.len()
+        // AsRef it's cost
+        let tail_len = match &self.tails {
+            Some(tails) => tails.len(),
+            None => 0,
+        };
+
+        self.table_empty.len() + self.table.len() + tail_len
     }
 
     #[inline(always)]
     pub fn capacity(&self) -> usize {
-        self.table_empty.capacity() + self.table.capacity()
+        // AsRef it's cost
+        let tail_capacity = match &self.tails {
+            Some(tails) => tails.capacity(),
+            None => 0,
+        };
+
+        self.table_empty.capacity() + self.table.capacity() + tail_capacity
     }
 
     /// # Safety
@@ -166,6 +178,7 @@ where
                 }),
             _ => {
                 if let Some(tails) = &mut self.tails {
+                    self.key_size += key.len();
                     let key = FallbackKey::new(key);
                     return Ok(SimpleUnsizedHashtableEntryMutRef(
                         SimpleUnsizedHashtableEntryMutRefInner::Table(tails.insert(key)),
@@ -568,6 +581,7 @@ where A: Allocator + Clone + Default
 
             _ => {
                 if let Some(tails) = &mut self.tails {
+                    self.key_size += key.len();
                     let s = self.arena.alloc_slice_copy(key);
                     let key = FallbackKey::new(s);
 
@@ -618,6 +632,16 @@ where A: Allocator + Clone + Default
                     )
                 }),
             _ => {
+                if let Some(tails) = &mut self.tails {
+                    self.key_size += key.len();
+                    let s = self.arena.alloc_slice_copy(key);
+                    let key = FallbackKey::new_with_hash(s, hash);
+
+                    return Ok(SimpleUnsizedHashtableEntryMutRef(
+                        SimpleUnsizedHashtableEntryMutRefInner::Table(tails.insert(key)),
+                    ));
+                }
+
                 self.table.check_grow();
                 match self
                     .table

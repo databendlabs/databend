@@ -139,20 +139,34 @@ where
 
     #[inline(always)]
     pub fn len(&self) -> usize {
+        // AsRef it's cost
+        let tail_len = match &self.tails {
+            Some(tails) => tails.len(),
+            None => 0,
+        };
+
         self.table0.len()
             + self.table1.len()
             + self.table2.len()
             + self.table3.len()
             + self.table4.len()
+            + tail_len
     }
 
     #[inline(always)]
     pub fn capacity(&self) -> usize {
+        // AsRef it's cost
+        let tail_capacity = match &self.tails {
+            Some(tails) => tails.capacity(),
+            None => 0,
+        };
+
         self.table0.capacity()
             + self.table1.capacity()
             + self.table2.capacity()
             + self.table3.capacity()
             + self.table4.capacity()
+            + tail_capacity
     }
 
     /// # Safety
@@ -168,6 +182,7 @@ where
 
         if !key.is_empty() {
             if let Some(tails) = &mut self.tails {
+                self.key_size += key.len();
                 let key = FallbackKey::new(key);
                 return Ok(UnsizedHashtableEntryMutRef(
                     UnsizedHashtableEntryMutRefInner::Table4(tails.insert(key)),
@@ -916,7 +931,9 @@ where A: Allocator + Clone + Default
 
         if !key.is_empty() {
             if let Some(tails) = &mut self.tails {
-                let key = FallbackKey::new(key);
+                self.key_size += key.len();
+                let s = self.arena.alloc_slice_copy(key);
+                let key = FallbackKey::new(s);
                 return Ok(UnsizedHashtableEntryMutRef(
                     UnsizedHashtableEntryMutRefInner::Table4(tails.insert(key)),
                 ));
@@ -1037,7 +1054,9 @@ where A: Allocator + Clone + Default
 
         if !key.is_empty() {
             if let Some(tails) = &mut self.tails {
-                let key = FallbackKey::new(key);
+                self.key_size += key.len();
+                let s = self.arena.alloc_slice_copy(key);
+                let key = FallbackKey::new(s);
                 return Ok(UnsizedHashtableEntryMutRef(
                     UnsizedHashtableEntryMutRefInner::Table4(tails.insert(key)),
                 ));

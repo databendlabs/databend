@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::*;
 
+use super::group_by::ArenaHolder;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -69,6 +70,8 @@ impl TransformAggregator {
     pub fn try_create_partial(
         transform_params: AggregatorTransformParams,
         ctx: Arc<QueryContext>,
+        pass_state_to_final: bool,
+        arena_holder: ArenaHolder,
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
@@ -86,14 +89,24 @@ impl TransformAggregator {
                 HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx,
                     transform_params,
-                    PartialAggregator::<false, T>::create(method, aggregator_params)?,
+                    PartialAggregator::<false, T>::create(
+                        method,
+                        aggregator_params,
+                        pass_state_to_final,
+                        arena_holder
+                    )?,
                 ),
             }),
             false => with_mappedhash_method!(|T| match transform_params.method.clone() {
                 HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx,
                     transform_params,
-                    PartialAggregator::<true, T>::create(method, aggregator_params)?,
+                    PartialAggregator::<true, T>::create(
+                        method,
+                        aggregator_params,
+                        pass_state_to_final,
+                        arena_holder
+                    )?,
                 ),
             }),
         }

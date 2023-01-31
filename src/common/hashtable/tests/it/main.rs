@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use ahash::HashSet;
+use ahash::HashSetExt;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
 use common_hashtable::StackHashMap;
@@ -137,4 +140,59 @@ fn test_unsized_hash_map() {
     }
     drop(hashtable);
     assert_eq!(COUNT.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn test_tail_array() {
+    let mut table0 = HashMap::<u64, u64>::new();
+    let mut table1 = HashMap::<u64, u64>::new();
+
+    unsafe {
+        for i in 0..100 {
+            match table0.insert_and_entry(i) {
+                Ok(x) => {
+                    x.write(i);
+                }
+                Err(_) => {}
+            }
+
+            match table1.insert_and_entry(i) {
+                Ok(x) => {
+                    x.write(i);
+                }
+                Err(_) => {}
+            }
+        }
+        assert_eq!(table0.len(), table1.len());
+        table0.enable_tail_array();
+
+        for i in 50..100 {
+            match table0.insert_and_entry(i) {
+                Ok(x) => {
+                    x.write(i);
+                }
+                Err(_) => {}
+            }
+
+            match table1.insert_and_entry(i) {
+                Ok(x) => {
+                    x.write(i);
+                }
+                Err(_) => {}
+            }
+        }
+        assert_eq!(table0.len(), 150);
+        assert_eq!(table1.len(), 100);
+
+        let mut set = HashSet::new();
+        // all keys in table0 could be found in table1
+        for key in table0.iter().map(|e| e.key()) {
+            set.insert(*key);
+            assert!(table1.get(key).is_some());
+        }
+        assert_eq!(set.len(), 100);
+    }
+
+    let hashtable = UnsizedHashMap::<[u8], u64>::new();
+    let _: Box<dyn Any> = Box::new(hashtable);
 }

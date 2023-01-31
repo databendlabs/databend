@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate_hashstate_info;
 mod aggregate_info;
 mod aggregator_final;
 mod aggregator_final_parallel;
@@ -21,6 +22,7 @@ mod aggregator_single_key;
 mod aggregator_twolevel;
 mod utils;
 
+pub use aggregate_hashstate_info::AggregateHashStateInfo;
 pub use aggregate_info::AggregateInfo;
 pub use aggregate_info::OverflowInfo;
 pub use aggregator_final_parallel::BucketAggregator;

@@ -90,11 +90,22 @@ where
     }
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.zero.is_some() as usize + self.table.len()
+        // AsRef it's cost
+        let tail_len = match &self.tails {
+            Some(tails) => tails.len(),
+            None => 0,
+        };
+
+        self.zero.is_some() as usize + self.table.len() + tail_len
     }
     #[inline(always)]
     pub fn capacity(&self) -> usize {
-        self.zero.is_some() as usize + self.table.capacity()
+        // AsRef it's cost
+        let tail_capacity = match &self.tails {
+            Some(tails) => tails.capacity(),
+            None => 0,
+        };
+        self.zero.is_some() as usize + self.table.capacity() + tail_capacity
     }
     #[inline(always)]
     pub fn entry(&self, key: &K) -> Option<&Entry<K, V>> {
@@ -171,7 +182,8 @@ where
     pub fn iter(&self) -> HashtableIter<'_, K, V> {
         let tail_iter = self.tails.as_ref().map(|tails| tails.iter());
         HashtableIter {
-            inner: Some(self.zero.iter().chain(self.table.iter())),
+            empty_iter: self.zero.iter(),
+            table0_iter: Some(self.table.iter()),
             tail_iter,
         }
     }
@@ -203,7 +215,8 @@ where
 }
 
 pub struct HashtableIter<'a, K, V> {
-    pub inner: Option<std::iter::Chain<std::option::Iter<'a, Entry<K, V>>, Table0Iter<'a, K, V>>>,
+    pub empty_iter: std::option::Iter<'a, Entry<K, V>>,
+    pub table0_iter: Option<Table0Iter<'a, K, V>>,
     pub tail_iter: Option<TailArrayIter<'a, K, V>>,
 }
 
@@ -213,11 +226,15 @@ where K: Keyable
     type Item = &'a Entry<K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(it) = self.inner.as_mut() {
+        if let Some(e) = self.empty_iter.next() {
+            return Some(e);
+        }
+
+        if let Some(it) = self.table0_iter.as_mut() {
             if let Some(e) = it.next() {
                 return Some(e);
             }
-            self.inner = None;
+            self.table0_iter = None;
         }
 
         if let Some(it) = self.tail_iter.as_mut() {
@@ -231,7 +248,8 @@ where K: Keyable
 }
 
 pub struct HashtableIterMut<'a, K, V> {
-    inner: Option<std::iter::Chain<std::option::IterMut<'a, Entry<K, V>>, Table0IterMut<'a, K, V>>>,
+    empty_iter: std::option::IterMut<'a, Entry<K, V>>,
+    table0_iter: Option<Table0IterMut<'a, K, V>>,
     tail_iter: Option<TailArrayIterMut<'a, K, V>>,
 }
 
@@ -241,11 +259,15 @@ where K: Keyable
     type Item = &'a mut Entry<K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(it) = self.inner.as_mut() {
+        if let Some(e) = self.empty_iter.next() {
+            return Some(e);
+        }
+
+        if let Some(it) = self.table0_iter.as_mut() {
             if let Some(e) = it.next() {
                 return Some(e);
             }
-            self.inner = None;
+            self.table0_iter = None;
         }
 
         if let Some(it) = self.tail_iter.as_mut() {
@@ -351,7 +373,8 @@ where
     fn iter(&self) -> Self::Iterator<'_> {
         let tail_iter = self.tails.as_ref().map(|tails| tails.iter());
         HashtableIter {
-            inner: Some(self.zero.iter().chain(self.table.iter())),
+            empty_iter: self.zero.iter(),
+            table0_iter: Some(self.table.iter()),
             tail_iter,
         }
     }

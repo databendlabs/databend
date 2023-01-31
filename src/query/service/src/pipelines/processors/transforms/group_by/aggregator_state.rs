@@ -13,9 +13,12 @@
 // limitations under the License.
 
 use std::alloc::Layout;
+use std::collections::VecDeque;
 use std::ptr::NonNull;
+use std::sync::Arc;
 
 use bumpalo::Bump;
+use parking_lot::RwLock;
 
 pub struct Area {
     bump: Bump,
@@ -32,3 +35,26 @@ impl Area {
 }
 
 unsafe impl Send for Area {}
+
+#[derive(Clone)]
+pub struct ArenaHolder {
+    values: Arc<RwLock<VecDeque<Area>>>,
+}
+
+impl ArenaHolder {
+    pub fn create() -> ArenaHolder {
+        ArenaHolder {
+            values: Arc::new(RwLock::new(VecDeque::new())),
+        }
+    }
+
+    pub fn put_area(&self, area: Option<Area>) {
+        if let Some(area) = area {
+            let mut values = self.values.write();
+            values.push_back(area);
+            tracing::info!("Putting arena into holder, current size: {}", values.len());
+        }
+    }
+}
+
+unsafe impl Send for ArenaHolder {}

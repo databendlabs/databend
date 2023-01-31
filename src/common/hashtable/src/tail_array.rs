@@ -16,14 +16,12 @@ use std::alloc::Allocator;
 
 use super::table0::Entry;
 use super::traits::Keyable;
-use crate::container::Container;
-use crate::container::StackContainer;
 
-const SIZE: usize = 8192;
+const SIZE: usize = 4096;
 
 pub struct TailArray<K, V, A: Allocator> {
     allocator: A,
-    pub(crate) datas: Vec<StackContainer<Entry<K, V>, SIZE, A>>,
+    pub(crate) datas: Vec<Box<[Entry<K, V>; SIZE], A>>,
     pub(crate) num_items: usize,
 }
 
@@ -43,8 +41,10 @@ where
     pub fn insert(&mut self, key: K) -> &mut Entry<K, V> {
         let pos = self.num_items % SIZE;
         if pos == 0 {
-            let container = unsafe { StackContainer::new_zeroed(SIZE, self.allocator.clone()) };
-            self.datas.push(container);
+            let data = unsafe {
+                Box::<[Entry<K, V>; SIZE], A>::new_zeroed_in(self.allocator.clone()).assume_init()
+            };
+            self.datas.push(data);
         }
 
         let tail = self.datas.last_mut().unwrap();
@@ -56,7 +56,7 @@ where
 
     pub fn iter(&self) -> TailArrayIter<'_, K, V> {
         TailArrayIter {
-            values: self.datas.iter().map(|v| v.as_ref()).collect(),
+            values: self.datas.iter().map(|v| v.as_ref().as_ref()).collect(),
             num_items: self.num_items,
             i: 0,
         }
@@ -65,10 +65,18 @@ where
     #[allow(dead_code)]
     pub fn iter_mut(&mut self) -> TailArrayIterMut<'_, K, V> {
         TailArrayIterMut {
-            values: self.datas.iter_mut().map(|v| v.as_mut()).collect(),
+            values: self.datas.iter_mut().map(|v| v.as_mut().as_mut()).collect(),
             num_items: self.num_items,
             i: 0,
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.num_items
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.datas.len() * SIZE
     }
 }
 
@@ -89,7 +97,7 @@ impl<'a, K, V> Iterator for TailArrayIter<'a, K, V> {
             let pos = self.i % SIZE;
 
             let v = self.values[array];
-            let res = &v.as_ref()[pos];
+            let res = &v[pos];
             self.i += 1;
             Some(res)
         }

@@ -45,7 +45,7 @@ use crate::pipelines::processors::transforms::group_by::aggregator_groups_builde
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::SerializedKeysGroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::FixedKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::KeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::SerializedKeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::StringKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::FixedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::SerializedKeysColumnIter;
@@ -66,7 +66,7 @@ use crate::pipelines::processors::AggregatorParams;
 // use common_expression::HashMethodSerializer;
 // use databend_query::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 // use databend_query::pipelines::processors::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
-// use databend_query::pipelines::processors::transforms::group_by::aggregator_keys_builder::SerializedKeysColumnBuilder;
+// use databend_query::pipelines::processors::transforms::group_by::aggregator_keys_builder::StringKeysColumnBuilder;
 //
 // impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 //     type State = SerializedKeysAggregatorState;
@@ -78,9 +78,9 @@ use crate::pipelines::processors::AggregatorParams;
 //         }
 //     }
 //
-//     type ColumnBuilder = SerializedKeysColumnBuilder;
+//     type ColumnBuilder = StringKeysColumnBuilder;
 //     fn state_array_builder(&self, capacity: usize) -> Self::ColumnBuilder {
-//         SerializedKeysColumnBuilder {
+//         StringKeysColumnBuilder {
 //             inner_builder: MutableStringColumn::with_capacity(capacity),
 //         }
 //     }
@@ -89,7 +89,7 @@ use crate::pipelines::processors::AggregatorParams;
 pub trait PolymorphicKeysHelper<Method: HashMethod> {
     const SUPPORT_TWO_LEVEL: bool;
 
-    type HashTable: HashtableLike<Key = Method::HashKey, Value = usize> + Send;
+    type HashTable: HashtableLike<Key = Method::HashKey, Value = usize> + Send + Sync + 'static;
     fn create_hash_table(&self) -> Result<Self::HashTable>;
 
     type ColumnBuilder<'a>: KeysColumnBuilder<T = &'a Method::HashKey>
@@ -402,13 +402,13 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
         Ok(UnsizedHashMap::new())
     }
 
-    type ColumnBuilder<'a> = SerializedKeysColumnBuilder<'a>;
+    type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
     fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> SerializedKeysColumnBuilder<'_> {
-        SerializedKeysColumnBuilder::create(capacity, value_capacity)
+    ) -> StringKeysColumnBuilder<'_> {
+        StringKeysColumnBuilder::create(capacity, value_capacity)
     }
 
     type KeysColumnIter = SerializedKeysColumnIter;
@@ -442,13 +442,13 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         Ok(SimpleUnsizedHashMap::new())
     }
 
-    type ColumnBuilder<'a> = SerializedKeysColumnBuilder<'a>;
+    type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
     fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> SerializedKeysColumnBuilder<'_> {
-        SerializedKeysColumnBuilder::create(capacity, value_capacity)
+    ) -> StringKeysColumnBuilder<'_> {
+        StringKeysColumnBuilder::create(capacity, value_capacity)
     }
 
     type KeysColumnIter = SerializedKeysColumnIter;
@@ -475,7 +475,7 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 
 #[derive(Clone)]
 pub struct TwoLevelHashMethod<Method: HashMethod + Send> {
-    method: Method,
+    pub(crate) method: Method,
 }
 
 impl<Method: HashMethod + Send> TwoLevelHashMethod<Method> {

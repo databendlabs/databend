@@ -33,6 +33,7 @@ use tracing::info;
 use super::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
+use crate::pipelines::processors::transforms::aggregator::AggregateHashStateInfo;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
 use crate::pipelines::processors::transforms::aggregator::SingleStateAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
@@ -116,6 +117,9 @@ where
                 generated: false,
                 should_expand_table: true,
                 input_rows: self.input_rows,
+                pass_state_to_final: self.pass_state_to_final,
+                arena_holder: self.arena_holder.clone(),
+                two_level_mode: true,
             },
         })
     }
@@ -155,6 +159,14 @@ where
         for (bucket, inner_table) in agg.hash_table.iter_tables_mut().enumerate() {
             if inner_table.len() == 0 {
                 continue;
+            }
+
+            if agg.pass_state_to_final {
+                let table = std::mem::replace(inner_table, agg.method.method.create_hash_table()?);
+                let rows = table.len();
+                let meta = AggregateHashStateInfo::create(bucket, Box::new(table));
+                let block = DataBlock::new_with_meta(vec![], rows, Some(meta));
+                return Ok(vec![block]);
             }
 
             let capacity = inner_table.len();
@@ -215,8 +227,11 @@ where
             return Ok(data_blocks);
         }
 
-        drop(agg.area.take());
-        agg.states_dropped = true;
+        if agg.pass_state_to_final {
+            agg.arena_holder.put_area(agg.area.take());
+            agg.states_dropped = true;
+        }
+
         Ok(data_blocks)
     }
 }
