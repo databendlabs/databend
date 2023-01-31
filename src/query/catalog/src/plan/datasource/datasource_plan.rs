@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,74 +13,17 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
-use common_meta_app::schema::TableInfo;
-use common_meta_types::UserStageInfo;
 
+use crate::plan::datasource::datasource_info::DataSourceInfo;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::Projection;
 use crate::plan::PushDownInfo;
-use crate::plan::StageFileInfo;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct StageTableInfo {
-    pub schema: TableSchemaRef,
-    pub path: String,
-    pub files: Vec<String>,
-    pub pattern: String,
-    pub user_stage_info: UserStageInfo,
-    pub files_to_copy: Option<Vec<StageFileInfo>>,
-}
-
-impl StageTableInfo {
-    pub fn schema(&self) -> Arc<TableSchema> {
-        self.schema.clone()
-    }
-
-    pub fn desc(&self) -> String {
-        self.user_stage_info.stage_name.clone()
-    }
-}
-
-impl Debug for StageTableInfo {
-    // Ignore the schema.
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.user_stage_info)
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum DataSourceInfo {
-    // Normal table source, `fuse/system`.
-    TableSource(TableInfo),
-
-    // Internal/External source, like `s3://` or `azblob://`.
-    StageSource(StageTableInfo),
-}
-
-impl DataSourceInfo {
-    pub fn schema(&self) -> Arc<TableSchema> {
-        match self {
-            DataSourceInfo::TableSource(table_info) => table_info.schema(),
-            DataSourceInfo::StageSource(table_info) => table_info.schema(),
-        }
-    }
-
-    pub fn desc(&self) -> String {
-        match self {
-            DataSourceInfo::TableSource(table_info) => table_info.desc.clone(),
-            DataSourceInfo::StageSource(table_info) => table_info.desc(),
-        }
-    }
-}
 
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
