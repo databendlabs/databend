@@ -427,13 +427,14 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
-        if self.main_pipeline.output_len() == 1 {
-            let _ = self
-                .main_pipeline
-                .resize(self.ctx.get_settings().get_max_threads()? as usize);
+        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+            self.main_pipeline.resize(max_threads)?;
         }
+
         // Sort
         self.main_pipeline.add_transform(|input, output| {
             TransformSortPartial::try_create(input, output, sort.limit, sort_desc.clone())

@@ -16,8 +16,6 @@ use std::any::Any;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::collections::VecDeque;
-use std::sync;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use common_arrow::arrow::compute::sort::row::RowConverter as ArrowRowConverter;
@@ -210,8 +208,6 @@ where
     row_converter: Converter,
 
     state: ProcessorState,
-
-    aborting: Arc<AtomicBool>,
 }
 
 impl<R, Converter> MultiSortMergeProcessor<R, Converter>
@@ -247,7 +243,6 @@ where
             input_finished: vec![false; input_size],
             row_converter,
             state: ProcessorState::Consume,
-            aborting: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -258,6 +253,7 @@ where
                 self.input_finished[i] = true;
                 continue;
             }
+
             input.set_need_data();
             if self.cursor_finished[i] && input.has_data() {
                 data.push((i, input.pull_data().unwrap()?));
@@ -443,18 +439,7 @@ where
         self
     }
 
-    fn interrupt(&self) {
-        self.aborting.store(true, sync::atomic::Ordering::Release);
-    }
-
     fn event(&mut self) -> Result<Event> {
-        let aborting = self.aborting.load(sync::atomic::Ordering::Relaxed);
-        if aborting {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
-        }
-
         if self.output.is_finished() {
             for input in self.inputs.iter() {
                 input.finish();
@@ -499,8 +484,10 @@ where
                     self.state = ProcessorState::Preserve(data_blocks);
                     return Ok(Event::Sync);
                 }
-                let all_finished = self.nums_active_inputs() == 0;
-                if all_finished {
+
+                let active_inputs = self.nums_active_inputs();
+
+                if active_inputs == 0 {
                     if !self.heap.is_empty() {
                         // The heap is not drained yet. Need to drain data into in_progress_rows.
                         self.state = ProcessorState::Preserve(vec![]);
