@@ -118,6 +118,7 @@ pub async fn streaming_load(
     let (mut plan, _, _) = planner
         .plan_sql(insert_sql)
         .await
+        .map_err(|err| err.display_with_sql(insert_sql))
         .map_err(InternalServerError)?;
     context.attach_query_str(plan.to_string(), insert_sql);
 
@@ -139,10 +140,13 @@ pub async fn streaming_load(
                 let to_table = context
                     .get_table(&insert.catalog, &insert.database, &insert.table)
                     .await
+                    .map_err(|err| err.display_with_sql(insert_sql))
                     .map_err(InternalServerError)?;
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
 
-                let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
+                let table_schema = infer_table_schema(&schema)
+                    .map_err(|err| err.display_with_sql(insert_sql))
+                    .map_err(InternalServerError)?;
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert_file_format(
                         rx,
@@ -154,6 +158,7 @@ pub async fn streaming_load(
                         to_table.get_block_compact_thresholds(),
                     )
                     .await
+                    .map_err(|err| err.display_with_sql(insert_sql))
                     .map_err(InternalServerError)?,
                 );
                 *input_context_ref = Some(input_context.clone());
@@ -171,7 +176,10 @@ pub async fn streaming_load(
                         files,
                     })),
                     Ok(Err(cause)) => Err(poem::Error::from_string(
-                        format!("execute fail: {}", cause.message()),
+                        format!(
+                            "execute fail: {}",
+                            cause.display_with_sql(insert_sql).message()
+                        ),
                         StatusCode::BAD_REQUEST,
                     )),
                     Err(_) => Err(poem::Error::from_string(
@@ -182,7 +190,7 @@ pub async fn streaming_load(
             }
             InsertInputSource::StreamingWithFormat(_, _, _) => Err(poem::Error::from_string(
                 "'INSERT INTO $table FORMAT <type> is now only supported in clickhouse handler,\
-                     please use 'FILE_FORMAT = (type = <type> ...)' instead.",
+                        please use 'FILE_FORMAT = (type = <type> ...)' instead.",
                 StatusCode::BAD_REQUEST,
             )),
             _non_supported_source => Err(poem::Error::from_string(

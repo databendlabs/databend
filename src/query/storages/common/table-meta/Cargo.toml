@@ -11,11 +11,9 @@ edition = { workspace = true }
 [dependencies]
 common-arrow = { path = "../../../../common/arrow" }
 common-base = { path = "../../../../common/base" }
-common-config = { path = "../../../config" }
 common-datavalues = { path = "../../../datavalues" }
 common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
-storages-common-cache = { path = "../../common/cache" }
 
 chrono = { workspace = true }
 enum-as-inner = "0.5"

@@ -22,17 +22,17 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct InsertStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
-    pub columns: Vec<Identifier<'a>>,
-    pub source: InsertSource<'a>,
+pub struct InsertStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub columns: Vec<Identifier>,
+    pub source: InsertSource,
     pub overwrite: bool,
 }
 
-impl Display for InsertStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for InsertStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "INSERT ")?;
         if self.overwrite {
             write!(f, "OVERWRITE ")?;
@@ -56,10 +56,10 @@ impl Display for InsertStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum InsertSource<'a> {
+pub enum InsertSource {
     Streaming {
         format: String,
-        rest_str: &'a str,
+        rest_str: String,
         start: usize,
     },
     StreamingV2 {
@@ -67,15 +67,15 @@ pub enum InsertSource<'a> {
         start: usize,
     },
     Values {
-        rest_str: &'a str,
+        rest_str: String,
     },
     Select {
-        query: Box<Query<'a>>,
+        query: Box<Query>,
     },
 }
 
-impl Display for InsertSource<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for InsertSource {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             InsertSource::Streaming {
                 format,

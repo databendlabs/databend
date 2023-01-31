@@ -20,9 +20,10 @@ use common_exception::Result;
 use common_meta_api::txn_cond_seq;
 use common_meta_api::txn_op_del;
 use common_meta_api::txn_op_put;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi;
 use common_meta_types::errors::app_error::TxnRetryMaxTimes;
 use common_meta_types::ConditionResult::Eq;
+use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
@@ -43,13 +44,13 @@ static STAGE_FILE_API_KEY_PREFIX: &str = "__fd_stage_files";
 const TXN_MAX_RETRY_TIMES: u32 = 10;
 
 pub struct StageMgr {
-    kv_api: Arc<dyn KVApi>,
+    kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
     stage_prefix: String,
     stage_file_prefix: String,
 }
 
 impl StageMgr {
-    pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>, tenant: &str) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while role mgr create)",

@@ -102,12 +102,13 @@ impl<'a> BlockWriter<'a> {
             .location_generator
             .block_bloom_index_location(&block_id);
 
-        let bloom_index =
+        let maybe_bloom_index =
             BloomIndex::try_create(FunctionContext::default(), schema, location.1, &[block])?;
-        if let Some(bloom_index) = bloom_index {
-            let index_block = bloom_index.filter_block;
+        if let Some(bloom_index) = maybe_bloom_index {
+            let index_block = bloom_index.serialize_to_data_block()?;
+            let filter_schema = bloom_index.filter_schema;
             let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-            let index_block_schema = &bloom_index.filter_schema;
+            let index_block_schema = &filter_schema;
             let (size, _) = blocks_to_parquet(
                 index_block_schema,
                 vec![index_block],

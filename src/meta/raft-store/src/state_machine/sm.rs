@@ -31,6 +31,7 @@ use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_sled_store::TransactionSledTree;
 use common_meta_stoerr::MetaStorageError;
+use common_meta_types::protobuf as pb;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
 use common_meta_types::txn_op_response;
@@ -45,7 +46,6 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
-use common_meta_types::PbSeqV;
 use common_meta_types::SeqV;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteByPrefixRequest;
@@ -543,7 +543,7 @@ impl StateMachine {
     ) -> Result<(), MetaStorageError> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let sv = sub_tree.get(&get.key)?;
-        let value = sv.map(PbSeqV::from);
+        let value = sv.map(to_pb_seq_v);
         let get_resp = TxnGetResponse {
             key: get.key.clone(),
             value,
@@ -579,7 +579,7 @@ impl StateMachine {
         let put_resp = TxnPutResponse {
             key: put.key.clone(),
             prev_value: if put.prev_value {
-                prev.map(PbSeqV::from)
+                prev.map(to_pb_seq_v)
             } else {
                 None
             },
@@ -611,7 +611,7 @@ impl StateMachine {
             key: delete.key.clone(),
             success: prev.is_some(),
             prev_value: if delete.prev_value {
-                prev.map(PbSeqV::from)
+                prev.map(to_pb_seq_v)
             } else {
                 None
             },
@@ -1087,6 +1087,14 @@ impl StateMachine {
     /// storage of client last resp to keep idempotent.
     pub fn client_last_resps(&self) -> AsKeySpace<ClientLastResps> {
         self.sm_tree.key_space()
+    }
+}
+
+/// Convert SeqV defined in rust types to SeqV defined in protobuf.
+fn to_pb_seq_v(seq_v: SeqV) -> pb::SeqV {
+    pb::SeqV {
+        seq: seq_v.seq,
+        data: seq_v.data,
     }
 }
 

@@ -1,4 +1,4 @@
-//  Copyright 2022 Datafuse Labs.
+//  Copyright 2021 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,13 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
+#![allow(clippy::uninlined_format_args)]
+#![deny(unused_crate_dependencies)]
 
-/// Filter data of a DataBlock, which itself is also a DataBlock.
-///
-/// Depending on the query conditions, columns of index data will be loaded on demand.
-pub struct BlockFilter {
-    pub filter_schema: TableSchemaRef,
-    pub filter_block: DataBlock,
-}
+pub mod kvapi;
+
+pub use kvapi::check_segment;
+pub use kvapi::check_segment_absent;
+pub use kvapi::check_segment_present;
+pub use kvapi::decode_id;
+pub use kvapi::escape;
+pub use kvapi::unescape;

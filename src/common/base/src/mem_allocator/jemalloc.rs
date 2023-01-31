@@ -16,20 +16,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+/// jemalloc allocator.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct JEAllocator<T> {
-    #[allow(dead_code)]
-    allocator: T,
-}
+pub struct JEAllocator;
 
-impl<T> JEAllocator<T> {
-    pub fn new(allocator: T) -> Self {
-        Self { allocator }
-    }
-}
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub mod linux_or_macos {
+#[cfg(target_os = "linux")]
+pub mod linux {
     use std::alloc::AllocError;
     use std::alloc::Allocator;
     use std::alloc::Layout;
@@ -41,10 +33,6 @@ pub mod linux_or_macos {
 
     use super::JEAllocator;
     use crate::runtime::ThreadTracker;
-
-    impl<T> JEAllocator<T> {
-        pub const FALLBACK: bool = false;
-    }
 
     #[cfg(all(any(
         target_arch = "arm",
@@ -80,7 +68,7 @@ pub mod linux_or_macos {
         }
     }
 
-    unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
+    unsafe impl Allocator for JEAllocator {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
             ThreadTracker::alloc(layout.size() as i64)?;
@@ -225,33 +213,31 @@ pub mod linux_or_macos {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub mod fallback {
+/// Other target fallback to std allocator.
+#[cfg(not(target_os = "linux"))]
+pub mod not_linux {
     use std::alloc::AllocError;
     use std::alloc::Allocator;
     use std::alloc::Layout;
     use std::ptr::NonNull;
 
     use super::JEAllocator;
+    use crate::mem_allocator::StdAllocator;
 
-    impl<T> JEAllocator<T> {
-        pub const FALLBACK: bool = true;
-    }
-
-    unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
+    unsafe impl Allocator for JEAllocator {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.allocate(layout)
-        }
-
-        #[inline(always)]
-        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-            self.allocator.deallocate(ptr, layout)
+            StdAllocator.allocate(layout)
         }
 
         #[inline(always)]
         fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.allocate_zeroed(layout)
+            StdAllocator.allocate_zeroed(layout)
+        }
+
+        #[inline(always)]
+        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            StdAllocator.deallocate(ptr, layout)
         }
 
         unsafe fn grow(
@@ -260,7 +246,7 @@ pub mod fallback {
             old_layout: Layout,
             new_layout: Layout,
         ) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.grow(ptr, old_layout, new_layout)
+            StdAllocator.grow(ptr, old_layout, new_layout)
         }
 
         unsafe fn grow_zeroed(
@@ -269,7 +255,7 @@ pub mod fallback {
             old_layout: Layout,
             new_layout: Layout,
         ) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.grow_zeroed(ptr, old_layout, new_layout)
+            StdAllocator.grow_zeroed(ptr, old_layout, new_layout)
         }
 
         unsafe fn shrink(
@@ -278,7 +264,7 @@ pub mod fallback {
             old_layout: Layout,
             new_layout: Layout,
         ) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.shrink(ptr, old_layout, new_layout)
+            StdAllocator.shrink(ptr, old_layout, new_layout)
         }
     }
 }

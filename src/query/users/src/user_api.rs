@@ -29,17 +29,18 @@ use common_management::UdfApi;
 use common_management::UdfMgr;
 use common_management::UserApi;
 use common_management::UserMgr;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::AuthInfo;
+use common_meta_types::KVAppError;
 use common_meta_types::TenantQuota;
 
 use crate::idm_config::IDMConfig;
 
 pub struct UserApiProvider {
     meta: MetaStore,
-    client: Arc<dyn KVApi>,
+    client: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
     idm_config: IDMConfig,
 }
 

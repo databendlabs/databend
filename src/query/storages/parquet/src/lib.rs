@@ -18,10 +18,12 @@
 mod parquet_part;
 mod parquet_reader;
 mod parquet_source;
+mod parquet_table;
 mod pruning;
 mod read_options;
 mod statistics;
 mod table_function;
 
+pub use parquet_table::ParquetTable;
 pub use read_options::ReadOptions;
-pub use table_function::ParquetTable;
+pub use table_function::parse_parquet_table_args;

@@ -25,7 +25,7 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
-use storages_common_table_meta::caches::CacheManager;
+use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;

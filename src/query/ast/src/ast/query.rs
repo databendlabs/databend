@@ -15,83 +15,84 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_exception::Span;
+
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Identifier;
-use crate::parser::token::Token;
 
 /// Root node of a query tree
 #[derive(Debug, Clone, PartialEq)]
-pub struct Query<'a> {
-    pub span: &'a [Token<'a>],
+pub struct Query {
+    pub span: Span,
     // With clause, common table expression
-    pub with: Option<With<'a>>,
+    pub with: Option<With>,
     // Set operator: SELECT or UNION / EXCEPT / INTERSECT
-    pub body: SetExpr<'a>,
+    pub body: SetExpr,
 
     // The following clauses can only appear in top level of a subquery/query
     // `ORDER BY` clause
-    pub order_by: Vec<OrderByExpr<'a>>,
+    pub order_by: Vec<OrderByExpr>,
     // `LIMIT` clause
-    pub limit: Vec<Expr<'a>>,
+    pub limit: Vec<Expr>,
     // `OFFSET` expr
-    pub offset: Option<Expr<'a>>,
+    pub offset: Option<Expr>,
 
     // If ignore the result (not output).
     pub ignore_result: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct With<'a> {
-    pub span: &'a [Token<'a>],
+pub struct With {
+    pub span: Span,
     pub recursive: bool,
-    pub ctes: Vec<CTE<'a>>,
+    pub ctes: Vec<CTE>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CTE<'a> {
-    pub span: &'a [Token<'a>],
-    pub alias: TableAlias<'a>,
-    pub query: Query<'a>,
+pub struct CTE {
+    pub span: Span,
+    pub alias: TableAlias,
+    pub query: Query,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SetOperation<'a> {
-    pub span: &'a [Token<'a>],
+pub struct SetOperation {
+    pub span: Span,
     pub op: SetOperator,
     pub all: bool,
-    pub left: Box<SetExpr<'a>>,
-    pub right: Box<SetExpr<'a>>,
+    pub left: Box<SetExpr>,
+    pub right: Box<SetExpr>,
 }
 
 /// A subquery represented with `SELECT` statement
 #[derive(Debug, Clone, PartialEq)]
-pub struct SelectStmt<'a> {
-    pub span: &'a [Token<'a>],
+pub struct SelectStmt {
+    pub span: Span,
     pub distinct: bool,
     // Result set of current subquery
-    pub select_list: Vec<SelectTarget<'a>>,
+    pub select_list: Vec<SelectTarget>,
     // `FROM` clause, a list of table references.
     // The table references split by `,` will be joined with cross join,
     // and the result set is union of the joined tables by default.
-    pub from: Vec<TableReference<'a>>,
+    pub from: Vec<TableReference>,
     // `WHERE` clause
-    pub selection: Option<Expr<'a>>,
+    pub selection: Option<Expr>,
     // `GROUP BY` clause
-    pub group_by: Vec<Expr<'a>>,
+    pub group_by: Vec<Expr>,
     // `HAVING` clause
-    pub having: Option<Expr<'a>>,
+    pub having: Option<Expr>,
 }
 
 /// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
 #[derive(Debug, Clone, PartialEq)]
-pub enum SetExpr<'a> {
-    Select(Box<SelectStmt<'a>>),
-    Query(Box<Query<'a>>),
+pub enum SetExpr {
+    Select(Box<SelectStmt>),
+    Query(Box<Query>),
     // UNION/EXCEPT/INTERSECT operator
-    SetOperation(Box<SetOperation<'a>>),
+    SetOperation(Box<SetOperation>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,8 +104,8 @@ pub enum SetOperator {
 
 /// `ORDER BY` clause
 #[derive(Debug, Clone, PartialEq)]
-pub struct OrderByExpr<'a> {
-    pub expr: Expr<'a>,
+pub struct OrderByExpr {
+    pub expr: Expr,
     // Optional `ASC` or `DESC`
     pub asc: Option<bool>,
     // Optional `NULLS FIRST` or `NULLS LAST`
@@ -113,90 +114,90 @@ pub struct OrderByExpr<'a> {
 
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq)]
-pub enum SelectTarget<'a> {
+pub enum SelectTarget {
     // Expression with alias, e.g. `SELECT b AS a, a+1 AS b FROM t`
     AliasedExpr {
-        expr: Box<Expr<'a>>,
-        alias: Option<Identifier<'a>>,
+        expr: Box<Expr>,
+        alias: Option<Identifier>,
     },
 
     // Qualified name, e.g. `SELECT t.a, t.* exclude t.a FROM t`.
     // For simplicity, wildcard is involved.
     QualifiedName {
-        qualified: QualifiedName<'a>,
-        exclude: Option<Vec<Identifier<'a>>>,
+        qualified: QualifiedName,
+        exclude: Option<Vec<Identifier>>,
     },
 }
 
-pub type QualifiedName<'a> = Vec<Indirection<'a>>;
+pub type QualifiedName = Vec<Indirection>;
 
 /// Indirection of a select result, like a part of `db.table.column`.
 /// Can be a database name, table name, field name or wildcard star(`*`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Indirection<'a> {
+pub enum Indirection {
     // Field name
-    Identifier(Identifier<'a>),
+    Identifier(Identifier),
     // Wildcard star
     Star,
 }
 
 /// Time Travel specification
 #[derive(Debug, Clone, PartialEq)]
-pub enum TimeTravelPoint<'a> {
+pub enum TimeTravelPoint {
     Snapshot(String),
-    Timestamp(Box<Expr<'a>>),
+    Timestamp(Box<Expr>),
 }
 
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq)]
-pub enum TableReference<'a> {
+pub enum TableReference {
     // Table name
     Table {
-        span: &'a [Token<'a>],
-        catalog: Option<Identifier<'a>>,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        alias: Option<TableAlias<'a>>,
-        travel_point: Option<TimeTravelPoint<'a>>,
+        span: Span,
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
+        alias: Option<TableAlias>,
+        travel_point: Option<TimeTravelPoint>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
-        span: &'a [Token<'a>],
-        name: Identifier<'a>,
-        params: Vec<Expr<'a>>,
-        named_params: Vec<(String, Expr<'a>)>,
-        alias: Option<TableAlias<'a>>,
+        span: Span,
+        name: Identifier,
+        params: Vec<Expr>,
+        named_params: Vec<(String, Expr)>,
+        alias: Option<TableAlias>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
-        span: &'a [Token<'a>],
-        subquery: Box<Query<'a>>,
-        alias: Option<TableAlias<'a>>,
+        span: Span,
+        subquery: Box<Query>,
+        alias: Option<TableAlias>,
     },
     Join {
-        span: &'a [Token<'a>],
-        join: Join<'a>,
+        span: Span,
+        join: Join,
     },
     Stage {
-        span: &'a [Token<'a>],
+        span: Span,
         location: FileLocation,
         files: Vec<String>,
-        alias: Option<TableAlias<'a>>,
+        alias: Option<TableAlias>,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TableAlias<'a> {
-    pub name: Identifier<'a>,
-    pub columns: Vec<Identifier<'a>>,
+pub struct TableAlias {
+    pub name: Identifier,
+    pub columns: Vec<Identifier>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Join<'a> {
+pub struct Join {
     pub op: JoinOperator,
-    pub condition: JoinCondition<'a>,
-    pub left: Box<TableReference<'a>>,
-    pub right: Box<TableReference<'a>>,
+    pub condition: JoinCondition,
+    pub left: Box<TableReference>,
+    pub right: Box<TableReference>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -215,14 +216,14 @@ pub enum JoinOperator {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum JoinCondition<'a> {
-    On(Box<Expr<'a>>),
-    Using(Vec<Identifier<'a>>),
+pub enum JoinCondition {
+    On(Box<Expr>),
+    Using(Vec<Identifier>),
     Natural,
     None,
 }
 
-impl<'a> Display for OrderByExpr<'a> {
+impl Display for OrderByExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.expr)?;
         if let Some(asc) = self.asc {
@@ -243,7 +244,7 @@ impl<'a> Display for OrderByExpr<'a> {
     }
 }
 
-impl<'a> Display for TableAlias<'a> {
+impl Display for TableAlias {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.name)?;
         if !self.columns.is_empty() {
@@ -255,7 +256,7 @@ impl<'a> Display for TableAlias<'a> {
     }
 }
 
-impl<'a> Display for TableReference<'a> {
+impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TableReference::Table {
@@ -383,7 +384,7 @@ impl<'a> Display for TableReference<'a> {
     }
 }
 
-impl<'a> Display for Indirection<'a> {
+impl Display for Indirection {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Indirection::Identifier(ident) => {
@@ -397,7 +398,7 @@ impl<'a> Display for Indirection<'a> {
     }
 }
 
-impl<'a> Display for SelectTarget<'a> {
+impl Display for SelectTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SelectTarget::AliasedExpr { expr, alias } => {
@@ -422,7 +423,7 @@ impl<'a> Display for SelectTarget<'a> {
     }
 }
 
-impl<'a> Display for SelectStmt<'a> {
+impl Display for SelectStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // SELECT clause
         write!(f, "SELECT ")?;
@@ -457,7 +458,7 @@ impl<'a> Display for SelectStmt<'a> {
     }
 }
 
-impl<'a> Display for SetExpr<'a> {
+impl Display for SetExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SetExpr::Select(select_stmt) => {
@@ -489,13 +490,13 @@ impl<'a> Display for SetExpr<'a> {
     }
 }
 
-impl<'a> Display for CTE<'a> {
+impl Display for CTE {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} AS ({})", self.alias, self.query)?;
         Ok(())
     }
 }
-impl<'a> Display for With<'a> {
+impl Display for With {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.recursive {
             write!(f, "RECURSIVE ")?;
@@ -506,7 +507,7 @@ impl<'a> Display for With<'a> {
     }
 }
 
-impl<'a> Display for Query<'a> {
+impl Display for Query {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // CTE, with clause
         if let Some(with) = &self.with {
@@ -537,7 +538,7 @@ impl<'a> Display for Query<'a> {
     }
 }
 
-impl<'a> Display for TimeTravelPoint<'a> {
+impl Display for TimeTravelPoint {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TimeTravelPoint::Snapshot(sid) => {

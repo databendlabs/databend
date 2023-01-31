@@ -13,21 +13,20 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
+use common_exception::Range;
 use common_exception::Result;
 use logos::Lexer;
 use logos::Logos;
-use logos::Span;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 pub use self::TokenKind::*;
-use crate::DisplayError;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Token<'a> {
     pub source: &'a str,
     pub kind: TokenKind,
-    pub span: Span,
+    pub span: Range,
 }
 
 impl<'a> Token<'a> {
@@ -35,12 +34,12 @@ impl<'a> Token<'a> {
         Token {
             source,
             kind: TokenKind::EOI,
-            span: source.len()..source.len(),
+            span: (source.len()..source.len()).into(),
         }
     }
 
     pub fn text(&self) -> &'a str {
-        &self.source[self.span.clone()]
+        &self.source[std::ops::Range::from(self.span)]
     }
 }
 
@@ -71,20 +70,14 @@ impl<'a> Iterator for Tokenizer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.lexer.next() {
-            Some(kind) if kind == TokenKind::Error => {
-                let rest_span = Token {
-                    source: self.source,
-                    kind: TokenKind::Error,
-                    span: self.lexer.span().start..self.source.len(),
-                };
-                Some(Err(ErrorCode::SyntaxException(rest_span.display_error(
-                    "unable to recognize the rest tokens".to_string(),
-                ))))
-            }
+            Some(kind) if kind == TokenKind::Error => Some(Err(ErrorCode::SyntaxException(
+                "unable to recognize the rest tokens".to_string(),
+            )
+            .set_span(Some((self.lexer.span().start..self.source.len()).into())))),
             Some(kind) => Some(Ok(Token {
                 source: self.source,
                 kind,
-                span: self.lexer.span(),
+                span: self.lexer.span().into(),
             })),
             None if !self.eoi => {
                 self.eoi = true;
@@ -318,6 +311,8 @@ pub enum TokenKind {
     COMPACT,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
+    #[token("CONTENT_TYPE", ignore(ascii_case))]
+    CONTENT_TYPE,
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
     #[token("CHARACTER", ignore(ascii_case))]

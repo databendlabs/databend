@@ -27,6 +27,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;
+use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
@@ -34,7 +35,7 @@ use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 
 pub struct ProcessorAsyncTask {
     worker_id: usize,
-    processor: ProcessorPtr,
+    processor_id: NodeIndex,
     queue: Arc<ExecutorTasksQueue>,
     workers_condvar: Arc<WorkersCondvar>,
     inner: BoxFuture<'static, Result<()>>,
@@ -62,28 +63,27 @@ impl ProcessorAsyncTask {
             }
         };
 
-        let wraning_processor = processor.clone();
+        let processor_id = unsafe { processor.id() };
+        let processor_name = unsafe { processor.name() };
         let inner = async move {
             let start = Instant::now();
             let mut inner = inner.boxed();
 
             loop {
-                unsafe {
-                    let interval = Box::pin(sleep(Duration::from_secs(5)));
-                    match futures::future::select(interval, inner).await {
-                        Either::Left((_, right)) => {
-                            inner = right;
-                            tracing::warn!(
-                                "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}",
-                                query_id,
-                                wraning_processor.id(),
-                                wraning_processor.name(),
-                                start.elapsed()
-                            );
-                        }
-                        Either::Right((res, _)) => {
-                            return res;
-                        }
+                let interval = Box::pin(sleep(Duration::from_secs(5)));
+                match futures::future::select(interval, inner).await {
+                    Either::Left((_, right)) => {
+                        inner = right;
+                        tracing::warn!(
+                            "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}",
+                            query_id,
+                            processor_id,
+                            processor_name,
+                            start.elapsed()
+                        );
+                    }
+                    Either::Right((res, _)) => {
+                        return res;
                     }
                 }
             }
@@ -91,7 +91,7 @@ impl ProcessorAsyncTask {
 
         ProcessorAsyncTask {
             worker_id,
-            processor,
+            processor_id,
             queue,
             workers_condvar,
             inner: inner.boxed(),
@@ -118,7 +118,7 @@ impl Future for ProcessorAsyncTask {
             Ok(Poll::Ready(res)) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor.clone(), self.worker_id, res),
+                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res),
                 );
                 Poll::Ready(())
             }
@@ -133,7 +133,7 @@ impl Future for ProcessorAsyncTask {
 
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor.clone(), self.worker_id, res),
+                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res),
                 );
 
                 Poll::Ready(())

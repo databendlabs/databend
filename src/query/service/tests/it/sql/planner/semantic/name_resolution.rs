@@ -14,8 +14,6 @@
 
 use common_ast::ast::Identifier;
 use common_ast::parser::parse_expr;
-use common_ast::parser::token::Token;
-use common_ast::parser::token::TokenKind;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
 use common_ast::Backtrace;
@@ -34,11 +32,7 @@ fn test_normalize_identifier_default() {
             name: "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
                 .to_string(),
             quote: None,
-            span: Token {
-                source: "",
-                kind: TokenKind::Ident,
-                span: (0..0),
-            },
+            span: None,
         };
         let norm_name = normalize_identifier(&ident, &ctx).name;
         assert_eq!(
@@ -53,11 +47,7 @@ fn test_normalize_identifier_default() {
             name: "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
                 .to_string(),
             quote: Some('"'),
-            span: Token {
-                source: "",
-                kind: TokenKind::Ident,
-                span: (0..0),
-            },
+            span: None,
         };
         let norm_name = normalize_identifier(&ident, &ctx).name;
         assert_eq!(
@@ -80,11 +70,7 @@ fn test_normalize_identifier_quoted_case_insensitive() {
             name: "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
                 .to_string(),
             quote: Some('"'),
-            span: Token {
-                source: "",
-                kind: TokenKind::Ident,
-                span: (0..0),
-            },
+            span: None,
         };
         let norm_name = normalize_identifier(&ident, &ctx).name;
         assert_eq!(
@@ -107,11 +93,7 @@ fn test_normalize_identifier_unquoted_case_sensitive() {
             name: "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
                 .to_string(),
             quote: None,
-            span: Token {
-                source: "",
-                kind: TokenKind::Ident,
-                span: (0..0),
-            },
+            span: None,
         };
         let norm_name = normalize_identifier(&ident, &ctx).name;
         assert_eq!(

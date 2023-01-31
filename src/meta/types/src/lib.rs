@@ -162,7 +162,6 @@ pub use seq_errors::ConflictSeq;
 pub use seq_num::SeqNum;
 pub use seq_value::IntoSeqV;
 pub use seq_value::KVMeta;
-pub use seq_value::PbSeqV;
 pub use seq_value::SeqV;
 pub use tenant_quota::TenantQuota;
 pub use user_auth::AuthInfo;

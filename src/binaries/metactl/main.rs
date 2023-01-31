@@ -21,11 +21,13 @@ mod snapshot;
 
 use clap::Parser;
 use common_base::base::tokio;
-use common_meta_api::KVApi;
 use common_meta_client::MetaGrpcClient;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_raft_store::config::get_default_raft_advertise_host;
 use common_tracing::init_logging;
 use common_tracing::Config as LogConfig;
+use common_tracing::FileConfig;
+use common_tracing::StderrConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
@@ -191,7 +193,17 @@ impl Default for RaftConfig {
 async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
 
-    let _guards = init_logging("metactl", &LogConfig::default());
+    let log_config = LogConfig {
+        file: FileConfig {
+            on: true,
+            level: config.log_level.clone(),
+            dir: ".databend/logs".to_string(),
+            format: "text".to_string(),
+        },
+        stderr: StderrConfig::default(),
+    };
+
+    let _guards = init_logging("metactl", &log_config);
 
     eprintln!();
     eprintln!("███╗   ███╗███████╗████████╗ █████╗        ██████╗████████╗██╗     ");

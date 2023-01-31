@@ -28,14 +28,14 @@ use crate::ast::TableReference;
 // SQL statement
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum Statement<'a> {
-    Query(Box<Query<'a>>),
+pub enum Statement {
+    Query(Box<Query>),
     Explain {
         kind: ExplainKind,
-        query: Box<Statement<'a>>,
+        query: Box<Statement>,
     },
 
-    Copy(CopyStmt<'a>),
+    Copy(CopyStmt),
     Call(CallStmt),
 
     ShowSettings {
@@ -45,7 +45,7 @@ pub enum Statement<'a> {
     ShowMetrics,
     ShowEngines,
     ShowFunctions {
-        limit: Option<ShowLimit<'a>>,
+        limit: Option<ShowLimit>,
     },
 
     KillStmt {
@@ -55,62 +55,62 @@ pub enum Statement<'a> {
 
     SetVariable {
         is_global: bool,
-        variable: Identifier<'a>,
-        value: Box<Expr<'a>>,
+        variable: Identifier,
+        value: Box<Expr>,
     },
 
-    UnSetVariable(UnSetStmt<'a>),
+    UnSetVariable(UnSetStmt),
 
     SetRole {
         is_default: bool,
         role_name: String,
     },
 
-    Insert(InsertStmt<'a>),
+    Insert(InsertStmt),
 
     Delete {
-        table_reference: TableReference<'a>,
-        selection: Option<Expr<'a>>,
+        table_reference: TableReference,
+        selection: Option<Expr>,
     },
 
-    Update(UpdateStmt<'a>),
+    Update(UpdateStmt),
 
     // Catalogs
-    ShowCatalogs(ShowCatalogsStmt<'a>),
-    ShowCreateCatalog(ShowCreateCatalogStmt<'a>),
+    ShowCatalogs(ShowCatalogsStmt),
+    ShowCreateCatalog(ShowCreateCatalogStmt),
     CreateCatalog(CreateCatalogStmt),
-    DropCatalog(DropCatalogStmt<'a>),
+    DropCatalog(DropCatalogStmt),
 
     // Databases
-    ShowDatabases(ShowDatabasesStmt<'a>),
-    ShowCreateDatabase(ShowCreateDatabaseStmt<'a>),
-    CreateDatabase(CreateDatabaseStmt<'a>),
-    DropDatabase(DropDatabaseStmt<'a>),
-    UndropDatabase(UndropDatabaseStmt<'a>),
-    AlterDatabase(AlterDatabaseStmt<'a>),
+    ShowDatabases(ShowDatabasesStmt),
+    ShowCreateDatabase(ShowCreateDatabaseStmt),
+    CreateDatabase(CreateDatabaseStmt),
+    DropDatabase(DropDatabaseStmt),
+    UndropDatabase(UndropDatabaseStmt),
+    AlterDatabase(AlterDatabaseStmt),
     UseDatabase {
-        database: Identifier<'a>,
+        database: Identifier,
     },
 
     // Tables
-    ShowTables(ShowTablesStmt<'a>),
-    ShowCreateTable(ShowCreateTableStmt<'a>),
-    DescribeTable(DescribeTableStmt<'a>),
-    ShowTablesStatus(ShowTablesStatusStmt<'a>),
-    CreateTable(CreateTableStmt<'a>),
-    DropTable(DropTableStmt<'a>),
-    UndropTable(UndropTableStmt<'a>),
-    AlterTable(AlterTableStmt<'a>),
-    RenameTable(RenameTableStmt<'a>),
-    TruncateTable(TruncateTableStmt<'a>),
-    OptimizeTable(OptimizeTableStmt<'a>),
-    AnalyzeTable(AnalyzeTableStmt<'a>),
-    ExistsTable(ExistsTableStmt<'a>),
+    ShowTables(ShowTablesStmt),
+    ShowCreateTable(ShowCreateTableStmt),
+    DescribeTable(DescribeTableStmt),
+    ShowTablesStatus(ShowTablesStatusStmt),
+    CreateTable(CreateTableStmt),
+    DropTable(DropTableStmt),
+    UndropTable(UndropTableStmt),
+    AlterTable(AlterTableStmt),
+    RenameTable(RenameTableStmt),
+    TruncateTable(TruncateTableStmt),
+    OptimizeTable(OptimizeTableStmt),
+    AnalyzeTable(AnalyzeTableStmt),
+    ExistsTable(ExistsTableStmt),
 
     // Views
-    CreateView(CreateViewStmt<'a>),
-    AlterView(AlterViewStmt<'a>),
-    DropView(DropViewStmt<'a>),
+    CreateView(CreateViewStmt),
+    AlterView(AlterViewStmt),
+    DropView(DropViewStmt),
 
     // User
     ShowUsers,
@@ -138,19 +138,19 @@ pub enum Statement<'a> {
     // UDF
     CreateUDF {
         if_not_exists: bool,
-        udf_name: Identifier<'a>,
-        parameters: Vec<Identifier<'a>>,
-        definition: Box<Expr<'a>>,
+        udf_name: Identifier,
+        parameters: Vec<Identifier>,
+        definition: Box<Expr>,
         description: Option<String>,
     },
     DropUDF {
         if_exists: bool,
-        udf_name: Identifier<'a>,
+        udf_name: Identifier,
     },
     AlterUDF {
-        udf_name: Identifier<'a>,
-        parameters: Vec<Identifier<'a>>,
-        definition: Box<Expr<'a>>,
+        udf_name: Identifier,
+        parameters: Vec<Identifier>,
+        definition: Box<Expr>,
         description: Option<String>,
     },
 
@@ -176,24 +176,24 @@ pub enum Statement<'a> {
     Presign(PresignStmt),
 
     // share
-    CreateShare(CreateShareStmt<'a>),
-    DropShare(DropShareStmt<'a>),
-    GrantShareObject(GrantShareObjectStmt<'a>),
-    RevokeShareObject(RevokeShareObjectStmt<'a>),
-    AlterShareTenants(AlterShareTenantsStmt<'a>),
-    DescShare(DescShareStmt<'a>),
+    CreateShare(CreateShareStmt),
+    DropShare(DropShareStmt),
+    GrantShareObject(GrantShareObjectStmt),
+    RevokeShareObject(RevokeShareObjectStmt),
+    AlterShareTenants(AlterShareTenantsStmt),
+    DescShare(DescShareStmt),
     ShowShares(ShowSharesStmt),
     ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt),
     ShowGrantsOfShare(ShowGrantsOfShareStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct StatementMsg<'a> {
-    pub(crate) stmt: Statement<'a>,
+pub struct StatementMsg {
+    pub(crate) stmt: Statement,
     pub(crate) format: Option<String>,
 }
 
-impl<'a> Display for Statement<'a> {
+impl Display for Statement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Statement::Explain { kind, query } => {

@@ -58,17 +58,17 @@ pub struct SelectList<'a> {
 
 #[derive(Debug)]
 pub struct SelectItem<'a> {
-    pub select_target: &'a SelectTarget<'a>,
+    pub select_target: &'a SelectTarget,
     pub scalar: ScalarExpr,
     pub alias: String,
 }
 
-impl<'a> Binder {
+impl Binder {
     pub(super) async fn bind_select_stmt(
         &mut self,
         bind_context: &BindContext,
-        stmt: &SelectStmt<'a>,
-        order_by: &[OrderByExpr<'a>],
+        stmt: &SelectStmt,
+        order_by: &[OrderByExpr],
     ) -> Result<(SExpr, BindContext)> {
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             self.bind_one_table(bind_context, stmt).await?
@@ -78,7 +78,7 @@ impl<'a> Binder {
                 .iter()
                 .cloned()
                 .reduce(|left, right| TableReference::Join {
-                    span: &[],
+                    span: None,
                     join: Join {
                         op: JoinOperator::CrossJoin,
                         condition: JoinCondition::None,
@@ -192,7 +192,7 @@ impl<'a> Binder {
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &BindContext,
-        query: &Query<'_>,
+        query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
             for cte in with.ctes.iter() {
@@ -255,7 +255,7 @@ impl<'a> Binder {
     pub(super) async fn bind_where(
         &mut self,
         bind_context: &BindContext,
-        expr: &Expr<'a>,
+        expr: &Expr,
         child: SExpr,
     ) -> Result<SExpr> {
         let mut scalar_binder = ScalarBinder::new(
@@ -277,8 +277,8 @@ impl<'a> Binder {
     pub(super) async fn bind_set_operator(
         &mut self,
         bind_context: &BindContext,
-        left: &SetExpr<'_>,
-        right: &SetExpr<'_>,
+        left: &SetExpr,
+        right: &SetExpr,
         op: &SetOperator,
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {

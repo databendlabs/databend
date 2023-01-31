@@ -40,7 +40,6 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::storages::Table;
@@ -127,16 +126,10 @@ impl Table for AsyncCrashMeTable {
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let output = OutputPort::create();
-        pipeline.add_pipe(Pipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![AsyncCrashMeSource::create(
-                ctx,
-                output,
-                self.panic_message.clone(),
-            )?],
-        });
+        pipeline.add_source(
+            |output| AsyncCrashMeSource::create(ctx.clone(), output, self.panic_message.clone()),
+            1,
+        )?;
 
         Ok(())
     }

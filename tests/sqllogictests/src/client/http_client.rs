@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
@@ -57,17 +58,8 @@ impl HttpClient {
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
-        if self.debug {
-            println!("Running sql with http client: [{sql}]");
-            match &self.session {
-                None => {
-                    println!("Current http session: [None]")
-                }
-                Some(session) => {
-                    println!("Current http session: [{session:?}]")
-                }
-            }
-        }
+        let start = Instant::now();
+
         let url = "http://127.0.0.1:8000/v1/query".to_string();
         let mut response = self.response(sql, &url, true).await?;
         // Set session from response to client
@@ -95,6 +87,14 @@ impl HttpClient {
         if !parsed_rows.is_empty() {
             types = vec![ColumnType::Any; parsed_rows[0].len()];
         }
+
+        if self.debug {
+            println!(
+                "Running sql with http client: [{sql}] ({:?})",
+                start.elapsed()
+            );
+        }
+
         Ok(DBOutput::Rows {
             types,
             rows: parsed_rows,

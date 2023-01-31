@@ -43,6 +43,7 @@ use common_meta_types::Node;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use openraft::Membership;
+use openraft::NodeId;
 use tokio::net::TcpSocket;
 use url::Url;
 
@@ -67,6 +68,8 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     let raft_config = &config.raft_config;
     eprintln!("import meta dir into: {}", raft_config.raft_dir);
 
+    let nodes = build_nodes(config.initial_cluster.clone(), raft_config.id)?;
+
     init_sled_db(raft_config.raft_dir.clone());
 
     clear()?;
@@ -75,12 +78,8 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     if config.initial_cluster.is_empty() {
         return Ok(());
     }
-    init_new_cluster(
-        config.initial_cluster.clone(),
-        max_log_id,
-        config.raft_config.id,
-    )
-    .await?;
+
+    init_new_cluster(nodes, max_log_id, config.raft_config.id).await?;
     Ok(())
 }
 
@@ -145,15 +144,9 @@ fn import_from(restore: String) -> anyhow::Result<Option<LogId>> {
     }
 }
 
-// initial_cluster format: node_id=endpoint,grpc_api_addr;
-async fn init_new_cluster(
-    initial_cluster: Vec<String>,
-    max_log_id: Option<LogId>,
-    id: u64,
-) -> anyhow::Result<()> {
-    eprintln!("init-cluster: {:?}", initial_cluster);
+fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap<NodeId, Node>> {
+    eprintln!("init-cluster: id={}, {:?}", id, initial_cluster);
 
-    let mut node_ids = BTreeSet::new();
     let mut nodes = BTreeMap::new();
     for peer in initial_cluster {
         eprintln!("peer:{}", peer);
@@ -162,7 +155,6 @@ async fn init_new_cluster(
             return Err(anyhow::anyhow!("invalid peer str: {}", peer));
         }
         let id = u64::from_str(node_info[0])?;
-        node_ids.insert(id);
 
         let addrs: Vec<&str> = node_info[1].split(',').collect();
         if addrs.len() != 2 {
@@ -184,6 +176,31 @@ async fn init_new_cluster(
         eprintln!("new cluster node:{}", node);
         nodes.insert(id, node);
     }
+
+    if nodes.is_empty() {
+        return Ok(nodes);
+    }
+
+    if !nodes.contains_key(&id) {
+        return Err(anyhow::anyhow!(
+            "node id ({}) has to be one of cluster member({:?})",
+            id,
+            nodes.keys().collect::<Vec<_>>()
+        ));
+    }
+
+    Ok(nodes)
+}
+
+// initial_cluster format: node_id=endpoint,grpc_api_addr;
+async fn init_new_cluster(
+    nodes: BTreeMap<NodeId, Node>,
+    max_log_id: Option<LogId>,
+    id: u64,
+) -> anyhow::Result<()> {
+    eprintln!("init-cluster: {:?}", nodes);
+
+    let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
 
     let db = get_sled_db();
     let config = RaftConfig {

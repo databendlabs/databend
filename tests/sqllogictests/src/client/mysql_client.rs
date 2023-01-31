@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Instant;
+
 use mysql_async::prelude::Queryable;
 use mysql_async::Conn;
 use mysql_async::Pool;
@@ -36,10 +38,14 @@ impl MySQLClient {
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
-        if self.debug {
-            println!("Running sql with mysql client: [{sql}]");
-        }
+        let start = Instant::now();
         let rows: Vec<Row> = self.conn.query(sql).await?;
+        if self.debug {
+            println!(
+                "Running sql with mysql client: [{sql}] ({:?})",
+                start.elapsed()
+            );
+        };
         let types = vec![ColumnType::Any; rows.len()];
         let mut parsed_rows = Vec::with_capacity(rows.len());
         for row in rows.into_iter() {

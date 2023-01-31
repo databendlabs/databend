@@ -23,7 +23,6 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
 use common_expression::Column;
@@ -359,9 +358,9 @@ impl Processor for NativeDeserializeDataTransform {
                     let prewhere_block = self.block_reader.build_block(arrays.clone())?;
                     let evaluator =
                         Evaluator::new(&prewhere_block, self.func_ctx, &BUILTIN_FUNCTIONS);
-                    let result = evaluator.run(filter).map_err(|(_, e)| {
-                        ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
-                    })?;
+                    let result = evaluator
+                        .run(filter)
+                        .map_err(|e| e.add_message("eval prewhere filter failed:"))?;
                     let filter = FilterHelpers::cast_to_nonull_boolean(&result).unwrap();
 
                     // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
@@ -414,7 +413,7 @@ impl Processor for NativeDeserializeDataTransform {
                 }
             }?;
 
-            // Step 5: Add the block to topk
+            // Step 5: Add the block to output data
             self.add_block(data_block)?;
         }
 

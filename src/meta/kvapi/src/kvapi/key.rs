@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Defines kvapi::KVApi key behaviors.
+
 use std::fmt::Debug;
 use std::string::FromUtf8Error;
 
+use crate::kvapi;
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum KVApiKeyError {
+pub enum KeyError {
     #[error(transparent)]
     FromUtf8Error(#[from] FromUtf8Error),
+
+    #[error("Non-ascii char are not supported: '{non_ascii}'")]
+    AsciiError { non_ascii: String },
 
     #[error("Expect {i}-th segment to be '{expect}', but: '{got}'")]
     InvalidSegment {
@@ -37,24 +44,27 @@ pub enum KVApiKeyError {
     InvalidId { s: String, reason: String },
 }
 
-/// Convert structured key to a string key used by KVApi and backwards
-pub trait KVApiKey: Debug
+/// Convert structured key to a string key used by kvapi::KVApi and backwards
+pub trait Key: Debug
 where Self: Sized
 {
     const PREFIX: &'static str;
 
-    fn to_key(&self) -> String;
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError>;
+    /// Encode structured key into a string.
+    fn to_string_key(&self) -> String;
+
+    /// Decode str into a structured key.
+    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError>;
 }
 
-impl KVApiKey for String {
+impl kvapi::Key for String {
     const PREFIX: &'static str = "";
 
-    fn to_key(&self) -> String {
+    fn to_string_key(&self) -> String {
         self.clone()
     }
 
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
         Ok(s.to_string())
     }
 }
@@ -67,7 +77,7 @@ impl KVApiKey for String {
 /// # Example
 /// ```
 /// let key = "data_bend!!";
-/// let new_key = escape_for_key(&key);
+/// let new_key = escape(&key);
 /// assert_eq!("data_bend%21%21".to_string(), new_key);
 /// ```
 pub fn escape(key: &str) -> String {
@@ -102,7 +112,7 @@ pub fn escape(key: &str) -> String {
 /// # Example
 /// ```
 /// let key = "data_bend%21%21";
-/// let original_key = unescape_for_key(&key);
+/// let original_key = unescape(&key);
 /// assert_eq!(Ok("data_bend!!".to_string()), original_key);
 /// ```
 pub fn unescape(key: &str) -> Result<String, FromUtf8Error> {
@@ -139,11 +149,15 @@ pub fn unescape(key: &str) -> Result<String, FromUtf8Error> {
 }
 
 /// Check if the `i`-th segment absent.
-pub fn check_segment_absent(elt: Option<&str>, i: usize, key: &str) -> Result<(), KVApiKeyError> {
+pub fn check_segment_absent(
+    elt: Option<&str>,
+    i: usize,
+    encoded: &str,
+) -> Result<(), kvapi::KeyError> {
     if elt.is_some() {
-        Err(KVApiKeyError::WrongNumberOfSegments {
+        Err(kvapi::KeyError::WrongNumberOfSegments {
             expect: i,
-            got: key.to_string(),
+            got: encoded.to_string(),
         })
     } else {
         Ok(())
@@ -155,11 +169,11 @@ pub fn check_segment_present<'a>(
     elt: Option<&'a str>,
     i: usize,
     key: &str,
-) -> Result<&'a str, KVApiKeyError> {
+) -> Result<&'a str, kvapi::KeyError> {
     if let Some(s) = elt {
         Ok(s)
     } else {
-        Err(KVApiKeyError::WrongNumberOfSegments {
+        Err(kvapi::KeyError::WrongNumberOfSegments {
             expect: i + 1,
             got: key.to_string(),
         })
@@ -167,9 +181,9 @@ pub fn check_segment_present<'a>(
 }
 
 /// Check if the `i`-th segment equals `expect`.
-pub fn check_segment(elt: &str, i: usize, expect: &str) -> Result<(), KVApiKeyError> {
+pub fn check_segment(elt: &str, i: usize, expect: &str) -> Result<(), kvapi::KeyError> {
     if elt != expect {
-        return Err(KVApiKeyError::InvalidSegment {
+        return Err(kvapi::KeyError::InvalidSegment {
             i,
             expect: expect.to_string(),
             got: elt.to_string(),
@@ -178,8 +192,9 @@ pub fn check_segment(elt: &str, i: usize, expect: &str) -> Result<(), KVApiKeyEr
     Ok(())
 }
 
-pub fn decode_id(s: &str) -> Result<u64, KVApiKeyError> {
-    let id = s.parse::<u64>().map_err(|e| KVApiKeyError::InvalidId {
+/// Decode a string into u64 id.
+pub fn decode_id(s: &str) -> Result<u64, kvapi::KeyError> {
+    let id = s.parse::<u64>().map_err(|e| kvapi::KeyError::InvalidId {
         s: s.to_string(),
         reason: e.to_string(),
     })?;

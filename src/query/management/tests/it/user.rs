@@ -19,7 +19,7 @@ use common_base::base::escape_for_key;
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_management::*;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi;
 use common_meta_types::AuthInfo;
 use common_meta_types::GetKVReply;
 use common_meta_types::KVAppError;
@@ -41,7 +41,9 @@ use mockall::*;
 mock! {
     pub KV {}
     #[async_trait]
-    impl KVApi for KV {
+    impl kvapi::KVApi for KV {
+        type Error = KVAppError;
+
         async fn upsert_kv(
             &self,
             act: UpsertKVReq,

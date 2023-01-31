@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
@@ -47,9 +46,7 @@ impl BlockOperator {
         match self {
             BlockOperator::Map { expr } => {
                 let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
-                let result = evaluator
-                    .run(expr)
-                    .map_err(|(_, e)| ErrorCode::Internal(e))?;
+                let result = evaluator.run(expr)?;
                 let col = BlockEntry {
                     data_type: expr.data_type().clone(),
                     value: result,
@@ -60,9 +57,7 @@ impl BlockOperator {
 
             BlockOperator::Filter { expr } => {
                 let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
-                let filter = evaluator
-                    .run(expr)
-                    .map_err(|(_, e)| ErrorCode::Internal(e))?;
+                let filter = evaluator.run(expr)?;
                 input.filter(&filter)
             }
 

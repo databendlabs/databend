@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 use reqwest::Client;
 use sqllogictest::ColumnType;
@@ -45,9 +46,6 @@ impl ClickhouseHttpClient {
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
-        if self.debug {
-            println!("Running sql with clickhouse client: [{sql}]");
-        }
         // Client will save the following info: use database, settings (session level info)
         // Then send them to server, so even though the session changes, database and settings context is correct
         if let Some(captures) = USE_SQL_RE.captures(sql) {
@@ -76,6 +74,8 @@ impl ClickhouseHttpClient {
                     .map(|(key, value)| (key.as_str(), value.as_str())),
             );
         }
+
+        let start = Instant::now();
         let response = self
             .client
             .post(&self.url)
@@ -83,6 +83,14 @@ impl ClickhouseHttpClient {
             .basic_auth("root", Some(""))
             .send()
             .await?;
+
+        if self.debug {
+            println!(
+                "Running sql with clickhouse client: [{sql}] ({:?})",
+                start.elapsed()
+            );
+        }
+
         // `res` is tsv format
         // Todo: find a better way to parse tsv
         let res = response.text().await?;

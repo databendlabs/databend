@@ -38,19 +38,22 @@ pub async fn query_local(conf: &Config) -> Result<()> {
 
     let sql = get_sql(local_conf.sql, local_conf.table);
 
-    let session = SessionManager::instance()
-        .create_session(SessionType::Local)
-        .await?;
-    let ctx = session.create_query_context().await?;
-    let mut planner = Planner::new(ctx.clone());
-    let (plan, _, _) = planner.plan_sql(&sql).await?;
-    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
-    let stream = interpreter.execute(ctx.clone()).await?;
-    let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
+    let res: Result<_> = try {
+        let session = SessionManager::instance()
+            .create_session(SessionType::Local)
+            .await?;
+        let ctx = session.create_query_context().await?;
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _, _) = planner.plan_sql(&sql).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let stream = interpreter.execute(ctx.clone()).await?;
+        let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
 
-    let schema = interpreter.schema();
-    print_blocks(schema, blocks.as_slice(), now)?;
-    Ok(())
+        let schema = interpreter.schema();
+        print_blocks(schema, blocks.as_slice(), now)?;
+    };
+
+    res.map_err(|err| err.display_with_sql(&sql))
 }
 
 fn get_sql(sql: String, table_str: String) -> String {

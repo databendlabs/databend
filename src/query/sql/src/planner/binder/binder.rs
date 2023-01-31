@@ -75,7 +75,7 @@ impl<'a> Binder {
         }
     }
 
-    pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<Plan> {
+    pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         let init_bind_context = BindContext::new();
         self.bind_statement(&init_bind_context, stmt).await
     }
@@ -84,7 +84,7 @@ impl<'a> Binder {
     pub(crate) async fn bind_statement(
         &mut self,
         bind_context: &BindContext,
-        stmt: &Statement<'a>,
+        stmt: &Statement,
     ) -> Result<Plan> {
         let plan = match stmt {
             Statement::Query(query) => {

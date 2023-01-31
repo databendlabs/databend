@@ -20,7 +20,7 @@ use common_base::base::escape_for_key;
 use common_base::base::unescape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_store::MetaStore;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;

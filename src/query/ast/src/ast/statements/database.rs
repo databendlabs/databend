@@ -22,13 +22,13 @@ use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq)] // Databases
-pub struct ShowDatabasesStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
+pub struct ShowDatabasesStmt {
+    pub catalog: Option<Identifier>,
     pub full: bool,
-    pub limit: Option<ShowLimit<'a>>,
+    pub limit: Option<ShowLimit>,
 }
 
-impl Display for ShowDatabasesStmt<'_> {
+impl Display for ShowDatabasesStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "SHOW ")?;
         if self.full {
@@ -47,12 +47,12 @@ impl Display for ShowDatabasesStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ShowCreateDatabaseStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Identifier<'a>,
+pub struct ShowCreateDatabaseStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Identifier,
 }
 
-impl Display for ShowCreateDatabaseStmt<'_> {
+impl Display for ShowCreateDatabaseStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "SHOW CREATE DATABASE ")?;
         write_period_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
@@ -62,16 +62,16 @@ impl Display for ShowCreateDatabaseStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CreateDatabaseStmt<'a> {
+pub struct CreateDatabaseStmt {
     pub if_not_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Identifier<'a>,
+    pub catalog: Option<Identifier>,
+    pub database: Identifier,
     pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
     pub from_share: Option<ShareNameIdent>,
 }
 
-impl Display for CreateDatabaseStmt<'_> {
+impl Display for CreateDatabaseStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CREATE DATABASE ")?;
         if self.if_not_exists {
@@ -94,13 +94,13 @@ impl Display for CreateDatabaseStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DropDatabaseStmt<'a> {
+pub struct DropDatabaseStmt {
     pub if_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Identifier<'a>,
+    pub catalog: Option<Identifier>,
+    pub database: Identifier,
 }
 
-impl Display for DropDatabaseStmt<'_> {
+impl Display for DropDatabaseStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DROP DATABASE ")?;
         if self.if_exists {
@@ -113,12 +113,12 @@ impl Display for DropDatabaseStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UndropDatabaseStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Identifier<'a>,
+pub struct UndropDatabaseStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Identifier,
 }
 
-impl Display for UndropDatabaseStmt<'_> {
+impl Display for UndropDatabaseStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "UNDROP DATABASE ")?;
         write_period_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
@@ -127,14 +127,14 @@ impl Display for UndropDatabaseStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AlterDatabaseStmt<'a> {
+pub struct AlterDatabaseStmt {
     pub if_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Identifier<'a>,
-    pub action: AlterDatabaseAction<'a>,
+    pub catalog: Option<Identifier>,
+    pub database: Identifier,
+    pub action: AlterDatabaseAction,
 }
 
-impl Display for AlterDatabaseStmt<'_> {
+impl Display for AlterDatabaseStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ALTER DATABASE ")?;
         if self.if_exists {
@@ -152,8 +152,8 @@ impl Display for AlterDatabaseStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AlterDatabaseAction<'a> {
-    RenameDatabase { new_db: Identifier<'a> },
+pub enum AlterDatabaseAction {
+    RenameDatabase { new_db: Identifier },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

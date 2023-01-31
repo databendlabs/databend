@@ -38,12 +38,6 @@ fn mask_string_test() {
 }
 
 #[test]
-fn replace_nth_char_test() {
-    assert_eq!("a23".to_string(), replace_nth_char("a13", 1, '2'));
-    assert_eq!("a13".to_string(), replace_nth_char("a13", 10, '2'));
-}
-
-#[test]
 fn convert_test() {
     assert_eq!(convert_byte_size(0_f64), "0.00 B");
     assert_eq!(convert_byte_size(0.1_f64), "0.10 B");

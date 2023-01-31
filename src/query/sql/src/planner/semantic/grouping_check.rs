@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::parser::token::Token;
-use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;
@@ -41,11 +40,7 @@ impl<'a> GroupingChecker<'a> {
         Self { bind_context }
     }
 
-    pub fn resolve(
-        &mut self,
-        scalar: &ScalarExpr,
-        span: Option<&[Token<'_>]>,
-    ) -> Result<ScalarExpr> {
+    pub fn resolve(&mut self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
         if let Some(index) = self
             .bind_context
             .aggregate_info
@@ -70,12 +65,10 @@ impl<'a> GroupingChecker<'a> {
         match scalar {
             ScalarExpr::BoundColumnRef(column) => {
                 // If this is a group item, then it should have been replaced with `group_items_map`
-                let mut err_msg = format!(
+                Err(ErrorCode::SemanticError(format!(
                     "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
                     &column.column.column_name
-                );
-                err_msg = span.map_or(err_msg.clone(), |span| span.display_error(err_msg.clone()));
-                Err(ErrorCode::SemanticError(err_msg))
+                )).set_span(span))
             }
             ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
             ScalarExpr::AndExpr(scalar) => Ok(AndExpr {

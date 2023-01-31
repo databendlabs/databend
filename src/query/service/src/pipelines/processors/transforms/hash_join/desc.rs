@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_expression::DataBlock;
@@ -106,7 +105,6 @@ impl HashJoinDesc {
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
             .try_reduce(|lhs, rhs| {
                 check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-                    .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))
             })
     }
 }

@@ -45,8 +45,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-
-type DataChunks = Vec<(usize, Vec<u8>)>;
+use crate::MergeIOReadResult;
 
 pub enum MutationAction {
     Deletion,
@@ -55,7 +54,7 @@ pub enum MutationAction {
 
 enum State {
     ReadData(Option<PartInfoPtr>),
-    FilterData(PartInfoPtr, DataChunks),
+    FilterData(PartInfoPtr, MergeIOReadResult),
     ReadRemain {
         part: PartInfoPtr,
         data_block: DataBlock,
@@ -63,7 +62,7 @@ enum State {
     },
     MergeRemain {
         part: PartInfoPtr,
-        chunks: DataChunks,
+        chunks: MergeIOReadResult,
         data_block: DataBlock,
         filter: Value<AnyType>,
     },
@@ -170,7 +169,12 @@ impl Processor for MutationSource {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::FilterData(part, chunks) => {
+            State::FilterData(part, read_res) => {
+                let chunks = read_res
+                    .columns_chunks()?
+                    .into_iter()
+                    .map(|(column_idx, column_chunk)| (column_idx, column_chunk))
+                    .collect::<Vec<_>>();
                 let mut data_block = self
                     .block_reader
                     .deserialize_parquet_chunks(part.clone(), chunks)?;
@@ -180,9 +184,9 @@ impl Processor for MutationSource {
                     let func_ctx = self.ctx.get_function_context()?;
                     let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
-                    let res = evaluator.run(filter).map_err(|(_, e)| {
-                        ErrorCode::Internal(format!("eval filter failed: {}.", e))
-                    })?;
+                    let res = evaluator
+                        .run(filter)
+                        .map_err(|e| e.add_message("eval filter failed:"))?;
                     let predicates =
                         FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
                             ErrorCode::BadArguments(
@@ -273,6 +277,12 @@ impl Processor for MutationSource {
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
+                    let chunks = chunks
+                        .columns_chunks()?
+                        .into_iter()
+                        .map(|(column_idx, column_chunk)| (column_idx, column_chunk))
+                        .collect::<Vec<_>>();
+
                     let remain_block = remain_reader.deserialize_parquet_chunks(part, chunks)?;
 
                     match self.action {
@@ -330,12 +340,7 @@ impl Processor for MutationSource {
                         &fuse_part.columns_meta,
                     )
                     .await?;
-                let chunks = read_res
-                    .columns_chunks()?
-                    .into_iter()
-                    .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
-                    .collect::<Vec<_>>();
-                self.state = State::FilterData(inner_part, chunks);
+                self.state = State::FilterData(inner_part, read_res);
             }
             State::ReadRemain {
                 part,
@@ -353,15 +358,9 @@ impl Processor for MutationSource {
                             &fuse_part.columns_meta,
                         )
                         .await?;
-                    let chunks = read_res
-                        .columns_chunks()?
-                        .into_iter()
-                        .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
-                        .collect::<Vec<_>>();
-
                     self.state = State::MergeRemain {
                         part,
-                        chunks,
+                        chunks: read_res,
                         data_block,
                         filter,
                     };

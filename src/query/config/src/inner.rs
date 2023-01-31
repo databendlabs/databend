@@ -165,8 +165,8 @@ pub struct QueryConfig {
     pub table_cache_segment_count: u64,
     /// Max number of cached bloom index meta objects
     pub table_cache_bloom_index_meta_count: u64,
-    /// Max bytes of cached bloom index
-    pub table_cache_bloom_index_data_bytes: u64,
+    /// Max number of cached bloom index filters
+    pub table_cache_bloom_index_filter_count: u64,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     pub management_mode: bool,
     pub jwt_key_file: String,
@@ -212,7 +212,7 @@ impl Default for QueryConfig {
             table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
-            table_meta_cache_enabled: false,
+            table_meta_cache_enabled: true,
             table_cache_block_meta_count: 102400,
             table_memory_cache_mb_size: 256,
             table_disk_cache_root: "_cache".to_string(),
@@ -221,7 +221,7 @@ impl Default for QueryConfig {
             table_cache_statistic_count: 256,
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,
-            table_cache_bloom_index_data_bytes: 1024 * 1024 * 1024,
+            table_cache_bloom_index_filter_count: 1024 * 1024,
             management_mode: false,
             jwt_key_file: "".to_string(),
             async_insert_max_data_size: 10000,
@@ -273,7 +273,7 @@ impl Default for MetaConfig {
             username: "root".to_string(),
             password: "".to_string(),
             client_timeout_in_second: 10,
-            auto_sync_interval: 10,
+            auto_sync_interval: 0,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
         }

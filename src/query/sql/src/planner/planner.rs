@@ -141,7 +141,7 @@ impl Planner {
         if let Statement::Query(query) = statment {
             if query.limit.is_empty() {
                 query.limit = vec![Expr::Literal {
-                    span: &[],
+                    span: None,
                     lit: Literal::Integer(max_rows),
                 }];
             }

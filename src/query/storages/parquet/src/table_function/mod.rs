@@ -12,9 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod read;
 mod table;
 
-use common_catalog::table_context::TableContext;
-pub use table::arrow_to_table_schema;
-pub use table::ParquetTable;
+pub use table::parse_parquet_table_args;

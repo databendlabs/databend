@@ -18,6 +18,8 @@ use common_catalog::plan::Projection;
 use common_catalog::table::CompactTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::BlockCompactMutator;
@@ -28,7 +30,6 @@ use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;
@@ -176,28 +177,31 @@ impl FuseTable {
         mutator: BlockCompactMutator,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        match pipeline.pipes.last() {
-            None => Err(ErrorCode::Internal("The pipeline is empty.")),
-            Some(pipe) if pipe.output_size() == 0 => {
-                Err(ErrorCode::Internal("The output of the last pipe is 0."))
-            }
-            Some(pipe) => {
-                let input_size = pipe.output_size();
-                let mut inputs_port = Vec::with_capacity(input_size);
-                for _ in 0..input_size {
+        if pipeline.is_empty() {
+            return Err(ErrorCode::Internal("The pipeline is empty."));
+        }
+
+        match pipeline.output_len() {
+            0 => Err(ErrorCode::Internal("The output of the last pipe is 0.")),
+            last_pipe_size => {
+                let mut inputs_port = Vec::with_capacity(last_pipe_size);
+                for _ in 0..last_pipe_size {
                     inputs_port.push(InputPort::create());
                 }
+
                 let output_port = OutputPort::create();
                 let processor = MergeSegmentsTransform::try_create(
                     mutator,
                     inputs_port.clone(),
                     output_port.clone(),
                 )?;
-                pipeline.pipes.push(Pipe::ResizePipe {
-                    inputs_port,
-                    outputs_port: vec![output_port],
+
+                pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
                     processor,
-                });
+                    inputs_port,
+                    vec![output_port],
+                )]));
+
                 Ok(())
             }
         }

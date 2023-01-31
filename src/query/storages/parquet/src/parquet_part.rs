@@ -28,46 +28,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct ParquetLocationPart {
-    pub location: String,
-}
-
-#[typetag::serde(name = "parquet_location")]
-impl PartInfo for ParquetLocationPart {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<ParquetLocationPart>() {
-            None => false,
-            Some(other) => self == other,
-        }
-    }
-
-    fn hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        self.location.hash(&mut s);
-        s.finish()
-    }
-}
-
-impl ParquetLocationPart {
-    pub fn create(location: String) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(ParquetLocationPart { location }))
-    }
-
-    pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetLocationPart> {
-        match info.as_any().downcast_ref::<ParquetLocationPart>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to ParquetLocationPart.",
-            )),
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ColumnMeta {
     pub offset: u64,
     pub length: u64,

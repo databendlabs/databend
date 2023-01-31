@@ -32,13 +32,13 @@ use crate::plans::SettingPlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::VarValue;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_set_variable(
         &mut self,
         bind_context: &BindContext,
         is_global: bool,
-        variable: &Identifier<'a>,
-        value: &Expr<'a>,
+        variable: &Identifier,
+        value: &Expr,
     ) -> Result<Plan> {
         let mut type_checker = TypeChecker::new(
             bind_context,
@@ -77,7 +77,7 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_unset_variable(
         &mut self,
         _bind_context: &BindContext,
-        stmt: &UnSetStmt<'_>,
+        stmt: &UnSetStmt,
     ) -> Result<Plan> {
         match stmt.clone().source {
             UnSetSource::Var { variable } => {

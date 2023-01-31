@@ -33,7 +33,6 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::table_functions::string_literal;
@@ -116,18 +115,18 @@ impl Table for FuseSegmentTable {
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let output = OutputPort::create();
-        pipeline.add_pipe(Pipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![FuseSegmentSource::create(
-                ctx,
-                output,
-                self.arg_database_name.to_owned(),
-                self.arg_table_name.to_owned(),
-                self.arg_snapshot_id.to_owned(),
-            )?],
-        });
+        pipeline.add_source(
+            |output| {
+                FuseSegmentSource::create(
+                    ctx.clone(),
+                    output,
+                    self.arg_database_name.to_owned(),
+                    self.arg_table_name.to_owned(),
+                    self.arg_snapshot_id.to_owned(),
+                )
+            },
+            1,
+        )?;
 
         Ok(())
     }

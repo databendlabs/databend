@@ -20,7 +20,6 @@ use common_expression::DataBlock;
 use super::v2;
 use crate::meta::v0;
 use crate::meta::v1;
-use crate::meta::v2::BlockFilter;
 
 // Here versions of meta are tagged with numeric values
 //
@@ -77,6 +76,8 @@ impl SnapshotVersion {
 
 impl Versioned<0> for v1::TableSnapshotStatistics {}
 
+impl Versioned<2> for DataBlock {}
+
 pub enum TableSnapshotStatisticsVersion {
     V0(PhantomData<v1::TableSnapshotStatistics>),
 }
@@ -93,19 +94,11 @@ impl TableSnapshotStatisticsVersion {
     }
 }
 
-impl Versioned<2> for DataBlock {}
-
-pub struct V0BloomBlock {}
-pub struct V2BloomBlock {}
-
-impl Versioned<0> for V0BloomBlock {}
-impl Versioned<2> for V2BloomBlock {}
-impl Versioned<3> for BlockFilter {}
-
-pub enum BlockBloomFilterIndexVersion {
-    V0(PhantomData<V0BloomBlock>),
-    V2(PhantomData<V2BloomBlock>),
-    V3(PhantomData<v2::BlockFilter>),
+/// Statically check that if T implements Versioned<U> where U equals V
+#[inline]
+pub fn testify_version<T, const V: u64>(t: PhantomData<T>) -> PhantomData<T>
+where T: Versioned<V> {
+    t
 }
 
 mod converters {
@@ -119,10 +112,10 @@ mod converters {
                 0 => Ok(SegmentInfoVersion::V0(
                     // `ver_eq<_, 0>` is merely a static check to make sure that
                     // the type `v0::SegmentInfoVersion` do have a numeric version number of 0
-                    ver_eq::<_, 0>(PhantomData),
+                    testify_version::<_, 0>(PhantomData),
                 )),
-                1 => Ok(SegmentInfoVersion::V1(ver_eq::<_, 1>(PhantomData))),
-                2 => Ok(SegmentInfoVersion::V2(ver_eq::<_, 2>(PhantomData))),
+                1 => Ok(SegmentInfoVersion::V1(testify_version::<_, 1>(PhantomData))),
+                2 => Ok(SegmentInfoVersion::V2(testify_version::<_, 2>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
                     "unknown segment version {value}, versions supported: 0, 1"
                 ))),
@@ -134,9 +127,9 @@ mod converters {
         type Error = ErrorCode;
         fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
-                0 => Ok(SnapshotVersion::V0(ver_eq::<_, 0>(PhantomData))),
-                1 => Ok(SnapshotVersion::V1(ver_eq::<_, 1>(PhantomData))),
-                2 => Ok(SnapshotVersion::V2(ver_eq::<_, 2>(PhantomData))),
+                0 => Ok(SnapshotVersion::V0(testify_version::<_, 0>(PhantomData))),
+                1 => Ok(SnapshotVersion::V1(testify_version::<_, 1>(PhantomData))),
+                2 => Ok(SnapshotVersion::V2(testify_version::<_, 2>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
                     "unknown snapshot segment version {value}, versions supported: 0, 1, 2"
                 ))),
@@ -148,7 +141,7 @@ mod converters {
         type Error = ErrorCode;
         fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
-                0 => Ok(TableSnapshotStatisticsVersion::V0(ver_eq::<_, 0>(
+                0 => Ok(TableSnapshotStatisticsVersion::V0(testify_version::<_, 0>(
                     PhantomData,
                 ))),
                 _ => Err(ErrorCode::Internal(format!(
@@ -156,33 +149,5 @@ mod converters {
                 ))),
             }
         }
-    }
-
-    impl TryFrom<u64> for BlockBloomFilterIndexVersion {
-        type Error = ErrorCode;
-        fn try_from(value: u64) -> Result<Self, Self::Error> {
-            match value {
-                1 => Err(ErrorCode::DeprecatedIndexFormat(
-                    "v1 bloom filter index is deprecated",
-                )),
-                // version 2 and version 3 are using the same StringColumn to storage the bloom filter
-                2 => Ok(BlockBloomFilterIndexVersion::V2(ver_eq::<_, 2>(
-                    PhantomData,
-                ))),
-                3 => Ok(BlockBloomFilterIndexVersion::V3(ver_eq::<_, 3>(
-                    PhantomData,
-                ))),
-                _ => Err(ErrorCode::Internal(format!(
-                    "unknown block bloom filer index version {value}, versions supported: 1"
-                ))),
-            }
-        }
-    }
-
-    /// Statically check that if T implements Versioned<U> where U equals V
-    #[inline]
-    fn ver_eq<T, const V: u64>(t: PhantomData<T>) -> PhantomData<T>
-    where T: Versioned<V> {
-        t
     }
 }

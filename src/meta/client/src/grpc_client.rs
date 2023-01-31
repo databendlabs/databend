@@ -37,7 +37,7 @@ use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
@@ -255,7 +255,6 @@ pub struct MetaGrpcClient {
     /// If a background task is blocked, no meta-client will be able to proceed if meta-client is reused.
     ///
     /// Note that a thread_pool tokio runtime does not help: a scheduled tokio-task resides in `filo_slot` won't be stolen by other tokio-workers.
-    /// TODO: dead code
     #[allow(dead_code)]
     rt: Arc<Runtime>,
 }

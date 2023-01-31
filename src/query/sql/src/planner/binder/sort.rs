@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::OrderByExpr;
-use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -46,27 +45,27 @@ use crate::plans::SortItem;
 use crate::BindContext;
 use crate::IndexType;
 
-pub struct OrderItems<'a> {
-    items: Vec<OrderItem<'a>>,
+pub struct OrderItems {
+    items: Vec<OrderItem>,
 }
 
-pub struct OrderItem<'a> {
-    pub expr: OrderByExpr<'a>,
+pub struct OrderItem {
+    pub expr: OrderByExpr,
     pub index: IndexType,
     pub name: String,
     // True if item need to wrap EvalScalar plan.
     pub need_eval_scalar: bool,
 }
 
-impl<'a> Binder {
+impl Binder {
     pub(super) async fn analyze_order_items(
         &mut self,
         from_context: &BindContext,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         projections: &[ColumnBinding],
-        order_by: &'a [OrderByExpr<'a>],
+        order_by: &[OrderByExpr],
         distinct: bool,
-    ) -> Result<OrderItems<'a>> {
+    ) -> Result<OrderItems> {
         let mut order_items = Vec::with_capacity(order_by.len());
         for order in order_by {
             match &order.expr {
@@ -122,11 +121,11 @@ impl<'a> Binder {
                         database.as_deref(),
                         table.as_deref(),
                         &column,
-                        &ident.span,
+                        ident.span,
                        &[])
                     .and_then(|v| {
                         if distinct {
-                            Err(ErrorCode::SemanticError(order.expr.span().display_error("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string())))
+                            Err(ErrorCode::SemanticError("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string()).set_span(order.expr.span()))
                         } else {
                             Ok(v)
                         }
@@ -151,9 +150,11 @@ impl<'a> Binder {
                 } => {
                     let index = *index as usize - 1;
                     if index >= projections.len() {
-                        return Err(ErrorCode::SemanticError(order.expr.span().display_error(
-                            format!("ORDER BY position {} is not in select list", index + 1),
-                        )));
+                        return Err(ErrorCode::SemanticError(format!(
+                            "ORDER BY position {} is not in select list",
+                            index + 1
+                        ))
+                        .set_span(order.expr.span()));
                     }
                     order_items.push(OrderItem {
                         expr: order.clone(),
@@ -215,8 +216,8 @@ impl<'a> Binder {
     pub(super) async fn bind_order_by(
         &mut self,
         from_context: &BindContext,
-        order_by: OrderItems<'a>,
-        select_list: &'a SelectList<'a>,
+        order_by: OrderItems,
+        select_list: &SelectList<'_>,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
@@ -302,7 +303,7 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         child: SExpr,
-        order_by: &[OrderByExpr<'_>],
+        order_by: &[OrderByExpr],
     ) -> Result<SExpr> {
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
@@ -331,12 +332,10 @@ impl<'a> Binder {
                     }
                 }
                 _ => {
-                    return Err(ErrorCode::SemanticError(
-                        order
-                            .expr
-                            .span()
-                            .display_error("can only order by column".to_string()),
-                    ));
+                    return Err(
+                        ErrorCode::SemanticError("can only order by column".to_string())
+                            .set_span(order.expr.span()),
+                    );
                 }
             }
         }

@@ -29,16 +29,16 @@ use crate::ast::TypeName;
 use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq)] // Tables
-pub struct ShowTablesStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
+pub struct ShowTablesStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
     pub full: bool,
-    pub limit: Option<ShowLimit<'a>>,
+    pub limit: Option<ShowLimit>,
     pub with_history: bool,
 }
 
-impl Display for ShowTablesStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for ShowTablesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW")?;
         if self.full {
             write!(f, " FULL")?;
@@ -63,14 +63,14 @@ impl Display for ShowTablesStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ShowCreateTableStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
+pub struct ShowCreateTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
 }
 
-impl Display for ShowCreateTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for ShowCreateTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW CREATE TABLE ")?;
         write_period_separated_list(
             f,
@@ -83,13 +83,13 @@ impl Display for ShowCreateTableStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ShowTablesStatusStmt<'a> {
-    pub database: Option<Identifier<'a>>,
-    pub limit: Option<ShowLimit<'a>>,
+pub struct ShowTablesStatusStmt {
+    pub database: Option<Identifier>,
+    pub limit: Option<ShowLimit>,
 }
 
-impl Display for ShowTablesStatusStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for ShowTablesStatusStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW TABLE STATUS")?;
         if let Some(database) = &self.database {
             write!(f, " FROM {database}")?;
@@ -103,22 +103,22 @@ impl Display for ShowTablesStatusStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CreateTableStmt<'a> {
+pub struct CreateTableStmt {
     pub if_not_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
-    pub source: Option<CreateTableSource<'a>>,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub source: Option<CreateTableSource>,
     pub engine: Option<Engine>,
     pub uri_location: Option<UriLocation>,
-    pub cluster_by: Vec<Expr<'a>>,
+    pub cluster_by: Vec<Expr>,
     pub table_options: BTreeMap<String, String>,
-    pub as_query: Option<Box<Query<'a>>>,
+    pub as_query: Option<Box<Query>>,
     pub transient: bool,
 }
 
-impl Display for CreateTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for CreateTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if self.transient {
             write!(f, "TRANSIENT ")?;
@@ -161,17 +161,17 @@ impl Display for CreateTableStmt<'_> {
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum CreateTableSource<'a> {
-    Columns(Vec<ColumnDefinition<'a>>),
+pub enum CreateTableSource {
+    Columns(Vec<ColumnDefinition>),
     Like {
-        catalog: Option<Identifier<'a>>,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
     },
 }
 
-impl Display for CreateTableSource<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for CreateTableSource {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CreateTableSource::Columns(columns) => {
                 write!(f, "(")?;
@@ -191,14 +191,14 @@ impl Display for CreateTableSource<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DescribeTableStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
+pub struct DescribeTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
 }
 
-impl Display for DescribeTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for DescribeTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DESCRIBE ")?;
         write_period_separated_list(
             f,
@@ -210,16 +210,16 @@ impl Display for DescribeTableStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DropTableStmt<'a> {
+pub struct DropTableStmt {
     pub if_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
     pub all: bool,
 }
 
-impl Display for DropTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for DropTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP TABLE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -240,14 +240,14 @@ impl Display for DropTableStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UndropTableStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
+pub struct UndropTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
 }
 
-impl Display for UndropTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for UndropTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UNDROP TABLE ")?;
         write_period_separated_list(
             f,
@@ -260,14 +260,14 @@ impl Display for UndropTableStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AlterTableStmt<'a> {
+pub struct AlterTableStmt {
     pub if_exists: bool,
-    pub table_reference: TableReference<'a>,
-    pub action: AlterTableAction<'a>,
+    pub table_reference: TableReference,
+    pub action: AlterTableAction,
 }
 
-impl Display for AlterTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for AlterTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER TABLE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -278,25 +278,25 @@ impl Display for AlterTableStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AlterTableAction<'a> {
+pub enum AlterTableAction {
     RenameTable {
-        new_table: Identifier<'a>,
+        new_table: Identifier,
     },
     AlterTableClusterKey {
-        cluster_by: Vec<Expr<'a>>,
+        cluster_by: Vec<Expr>,
     },
     DropTableClusterKey,
     ReclusterTable {
         is_final: bool,
-        selection: Option<Expr<'a>>,
+        selection: Option<Expr>,
     },
     RevertTo {
-        point: TimeTravelPoint<'a>,
+        point: TimeTravelPoint,
     },
 }
 
-impl Display for AlterTableAction<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for AlterTableAction {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")
@@ -330,18 +330,18 @@ impl Display for AlterTableAction<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenameTableStmt<'a> {
+pub struct RenameTableStmt {
     pub if_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
-    pub new_catalog: Option<Identifier<'a>>,
-    pub new_database: Option<Identifier<'a>>,
-    pub new_table: Identifier<'a>,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub new_catalog: Option<Identifier>,
+    pub new_database: Option<Identifier>,
+    pub new_table: Identifier,
 }
 
-impl Display for RenameTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for RenameTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "RENAME TABLE ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
@@ -365,15 +365,15 @@ impl Display for RenameTableStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TruncateTableStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
+pub struct TruncateTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
     pub purge: bool,
 }
 
-impl Display for TruncateTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for TruncateTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "TRUNCATE TABLE ")?;
         write_period_separated_list(
             f,
@@ -391,15 +391,15 @@ impl Display for TruncateTableStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct OptimizeTableStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
-    pub action: OptimizeTableAction<'a>,
+pub struct OptimizeTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub action: OptimizeTableAction,
 }
 
-impl Display for OptimizeTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for OptimizeTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "OPTIMIZE TABLE ")?;
         write_period_separated_list(
             f,
@@ -415,14 +415,14 @@ impl Display for OptimizeTableStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AnalyzeTableStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
+pub struct AnalyzeTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
 }
 
-impl Display for AnalyzeTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for AnalyzeTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ANALYZE TABLE ")?;
         write_period_separated_list(
             f,
@@ -437,14 +437,14 @@ impl Display for AnalyzeTableStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExistsTableStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub table: Identifier<'a>,
+pub struct ExistsTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
 }
 
-impl Display for ExistsTableStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for ExistsTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "EXISTS TABLE ")?;
         write_period_separated_list(
             f,
@@ -466,7 +466,7 @@ pub enum Engine {
 }
 
 impl Display for Engine {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Engine::Null => write!(f, "NULL"),
             Engine::Memory => write!(f, "MEMORY"),
@@ -484,19 +484,19 @@ pub enum CompactTarget {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum OptimizeTableAction<'a> {
+pub enum OptimizeTableAction {
     All,
     Purge {
-        before: Option<TimeTravelPoint<'a>>,
+        before: Option<TimeTravelPoint>,
     },
     Compact {
         target: CompactTarget,
-        limit: Option<Expr<'a>>,
+        limit: Option<Expr>,
     },
 }
 
-impl<'a> Display for OptimizeTableAction<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for OptimizeTableAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             OptimizeTableAction::All => write!(f, "ALL"),
             OptimizeTableAction::Purge { before } => {
@@ -525,15 +525,15 @@ impl<'a> Display for OptimizeTableAction<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ColumnDefinition<'a> {
-    pub name: Identifier<'a>,
+pub struct ColumnDefinition {
+    pub name: Identifier,
     pub data_type: TypeName,
-    pub default_expr: Option<Box<Expr<'a>>>,
+    pub default_expr: Option<Box<Expr>>,
     pub comment: Option<String>,
 }
 
-impl<'a> Display for ColumnDefinition<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for ColumnDefinition {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
 
         if !matches!(self.data_type, TypeName::Nullable(_)) {

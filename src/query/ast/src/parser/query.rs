@@ -47,7 +47,7 @@ pub fn query(i: Input) -> IResult<Query> {
             (with, body, opt_order_by_block, opt_limit_block, opt_offset_block, opt_ignore_result),
         )| {
             Query {
-                span: span.0,
+                span: transform_span(span.0),
                 with,
                 body,
                 order_by: opt_order_by_block
@@ -67,7 +67,7 @@ pub fn with(i: Input) -> IResult<With> {
             #table_alias ~ AS ~ "(" ~ #query ~ ")"
         }),
         |(span, (table_alias, _, _, query, _))| CTE {
-            span: span.0,
+            span: transform_span(span.0),
             alias: table_alias,
             query,
         },
@@ -78,7 +78,7 @@ pub fn with(i: Input) -> IResult<With> {
             WITH ~ RECURSIVE? ~ ^#comma_separated_list1(cte)
         }),
         |(span, (_, recursive, ctes))| With {
-            span: span.0,
+            span: transform_span(span.0),
             recursive: recursive.is_some(),
             ctes,
         },
@@ -232,11 +232,11 @@ pub fn table_reference(i: Input) -> IResult<TableReference> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TableFunctionParam<'a> {
+pub enum TableFunctionParam {
     // func(name => arg)
-    Named { name: String, value: Expr<'a> },
+    Named { name: String, value: Expr },
     // func(arg)
-    Normal(Expr<'a>),
+    Normal(Expr),
 }
 
 pub fn table_function_param(i: Input) -> IResult<TableFunctionParam> {
@@ -254,24 +254,24 @@ pub fn table_function_param(i: Input) -> IResult<TableFunctionParam> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TableReferenceElement<'a> {
+pub enum TableReferenceElement {
     Table {
-        catalog: Option<Identifier<'a>>,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
-        alias: Option<TableAlias<'a>>,
-        travel_point: Option<TimeTravelPoint<'a>>,
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
+        alias: Option<TableAlias>,
+        travel_point: Option<TimeTravelPoint>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
-        name: Identifier<'a>,
-        params: Vec<TableFunctionParam<'a>>,
-        alias: Option<TableAlias<'a>>,
+        name: Identifier,
+        params: Vec<TableFunctionParam>,
+        alias: Option<TableAlias>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
-        subquery: Box<Query<'a>>,
-        alias: Option<TableAlias<'a>>,
+        subquery: Box<Query>,
+        alias: Option<TableAlias>,
     },
     // [NATURAL] [INNER|OUTER|CROSS|...] JOIN
     Join {
@@ -279,12 +279,12 @@ pub enum TableReferenceElement<'a> {
         natural: bool,
     },
     // ON expr | USING (ident, ...)
-    JoinCondition(JoinCondition<'a>),
-    Group(TableReference<'a>),
+    JoinCondition(JoinCondition),
+    Group(TableReference),
     Stage {
         location: FileLocation,
         files: Vec<String>,
-        alias: Option<TableAlias<'a>>,
+        alias: Option<TableAlias>,
     },
 }
 
@@ -392,12 +392,12 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
 
 struct TableReferenceParser;
 
-impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement<'a>>>> PrattParser<I>
+impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
     for TableReferenceParser
 {
     type Error = &'static str;
-    type Input = WithSpan<'a, TableReferenceElement<'a>>;
-    type Output = TableReference<'a>;
+    type Input = WithSpan<'a, TableReferenceElement>;
+    type Output = TableReference;
 
     fn query(&mut self, input: &Self::Input) -> Result<Affix, &'static str> {
         let affix = match &input.elem {
@@ -418,7 +418,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement<'a>>>> PrattParse
                 alias,
                 travel_point,
             } => TableReference::Table {
-                span: input.span.0,
+                span: transform_span(input.span.0),
                 catalog,
                 database,
                 table,
@@ -445,7 +445,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement<'a>>>> PrattParse
                     })
                     .collect();
                 TableReference::TableFunction {
-                    span: input.span.0,
+                    span: transform_span(input.span.0),
                     name,
                     params: normal_params,
                     named_params,
@@ -453,7 +453,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement<'a>>>> PrattParse
                 }
             }
             TableReferenceElement::Subquery { subquery, alias } => TableReference::Subquery {
-                span: input.span.0,
+                span: transform_span(input.span.0),
                 subquery,
                 alias,
             },
@@ -462,7 +462,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement<'a>>>> PrattParse
                 files,
                 alias,
             } => TableReference::Stage {
-                span: input.span.0,
+                span: transform_span(input.span.0),
                 location,
                 files,
                 alias,
@@ -486,7 +486,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement<'a>>>> PrattParse
                     JoinCondition::None
                 };
                 TableReference::Join {
-                    span: input.span.0,
+                    span: transform_span(input.span.0),
                     join: Join {
                         op,
                         condition,
@@ -540,20 +540,20 @@ pub fn set_operation(i: Input) -> IResult<SetExpr> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum SetOperationElement<'a> {
+pub enum SetOperationElement {
     SelectStmt {
         distinct: bool,
-        select_list: Box<Vec<SelectTarget<'a>>>,
-        from: Box<Vec<TableReference<'a>>>,
-        selection: Box<Option<Expr<'a>>>,
-        group_by: Box<Vec<Expr<'a>>>,
-        having: Box<Option<Expr<'a>>>,
+        select_list: Box<Vec<SelectTarget>>,
+        from: Box<Vec<TableReference>>,
+        selection: Box<Option<Expr>>,
+        group_by: Box<Vec<Expr>>,
+        having: Box<Option<Expr>>,
     },
     SetOperation {
         op: SetOperator,
         all: bool,
     },
-    Group(SetExpr<'a>),
+    Group(SetExpr),
 }
 
 pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
@@ -622,12 +622,12 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
 
 struct SetOperationParser;
 
-impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement<'a>>>> PrattParser<I>
+impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
     for SetOperationParser
 {
     type Error = &'static str;
-    type Input = WithSpan<'a, SetOperationElement<'a>>;
-    type Output = SetExpr<'a>;
+    type Input = WithSpan<'a, SetOperationElement>;
+    type Output = SetExpr;
 
     fn query(&mut self, input: &Self::Input) -> Result<Affix, &'static str> {
         let affix = match &input.elem {
@@ -653,7 +653,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement<'a>>>> PrattParser<
                 group_by,
                 having,
             } => SetExpr::Select(Box::new(SelectStmt {
-                span: input.span.0,
+                span: transform_span(input.span.0),
                 distinct,
                 select_list: *select_list,
                 from: *from,
@@ -675,7 +675,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement<'a>>>> PrattParser<
         let set_expr = match input.elem {
             SetOperationElement::SetOperation { op, all, .. } => {
                 SetExpr::SetOperation(Box::new(SetOperation {
-                    span: input.span.0,
+                    span: transform_span(input.span.0),
                     op,
                     all,
                     left: Box::new(lhs),

@@ -24,12 +24,13 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -395,11 +396,11 @@ fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + S
     let output = transform.get_output();
     let inputs_port = transform.get_inputs();
 
-    pipeline.add_pipe(Pipe::ResizePipe {
+    pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(transform)),
         inputs_port,
-        outputs_port: vec![output],
-        processor: ProcessorPtr::create(Box::new(transform)),
-    });
+        vec![output],
+    )]));
 
     pipeline.resize(input_nums)?;
 
@@ -502,9 +503,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_block.take() {
+        if let Some(mut data_block) = self.input_block.take() {
             let mut blocks = vec![];
-            if let Some(meta) = data_block.get_meta() {
+            if let Some(meta) = data_block.take_meta() {
                 if let Some(meta) = meta.as_any().downcast_ref::<ConvertGroupingMetaInfo>() {
                     blocks.extend(meta.blocks.iter().cloned());
                 }

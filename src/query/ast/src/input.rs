@@ -23,7 +23,7 @@ use crate::Backtrace;
 /// Input tokens slice with a backtrace that records all errors including
 /// the optional branch.
 #[derive(Debug, Clone, Copy)]
-pub struct Input<'a>(pub &'a [Token<'a>], pub Dialect, pub &'a Backtrace<'a>);
+pub struct Input<'a>(pub &'a [Token<'a>], pub Dialect, pub &'a Backtrace);
 
 impl<'a> std::ops::Deref for Input<'a> {
     type Target = [Token<'a>];

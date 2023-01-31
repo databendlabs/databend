@@ -17,9 +17,9 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use common_base::base::tokio;
-use common_meta_api::ApiBuilder;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_api::ShareApiTestSuite;
+use common_meta_kvapi::kvapi;
 use common_meta_raft_store::state_machine::StateMachine;
 
 use crate::testing::new_raft_test_context;
@@ -31,7 +31,7 @@ struct StateMachineBuilder {
 }
 
 #[async_trait]
-impl ApiBuilder<StateMachine> for StateMachineBuilder {
+impl kvapi::ApiBuilder<StateMachine> for StateMachineBuilder {
     async fn build(&self) -> StateMachine {
         let tc = new_raft_test_context();
         let sm = StateMachine::open(&tc.raft_config, 1).await.unwrap();

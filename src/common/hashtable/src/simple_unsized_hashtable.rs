@@ -567,7 +567,6 @@ where A: Allocator + Clone + Default
                 .table_empty
                 .insert()
                 .map(|x| {
-                    self.key_size += key.len();
                     SimpleUnsizedHashtableEntryMutRef(
                         SimpleUnsizedHashtableEntryMutRefInner::TableEmpty(x, PhantomData),
                     )

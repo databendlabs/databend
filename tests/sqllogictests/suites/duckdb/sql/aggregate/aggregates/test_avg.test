@@ -24,10 +24,7 @@ SELECT AVG(3::DOUBLE), AVG(NULL::DOUBLE)
 statement error 1005
 CREATE SEQUENCE seq
 
-statement error 1065
-SELECT AVG(nextval('seq'))
-
-statement error 1065
+statement error 1008
 SELECT AVG(nextval('seq'))
 
 statement ok
@@ -49,10 +46,10 @@ SELECT AVG(i) FROM integers WHERE i > 100
 ----
 NULL
 
-statement error 1065
+statement error 1028
 SELECT AVG()
 
-statement error 1065
+statement error 1028
 SELECT AVG(1, 2, 3)
 
 statement error 1065

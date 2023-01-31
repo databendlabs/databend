@@ -19,25 +19,25 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UnSetStmt<'a> {
-    pub source: UnSetSource<'a>,
+pub struct UnSetStmt {
+    pub source: UnSetSource,
 }
 
-impl Display for UnSetStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for UnSetStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UNSET ")?;
         write!(f, "{}", self.source)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum UnSetSource<'a> {
-    Var { variable: Identifier<'a> },
-    Vars { variables: Vec<Identifier<'a>> },
+pub enum UnSetSource {
+    Var { variable: Identifier },
+    Vars { variables: Vec<Identifier> },
 }
 
-impl Display for UnSetSource<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for UnSetSource {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             UnSetSource::Var { variable } => write!(f, "{variable}"),
             UnSetSource::Vars { variables } => {

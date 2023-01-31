@@ -58,15 +58,35 @@ pub struct PresignStmt {
     pub action: PresignAction,
     pub location: PresignLocation,
     pub expire: Duration,
+    pub content_type: Option<String>,
 }
 
 impl Display for PresignStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "PRESIGN {} EXPIRE = {}",
+            "PRESIGN {} {} EXPIRE = {}",
+            self.action,
             self.location,
             self.expire.as_secs()
-        )
+        )?;
+        if let Some(content_type) = &self.content_type {
+            write!(f, " CONTENT_TYPE = '{}'", content_type)?;
+        }
+        Ok(())
     }
+}
+
+impl PresignStmt {
+    pub fn apply_option(&mut self, opt: PresignOption) {
+        match opt {
+            PresignOption::Expire(v) => self.expire = Duration::from_secs(v),
+            PresignOption::ContentType(v) => self.content_type = Some(v),
+        }
+    }
+}
+
+pub enum PresignOption {
+    ContentType(String),
+    Expire(u64),
 }

@@ -22,16 +22,15 @@ common-functions = { path = "../../../functions" }
 
 storages-common-table-meta = { path = "../table-meta" }
 
-xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = [
-    "cbordata",
-], tag = "databend-alpha.4" }
-
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
 match-template = "0.0.1"
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = "0.1.36"
+xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = [
+    "cbordata",
+], tag = "databend-alpha.4" }
 
 [dev-dependencies]
 criterion = "0.4"

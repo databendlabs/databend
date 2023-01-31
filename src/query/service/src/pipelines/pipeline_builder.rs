@@ -27,7 +27,6 @@ use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::EmptySink;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
@@ -52,7 +51,6 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 
-use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
@@ -251,7 +249,6 @@ impl PipelineBuilder {
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
             .try_reduce(|lhs, rhs| {
                 check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-                    .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))
             })
             .transpose()
             .unwrap_or_else(|| {
@@ -559,21 +556,11 @@ impl PipelineBuilder {
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
 
         let (tx, rx) = async_channel::unbounded();
-        let mut inputs_port = Vec::with_capacity(build_res.main_pipeline.output_len());
-        let mut processors = Vec::with_capacity(build_res.main_pipeline.output_len());
-        for _ in 0..build_res.main_pipeline.output_len() {
-            let input_port = InputPort::create();
-            processors.push(UnionReceiveSink::create(
-                Some(tx.clone()),
-                input_port.clone(),
-            ));
-            inputs_port.push(input_port);
-        }
-        build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
-            outputs_port: vec![],
-            inputs_port,
-            processors,
-        });
+
+        build_res
+            .main_pipeline
+            .add_sink(|input_port| Ok(UnionReceiveSink::create(Some(tx.clone()), input_port)))?;
+
         self.pipelines.push(build_res.main_pipeline);
         self.pipelines
             .extend(build_res.sources_pipelines.into_iter());

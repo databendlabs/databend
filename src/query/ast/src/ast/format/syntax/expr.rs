@@ -23,7 +23,7 @@ use crate::ast::BinaryOperator;
 use crate::ast::Expr;
 use crate::ast::MapAccessor;
 
-pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
+pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
     match expr {
         Expr::ColumnRef {
             database,
@@ -272,7 +272,7 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
                                 .append(RcDoc::space())
                                 .append(RcDoc::text("THEN"))
                                 .append(RcDoc::space())
-                                .append(pretty_expr(res.clone()))
+                                .append(pretty_expr(res))
                         },
                     )))
                     .nest(NEST_FACTOR)

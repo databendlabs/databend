@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_base::base::tokio;
-use common_meta_api::KVApiTestSuite;
+use common_meta_kvapi::kvapi;
 use databend_meta::init_meta_ut;
 
 use crate::tests::service::MetaSrvBuilder;
@@ -27,5 +27,5 @@ async fn test_metasrv_kv_api() -> anyhow::Result<()> {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
 
-    KVApiTestSuite {}.test_all(builder).await
+    kvapi::TestSuite {}.test_all(builder).await
 }

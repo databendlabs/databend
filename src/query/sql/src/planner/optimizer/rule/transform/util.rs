@@ -38,8 +38,7 @@ pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
                     right_cond.as_raw_expr_with_col_name(),
                 ],
             };
-            let expr = type_check::check(&raw_expr, registry)
-                .map_err(|(_, e)| common_exception::ErrorCode::SemanticError(e))?;
+            let expr = type_check::check(&raw_expr, registry)?;
             Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
                 left: Box::new(left_cond.clone()),
                 right: Box::new(right_cond.clone()),

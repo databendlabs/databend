@@ -17,11 +17,11 @@ use std::collections::HashSet;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
-use common_ast::parser::token::Token;
 use common_ast::walk_expr;
 use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 use common_functions::is_builtin_function;
 
 #[derive(Default)]
@@ -71,20 +71,20 @@ impl UDFValidator {
 impl<'ast> Visitor<'ast> for UDFValidator {
     fn visit_column_ref(
         &mut self,
-        _span: &'ast [Token<'ast>],
-        _database: &'ast Option<Identifier<'ast>>,
-        _table: &'ast Option<Identifier<'ast>>,
-        column: &'ast Identifier<'ast>,
+        _span: Span,
+        _database: &'ast Option<Identifier>,
+        _table: &'ast Option<Identifier>,
+        column: &'ast Identifier,
     ) {
         self.expr_params.insert(column.to_string());
     }
 
     fn visit_function_call(
         &mut self,
-        _span: &'ast [Token<'ast>],
+        _span: Span,
         _distinct: bool,
-        name: &'ast Identifier<'ast>,
-        args: &'ast [Expr<'ast>],
+        name: &'ast Identifier,
+        args: &'ast [Expr],
         _params: &'ast [Literal],
     ) {
         let name = name.to_string();

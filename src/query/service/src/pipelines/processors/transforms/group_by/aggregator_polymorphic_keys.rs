@@ -17,7 +17,6 @@ use std::marker::PhantomData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::*;
-use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::ValueType;
 use common_expression::Column;
@@ -283,7 +282,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, u128>;
     fn keys_column_builder(&self, capacity: usize, _: usize) -> LargeFixedKeysColumnBuilder<u128> {
         LargeFixedKeysColumnBuilder {
-            inner_builder: StringColumnBuilder::with_capacity(capacity, capacity * 16),
+            values: Vec::with_capacity(capacity * 16),
             _t: PhantomData,
         }
     }
@@ -324,7 +323,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, U256>;
     fn keys_column_builder(&self, capacity: usize, _: usize) -> LargeFixedKeysColumnBuilder<U256> {
         LargeFixedKeysColumnBuilder {
-            inner_builder: StringColumnBuilder::with_capacity(capacity, capacity * 32),
+            values: Vec::with_capacity(capacity * 32),
             _t: PhantomData,
         }
     }
@@ -366,7 +365,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
     fn keys_column_builder(&self, capacity: usize, _: usize) -> LargeFixedKeysColumnBuilder<U512> {
         LargeFixedKeysColumnBuilder {
             _t: PhantomData::default(),
-            inner_builder: StringColumnBuilder::with_capacity(capacity, capacity * 64),
+            values: Vec::with_capacity(capacity * 64),
         }
     }
 
