@@ -61,12 +61,12 @@ fn test_project_schema_from_tuple() -> Result<()> {
         ];
 
         let mut path_indices = BTreeMap::new();
-        path_indices.insert(0, vec![0]);
-        path_indices.insert(1, vec![1, 0, 0]);
-        path_indices.insert(2, vec![1, 0, 1]);
-        path_indices.insert(3, vec![1, 1]);
-        path_indices.insert(4, vec![1, 0]);
-        path_indices.insert(5, vec![1]);
+        path_indices.insert(0, vec![0]); // a
+        path_indices.insert(1, vec![1, 0, 0]); // b:b1:b11
+        path_indices.insert(2, vec![1, 0, 1]); // b:b1:b12
+        path_indices.insert(3, vec![1, 1]); // b:b2
+        path_indices.insert(4, vec![1, 0]); // b:b1
+        path_indices.insert(5, vec![1]); // b
         let project_schema = schema.inner_project(&path_indices);
 
         for (i, field) in project_schema.fields().iter().enumerate() {
@@ -74,7 +74,27 @@ fn test_project_schema_from_tuple() -> Result<()> {
         }
         assert_eq!(project_schema.next_column_id(), schema.next_column_id());
         assert_eq!(project_schema.column_id_set(), schema.column_id_set());
-    }
+
+        // check leaf fields
+        {
+            let expected_column_id_field = vec![
+                (0, "a"),
+                (1, "b:b1:b11"),
+                (2, "b:b1:b12"),
+                (3, "b:b2"),
+                (1, "b11"),
+                (2, "b12"),
+                (1, "b11"),
+                (2, "b12"),
+                (3, "b2"),
+            ];
+            let (column_ids, leaf_fields) = project_schema.leaf_fields();
+            for (i, (column_id, leaf_field)) in column_ids.iter().zip(leaf_fields).enumerate() {
+                assert_eq!(expected_column_id_field[i].0, *column_id);
+                assert_eq!(expected_column_id_field[i].1, leaf_field.name());
+            }
+        }
+    };
 
     // drop column
     {
@@ -264,6 +284,29 @@ fn test_schema_from_struct() -> Result<()> {
         assert_eq!(flat_column_ids[i], flat_column_ids[i - 1] + 1);
     }
 
+    // check leaf fields
+    {
+        let expected_column_id_field = vec![
+            (0, "u64"),
+            (1, "0"),
+            (2, "1"),
+            (3, "1:0"),
+            (4, "0"),
+            (5, "1"),
+            (6, "nullarray"),
+            (7, "maparray"),
+            (8, "nullu64"),
+            (9, "u64array:0"),
+            (10, "a"),
+            (11, "b"),
+        ];
+        let (column_ids, leaf_fields) = schema.leaf_fields();
+        for (i, (column_id, leaf_field)) in column_ids.iter().zip(leaf_fields).enumerate() {
+            assert_eq!(expected_column_id_field[i].0, *column_id);
+            assert_eq!(expected_column_id_field[i].1, leaf_field.name());
+        }
+    }
+
     Ok(())
 }
 
@@ -273,7 +316,7 @@ fn test_schema_modify_field() -> Result<()> {
     let field2 = TableField::new("b", TableDataType::Number(NumberDataType::UInt64));
     let field3 = TableField::new("c", TableDataType::Number(NumberDataType::UInt64));
 
-    let mut schema = TableSchema::new(vec![field1]);
+    let mut schema = TableSchema::new(vec![field1.clone()]);
 
     let expected_field1 = TableField::new_from_column_ids(
         "a",
@@ -295,8 +338,10 @@ fn test_schema_modify_field() -> Result<()> {
     );
 
     assert_eq!(schema.fields().to_owned(), vec![expected_field1.clone()]);
-    // assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.is_column_deleted(0), false);
+    assert_eq!(schema.to_column_ids(), vec![0]);
+    assert_eq!(schema.to_leaf_column_ids(), vec![0]);
     assert_eq!(schema.next_column_id(), 1);
 
     // add column b
@@ -305,18 +350,22 @@ fn test_schema_modify_field() -> Result<()> {
         expected_field1.clone(),
         expected_field2,
     ]);
-    // assert_eq!(schema.column_id_of("a").unwrap(), 0);
-    // assert_eq!(schema.column_id_of("b").unwrap(), 1);
+    assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    assert_eq!(schema.column_id_of("b").unwrap(), 1);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), false);
+    assert_eq!(schema.to_column_ids(), vec![0, 1]);
+    assert_eq!(schema.to_leaf_column_ids(), vec![0, 1]);
     assert_eq!(schema.next_column_id(), 2);
 
     // drop column b
     schema.drop_column("b")?;
     assert_eq!(schema.fields().to_owned(), vec![expected_field1.clone(),]);
-    // assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    assert_eq!(schema.column_id_of("a").unwrap(), 0);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), true);
+    assert_eq!(schema.to_column_ids(), vec![0]);
+    assert_eq!(schema.to_leaf_column_ids(), vec![0]);
     assert_eq!(schema.next_column_id(), 2);
 
     // add column c
@@ -325,11 +374,13 @@ fn test_schema_modify_field() -> Result<()> {
         expected_field1,
         expected_field3
     ]);
-    // assert_eq!(schema.column_id_of("a").unwrap(), 0);
-    // assert_eq!(schema.column_id_of("c").unwrap(), 2);
+    assert_eq!(schema.column_id_of("a").unwrap(), 0);
+    assert_eq!(schema.column_id_of("c").unwrap(), 2);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), true);
     assert_eq!(schema.is_column_deleted(2), false);
+    assert_eq!(schema.to_column_ids(), vec![0, 2]);
+    assert_eq!(schema.to_leaf_column_ids(), vec![0, 2]);
     assert_eq!(schema.next_column_id(), 3);
 
     // add struct column
@@ -338,50 +389,104 @@ fn test_schema_modify_field() -> Result<()> {
     let child_field22 = TableDataType::Number(NumberDataType::UInt64);
     let s = TableDataType::Tuple {
         fields_name: vec!["0".to_string(), "1".to_string()],
-        fields_type: vec![child_field11, child_field12],
+        fields_type: vec![child_field11.clone(), child_field12.clone()],
     };
     let s2 = TableDataType::Tuple {
         fields_name: vec!["0".to_string(), "1".to_string()],
-        fields_type: vec![s, child_field22],
+        fields_type: vec![s.clone(), child_field22.clone()],
     };
-    schema.add_columns(&[TableField::new("s", s2)])?;
-    // assert_eq!(schema.column_id_of("s").unwrap(), 3);
-    // assert_eq!(schema.column_id_of("s:0").unwrap(), 3);
-    // assert_eq!(schema.column_id_of("s:0:0").unwrap(), 3);
-    // assert_eq!(schema.column_id_of("s:0:1").unwrap(), 4);
-    // assert_eq!(schema.column_id_of("s:1").unwrap(), 5);
+    schema.add_columns(&[TableField::new("s", s2.clone())])?;
+    assert_eq!(schema.column_id_of("s").unwrap(), 3);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), true);
     assert_eq!(schema.is_column_deleted(2), false);
     assert_eq!(schema.is_column_deleted(3), false);
+    assert_eq!(schema.to_column_ids(), vec![0, 2, 3, 3, 3, 4, 5]);
+    assert_eq!(schema.to_leaf_column_ids(), vec![0, 2, 3, 4, 5]);
     assert_eq!(schema.next_column_id(), 6);
 
     // add array column
     let ary = TableDataType::Array(Box::new(TableDataType::Array(Box::new(
         TableDataType::Number(NumberDataType::UInt64),
     ))));
-    schema.add_columns(&[TableField::new("ary", ary)])?;
-    // assert_eq!(schema.column_id_of("ary").unwrap(), 6);
-    // assert_eq!(schema.column_id_of("ary:0").unwrap(), 6);
+    schema.add_columns(&[TableField::new("ary", ary.clone())])?;
+    assert_eq!(schema.column_id_of("ary").unwrap(), 6);
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), true);
     assert_eq!(schema.is_column_deleted(2), false);
     assert_eq!(schema.is_column_deleted(3), false);
     assert_eq!(schema.is_column_deleted(6), false);
+    assert_eq!(schema.to_column_ids(), vec![0, 2, 3, 3, 3, 4, 5, 6, 6, 6]);
+    assert_eq!(schema.to_leaf_column_ids(), vec![0, 2, 3, 4, 5, 6]);
     assert_eq!(schema.next_column_id(), 7);
 
-    // drop column
+    // check leaf fields
+    {
+        let expected_column_id_field = vec![
+            (0, "a"),
+            (2, "c"),
+            (3, "0"),
+            (4, "1"),
+            (5, "1"),
+            (6, "ary:0:0"),
+        ];
+        let (column_ids, leaf_fields) = schema.leaf_fields();
+        for (i, (column_id, leaf_field)) in column_ids.iter().zip(leaf_fields).enumerate() {
+            assert_eq!(expected_column_id_field[i].0, *column_id);
+            assert_eq!(expected_column_id_field[i].1, leaf_field.name());
+        }
+    }
+
+    // check project fields
+    {
+        let mut project_fields = BTreeMap::new();
+        project_fields.insert(0, field1);
+        project_fields.insert(2, TableField::new("s", s2));
+        project_fields.insert(3, TableField::new("0", s));
+        project_fields.insert(4, TableField::new("0", child_field11));
+        project_fields.insert(5, TableField::new("1", child_field12));
+        project_fields.insert(6, TableField::new("1", child_field22));
+        project_fields.insert(7, TableField::new("ary", ary));
+        project_fields.insert(
+            8,
+            TableField::new(
+                "ary:0",
+                TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+        );
+        project_fields.insert(
+            9,
+            TableField::new("0", TableDataType::Number(NumberDataType::UInt64)),
+        );
+        let project_schema = schema.project_by_fields(&project_fields);
+        let expected_column_ids = vec![
+            (0, vec![0]),
+            (2, vec![3, 3, 3, 4, 5]),
+            (3, vec![3, 3, 4]),
+            (4, vec![3]),
+            (5, vec![4]),
+            (6, vec![5]),
+            (7, vec![6, 6, 6]),
+            (8, vec![6, 6]),
+            (9, vec![6]),
+        ];
+        for (project_schema_index, (_i, column_ids)) in expected_column_ids.into_iter().enumerate()
+        {
+            let field = &project_schema.fields()[project_schema_index];
+            assert_eq!(field.column_ids(), &column_ids);
+        }
+    }
+
+    // drop tuple column
     schema.drop_column("s")?;
     assert_eq!(schema.is_column_deleted(0), false);
     assert_eq!(schema.is_column_deleted(1), true);
     assert_eq!(schema.is_column_deleted(2), false);
     assert_eq!(schema.is_column_deleted(3), true);
     assert_eq!(schema.is_column_deleted(6), false);
-    // assert!(schema.column_id_of("s").is_err());
-    // assert!(schema.column_id_of("s:0").is_err());
-    // assert!(schema.column_id_of("s:1").is_err());
-    // assert!(schema.column_id_of("s:0:0").is_err());
-    // assert!(schema.column_id_of("s:0:1").is_err());
+    assert_eq!(schema.to_column_ids(), vec![0, 2, 6, 6, 6]);
+    assert_eq!(schema.to_leaf_column_ids(), vec![0, 2, 6]);
+    assert!(schema.column_id_of("s").is_err());
 
     Ok(())
 }
