@@ -198,9 +198,14 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
         return Ok(());
     }
     // Run all tasks parallel
+    let num_of_tasks = tasks.len();
     run_parallel_async(tasks).await?;
     let duration = start.elapsed();
-    println!("Run all tests using {} ms", duration.as_millis());
+    println!(
+        "Run all tests[{}] using {} ms",
+        num_of_tasks,
+        duration.as_millis()
+    );
 
     Ok(())
 }
@@ -210,6 +215,7 @@ async fn run_parallel_async(
 ) -> Result<()> {
     let args = SqlLogicTestArgs::parse();
     let jobs = tasks.len().clamp(1, args.parallel);
+    let num_of_tasks = tasks.len();
     let tasks = stream::iter(tasks).buffer_unordered(jobs);
     let no_fail_fast = args.no_fail_fast;
     if !no_fail_fast {
@@ -217,13 +223,17 @@ async fn run_parallel_async(
             .filter_map(|result| async { result.err() })
             .collect()
             .await;
-        handle_error_records(errors)?;
+        handle_error_records(errors, no_fail_fast, num_of_tasks)?;
     } else {
         let errors: Vec<Vec<TestError>> = tasks
             .filter_map(|result| async { result.ok() })
             .collect()
             .await;
-        handle_error_records(errors.into_iter().flatten().collect())?;
+        handle_error_records(
+            errors.into_iter().flatten().collect(),
+            no_fail_fast,
+            num_of_tasks,
+        )?;
     }
     Ok(())
 }
@@ -270,14 +280,20 @@ async fn run_file_async(
     Ok(error_records)
 }
 
-fn handle_error_records(error_records: Vec<TestError>) -> Result<()> {
+fn handle_error_records(
+    error_records: Vec<TestError>,
+    no_fail_fast: bool,
+    total_tests: usize,
+) -> Result<()> {
     if error_records.is_empty() {
         return Ok(());
     }
 
     println!(
-        "Test finished, Total {} records failed to run",
-        error_records.len()
+        "Test finished, fail fast {}, {} out of {} records failed to run",
+        if no_fail_fast { "disabled" } else { "enabled" },
+        error_records.len(),
+        total_tests
     );
     for (idx, error_record) in error_records.iter().enumerate() {
         println!("{idx}: {}", error_record.display(true));
