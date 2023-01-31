@@ -232,14 +232,12 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 
         for mut data_block in blocks {
             if let Some(mut meta) = data_block.take_meta() {
-                let info = meta
-                    .as_mut_any()
-                    .downcast_mut::<AggregateHashStateInfo>()
-                    .unwrap();
-                let hashtable = info.hash_state.downcast_mut::<Method::HashTable>().unwrap();
-                self.state_holders.push(info.state_holder.take());
-                self.merge_partial_hashstates(hashtable)?;
-                continue;
+                if let Some(info) = meta.as_mut_any().downcast_mut::<AggregateHashStateInfo>() {
+                    let hashtable = info.hash_state.downcast_mut::<Method::HashTable>().unwrap();
+                    self.state_holders.push(info.state_holder.take());
+                    self.merge_partial_hashstates(hashtable)?;
+                    continue;
+                }
             }
 
             let block = data_block.convert_to_full();
