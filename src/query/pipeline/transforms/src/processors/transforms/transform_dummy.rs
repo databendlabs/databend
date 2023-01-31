@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,25 +16,23 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::transforms::transform::Transform;
-use crate::pipelines::processors::transforms::transform::Transformer;
+use crate::processors::transforms::Transform;
+use crate::processors::transforms::Transformer;
 
 pub struct TransformDummy;
 
 impl TransformDummy {
-    #[allow(dead_code)]
     pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
-        Transformer::create(input, output, TransformDummy {})
+        Transformer::create(input, output, TransformDummy)
     }
 }
 
-#[async_trait::async_trait]
 impl Transform for TransformDummy {
-    const NAME: &'static str = "DummyTransform";
+    const NAME: &'static str = "TransformDummy";
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         Ok(data)
