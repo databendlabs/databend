@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-. "$CURDIR"/../../../shell_env.sh
+. "$CURDIR"/../../../../shell_env.sh
 
 echo "drop stage if exists s1;" | $MYSQL_CLIENT_CONNECT
 echo "create stage s1 FILE_FORMAT = (type = PARQUET);" | $MYSQL_CLIENT_CONNECT
 
-aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/tuple.parquet s3://testbucket/admin/stage/internal/s1/complex.parquet  >/dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/tuple.parquet s3://testbucket/admin/stage/internal/s1/tuple.parquet  >/dev/null 2>&1
 
 echo "select * from @s1;" |  $MYSQL_CLIENT_CONNECT
 
@@ -38,7 +38,7 @@ echo "select id from @s1 where t:b < 'c';" |  $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists s2;" | $MYSQL_CLIENT_CONNECT
 echo "create stage s2 FILE_FORMAT = (type = PARQUET);" | $MYSQL_CLIENT_CONNECT
 
-aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/complex.parquet s3://testbucket/admin/stage/internal/s2/complex.parquet  >/dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/complex.parquet s3://testbucket/admin/stage/internal/s2/complex.parquet  >/dev/null 2>&1
 
 echo "select meta from @s2 limit 3;" |  $MYSQL_CLIENT_CONNECT
 
