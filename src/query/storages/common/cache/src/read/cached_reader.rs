@@ -41,10 +41,10 @@ pub struct CachedReader<T, L, C> {
     _p: PhantomData<T>,
 }
 
-impl<T, L, C, M> CachedReader<T, L, C>
+impl<'a, T, L, C, M> CachedReader<T, L, C>
 where
     L: Loader<T> + Sync,
-    C: StorageCache<String, T, Meter = M>,
+    C: 'a + StorageCache<String, T, Meter = M, CachedItem = Arc<T>>,
 {
     pub fn new(cache: Option<Arc<RwLock<C>>>, name: impl Into<String>, loader: L) -> Self {
         Self {

@@ -54,12 +54,13 @@ where
     K: Eq + Hash,
 {
     type Meter = M;
+    type CachedItem = Arc<V>;
 
     fn put(&mut self, key: K, value: Arc<V>) {
         Cache::put(self, key, value);
     }
 
-    fn get<Q>(&mut self, k: &Q) -> Option<Arc<V>>
+    fn get<Q>(&mut self, k: &Q) -> Option<Self::CachedItem>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,

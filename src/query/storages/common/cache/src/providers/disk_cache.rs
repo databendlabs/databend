@@ -38,6 +38,7 @@ impl DiskCacheBuilder {
 
 impl StorageCache<String, Vec<u8>> for DiskCache {
     type Meter = ();
+    type CachedItem = Arc<Vec<u8>>;
 
     // TODO change this signature, takes &[u8]
     fn put(&mut self, key: String, value: Arc<Vec<u8>>) {
