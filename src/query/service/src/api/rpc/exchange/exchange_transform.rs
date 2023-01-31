@@ -232,7 +232,7 @@ impl Processor for ExchangeTransform {
                 } else {
                     let mut meta = vec![];
                     meta.write_scalar_own(data_block.num_rows() as u32)?;
-                    bincode::serialize_into(&mut meta, &data_block.meta()?).map_err(|_| {
+                    bincode::serialize_into(&mut meta, &data_block.get_meta()).map_err(|_| {
                         ErrorCode::BadBytes("block meta serialize error when exchange")
                     })?;
 

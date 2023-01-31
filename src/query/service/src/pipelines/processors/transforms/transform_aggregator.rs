@@ -69,6 +69,7 @@ impl TransformAggregator {
     pub fn try_create_partial(
         transform_params: AggregatorTransformParams,
         ctx: Arc<QueryContext>,
+        pass_state_to_final: bool,
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
@@ -86,14 +87,22 @@ impl TransformAggregator {
                 HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx,
                     transform_params,
-                    PartialAggregator::<false, T>::create(method, aggregator_params)?,
+                    PartialAggregator::<false, T>::create(
+                        method,
+                        aggregator_params,
+                        pass_state_to_final,
+                    )?,
                 ),
             }),
             false => with_mappedhash_method!(|T| match transform_params.method.clone() {
                 HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx,
                     transform_params,
-                    PartialAggregator::<true, T>::create(method, aggregator_params)?,
+                    PartialAggregator::<true, T>::create(
+                        method,
+                        aggregator_params,
+                        pass_state_to_final,
+                    )?,
                 ),
             }),
         }
