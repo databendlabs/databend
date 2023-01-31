@@ -1,4 +1,4 @@
-//  Copyright 2022 Datafuse Labs.
+//  Copyright 2023 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,6 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod blocking;
+mod non_blocking;
+mod partition;
+mod read;
 mod table;
 
-pub use table::parse_parquet_table_args;
+pub(crate) use table::arrow_to_table_schema;
+pub use table::ParquetTable;

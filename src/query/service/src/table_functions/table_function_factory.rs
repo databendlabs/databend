@@ -134,7 +134,7 @@ impl TableFunctionFactory {
 
         creators.insert(
             "read_parquet".to_string(),
-            (next_id(), Arc::new(ParquetTable::create)),
+            (next_id(), Arc::new(ParquetTable::create_table_function)),
         );
 
         TableFunctionFactory {
