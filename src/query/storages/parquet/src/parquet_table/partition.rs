@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use storages_common_pruner::RangePrunerCreator;
 
-use super::arrow_to_table_schema;
+use super::table::arrow_to_table_schema;
 use crate::parquet_reader::ParquetReader;
 use crate::pruning::build_column_page_pruners;
 use crate::pruning::PartitionPruner;

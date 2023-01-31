@@ -29,7 +29,7 @@ use common_storage::ColumnNodes;
 use opendal::Operator;
 
 use crate::parquet_part::ParquetRowGroupPart;
-use crate::table_function::arrow_to_table_schema;
+use crate::parquet_table::arrow_to_table_schema;
 
 pub type IndexedChunk = (usize, Vec<u8>);
 

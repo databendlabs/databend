@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::DataSchema;
@@ -26,7 +27,6 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 
 use super::ParquetTable;
-use super::TableContext;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::ParquetSource;
 
