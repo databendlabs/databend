@@ -48,6 +48,7 @@ use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
+use common_storages_parquet::ParquetTable;
 use common_storages_stage::StageTable;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -212,6 +213,7 @@ impl TableContext for QueryContext {
             DataSourceInfo::StageSource(stage_info) => {
                 self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
             }
+            DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
         }
     }
 
