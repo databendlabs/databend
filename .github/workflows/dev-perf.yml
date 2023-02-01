@@ -96,7 +96,7 @@ jobs:
           bendsql connect
       - name: Load Data
         run: |
-          ./scripts/benchmark/hits/load.sh
+          ./scripts/benchmark/query/load/hits.sh
       - name: Run Benchmark
         run: |
           mkdir -p /tmp/databend-perf/
