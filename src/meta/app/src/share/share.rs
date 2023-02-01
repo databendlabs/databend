@@ -686,12 +686,14 @@ mod kvapi_key_impl {
 
         fn to_string_key(&self) -> String {
             match *self {
-                ShareGrantObject::Database(db_id) => {
-                    format!("{}/db/{}", Self::PREFIX, db_id,)
-                }
-                ShareGrantObject::Table(tbl_id) => {
-                    format!("{}/table/{}", Self::PREFIX, tbl_id,)
-                }
+                ShareGrantObject::Database(db_id) => kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                    .push_raw("db")
+                    .push_u64(db_id)
+                    .done(),
+                ShareGrantObject::Table(table_id) => kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                    .push_raw("table")
+                    .push_u64(table_id)
+                    .done(),
             }
         }
 
@@ -743,7 +745,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_SHARE_ID;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.share_id)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.share_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
@@ -789,7 +793,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_SHARE_ID_TO_NAME;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.share_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.share_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
