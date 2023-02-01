@@ -15,7 +15,6 @@
 use std::boxed::Box;
 use std::fs;
 use std::fs::File;
-use std::hash::BuildHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::prelude::*;
@@ -24,6 +23,8 @@ use std::path::PathBuf;
 
 use filetime::set_file_times;
 use filetime::FileTime;
+use siphasher::sip128;
+use siphasher::sip128::Hasher128;
 use tracing::error;
 use walkdir::WalkDir;
 
@@ -66,13 +67,14 @@ fn get_all_files<P: AsRef<Path>>(path: P) -> Box<dyn Iterator<Item = (PathBuf, u
 pub type LruDiskCache = DiskCache<LruCache<String, u64, DefaultHashBuilder, FileSize>>;
 
 /// An basic disk cache of files on disk.
-pub struct DiskCache<C, S: BuildHasher + Clone = DefaultHashBuilder>
-where C: Cache<String, u64, S, FileSize>
-{
-    hash_builder: S,
+// pub struct DiskCache<C, S: BuildHasher + Clone = DefaultHashBuilder>
+pub struct DiskCache<C> {
     cache: C,
     root: PathBuf,
 }
+
+#[derive(Hash)]
+struct CacheKey(String);
 
 impl<C> DiskCache<C>
 where C: Cache<String, u64, DefaultHashBuilder, FileSize>
@@ -88,39 +90,17 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
     /// expects to have sole maintenance of the contents.
     pub fn new<T>(path: T, size: u64) -> Result<Self>
     where PathBuf: From<T> {
-        let default_hash_builder = DefaultHashBuilder::new();
         DiskCache {
-            hash_builder: default_hash_builder.clone(),
-            cache: C::with_meter_and_hasher(size, FileSize, default_hash_builder),
+            cache: C::with_meter_and_hasher(size, FileSize, DefaultHashBuilder::default()),
             root: PathBuf::from(path),
         }
         .init()
     }
 }
 
-impl<C, S> DiskCache<C, S>
-where
-    C: Cache<String, u64, S, FileSize>,
-    S: BuildHasher + Clone,
+impl<C> DiskCache<C>
+where C: Cache<String, u64, DefaultHashBuilder, FileSize>
 {
-    /// Create an `DiskCache` with hasher that stores files in `path`, limited to `size` bytes.
-    ///
-    /// Existing files in `path` will be stored with their last-modified time from the filesystem
-    /// used as the order for the recency of their use. Any files that are individually larger
-    /// than `size` bytes will be removed.
-    ///
-    /// The cache is not observant of changes to files under `path` from external sources, it
-    /// expects to have sole maintenance of the contents.
-    pub fn new_with_hasher<T>(path: T, size: u64, hash_builder: S) -> Result<Self>
-    where PathBuf: From<T> {
-        DiskCache {
-            hash_builder: hash_builder.clone(),
-            cache: C::with_meter_and_hasher(size, FileSize, hash_builder),
-            root: PathBuf::from(path),
-        }
-        .init()
-    }
-
     /// Return the current size of all the files in the cache.
     pub fn size(&self) -> u64 {
         self.cache.size()
@@ -174,10 +154,10 @@ where
                         panic!("Error removing file from cache: `{:?}`: {}", remove_path, e)
                     });
                 }
-                let rel_path = file
+                let relative_path = file
                     .strip_prefix(&self.root)
                     .map_err(|_e| self::Error::MalformedPath)?;
-                let cache_key = Self::recovery_from(rel_path);
+                let cache_key = Self::recovery_from(relative_path);
                 self.cache.put(cache_key, size);
             }
         }
@@ -189,8 +169,8 @@ where
         size <= self.cache.capacity()
     }
 
-    pub fn recovery_from(str: &Path) -> String {
-        let key_string = match str.as_os_str().to_str() {
+    pub fn recovery_from(relative_path: &Path) -> String {
+        let key_string = match relative_path.as_os_str().to_str() {
             Some(str) => str.to_owned(),
             None => {
                 unreachable!()
@@ -199,23 +179,20 @@ where
         key_string
     }
 
-    pub fn cache_key<K>(&self, str: &K) -> String
-    where K: Hash + Eq + ?Sized {
-        // TODO we need a 128 bit digest
-        let mut hash_state = self.hash_builder.build_hasher();
-        str.hash(&mut hash_state);
-        let digits = hash_state.finish();
-        let hex_key = format!("{:x}", digits);
-        hex_key
+    // convert key string into hex string of SipHash 2-4 128
+    fn cache_key(&self, str: &str) -> CacheKey {
+        let mut sip = sip128::SipHasher24::new();
+        sip.write(str.as_bytes());
+        let hash = sip.finish128();
+        let hex_hash = hex::encode(hash.as_bytes());
+        CacheKey(hex_hash)
     }
 
-    pub fn cache_path<K>(&self, str: &K) -> PathBuf
-    where K: Hash + Eq + ?Sized {
-        let hex_key = self.cache_key(str);
-        let prefix = &hex_key[0..3];
+    fn cache_path(&self, cache_key: &CacheKey) -> PathBuf {
+        let prefix = &cache_key.0[0..3];
         let mut path_buf = PathBuf::from(prefix);
-        path_buf.push(Path::new(&hex_key));
-        path_buf
+        path_buf.push(Path::new(&cache_key.0));
+        self.rel_to_abs_path(path_buf)
     }
 
     /// Add a file with `bytes` as its contents to the cache at path `key`.
@@ -224,37 +201,29 @@ where
             return Err(Error::FileTooLarge);
         }
 
-        // TODO combine these
         let cache_key = self.cache_key(key.as_ref());
-        let rel_path = self.cache_path(key.as_ref());
-        let path = self.rel_to_abs_path(rel_path);
+        let path = self.cache_path(&cache_key);
         // TODO rm this panic, no nested dirs here
         fs::create_dir_all(path.parent().expect("Bad path?"))?;
         let mut f = File::create(&path)?;
         f.write_all(bytes)?;
-        let size = bytes.len() as u64;
-        if let Some(_replaced) = self.cache.put(cache_key, size) {
-            // TODO remove the replaced item from disk
-        }
+        self.cache.put(cache_key.0, bytes.len() as u64);
         Ok(())
     }
 
     /// Return `true` if a file with path `key` is in the cache.
-    pub fn contains_key<K: AsRef<str>>(&self, key: &K) -> bool
-    where K: Hash + Eq + ?Sized {
+    pub fn contains_key(&self, key: &str) -> bool {
         let cache_key = self.cache_key(key);
-        self.cache.contains(&cache_key)
+        self.cache.contains(&cache_key.0)
     }
 
     /// Get an opened `File` for `key`, if one exists and can be opened. Updates the Cache state
     /// of the file if present. Avoid using this method if at all possible, prefer `.get`.
-    pub fn get_file<K>(&mut self, key: &K) -> Result<File>
-    where K: Hash + Eq + ?Sized {
+    pub fn get_file(&mut self, key: &str) -> Result<File> {
         let cache_key = self.cache_key(key);
-        let rel_path = self.cache_path(key);
-        let path = self.rel_to_abs_path(rel_path);
+        let path = self.cache_path(&cache_key);
         self.cache
-            .get(&cache_key)
+            .get(&cache_key.0)
             .ok_or(Error::FileNotInCache)
             .and_then(|_| {
                 // TODO do we need to adjust the mtime, cross reboot?
@@ -265,13 +234,11 @@ where
     }
 
     /// Remove the given key from the cache.
-    pub fn remove<K>(&mut self, key: &K) -> Result<()>
-    where K: Hash + Eq + ?Sized {
+    pub fn remove(&mut self, key: &str) -> Result<()> {
         let cache_key = self.cache_key(key);
-        let rel_path = self.cache_path(key);
-        match self.cache.pop(&cache_key) {
+        match self.cache.pop(&cache_key.0) {
             Some(_) => {
-                let path = self.rel_to_abs_path(rel_path);
+                let path = self.cache_path(&cache_key);
                 fs::remove_file(&path).map_err(|e| {
                     error!("Error removing file from cache: `{:?}`: {}", path, e);
                     Into::into(e)

@@ -12,21 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
-use std::hash::Hash;
 use std::sync::Arc;
 
 pub trait CacheAccessor<K, V> {
-    fn get<Q>(&self, k: &Q) -> Option<Arc<V>>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
-
+    fn get(&self, k: &str) -> Option<Arc<V>>;
     fn put(&self, key: K, value: Arc<V>);
-    fn evict<Q>(&self, k: &Q) -> bool
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
+    fn evict(&self, k: &str) -> bool;
 }
 
 /// The minimum interface that cache providers should implement
@@ -36,20 +27,12 @@ pub trait StorageCache<K, V> {
 
     fn put(&mut self, key: K, value: Arc<V>);
 
-    fn get<Q>(&mut self, k: &Q) -> Option<Self::CachedItem>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
+    fn get(&mut self, k: &str) -> Option<Self::CachedItem>;
 
-    fn evict<Q>(&mut self, k: &Q) -> bool
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
+    fn evict(&mut self, k: &str) -> bool;
 }
 
 mod impls {
-    use std::borrow::Borrow;
-    use std::hash::Hash;
     use std::sync::Arc;
 
     use parking_lot::RwLock;
@@ -62,11 +45,7 @@ mod impls {
         C: StorageCache<String, V, CachedItem = Arc<V>>,
         Self: 'a,
     {
-        fn get<Q>(&self, k: &Q) -> Option<C::CachedItem>
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
+        fn get(&self, k: &str) -> Option<C::CachedItem> {
             let mut guard = self.write();
             guard.get(k)
         }
@@ -76,11 +55,7 @@ mod impls {
             guard.put(k, v);
         }
 
-        fn evict<Q>(&self, k: &Q) -> bool
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
+        fn evict(&self, k: &str) -> bool {
             let mut guard = self.write();
             guard.evict(k)
         }
@@ -89,11 +64,7 @@ mod impls {
     impl<V, C> CacheAccessor<String, V> for Option<Arc<RwLock<C>>>
     where C: StorageCache<String, V, CachedItem = Arc<V>>
     {
-        fn get<Q>(&self, k: &Q) -> Option<Arc<V>>
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
+        fn get(&self, k: &str) -> Option<Arc<V>> {
             self.as_ref().and_then(|cache| cache.get(k))
         }
 
@@ -103,11 +74,7 @@ mod impls {
             }
         }
 
-        fn evict<Q>(&self, k: &Q) -> bool
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
+        fn evict(&self, k: &str) -> bool {
             if let Some(cache) = self {
                 cache.evict(k)
             } else {

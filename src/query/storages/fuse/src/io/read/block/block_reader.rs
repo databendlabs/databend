@@ -37,6 +37,9 @@ use common_storage::ColumnNodes;
 use futures::future::try_join_all;
 use opendal::Object;
 use opendal::Operator;
+use storages_common_cache::metrics_inc_cache_access_count;
+use storages_common_cache::metrics_inc_cache_hit_count;
+use storages_common_cache::metrics_inc_cache_miss_count;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::ColumnId;
@@ -314,10 +317,15 @@ impl BlockReader {
         let cache_manager = CacheManager::instance().get_block_data_cache();
         let mut data_from_cache = vec![];
         for column_id in self.project_indices.keys() {
+            // TODO encapsulate this in another component
             let column_cache_key = format!("{location}-{column_id}");
+            let cache_name = "data_block_cache";
+            metrics_inc_cache_access_count(1, cache_name);
             if let Some(cached_column_raw_data) = cache_manager.get(&column_cache_key) {
+                metrics_inc_cache_hit_count(1, cache_name);
                 data_from_cache.push((*column_id as ColumnId, cached_column_raw_data));
             } else {
+                metrics_inc_cache_miss_count(1, cache_name);
                 let column_meta = &columns_meta[column_id];
                 let (offset, len) = column_meta.offset_length();
                 ranges.push((*column_id, offset..(offset + len)));

@@ -30,3 +30,5 @@ pub use read::InMemoryBytesCacheReader;
 pub use read::InMemoryItemCacheReader;
 pub use read::LoadParams;
 pub use read::Loader;
+
+pub use self::metrics::*;

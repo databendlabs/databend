@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::hash::BuildHasher;
-use std::hash::Hash;
 use std::sync::Arc;
 
 use common_cache::BytesMeter;
@@ -47,32 +45,23 @@ impl InMemoryCacheBuilder {
     }
 }
 
-impl<K, V, S, M> StorageCache<K, V> for LruCache<K, Arc<V>, S, M>
+impl<V, S, M> StorageCache<String, V> for LruCache<String, Arc<V>, S, M>
 where
-    M: CountableMeter<K, Arc<V>>,
+    M: CountableMeter<String, Arc<V>>,
     S: BuildHasher,
-    K: Eq + Hash,
 {
     type Meter = M;
     type CachedItem = Arc<V>;
 
-    fn put(&mut self, key: K, value: Arc<V>) {
+    fn put(&mut self, key: String, value: Arc<V>) {
         Cache::put(self, key, value);
     }
 
-    fn get<Q>(&mut self, k: &Q) -> Option<Self::CachedItem>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
-    {
+    fn get(&mut self, k: &str) -> Option<Self::CachedItem> {
         Cache::get(self, k).cloned()
     }
 
-    fn evict<Q>(&mut self, k: &Q) -> bool
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
-    {
+    fn evict(&mut self, k: &str) -> bool {
         self.pop(k).is_some()
     }
 }

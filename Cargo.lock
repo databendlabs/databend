@@ -1295,7 +1295,9 @@ version = "0.1.0"
 dependencies = [
  "filetime",
  "heapsize",
+ "hex",
  "ritelinked",
+ "siphasher",
  "tracing",
  "walkdir",
 ]

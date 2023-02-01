@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
-use std::hash::Hash;
 use std::io::Read;
 use std::sync::Arc;
 
@@ -47,12 +45,8 @@ impl StorageCache<String, Vec<u8>> for DiskCache {
         }
     }
 
-    // TODO change this signature, remove tha Arc
-    fn get<Q>(&mut self, k: &Q) -> Option<Arc<Vec<u8>>>
-    where
-        String: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
-    {
+    // TODO change this signature, remove that Arc
+    fn get(&mut self, k: &str) -> Option<Arc<Vec<u8>>> {
         let mut read_file = || {
             let mut file = self.get_file(k)?;
             let mut v = vec![];
@@ -69,11 +63,7 @@ impl StorageCache<String, Vec<u8>> for DiskCache {
         }
     }
 
-    fn evict<Q>(&mut self, k: &Q) -> bool
-    where
-        String: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
-    {
+    fn evict(&mut self, k: &str) -> bool {
         if let Err(e) = self.remove(k) {
             error!("evict disk cache item failed {}", e);
             false
